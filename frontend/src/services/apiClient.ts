@@ -19,3 +19,31 @@ apiClient.interceptors.request.use((config) => {
 
   return config
 })
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error.response?.status
+    const requestUrl = typeof error.config?.url === 'string' ? error.config.url : ''
+    const isAuthRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register')
+
+    if (status === 401 && !isAuthRequest) {
+      localStorage.removeItem('ai-chinese-learning-token')
+
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        const redirect = `${window.location.pathname}${window.location.search}`
+        window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
+      }
+    }
+
+    if (status === 403 && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('app:forbidden', {
+          detail: 'You do not have permission to access that page.',
+        }),
+      )
+    }
+
+    return Promise.reject(error)
+  },
+)

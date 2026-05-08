@@ -16,3 +16,9 @@ spring:
 logging:
   level:
     root: warn
+
+app:
+  security:
+    jwt:
+      secret: test-jwt-secret-key-for-phase-three-12345
+      expiration: 3600000

@@ -7,6 +7,7 @@ import App from './App.vue'
 import { i18n } from './i18n'
 import { router } from './router'
 import { pinia } from './stores'
+import { useAuthStore } from './stores/authStore'
 import './styles/main.css'
 
 const app = createApp(App)
@@ -19,5 +20,14 @@ app.use(ElementPlus)
 app.use(pinia)
 app.use(router)
 app.use(i18n)
+
+const authStore = useAuthStore(pinia)
+if (authStore.token) {
+  authStore.fetchCurrentUser().catch(() => {
+    authStore.clearAuthState()
+  })
+} else {
+  authStore.initialized = true
+}
 
 app.mount('#app')

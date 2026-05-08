@@ -1,10 +1,11 @@
-import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 
 import AdminLayout from '../layouts/AdminLayout.vue'
 import PublicLayout from '../layouts/PublicLayout.vue'
 import StudentLayout from '../layouts/StudentLayout.vue'
 import TeacherLayout from '../layouts/TeacherLayout.vue'
 import { i18n } from '../i18n'
+import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
 import AiDisclaimerPage from '../pages/public/AiDisclaimerPage.vue'
 import ChildSafetyPage from '../pages/public/ChildSafetyPage.vue'
 import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
@@ -14,12 +15,21 @@ import LoginPage from '../pages/public/LoginPage.vue'
 import PrivacyPage from '../pages/public/PrivacyPage.vue'
 import RegisterPage from '../pages/public/RegisterPage.vue'
 import TermsPage from '../pages/public/TermsPage.vue'
-import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
-import { useAuthStore } from '../stores/authStore'
+import { pinia } from '../stores'
+import { useAuthStore, type UserRole } from '../stores/authStore'
 
-const routes = [
+declare module 'vue-router' {
+  interface RouteMeta {
+    titleKey?: string
+    requiresAuth?: boolean
+    roles?: UserRole[]
+    guestOnly?: boolean
+  }
+}
+
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: PublicLayout,
@@ -34,13 +44,13 @@ const routes = [
         path: 'login',
         name: 'login',
         component: LoginPage,
-        meta: { titleKey: 'nav.login' },
+        meta: { titleKey: 'nav.login', guestOnly: true },
       },
       {
         path: 'register',
         name: 'register',
         component: RegisterPage,
-        meta: { titleKey: 'nav.register' },
+        meta: { titleKey: 'nav.register', guestOnly: true },
       },
       {
         path: 'courses',
@@ -83,10 +93,10 @@ const routes = [
   {
     path: '/student',
     component: StudentLayout,
-    meta: { requiresAuth: true, role: 'STUDENT', titleKey: 'nav.studentDashboard' },
+    meta: { requiresAuth: true, roles: ['STUDENT' as UserRole], titleKey: 'nav.studentDashboard' },
     children: [
       {
-        path: '',
+        path: 'dashboard',
         name: 'student-dashboard',
         component: StudentDashboardPage,
       },
@@ -95,10 +105,10 @@ const routes = [
   {
     path: '/teacher',
     component: TeacherLayout,
-    meta: { requiresAuth: true, role: 'TEACHER', titleKey: 'nav.teacherDashboard' },
+    meta: { requiresAuth: true, roles: ['TEACHER' as UserRole], titleKey: 'nav.teacherDashboard' },
     children: [
       {
-        path: '',
+        path: 'dashboard',
         name: 'teacher-dashboard',
         component: TeacherDashboardPage,
       },
@@ -107,10 +117,10 @@ const routes = [
   {
     path: '/admin',
     component: AdminLayout,
-    meta: { requiresAuth: true, role: 'ADMIN', titleKey: 'nav.adminDashboard' },
+    meta: { requiresAuth: true, roles: ['ADMIN' as UserRole], titleKey: 'nav.adminDashboard' },
     children: [
       {
-        path: '',
+        path: 'dashboard',
         name: 'admin-dashboard',
         component: AdminDashboardPage,
       },
@@ -126,15 +136,27 @@ export const router = createRouter({
   },
 })
 
-router.beforeEach((to) => {
-  const authStore = useAuthStore()
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore(pinia)
+
+  if (!authStore.initialized && authStore.token) {
+    try {
+      await authStore.fetchCurrentUser()
+    } catch {
+      // Redirect handling happens below and in the Axios interceptor.
+    }
+  }
+
+  if (to.meta.guestOnly && authStore.isAuthenticated) {
+    return redirectByRole(authStore.roles[0] ?? null)
+  }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  if (to.meta.requiresAuth && to.meta.role && authStore.userRole !== to.meta.role) {
-    return redirectByRole(authStore.userRole)
+  if (to.meta.roles?.length && !to.meta.roles.some((role) => authStore.hasRole(role))) {
+    return redirectByRole(authStore.roles[0] ?? null)
   }
 
   return true
@@ -146,7 +168,7 @@ router.afterEach((to: RouteLocationNormalized) => {
   document.title = `${pageTitle} | ${i18n.global.t('common.appName')}`
 })
 
-function redirectByRole(role: string | null) {
+function redirectByRole(role: UserRole | null) {
   if (role === 'STUDENT') {
     return { name: 'student-dashboard' }
   }
