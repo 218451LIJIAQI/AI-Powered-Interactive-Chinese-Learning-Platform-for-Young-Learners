@@ -21,6 +21,7 @@ docker compose up -d
 This starts:
 - MySQL 8.4
 - Database name: `ai_chinese_learning`
+- Host port: `3307`
 
 ## 2. Run the Backend
 From the `backend` folder:
@@ -66,6 +67,9 @@ Default frontend URL:
 - Global exception handler skeleton
 - Basic CORS placeholder
 - MySQL Docker Compose setup
+
+Phase 2 note:
+- The backend now expects the local Docker MySQL instance on port `3307` by default.
 
 ## 6. What Is Intentionally Deferred
 - Authentication and JWT

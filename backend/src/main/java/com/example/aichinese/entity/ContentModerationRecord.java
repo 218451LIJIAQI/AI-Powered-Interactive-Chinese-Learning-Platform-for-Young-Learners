@@ -1,0 +1,43 @@
+package com.example.aichinese.entity;
+
+import com.example.aichinese.entity.base.BaseEntity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+@Table(name = "content_moderation_records", indexes = {
+        @Index(name = "idx_content_moderation_records_admin_user_id", columnList = "admin_user_id"),
+        @Index(name = "idx_content_moderation_records_target_type_target_id", columnList = "target_type,target_id")
+})
+public class ContentModerationRecord extends BaseEntity {
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "admin_user_id")
+    private User adminUser;
+
+    @Column(name = "target_type", nullable = false, length = 50)
+    private String targetType;
+
+    @Column(name = "target_id", nullable = false)
+    private Long targetId;
+
+    @Column(name = "action_taken", nullable = false, length = 100)
+    private String actionTaken;
+
+    @Lob
+    @Column(name = "note")
+    private String note;
+}

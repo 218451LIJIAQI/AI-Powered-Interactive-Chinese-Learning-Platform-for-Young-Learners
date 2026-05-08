@@ -1,0 +1,41 @@
+package com.example.aichinese.entity;
+
+import java.time.LocalDateTime;
+
+import com.example.aichinese.entity.base.BaseEntity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+@Table(name = "live_class_enrolments", indexes = {
+        @Index(name = "idx_live_class_enrolments_live_class_id", columnList = "live_class_id"),
+        @Index(name = "idx_live_class_enrolments_student_id", columnList = "student_id")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_live_class_enrolments_live_class_student", columnNames = { "live_class_id", "student_id" })
+})
+public class LiveClassEnrolment extends BaseEntity {
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "live_class_id", nullable = false)
+    private LiveClass liveClass;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "student_id", nullable = false)
+    private StudentProfile student;
+
+    @Column(name = "enrolled_at")
+    private LocalDateTime enrolledAt;
+}

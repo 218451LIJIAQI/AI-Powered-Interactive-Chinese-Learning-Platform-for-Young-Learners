@@ -2,22 +2,19 @@ spring:
   application:
     name: ai-chinese-learning-platform-backend
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:ai_chinese_learning}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Singapore
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:ai_chinese_learning}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Singapore
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      initialization-fail-timeout: 0
+      initialization-fail-timeout: 60000
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate:
-        boot:
-          allow_jdbc_metadata_access: false
         format_sql: true
-    database-platform: org.hibernate.dialect.MySQLDialect
     show-sql: false
 
 server:
