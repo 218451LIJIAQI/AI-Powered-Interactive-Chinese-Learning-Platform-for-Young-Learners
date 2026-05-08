@@ -44,6 +44,10 @@ public class Lesson extends BaseEntity {
     @JoinColumn(name = "category_id")
     private LearningCategory category;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "level_id")
+    private LearningLevel level;
+
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
@@ -71,4 +75,10 @@ public class Lesson extends BaseEntity {
 
     @Column(name = "cover_image_url", length = 255)
     private String coverImageUrl;
+
+    @Column(name = "rejection_reason", length = 1000)
+    private String rejectionReason;
+
+    @Column(name = "estimated_duration_minutes")
+    private Integer estimatedDurationMinutes;
 }

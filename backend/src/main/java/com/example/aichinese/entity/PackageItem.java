@@ -1,9 +1,12 @@
 package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.PackageItemType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -26,12 +29,16 @@ public class PackageItem extends BaseEntity {
     @JoinColumn(name = "course_package_id", nullable = false)
     private CoursePackage coursePackage;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "item_type", nullable = false, length = 50)
-    private String itemType;
+    private PackageItemType itemType;
 
     @Column(name = "item_id", nullable = false)
     private Long itemId;
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
+
+    @Column(name = "title_snapshot", length = 200)
+    private String titleSnapshot;
 }

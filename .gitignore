@@ -15,6 +15,9 @@ frontend/.env.local
 # Backend
 backend/target/
 backend/.env
+backend/uploads/
+backend/phase5-*.pdf
+backend/phase5-*.log
 
 # IDE
 .idea/

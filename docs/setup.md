@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 5.
+This document explains how to run the project locally through Phase 6.
 
 ## Prerequisites
 - Node.js and npm
@@ -25,8 +25,8 @@ This starts:
 
 ## 2. Configure Backend Environment Variables
 Use:
-- [backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/.env.example)
-- [backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/src/main/resources/application-example.yml)
+- [../backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/backend/.env.example)
+- [../backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/backend/src/main/resources/application-example.yml)
 
 Important variables:
 - `JWT_SECRET`
@@ -55,7 +55,7 @@ MAX_FILE_SIZE=5MB
 
 Notes:
 - Do not use real production secrets in local demo setup files.
-- `JWT_SECRET` should be a strong plain-text secret with at least 32 characters/bytes.
+- `JWT_SECRET` should be a strong plain-text secret with at least 32 characters or bytes.
 - If you need to provide a Base64-encoded JWT secret, use the prefix `base64:`.
 - Invalid or short JWT secrets now fail clearly during backend startup instead of producing a runtime login `500`.
 - If `DEFAULT_ADMIN_EMAIL` or `DEFAULT_ADMIN_PASSWORD` is missing, the backend still starts safely and skips admin creation.
@@ -103,10 +103,11 @@ Frontend auth behavior:
   - `TEACHER -> /teacher/dashboard`
   - `ADMIN -> /admin/dashboard`
 
-## 6. Phase 4 Dashboard Routes
+## 6. Main Frontend Routes
 Public routes:
 - `/`
 - `/courses`
+- `/courses/:id`
 - `/faq`
 - `/terms`
 - `/privacy`
@@ -114,6 +115,7 @@ Public routes:
 - `/ai-disclaimer`
 - `/login`
 - `/register`
+- `/teachers/:id`
 
 Student routes:
 - `/student/dashboard`
@@ -137,19 +139,13 @@ Teacher routes:
 - `/teacher/profile`
 - `/teacher/verification-status`
 - `/teacher/verification-documents`
-- `/teacher/content`
+- `/teacher/modules`
 - `/teacher/lessons`
-- `/teacher/quizzes`
-- `/teacher/flashcards`
-- `/teacher/matching-games`
-- `/teacher/ai-assistant`
-- `/teacher/ai-content-tools`
-- `/teacher/student-progress`
-- `/teacher/reviews`
-- `/teacher/earnings`
-- `/teacher/payouts`
-- `/teacher/notifications`
-- `/teacher/support`
+- `/teacher/lessons/new`
+- `/teacher/lessons/:id/edit`
+- `/teacher/packages`
+- `/teacher/packages/new`
+- `/teacher/packages/:id/edit`
 
 Admin routes:
 - `/admin/dashboard`
@@ -157,21 +153,9 @@ Admin routes:
 - `/admin/students`
 - `/admin/teacher-approval`
 - `/admin/teacher-approval/:id`
-- `/admin/content-approval`
-- `/admin/ai-usage-logs`
-- `/admin/payments`
-- `/admin/refunds`
-- `/admin/payouts`
-- `/admin/subscription-plans`
-- `/admin/reports`
-- `/admin/reviews`
-- `/admin/notifications`
-- `/admin/support-tickets`
-- `/admin/activity-logs`
-- `/admin/settings`
-
-Public teacher profile route:
-- `/teachers/:id`
+- `/admin/content/approvals`
+- `/admin/content/approvals/:type/:id`
+- `/admin/content/moderation`
 
 ## 7. Dashboard Summary APIs
 Student dashboard:
@@ -191,7 +175,7 @@ Behavior:
 - Returns safe defaults or empty arrays for later-phase workflows
 - Uses the shared `ApiResponse` response format
 
-## 8. Phase 5 Teacher Verification And Admin Management APIs
+## 8. Teacher Verification And Admin Management APIs
 Teacher APIs:
 - `GET /api/v1/teachers/me`
 - `PUT /api/v1/teachers/me/profile`
@@ -213,70 +197,86 @@ Admin APIs:
 Public API:
 - `GET /api/v1/public/teachers/{id}`
 
-## 9. Teacher Verification Workflow
-- Teacher registers publicly and starts with `PENDING` status.
-- Teacher updates their profile at `/teacher/profile`.
-- Teacher uploads private verification documents at `/teacher/verification-documents`.
-- Admin reviews pending teachers at `/admin/teacher-approval`.
-- Admin approves or rejects the teacher.
-- Rejected teachers can see the rejection reason and resubmit verification.
-- Only approved teachers are visible on the public teacher profile route.
+## 9. Phase 6 Content Management APIs
+Public:
+- `GET /api/v1/public/levels`
+- `GET /api/v1/public/categories`
+- `GET /api/v1/public/courses`
+- `GET /api/v1/public/courses/{id}`
 
-## 10. Manual Phase 5 Testing Guide
-Teacher profile and upload:
-- Register and log in as a teacher
-- Open `/teacher/profile`
-- Save profile changes
-- Open `/teacher/verification-documents`
-- Upload a PDF or PNG verification file
-- Confirm the document list and status card update
+Teacher:
+- `GET /api/v1/teachers/modules`
+- `POST /api/v1/teachers/modules`
+- `GET /api/v1/teachers/modules/{id}`
+- `PUT /api/v1/teachers/modules/{id}`
+- `PATCH /api/v1/teachers/modules/{id}/archive`
+- `POST /api/v1/teachers/modules/{id}/submit`
+- `GET /api/v1/teachers/lessons`
+- `POST /api/v1/teachers/lessons`
+- `GET /api/v1/teachers/lessons/{id}`
+- `PUT /api/v1/teachers/lessons/{id}`
+- `PATCH /api/v1/teachers/lessons/{id}/archive`
+- `POST /api/v1/teachers/lessons/{id}/submit`
+- `GET /api/v1/teachers/lessons/{lessonId}/activities`
+- `POST /api/v1/teachers/lessons/{lessonId}/activities`
+- `PUT /api/v1/teachers/lesson-activities/{activityId}`
+- `PATCH /api/v1/teachers/lesson-activities/{activityId}/archive`
+- `GET /api/v1/teachers/packages`
+- `POST /api/v1/teachers/packages`
+- `GET /api/v1/teachers/packages/{id}`
+- `PUT /api/v1/teachers/packages/{id}`
+- `PATCH /api/v1/teachers/packages/{id}/archive`
+- `POST /api/v1/teachers/packages/{id}/submit`
+- `POST /api/v1/teachers/packages/{id}/items`
+- `DELETE /api/v1/teachers/packages/{packageId}/items/{itemId}`
 
-Admin approval:
-- Log in as the seeded admin
-- Open `/admin/teacher-approval`
-- Review a pending teacher
-- Open the teacher detail page
-- View the protected document
-- Approve or reject the teacher
+Admin:
+- `GET /api/v1/admin/levels`
+- `GET /api/v1/admin/categories`
+- `GET /api/v1/admin/content/submissions`
+- `GET /api/v1/admin/content/submissions/{contentType}/{id}`
+- `POST /api/v1/admin/content/{contentType}/{id}/approve`
+- `POST /api/v1/admin/content/{contentType}/{id}/reject`
+- `POST /api/v1/admin/content/{contentType}/{id}/publish`
+- `POST /api/v1/admin/content/{contentType}/{id}/archive`
 
-Public teacher profile:
-- After approval, open `/teachers/{teacherId}`
-- Confirm the verified badge and safe public info appear
-- Confirm rejected or pending teachers are not publicly visible
-## 11. Dashboard Testing Guide
-### Student dashboard
-- Register or log in as a student
-- Visit `/student/dashboard`
-- Confirm:
-  - welcome message uses the authenticated user
-  - progress cards render
-  - quick access cards render
-  - empty states appear instead of broken widgets
+## 10. Manual Phase 6 Testing Guide
+Teacher content creation:
+- Log in as an approved teacher
+- Open `/teacher/modules` and create a module
+- Open `/teacher/lessons` and create a lesson
+- Add at least one lesson activity placeholder
+- Open `/teacher/packages` and create a package
+- Add one module or lesson to the package
+- Submit the content for review
 
-### Teacher dashboard
-- Register or log in as a teacher
-- Visit `/teacher/dashboard`
-- Confirm:
-  - teacher status is shown
-  - `PENDING` or `REJECTED` displays a clear alert
-  - creation-related actions are disabled or visually locked
+Admin content moderation:
+- Log in as an admin
+- Open `/admin/content/approvals`
+- Review submitted content
+- Approve or reject content with a reason
+- Publish approved content
+- Open `/admin/content/moderation` to confirm status visibility
 
-### Admin dashboard
-- Log in with the seeded admin account
-- Visit `/admin/dashboard`
-- Confirm:
-  - total students, teachers, and pending approvals render
-  - recent user activity, recent reports, and recent audit logs render safely
-  - payment and AI cards show safe summary values
+Public discovery:
+- Open `/courses`
+- Filter by level, category, access type, or learning type
+- Confirm only published content appears
+- Open `/courses/{id}` and confirm paid content remains locked
 
-## 12. What Exists Through Phase 5
+## 11. What Exists Through Phase 6
 - Frontend app scaffold
 - Role-based layouts and navigation
 - Real login page
 - Real student and teacher registration page
 - Auth store, JWT handling, and route guards
 - Student, teacher, and admin dashboards with real API-backed summary structure
-- Placeholder workspace pages for future modules
+- Teacher profile and verification workflow
+- Admin teacher approval workflow
+- Public approved teacher profile page
+- Teacher module, lesson, and package management pages
+- Admin content approval and moderation pages
+- Public course discovery and course detail pages
 - Spring Boot backend
 - `/api/v1/health`
 - Database foundation and seed data
@@ -284,16 +284,18 @@ Public teacher profile:
 - Current user API
 - Role-based backend protection
 - Dashboard summary APIs
-- Backend auth and dashboard integration tests
-- Teacher profile management
-- Teacher verification upload and resubmission flow
-- Admin teacher approval and rejection flow
-- Admin user and student list pages
-- Public approved teacher profile page
-- Phase 5 backend integration tests
-## 13. What Is Intentionally Deferred
+- Content management workflow APIs
+- Backend integration tests for content workflow and security
+
+## 12. What Is Intentionally Deferred
 - AI integration logic
 - Payment and subscription workflows
-- Learning content management
-- Course, package, lesson, quiz, and business feature workflows
-- Full support, report, review, notification, refund, and payout workflows
+- Checkout and cart logic
+- Quiz gameplay
+- Flashcard gameplay
+- Matching gameplay
+- Tracing canvas
+- Student progress workflows
+- Live class scheduling
+- Recorded lesson player
+- Reviews, reports, support tickets, refunds, payouts, and advanced notifications

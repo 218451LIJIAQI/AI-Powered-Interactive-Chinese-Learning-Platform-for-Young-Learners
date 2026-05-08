@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { dashboardService } from '../../services/dashboardService'
@@ -7,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore'
 import type { TeacherDashboardSummary } from '../../types/dashboard'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const { t } = useI18n()
 
 const user = computed(() => authStore.currentUser)
@@ -51,7 +53,21 @@ const analyticsCards = computed(() => [
 ])
 
 const actionCards = computed(() => [
-  { title: t('dashboard.manageModules'), description: t('dashboard.manageModulesDesc'), routeName: 'teacher-content' },
+  {
+    title: t('content.moduleManagementTitle'),
+    description: t('content.moduleManagementDescription'),
+    routeName: 'teacher-modules',
+  },
+  {
+    title: t('content.lessonManagementTitle'),
+    description: t('content.lessonManagementDescription'),
+    routeName: 'teacher-lessons',
+  },
+  {
+    title: t('content.packageManagementTitle'),
+    description: t('content.packageManagementDescription'),
+    routeName: 'teacher-packages',
+  },
   { title: t('dashboard.manageQuizzes'), description: t('dashboard.manageQuizzesDesc'), routeName: 'teacher-quizzes' },
   { title: t('dashboard.manageFlashcards'), description: t('dashboard.manageFlashcardsDesc'), routeName: 'teacher-flashcards' },
   {
@@ -59,7 +75,11 @@ const actionCards = computed(() => [
     description: t('dashboard.manageMatchingGamesDesc'),
     routeName: 'teacher-matching-games',
   },
-  { title: t('dashboard.viewStudentProgress'), description: t('dashboard.viewStudentProgressDesc'), routeName: 'teacher-student-progress' },
+  {
+    title: t('dashboard.viewStudentProgress'),
+    description: t('dashboard.viewStudentProgressDesc'),
+    routeName: 'teacher-student-progress',
+  },
   { title: t('dashboard.giveFeedback'), description: t('dashboard.giveFeedbackDesc'), routeName: 'teacher-support' },
 ])
 
@@ -92,7 +112,12 @@ onMounted(() => {
 
             <div class="dashboard-hero__aside">
               <el-tag :type="statusType" size="large" round>{{ teacherStatus ?? 'PENDING' }}</el-tag>
-              <el-button type="primary" size="large" :disabled="contentLocked">
+              <el-button
+                type="primary"
+                size="large"
+                :disabled="contentLocked"
+                @click="router.push({ name: 'teacher-lesson-new' })"
+              >
                 {{ t('dashboard.createNewLesson') }}
               </el-button>
             </div>
@@ -183,7 +208,7 @@ onMounted(() => {
               <article v-for="quiz in dashboard.recentQuizResults" :key="quiz.attemptId" class="summary-row">
                 <div>
                   <strong>{{ quiz.quizTitle }}</strong>
-                  <p>{{ quiz.studentName }} · {{ quiz.score ?? 0 }}/{{ quiz.maxScore ?? 0 }}</p>
+                  <p>{{ quiz.studentName }} - {{ quiz.score ?? 0 }}/{{ quiz.maxScore ?? 0 }}</p>
                 </div>
                 <el-tag round type="success">{{ t('dashboard.reviewed') }}</el-tag>
               </article>

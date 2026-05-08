@@ -86,7 +86,7 @@ onMounted(() => {
                 <h3>{{ t('dashboard.manageTeachers') }}</h3>
                 <p>{{ t('dashboard.manageTeachersDesc') }}</p>
               </router-link>
-              <router-link class="management-card" :to="{ name: 'admin-content-approval' }">
+              <router-link class="management-card" :to="{ name: 'admin-content-approvals' }">
                 <h3>{{ t('dashboard.manageContent') }}</h3>
                 <p>{{ t('dashboard.manageContentDesc') }}</p>
               </router-link>
@@ -156,7 +156,7 @@ onMounted(() => {
               <article v-for="activity in dashboard.recentUserActivity" :key="activity.userId" class="summary-row">
                 <div>
                   <strong>{{ activity.fullName }}</strong>
-                  <p>{{ activity.email }} · {{ activity.roles.join(', ') }}</p>
+                  <p>{{ activity.email }} - {{ activity.roles.join(', ') }}</p>
                 </div>
                 <el-tag round>{{ activity.roles[0] }}</el-tag>
               </article>

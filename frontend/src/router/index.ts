@@ -6,6 +6,9 @@ import StudentLayout from '../layouts/StudentLayout.vue'
 import TeacherLayout from '../layouts/TeacherLayout.vue'
 import { i18n } from '../i18n'
 import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
+import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vue'
+import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
+import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
 import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
 import AdminTeacherVerificationDetailPage from '../pages/admin/AdminTeacherVerificationDetailPage.vue'
@@ -13,6 +16,7 @@ import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage.vue'
 import AiDisclaimerPage from '../pages/public/AiDisclaimerPage.vue'
 import ChildSafetyPage from '../pages/public/ChildSafetyPage.vue'
 import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
+import CourseDetailPage from '../pages/public/CourseDetailPage.vue'
 import FAQPage from '../pages/public/FAQPage.vue'
 import LandingPage from '../pages/public/LandingPage.vue'
 import LoginPage from '../pages/public/LoginPage.vue'
@@ -22,6 +26,11 @@ import TeacherPublicProfilePage from '../pages/public/TeacherPublicProfilePage.v
 import TermsPage from '../pages/public/TermsPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
+import ModuleManagementPage from '../pages/teacher/ModuleManagementPage.vue'
+import LessonManagementPage from '../pages/teacher/LessonManagementPage.vue'
+import LessonEditorPage from '../pages/teacher/LessonEditorPage.vue'
+import PackageManagementPage from '../pages/teacher/PackageManagementPage.vue'
+import PackageEditorPage from '../pages/teacher/PackageEditorPage.vue'
 import TeacherProfilePage from '../pages/teacher/TeacherProfilePage.vue'
 import TeacherVerificationUploadPage from '../pages/teacher/TeacherVerificationUploadPage.vue'
 import PlaceholderWorkspacePage from '../components/common/PlaceholderWorkspacePage.vue'
@@ -244,26 +253,48 @@ const teacherChildren: RouteRecordRaw[] = [
     component: TeacherVerificationUploadPage,
     meta: { titleKey: 'nav.uploadVerificationDocuments' },
   },
-  createPlaceholderRoute(
-    'content',
-    'teacher-content',
-    'nav.contentManagement',
-    'teacher',
-    'Content Management',
-    'Content management is structured for a later phase',
-    'This workspace is ready for modules, lessons, activities, and publishing states once content workflows begin.',
-    ['Draft, submit, review, and publish content', 'See content status across modules and lessons', 'Prepare free and paid learning packages'],
-  ),
-  createPlaceholderRoute(
-    'lessons',
-    'teacher-lessons',
-    'nav.lessonManagement',
-    'teacher',
-    'Lesson Management',
-    'Lesson authoring tools will be enabled in a later phase',
-    'This page will host lesson creation, editing, rich activity composition, and media uploads.',
-    ['Create structured lessons', 'Attach audio, images, and video references', 'Organize lessons by modules and categories'],
-  ),
+  {
+    path: 'modules',
+    name: 'teacher-modules',
+    component: ModuleManagementPage,
+    meta: { titleKey: 'nav.moduleManagement' },
+  },
+  {
+    path: 'lessons',
+    name: 'teacher-lessons',
+    component: LessonManagementPage,
+    meta: { titleKey: 'nav.lessonManagement' },
+  },
+  {
+    path: 'lessons/new',
+    name: 'teacher-lesson-new',
+    component: LessonEditorPage,
+    meta: { titleKey: 'content.lessonEditorTitle', navKey: 'teacher-lessons' },
+  },
+  {
+    path: 'lessons/:id/edit',
+    name: 'teacher-lesson-edit',
+    component: LessonEditorPage,
+    meta: { titleKey: 'content.lessonEditorTitle', navKey: 'teacher-lessons' },
+  },
+  {
+    path: 'packages',
+    name: 'teacher-packages',
+    component: PackageManagementPage,
+    meta: { titleKey: 'nav.packageManagement' },
+  },
+  {
+    path: 'packages/new',
+    name: 'teacher-package-new',
+    component: PackageEditorPage,
+    meta: { titleKey: 'content.packageEditorTitle', navKey: 'teacher-packages' },
+  },
+  {
+    path: 'packages/:id/edit',
+    name: 'teacher-package-edit',
+    component: PackageEditorPage,
+    meta: { titleKey: 'content.packageEditorTitle', navKey: 'teacher-packages' },
+  },
   createPlaceholderRoute(
     'quizzes',
     'teacher-quizzes',
@@ -407,16 +438,24 @@ const adminChildren: RouteRecordRaw[] = [
     component: AdminTeacherVerificationDetailPage,
     meta: { titleKey: 'nav.teacherApproval', navKey: 'admin-teacher-approval' },
   },
-  createPlaceholderRoute(
-    'content-approval',
-    'admin-content-approval',
-    'nav.contentApproval',
-    'admin',
-    'Content Approval',
-    'Content moderation and approval will arrive later',
-    'This workspace is staged for review of teacher-submitted learning materials and moderation requests.',
-    ['Approve or reject submitted content', 'Request revisions', 'Archive or hide unsuitable material'],
-  ),
+  {
+    path: 'content/approvals',
+    name: 'admin-content-approvals',
+    component: AdminContentApprovalPage,
+    meta: { titleKey: 'nav.contentApproval' },
+  },
+  {
+    path: 'content/approvals/:type/:id',
+    name: 'admin-content-approval-detail',
+    component: AdminContentDetailReviewPage,
+    meta: { titleKey: 'nav.contentApproval', navKey: 'admin-content-approvals' },
+  },
+  {
+    path: 'content/moderation',
+    name: 'admin-content-moderation',
+    component: AdminContentModerationListPage,
+    meta: { titleKey: 'nav.contentModeration' },
+  },
   createPlaceholderRoute(
     'ai-usage-logs',
     'admin-ai-usage-logs',
@@ -557,6 +596,12 @@ const routes: RouteRecordRaw[] = [
         name: 'courses',
         component: CourseDiscoveryPage,
         meta: { titleKey: 'nav.courses' },
+      },
+      {
+        path: 'courses/:id',
+        name: 'course-detail',
+        component: CourseDetailPage,
+        meta: { titleKey: 'content.courseDetailTitle' },
       },
       {
         path: 'faq',

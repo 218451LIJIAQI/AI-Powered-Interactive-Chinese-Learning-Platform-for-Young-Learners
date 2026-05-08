@@ -2,6 +2,7 @@ package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LessonActivityType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,8 +32,9 @@ public class LessonActivity extends BaseEntity {
     @JoinColumn(name = "lesson_id", nullable = false)
     private Lesson lesson;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "activity_type", nullable = false, length = 50)
-    private String activityType;
+    private LessonActivityType activityType;
 
     @Column(name = "title", nullable = false, length = 200)
     private String title;
@@ -50,4 +52,7 @@ public class LessonActivity extends BaseEntity {
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
+
+    @Column(name = "description", length = 1000)
+    private String description;
 }

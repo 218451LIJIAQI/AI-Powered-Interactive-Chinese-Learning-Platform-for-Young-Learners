@@ -636,6 +636,139 @@ p {
   gap: 14px;
 }
 
+.content-toolbar,
+.content-inline-form,
+.content-form-grid,
+.course-discovery-grid,
+.table-actions,
+.teacher-profile-actions,
+.pagination-row {
+  display: flex;
+  gap: 14px;
+}
+
+.content-toolbar,
+.content-inline-form,
+.teacher-profile-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.content-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.content-filter {
+  min-width: 160px;
+}
+
+.content-filter--wide {
+  min-width: min(100%, 280px);
+  flex: 1 1 280px;
+}
+
+.table-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.teacher-profile-actions {
+  justify-content: flex-end;
+}
+
+.lesson-activity-section {
+  padding: 24px;
+}
+
+.course-discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.course-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  border-radius: 28px;
+}
+
+.course-card__media {
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 143, 66, 0.16), rgba(59, 179, 195, 0.14));
+}
+
+.course-card__image,
+.course-card__placeholder {
+  width: 100%;
+  height: 180px;
+}
+
+.course-card__image {
+  display: block;
+  object-fit: cover;
+}
+
+.course-card__placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.course-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.course-card__body h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.course-card__body p,
+.course-card__footer p,
+.course-card__meta span {
+  color: var(--text-secondary);
+}
+
+.course-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.92rem;
+}
+
+.course-card__teacher {
+  margin: 0;
+}
+
+.course-card__teacher-link {
+  color: var(--teacher-accent);
+  font-weight: 700;
+}
+
+.course-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.pagination-row {
+  justify-content: center;
+  margin-top: 8px;
+}
+
 .summary-row {
   display: flex;
   align-items: center;
@@ -804,6 +937,8 @@ p {
   .auth-form--grid,
   .dashboard-grid,
   .dashboard-grid--two-thirds,
+  .content-form-grid,
+  .course-discovery-grid,
   .student-stat-grid,
   .teacher-analytics-grid,
   .admin-stat-grid,
@@ -823,6 +958,15 @@ p {
 
   .main-nav {
     justify-content: flex-start;
+  }
+
+  .content-toolbar,
+  .content-inline-form,
+  .teacher-profile-actions,
+  .course-card__footer,
+  .table-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .main-nav__link {
@@ -857,5 +1001,11 @@ p {
   .public-footer {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .content-filter,
+  .content-filter--wide {
+    width: 100%;
+    min-width: 0;
   }
 }

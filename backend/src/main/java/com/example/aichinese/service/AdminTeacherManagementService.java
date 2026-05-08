@@ -22,7 +22,6 @@ import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.TeacherVerificationDocument;
 import com.example.aichinese.entity.TeacherVerificationReview;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.mapper.TeacherManagementMapper;
 import com.example.aichinese.repository.AuditLogRepository;

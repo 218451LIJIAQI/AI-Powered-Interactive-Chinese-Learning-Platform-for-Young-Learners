@@ -12,10 +12,16 @@ const navItems = [
     icon: 'CircleCheck',
   },
   {
-    key: 'admin-content-approval',
+    key: 'admin-content-approvals',
     labelKey: 'nav.contentApproval',
-    routeName: 'admin-content-approval',
+    routeName: 'admin-content-approvals',
     icon: 'DocumentCopy',
+  },
+  {
+    key: 'admin-content-moderation',
+    labelKey: 'nav.contentModeration',
+    routeName: 'admin-content-moderation',
+    icon: 'Finished',
   },
   {
     key: 'admin-ai-usage-logs',

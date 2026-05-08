@@ -62,4 +62,7 @@ public class LearningModule extends BaseEntity {
 
     @Column(name = "cover_image_url", length = 255)
     private String coverImageUrl;
+
+    @Column(name = "rejection_reason", length = 1000)
+    private String rejectionReason;
 }

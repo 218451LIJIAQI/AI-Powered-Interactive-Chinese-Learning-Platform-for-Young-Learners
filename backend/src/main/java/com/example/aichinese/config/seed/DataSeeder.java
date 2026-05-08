@@ -209,7 +209,9 @@ public class DataSeeder implements CommandLineRunner {
             return;
         }
 
-        if (userRepository.findByEmail(defaultAdminEmail).isPresent()) {
+        String normalizedEmail = defaultAdminEmail.trim().toLowerCase(java.util.Locale.ROOT);
+
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             return;
         }
 
@@ -217,7 +219,7 @@ public class DataSeeder implements CommandLineRunner {
                 .orElseThrow(() -> new IllegalStateException("ADMIN role must exist before admin seeding."));
 
         User admin = new User();
-        admin.setEmail(defaultAdminEmail.trim().toLowerCase());
+        admin.setEmail(normalizedEmail);
         admin.setPasswordHash(passwordEncoder.encode(defaultAdminPassword));
         admin.setDisplayName("Platform Administrator");
         admin.setPreferredLanguage("en");
