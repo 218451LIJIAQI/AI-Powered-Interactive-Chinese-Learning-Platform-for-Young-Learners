@@ -10,6 +10,19 @@ const isLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 
 const navItems = computed(() => [
   { key: 'teacher-dashboard', labelKey: 'nav.teacherDashboard', routeName: 'teacher-dashboard', icon: 'House' },
+  { key: 'teacher-profile', labelKey: 'nav.teacherProfile', routeName: 'teacher-profile', icon: 'User' },
+  {
+    key: 'teacher-verification-status',
+    labelKey: 'nav.teacherVerificationStatus',
+    routeName: 'teacher-verification-status',
+    icon: 'CircleCheck',
+  },
+  {
+    key: 'teacher-verification-documents',
+    labelKey: 'nav.uploadVerificationDocuments',
+    routeName: 'teacher-verification-documents',
+    icon: 'Upload',
+  },
   { key: 'teacher-content', labelKey: 'nav.contentManagement', routeName: 'teacher-content', icon: 'Collection' },
   { key: 'teacher-lessons', labelKey: 'nav.lessonManagement', routeName: 'teacher-lessons', icon: 'Notebook' },
   { key: 'teacher-quizzes', labelKey: 'nav.quizManagement', routeName: 'teacher-quizzes', icon: 'DocumentChecked' },

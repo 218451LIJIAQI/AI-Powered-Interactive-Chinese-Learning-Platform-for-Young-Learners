@@ -4,6 +4,7 @@ import AppShell from '../components/common/AppShell.vue'
 const navItems = [
   { key: 'admin-dashboard', labelKey: 'nav.adminDashboard', routeName: 'admin-dashboard', icon: 'House' },
   { key: 'admin-users', labelKey: 'nav.userManagement', routeName: 'admin-users', icon: 'UserFilled' },
+  { key: 'admin-students', labelKey: 'nav.students', routeName: 'admin-students', icon: 'Avatar' },
   {
     key: 'admin-teacher-approval',
     labelKey: 'nav.teacherApproval',

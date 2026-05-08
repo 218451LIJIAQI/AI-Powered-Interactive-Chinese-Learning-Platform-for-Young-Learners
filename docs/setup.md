@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 4.
+This document explains how to run the project locally through Phase 5.
 
 ## Prerequisites
 - Node.js and npm
@@ -33,6 +33,8 @@ Important variables:
 - `JWT_EXPIRATION`
 - `DEFAULT_ADMIN_EMAIL`
 - `DEFAULT_ADMIN_PASSWORD`
+- `UPLOAD_DIR`
+- `MAX_FILE_SIZE`
 
 Example:
 
@@ -43,14 +45,19 @@ DB_NAME=ai_chinese_learning
 DB_USERNAME=root
 DB_PASSWORD=root
 APP_CORS_ALLOWED_ORIGINS=http://localhost:5173
-JWT_SECRET=replace-with-a-32-character-minimum-secret
+JWT_SECRET=replace-with-a-strong-plain-text-secret-at-least-32-characters-long
 JWT_EXPIRATION=3600000
 DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=SuperSecure123!
+UPLOAD_DIR=./uploads
+MAX_FILE_SIZE=5MB
 ```
 
 Notes:
 - Do not use real production secrets in local demo setup files.
+- `JWT_SECRET` should be a strong plain-text secret with at least 32 characters/bytes.
+- If you need to provide a Base64-encoded JWT secret, use the prefix `base64:`.
+- Invalid or short JWT secrets now fail clearly during backend startup instead of producing a runtime login `500`.
 - If `DEFAULT_ADMIN_EMAIL` or `DEFAULT_ADMIN_PASSWORD` is missing, the backend still starts safely and skips admin creation.
 
 ## 3. Run the Backend
@@ -127,6 +134,9 @@ Student routes:
 
 Teacher routes:
 - `/teacher/dashboard`
+- `/teacher/profile`
+- `/teacher/verification-status`
+- `/teacher/verification-documents`
 - `/teacher/content`
 - `/teacher/lessons`
 - `/teacher/quizzes`
@@ -144,7 +154,9 @@ Teacher routes:
 Admin routes:
 - `/admin/dashboard`
 - `/admin/users`
+- `/admin/students`
 - `/admin/teacher-approval`
+- `/admin/teacher-approval/:id`
 - `/admin/content-approval`
 - `/admin/ai-usage-logs`
 - `/admin/payments`
@@ -157,6 +169,9 @@ Admin routes:
 - `/admin/support-tickets`
 - `/admin/activity-logs`
 - `/admin/settings`
+
+Public teacher profile route:
+- `/teachers/:id`
 
 ## 7. Dashboard Summary APIs
 Student dashboard:
@@ -176,7 +191,59 @@ Behavior:
 - Returns safe defaults or empty arrays for later-phase workflows
 - Uses the shared `ApiResponse` response format
 
-## 8. Dashboard Testing Guide
+## 8. Phase 5 Teacher Verification And Admin Management APIs
+Teacher APIs:
+- `GET /api/v1/teachers/me`
+- `PUT /api/v1/teachers/me/profile`
+- `GET /api/v1/teachers/verification-status`
+- `POST /api/v1/teachers/verification-documents`
+- `POST /api/v1/teachers/resubmit-verification`
+- `GET /api/v1/teachers/verification-documents/{id}`
+
+Admin APIs:
+- `GET /api/v1/admin/teachers`
+- `GET /api/v1/admin/teachers/{id}`
+- `GET /api/v1/admin/teachers/pending`
+- `POST /api/v1/admin/teachers/{id}/approve`
+- `POST /api/v1/admin/teachers/{id}/reject`
+- `GET /api/v1/admin/teacher-documents/{id}`
+- `GET /api/v1/admin/users`
+- `GET /api/v1/admin/students`
+
+Public API:
+- `GET /api/v1/public/teachers/{id}`
+
+## 9. Teacher Verification Workflow
+- Teacher registers publicly and starts with `PENDING` status.
+- Teacher updates their profile at `/teacher/profile`.
+- Teacher uploads private verification documents at `/teacher/verification-documents`.
+- Admin reviews pending teachers at `/admin/teacher-approval`.
+- Admin approves or rejects the teacher.
+- Rejected teachers can see the rejection reason and resubmit verification.
+- Only approved teachers are visible on the public teacher profile route.
+
+## 10. Manual Phase 5 Testing Guide
+Teacher profile and upload:
+- Register and log in as a teacher
+- Open `/teacher/profile`
+- Save profile changes
+- Open `/teacher/verification-documents`
+- Upload a PDF or PNG verification file
+- Confirm the document list and status card update
+
+Admin approval:
+- Log in as the seeded admin
+- Open `/admin/teacher-approval`
+- Review a pending teacher
+- Open the teacher detail page
+- View the protected document
+- Approve or reject the teacher
+
+Public teacher profile:
+- After approval, open `/teachers/{teacherId}`
+- Confirm the verified badge and safe public info appear
+- Confirm rejected or pending teachers are not publicly visible
+## 11. Dashboard Testing Guide
 ### Student dashboard
 - Register or log in as a student
 - Visit `/student/dashboard`
@@ -202,7 +269,7 @@ Behavior:
   - recent user activity, recent reports, and recent audit logs render safely
   - payment and AI cards show safe summary values
 
-## 9. What Exists Through Phase 4
+## 12. What Exists Through Phase 5
 - Frontend app scaffold
 - Role-based layouts and navigation
 - Real login page
@@ -218,11 +285,15 @@ Behavior:
 - Role-based backend protection
 - Dashboard summary APIs
 - Backend auth and dashboard integration tests
-
-## 10. What Is Intentionally Deferred
+- Teacher profile management
+- Teacher verification upload and resubmission flow
+- Admin teacher approval and rejection flow
+- Admin user and student list pages
+- Public approved teacher profile page
+- Phase 5 backend integration tests
+## 13. What Is Intentionally Deferred
 - AI integration logic
 - Payment and subscription workflows
 - Learning content management
-- Teacher verification document upload workflow
 - Course, package, lesson, quiz, and business feature workflows
 - Full support, report, review, notification, refund, and payout workflows

@@ -5,7 +5,11 @@ import PublicLayout from '../layouts/PublicLayout.vue'
 import StudentLayout from '../layouts/StudentLayout.vue'
 import TeacherLayout from '../layouts/TeacherLayout.vue'
 import { i18n } from '../i18n'
+import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
+import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
+import AdminTeacherVerificationDetailPage from '../pages/admin/AdminTeacherVerificationDetailPage.vue'
+import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage.vue'
 import AiDisclaimerPage from '../pages/public/AiDisclaimerPage.vue'
 import ChildSafetyPage from '../pages/public/ChildSafetyPage.vue'
 import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
@@ -14,9 +18,12 @@ import LandingPage from '../pages/public/LandingPage.vue'
 import LoginPage from '../pages/public/LoginPage.vue'
 import PrivacyPage from '../pages/public/PrivacyPage.vue'
 import RegisterPage from '../pages/public/RegisterPage.vue'
+import TeacherPublicProfilePage from '../pages/public/TeacherPublicProfilePage.vue'
 import TermsPage from '../pages/public/TermsPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
+import TeacherProfilePage from '../pages/teacher/TeacherProfilePage.vue'
+import TeacherVerificationUploadPage from '../pages/teacher/TeacherVerificationUploadPage.vue'
 import PlaceholderWorkspacePage from '../components/common/PlaceholderWorkspacePage.vue'
 import { pinia } from '../stores'
 import { useAuthStore, type UserRole } from '../stores/authStore'
@@ -27,6 +34,7 @@ declare module 'vue-router' {
     requiresAuth?: boolean
     roles?: UserRole[]
     guestOnly?: boolean
+    navKey?: string
     placeholder?: {
       eyebrow: string
       title: string
@@ -218,6 +226,24 @@ const teacherChildren: RouteRecordRaw[] = [
     component: TeacherDashboardPage,
     meta: { titleKey: 'nav.teacherDashboard' },
   },
+  {
+    path: 'profile',
+    name: 'teacher-profile',
+    component: TeacherProfilePage,
+    meta: { titleKey: 'nav.teacherProfile' },
+  },
+  {
+    path: 'verification-status',
+    name: 'teacher-verification-status',
+    component: TeacherVerificationUploadPage,
+    meta: { titleKey: 'nav.teacherVerificationStatus' },
+  },
+  {
+    path: 'verification-documents',
+    name: 'teacher-verification-documents',
+    component: TeacherVerificationUploadPage,
+    meta: { titleKey: 'nav.uploadVerificationDocuments' },
+  },
   createPlaceholderRoute(
     'content',
     'teacher-content',
@@ -357,26 +383,30 @@ const adminChildren: RouteRecordRaw[] = [
     component: AdminDashboardPage,
     meta: { titleKey: 'nav.adminDashboard' },
   },
-  createPlaceholderRoute(
-    'users',
-    'admin-users',
-    'nav.userManagement',
-    'admin',
-    'User Management',
-    'User management tools will be added in a later phase',
-    'This page is prepared for student and teacher account oversight, filtering, and moderation actions.',
-    ['Browse users by role', 'Inspect account health', 'Manage account status safely'],
-  ),
-  createPlaceholderRoute(
-    'teacher-approval',
-    'admin-teacher-approval',
-    'nav.teacherApproval',
-    'admin',
-    'Teacher Approval',
-    'Teacher verification workflows are reserved for a later phase',
-    'This section will later support review of teacher documents, approval decisions, and rejection reasons.',
-    ['Review pending teacher accounts', 'Approve or reject verification', 'Send next-step guidance'],
-  ),
+  {
+    path: 'users',
+    name: 'admin-users',
+    component: AdminUserManagementPage,
+    meta: { titleKey: 'nav.userManagement' },
+  },
+  {
+    path: 'students',
+    name: 'admin-students',
+    component: AdminStudentListPage,
+    meta: { titleKey: 'nav.students' },
+  },
+  {
+    path: 'teacher-approval',
+    name: 'admin-teacher-approval',
+    component: AdminTeacherApprovalListPage,
+    meta: { titleKey: 'nav.teacherApproval' },
+  },
+  {
+    path: 'teacher-approval/:id',
+    name: 'admin-teacher-approval-detail',
+    component: AdminTeacherVerificationDetailPage,
+    meta: { titleKey: 'nav.teacherApproval', navKey: 'admin-teacher-approval' },
+  },
   createPlaceholderRoute(
     'content-approval',
     'admin-content-approval',
@@ -557,6 +587,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ai-disclaimer',
         component: AiDisclaimerPage,
         meta: { titleKey: 'nav.aiDisclaimer' },
+      },
+      {
+        path: 'teachers/:id',
+        name: 'teacher-public-profile',
+        component: TeacherPublicProfilePage,
+        meta: { titleKey: 'nav.teacherPublicProfile' },
       },
     ],
   },

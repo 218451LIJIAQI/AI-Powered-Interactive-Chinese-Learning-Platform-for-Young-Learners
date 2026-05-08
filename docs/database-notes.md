@@ -173,16 +173,35 @@ If either value is missing:
 No admin credentials are hard-coded in the codebase.
 
 ## 7. Notes On Scope
-Phase 2 intentionally covers only:
+Phase 2 established the schema foundation. By Phase 5, these additional table groups are now actively used in implemented workflows:
+
+- Teacher verification workflow:
+  - `teacher_profiles`
+  - `teacher_verification_documents`
+  - `teacher_verification_reviews`
+  - `uploaded_files`
+- Basic moderation and communication support:
+  - `notifications`
+  - `audit_logs`
+
+Phase 2 intentionally covered only:
 - entities
 - enums
 - repositories
 - seed data
 - database configuration
 
-It does not yet implement:
+Implemented by Phase 5:
+- teacher profile updates
+- teacher verification document upload and review records
+- admin teacher approval and rejection
+- protected uploaded file metadata storage
+- notification records for verification actions
+- audit logs for verification actions
+
+Still not implemented:
 - authentication
-- business workflows
 - AI features
 - payment flows
-- feature controllers beyond the existing health endpoint
+- learning content CRUD workflows
+- broader business workflows beyond the approved Phase 5 scope

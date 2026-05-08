@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -126,6 +127,8 @@ public class AuthService {
                     new UsernamePasswordAuthenticationToken(email, request.password()));
         } catch (BadCredentialsException exception) {
             throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.");
+        } catch (AuthenticationException exception) {
+            throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.", exception);
         }
 
         User user = userRepository.findByEmailWithRoles(email)

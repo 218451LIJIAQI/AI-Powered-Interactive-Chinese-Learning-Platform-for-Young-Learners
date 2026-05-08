@@ -32,7 +32,7 @@ const { t } = useI18n()
 
 const isPublic = computed(() => props.variant === 'public')
 const currentUserName = computed(() => authStore.currentUser?.fullName ?? '')
-const activeKey = computed(() => String(route.name ?? ''))
+const activeKey = computed(() => String(route.meta.navKey ?? route.name ?? ''))
 
 async function handleNavigate(routeName?: string, disabled?: boolean) {
   if (!routeName || disabled) {

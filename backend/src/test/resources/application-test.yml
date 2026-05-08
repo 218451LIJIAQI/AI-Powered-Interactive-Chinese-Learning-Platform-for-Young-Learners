@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:aichinese;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:aichinese-${random.uuid};MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -20,5 +20,8 @@ logging:
 app:
   security:
     jwt:
-      secret: test-jwt-secret-key-for-phase-three-12345
+      secret: RuntimeStyleJwtSecretForTests1234567890AB
       expiration: 3600000
+  upload:
+    directory: ./target/test-uploads
+    max-file-size: 5MB

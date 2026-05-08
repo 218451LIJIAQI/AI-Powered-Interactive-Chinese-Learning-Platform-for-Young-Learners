@@ -193,6 +193,41 @@ class AuthControllerIntegrationTests {
     }
 
     @Test
+    void shouldReturnCurrentUserForAuthenticatedTeacher() throws Exception {
+        String email = uniqueEmail("me-teacher");
+        registerTeacher(email, "Password123!");
+        String token = loginAndExtractToken(email, "Password123!");
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.email").value(email))
+                .andExpect(jsonPath("$.data.teacherProfile").isMap())
+                .andExpect(jsonPath("$.data.teacherProfile.teacherStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.studentProfile").doesNotExist());
+    }
+
+    @Test
+    void shouldReturnCurrentUserForAuthenticatedAdminWithoutProfiles() throws Exception {
+        String token = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+
+        MvcResult result = mockMvc.perform(get("/api/v1/auth/me")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.email").value("admin@example.com"))
+                .andExpect(jsonPath("$.data.roles[0]").value("ADMIN"))
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        assertThat(responseBody).contains("\"studentProfile\":null");
+        assertThat(responseBody).contains("\"teacherProfile\":null");
+        assertThat(responseBody).doesNotContain("passwordHash");
+        assertThat(responseBody).doesNotContain("password_hash");
+    }
+
+    @Test
     void shouldRejectProtectedRouteWithoutToken() throws Exception {
         mockMvc.perform(get("/api/v1/students/dashboard"))
                 .andExpect(status().isUnauthorized())
