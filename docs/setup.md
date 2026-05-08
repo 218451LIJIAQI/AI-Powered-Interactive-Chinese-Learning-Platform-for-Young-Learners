@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 3.
+This document explains how to run the project locally through Phase 4.
 
 ## Prerequisites
 - Node.js and npm
@@ -28,7 +28,7 @@ Use:
 - [backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/.env.example)
 - [backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/src/main/resources/application-example.yml)
 
-Important Phase 3 variables:
+Important variables:
 - `JWT_SECRET`
 - `JWT_EXPIRATION`
 - `DEFAULT_ADMIN_EMAIL`
@@ -77,7 +77,7 @@ npm run dev
 Default frontend URL:
 - `http://localhost:5173`
 
-## 5. Phase 3 Authentication Flows
+## 5. Authentication and Route Protection
 Implemented auth endpoints:
 - `POST /api/v1/auth/register/student`
 - `POST /api/v1/auth/register/teacher`
@@ -87,24 +87,7 @@ Implemented auth endpoints:
 - `POST /api/v1/auth/forgot-password`
 - `POST /api/v1/auth/reset-password`
 
-### Student registration
-- Public route
-- Creates `STUDENT` role user
-- Creates `student_profiles` record
-
-### Teacher registration
-- Public route
-- Creates `TEACHER` role user
-- Creates `teacher_profiles` record
-- Default status is `PENDING`
-
-### Admin login
-- Admin cannot register publicly
-- Admin account is seeded only from:
-  - `DEFAULT_ADMIN_EMAIL`
-  - `DEFAULT_ADMIN_PASSWORD`
-
-### Frontend auth behavior
+Frontend auth behavior:
 - JWT token is stored in local storage
 - Axios automatically sends `Authorization: Bearer <token>`
 - Vue Router guards protect role pages
@@ -113,39 +96,133 @@ Implemented auth endpoints:
   - `TEACHER -> /teacher/dashboard`
   - `ADMIN -> /admin/dashboard`
 
-## 6. Protected Route Testing
-Without token:
-- `GET /api/v1/students/dashboard` should return `401`
+## 6. Phase 4 Dashboard Routes
+Public routes:
+- `/`
+- `/courses`
+- `/faq`
+- `/terms`
+- `/privacy`
+- `/child-safety`
+- `/ai-disclaimer`
+- `/login`
+- `/register`
 
-With a student token:
-- `GET /api/v1/students/dashboard` should return `200`
-- `GET /api/v1/admin/dashboard` should return `403`
+Student routes:
+- `/student/dashboard`
+- `/student/modules`
+- `/student/ai-tutor`
+- `/student/ai-vocabulary`
+- `/student/ai-sentence-practice`
+- `/student/pronunciation-feedback`
+- `/student/writing-feedback`
+- `/student/progress`
+- `/student/rewards`
+- `/student/cart`
+- `/student/payment-history`
+- `/student/subscription`
+- `/student/wishlist`
+- `/student/notifications`
+- `/student/support`
 
-With a teacher token:
-- `GET /api/v1/teachers/dashboard` should return `200`
+Teacher routes:
+- `/teacher/dashboard`
+- `/teacher/content`
+- `/teacher/lessons`
+- `/teacher/quizzes`
+- `/teacher/flashcards`
+- `/teacher/matching-games`
+- `/teacher/ai-assistant`
+- `/teacher/ai-content-tools`
+- `/teacher/student-progress`
+- `/teacher/reviews`
+- `/teacher/earnings`
+- `/teacher/payouts`
+- `/teacher/notifications`
+- `/teacher/support`
 
-With an admin token:
-- `GET /api/v1/admin/dashboard` should return `200`
+Admin routes:
+- `/admin/dashboard`
+- `/admin/users`
+- `/admin/teacher-approval`
+- `/admin/content-approval`
+- `/admin/ai-usage-logs`
+- `/admin/payments`
+- `/admin/refunds`
+- `/admin/payouts`
+- `/admin/subscription-plans`
+- `/admin/reports`
+- `/admin/reviews`
+- `/admin/notifications`
+- `/admin/support-tickets`
+- `/admin/activity-logs`
+- `/admin/settings`
 
-## 7. What Exists Through Phase 3
+## 7. Dashboard Summary APIs
+Student dashboard:
+- `GET /api/v1/students/dashboard`
+- Requires `STUDENT`
+
+Teacher dashboard:
+- `GET /api/v1/teachers/dashboard`
+- Requires `TEACHER`
+
+Admin dashboard:
+- `GET /api/v1/admin/dashboard`
+- Requires `ADMIN`
+
+Behavior:
+- Returns real counts where the database already contains relevant records
+- Returns safe defaults or empty arrays for later-phase workflows
+- Uses the shared `ApiResponse` response format
+
+## 8. Dashboard Testing Guide
+### Student dashboard
+- Register or log in as a student
+- Visit `/student/dashboard`
+- Confirm:
+  - welcome message uses the authenticated user
+  - progress cards render
+  - quick access cards render
+  - empty states appear instead of broken widgets
+
+### Teacher dashboard
+- Register or log in as a teacher
+- Visit `/teacher/dashboard`
+- Confirm:
+  - teacher status is shown
+  - `PENDING` or `REJECTED` displays a clear alert
+  - creation-related actions are disabled or visually locked
+
+### Admin dashboard
+- Log in with the seeded admin account
+- Visit `/admin/dashboard`
+- Confirm:
+  - total students, teachers, and pending approvals render
+  - recent user activity, recent reports, and recent audit logs render safely
+  - payment and AI cards show safe summary values
+
+## 9. What Exists Through Phase 4
 - Frontend app scaffold
-- Role-based layouts
+- Role-based layouts and navigation
 - Real login page
 - Real student and teacher registration page
 - Auth store, JWT handling, and route guards
-- Student, teacher, and admin dashboard placeholders with authenticated user info
+- Student, teacher, and admin dashboards with real API-backed summary structure
+- Placeholder workspace pages for future modules
 - Spring Boot backend
 - `/api/v1/health`
 - Database foundation and seed data
 - Spring Security and JWT authentication
 - Current user API
 - Role-based backend protection
-- Backend auth integration tests
+- Dashboard summary APIs
+- Backend auth and dashboard integration tests
 
-## 8. What Is Intentionally Deferred
-- AI integration
+## 10. What Is Intentionally Deferred
+- AI integration logic
 - Payment and subscription workflows
 - Learning content management
 - Teacher verification document upload workflow
 - Course, package, lesson, quiz, and business feature workflows
-- Full email delivery system
+- Full support, report, review, notification, refund, and payout workflows

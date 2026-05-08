@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+const PUBLIC_PROTECTED_PATHS = ['/student', '/teacher', '/admin']
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
@@ -30,7 +31,11 @@ apiClient.interceptors.response.use(
     if (status === 401 && !isAuthRequest) {
       localStorage.removeItem('ai-chinese-learning-token')
 
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname !== '/login' &&
+        PUBLIC_PROTECTED_PATHS.some((path) => window.location.pathname.startsWith(path))
+      ) {
         const redirect = `${window.location.pathname}${window.location.search}`
         window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
       }

@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.example.aichinese.entity.StudentBadge;
 
 public interface StudentBadgeRepository extends JpaRepository<StudentBadge, Long> {
+
+    long countByStudentId(Long studentId);
 }

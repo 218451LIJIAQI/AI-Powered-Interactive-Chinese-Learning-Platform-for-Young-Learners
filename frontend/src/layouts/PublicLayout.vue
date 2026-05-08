@@ -1,20 +1,28 @@
 <script setup lang="ts">
-import AppHeader from '../components/common/AppHeader.vue'
+import AppShell from '../components/common/AppShell.vue'
 
-const links = [
-  { labelKey: 'nav.home', name: 'landing' },
-  { labelKey: 'nav.courses', name: 'courses' },
-  { labelKey: 'nav.faq', name: 'faq' },
-  { labelKey: 'nav.login', name: 'login' },
-  { labelKey: 'nav.register', name: 'register' },
+const navItems = [
+  { key: 'landing', labelKey: 'nav.home', routeName: 'landing', icon: 'House' },
+  { key: 'courses', labelKey: 'nav.courses', routeName: 'courses', icon: 'Reading' },
+  { key: 'faq', labelKey: 'nav.faq', routeName: 'faq', icon: 'QuestionFilled' },
+  { key: 'login', labelKey: 'nav.login', routeName: 'login', icon: 'User' },
+  { key: 'register', labelKey: 'nav.register', routeName: 'register', icon: 'EditPen' },
+]
+
+const footerLinks = [
+  { labelKey: 'nav.terms', routeName: 'terms' },
+  { labelKey: 'nav.privacy', routeName: 'privacy' },
+  { labelKey: 'nav.childSafety', routeName: 'child-safety' },
+  { labelKey: 'nav.aiDisclaimer', routeName: 'ai-disclaimer' },
 ]
 </script>
 
 <template>
-  <div class="site-shell site-shell--public">
-    <AppHeader :links="links" variant="public" />
-    <main class="site-content">
-      <router-view />
-    </main>
-  </div>
+  <AppShell
+    variant="public"
+    :title="'AI-Powered Interactive Chinese Learning Platform'"
+    :subtitle="'A bright, child-friendly learning experience for Malaysian young Mandarin learners.'"
+    :nav-items="navItems"
+    :footer-links="footerLinks"
+  />
 </template>

@@ -9,15 +9,15 @@ const { t } = useI18n()
 const featureCards = [
   {
     title: 'AI Tutor',
-    description: 'A friendly learning guide will become a core feature in later phases.',
+    description: 'Friendly AI tutoring, vocabulary help, and sentence guidance are central to the learning experience.',
   },
   {
     title: 'Interactive Practice',
-    description: 'Flashcards, quizzes, tracing, and listening experiences will live here.',
+    description: 'Flashcards, quizzes, tracing, matching games, and listening activities support playful repetition.',
   },
   {
     title: 'Teacher-led Learning',
-    description: 'Live, recorded, and hybrid learning content will be added in later phases.',
+    description: 'Teacher-created live, recorded, and hybrid lessons will fit into a moderated learning platform.',
   },
 ]
 </script>
@@ -30,16 +30,19 @@ const featureCards = [
       <el-card class="feature-banner" shadow="never">
         <div class="feature-banner__content">
           <div>
-            <p class="section-label">Phase 1 Foundation</p>
-            <h2>Frontend structure, backend foundation, and local development setup are ready.</h2>
+            <p class="section-label">{{ t('landing.phaseBadge') }}</p>
+            <h2>{{ t('landing.phaseTitle') }}</h2>
             <p>
-              This starter already includes role-based layouts, routing, i18n, theme support, backend health checks,
-              and MySQL development setup.
+              {{ t('landing.phaseDescription') }}
             </p>
           </div>
           <div class="feature-banner__actions">
-            <el-button type="primary" size="large">{{ t('common.startLearning') }}</el-button>
-            <el-button size="large" plain>{{ t('common.learnMore') }}</el-button>
+            <router-link :to="{ name: 'register' }">
+              <el-button type="primary" size="large">{{ t('common.startLearning') }}</el-button>
+            </router-link>
+            <router-link :to="{ name: 'courses' }">
+              <el-button size="large" plain>{{ t('common.learnMore') }}</el-button>
+            </router-link>
           </div>
         </div>
       </el-card>
@@ -52,6 +55,12 @@ const featureCards = [
           :description="card.description"
         />
       </div>
+    </section>
+
+    <section class="placeholder-grid">
+      <PlaceholderCard title="Gamified rewards" description="Points, badges, levels, and daily streaks will keep progress encouraging and child-friendly." />
+      <PlaceholderCard title="Teacher dashboards" description="Teachers will manage future lessons, student progress, and AI-assisted content tools from dedicated workspaces." />
+      <PlaceholderCard title="Admin oversight" description="Admins will review approvals, safety signals, AI usage, and operational health with protected controls." />
     </section>
   </div>
 </template>
