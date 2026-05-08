@@ -1,0 +1,32 @@
+export default {
+  nav: {
+    home: '首页',
+    courses: '课程',
+    faq: '常见问题',
+    terms: '服务条款',
+    privacy: '隐私政策',
+    childSafety: '儿童安全',
+    aiDisclaimer: 'AI 免责声明',
+    login: '登录',
+    register: '注册',
+    studentDashboard: '学生仪表板',
+    teacherDashboard: '教师仪表板',
+    adminDashboard: '管理员仪表板',
+  },
+  common: {
+    appName: 'AI 华语学习平台',
+    theme: '主题',
+    language: '语言',
+    light: '浅色',
+    dark: '深色',
+    viewDashboard: '查看仪表板',
+    learnMore: '了解更多',
+    startLearning: '开始学习',
+    placeholder: '此页面已为下一阶段准备好。',
+  },
+  landing: {
+    badge: '为 7-12 岁学习者打造的 AI 学习体验',
+    title: '为儿童设计的有趣华语学习平台',
+    subtitle: '通过 AI 导师、互动练习、故事学习和友好的进度追踪来学习华语。',
+  },
+}
