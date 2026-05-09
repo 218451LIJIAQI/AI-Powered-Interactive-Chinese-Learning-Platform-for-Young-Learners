@@ -26,6 +26,30 @@ const navItems = computed(() => [
   { key: 'teacher-earnings', labelKey: 'nav.earnings', routeName: 'teacher-earnings', icon: 'Coin' },
   { key: 'teacher-payouts', labelKey: 'nav.payoutRequests', routeName: 'teacher-payouts', icon: 'Wallet' },
   {
+    key: 'teacher-live-classes',
+    labelKey: 'nav.liveClasses',
+    routeName: 'teacher-live-classes',
+    icon: 'VideoCamera',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-schedule',
+    labelKey: 'nav.schedule',
+    routeName: 'teacher-schedule',
+    icon: 'Calendar',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-recorded-lessons',
+    labelKey: 'nav.recordedLessons',
+    routeName: 'teacher-recorded-lessons',
+    icon: 'Film',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
     key: 'teacher-modules',
     labelKey: 'nav.moduleManagement',
     routeName: 'teacher-modules',
@@ -126,7 +150,7 @@ const navItems = computed(() => [
 
 const subtitle = computed(() => {
   const status = authStore.teacherStatus ?? 'PENDING'
-  return `Manage your teaching workspace, use AI-assisted planning tools, and track approval status. Current status: ${status}.`
+  return `Manage your teaching workspace, schedule live lessons, prepare recorded materials, and track approval status. Current status: ${status}.`
 })
 </script>
 

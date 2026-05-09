@@ -3,7 +3,7 @@
 ## Project Overview
 This project is a full-stack final-year-project web application for young learners aged 7-12. It is designed as an interactive and gamified Chinese learning platform for the Malaysian context, with support for student, teacher, and admin roles.
 
-Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 added the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility. Phase 9 now adds payment and commerce workflows with Stripe-ready backend configuration, cart and checkout flows, subscriptions, entitlements, teacher earnings, refunds, and payouts.
+Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 added the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility. Phase 9 added payment and commerce workflows with Stripe-ready backend configuration, cart and checkout flows, subscriptions, entitlements, teacher earnings, refunds, and payouts. Phase 10 now adds live classes, recorded lesson videos, hybrid lesson delivery, protected join-link access, video progress tracking, and student/teacher/admin schedule views.
 
 ## Tech Stack
 - Frontend: Vue 3, Vite, TypeScript, Element Plus, Vue Router, Pinia, Axios, Vue I18n, npm
@@ -12,7 +12,7 @@ Phase 1 established the monorepo scaffold. Phase 2 added the backend database fo
 - Tooling: Docker Compose
 
 ## Current Status
-Completed through Phase 9 work-in-progress:
+Completed through Phase 10 work-in-progress:
 - Monorepo scaffold created
 - Vue frontend created with required packages and folder structure
 - Public, student, teacher, and admin layouts added and polished
@@ -72,6 +72,16 @@ Completed through Phase 9 work-in-progress:
   - admin payment and refund management views
   - public paid-content purchase entry points
   - backend commerce integration tests
+- Phase 10 live and recorded learning foundation added:
+  - teacher live class create, update, cancel, reschedule, and enrolment list flows
+  - student live class list, detail, enrolment, and protected join-link flow
+  - admin live class overview and schedule overview
+  - recorded lesson video support with uploaded-file or external-URL sources
+  - protected recorded video streaming through backend access checks
+  - video progress save, update, resume, and completion flow
+  - hybrid lesson player support for live classes plus recorded videos
+  - student, teacher, and admin schedule pages
+  - backend integration tests for live and recorded learning security
 
 Phase 9 known limitations:
 - Stripe sandbox/test mode only
@@ -82,8 +92,6 @@ Phase 9 known limitations:
 
 Still intentionally not implemented:
 - leaderboard
-- live class scheduling workflows
-- recorded video upload or player workflows
 - custom AI model training
 - professional handwriting recognition
 - professional pronunciation scoring
@@ -102,7 +110,11 @@ Public:
 Student:
 - `/student/dashboard`
 - `/student/lessons`
+- `/student/live-classes`
+- `/student/live-classes/:id`
+- `/student/schedule`
 - `/student/lessons/:lessonId`
+- `/student/recorded-lessons/:id`
 - `/student/lessons/:lessonId/flashcards`
 - `/student/quizzes/:quizId`
 - `/student/quiz-attempts/:attemptId`
@@ -124,6 +136,11 @@ Teacher:
 - `/teacher/dashboard`
 - `/teacher/profile`
 - `/teacher/verification-status`
+- `/teacher/live-classes`
+- `/teacher/live-classes/create`
+- `/teacher/live-classes/:id/edit`
+- `/teacher/schedule`
+- `/teacher/recorded-lessons`
 - `/teacher/modules`
 - `/teacher/lessons`
 - `/teacher/lessons/new`
@@ -144,6 +161,8 @@ Teacher:
 
 Admin:
 - `/admin/dashboard`
+- `/admin/live-classes`
+- `/admin/schedule`
 - `/admin/users`
 - `/admin/students`
 - `/admin/teacher-approval`
@@ -211,6 +230,20 @@ Important:
 - Never place the real Stripe secret key or webhook secret in frontend code.
 - The frontend does not store card data.
 - If Stripe keys are missing or the real provider is disabled, the backend remains runnable and returns safe unavailable or mock-mode checkout behavior.
+
+## Live And Recorded Learning Configuration
+Recorded lesson uploads use backend-only filesystem configuration:
+
+```env
+RECORDED_VIDEO_UPLOAD_DIR=./uploads/recorded-videos
+MAX_VIDEO_FILE_SIZE=100MB
+```
+
+Important:
+- Meeting links are never exposed in public course or lesson APIs.
+- Students only receive the meeting link from the protected join endpoint after enrolment and entitlement checks pass.
+- Uploaded recorded videos are served through backend-protected endpoints and do not expose private storage paths.
+- Do not commit uploaded runtime video files.
 
 ## Phase 7 API Overview
 Student learning:
@@ -296,3 +329,5 @@ npm run dev
 - Content management: [docs/content-management.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/content-management.md)
 - Interactive learning: [docs/interactive-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/interactive-learning.md)
 - AI features: [docs/ai-features.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/ai-features.md)
+- Payment and commerce: [docs/payment-commerce.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/payment-commerce.md)
+- Live, recorded, and hybrid learning: [docs/live-recorded-hybrid-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/live-recorded-hybrid-learning.md)

@@ -9,6 +9,8 @@ import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vu
 import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
 import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
 import AdminAiUsageLogsPage from '../pages/admin/AdminAiUsageLogsPage.vue'
+import AdminLiveClassOverviewPage from '../pages/admin/AdminLiveClassOverviewPage.vue'
+import AdminScheduleOverviewPage from '../pages/admin/AdminScheduleOverviewPage.vue'
 import CommissionSettingPage from '../pages/admin/CommissionSettingPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
 import PaymentManagementPage from '../pages/admin/PaymentManagementPage.vue'
@@ -49,10 +51,14 @@ import PaymentResultPage from '../pages/student/PaymentResultPage.vue'
 import ProgressPage from '../pages/student/ProgressPage.vue'
 import QuizPage from '../pages/student/QuizPage.vue'
 import QuizResultPage from '../pages/student/QuizResultPage.vue'
+import RecordedLessonPlayerPage from '../pages/student/RecordedLessonPlayerPage.vue'
 import RefundHistoryPage from '../pages/student/RefundHistoryPage.vue'
 import RewardsPage from '../pages/student/RewardsPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
 import StudentLessonsPage from '../pages/student/StudentLessonsPage.vue'
+import StudentLiveClassDetailPage from '../pages/student/StudentLiveClassDetailPage.vue'
+import StudentLiveClassListPage from '../pages/student/StudentLiveClassListPage.vue'
+import StudentSchedulePage from '../pages/student/StudentSchedulePage.vue'
 import SubscriptionPage from '../pages/student/SubscriptionPage.vue'
 import WrongAnswerReviewPage from '../pages/student/WrongAnswerReviewPage.vue'
 import EarningsDashboardPage from '../pages/teacher/EarningsDashboardPage.vue'
@@ -72,7 +78,10 @@ import PayoutRequestPage from '../pages/teacher/PayoutRequestPage.vue'
 import QuizEditorPage from '../pages/teacher/QuizEditorPage.vue'
 import QuizResultsViewerPage from '../pages/teacher/QuizResultsViewerPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
+import TeacherLiveClassManagementPage from '../pages/teacher/TeacherLiveClassManagementPage.vue'
 import TeacherProfilePage from '../pages/teacher/TeacherProfilePage.vue'
+import TeacherRecordedLessonManagementPage from '../pages/teacher/TeacherRecordedLessonManagementPage.vue'
+import TeacherSchedulePage from '../pages/teacher/TeacherSchedulePage.vue'
 import TeacherVerificationUploadPage from '../pages/teacher/TeacherVerificationUploadPage.vue'
 import TracingExerciseEditorPage from '../pages/teacher/TracingExerciseEditorPage.vue'
 import { pinia } from '../stores'
@@ -125,6 +134,24 @@ const studentChildren: RouteRecordRaw[] = [
     name: 'student-lessons',
     component: StudentLessonsPage,
     meta: { titleKey: 'nav.studentLessons' },
+  },
+  {
+    path: 'live-classes',
+    name: 'student-live-classes',
+    component: StudentLiveClassListPage,
+    meta: { titleKey: 'nav.liveClasses' },
+  },
+  {
+    path: 'live-classes/:id',
+    name: 'student-live-class-detail',
+    component: StudentLiveClassDetailPage,
+    meta: { titleKey: 'phase10.liveClassDetailTitle', navKey: 'student-live-classes' },
+  },
+  {
+    path: 'schedule',
+    name: 'student-schedule',
+    component: StudentSchedulePage,
+    meta: { titleKey: 'nav.schedule' },
   },
   {
     path: 'lessons/:lessonId',
@@ -191,6 +218,12 @@ const studentChildren: RouteRecordRaw[] = [
     name: 'student-payment-result',
     component: PaymentResultPage,
     meta: { titleKey: 'commerce.paymentResultTitle', navKey: 'student-payments' },
+  },
+  {
+    path: 'recorded-lessons/:id',
+    name: 'student-recorded-lesson',
+    component: RecordedLessonPlayerPage,
+    meta: { titleKey: 'phase10.recordedLessonPlayerTitle', navKey: 'student-lessons' },
   },
   {
     path: 'subscription',
@@ -296,6 +329,36 @@ const teacherChildren: RouteRecordRaw[] = [
     name: 'teacher-lessons',
     component: LessonManagementPage,
     meta: { titleKey: 'nav.lessonManagement' },
+  },
+  {
+    path: 'live-classes',
+    name: 'teacher-live-classes',
+    component: TeacherLiveClassManagementPage,
+    meta: { titleKey: 'nav.liveClasses' },
+  },
+  {
+    path: 'live-classes/create',
+    name: 'teacher-live-class-create',
+    component: TeacherLiveClassManagementPage,
+    meta: { titleKey: 'phase10.createLiveClass', navKey: 'teacher-live-classes' },
+  },
+  {
+    path: 'live-classes/:id/edit',
+    name: 'teacher-live-class-edit',
+    component: TeacherLiveClassManagementPage,
+    meta: { titleKey: 'phase10.editLiveClass', navKey: 'teacher-live-classes' },
+  },
+  {
+    path: 'schedule',
+    name: 'teacher-schedule',
+    component: TeacherSchedulePage,
+    meta: { titleKey: 'nav.schedule' },
+  },
+  {
+    path: 'recorded-lessons',
+    name: 'teacher-recorded-lessons',
+    component: TeacherRecordedLessonManagementPage,
+    meta: { titleKey: 'nav.recordedLessons' },
   },
   {
     path: 'lessons/new',
@@ -461,6 +524,18 @@ const adminChildren: RouteRecordRaw[] = [
     name: 'admin-payments',
     component: PaymentManagementPage,
     meta: { titleKey: 'nav.paymentManagement' },
+  },
+  {
+    path: 'live-classes',
+    name: 'admin-live-classes',
+    component: AdminLiveClassOverviewPage,
+    meta: { titleKey: 'nav.liveClasses' },
+  },
+  {
+    path: 'schedule',
+    name: 'admin-schedule',
+    component: AdminScheduleOverviewPage,
+    meta: { titleKey: 'nav.schedule' },
   },
   {
     path: 'refunds',

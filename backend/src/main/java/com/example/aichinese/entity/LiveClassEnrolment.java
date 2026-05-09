@@ -3,9 +3,12 @@ package com.example.aichinese.entity;
 import java.time.LocalDateTime;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -36,6 +39,16 @@ public class LiveClassEnrolment extends BaseEntity {
     @JoinColumn(name = "student_id", nullable = false)
     private StudentProfile student;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "enrolment_status", nullable = false, length = 30)
+    private LiveClassEnrolmentStatus enrolmentStatus = LiveClassEnrolmentStatus.ENROLLED;
+
     @Column(name = "enrolled_at")
     private LocalDateTime enrolledAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "attended_at")
+    private LocalDateTime attendedAt;
 }

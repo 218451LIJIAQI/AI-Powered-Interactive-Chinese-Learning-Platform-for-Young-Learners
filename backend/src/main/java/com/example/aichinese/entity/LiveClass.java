@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.LiveClassStatus;
+import com.example.aichinese.entity.enums.MeetingPlatform;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -38,17 +39,31 @@ public class LiveClass extends BaseEntity {
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_package_id")
+    private CoursePackage coursePackage;
+
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
+    @Column(name = "description", length = 1000)
+    private String description;
+
     @Column(name = "meeting_link", length = 500)
     private String meetingLink;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meeting_platform", nullable = false, length = 40)
+    private MeetingPlatform meetingPlatform = MeetingPlatform.OTHER;
 
     @Column(name = "scheduled_start_at")
     private LocalDateTime scheduledStartAt;
 
     @Column(name = "scheduled_end_at")
     private LocalDateTime scheduledEndAt;
+
+    @Column(name = "max_participants")
+    private Integer maxParticipants;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "live_class_status", nullable = false, length = 30)

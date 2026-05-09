@@ -69,12 +69,14 @@ The Phase 2 schema is grouped into these main areas:
   - `live_classes`
   - `live_class_enrolments`
   - `learning_tasks`
+- Recorded learning:
+  - `recorded_lesson_videos`
 - Wishlist and uploads:
   - `saved_items`
   - `uploaded_files`
 
 ## 2. Important Enums
-Phase 2 includes these main enums:
+Phase 2 and later phases include these main enums:
 
 - `RoleName`: `STUDENT`, `TEACHER`, `ADMIN`
 - `TeacherStatus`: `PENDING`, `APPROVED`, `REJECTED`
@@ -82,6 +84,9 @@ Phase 2 includes these main enums:
 - `LearningType`: `LIVE`, `RECORDED`, `HYBRID`
 - `AccessType`: `FREE`, `PAID`
 - `LiveClassStatus`: `SCHEDULED`, `ONGOING`, `COMPLETED`, `CANCELLED`, `RESCHEDULED`
+- `LiveClassEnrolmentStatus`: `ENROLLED`, `CANCELLED`, `ATTENDED`, `MISSED`
+- `MeetingPlatform`: `ZOOM`, `GOOGLE_MEET`, `MICROSOFT_TEAMS`, `OTHER`
+- `RecordedVideoSourceType`: `UPLOADED_FILE`, `EXTERNAL_URL`
 - `PaymentStatus`: `PENDING`, `PAID`, `FAILED`, `CANCELLED`, `REFUNDED`
 - `RefundStatus`: `PENDING`, `APPROVED`, `REJECTED`, `REFUNDED`
 - `PayoutStatus`: `PENDING`, `APPROVED`, `REJECTED`, `PAID`
@@ -205,3 +210,24 @@ Still not implemented:
 - payment flows
 - learning content CRUD workflows
 - broader business workflows beyond the approved Phase 5 scope
+
+## 8. Phase 10 Schema Notes
+Phase 10 reuses the existing schedule foundation and extends it with lightweight live and recorded learning support:
+
+- `live_classes`
+  - linked to teacher, lesson, and optional package
+  - stores external meeting link, platform, timing, status, and optional participant cap
+- `live_class_enrolments`
+  - stores student enrolment, cancellation, and attendance state
+- `recorded_lesson_videos`
+  - links recorded video metadata to a lesson and optional package
+  - supports `UPLOADED_FILE` or `EXTERNAL_URL`
+- `video_progress`
+  - continues to track learner progress, now keyed to recorded lesson videos as well
+- `uploaded_files`
+  - stores protected metadata for uploaded recorded lesson files
+
+Development notes:
+- Meeting links are sensitive and must not be exposed in public APIs.
+- Uploaded file paths are stored in the database but are not returned directly to the frontend.
+- Hibernate `ddl-auto=update` remains the development strategy for this prototype.

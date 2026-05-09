@@ -15,4 +15,7 @@ public interface PackageItemRepository extends JpaRepository<PackageItem, Long> 
 
     @EntityGraph(attributePaths = { "coursePackage", "coursePackage.teacher", "coursePackage.teacher.user" })
     Optional<PackageItem> findByIdAndCoursePackageTeacherUserId(Long id, Long teacherUserId);
+
+    @EntityGraph(attributePaths = { "coursePackage", "coursePackage.teacher", "coursePackage.teacher.user" })
+    List<PackageItem> findByItemTypeAndItemId(com.example.aichinese.entity.enums.PackageItemType itemType, Long itemId);
 }

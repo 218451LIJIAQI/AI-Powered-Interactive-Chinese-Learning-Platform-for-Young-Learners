@@ -36,6 +36,8 @@ import com.example.aichinese.dto.content.ContentSubmissionResponse;
 import com.example.aichinese.dto.content.LearningCategoryResponse;
 import com.example.aichinese.dto.content.LearningLevelResponse;
 import com.example.aichinese.dto.dashboard.AdminDashboardResponse;
+import com.example.aichinese.dto.learning.AdminScheduleResponse;
+import com.example.aichinese.dto.learning.LiveClassResponse;
 import com.example.aichinese.entity.enums.ManagedContentType;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AdminContentReviewService;
@@ -44,6 +46,8 @@ import com.example.aichinese.service.AdminUserManagementService;
 import com.example.aichinese.service.AiService;
 import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LearningCatalogService;
+import com.example.aichinese.service.LiveClassService;
+import com.example.aichinese.service.ScheduleService;
 
 import jakarta.validation.Valid;
 
@@ -58,6 +62,8 @@ public class AdminController {
     private final AdminContentReviewService adminContentReviewService;
     private final LearningCatalogService learningCatalogService;
     private final AiService aiService;
+    private final LiveClassService liveClassService;
+    private final ScheduleService scheduleService;
 
     public AdminController(
             DashboardService dashboardService,
@@ -65,13 +71,17 @@ public class AdminController {
             AdminUserManagementService adminUserManagementService,
             AdminContentReviewService adminContentReviewService,
             LearningCatalogService learningCatalogService,
-            AiService aiService) {
+            AiService aiService,
+            LiveClassService liveClassService,
+            ScheduleService scheduleService) {
         this.dashboardService = dashboardService;
         this.adminTeacherManagementService = adminTeacherManagementService;
         this.adminUserManagementService = adminUserManagementService;
         this.adminContentReviewService = adminContentReviewService;
         this.learningCatalogService = learningCatalogService;
         this.aiService = aiService;
+        this.liveClassService = liveClassService;
+        this.scheduleService = scheduleService;
     }
 
     @GetMapping("/dashboard")
@@ -80,6 +90,31 @@ public class AdminController {
         return ApiResponse.success(
                 "Admin dashboard retrieved successfully.",
                 dashboardService.getAdminDashboard(currentUser));
+    }
+
+    @GetMapping("/schedule")
+    public ApiResponse<AdminScheduleResponse> getAdminSchedule(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Admin schedule retrieved successfully.",
+                scheduleService.getAdminSchedule(currentUser));
+    }
+
+    @GetMapping("/live-classes")
+    public ApiResponse<List<LiveClassResponse>> getAdminLiveClasses(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Admin live classes retrieved successfully.",
+                liveClassService.getAdminLiveClasses(currentUser));
+    }
+
+    @GetMapping("/live-classes/{id}")
+    public ApiResponse<LiveClassResponse> getAdminLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Admin live class retrieved successfully.",
+                liveClassService.getAdminLiveClass(currentUser, id));
     }
 
     @GetMapping("/teachers")

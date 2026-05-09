@@ -35,28 +35,42 @@ import com.example.aichinese.dto.content.UpdateLessonRequest;
 import com.example.aichinese.dto.content.UpdateModuleRequest;
 import com.example.aichinese.dto.dashboard.TeacherDashboardResponse;
 import com.example.aichinese.dto.learning.CreateFlashcardRequest;
+import com.example.aichinese.dto.learning.CreateLiveClassRequest;
 import com.example.aichinese.dto.learning.CreateListeningExerciseRequest;
 import com.example.aichinese.dto.learning.CreateMatchingGameRequest;
 import com.example.aichinese.dto.learning.CreateQuizQuestionRequest;
 import com.example.aichinese.dto.learning.CreateQuizRequest;
 import com.example.aichinese.dto.learning.CreateTracingExerciseRequest;
 import com.example.aichinese.dto.learning.FlashcardOptionResponse;
+import com.example.aichinese.dto.learning.LiveClassEnrolmentResponse;
+import com.example.aichinese.dto.learning.LiveClassResponse;
+import com.example.aichinese.dto.learning.LessonVideoProgressSummaryResponse;
 import com.example.aichinese.dto.learning.ListeningExerciseResponse;
 import com.example.aichinese.dto.learning.MatchingGameResponse;
+import com.example.aichinese.dto.learning.RecordedLessonVideoRequest;
+import com.example.aichinese.dto.learning.RecordedLessonVideoResponse;
+import com.example.aichinese.dto.learning.RescheduleLiveClassRequest;
+import com.example.aichinese.dto.learning.TeacherScheduleResponse;
 import com.example.aichinese.dto.learning.TeacherQuizAttemptSummaryResponse;
 import com.example.aichinese.dto.learning.TeacherQuizResponse;
 import com.example.aichinese.dto.learning.TracingExerciseResponse;
+import com.example.aichinese.dto.learning.UpdateLiveClassRequest;
+import com.example.aichinese.dto.learning.UpdateLiveClassStatusRequest;
 import com.example.aichinese.dto.teacher.TeacherProfileResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationStatusResponse;
 import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LessonActivityService;
+import com.example.aichinese.service.LiveClassService;
+import com.example.aichinese.service.RecordedLessonService;
+import com.example.aichinese.service.ScheduleService;
 import com.example.aichinese.service.TeacherLearningActivityService;
 import com.example.aichinese.service.TeacherLessonService;
 import com.example.aichinese.service.TeacherManagementService;
 import com.example.aichinese.service.TeacherModuleService;
 import com.example.aichinese.service.TeacherPackageService;
+import com.example.aichinese.service.VideoProgressService;
 
 import jakarta.validation.Valid;
 
@@ -72,6 +86,10 @@ public class TeacherController {
     private final LessonActivityService lessonActivityService;
     private final TeacherPackageService teacherPackageService;
     private final TeacherLearningActivityService teacherLearningActivityService;
+    private final LiveClassService liveClassService;
+    private final RecordedLessonService recordedLessonService;
+    private final VideoProgressService videoProgressService;
+    private final ScheduleService scheduleService;
 
     public TeacherController(
             DashboardService dashboardService,
@@ -80,7 +98,11 @@ public class TeacherController {
             TeacherLessonService teacherLessonService,
             LessonActivityService lessonActivityService,
             TeacherPackageService teacherPackageService,
-            TeacherLearningActivityService teacherLearningActivityService) {
+            TeacherLearningActivityService teacherLearningActivityService,
+            LiveClassService liveClassService,
+            RecordedLessonService recordedLessonService,
+            VideoProgressService videoProgressService,
+            ScheduleService scheduleService) {
         this.dashboardService = dashboardService;
         this.teacherManagementService = teacherManagementService;
         this.teacherModuleService = teacherModuleService;
@@ -88,6 +110,10 @@ public class TeacherController {
         this.lessonActivityService = lessonActivityService;
         this.teacherPackageService = teacherPackageService;
         this.teacherLearningActivityService = teacherLearningActivityService;
+        this.liveClassService = liveClassService;
+        this.recordedLessonService = recordedLessonService;
+        this.videoProgressService = videoProgressService;
+        this.scheduleService = scheduleService;
     }
 
     @GetMapping("/dashboard")
@@ -232,6 +258,174 @@ public class TeacherController {
         return ApiResponse.success(
                 "Teacher lesson retrieved successfully.",
                 teacherLessonService.getTeacherLesson(currentUser, id));
+    }
+
+    @GetMapping("/schedule")
+    public ApiResponse<TeacherScheduleResponse> getTeacherSchedule(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Teacher schedule retrieved successfully.",
+                scheduleService.getTeacherSchedule(currentUser));
+    }
+
+    @GetMapping("/live-classes")
+    public ApiResponse<java.util.List<LiveClassResponse>> getTeacherLiveClasses(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Teacher live classes retrieved successfully.",
+                liveClassService.getTeacherLiveClasses(currentUser));
+    }
+
+    @PostMapping("/live-classes")
+    public ApiResponse<LiveClassResponse> createLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @Valid @RequestBody CreateLiveClassRequest request) {
+        return ApiResponse.success(
+                "Live class created successfully.",
+                liveClassService.createLiveClass(currentUser, request));
+    }
+
+    @GetMapping("/live-classes/{id}")
+    public ApiResponse<LiveClassResponse> getTeacherLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Teacher live class retrieved successfully.",
+                liveClassService.getTeacherLiveClass(currentUser, id));
+    }
+
+    @PutMapping("/live-classes/{id}")
+    public ApiResponse<LiveClassResponse> updateLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateLiveClassRequest request) {
+        return ApiResponse.success(
+                "Live class updated successfully.",
+                liveClassService.updateLiveClass(currentUser, id, request));
+    }
+
+    @PatchMapping("/live-classes/{id}/status")
+    public ApiResponse<LiveClassResponse> updateLiveClassStatus(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateLiveClassStatusRequest request) {
+        return ApiResponse.success(
+                "Live class status updated successfully.",
+                liveClassService.updateStatus(currentUser, id, request.status()));
+    }
+
+    @PatchMapping("/live-classes/{id}/cancel")
+    public ApiResponse<LiveClassResponse> cancelLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Live class cancelled successfully.",
+                liveClassService.cancelLiveClass(currentUser, id));
+    }
+
+    @PatchMapping("/live-classes/{id}/reschedule")
+    public ApiResponse<LiveClassResponse> rescheduleLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody RescheduleLiveClassRequest request) {
+        return ApiResponse.success(
+                "Live class rescheduled successfully.",
+                liveClassService.rescheduleLiveClass(currentUser, id, request));
+    }
+
+    @GetMapping("/live-classes/{id}/enrolments")
+    public ApiResponse<java.util.List<LiveClassEnrolmentResponse>> getLiveClassEnrolments(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Live class enrolments retrieved successfully.",
+                liveClassService.getTeacherEnrolments(currentUser, id));
+    }
+
+    @GetMapping("/lessons/{lessonId}/recorded-videos")
+    public ApiResponse<java.util.List<RecordedLessonVideoResponse>> getRecordedVideos(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Recorded lesson videos retrieved successfully.",
+                recordedLessonService.getTeacherRecordedVideos(currentUser, lessonId));
+    }
+
+    @PostMapping(value = "/lessons/{lessonId}/recorded-videos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<RecordedLessonVideoResponse> createRecordedVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @RequestParam("title") String title,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "packageId", required = false) Long packageId,
+            @RequestParam("sourceType") String sourceType,
+            @RequestParam(value = "externalVideoUrl", required = false) String externalVideoUrl,
+            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+            @RequestParam(value = "sortOrder", defaultValue = "0") Integer sortOrder,
+            @RequestParam(value = "file", required = false) MultipartFile file) {
+        return ApiResponse.success(
+                "Recorded lesson video created successfully.",
+                recordedLessonService.createRecordedVideo(
+                        currentUser,
+                        lessonId,
+                        new RecordedLessonVideoRequest(
+                                title,
+                                description,
+                                packageId,
+                                sourceType,
+                                externalVideoUrl,
+                                durationSeconds,
+                                sortOrder),
+                        file));
+    }
+
+    @PutMapping(value = "/lessons/{lessonId}/recorded-videos/{videoId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<RecordedLessonVideoResponse> updateRecordedVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @PathVariable Long videoId,
+            @RequestParam("title") String title,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "packageId", required = false) Long packageId,
+            @RequestParam("sourceType") String sourceType,
+            @RequestParam(value = "externalVideoUrl", required = false) String externalVideoUrl,
+            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+            @RequestParam(value = "sortOrder", defaultValue = "0") Integer sortOrder,
+            @RequestParam(value = "file", required = false) MultipartFile file) {
+        return ApiResponse.success(
+                "Recorded lesson video updated successfully.",
+                recordedLessonService.updateRecordedVideo(
+                        currentUser,
+                        lessonId,
+                        videoId,
+                        new RecordedLessonVideoRequest(
+                                title,
+                                description,
+                                packageId,
+                                sourceType,
+                                externalVideoUrl,
+                                durationSeconds,
+                                sortOrder),
+                        file));
+    }
+
+    @PatchMapping("/lessons/{lessonId}/recorded-videos/{videoId}/archive")
+    public ApiResponse<RecordedLessonVideoResponse> archiveRecordedVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @PathVariable Long videoId) {
+        return ApiResponse.success(
+                "Recorded lesson video archived successfully.",
+                recordedLessonService.archiveRecordedVideo(currentUser, lessonId, videoId));
+    }
+
+    @GetMapping("/lessons/{lessonId}/video-progress")
+    public ApiResponse<java.util.List<LessonVideoProgressSummaryResponse>> getLessonVideoProgress(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Lesson video progress retrieved successfully.",
+                videoProgressService.getTeacherLessonProgress(currentUser, lessonId));
     }
 
     @PutMapping("/lessons/{id}")

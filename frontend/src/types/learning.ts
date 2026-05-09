@@ -203,7 +203,10 @@ export type StudentLessonPlayer = {
   completionPercent: number
   completed: boolean
   locked: boolean
+  learningType: string | null
   activities: StudentLessonActivitySummary[]
+  liveClasses: import('./liveLearning').LiveClass[]
+  recordedVideos: import('./liveLearning').RecordedLessonVideo[]
 }
 
 export type FlashcardPracticeResponse = {

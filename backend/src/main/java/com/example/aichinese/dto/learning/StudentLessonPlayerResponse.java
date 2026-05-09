@@ -11,5 +11,8 @@ public record StudentLessonPlayerResponse(
         int completionPercent,
         boolean completed,
         boolean locked,
-        List<StudentLessonActivitySummaryResponse> activities) {
+        String learningType,
+        List<StudentLessonActivitySummaryResponse> activities,
+        List<LiveClassResponse> liveClasses,
+        List<RecordedLessonVideoResponse> recordedVideos) {
 }

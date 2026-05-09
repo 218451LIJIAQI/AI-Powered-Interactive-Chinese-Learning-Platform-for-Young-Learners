@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ import com.example.aichinese.entity.Flashcard;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LessonActivity;
 import com.example.aichinese.entity.ListeningExercise;
+import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.MatchingGameItem;
 import com.example.aichinese.entity.Quiz;
@@ -49,14 +52,20 @@ import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.QuizAttemptAnswer;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
+import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LessonActivityType;
+import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
+import com.example.aichinese.entity.enums.LiveClassStatus;
+import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.mapper.LearningActivityMapper;
 import com.example.aichinese.repository.FlashcardRepository;
 import com.example.aichinese.repository.LessonActivityRepository;
 import com.example.aichinese.repository.ListeningExerciseRepository;
+import com.example.aichinese.repository.LiveClassEnrolmentRepository;
+import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.repository.MatchingGameItemRepository;
 import com.example.aichinese.repository.MatchingGameRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
@@ -64,6 +73,7 @@ import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.QuizOptionRepository;
 import com.example.aichinese.repository.QuizQuestionRepository;
 import com.example.aichinese.repository.QuizRepository;
+import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.repository.TracingExerciseRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
@@ -83,8 +93,13 @@ public class StudentLearningService {
     private final MatchingGameItemRepository matchingGameItemRepository;
     private final ListeningExerciseRepository listeningExerciseRepository;
     private final TracingExerciseRepository tracingExerciseRepository;
+    private final LiveClassRepository liveClassRepository;
+    private final LiveClassEnrolmentRepository liveClassEnrolmentRepository;
+    private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LearningActivityMapper learningActivityMapper;
     private final LearningPayloadCodec learningPayloadCodec;
+    private final LiveLearningAccessService liveLearningAccessService;
+    private final LiveLearningMapper liveLearningMapper;
 
     public StudentLearningService(
             StudentLearningAccessService studentLearningAccessService,
@@ -100,8 +115,13 @@ public class StudentLearningService {
             MatchingGameItemRepository matchingGameItemRepository,
             ListeningExerciseRepository listeningExerciseRepository,
             TracingExerciseRepository tracingExerciseRepository,
+            LiveClassRepository liveClassRepository,
+            LiveClassEnrolmentRepository liveClassEnrolmentRepository,
+            RecordedLessonVideoRepository recordedLessonVideoRepository,
             LearningActivityMapper learningActivityMapper,
-            LearningPayloadCodec learningPayloadCodec) {
+            LearningPayloadCodec learningPayloadCodec,
+            LiveLearningAccessService liveLearningAccessService,
+            LiveLearningMapper liveLearningMapper) {
         this.studentLearningAccessService = studentLearningAccessService;
         this.studentLearningProgressService = studentLearningProgressService;
         this.flashcardRepository = flashcardRepository;
@@ -115,8 +135,13 @@ public class StudentLearningService {
         this.matchingGameItemRepository = matchingGameItemRepository;
         this.listeningExerciseRepository = listeningExerciseRepository;
         this.tracingExerciseRepository = tracingExerciseRepository;
+        this.liveClassRepository = liveClassRepository;
+        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
+        this.recordedLessonVideoRepository = recordedLessonVideoRepository;
         this.learningActivityMapper = learningActivityMapper;
         this.learningPayloadCodec = learningPayloadCodec;
+        this.liveLearningAccessService = liveLearningAccessService;
+        this.liveLearningMapper = liveLearningMapper;
     }
 
     @Transactional(readOnly = true)
@@ -136,7 +161,10 @@ public class StudentLearningService {
                 completionPercent,
                 completionPercent >= 100,
                 locked,
-                buildLessonActivities(student, lesson, locked));
+                lesson.getLearningType() == null ? null : lesson.getLearningType().name(),
+                buildLessonActivities(student, lesson, locked),
+                buildLessonLiveClasses(student, lesson),
+                buildRecordedVideos(student, lesson));
     }
 
     @Transactional(readOnly = true)
@@ -623,6 +651,83 @@ public class StudentLearningService {
     private boolean isCorrectAnswer(QuizQuestion question, String answerText) {
         String submitted = answerText == null ? "" : answerText.trim();
         return normalize(submitted).equals(normalize(question.getCorrectAnswerText()));
+    }
+
+    private List<com.example.aichinese.dto.learning.LiveClassResponse> buildLessonLiveClasses(StudentProfile student, Lesson lesson) {
+        Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
+
+        return liveClassRepository.findAll().stream()
+                .filter(liveClass -> liveClass.getLesson() != null && Objects.equals(liveClass.getLesson().getId(), lesson.getId())
+                        || liveClass.getCoursePackage() != null && relatedPackageIds.contains(liveClass.getCoursePackage().getId()))
+                .filter(liveClass -> liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
+                        && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
+                .map(liveClass -> {
+                    long enrolledCount = liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatus(
+                            liveClass.getId(),
+                            LiveClassEnrolmentStatus.ENROLLED);
+                    boolean enrolled = liveLearningAccessService.isStudentEnrolled(liveClass.getId(), student.getId());
+                    boolean accessAllowed = hasLiveClassAccess(student, liveClass);
+                    boolean canEnrol = !enrolled && accessAllowed;
+                    boolean canJoin = enrolled && accessAllowed
+                            && (liveClass.getLiveClassStatus() == LiveClassStatus.SCHEDULED
+                                    || liveClass.getLiveClassStatus() == LiveClassStatus.ONGOING);
+                    return liveLearningMapper.toLiveClassResponse(
+                            liveClass,
+                            enrolledCount,
+                            enrolled,
+                            canEnrol,
+                            accessAllowed,
+                            canJoin,
+                            false);
+                })
+                .sorted(Comparator.comparing(com.example.aichinese.dto.learning.LiveClassResponse::startTime,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    private List<com.example.aichinese.dto.learning.RecordedLessonVideoResponse> buildRecordedVideos(StudentProfile student, Lesson lesson) {
+        Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
+
+        return recordedLessonVideoRepository.findAll().stream()
+                .filter(RecordedLessonVideo::isActive)
+                .filter(video -> video.getLesson() != null && Objects.equals(video.getLesson().getId(), lesson.getId())
+                        || video.getCoursePackage() != null && relatedPackageIds.contains(video.getCoursePackage().getId()))
+                .filter(video -> canAccessVideo(student, video))
+                .map(video -> liveLearningMapper.toRecordedVideoResponse(
+                        video,
+                        video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
+                                ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
+                                : null,
+                        video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null))
+                .sorted(Comparator.comparing(com.example.aichinese.dto.learning.RecordedLessonVideoResponse::sortOrder)
+                        .thenComparing(com.example.aichinese.dto.learning.RecordedLessonVideoResponse::createdAt))
+                .toList();
+    }
+
+    private boolean hasLiveClassAccess(StudentProfile student, LiveClass liveClass) {
+        try {
+            if (liveClass.getLesson() != null) {
+                liveLearningAccessService.ensureStudentHasLessonAccess(student, liveClass.getLesson());
+            }
+            if (liveClass.getCoursePackage() != null) {
+                liveLearningAccessService.ensureStudentHasPackageAccess(student, liveClass.getCoursePackage());
+            }
+            return true;
+        } catch (ResponseStatusException exception) {
+            return false;
+        }
+    }
+
+    private boolean canAccessVideo(StudentProfile student, RecordedLessonVideo video) {
+        try {
+            liveLearningAccessService.ensureStudentHasLessonAccess(student, video.getLesson());
+            if (video.getCoursePackage() != null) {
+                liveLearningAccessService.ensureStudentHasPackageAccess(student, video.getCoursePackage());
+            }
+            return true;
+        } catch (ResponseStatusException exception) {
+            return false;
+        }
     }
 
     private WrongAnswerResponse toWrongAnswerResponse(QuizAttemptAnswer answer) {

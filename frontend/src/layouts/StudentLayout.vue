@@ -9,6 +9,8 @@ const authStore = useAuthStore()
 const navItems = computed(() => [
   { key: 'student-dashboard', labelKey: 'nav.studentDashboard', routeName: 'student-dashboard', icon: 'House' },
   { key: 'student-lessons', labelKey: 'nav.studentLessons', routeName: 'student-lessons', icon: 'Reading' },
+  { key: 'student-live-classes', labelKey: 'nav.liveClasses', routeName: 'student-live-classes', icon: 'VideoPlay' },
+  { key: 'student-schedule', labelKey: 'nav.schedule', routeName: 'student-schedule', icon: 'Calendar' },
   { key: 'student-cart', labelKey: 'nav.cart', routeName: 'student-cart', icon: 'ShoppingCart' },
   { key: 'student-payments', labelKey: 'nav.paymentHistory', routeName: 'student-payments', icon: 'CreditCard' },
   { key: 'student-subscription', labelKey: 'nav.subscription', routeName: 'student-subscription', icon: 'Tickets' },
@@ -42,7 +44,7 @@ const navItems = computed(() => [
 
 const subtitle = computed(() => {
   const name = authStore.currentUser?.fullName ?? 'young learner'
-  return `Welcome back, ${name}. Explore lessons, practise with AI, track progress, and celebrate rewards from one playful dashboard.`
+  return `Welcome back, ${name}. Explore lessons, join live classes, continue recorded practice, and celebrate your progress from one playful dashboard.`
 })
 </script>
 

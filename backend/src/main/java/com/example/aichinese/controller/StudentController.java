@@ -2,10 +2,16 @@ package com.example.aichinese.controller;
 
 import java.util.List;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,13 +24,17 @@ import com.example.aichinese.dto.learning.CompleteTracingExerciseRequest;
 import com.example.aichinese.dto.learning.DailyStreakResponse;
 import com.example.aichinese.dto.learning.FlashcardOptionResponse;
 import com.example.aichinese.dto.learning.FlashcardPracticeResponse;
+import com.example.aichinese.dto.learning.JoinLiveClassResponse;
 import com.example.aichinese.dto.learning.ListeningExercisePlayResponse;
 import com.example.aichinese.dto.learning.ListeningExerciseSubmissionResponse;
+import com.example.aichinese.dto.learning.LiveClassResponse;
 import com.example.aichinese.dto.learning.MatchingGamePlayResponse;
 import com.example.aichinese.dto.learning.MatchingGameSubmissionResponse;
 import com.example.aichinese.dto.learning.PointsTransactionResponse;
 import com.example.aichinese.dto.learning.QuizAttemptResultResponse;
+import com.example.aichinese.dto.learning.RecordedLessonVideoResponse;
 import com.example.aichinese.dto.learning.RewardSummaryResponse;
+import com.example.aichinese.dto.learning.StudentScheduleResponse;
 import com.example.aichinese.dto.learning.StudentLessonActivitySummaryResponse;
 import com.example.aichinese.dto.learning.StudentLessonPlayerResponse;
 import com.example.aichinese.dto.learning.StudentProgressSummaryResponse;
@@ -34,10 +44,16 @@ import com.example.aichinese.dto.learning.SubmitMatchingGameRequest;
 import com.example.aichinese.dto.learning.SubmitQuizAttemptRequest;
 import com.example.aichinese.dto.learning.TracingExerciseCompletionResponse;
 import com.example.aichinese.dto.learning.TracingExercisePlayResponse;
+import com.example.aichinese.dto.learning.VideoProgressRequest;
+import com.example.aichinese.dto.learning.VideoProgressResponse;
 import com.example.aichinese.dto.learning.WrongAnswerResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.DashboardService;
+import com.example.aichinese.service.LiveClassService;
+import com.example.aichinese.service.RecordedLessonService;
+import com.example.aichinese.service.ScheduleService;
 import com.example.aichinese.service.StudentLearningService;
+import com.example.aichinese.service.VideoProgressService;
 
 import jakarta.validation.Valid;
 
@@ -48,10 +64,24 @@ public class StudentController {
 
     private final DashboardService dashboardService;
     private final StudentLearningService studentLearningService;
+    private final LiveClassService liveClassService;
+    private final RecordedLessonService recordedLessonService;
+    private final VideoProgressService videoProgressService;
+    private final ScheduleService scheduleService;
 
-    public StudentController(DashboardService dashboardService, StudentLearningService studentLearningService) {
+    public StudentController(
+            DashboardService dashboardService,
+            StudentLearningService studentLearningService,
+            LiveClassService liveClassService,
+            RecordedLessonService recordedLessonService,
+            VideoProgressService videoProgressService,
+            ScheduleService scheduleService) {
         this.dashboardService = dashboardService;
         this.studentLearningService = studentLearningService;
+        this.liveClassService = liveClassService;
+        this.recordedLessonService = recordedLessonService;
+        this.videoProgressService = videoProgressService;
+        this.scheduleService = scheduleService;
     }
 
     @GetMapping("/dashboard")
@@ -69,6 +99,126 @@ public class StudentController {
         return ApiResponse.success(
                 "Lesson player retrieved successfully.",
                 studentLearningService.getLessonPlayer(currentUser, lessonId));
+    }
+
+    @GetMapping("/schedule")
+    public ApiResponse<StudentScheduleResponse> getStudentSchedule(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Student schedule retrieved successfully.",
+                scheduleService.getStudentSchedule(currentUser));
+    }
+
+    @GetMapping("/live-classes")
+    public ApiResponse<List<LiveClassResponse>> getStudentLiveClasses(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Live classes retrieved successfully.",
+                liveClassService.getStudentLiveClasses(currentUser));
+    }
+
+    @GetMapping("/live-classes/{id}")
+    public ApiResponse<LiveClassResponse> getStudentLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Live class retrieved successfully.",
+                liveClassService.getStudentLiveClass(currentUser, id));
+    }
+
+    @PostMapping("/live-classes/{id}/enrol")
+    public ApiResponse<LiveClassResponse> enrolLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Live class enrolment completed successfully.",
+                liveClassService.enrol(currentUser, id));
+    }
+
+    @PostMapping("/live-classes/{id}/cancel-enrolment")
+    public ApiResponse<LiveClassResponse> cancelLiveClassEnrolment(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Live class enrolment cancelled successfully.",
+                liveClassService.cancelEnrolment(currentUser, id));
+    }
+
+    @GetMapping("/live-classes/{id}/join")
+    public ApiResponse<JoinLiveClassResponse> joinLiveClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success(
+                "Live class join link retrieved successfully.",
+                liveClassService.join(currentUser, id));
+    }
+
+    @GetMapping("/lessons/{lessonId}/recorded-videos")
+    public ApiResponse<List<RecordedLessonVideoResponse>> getRecordedVideos(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Recorded lesson videos retrieved successfully.",
+                recordedLessonService.getStudentRecordedVideos(currentUser, lessonId));
+    }
+
+    @GetMapping("/lessons/{lessonId}/recorded-videos/{videoId}")
+    public ApiResponse<RecordedLessonVideoResponse> getRecordedVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @PathVariable Long videoId) {
+        return ApiResponse.success(
+                "Recorded lesson video retrieved successfully.",
+                recordedLessonService.getStudentRecordedVideo(currentUser, lessonId, videoId));
+    }
+
+    @GetMapping("/recorded-videos/{videoId}/stream")
+    public ResponseEntity<Resource> streamRecordedVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long videoId) {
+        Resource resource = recordedLessonService.loadRecordedVideoResource(currentUser, videoId);
+        return ResponseEntity.ok()
+                .contentType(MediaTypeFactory.getMediaType(resource).orElse(MediaType.APPLICATION_OCTET_STREAM))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                .body(resource);
+    }
+
+    @GetMapping("/video-progress/{videoId}")
+    public ApiResponse<VideoProgressResponse> getVideoProgress(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long videoId) {
+        return ApiResponse.success(
+                "Video progress retrieved successfully.",
+                videoProgressService.getProgress(currentUser, videoId));
+    }
+
+    @PostMapping("/video-progress/{videoId}")
+    public ApiResponse<VideoProgressResponse> createVideoProgress(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long videoId,
+            @Valid @RequestBody VideoProgressRequest request) {
+        return ApiResponse.success(
+                "Video progress saved successfully.",
+                videoProgressService.upsertProgress(currentUser, videoId, request));
+    }
+
+    @PatchMapping("/video-progress/{videoId}")
+    public ApiResponse<VideoProgressResponse> updateVideoProgress(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long videoId,
+            @Valid @RequestBody VideoProgressRequest request) {
+        return ApiResponse.success(
+                "Video progress updated successfully.",
+                videoProgressService.upsertProgress(currentUser, videoId, request));
+    }
+
+    @PostMapping("/video-progress/{videoId}/complete")
+    public ApiResponse<VideoProgressResponse> completeVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long videoId) {
+        return ApiResponse.success(
+                "Video marked as completed successfully.",
+                videoProgressService.completeVideo(currentUser, videoId));
     }
 
     @GetMapping("/lessons/{lessonId}/activities")

@@ -18,8 +18,8 @@ spring:
     show-sql: false
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZE:5MB}
-      max-request-size: ${MAX_FILE_SIZE:5MB}
+      max-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
+      max-request-size: ${MAX_VIDEO_FILE_SIZE:100MB}
 
 server:
   port: 8080
@@ -36,6 +36,8 @@ app:
   upload:
     directory: ${UPLOAD_DIR:./uploads}
     max-file-size: ${MAX_FILE_SIZE:5MB}
+    recorded-video-directory: ${RECORDED_VIDEO_UPLOAD_DIR:./uploads/recorded-videos}
+    max-video-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
   ai:
     provider: ${AI_PROVIDER:deepseek}
     api-base-url: ${AI_API_BASE_URL:https://api.deepseek.com}

@@ -29,6 +29,8 @@ const navItems = [
     routeName: 'admin-ai-usage-logs',
     icon: 'DataLine',
   },
+  { key: 'admin-live-classes', labelKey: 'nav.liveClasses', routeName: 'admin-live-classes', icon: 'VideoCameraFilled' },
+  { key: 'admin-schedule', labelKey: 'nav.schedule', routeName: 'admin-schedule', icon: 'Calendar' },
   { key: 'admin-payments', labelKey: 'nav.paymentManagement', routeName: 'admin-payments', icon: 'CreditCard' },
   { key: 'admin-refunds', labelKey: 'nav.refundManagement', routeName: 'admin-refunds', icon: 'RefreshLeft' },
   { key: 'admin-payouts', labelKey: 'nav.payoutManagement', routeName: 'admin-payouts', icon: 'Wallet' },
@@ -72,7 +74,7 @@ const navItems = [
   <AppShell
     variant="admin"
     title="Admin Control Center"
-    subtitle="Track platform health, approvals, and operational signals from a dashboard-ready workspace."
+    subtitle="Track platform health, live learning schedules, approvals, and operational signals from a dashboard-ready workspace."
     :nav-items="navItems"
   />
 </template>

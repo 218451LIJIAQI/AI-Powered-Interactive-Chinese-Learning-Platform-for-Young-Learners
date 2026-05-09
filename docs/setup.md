@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 9.
+This document explains how to run the project locally through Phase 10.
 
 ## Prerequisites
 - Node.js and npm
@@ -35,6 +35,8 @@ Important variables:
 - `DEFAULT_ADMIN_PASSWORD`
 - `UPLOAD_DIR`
 - `MAX_FILE_SIZE`
+- `RECORDED_VIDEO_UPLOAD_DIR`
+- `MAX_VIDEO_FILE_SIZE`
 - `AI_PROVIDER`
 - `AI_API_BASE_URL`
 - `AI_API_KEY`
@@ -68,6 +70,8 @@ DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=SuperSecure123!
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE=5MB
+RECORDED_VIDEO_UPLOAD_DIR=./uploads/recorded-videos
+MAX_VIDEO_FILE_SIZE=100MB
 AI_PROVIDER=deepseek
 AI_API_BASE_URL=https://api.deepseek.com
 AI_API_KEY=replace-with-your-deepseek-api-key
@@ -99,6 +103,8 @@ Notes:
 - The real `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` must only be set in the backend environment locally.
 - Never place Stripe secret keys in frontend files or commit them.
 - If `PAYMENT_ENABLE_REAL_PROVIDER=false` or the Stripe secret key is missing, the backend still starts and checkout returns safe mock or unavailable responses.
+- Recorded lesson uploads should stay in backend-managed directories only.
+- Do not commit uploaded lesson videos or temporary runtime media files.
 
 ## 3. Run the Backend
 From the `backend` folder:
@@ -160,7 +166,11 @@ Public routes:
 Student routes:
 - `/student/dashboard`
 - `/student/lessons`
+- `/student/live-classes`
+- `/student/live-classes/:id`
+- `/student/schedule`
 - `/student/lessons/:lessonId`
+- `/student/recorded-lessons/:id`
 - `/student/lessons/:lessonId/flashcards`
 - `/student/quizzes/:quizId`
 - `/student/quiz-attempts/:attemptId`
@@ -176,6 +186,11 @@ Teacher routes:
 - `/teacher/profile`
 - `/teacher/verification-status`
 - `/teacher/verification-documents`
+- `/teacher/live-classes`
+- `/teacher/live-classes/create`
+- `/teacher/live-classes/:id/edit`
+- `/teacher/schedule`
+- `/teacher/recorded-lessons`
 - `/teacher/modules`
 - `/teacher/lessons`
 - `/teacher/lessons/new`
@@ -192,6 +207,8 @@ Teacher routes:
 
 Admin routes:
 - `/admin/dashboard`
+- `/admin/live-classes`
+- `/admin/schedule`
 - `/admin/users`
 - `/admin/students`
 - `/admin/teacher-approval`
@@ -368,7 +385,7 @@ Phase 7 interactive learning:
 - open `/student/progress`
 - open `/student/rewards`
 
-## 11. What Exists Through Phase 7
+## 11. What Exists Through Phase 10
 - Frontend app scaffold
 - Role-based layouts and navigation
 - Real login page
@@ -393,6 +410,10 @@ Phase 7 interactive learning:
 - Content management workflow APIs
 - Interactive learning APIs, scoring, progress tracking, and rewards
 - Backend integration tests for content workflow, security, and interactive learning
+- Live class APIs, enrolment flow, and protected join-link checks
+- Recorded lesson video APIs and protected streaming
+- Video progress tracking APIs
+- Student, teacher, and admin schedule APIs
 
 ## 12. What Is Intentionally Deferred
 - AI integration logic
@@ -403,6 +424,7 @@ Phase 7 interactive learning:
 - Leaderboard
 - Professional handwriting recognition
 - Professional pronunciation scoring
-- Live class scheduling
-- Recorded lesson player
+- Internal video conferencing
+- WebRTC
+- Advanced streaming, CDN, or transcoding
 - Reviews, reports, support tickets, refunds, payouts, and advanced notifications

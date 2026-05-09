@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -19,7 +20,10 @@ import lombok.Setter;
 @Entity
 @Table(name = "video_progress", indexes = {
         @Index(name = "idx_video_progress_student_id", columnList = "student_id"),
-        @Index(name = "idx_video_progress_lesson_id", columnList = "lesson_id")
+        @Index(name = "idx_video_progress_lesson_id", columnList = "lesson_id"),
+        @Index(name = "idx_video_progress_recorded_video_id", columnList = "recorded_video_id")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_video_progress_student_video", columnNames = { "student_id", "recorded_video_id" })
 })
 public class VideoProgress extends BaseEntity {
 
@@ -31,12 +35,22 @@ public class VideoProgress extends BaseEntity {
     @JoinColumn(name = "lesson_id", nullable = false)
     private Lesson lesson;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recorded_video_id")
+    private RecordedLessonVideo recordedVideo;
+
     @Column(name = "watched_seconds")
     private Integer watchedSeconds;
 
-    @Column(name = "duration_seconds")
-    private Integer durationSeconds;
+    @Column(name = "total_seconds")
+    private Integer totalSeconds;
 
-    @Column(name = "completion_percent")
-    private Integer completionPercent;
+    @Column(name = "progress_percentage")
+    private Integer progressPercentage;
+
+    @Column(name = "completed", nullable = false)
+    private boolean completed;
+
+    @Column(name = "last_watched_at")
+    private java.time.LocalDateTime lastWatchedAt;
 }
