@@ -3,7 +3,7 @@
 ## Project Overview
 This project is a full-stack final-year-project web application for young learners aged 7-12. It is designed as an interactive and gamified Chinese learning platform for the Malaysian context, with support for student, teacher, and admin roles.
 
-Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 added the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility. Phase 9 added payment and commerce workflows with Stripe-ready backend configuration, cart and checkout flows, subscriptions, entitlements, teacher earnings, refunds, and payouts. Phase 10 now adds live classes, recorded lesson videos, hybrid lesson delivery, protected join-link access, video progress tracking, and student/teacher/admin schedule views.
+Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 added the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility. Phase 9 added payment and commerce workflows with Stripe-ready backend configuration, cart and checkout flows, subscriptions, entitlements, teacher earnings, refunds, and payouts. Phase 10 added live classes, recorded lesson videos, hybrid lesson delivery, protected join-link access, video progress tracking, and student/teacher/admin schedule views. Phase 11 adds notifications, optional SMTP email, reports, reviews, teacher feedback, support tickets, content moderation actions, and audit log visibility.
 
 ## Tech Stack
 - Frontend: Vue 3, Vite, TypeScript, Element Plus, Vue Router, Pinia, Axios, Vue I18n, npm
@@ -12,7 +12,7 @@ Phase 1 established the monorepo scaffold. Phase 2 added the backend database fo
 - Tooling: Docker Compose
 
 ## Current Status
-Completed through Phase 10 work-in-progress:
+Completed through Phase 11 work-in-progress:
 - Monorepo scaffold created
 - Vue frontend created with required packages and folder structure
 - Public, student, teacher, and admin layouts added and polished
@@ -82,13 +82,25 @@ Completed through Phase 10 work-in-progress:
   - hybrid lesson player support for live classes plus recorded videos
   - student, teacher, and admin schedule pages
   - backend integration tests for live and recorded learning security
+- Phase 11 communication, moderation, support, and audit foundation added:
+  - in-app notifications with unread count, mark-as-read, and mark-all-as-read
+  - optional SMTP email service with safe no-op fallback
+  - student reports with admin review and teacher revision visibility
+  - student reviews with teacher visibility and admin moderation
+  - teacher feedback to students with linked-student checks
+  - support tickets with threaded replies, admin status updates, and priority updates
+  - admin content moderation actions with teacher moderation history visibility
+  - admin audit log visibility
+  - backend integration tests for Phase 11 communication and moderation flows
 
-Phase 9 known limitations:
+Phase 11 known limitations:
 - Stripe sandbox/test mode only
 - real Stripe keys must stay in backend environment variables only
 - payout is simulated by admin approval and mark-paid workflow
 - refund handling is prototype-friendly when no live Stripe refund integration is configured
 - no real bank transfer automation
+- SMTP currently uses simple plain-text message bodies rather than a full template engine
+- audit log IP addresses remain optional when request IP context is not passed into the reusable logging service
 
 Still intentionally not implemented:
 - leaderboard
@@ -96,7 +108,7 @@ Still intentionally not implemented:
 - professional handwriting recognition
 - professional pronunciation scoring
 - professional tone scoring
-- Phase 9 or later workflows
+- Phase 12 analytics and final polish workflows
 
 ## Key Routes
 Public:
@@ -108,11 +120,19 @@ Public:
 - `/register`
 
 Student:
+- `/notifications`
+- `/support-tickets`
+- `/support-tickets/create`
+- `/support-tickets/:id`
 - `/student/dashboard`
 - `/student/lessons`
 - `/student/live-classes`
 - `/student/live-classes/:id`
 - `/student/schedule`
+- `/student/reports`
+- `/student/reports/create`
+- `/student/reviews`
+- `/student/feedback`
 - `/student/lessons/:lessonId`
 - `/student/recorded-lessons/:id`
 - `/student/lessons/:lessonId/flashcards`
@@ -133,6 +153,10 @@ Student:
 - `/student/ai/writing-feedback`
 
 Teacher:
+- `/notifications`
+- `/support-tickets`
+- `/support-tickets/create`
+- `/support-tickets/:id`
 - `/teacher/dashboard`
 - `/teacher/profile`
 - `/teacher/verification-status`
@@ -141,6 +165,10 @@ Teacher:
 - `/teacher/live-classes/:id/edit`
 - `/teacher/schedule`
 - `/teacher/recorded-lessons`
+- `/teacher/reviews`
+- `/teacher/feedback`
+- `/teacher/reports`
+- `/teacher/moderation-records`
 - `/teacher/modules`
 - `/teacher/lessons`
 - `/teacher/lessons/new`
@@ -160,6 +188,10 @@ Teacher:
 - `/teacher/ai/story-generator`
 
 Admin:
+- `/notifications`
+- `/support-tickets`
+- `/support-tickets/create`
+- `/support-tickets/:id`
 - `/admin/dashboard`
 - `/admin/live-classes`
 - `/admin/schedule`
@@ -168,6 +200,14 @@ Admin:
 - `/admin/teacher-approval`
 - `/admin/content/approvals`
 - `/admin/content/moderation`
+- `/admin/reports`
+- `/admin/reports/:id`
+- `/admin/reviews`
+- `/admin/notifications`
+- `/admin/support-tickets`
+- `/admin/support-tickets/:id`
+- `/admin/audit-logs`
+- `/admin/moderation`
 - `/admin/ai-usage-logs`
 
 ## Phase 8 AI API Overview
@@ -244,6 +284,78 @@ Important:
 - Students only receive the meeting link from the protected join endpoint after enrolment and entitlement checks pass.
 - Uploaded recorded videos are served through backend-protected endpoints and do not expose private storage paths.
 - Do not commit uploaded runtime video files.
+
+## Phase 11 Email Configuration
+Optional SMTP placeholders are backend-only:
+
+```env
+SMTP_ENABLED=false
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=
+```
+
+Important:
+- SMTP is optional and the backend still starts when it is not configured.
+- In-app notifications continue to work even when email sending is skipped.
+- Never commit real SMTP credentials or expose them in frontend code.
+
+## Phase 11 API Overview
+Communication and moderation:
+- `GET /api/v1/notifications`
+- `GET /api/v1/notifications/unread-count`
+- `PATCH /api/v1/notifications/{id}/read`
+- `PATCH /api/v1/notifications/read-all`
+- `POST /api/v1/reports`
+- `GET /api/v1/reports/my`
+- `GET /api/v1/reports/my/{id}`
+- `POST /api/v1/reviews`
+- `GET /api/v1/reviews/my`
+- `PUT /api/v1/reviews/{id}`
+- `DELETE /api/v1/reviews/{id}`
+- `GET /api/v1/public/reviews`
+- `GET /api/v1/students/feedback`
+- `GET /api/v1/students/feedback/{id}`
+- `POST /api/v1/teachers/feedback`
+- `GET /api/v1/teachers/feedback`
+- `PUT /api/v1/teachers/feedback/{id}`
+- `GET /api/v1/teachers/feedback/candidates`
+- `GET /api/v1/teachers/reviews`
+- `GET /api/v1/teachers/reports`
+- `GET /api/v1/teachers/reports/{id}`
+- `GET /api/v1/teachers/moderation-records`
+- `POST /api/v1/support-tickets`
+- `GET /api/v1/support-tickets/my`
+- `GET /api/v1/support-tickets/{id}`
+- `POST /api/v1/support-tickets/{id}/messages`
+- `GET /api/v1/admin/notifications`
+- `GET /api/v1/admin/reports`
+- `GET /api/v1/admin/reports/{id}`
+- `PATCH /api/v1/admin/reports/{id}/review`
+- `PATCH /api/v1/admin/reports/{id}/dismiss`
+- `PATCH /api/v1/admin/reports/{id}/mark-action-taken`
+- `PATCH /api/v1/admin/reports/{id}/request-revision`
+- `GET /api/v1/admin/reviews`
+- `PATCH /api/v1/admin/reviews/{id}/hide`
+- `PATCH /api/v1/admin/reviews/{id}/show`
+- `PATCH /api/v1/admin/reviews/{id}/flag`
+- `GET /api/v1/admin/support-tickets`
+- `GET /api/v1/admin/support-tickets/{id}`
+- `POST /api/v1/admin/support-tickets/{id}/messages`
+- `PATCH /api/v1/admin/support-tickets/{id}/status`
+- `PATCH /api/v1/admin/support-tickets/{id}/priority`
+- `GET /api/v1/admin/moderation-records`
+- `GET /api/v1/admin/moderation-records/{id}`
+- `POST /api/v1/admin/moderation/hide`
+- `POST /api/v1/admin/moderation/unpublish`
+- `POST /api/v1/admin/moderation/archive`
+- `POST /api/v1/admin/moderation/request-revision`
+- `POST /api/v1/admin/moderation/restore`
+- `GET /api/v1/admin/audit-logs`
+- `GET /api/v1/admin/audit-logs/{id}`
+- `GET /api/v1/admin/feedback`
 
 ## Phase 7 API Overview
 Student learning:
@@ -324,10 +436,13 @@ npm run dev
 
 ## Documentation
 - Setup guide: [docs/setup.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/setup.md)
+- API overview: [docs/api-overview.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/api-overview.md)
 - Database notes: [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/database-notes.md)
+- Testing checklist: [docs/testing-checklist.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/testing-checklist.md)
 - Teacher verification workflow: [docs/teacher-verification-workflow.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/teacher-verification-workflow.md)
 - Content management: [docs/content-management.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/content-management.md)
 - Interactive learning: [docs/interactive-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/interactive-learning.md)
 - AI features: [docs/ai-features.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/ai-features.md)
 - Payment and commerce: [docs/payment-commerce.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/payment-commerce.md)
 - Live, recorded, and hybrid learning: [docs/live-recorded-hybrid-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/live-recorded-hybrid-learning.md)
+- Communication, moderation, support, and audit: [docs/communication-moderation-support-audit.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/communication-moderation-support-audit.md)

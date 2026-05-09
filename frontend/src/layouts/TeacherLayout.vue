@@ -2,9 +2,11 @@
 import { computed } from 'vue'
 
 import AppShell from '../components/common/AppShell.vue'
+import { useNotificationUnreadCount } from '../composables/useNotificationUnreadCount'
 import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
+const { unreadCount } = useNotificationUnreadCount(true)
 
 const isLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 
@@ -46,6 +48,40 @@ const navItems = computed(() => [
     labelKey: 'nav.recordedLessons',
     routeName: 'teacher-recorded-lessons',
     icon: 'Film',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  { key: 'notifications', labelKey: 'nav.notifications', routeName: 'notifications', icon: 'Bell', badgeCount: unreadCount.value },
+  { key: 'support-tickets', labelKey: 'nav.supportTickets', routeName: 'support-tickets', icon: 'Service' },
+  {
+    key: 'teacher-reviews',
+    labelKey: 'nav.reviews',
+    routeName: 'teacher-reviews',
+    icon: 'ChatDotRound',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-feedback',
+    labelKey: 'phase11.teacherFeedbackNav',
+    routeName: 'teacher-feedback',
+    icon: 'Memo',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-reports',
+    labelKey: 'nav.reports',
+    routeName: 'teacher-reports',
+    icon: 'Warning',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-moderation-records',
+    labelKey: 'phase11.moderationNav',
+    routeName: 'teacher-moderation-records',
+    icon: 'Finished',
     disabled: isLocked.value,
     chip: isLocked.value ? 'Locked' : undefined,
   },

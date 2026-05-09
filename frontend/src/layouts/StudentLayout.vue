@@ -2,15 +2,22 @@
 import { computed } from 'vue'
 
 import AppShell from '../components/common/AppShell.vue'
+import { useNotificationUnreadCount } from '../composables/useNotificationUnreadCount'
 import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
+const { unreadCount } = useNotificationUnreadCount(true)
 
 const navItems = computed(() => [
   { key: 'student-dashboard', labelKey: 'nav.studentDashboard', routeName: 'student-dashboard', icon: 'House' },
   { key: 'student-lessons', labelKey: 'nav.studentLessons', routeName: 'student-lessons', icon: 'Reading' },
   { key: 'student-live-classes', labelKey: 'nav.liveClasses', routeName: 'student-live-classes', icon: 'VideoPlay' },
   { key: 'student-schedule', labelKey: 'nav.schedule', routeName: 'student-schedule', icon: 'Calendar' },
+  { key: 'notifications', labelKey: 'nav.notifications', routeName: 'notifications', icon: 'Bell', badgeCount: unreadCount.value },
+  { key: 'support-tickets', labelKey: 'nav.supportTickets', routeName: 'support-tickets', icon: 'Service' },
+  { key: 'student-reports', labelKey: 'nav.reports', routeName: 'student-reports', icon: 'Warning' },
+  { key: 'student-reviews', labelKey: 'nav.reviews', routeName: 'student-reviews', icon: 'ChatDotRound' },
+  { key: 'student-feedback', labelKey: 'phase11.teacherFeedbackNav', routeName: 'student-feedback', icon: 'Memo' },
   { key: 'student-cart', labelKey: 'nav.cart', routeName: 'student-cart', icon: 'ShoppingCart' },
   { key: 'student-payments', labelKey: 'nav.paymentHistory', routeName: 'student-payments', icon: 'CreditCard' },
   { key: 'student-subscription', labelKey: 'nav.subscription', routeName: 'student-subscription', icon: 'Tickets' },

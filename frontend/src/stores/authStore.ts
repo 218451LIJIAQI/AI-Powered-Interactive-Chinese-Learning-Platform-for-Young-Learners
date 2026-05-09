@@ -1,8 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { AxiosError } from 'axios'
 
 import { apiClient } from '../services/apiClient'
+import { extractApiError } from '../utils/apiError'
 
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
 export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | null
@@ -66,25 +66,6 @@ type TeacherRegistrationPayload = RegisterPayloadBase & {
 }
 
 const TOKEN_KEY = 'ai-chinese-learning-token'
-
-function extractApiError(error: unknown, fallback: string) {
-  if (error instanceof AxiosError) {
-    const responseData = error.response?.data as Partial<ApiResponse<unknown>> | undefined
-    if (Array.isArray(responseData?.errors) && responseData.errors.length > 0) {
-      return responseData.errors[0]
-    }
-
-    if (typeof responseData?.message === 'string' && responseData.message.trim()) {
-      return responseData.message
-    }
-  }
-
-  if (error instanceof Error && error.message.trim()) {
-    return error.message
-  }
-
-  return fallback
-}
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))

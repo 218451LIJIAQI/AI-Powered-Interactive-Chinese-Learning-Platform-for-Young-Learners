@@ -15,6 +15,7 @@ type NavItem = {
   routeName?: string
   disabled?: boolean
   chip?: string
+  badgeCount?: number
 }
 
 const props = defineProps<{
@@ -94,6 +95,11 @@ async function handleLogout() {
             <el-tag v-if="item.chip" size="small" effect="plain" round class="shell-menu__chip">
               {{ item.chip }}
             </el-tag>
+            <el-badge
+              v-if="typeof item.badgeCount === 'number' && item.badgeCount > 0"
+              :value="item.badgeCount"
+              class="shell-menu__badge"
+            />
           </el-menu-item>
         </el-menu>
       </aside>

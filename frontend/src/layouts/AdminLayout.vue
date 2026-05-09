@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import AppShell from '../components/common/AppShell.vue'
+import { computed } from 'vue'
 
-const navItems = [
+import AppShell from '../components/common/AppShell.vue'
+import { useNotificationUnreadCount } from '../composables/useNotificationUnreadCount'
+
+const { unreadCount } = useNotificationUnreadCount(true)
+
+const navItems = computed(() => [
   { key: 'admin-dashboard', labelKey: 'nav.adminDashboard', routeName: 'admin-dashboard', icon: 'House' },
   { key: 'admin-users', labelKey: 'nav.userManagement', routeName: 'admin-users', icon: 'UserFilled' },
   { key: 'admin-students', labelKey: 'nav.students', routeName: 'admin-students', icon: 'Avatar' },
@@ -22,6 +27,12 @@ const navItems = [
     labelKey: 'nav.contentModeration',
     routeName: 'admin-content-moderation',
     icon: 'Finished',
+  },
+  {
+    key: 'admin-moderation',
+    labelKey: 'phase11.moderationNav',
+    routeName: 'admin-moderation',
+    icon: 'Operation',
   },
   {
     key: 'admin-ai-usage-logs',
@@ -53,6 +64,7 @@ const navItems = [
     labelKey: 'nav.notifications',
     routeName: 'admin-notifications',
     icon: 'Bell',
+    badgeCount: unreadCount.value,
   },
   {
     key: 'admin-support-tickets',
@@ -61,13 +73,13 @@ const navItems = [
     icon: 'Service',
   },
   {
-    key: 'admin-activity-logs',
+    key: 'admin-audit-logs',
     labelKey: 'nav.activityLogs',
-    routeName: 'admin-activity-logs',
+    routeName: 'admin-audit-logs',
     icon: 'Memo',
   },
   { key: 'admin-settings', labelKey: 'nav.systemSettings', routeName: 'admin-settings', icon: 'Setting' },
-]
+])
 </script>
 
 <template>

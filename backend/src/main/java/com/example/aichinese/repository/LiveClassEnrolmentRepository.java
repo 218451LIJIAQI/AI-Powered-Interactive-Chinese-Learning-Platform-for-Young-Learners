@@ -28,4 +28,6 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
             Long liveClassId,
             Long studentId,
             LiveClassEnrolmentStatus enrolmentStatus);
+
+    boolean existsByStudentIdAndLiveClassTeacherUserId(Long studentId, Long teacherUserId);
 }

@@ -34,7 +34,7 @@ public class Report extends BaseEntity {
     @Column(name = "target_type", nullable = false, length = 50)
     private String targetType;
 
-    @Column(name = "target_id", nullable = false)
+    @Column(name = "target_id")
     private Long targetId;
 
     @Lob
@@ -44,4 +44,15 @@ public class Report extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "report_status", nullable = false, length = 30)
     private ReportStatus reportStatus = ReportStatus.PENDING;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_teacher_id")
+    private TeacherProfile relatedTeacher;
+
+    @Lob
+    @Column(name = "admin_note")
+    private String adminNote;
+
+    @Column(name = "teacher_revision_requested", nullable = false)
+    private boolean teacherRevisionRequested;
 }

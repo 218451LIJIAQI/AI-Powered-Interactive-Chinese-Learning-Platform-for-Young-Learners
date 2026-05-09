@@ -12,6 +12,7 @@ import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.ListeningExercise;
 import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.Quiz;
+import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.enums.AccessType;
@@ -134,6 +135,15 @@ public class StudentLearningAccessService {
         boolean moduleAccess = lesson.getModule() != null
                 && entitlementService.hasAccessToItem(student.getId(), "MODULE", lesson.getModule().getId());
         return directLessonAccess || moduleAccess;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasPackageAccess(StudentProfile student, CoursePackage coursePackage) {
+        if (coursePackage.getAccessType() != AccessType.PAID) {
+            return true;
+        }
+
+        return entitlementService.hasAccessToItem(student.getId(), "PACKAGE", coursePackage.getId());
     }
 
     public void ensureFreeAccess(Lesson lesson) {

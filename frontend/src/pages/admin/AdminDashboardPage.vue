@@ -94,7 +94,7 @@ onMounted(() => {
                 <h3>{{ t('dashboard.reportsSummary') }}</h3>
                 <p>{{ t('dashboard.reportsSummaryDesc') }}</p>
               </router-link>
-              <router-link class="management-card" :to="{ name: 'admin-activity-logs' }">
+              <router-link class="management-card" :to="{ name: 'admin-audit-logs' }">
                 <h3>{{ t('dashboard.activityLogsSummary') }}</h3>
                 <p>{{ t('dashboard.activityLogsSummaryDesc') }}</p>
               </router-link>

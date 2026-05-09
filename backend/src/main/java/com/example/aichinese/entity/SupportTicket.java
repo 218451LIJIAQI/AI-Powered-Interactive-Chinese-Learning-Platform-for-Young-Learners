@@ -1,6 +1,7 @@
 package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.SupportTicketPriority;
 import com.example.aichinese.entity.enums.SupportTicketStatus;
 
 import jakarta.persistence.Column;
@@ -41,4 +42,8 @@ public class SupportTicket extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "ticket_status", nullable = false, length = 30)
     private SupportTicketStatus ticketStatus = SupportTicketStatus.OPEN;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ticket_priority", nullable = false, length = 20)
+    private SupportTicketPriority ticketPriority = SupportTicketPriority.MEDIUM;
 }

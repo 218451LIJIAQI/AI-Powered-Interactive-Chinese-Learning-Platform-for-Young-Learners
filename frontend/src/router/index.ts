@@ -7,10 +7,17 @@ import TeacherLayout from '../layouts/TeacherLayout.vue'
 import { i18n } from '../i18n'
 import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vue'
 import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
+import AdminContentModerationPage from '../pages/admin/AdminContentModerationPage.vue'
 import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
 import AdminAiUsageLogsPage from '../pages/admin/AdminAiUsageLogsPage.vue'
+import AdminAuditLogPage from '../pages/admin/AdminAuditLogPage.vue'
 import AdminLiveClassOverviewPage from '../pages/admin/AdminLiveClassOverviewPage.vue'
+import AdminReportDetailPage from '../pages/admin/AdminReportDetailPage.vue'
+import AdminReportManagementPage from '../pages/admin/AdminReportManagementPage.vue'
+import AdminReviewModerationPage from '../pages/admin/AdminReviewModerationPage.vue'
 import AdminScheduleOverviewPage from '../pages/admin/AdminScheduleOverviewPage.vue'
+import AdminSupportManagementPage from '../pages/admin/AdminSupportManagementPage.vue'
+import AdminSupportTicketDetailPage from '../pages/admin/AdminSupportTicketDetailPage.vue'
 import CommissionSettingPage from '../pages/admin/CommissionSettingPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
 import PaymentManagementPage from '../pages/admin/PaymentManagementPage.vue'
@@ -21,7 +28,10 @@ import SubscriptionPlanManagementPage from '../pages/admin/SubscriptionPlanManag
 import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
 import AdminTeacherVerificationDetailPage from '../pages/admin/AdminTeacherVerificationDetailPage.vue'
 import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage.vue'
-import PlaceholderWorkspacePage from '../components/common/PlaceholderWorkspacePage.vue'
+import NotificationCenterPage from '../pages/shared/NotificationCenterPage.vue'
+import CreateSupportTicketPage from '../pages/shared/CreateSupportTicketPage.vue'
+import SupportTicketDetailPage from '../pages/shared/SupportTicketDetailPage.vue'
+import SupportTicketListPage from '../pages/shared/SupportTicketListPage.vue'
 import AiDisclaimerPage from '../pages/public/AiDisclaimerPage.vue'
 import ChildSafetyPage from '../pages/public/ChildSafetyPage.vue'
 import CourseDetailPage from '../pages/public/CourseDetailPage.vue'
@@ -54,7 +64,11 @@ import QuizResultPage from '../pages/student/QuizResultPage.vue'
 import RecordedLessonPlayerPage from '../pages/student/RecordedLessonPlayerPage.vue'
 import RefundHistoryPage from '../pages/student/RefundHistoryPage.vue'
 import RewardsPage from '../pages/student/RewardsPage.vue'
+import MyReportsPage from '../pages/student/MyReportsPage.vue'
+import MyReviewsPage from '../pages/student/MyReviewsPage.vue'
+import ReportFormPage from '../pages/student/ReportFormPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
+import StudentFeedbackPage from '../pages/student/StudentFeedbackPage.vue'
 import StudentLessonsPage from '../pages/student/StudentLessonsPage.vue'
 import StudentLiveClassDetailPage from '../pages/student/StudentLiveClassDetailPage.vue'
 import StudentLiveClassListPage from '../pages/student/StudentLiveClassListPage.vue'
@@ -78,11 +92,15 @@ import PayoutRequestPage from '../pages/teacher/PayoutRequestPage.vue'
 import QuizEditorPage from '../pages/teacher/QuizEditorPage.vue'
 import QuizResultsViewerPage from '../pages/teacher/QuizResultsViewerPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
+import TeacherFeedbackPage from '../pages/teacher/TeacherFeedbackPage.vue'
 import TeacherLiveClassManagementPage from '../pages/teacher/TeacherLiveClassManagementPage.vue'
 import TeacherProfilePage from '../pages/teacher/TeacherProfilePage.vue'
 import TeacherRecordedLessonManagementPage from '../pages/teacher/TeacherRecordedLessonManagementPage.vue'
+import TeacherReportsRevisionRequestsPage from '../pages/teacher/TeacherReportsRevisionRequestsPage.vue'
+import TeacherReviewsPage from '../pages/teacher/TeacherReviewsPage.vue'
 import TeacherSchedulePage from '../pages/teacher/TeacherSchedulePage.vue'
 import TeacherVerificationUploadPage from '../pages/teacher/TeacherVerificationUploadPage.vue'
+import TeacherModerationRecordsPage from '../pages/teacher/TeacherModerationRecordsPage.vue'
 import TracingExerciseEditorPage from '../pages/teacher/TracingExerciseEditorPage.vue'
 import { pinia } from '../stores'
 import { useAuthStore, type UserRole } from '../stores/authStore'
@@ -94,31 +112,6 @@ declare module 'vue-router' {
     roles?: UserRole[]
     guestOnly?: boolean
     navKey?: string
-  }
-}
-
-function createPlaceholderRoute(
-  path: string,
-  name: string,
-  titleKey: string,
-  accent: 'student' | 'teacher' | 'admin',
-  eyebrow: string,
-  title: string,
-  description: string,
-  bullets: string[],
-): RouteRecordRaw {
-  return {
-    path,
-    name,
-    component: PlaceholderWorkspacePage,
-    props: {
-      eyebrow,
-      title,
-      description,
-      bullets,
-      accent,
-    },
-    meta: { titleKey },
   }
 }
 
@@ -152,6 +145,30 @@ const studentChildren: RouteRecordRaw[] = [
     name: 'student-schedule',
     component: StudentSchedulePage,
     meta: { titleKey: 'nav.schedule' },
+  },
+  {
+    path: 'reports',
+    name: 'student-reports',
+    component: MyReportsPage,
+    meta: { titleKey: 'phase11.myReportsTitle' },
+  },
+  {
+    path: 'reports/create',
+    name: 'student-report-create',
+    component: ReportFormPage,
+    meta: { titleKey: 'phase11.submitReportTitle', navKey: 'student-reports' },
+  },
+  {
+    path: 'reviews',
+    name: 'student-reviews',
+    component: MyReviewsPage,
+    meta: { titleKey: 'phase11.myReviewsTitle' },
+  },
+  {
+    path: 'feedback',
+    name: 'student-feedback',
+    component: StudentFeedbackPage,
+    meta: { titleKey: 'phase11.studentFeedbackTitle' },
   },
   {
     path: 'lessons/:lessonId',
@@ -361,6 +378,30 @@ const teacherChildren: RouteRecordRaw[] = [
     meta: { titleKey: 'nav.recordedLessons' },
   },
   {
+    path: 'reviews',
+    name: 'teacher-reviews',
+    component: TeacherReviewsPage,
+    meta: { titleKey: 'phase11.teacherReviewsTitle' },
+  },
+  {
+    path: 'feedback',
+    name: 'teacher-feedback',
+    component: TeacherFeedbackPage,
+    meta: { titleKey: 'phase11.teacherFeedbackTitle' },
+  },
+  {
+    path: 'reports',
+    name: 'teacher-reports',
+    component: TeacherReportsRevisionRequestsPage,
+    meta: { titleKey: 'phase11.teacherReportsTitle' },
+  },
+  {
+    path: 'moderation-records',
+    name: 'teacher-moderation-records',
+    component: TeacherModerationRecordsPage,
+    meta: { titleKey: 'phase11.teacherModerationTitle' },
+  },
+  {
     path: 'lessons/new',
     name: 'teacher-lesson-new',
     component: LessonEditorPage,
@@ -561,66 +602,61 @@ const adminChildren: RouteRecordRaw[] = [
     component: CommissionSettingPage,
     meta: { titleKey: 'commerce.commissionTitle' },
   },
-  createPlaceholderRoute(
-    'reports',
-    'admin-reports',
-    'nav.reports',
-    'admin',
-    'Reports',
-    'Reporting workflows are staged for a later phase',
-    'This page will later support review of content issues, inappropriate material reports, and technical complaints.',
-    ['Review pending reports', 'Take moderation actions', 'Track resolution history'],
-  ),
-  createPlaceholderRoute(
-    'reviews',
-    'admin-reviews',
-    'nav.reviewsModeration',
-    'admin',
-    'Reviews Moderation',
-    'Review moderation tools will be added later',
-    'Admins will later inspect student reviews, hide unsuitable content, and preserve moderation logs here.',
-    ['Inspect public reviews', 'Hide inappropriate comments', 'Keep moderation records'],
-  ),
-  createPlaceholderRoute(
-    'notifications',
-    'admin-notifications',
-    'nav.notifications',
-    'admin',
-    'Notifications',
-    'Admin notifications are prepared for later phases',
-    'This area will later gather platform alerts for approvals, tickets, reports, and financial events.',
-    ['View platform alerts', 'Prioritize pending actions', 'Track operational reminders'],
-  ),
-  createPlaceholderRoute(
-    'support-tickets',
-    'admin-support-tickets',
-    'nav.supportTickets',
-    'admin',
-    'Support Tickets',
-    'Ticket management will be implemented later',
-    'This page will later allow admins to triage support tickets and respond to students and teachers.',
-    ['Review open tickets', 'Reply and update status', 'Close resolved issues'],
-  ),
-  createPlaceholderRoute(
-    'activity-logs',
-    'admin-activity-logs',
-    'nav.activityLogs',
-    'admin',
-    'Activity Logs',
-    'Detailed activity log browsing will expand in a later phase',
-    'This section is ready for login history, approval actions, and moderation audit trails.',
-    ['Review audit events', 'Filter by action type', 'Inspect admin decisions'],
-  ),
-  createPlaceholderRoute(
-    'settings',
-    'admin-settings',
-    'nav.systemSettings',
-    'admin',
-    'System Settings',
-    'Platform settings management will be added later',
-    'This workspace is prepared for commission rate, platform toggles, and operational configuration controls.',
-    ['Adjust commission and platform defaults', 'Review environment-linked settings', 'Manage feature toggle scaffolds'],
-  ),
+  {
+    path: 'reports',
+    name: 'admin-reports',
+    component: AdminReportManagementPage,
+    meta: { titleKey: 'phase11.adminReportsTitle' },
+  },
+  {
+    path: 'reports/:id',
+    name: 'admin-report-detail',
+    component: AdminReportDetailPage,
+    meta: { titleKey: 'phase11.reportDetailTitle', navKey: 'admin-reports' },
+  },
+  {
+    path: 'reviews',
+    name: 'admin-reviews',
+    component: AdminReviewModerationPage,
+    meta: { titleKey: 'phase11.adminReviewsTitle' },
+  },
+  {
+    path: 'notifications',
+    name: 'admin-notifications',
+    component: NotificationCenterPage,
+    meta: { titleKey: 'phase11.notificationsTitle' },
+  },
+  {
+    path: 'support-tickets',
+    name: 'admin-support-tickets',
+    component: AdminSupportManagementPage,
+    meta: { titleKey: 'phase11.adminSupportTitle' },
+  },
+  {
+    path: 'support-tickets/:id',
+    name: 'admin-support-ticket-detail',
+    component: AdminSupportTicketDetailPage,
+    meta: { titleKey: 'phase11.supportTicketDetailTitle', navKey: 'admin-support-tickets' },
+  },
+  {
+    path: 'audit-logs',
+    alias: 'activity-logs',
+    name: 'admin-audit-logs',
+    component: AdminAuditLogPage,
+    meta: { titleKey: 'phase11.auditLogsTitle' },
+  },
+  {
+    path: 'moderation',
+    name: 'admin-moderation',
+    component: AdminContentModerationPage,
+    meta: { titleKey: 'phase11.adminModerationTitle' },
+  },
+  {
+    path: 'settings',
+    name: 'admin-settings',
+    component: AdminContentModerationListPage,
+    meta: { titleKey: 'nav.systemSettings' },
+  },
 ]
 
 const routes: RouteRecordRaw[] = [
@@ -709,6 +745,30 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/notifications',
+    name: 'notifications',
+    component: NotificationCenterPage,
+    meta: { titleKey: 'phase11.notificationsTitle', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  },
+  {
+    path: '/support-tickets',
+    name: 'support-tickets',
+    component: SupportTicketListPage,
+    meta: { titleKey: 'phase11.supportTicketsTitle', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  },
+  {
+    path: '/support-tickets/create',
+    name: 'support-ticket-create',
+    component: CreateSupportTicketPage,
+    meta: { titleKey: 'phase11.createSupportTicket', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  },
+  {
+    path: '/support-tickets/:id',
+    name: 'support-ticket-detail',
+    component: SupportTicketDetailPage,
+    meta: { titleKey: 'phase11.supportTicketDetailTitle', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  },
+  {
     path: '/student',
     component: StudentLayout,
     meta: { requiresAuth: true, roles: ['STUDENT'], titleKey: 'nav.studentDashboard' },
@@ -764,8 +824,9 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to: RouteLocationNormalized) => {
   const titleKey = typeof to.meta.titleKey === 'string' ? to.meta.titleKey : 'common.appName'
-  const pageTitle = i18n.global.t(titleKey)
-  document.title = `${pageTitle} | ${i18n.global.t('common.appName')}`
+  const translate = i18n.global.t as (key: string) => string
+  const pageTitle = translate(titleKey)
+  document.title = `${pageTitle} | ${translate('common.appName')}`
 })
 
 function redirectByRole(role: UserRole | null) {

@@ -29,6 +29,9 @@ public class AuditLog extends BaseEntity {
     @JoinColumn(name = "actor_user_id")
     private User actorUser;
 
+    @Column(name = "actor_email", length = 150)
+    private String actorEmail;
+
     @Column(name = "action_type", nullable = false, length = 100)
     private String actionType;
 

@@ -20,6 +20,17 @@ spring:
     multipart:
       max-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
       max-request-size: ${MAX_VIDEO_FILE_SIZE:100MB}
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 server:
   port: 8080
@@ -55,3 +66,6 @@ app:
     timeout-seconds: ${PAYMENT_TIMEOUT_SECONDS:30}
     enable-real-provider: ${PAYMENT_ENABLE_REAL_PROVIDER:false}
     mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:true}
+  email:
+    enabled: ${SMTP_ENABLED:false}
+    from: ${SMTP_FROM:}

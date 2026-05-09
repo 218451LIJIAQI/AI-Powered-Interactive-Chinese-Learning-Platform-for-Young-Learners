@@ -40,4 +40,11 @@ public class ContentModerationRecord extends BaseEntity {
     @Lob
     @Column(name = "note")
     private String note;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_teacher_id")
+    private TeacherProfile relatedTeacher;
+
+    @Column(name = "target_title_snapshot", length = 255)
+    private String targetTitleSnapshot;
 }

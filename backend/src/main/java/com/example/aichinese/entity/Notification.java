@@ -2,6 +2,7 @@ package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.NotificationStatus;
+import com.example.aichinese.entity.enums.NotificationType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -23,7 +24,8 @@ import lombok.Setter;
 @Entity
 @Table(name = "notifications", indexes = {
         @Index(name = "idx_notifications_user_id", columnList = "user_id"),
-        @Index(name = "idx_notifications_status", columnList = "notification_status")
+        @Index(name = "idx_notifications_status", columnList = "notification_status"),
+        @Index(name = "idx_notifications_type", columnList = "notification_type")
 })
 public class Notification extends BaseEntity {
 
@@ -39,9 +41,26 @@ public class Notification extends BaseEntity {
     private String message;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "notification_type", nullable = false, length = 40)
+    private NotificationType notificationType = NotificationType.SYSTEM;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "notification_status", nullable = false, length = 20)
     private NotificationStatus notificationStatus = NotificationStatus.UNREAD;
 
+    @Column(name = "target_type", length = 50)
+    private String targetType;
+
+    @Column(name = "target_id")
+    private Long targetId;
+
     @Column(name = "target_path", length = 255)
     private String targetPath;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_user_id")
+    private User createdByUser;
+
+    @Column(name = "read_at")
+    private java.time.LocalDateTime readAt;
 }

@@ -12,10 +12,12 @@ import com.example.aichinese.dto.content.LearningCategoryResponse;
 import com.example.aichinese.dto.content.LearningLevelResponse;
 import com.example.aichinese.dto.content.PublicCourseDetailResponse;
 import com.example.aichinese.dto.content.PublicCourseSummaryResponse;
+import com.example.aichinese.dto.communication.ReviewResponse;
 import com.example.aichinese.dto.publicview.PublicTeacherProfileResponse;
 import com.example.aichinese.service.LearningCatalogService;
 import com.example.aichinese.service.PublicContentService;
 import com.example.aichinese.service.PublicTeacherProfileService;
+import com.example.aichinese.service.ReviewService;
 
 @RestController
 @RequestMapping("/api/v1/public")
@@ -24,14 +26,17 @@ public class PublicController {
     private final PublicTeacherProfileService publicTeacherProfileService;
     private final LearningCatalogService learningCatalogService;
     private final PublicContentService publicContentService;
+    private final ReviewService reviewService;
 
     public PublicController(
             PublicTeacherProfileService publicTeacherProfileService,
             LearningCatalogService learningCatalogService,
-            PublicContentService publicContentService) {
+            PublicContentService publicContentService,
+            ReviewService reviewService) {
         this.publicTeacherProfileService = publicTeacherProfileService;
         this.learningCatalogService = learningCatalogService;
         this.publicContentService = publicContentService;
+        this.reviewService = reviewService;
     }
 
     @GetMapping("/teachers/{id}")
@@ -75,5 +80,14 @@ public class PublicController {
         return ApiResponse.success(
                 "Published course detail retrieved successfully.",
                 publicContentService.getCourseDetail(id));
+    }
+
+    @GetMapping("/reviews")
+    public ApiResponse<java.util.List<ReviewResponse>> getPublicReviews(
+            @RequestParam("targetType") String targetType,
+            @RequestParam("targetId") Long targetId) {
+        return ApiResponse.success(
+                "Public reviews retrieved successfully.",
+                reviewService.getPublicVisibleReviews(targetType, targetId));
     }
 }

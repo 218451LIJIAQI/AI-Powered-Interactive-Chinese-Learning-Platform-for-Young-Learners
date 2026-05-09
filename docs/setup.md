@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 10.
+This document explains how to run the project locally through Phase 11.
 
 ## Prerequisites
 - Node.js and npm
@@ -54,6 +54,12 @@ Important variables:
 - `PAYMENT_ENABLE_REAL_PROVIDER`
 - `PAYMENT_TIMEOUT_SECONDS`
 - `PAYMENT_MOCK_SUCCESS_ENABLED`
+- `SMTP_ENABLED`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM`
 
 Example:
 
@@ -89,6 +95,12 @@ PAYMENT_CURRENCY=MYR
 PAYMENT_ENABLE_REAL_PROVIDER=false
 PAYMENT_TIMEOUT_SECONDS=30
 PAYMENT_MOCK_SUCCESS_ENABLED=true
+SMTP_ENABLED=false
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=
 ```
 
 Notes:
@@ -103,6 +115,8 @@ Notes:
 - The real `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` must only be set in the backend environment locally.
 - Never place Stripe secret keys in frontend files or commit them.
 - If `PAYMENT_ENABLE_REAL_PROVIDER=false` or the Stripe secret key is missing, the backend still starts and checkout returns safe mock or unavailable responses.
+- If `SMTP_ENABLED=false` or `SMTP_HOST` is empty, the backend still starts and email sending safely falls back to a no-op implementation.
+- In-app notifications continue to work even when SMTP is not configured.
 - Recorded lesson uploads should stay in backend-managed directories only.
 - Do not commit uploaded lesson videos or temporary runtime media files.
 
@@ -164,11 +178,19 @@ Public routes:
 - `/teachers/:id`
 
 Student routes:
+- `/notifications`
+- `/support-tickets`
+- `/support-tickets/create`
+- `/support-tickets/:id`
 - `/student/dashboard`
 - `/student/lessons`
 - `/student/live-classes`
 - `/student/live-classes/:id`
 - `/student/schedule`
+- `/student/reports`
+- `/student/reports/create`
+- `/student/reviews`
+- `/student/feedback`
 - `/student/lessons/:lessonId`
 - `/student/recorded-lessons/:id`
 - `/student/lessons/:lessonId/flashcards`
@@ -182,6 +204,10 @@ Student routes:
 - `/student/wrong-answers`
 
 Teacher routes:
+- `/notifications`
+- `/support-tickets`
+- `/support-tickets/create`
+- `/support-tickets/:id`
 - `/teacher/dashboard`
 - `/teacher/profile`
 - `/teacher/verification-status`
@@ -191,6 +217,10 @@ Teacher routes:
 - `/teacher/live-classes/:id/edit`
 - `/teacher/schedule`
 - `/teacher/recorded-lessons`
+- `/teacher/reviews`
+- `/teacher/feedback`
+- `/teacher/reports`
+- `/teacher/moderation-records`
 - `/teacher/modules`
 - `/teacher/lessons`
 - `/teacher/lessons/new`
@@ -206,6 +236,10 @@ Teacher routes:
 - `/teacher/quiz-results`
 
 Admin routes:
+- `/notifications`
+- `/support-tickets`
+- `/support-tickets/create`
+- `/support-tickets/:id`
 - `/admin/dashboard`
 - `/admin/live-classes`
 - `/admin/schedule`
@@ -216,6 +250,14 @@ Admin routes:
 - `/admin/content/approvals`
 - `/admin/content/approvals/:type/:id`
 - `/admin/content/moderation`
+- `/admin/reports`
+- `/admin/reports/:id`
+- `/admin/reviews`
+- `/admin/notifications`
+- `/admin/support-tickets`
+- `/admin/support-tickets/:id`
+- `/admin/audit-logs`
+- `/admin/moderation`
 - `/admin/ai-usage-logs`
 
 AI student routes:
@@ -385,7 +427,7 @@ Phase 7 interactive learning:
 - open `/student/progress`
 - open `/student/rewards`
 
-## 11. What Exists Through Phase 10
+## 11. What Exists Through Phase 11
 - Frontend app scaffold
 - Role-based layouts and navigation
 - Real login page
@@ -414,6 +456,10 @@ Phase 7 interactive learning:
 - Recorded lesson video APIs and protected streaming
 - Video progress tracking APIs
 - Student, teacher, and admin schedule APIs
+- Notification APIs and notification center UI
+- Report, review, teacher feedback, and support ticket workflows
+- Content moderation actions and moderation history pages
+- Admin audit log APIs and audit log page
 
 ## 12. What Is Intentionally Deferred
 - AI integration logic
@@ -427,4 +473,4 @@ Phase 7 interactive learning:
 - Internal video conferencing
 - WebRTC
 - Advanced streaming, CDN, or transcoding
-- Reviews, reports, support tickets, refunds, payouts, and advanced notifications
+- Phase 12 analytics and final UI polish

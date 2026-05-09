@@ -3,9 +3,12 @@ package com.example.aichinese.entity;
 import java.math.BigDecimal;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.ReviewStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -42,6 +45,10 @@ public class Review extends BaseEntity {
     @Lob
     @Column(name = "review_comment")
     private String reviewComment;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_status", nullable = false, length = 20)
+    private ReviewStatus reviewStatus = ReviewStatus.VISIBLE;
 
     @Column(name = "visible", nullable = false)
     private boolean visible = true;

@@ -91,8 +91,16 @@ Phase 2 and later phases include these main enums:
 - `RefundStatus`: `PENDING`, `APPROVED`, `REJECTED`, `REFUNDED`
 - `PayoutStatus`: `PENDING`, `APPROVED`, `REJECTED`, `PAID`
 - `SupportTicketStatus`: `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`
+- `SupportTicketPriority`: `LOW`, `MEDIUM`, `HIGH`, `URGENT`
 - `ReportStatus`: `PENDING`, `REVIEWED`, `DISMISSED`, `ACTION_TAKEN`
+- `ReportTargetType`: `LESSON`, `PACKAGE`, `REVIEW`, `TEACHER`, `TECHNICAL`, `OTHER`
 - `NotificationStatus`: `UNREAD`, `READ`
+- `NotificationType`: `SYSTEM`, `TEACHER_FEEDBACK`, `QUIZ_RESULT`, `PROGRESS_UPDATE`, `REWARD_EARNED`, `PAYMENT_STATUS`, `REFUND_STATUS`, `PAYOUT_STATUS`, `LIVE_CLASS_REMINDER`, `TEACHER_APPROVAL`, `CONTENT_REVIEW`, `REPORT_CREATED`, `REVIEW_RECEIVED`, `SUPPORT_TICKET`, `MODERATION_ACTION`, `ADMIN_TASK`
+- `ReviewStatus`: `VISIBLE`, `HIDDEN`, `FLAGGED`
+- `ReviewTargetType`: `LESSON`, `PACKAGE`, `TEACHER`
+- `ContentModerationAction`: `HIDE`, `UNPUBLISH`, `ARCHIVE`, `REQUEST_REVISION`, `RESTORE`
+- `ContentModerationTargetType`: `LESSON`, `PACKAGE`, `REVIEW`, `TEACHER_PROFILE`, `OTHER`
+- `TeacherFeedbackType`: `QUIZ`, `LESSON`, `PROGRESS`, `WEAK_AREA`, `GENERAL`
 
 ## 3. Seed Data
 The startup seeder inserts only essential reference data:
@@ -231,3 +239,28 @@ Development notes:
 - Meeting links are sensitive and must not be exposed in public APIs.
 - Uploaded file paths are stored in the database but are not returned directly to the frontend.
 - Hibernate `ddl-auto=update` remains the development strategy for this prototype.
+
+## 9. Phase 11 Schema Notes
+Phase 11 reuses the existing communication and moderation tables and adds teacher feedback support:
+
+- `notifications`
+  - stores notification type, status, optional target type/id, optional target path, read timestamp, and optional creator
+- `reports`
+  - stores report target type/id, reporter, reason, status, related teacher, optional admin note, and revision-request flag
+- `reviews`
+  - stores review target type/id, rating, optional comment, visibility, and moderation status
+- `support_tickets`
+  - stores requester, subject, initial description, status, and priority
+- `support_ticket_messages`
+  - stores threaded replies linked to a ticket and sender
+- `content_moderation_records`
+  - stores admin action, target type/id, target title snapshot, note, and related teacher
+- `audit_logs`
+  - stores actor, action type, target type/id, description, timestamp, and optional IP address
+- `teacher_feedback`
+  - links a teacher and student with optional lesson or quiz-attempt context plus feedback type and message
+
+Security notes:
+- private notification records remain user-owned and are not exposed publicly
+- support ticket threads remain requester-owned unless accessed through admin routes
+- uploaded file paths and SMTP credentials must not be exposed through Phase 11 APIs
