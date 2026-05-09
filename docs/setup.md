@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 6.
+This document explains how to run the project locally through Phase 7.
 
 ## Prerequisites
 - Node.js and npm
@@ -119,20 +119,17 @@ Public routes:
 
 Student routes:
 - `/student/dashboard`
-- `/student/modules`
-- `/student/ai-tutor`
-- `/student/ai-vocabulary`
-- `/student/ai-sentence-practice`
-- `/student/pronunciation-feedback`
-- `/student/writing-feedback`
+- `/student/lessons`
+- `/student/lessons/:lessonId`
+- `/student/lessons/:lessonId/flashcards`
+- `/student/quizzes/:quizId`
+- `/student/quiz-attempts/:attemptId`
+- `/student/matching-games/:gameId`
+- `/student/listening-exercises/:exerciseId`
+- `/student/tracing-exercises/:exerciseId`
 - `/student/progress`
 - `/student/rewards`
-- `/student/cart`
-- `/student/payment-history`
-- `/student/subscription`
-- `/student/wishlist`
-- `/student/notifications`
-- `/student/support`
+- `/student/wrong-answers`
 
 Teacher routes:
 - `/teacher/dashboard`
@@ -146,6 +143,12 @@ Teacher routes:
 - `/teacher/packages`
 - `/teacher/packages/new`
 - `/teacher/packages/:id/edit`
+- `/teacher/flashcards`
+- `/teacher/quizzes`
+- `/teacher/matching-games`
+- `/teacher/listening-exercises`
+- `/teacher/tracing-exercises`
+- `/teacher/quiz-results`
 
 Admin routes:
 - `/admin/dashboard`
@@ -240,7 +243,7 @@ Admin:
 - `POST /api/v1/admin/content/{contentType}/{id}/publish`
 - `POST /api/v1/admin/content/{contentType}/{id}/archive`
 
-## 10. Manual Phase 6 Testing Guide
+## 10. Manual Phase 6 and Phase 7 Testing Guide
 Teacher content creation:
 - Log in as an approved teacher
 - Open `/teacher/modules` and create a module
@@ -264,7 +267,24 @@ Public discovery:
 - Confirm only published content appears
 - Open `/courses/{id}` and confirm paid content remains locked
 
-## 11. What Exists Through Phase 6
+Phase 7 interactive learning:
+- log in as an approved teacher
+- add flashcards to an owned draft or rejected lesson
+- add a quiz and at least one question
+- add matching, listening, and tracing activities
+- submit and publish the lesson through the existing Phase 6 workflow
+- log in as a student
+- open `/student/lessons`
+- open the published lesson player
+- practise flashcards
+- submit a quiz and review the result
+- open wrong-answer review
+- submit matching and listening activities
+- complete tracing
+- open `/student/progress`
+- open `/student/rewards`
+
+## 11. What Exists Through Phase 7
 - Frontend app scaffold
 - Role-based layouts and navigation
 - Real login page
@@ -277,6 +297,8 @@ Public discovery:
 - Teacher module, lesson, and package management pages
 - Admin content approval and moderation pages
 - Public course discovery and course detail pages
+- Student lesson player, flashcard practice, quiz pages, wrong-answer review, progress, and rewards pages
+- Teacher flashcard, quiz, matching, listening, tracing, and quiz-results pages
 - Spring Boot backend
 - `/api/v1/health`
 - Database foundation and seed data
@@ -285,17 +307,18 @@ Public discovery:
 - Role-based backend protection
 - Dashboard summary APIs
 - Content management workflow APIs
-- Backend integration tests for content workflow and security
+- Interactive learning APIs, scoring, progress tracking, and rewards
+- Backend integration tests for content workflow, security, and interactive learning
 
 ## 12. What Is Intentionally Deferred
 - AI integration logic
 - Payment and subscription workflows
 - Checkout and cart logic
-- Quiz gameplay
-- Flashcard gameplay
-- Matching gameplay
-- Tracing canvas
-- Student progress workflows
+- Advanced AI tutor and AI explanations
+- Commerce unlock logic
+- Leaderboard
+- Professional handwriting recognition
+- Professional pronunciation scoring
 - Live class scheduling
 - Recorded lesson player
 - Reviews, reports, support tickets, refunds, payouts, and advanced notifications

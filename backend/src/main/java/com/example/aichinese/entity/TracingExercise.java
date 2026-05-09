@@ -38,6 +38,15 @@ public class TracingExercise extends BaseEntity {
     @Column(name = "target_character", length = 100)
     private String targetCharacter;
 
+    @Column(name = "pinyin", length = 255)
+    private String pinyin;
+
+    @Column(name = "meaning", length = 500)
+    private String meaning;
+
+    @Column(name = "instructions", length = 1000)
+    private String instructions;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "content_status", nullable = false, length = 30)
     private ContentStatus contentStatus = ContentStatus.DRAFT;

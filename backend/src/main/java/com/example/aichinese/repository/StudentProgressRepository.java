@@ -9,4 +9,6 @@ import com.example.aichinese.entity.StudentProgress;
 public interface StudentProgressRepository extends JpaRepository<StudentProgress, Long> {
 
     Optional<StudentProgress> findFirstByStudentIdOrderByUpdatedAtDesc(Long studentId);
+
+    Optional<StudentProgress> findByStudentId(Long studentId);
 }

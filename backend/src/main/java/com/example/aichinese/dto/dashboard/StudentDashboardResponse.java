@@ -16,7 +16,7 @@ public record StudentDashboardResponse(
         List<RecommendedLessonSummary> recommendedLessons,
         List<SavedItemSummary> savedItems,
         List<NotificationSummary> recentNotifications,
-        String aiRecommendedNextStep) {
+        String recommendedNextStep) {
 
     public record RecentQuizResult(
             Long attemptId,

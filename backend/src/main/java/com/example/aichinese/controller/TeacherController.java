@@ -34,12 +34,25 @@ import com.example.aichinese.dto.content.UpdateLessonActivityRequest;
 import com.example.aichinese.dto.content.UpdateLessonRequest;
 import com.example.aichinese.dto.content.UpdateModuleRequest;
 import com.example.aichinese.dto.dashboard.TeacherDashboardResponse;
+import com.example.aichinese.dto.learning.CreateFlashcardRequest;
+import com.example.aichinese.dto.learning.CreateListeningExerciseRequest;
+import com.example.aichinese.dto.learning.CreateMatchingGameRequest;
+import com.example.aichinese.dto.learning.CreateQuizQuestionRequest;
+import com.example.aichinese.dto.learning.CreateQuizRequest;
+import com.example.aichinese.dto.learning.CreateTracingExerciseRequest;
+import com.example.aichinese.dto.learning.FlashcardOptionResponse;
+import com.example.aichinese.dto.learning.ListeningExerciseResponse;
+import com.example.aichinese.dto.learning.MatchingGameResponse;
+import com.example.aichinese.dto.learning.TeacherQuizAttemptSummaryResponse;
+import com.example.aichinese.dto.learning.TeacherQuizResponse;
+import com.example.aichinese.dto.learning.TracingExerciseResponse;
 import com.example.aichinese.dto.teacher.TeacherProfileResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationStatusResponse;
 import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LessonActivityService;
+import com.example.aichinese.service.TeacherLearningActivityService;
 import com.example.aichinese.service.TeacherLessonService;
 import com.example.aichinese.service.TeacherManagementService;
 import com.example.aichinese.service.TeacherModuleService;
@@ -58,6 +71,7 @@ public class TeacherController {
     private final TeacherLessonService teacherLessonService;
     private final LessonActivityService lessonActivityService;
     private final TeacherPackageService teacherPackageService;
+    private final TeacherLearningActivityService teacherLearningActivityService;
 
     public TeacherController(
             DashboardService dashboardService,
@@ -65,13 +79,15 @@ public class TeacherController {
             TeacherModuleService teacherModuleService,
             TeacherLessonService teacherLessonService,
             LessonActivityService lessonActivityService,
-            TeacherPackageService teacherPackageService) {
+            TeacherPackageService teacherPackageService,
+            TeacherLearningActivityService teacherLearningActivityService) {
         this.dashboardService = dashboardService;
         this.teacherManagementService = teacherManagementService;
         this.teacherModuleService = teacherModuleService;
         this.teacherLessonService = teacherLessonService;
         this.lessonActivityService = lessonActivityService;
         this.teacherPackageService = teacherPackageService;
+        this.teacherLearningActivityService = teacherLearningActivityService;
     }
 
     @GetMapping("/dashboard")
@@ -356,5 +372,228 @@ public class TeacherController {
         return ApiResponse.success(
                 "Package item removed successfully.",
                 teacherPackageService.removePackageItem(currentUser, packageId, itemId));
+    }
+
+    @GetMapping("/lessons/{lessonId}/flashcards")
+    public ApiResponse<java.util.List<FlashcardOptionResponse>> getLessonFlashcards(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Flashcards retrieved successfully.",
+                teacherLearningActivityService.getFlashcards(currentUser, lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/flashcards")
+    public ApiResponse<FlashcardOptionResponse> createFlashcard(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @Valid @RequestBody CreateFlashcardRequest request) {
+        return ApiResponse.success(
+                "Flashcard created successfully.",
+                teacherLearningActivityService.createFlashcard(currentUser, lessonId, request));
+    }
+
+    @PutMapping("/flashcards/{flashcardId}")
+    public ApiResponse<FlashcardOptionResponse> updateFlashcard(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long flashcardId,
+            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateFlashcardRequest request) {
+        return ApiResponse.success(
+                "Flashcard updated successfully.",
+                teacherLearningActivityService.updateFlashcard(currentUser, flashcardId, request));
+    }
+
+    @DeleteMapping("/flashcards/{flashcardId}")
+    public ApiResponse<Void> deleteFlashcard(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long flashcardId) {
+        teacherLearningActivityService.deleteFlashcard(currentUser, flashcardId);
+        return ApiResponse.success("Flashcard archived successfully.", null);
+    }
+
+    @GetMapping("/lessons/{lessonId}/quizzes")
+    public ApiResponse<java.util.List<TeacherQuizResponse>> getLessonQuizzes(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Quizzes retrieved successfully.",
+                teacherLearningActivityService.getQuizzes(currentUser, lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/quizzes")
+    public ApiResponse<TeacherQuizResponse> createQuiz(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @Valid @RequestBody CreateQuizRequest request) {
+        return ApiResponse.success(
+                "Quiz created successfully.",
+                teacherLearningActivityService.createQuiz(currentUser, lessonId, request));
+    }
+
+    @PutMapping("/quizzes/{quizId}")
+    public ApiResponse<TeacherQuizResponse> updateQuiz(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long quizId,
+            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateQuizRequest request) {
+        return ApiResponse.success(
+                "Quiz updated successfully.",
+                teacherLearningActivityService.updateQuiz(currentUser, quizId, request));
+    }
+
+    @DeleteMapping("/quizzes/{quizId}")
+    public ApiResponse<Void> deleteQuiz(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long quizId) {
+        teacherLearningActivityService.deleteQuiz(currentUser, quizId);
+        return ApiResponse.success("Quiz archived successfully.", null);
+    }
+
+    @PostMapping("/quizzes/{quizId}/questions")
+    public ApiResponse<TeacherQuizResponse> createQuizQuestion(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long quizId,
+            @Valid @RequestBody CreateQuizQuestionRequest request) {
+        return ApiResponse.success(
+                "Quiz question created successfully.",
+                teacherLearningActivityService.addQuizQuestion(currentUser, quizId, request));
+    }
+
+    @PutMapping("/quiz-questions/{questionId}")
+    public ApiResponse<TeacherQuizResponse> updateQuizQuestion(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long questionId,
+            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateQuizQuestionRequest request) {
+        return ApiResponse.success(
+                "Quiz question updated successfully.",
+                teacherLearningActivityService.updateQuizQuestion(currentUser, questionId, request));
+    }
+
+    @DeleteMapping("/quiz-questions/{questionId}")
+    public ApiResponse<TeacherQuizResponse> deleteQuizQuestion(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long questionId) {
+        return ApiResponse.success(
+                "Quiz question deleted successfully.",
+                teacherLearningActivityService.deleteQuizQuestion(currentUser, questionId));
+    }
+
+    @GetMapping("/quizzes/{quizId}/attempts")
+    public ApiResponse<java.util.List<TeacherQuizAttemptSummaryResponse>> getQuizAttempts(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long quizId) {
+        return ApiResponse.success(
+                "Quiz attempts retrieved successfully.",
+                teacherLearningActivityService.getQuizAttempts(currentUser, quizId));
+    }
+
+    @GetMapping("/lessons/{lessonId}/matching-games")
+    public ApiResponse<java.util.List<MatchingGameResponse>> getMatchingGames(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Matching games retrieved successfully.",
+                teacherLearningActivityService.getMatchingGames(currentUser, lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/matching-games")
+    public ApiResponse<MatchingGameResponse> createMatchingGame(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @Valid @RequestBody CreateMatchingGameRequest request) {
+        return ApiResponse.success(
+                "Matching game created successfully.",
+                teacherLearningActivityService.createMatchingGame(currentUser, lessonId, request));
+    }
+
+    @PutMapping("/matching-games/{gameId}")
+    public ApiResponse<MatchingGameResponse> updateMatchingGame(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long gameId,
+            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateMatchingGameRequest request) {
+        return ApiResponse.success(
+                "Matching game updated successfully.",
+                teacherLearningActivityService.updateMatchingGame(currentUser, gameId, request));
+    }
+
+    @DeleteMapping("/matching-games/{gameId}")
+    public ApiResponse<Void> deleteMatchingGame(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long gameId) {
+        teacherLearningActivityService.deleteMatchingGame(currentUser, gameId);
+        return ApiResponse.success("Matching game archived successfully.", null);
+    }
+
+    @GetMapping("/lessons/{lessonId}/listening-exercises")
+    public ApiResponse<java.util.List<ListeningExerciseResponse>> getListeningExercises(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Listening exercises retrieved successfully.",
+                teacherLearningActivityService.getListeningExercises(currentUser, lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/listening-exercises")
+    public ApiResponse<ListeningExerciseResponse> createListeningExercise(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @Valid @RequestBody CreateListeningExerciseRequest request) {
+        return ApiResponse.success(
+                "Listening exercise created successfully.",
+                teacherLearningActivityService.createListeningExercise(currentUser, lessonId, request));
+    }
+
+    @PutMapping("/listening-exercises/{exerciseId}")
+    public ApiResponse<ListeningExerciseResponse> updateListeningExercise(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long exerciseId,
+            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateListeningExerciseRequest request) {
+        return ApiResponse.success(
+                "Listening exercise updated successfully.",
+                teacherLearningActivityService.updateListeningExercise(currentUser, exerciseId, request));
+    }
+
+    @DeleteMapping("/listening-exercises/{exerciseId}")
+    public ApiResponse<Void> deleteListeningExercise(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long exerciseId) {
+        teacherLearningActivityService.deleteListeningExercise(currentUser, exerciseId);
+        return ApiResponse.success("Listening exercise archived successfully.", null);
+    }
+
+    @GetMapping("/lessons/{lessonId}/tracing-exercises")
+    public ApiResponse<java.util.List<TracingExerciseResponse>> getTracingExercises(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Tracing exercises retrieved successfully.",
+                teacherLearningActivityService.getTracingExercises(currentUser, lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/tracing-exercises")
+    public ApiResponse<TracingExerciseResponse> createTracingExercise(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @Valid @RequestBody CreateTracingExerciseRequest request) {
+        return ApiResponse.success(
+                "Tracing exercise created successfully.",
+                teacherLearningActivityService.createTracingExercise(currentUser, lessonId, request));
+    }
+
+    @PutMapping("/tracing-exercises/{exerciseId}")
+    public ApiResponse<TracingExerciseResponse> updateTracingExercise(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long exerciseId,
+            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateTracingExerciseRequest request) {
+        return ApiResponse.success(
+                "Tracing exercise updated successfully.",
+                teacherLearningActivityService.updateTracingExercise(currentUser, exerciseId, request));
+    }
+
+    @DeleteMapping("/tracing-exercises/{exerciseId}")
+    public ApiResponse<Void> deleteTracingExercise(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long exerciseId) {
+        teacherLearningActivityService.deleteTracingExercise(currentUser, exerciseId);
+        return ApiResponse.success("Tracing exercise archived successfully.", null);
     }
 }

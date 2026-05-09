@@ -5,18 +5,19 @@ import PublicLayout from '../layouts/PublicLayout.vue'
 import StudentLayout from '../layouts/StudentLayout.vue'
 import TeacherLayout from '../layouts/TeacherLayout.vue'
 import { i18n } from '../i18n'
-import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
 import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vue'
 import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
 import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
+import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
 import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
 import AdminTeacherVerificationDetailPage from '../pages/admin/AdminTeacherVerificationDetailPage.vue'
 import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage.vue'
+import PlaceholderWorkspacePage from '../components/common/PlaceholderWorkspacePage.vue'
 import AiDisclaimerPage from '../pages/public/AiDisclaimerPage.vue'
 import ChildSafetyPage from '../pages/public/ChildSafetyPage.vue'
-import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
 import CourseDetailPage from '../pages/public/CourseDetailPage.vue'
+import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
 import FAQPage from '../pages/public/FAQPage.vue'
 import LandingPage from '../pages/public/LandingPage.vue'
 import LoginPage from '../pages/public/LoginPage.vue'
@@ -24,16 +25,32 @@ import PrivacyPage from '../pages/public/PrivacyPage.vue'
 import RegisterPage from '../pages/public/RegisterPage.vue'
 import TeacherPublicProfilePage from '../pages/public/TeacherPublicProfilePage.vue'
 import TermsPage from '../pages/public/TermsPage.vue'
+import CharacterTracingPage from '../pages/student/CharacterTracingPage.vue'
+import FlashcardPracticePage from '../pages/student/FlashcardPracticePage.vue'
+import LessonPlayerPage from '../pages/student/LessonPlayerPage.vue'
+import ListenAndChoosePage from '../pages/student/ListenAndChoosePage.vue'
+import MatchingGamePage from '../pages/student/MatchingGamePage.vue'
+import ProgressPage from '../pages/student/ProgressPage.vue'
+import QuizPage from '../pages/student/QuizPage.vue'
+import QuizResultPage from '../pages/student/QuizResultPage.vue'
+import RewardsPage from '../pages/student/RewardsPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
-import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
-import ModuleManagementPage from '../pages/teacher/ModuleManagementPage.vue'
-import LessonManagementPage from '../pages/teacher/LessonManagementPage.vue'
+import StudentLessonsPage from '../pages/student/StudentLessonsPage.vue'
+import WrongAnswerReviewPage from '../pages/student/WrongAnswerReviewPage.vue'
+import FlashcardEditorPage from '../pages/teacher/FlashcardEditorPage.vue'
 import LessonEditorPage from '../pages/teacher/LessonEditorPage.vue'
-import PackageManagementPage from '../pages/teacher/PackageManagementPage.vue'
+import LessonManagementPage from '../pages/teacher/LessonManagementPage.vue'
+import ListeningExerciseEditorPage from '../pages/teacher/ListeningExerciseEditorPage.vue'
+import MatchingGameEditorPage from '../pages/teacher/MatchingGameEditorPage.vue'
+import ModuleManagementPage from '../pages/teacher/ModuleManagementPage.vue'
 import PackageEditorPage from '../pages/teacher/PackageEditorPage.vue'
+import PackageManagementPage from '../pages/teacher/PackageManagementPage.vue'
+import QuizEditorPage from '../pages/teacher/QuizEditorPage.vue'
+import QuizResultsViewerPage from '../pages/teacher/QuizResultsViewerPage.vue'
+import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
 import TeacherProfilePage from '../pages/teacher/TeacherProfilePage.vue'
 import TeacherVerificationUploadPage from '../pages/teacher/TeacherVerificationUploadPage.vue'
-import PlaceholderWorkspacePage from '../components/common/PlaceholderWorkspacePage.vue'
+import TracingExerciseEditorPage from '../pages/teacher/TracingExerciseEditorPage.vue'
 import { pinia } from '../stores'
 import { useAuthStore, type UserRole } from '../stores/authStore'
 
@@ -44,13 +61,6 @@ declare module 'vue-router' {
     roles?: UserRole[]
     guestOnly?: boolean
     navKey?: string
-    placeholder?: {
-      eyebrow: string
-      title: string
-      description: string
-      bullets: string[]
-      accent?: 'student' | 'teacher' | 'admin'
-    }
   }
 }
 
@@ -86,146 +96,72 @@ const studentChildren: RouteRecordRaw[] = [
     component: StudentDashboardPage,
     meta: { titleKey: 'nav.studentDashboard' },
   },
-  createPlaceholderRoute(
-    'modules',
-    'student-modules',
-    'nav.learningModules',
-    'student',
-    'Learning Modules',
-    'Learning modules are ready for the next content phase',
-    'This area is prepared for structured level, module, and lesson browsing once content workflows are implemented.',
-    ['Browse modules by level, category, and learning type', 'Continue unfinished lessons', 'Unlock free and paid content safely through backend access control'],
-  ),
-  createPlaceholderRoute(
-    'ai-tutor',
-    'student-ai-tutor',
-    'nav.aiTutor',
-    'student',
-    'AI Tutor',
-    'AI Tutor workspace coming in a later phase',
-    'This student-friendly area will host free-form Chinese learning questions, lesson help, and guided practice.',
-    ['Ask Chinese vocabulary and sentence questions', 'Get child-friendly explanations', 'Use lesson-level ask-AI help tools'],
-  ),
-  createPlaceholderRoute(
-    'ai-vocabulary',
-    'student-ai-vocabulary',
-    'nav.aiVocabulary',
-    'student',
-    'AI Vocabulary Helper',
-    'Vocabulary support tools are scaffolded here',
-    'This page will later help students explore words in English, Bahasa Melayu, and Chinese with examples and mini practice.',
-    ['Chinese meaning and pinyin support', 'English and Bahasa Melayu translations', 'Simple example sentence generation'],
-  ),
-  createPlaceholderRoute(
-    'ai-sentence-practice',
-    'student-ai-sentence-practice',
-    'nav.aiSentencePractice',
-    'student',
-    'AI Sentence Practice',
-    'Sentence practice tools are planned for a later phase',
-    'This page is ready for grammar feedback, word-order suggestions, and short follow-up exercises.',
-    ['Check simple Chinese sentence structure', 'Get pinyin and translations', 'Receive gentle improvement tips'],
-  ),
-  createPlaceholderRoute(
-    'pronunciation-feedback',
-    'student-pronunciation-feedback',
-    'nav.pronunciationFeedback',
-    'student',
-    'Pronunciation Feedback',
-    'Pronunciation practice will be added after the dashboard phase',
-    'The layout is ready for microphone recording, playback, and child-friendly pronunciation feedback workflows.',
-    ['Record voice attempts', 'Replay teacher audio or browser speech', 'Receive tone and pronunciation guidance'],
-  ),
-  createPlaceholderRoute(
-    'writing-feedback',
-    'student-writing-feedback',
-    'nav.writingFeedback',
-    'student',
-    'Writing Feedback',
-    'Writing and tracing support is prepared here',
-    'This page will later host tracing submissions, writing snapshots, and encouraging feedback.',
-    ['Canvas-based tracing practice', 'Writing image submission', 'Simple prototype-friendly feedback'],
-  ),
-  createPlaceholderRoute(
-    'progress',
-    'student-progress',
-    'nav.progress',
-    'student',
-    'Progress',
-    'Progress insights will expand in future phases',
-    'This page is ready for charts, learning history, weak-area summaries, and AI-supported next-step advice.',
-    ['Learning progress trends', 'Quiz score summaries', 'Weak-area revision guidance'],
-  ),
-  createPlaceholderRoute(
-    'rewards',
-    'student-rewards',
-    'nav.rewards',
-    'student',
-    'Rewards',
-    'Gamified rewards will grow from this foundation',
-    'This page is prepared for points, badges, levels, streaks, and achievement showcases.',
-    ['Badge collection', 'Level milestones', 'Daily streak achievements'],
-  ),
-  createPlaceholderRoute(
-    'cart',
-    'student-cart',
-    'nav.cart',
-    'student',
-    'Cart',
-    'Commerce pages are staged for a later phase',
-    'This layout is ready for paid course items, premium AI packages, and Stripe sandbox checkout.',
-    ['Review saved paid items', 'Buy now and cart checkout flow', 'Membership upgrade entry points'],
-  ),
-  createPlaceholderRoute(
-    'payment-history',
-    'student-payment-history',
-    'nav.paymentHistory',
-    'student',
-    'Payment History',
-    'Payment history will appear here in the commerce phase',
-    'Students will later be able to review successful, failed, and refunded purchases safely from this page.',
-    ['Payment status history', 'Refund request entry points', 'Subscription billing snapshots'],
-  ),
-  createPlaceholderRoute(
-    'subscription',
-    'student-subscription',
-    'nav.subscription',
-    'student',
-    'Subscription',
-    'Subscription membership management is prepared here',
-    'This page will later show Free, Basic, Premium, and Family plan options with safe upgrade flows.',
-    ['Membership overview', 'Plan comparison and benefits', 'Upgrade and renewal actions'],
-  ),
-  createPlaceholderRoute(
-    'wishlist',
-    'student-wishlist',
-    'nav.wishlist',
-    'student',
-    'Wishlist',
-    'Saved items management will expand here',
-    'Students will later revisit saved stories, vocabulary, lessons, and premium content from one page.',
-    ['Saved learning content', 'Saved AI practice items', 'Quick access back into learning'],
-  ),
-  createPlaceholderRoute(
-    'notifications',
-    'student-notifications',
-    'nav.notifications',
-    'student',
-    'Notifications',
-    'Student notifications are prepared for later phases',
-    'This page will later organize quiz results, teacher feedback, progress updates, and reminders.',
-    ['Reward updates', 'Teacher feedback alerts', 'Live class and learning reminders'],
-  ),
-  createPlaceholderRoute(
-    'support',
-    'student-support',
-    'nav.support',
-    'student',
-    'Support',
-    'Help center workflows will arrive in a later phase',
-    'This page is ready for FAQs, support ticket entry, and safe help guidance for young learners.',
-    ['Submit support requests', 'Read help guidance', 'Follow ticket replies from admins'],
-  ),
+  {
+    path: 'lessons',
+    name: 'student-lessons',
+    component: StudentLessonsPage,
+    meta: { titleKey: 'nav.studentLessons' },
+  },
+  {
+    path: 'lessons/:lessonId',
+    name: 'student-lesson-player',
+    component: LessonPlayerPage,
+    meta: { titleKey: 'learning.lessonPlayerTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'lessons/:lessonId/flashcards',
+    name: 'student-flashcards',
+    component: FlashcardPracticePage,
+    meta: { titleKey: 'learning.flashcardPracticeTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'quizzes/:quizId',
+    name: 'student-quiz',
+    component: QuizPage,
+    meta: { titleKey: 'learning.quizPageTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'quiz-attempts/:attemptId',
+    name: 'student-quiz-result',
+    component: QuizResultPage,
+    meta: { titleKey: 'learning.quizResultTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'matching-games/:gameId',
+    name: 'student-matching-game',
+    component: MatchingGamePage,
+    meta: { titleKey: 'learning.matchingPlayTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'listening-exercises/:exerciseId',
+    name: 'student-listening',
+    component: ListenAndChoosePage,
+    meta: { titleKey: 'learning.listeningPlayTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'tracing-exercises/:exerciseId',
+    name: 'student-tracing',
+    component: CharacterTracingPage,
+    meta: { titleKey: 'learning.tracingPlayTitle', navKey: 'student-lessons' },
+  },
+  {
+    path: 'progress',
+    name: 'student-progress',
+    component: ProgressPage,
+    meta: { titleKey: 'nav.progress' },
+  },
+  {
+    path: 'rewards',
+    name: 'student-rewards',
+    component: RewardsPage,
+    meta: { titleKey: 'nav.rewards' },
+  },
+  {
+    path: 'wrong-answers',
+    name: 'student-wrong-answers',
+    component: WrongAnswerReviewPage,
+    meta: { titleKey: 'nav.wrongAnswers' },
+  },
 ]
 
 const teacherChildren: RouteRecordRaw[] = [
@@ -295,116 +231,42 @@ const teacherChildren: RouteRecordRaw[] = [
     component: PackageEditorPage,
     meta: { titleKey: 'content.packageEditorTitle', navKey: 'teacher-packages' },
   },
-  createPlaceholderRoute(
-    'quizzes',
-    'teacher-quizzes',
-    'nav.quizManagement',
-    'teacher',
-    'Quiz Management',
-    'Quiz creation tools are staged for a future phase',
-    'The UI is ready for quiz authoring, review, and performance monitoring once the learning workflow opens.',
-    ['Build multiple question types', 'Review attempt performance', 'Save AI-assisted quiz drafts later'],
-  ),
-  createPlaceholderRoute(
-    'flashcards',
-    'teacher-flashcards',
-    'nav.flashcardManagement',
-    'teacher',
-    'Flashcard Management',
-    'Flashcard authoring will be added later',
-    'This page is prepared for vocabulary decks, image-backed cards, and lesson-linked practice materials.',
-    ['Create vocabulary card sets', 'Attach images and hints', 'Group flashcards by lesson topics'],
-  ),
-  createPlaceholderRoute(
-    'matching-games',
-    'teacher-matching-games',
-    'nav.matchingGameManagement',
-    'teacher',
-    'Matching Games',
-    'Matching game tools are prepared for a later phase',
-    'This section will later support kid-friendly matching activities for words, meanings, and images.',
-    ['Word-to-meaning matching', 'Word-to-image matching', 'Lesson-linked practice sets'],
-  ),
-  createPlaceholderRoute(
-    'ai-assistant',
-    'teacher-ai-assistant',
-    'nav.aiTeacherAssistant',
-    'teacher',
-    'AI Teacher Assistant',
-    'AI teacher tools are intentionally deferred to a later phase',
-    'This workspace is reserved for lesson outlines, content ideas, and teaching assistance after approval.',
-    ['Generate lesson outline ideas', 'Draft vocabulary support sets', 'Receive teaching suggestions from AI'],
-  ),
-  createPlaceholderRoute(
-    'ai-content-tools',
-    'teacher-ai-content-tools',
-    'nav.aiContentTools',
-    'teacher',
-    'AI Content Tools',
-    'AI content generation tools will be added later',
-    'This page is ready for AI quiz, story, and practice content generation with teacher review before saving.',
-    ['Generate editable quiz drafts', 'Create story-based lesson ideas', 'Draft reusable practice content'],
-  ),
-  createPlaceholderRoute(
-    'student-progress',
-    'teacher-student-progress',
-    'nav.studentProgress',
-    'teacher',
-    'Student Progress',
-    'Progress monitoring tools will expand here',
-    'Teachers will later review learner activity, weak areas, and coaching opportunities from this section.',
-    ['View active learners', 'Review quiz and lesson progress', 'Track weak areas and engagement'],
-  ),
-  createPlaceholderRoute(
-    'reviews',
-    'teacher-reviews',
-    'nav.reviews',
-    'teacher',
-    'Reviews',
-    'Course and package reviews will appear here later',
-    'This page is staged for viewing student feedback on teacher-created learning content.',
-    ['Review student ratings', 'Track praise and issues', 'Spot trends across content'],
-  ),
-  createPlaceholderRoute(
-    'earnings',
-    'teacher-earnings',
-    'nav.earnings',
-    'teacher',
-    'Earnings',
-    'Teacher earnings reporting is prepared for the commerce phase',
-    'This section will later show gross sales, net earnings, commission, and revenue trends.',
-    ['Gross and net earnings overview', 'Commission breakdowns', 'Content sales snapshots'],
-  ),
-  createPlaceholderRoute(
-    'payouts',
-    'teacher-payouts',
-    'nav.payoutRequests',
-    'teacher',
-    'Payout Requests',
-    'Payout workflows will arrive later',
-    'This page is ready for payout history, pending balances, and request submissions once earnings are enabled.',
-    ['Available balance tracking', 'Payout request history', 'Admin decision updates'],
-  ),
-  createPlaceholderRoute(
-    'notifications',
-    'teacher-notifications',
-    'nav.notifications',
-    'teacher',
-    'Notifications',
-    'Teacher notifications are prepared for later phases',
-    'This page will later gather approval updates, student reviews, revision requests, and payout alerts.',
-    ['Approval and rejection alerts', 'Student activity updates', 'Platform notices'],
-  ),
-  createPlaceholderRoute(
-    'support',
-    'teacher-support',
-    'nav.support',
-    'teacher',
-    'Support',
-    'Support workflows will be added in a later phase',
-    'This workspace will later help teachers reach admins, manage tickets, and find help resources.',
-    ['Open support requests', 'Read responses from admins', 'Review platform guidance'],
-  ),
+  {
+    path: 'quizzes',
+    name: 'teacher-quizzes',
+    component: QuizEditorPage,
+    meta: { titleKey: 'nav.quizManagement' },
+  },
+  {
+    path: 'flashcards',
+    name: 'teacher-flashcards',
+    component: FlashcardEditorPage,
+    meta: { titleKey: 'nav.flashcardManagement' },
+  },
+  {
+    path: 'matching-games',
+    name: 'teacher-matching-games',
+    component: MatchingGameEditorPage,
+    meta: { titleKey: 'nav.matchingGameManagement' },
+  },
+  {
+    path: 'listening-exercises',
+    name: 'teacher-listening-exercises',
+    component: ListeningExerciseEditorPage,
+    meta: { titleKey: 'nav.listeningExerciseManagement' },
+  },
+  {
+    path: 'tracing-exercises',
+    name: 'teacher-tracing-exercises',
+    component: TracingExerciseEditorPage,
+    meta: { titleKey: 'nav.tracingExerciseManagement' },
+  },
+  {
+    path: 'quiz-results',
+    name: 'teacher-quiz-results',
+    component: QuizResultsViewerPage,
+    meta: { titleKey: 'nav.quizResults' },
+  },
 ]
 
 const adminChildren: RouteRecordRaw[] = [

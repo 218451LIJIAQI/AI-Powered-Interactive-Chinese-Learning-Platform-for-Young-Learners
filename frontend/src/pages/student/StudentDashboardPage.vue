@@ -14,10 +14,10 @@ const loading = ref(true)
 const dashboard = ref<StudentDashboardSummary | null>(null)
 
 const quickActions = [
-  { title: 'Flashcards', description: 'Review words with visual cards.', icon: 'Files', routeName: 'student-modules' },
-  { title: 'Games', description: 'Play matching and listening mini activities.', icon: 'Connection', routeName: 'student-progress' },
-  { title: 'Quizzes', description: 'Practise with short revision challenges.', icon: 'DocumentChecked', routeName: 'student-progress' },
-  { title: 'Tracing Practice', description: 'Warm up writing and tracing skills.', icon: 'EditPen', routeName: 'student-writing-feedback' },
+  { title: 'Lessons', description: 'Jump into published lessons and playful practice.', icon: 'Reading', routeName: 'student-lessons' },
+  { title: 'Flashcards', description: 'Review words with visual cards and pinyin hints.', icon: 'Files', routeName: 'student-lessons' },
+  { title: 'Wrong Answers', description: 'Review mistakes and try again with confidence.', icon: 'DocumentDelete', routeName: 'student-wrong-answers' },
+  { title: 'Rewards', description: 'See your points, badges, and daily streak.', icon: 'TrophyBase', routeName: 'student-rewards' },
 ]
 
 const statCards = computed(() => [
@@ -64,8 +64,8 @@ onMounted(() => {
 
             <div class="dashboard-hero__aside dashboard-hero__aside--student">
               <div class="dashboard-bubble">
-                <span class="dashboard-bubble__label">{{ t('dashboard.aiRecommendedNextStep') }}</span>
-                <strong>{{ dashboard?.aiRecommendedNextStep ?? t('dashboard.studentDefaultAiStep') }}</strong>
+                <span class="dashboard-bubble__label">{{ t('dashboard.recommendedNextStep') }}</span>
+                <strong>{{ dashboard?.recommendedNextStep ?? t('dashboard.studentDefaultNextStep') }}</strong>
               </div>
               <el-button type="primary" size="large" round>
                 {{ t('dashboard.continueLearning') }}

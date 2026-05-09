@@ -39,6 +39,21 @@ public class Flashcard extends BaseEntity {
     @Column(name = "image_url", length = 255)
     private String imageUrl;
 
+    @Column(name = "pinyin", length = 255)
+    private String pinyin;
+
+    @Column(name = "english_meaning", length = 500)
+    private String englishMeaning;
+
+    @Column(name = "malay_meaning", length = 500)
+    private String malayMeaning;
+
+    @Column(name = "audio_url", length = 255)
+    private String audioUrl;
+
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
+
     @Lob
     @Column(name = "extra_payload")
     private String extraPayload;

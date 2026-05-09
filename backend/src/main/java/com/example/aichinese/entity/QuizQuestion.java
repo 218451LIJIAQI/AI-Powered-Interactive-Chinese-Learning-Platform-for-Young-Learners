@@ -37,6 +37,9 @@ public class QuizQuestion extends BaseEntity {
     @Column(name = "correct_answer_text", length = 1000)
     private String correctAnswerText;
 
+    @Column(name = "explanation", length = 1000)
+    private String explanation;
+
     @Column(name = "points", nullable = false)
     private Integer points = 0;
 

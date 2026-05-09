@@ -37,4 +37,10 @@ public class MatchingGameItem extends BaseEntity {
 
     @Column(name = "right_image_url", length = 255)
     private String rightImageUrl;
+
+    @Column(name = "pinyin", length = 255)
+    private String pinyin;
+
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
 }

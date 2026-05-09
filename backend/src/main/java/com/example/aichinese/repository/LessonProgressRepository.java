@@ -12,6 +12,14 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
 
     List<LessonProgress> findTop5ByStudentIdAndCompletedFalseOrderByUpdatedAtDesc(Long studentId);
 
+    java.util.Optional<LessonProgress> findByStudentIdAndLessonId(Long studentId, Long lessonId);
+
+    long countByStudentId(Long studentId);
+
+    long countByStudentIdAndCompletedTrue(Long studentId);
+
+    List<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId);
+
     @Query("select count(distinct lp.student.id) from LessonProgress lp where lp.lesson.teacher.id = :teacherId")
     long countDistinctStudentsByTeacherId(@Param("teacherId") Long teacherId);
 }

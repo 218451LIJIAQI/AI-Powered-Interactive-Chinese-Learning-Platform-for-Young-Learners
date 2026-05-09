@@ -40,7 +40,7 @@ export type StudentDashboardSummary = {
     targetPath: string | null
     createdAt: string
   }[]
-  aiRecommendedNextStep: string
+  recommendedNextStep: string
 }
 
 export type TeacherDashboardSummary = {
