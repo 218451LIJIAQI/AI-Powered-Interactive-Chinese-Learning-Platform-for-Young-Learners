@@ -42,4 +42,25 @@ public class AiUsageLog extends BaseEntity {
 
     @Column(name = "token_count")
     private Integer tokenCount;
+
+    @Column(name = "user_role", length = 50)
+    private String userRole;
+
+    @Column(name = "language_preference", length = 20)
+    private String languagePreference;
+
+    @Column(name = "input_summary", length = 500)
+    private String inputSummary;
+
+    @Column(name = "output_summary", length = 500)
+    private String outputSummary;
+
+    @Column(name = "error_summary", length = 255)
+    private String errorSummary;
+
+    @Column(name = "related_entity_type", length = 100)
+    private String relatedEntityType;
+
+    @Column(name = "related_entity_id")
+    private Long relatedEntityId;
 }

@@ -1,5 +1,6 @@
 package com.example.aichinese.controller;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.core.io.Resource;
@@ -8,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,6 +28,7 @@ import com.example.aichinese.dto.admin.AdminTeacherListItemResponse;
 import com.example.aichinese.dto.admin.AdminUserListItemResponse;
 import com.example.aichinese.dto.admin.ApproveTeacherRequest;
 import com.example.aichinese.dto.admin.RejectTeacherRequest;
+import com.example.aichinese.dto.ai.AdminAiUsageLogResponse;
 import com.example.aichinese.dto.content.ContentApprovalRequest;
 import com.example.aichinese.dto.content.ContentRejectionRequest;
 import com.example.aichinese.dto.content.ContentSubmissionDetailResponse;
@@ -38,6 +41,7 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AdminContentReviewService;
 import com.example.aichinese.service.AdminTeacherManagementService;
 import com.example.aichinese.service.AdminUserManagementService;
+import com.example.aichinese.service.AiService;
 import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LearningCatalogService;
 
@@ -53,18 +57,21 @@ public class AdminController {
     private final AdminUserManagementService adminUserManagementService;
     private final AdminContentReviewService adminContentReviewService;
     private final LearningCatalogService learningCatalogService;
+    private final AiService aiService;
 
     public AdminController(
             DashboardService dashboardService,
             AdminTeacherManagementService adminTeacherManagementService,
             AdminUserManagementService adminUserManagementService,
             AdminContentReviewService adminContentReviewService,
-            LearningCatalogService learningCatalogService) {
+            LearningCatalogService learningCatalogService,
+            AiService aiService) {
         this.dashboardService = dashboardService;
         this.adminTeacherManagementService = adminTeacherManagementService;
         this.adminUserManagementService = adminUserManagementService;
         this.adminContentReviewService = adminContentReviewService;
         this.learningCatalogService = learningCatalogService;
+        this.aiService = aiService;
     }
 
     @GetMapping("/dashboard")
@@ -143,6 +150,22 @@ public class AdminController {
         return ApiResponse.success(
                 "Users retrieved successfully.",
                 adminUserManagementService.listUsers(role, keyword, status, page, size));
+    }
+
+    @GetMapping("/ai/usage-logs")
+    public ApiResponse<PageResponse<AdminAiUsageLogResponse>> listAiUsageLogs(
+            @RequestParam(value = "featureType", required = false) String featureType,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "userRole", required = false) String userRole,
+            @RequestParam(value = "dateFrom", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(value = "dateTo", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size) {
+        return ApiResponse.success(
+                "AI usage logs retrieved successfully.",
+                aiService.getUsageLogs(featureType, status, userRole, dateFrom, dateTo, page, size));
     }
 
     @GetMapping("/students")

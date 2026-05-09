@@ -8,6 +8,7 @@ import { i18n } from '../i18n'
 import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vue'
 import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
 import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
+import AdminAiUsageLogsPage from '../pages/admin/AdminAiUsageLogsPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
 import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
 import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
@@ -27,6 +28,13 @@ import TeacherPublicProfilePage from '../pages/public/TeacherPublicProfilePage.v
 import TermsPage from '../pages/public/TermsPage.vue'
 import CharacterTracingPage from '../pages/student/CharacterTracingPage.vue'
 import FlashcardPracticePage from '../pages/student/FlashcardPracticePage.vue'
+import AiPronunciationFeedbackPage from '../pages/student/AiPronunciationFeedbackPage.vue'
+import AiQuizGeneratorPage from '../pages/student/AiQuizGeneratorPage.vue'
+import AiSentencePracticePage from '../pages/student/AiSentencePracticePage.vue'
+import AiStoryGeneratorPage from '../pages/student/AiStoryGeneratorPage.vue'
+import AiTutorPage from '../pages/student/AiTutorPage.vue'
+import AiVocabularyHelperPage from '../pages/student/AiVocabularyHelperPage.vue'
+import AiWritingFeedbackPage from '../pages/student/AiWritingFeedbackPage.vue'
 import LessonPlayerPage from '../pages/student/LessonPlayerPage.vue'
 import ListenAndChoosePage from '../pages/student/ListenAndChoosePage.vue'
 import MatchingGamePage from '../pages/student/MatchingGamePage.vue'
@@ -45,6 +53,10 @@ import MatchingGameEditorPage from '../pages/teacher/MatchingGameEditorPage.vue'
 import ModuleManagementPage from '../pages/teacher/ModuleManagementPage.vue'
 import PackageEditorPage from '../pages/teacher/PackageEditorPage.vue'
 import PackageManagementPage from '../pages/teacher/PackageManagementPage.vue'
+import TeacherAiQuizGeneratorPage from '../pages/teacher/TeacherAiQuizGeneratorPage.vue'
+import TeacherAiStoryGeneratorPage from '../pages/teacher/TeacherAiStoryGeneratorPage.vue'
+import TeacherAiTeacherAssistantPage from '../pages/teacher/TeacherAiTeacherAssistantPage.vue'
+import TeacherAiVocabularyHelperPage from '../pages/teacher/TeacherAiVocabularyHelperPage.vue'
 import QuizEditorPage from '../pages/teacher/QuizEditorPage.vue'
 import QuizResultsViewerPage from '../pages/teacher/QuizResultsViewerPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
@@ -149,6 +161,48 @@ const studentChildren: RouteRecordRaw[] = [
     name: 'student-progress',
     component: ProgressPage,
     meta: { titleKey: 'nav.progress' },
+  },
+  {
+    path: 'ai/tutor',
+    name: 'student-ai-tutor',
+    component: AiTutorPage,
+    meta: { titleKey: 'nav.aiTutor' },
+  },
+  {
+    path: 'ai/vocabulary',
+    name: 'student-ai-vocabulary',
+    component: AiVocabularyHelperPage,
+    meta: { titleKey: 'nav.aiVocabulary' },
+  },
+  {
+    path: 'ai/sentence-practice',
+    name: 'student-ai-sentence-practice',
+    component: AiSentencePracticePage,
+    meta: { titleKey: 'nav.aiSentencePractice' },
+  },
+  {
+    path: 'ai/quiz-generator',
+    name: 'student-ai-quiz-generator',
+    component: AiQuizGeneratorPage,
+    meta: { titleKey: 'nav.aiQuizGenerator' },
+  },
+  {
+    path: 'ai/story-generator',
+    name: 'student-ai-story-generator',
+    component: AiStoryGeneratorPage,
+    meta: { titleKey: 'nav.aiStoryGenerator' },
+  },
+  {
+    path: 'ai/pronunciation-feedback',
+    name: 'student-ai-pronunciation-feedback',
+    component: AiPronunciationFeedbackPage,
+    meta: { titleKey: 'nav.pronunciationFeedback' },
+  },
+  {
+    path: 'ai/writing-feedback',
+    name: 'student-ai-writing-feedback',
+    component: AiWritingFeedbackPage,
+    meta: { titleKey: 'nav.writingFeedback' },
   },
   {
     path: 'rewards',
@@ -267,6 +321,30 @@ const teacherChildren: RouteRecordRaw[] = [
     component: QuizResultsViewerPage,
     meta: { titleKey: 'nav.quizResults' },
   },
+  {
+    path: 'ai/assistant',
+    name: 'teacher-ai-assistant',
+    component: TeacherAiTeacherAssistantPage,
+    meta: { titleKey: 'nav.aiTeacherAssistant' },
+  },
+  {
+    path: 'ai/vocabulary',
+    name: 'teacher-ai-vocabulary',
+    component: TeacherAiVocabularyHelperPage,
+    meta: { titleKey: 'nav.aiVocabulary' },
+  },
+  {
+    path: 'ai/quiz-generator',
+    name: 'teacher-ai-quiz-generator',
+    component: TeacherAiQuizGeneratorPage,
+    meta: { titleKey: 'nav.aiQuizGenerator' },
+  },
+  {
+    path: 'ai/story-generator',
+    name: 'teacher-ai-story-generator',
+    component: TeacherAiStoryGeneratorPage,
+    meta: { titleKey: 'nav.aiStoryGenerator' },
+  },
 ]
 
 const adminChildren: RouteRecordRaw[] = [
@@ -318,16 +396,12 @@ const adminChildren: RouteRecordRaw[] = [
     component: AdminContentModerationListPage,
     meta: { titleKey: 'nav.contentModeration' },
   },
-  createPlaceholderRoute(
-    'ai-usage-logs',
-    'admin-ai-usage-logs',
-    'nav.aiUsageLogs',
-    'admin',
-    'AI Usage Logs',
-    'Detailed AI usage management is deferred to a later phase',
-    'This page will later expand the operational view of provider usage, features, and moderation-sensitive prompts.',
-    ['Track AI feature volume', 'Inspect provider usage trends', 'Review operational safeguards'],
-  ),
+  {
+    path: 'ai-usage-logs',
+    name: 'admin-ai-usage-logs',
+    component: AdminAiUsageLogsPage,
+    meta: { titleKey: 'nav.aiUsageLogs' },
+  },
   createPlaceholderRoute(
     'payments',
     'admin-payments',

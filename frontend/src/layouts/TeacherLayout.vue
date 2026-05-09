@@ -88,11 +88,43 @@ const navItems = computed(() => [
     chip: isLocked.value ? 'Locked' : undefined,
   },
   { key: 'teacher-quiz-results', labelKey: 'nav.quizResults', routeName: 'teacher-quiz-results', icon: 'Histogram' },
+  {
+    key: 'teacher-ai-assistant',
+    labelKey: 'nav.aiTeacherAssistant',
+    routeName: 'teacher-ai-assistant',
+    icon: 'ChatLineRound',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-ai-vocabulary',
+    labelKey: 'nav.aiVocabulary',
+    routeName: 'teacher-ai-vocabulary',
+    icon: 'CollectionTag',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-ai-quiz-generator',
+    labelKey: 'nav.aiQuizGenerator',
+    routeName: 'teacher-ai-quiz-generator',
+    icon: 'MagicStick',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
+  {
+    key: 'teacher-ai-story-generator',
+    labelKey: 'nav.aiStoryGenerator',
+    routeName: 'teacher-ai-story-generator',
+    icon: 'Notebook',
+    disabled: isLocked.value,
+    chip: isLocked.value ? 'Locked' : undefined,
+  },
 ])
 
 const subtitle = computed(() => {
   const status = authStore.teacherStatus ?? 'PENDING'
-  return `Manage your teaching workspace, review engagement signals, and track approval status. Current status: ${status}.`
+  return `Manage your teaching workspace, use AI-assisted planning tools, and track approval status. Current status: ${status}.`
 })
 </script>
 

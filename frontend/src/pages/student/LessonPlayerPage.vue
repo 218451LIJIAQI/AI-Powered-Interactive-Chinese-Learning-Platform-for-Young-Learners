@@ -91,6 +91,9 @@ onMounted(() => {
                 <span class="dashboard-bubble__label">{{ t('dashboard.learningProgress') }}</span>
                 <strong>{{ lesson?.completionPercent ?? 0 }}%</strong>
               </div>
+              <router-link :to="{ name: 'student-ai-tutor', query: { lessonId: lessonId, topic: lesson?.title } }">
+                <el-button round>{{ t('ai.askAiHelp') }}</el-button>
+              </router-link>
               <el-progress
                 :percentage="lesson?.completionPercent ?? 0"
                 :stroke-width="16"

@@ -51,6 +51,19 @@ onMounted(() => {
             <p><strong>{{ t('learning.yourAnswer') }}:</strong> {{ item.studentAnswer }}</p>
             <p><strong>{{ t('learning.correctAnswer') }}:</strong> {{ item.correctAnswer }}</p>
             <p v-if="item.explanation"><strong>{{ t('learning.explanation') }}:</strong> {{ item.explanation }}</p>
+            <div class="student-practice-card__actions">
+              <router-link
+                :to="{
+                  name: 'student-ai-tutor',
+                  query: {
+                    topic: item.questionText,
+                    context: item.correctAnswer,
+                  },
+                }"
+              >
+                <el-button round>{{ t('ai.askAiAboutMistake') }}</el-button>
+              </router-link>
+            </div>
           </el-card>
         </section>
 

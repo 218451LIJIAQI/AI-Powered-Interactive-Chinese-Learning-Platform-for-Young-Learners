@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 7.
+This document explains how to run the project locally through Phase 8.
 
 ## Prerequisites
 - Node.js and npm
@@ -35,6 +35,13 @@ Important variables:
 - `DEFAULT_ADMIN_PASSWORD`
 - `UPLOAD_DIR`
 - `MAX_FILE_SIZE`
+- `AI_PROVIDER`
+- `AI_API_BASE_URL`
+- `AI_API_KEY`
+- `AI_MODEL_NAME`
+- `AI_TIMEOUT_SECONDS`
+- `AI_MAX_OUTPUT_TOKENS`
+- `AI_ENABLE_REAL_PROVIDER`
 
 Example:
 
@@ -51,6 +58,13 @@ DEFAULT_ADMIN_EMAIL=admin@example.com
 DEFAULT_ADMIN_PASSWORD=SuperSecure123!
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE=5MB
+AI_PROVIDER=deepseek
+AI_API_BASE_URL=https://api.deepseek.com
+AI_API_KEY=replace-with-your-deepseek-api-key
+AI_MODEL_NAME=deepseek-chat
+AI_TIMEOUT_SECONDS=30
+AI_MAX_OUTPUT_TOKENS=1200
+AI_ENABLE_REAL_PROVIDER=false
 ```
 
 Notes:
@@ -59,6 +73,9 @@ Notes:
 - If you need to provide a Base64-encoded JWT secret, use the prefix `base64:`.
 - Invalid or short JWT secrets now fail clearly during backend startup instead of producing a runtime login `500`.
 - If `DEFAULT_ADMIN_EMAIL` or `DEFAULT_ADMIN_PASSWORD` is missing, the backend still starts safely and skips admin creation.
+- The real `AI_API_KEY` must only be set in the backend environment locally.
+- Never place the real `AI_API_KEY` in frontend files or commit it.
+- If `AI_ENABLE_REAL_PROVIDER=false` or the key is missing, the backend stays runnable and AI features return friendly unavailable responses.
 
 ## 3. Run the Backend
 From the `backend` folder:
@@ -159,6 +176,22 @@ Admin routes:
 - `/admin/content/approvals`
 - `/admin/content/approvals/:type/:id`
 - `/admin/content/moderation`
+- `/admin/ai-usage-logs`
+
+AI student routes:
+- `/student/ai/tutor`
+- `/student/ai/vocabulary`
+- `/student/ai/sentence-practice`
+- `/student/ai/quiz-generator`
+- `/student/ai/story-generator`
+- `/student/ai/pronunciation-feedback`
+- `/student/ai/writing-feedback`
+
+AI teacher routes:
+- `/teacher/ai/assistant`
+- `/teacher/ai/vocabulary`
+- `/teacher/ai/quiz-generator`
+- `/teacher/ai/story-generator`
 
 ## 7. Dashboard Summary APIs
 Student dashboard:
@@ -258,6 +291,34 @@ Admin content moderation:
 - Open `/admin/content/approvals`
 - Review submitted content
 - Approve or reject content with a reason
+
+## 11. Manual Phase 8 AI Testing Guide
+AI unavailable mode:
+- Leave `AI_ENABLE_REAL_PROVIDER=false` or do not set `AI_API_KEY`
+- Start backend and frontend
+- Log in as student
+- Open the AI tutor or vocabulary helper
+- Submit a request
+- Confirm the UI shows a friendly unavailable response and the app does not crash
+- Log in as admin and review `/admin/ai-usage-logs`
+
+AI real-provider mode:
+- Set the real `AI_API_KEY` locally in the backend environment only
+- Set `AI_ENABLE_REAL_PROVIDER=true`
+- Start backend
+- Test:
+  - AI tutor
+  - vocabulary helper
+  - sentence practice
+  - quiz generator
+  - story generator
+  - teacher assistant
+  - admin AI usage logs
+
+Prototype upload feedback:
+- Open student pronunciation feedback and upload a small audio file
+- Open student writing feedback and submit a canvas image or PNG/JPG
+- Confirm the current workflow returns a safe prototype/unavailable response rather than a crash
 - Publish approved content
 - Open `/admin/content/moderation` to confirm status visibility
 

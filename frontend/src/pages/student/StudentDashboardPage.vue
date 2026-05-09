@@ -13,12 +13,18 @@ const user = computed(() => authStore.currentUser)
 const loading = ref(true)
 const dashboard = ref<StudentDashboardSummary | null>(null)
 
-const quickActions = [
+const quickActions = computed(() => [
   { title: 'Lessons', description: 'Jump into published lessons and playful practice.', icon: 'Reading', routeName: 'student-lessons' },
+  {
+    title: t('nav.aiTutor'),
+    description: t('ai.quickTutorDescription'),
+    icon: 'ChatDotRound',
+    routeName: 'student-ai-tutor',
+  },
   { title: 'Flashcards', description: 'Review words with visual cards and pinyin hints.', icon: 'Files', routeName: 'student-lessons' },
   { title: 'Wrong Answers', description: 'Review mistakes and try again with confidence.', icon: 'DocumentDelete', routeName: 'student-wrong-answers' },
   { title: 'Rewards', description: 'See your points, badges, and daily streak.', icon: 'TrophyBase', routeName: 'student-rewards' },
-]
+])
 
 const statCards = computed(() => [
   { label: t('dashboard.currentLevel'), value: dashboard.value?.currentLevel ?? 'Beginner', accent: 'sun' },
@@ -88,6 +94,26 @@ onMounted(() => {
         </section>
 
         <section class="dashboard-grid dashboard-grid--two-thirds">
+          <el-card class="dashboard-panel dashboard-panel--featured" shadow="hover">
+            <div class="panel-header">
+              <div>
+                <p class="section-label">{{ t('nav.aiTutor') }}</p>
+                <h2>{{ t('ai.dashboardCardTitle') }}</h2>
+              </div>
+              <el-tag type="success" round>{{ t('ai.childFriendlyLabel') }}</el-tag>
+            </div>
+
+            <p>{{ t('ai.dashboardCardDescription') }}</p>
+            <div class="student-practice-card__actions">
+              <router-link :to="{ name: 'student-ai-tutor' }">
+                <el-button type="primary" round>{{ t('ai.openAiTutor') }}</el-button>
+              </router-link>
+              <router-link :to="{ name: 'student-ai-vocabulary' }">
+                <el-button round>{{ t('ai.tryVocabularyHelper') }}</el-button>
+              </router-link>
+            </div>
+          </el-card>
+
           <el-card class="dashboard-panel dashboard-panel--featured" shadow="hover">
             <div class="panel-header">
               <div>

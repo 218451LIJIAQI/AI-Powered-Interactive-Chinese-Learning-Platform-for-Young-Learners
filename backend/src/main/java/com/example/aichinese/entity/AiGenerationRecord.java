@@ -39,6 +39,24 @@ public class AiGenerationRecord extends BaseEntity {
     @Column(name = "response_text")
     private String responseText;
 
+    @Column(name = "language_preference", length = 20)
+    private String languagePreference;
+
+    @Column(name = "status", length = 50)
+    private String status;
+
+    @Column(name = "provider_name", length = 100)
+    private String providerName;
+
+    @Column(name = "model_name", length = 120)
+    private String modelName;
+
+    @Column(name = "related_entity_type", length = 100)
+    private String relatedEntityType;
+
+    @Column(name = "related_entity_id")
+    private Long relatedEntityId;
+
     @Column(name = "saved_as_official_content", nullable = false)
     private boolean savedAsOfficialContent;
 

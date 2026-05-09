@@ -34,6 +34,10 @@ public class AiFeedbackRecord extends BaseEntity {
     @Column(name = "input_file_url", length = 255)
     private String inputFileUrl;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_file_id")
+    private UploadedFile uploadedFile;
+
     @Lob
     @Column(name = "input_text")
     private String inputText;
@@ -41,4 +45,10 @@ public class AiFeedbackRecord extends BaseEntity {
     @Lob
     @Column(name = "feedback_text")
     private String feedbackText;
+
+    @Column(name = "language_preference", length = 20)
+    private String languagePreference;
+
+    @Column(name = "status", length = 50)
+    private String status;
 }

@@ -785,6 +785,62 @@ p {
   border-radius: 28px;
 }
 
+.ai-chat-panel,
+.ai-result-panel {
+  min-height: auto;
+}
+
+.ai-chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.ai-chat-bubble {
+  max-width: min(100%, 720px);
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.ai-chat-bubble--assistant {
+  align-self: flex-start;
+  background: linear-gradient(135deg, rgba(255, 143, 66, 0.14), rgba(59, 179, 195, 0.12));
+}
+
+.ai-chat-bubble--user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, rgba(86, 126, 255, 0.12), rgba(255, 255, 255, 0.9));
+}
+
+.ai-chat-bubble strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.ai-chat-bubble p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.ai-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ai-composer__actions {
+  justify-content: flex-end;
+}
+
+.ai-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .student-practice-card {
   padding: 28px;
   border: 1px solid var(--border-color);

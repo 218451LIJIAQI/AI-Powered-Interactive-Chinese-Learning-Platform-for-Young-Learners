@@ -33,6 +33,12 @@ public class AiChatSession extends BaseEntity {
     @Column(name = "session_title", length = 200)
     private String sessionTitle;
 
+    @Column(name = "language_preference", length = 20)
+    private String languagePreference;
+
+    @Column(name = "related_lesson_id")
+    private Long relatedLessonId;
+
     @Column(name = "active", nullable = false)
     private boolean active = true;
 }

@@ -36,3 +36,11 @@ app:
   upload:
     directory: ${UPLOAD_DIR:./uploads}
     max-file-size: ${MAX_FILE_SIZE:5MB}
+  ai:
+    provider: ${AI_PROVIDER:deepseek}
+    api-base-url: ${AI_API_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:replace-with-your-deepseek-api-key}
+    model-name: ${AI_MODEL_NAME:deepseek-chat}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+    max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:1200}
+    enable-real-provider: ${AI_ENABLE_REAL_PROVIDER:false}

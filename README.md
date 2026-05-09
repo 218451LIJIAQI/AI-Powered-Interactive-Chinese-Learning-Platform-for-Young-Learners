@@ -3,7 +3,7 @@
 ## Project Overview
 This project is a full-stack final-year-project web application for young learners aged 7-12. It is designed as an interactive and gamified Chinese learning platform for the Malaysian context, with support for student, teacher, and admin roles.
 
-Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 now adds interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system.
+Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 now adds the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility.
 
 ## Tech Stack
 - Frontend: Vue 3, Vite, TypeScript, Element Plus, Vue Router, Pinia, Axios, Vue I18n, npm
@@ -12,7 +12,7 @@ Phase 1 established the monorepo scaffold. Phase 2 added the backend database fo
 - Tooling: Docker Compose
 
 ## Current Status
-Completed through Phase 7:
+Completed through Phase 8:
 - Monorepo scaffold created
 - Vue frontend created with required packages and folder structure
 - Public, student, teacher, and admin layouts added and polished
@@ -44,16 +44,36 @@ Completed through Phase 7:
   - teacher flashcard, quiz, matching, listening, and tracing editors
   - teacher quiz attempt viewer
 - Backend integration tests added for Phase 7 learning and reward flows
+- Phase 8 AI foundation added:
+  - backend AI provider abstraction
+  - DeepSeek-compatible backend provider client
+  - AI chat tutor endpoint
+  - AI vocabulary helper endpoint
+  - AI sentence practice endpoint
+  - AI quiz generator endpoint
+  - AI story generator endpoint
+  - AI learning recommendation endpoint
+  - AI progress insight endpoint
+  - AI teacher assistant endpoint
+  - AI pronunciation feedback prototype endpoint
+  - AI writing feedback prototype endpoint
+  - admin AI usage logs endpoint
+  - student AI pages
+  - teacher AI pages
+  - admin AI usage logs page
+  - safe unavailable mode when no real AI key is configured
+  - backend AI integration tests
 
-Intentionally not implemented in Phase 7:
-- AI features
+Intentionally not implemented in Phase 8:
 - payment, subscription, cart, refund, payout, or entitlement logic
 - leaderboard
 - live class scheduling workflows
 - recorded video upload or player workflows
+- custom AI model training
 - professional handwriting recognition
 - professional pronunciation scoring
-- Phase 8 or later workflows
+- professional tone scoring
+- Phase 9 or later workflows
 
 ## Key Routes
 Public:
@@ -77,6 +97,13 @@ Student:
 - `/student/progress`
 - `/student/rewards`
 - `/student/wrong-answers`
+- `/student/ai/tutor`
+- `/student/ai/vocabulary`
+- `/student/ai/sentence-practice`
+- `/student/ai/quiz-generator`
+- `/student/ai/story-generator`
+- `/student/ai/pronunciation-feedback`
+- `/student/ai/writing-feedback`
 
 Teacher:
 - `/teacher/dashboard`
@@ -95,6 +122,10 @@ Teacher:
 - `/teacher/listening-exercises`
 - `/teacher/tracing-exercises`
 - `/teacher/quiz-results`
+- `/teacher/ai/assistant`
+- `/teacher/ai/vocabulary`
+- `/teacher/ai/quiz-generator`
+- `/teacher/ai/story-generator`
 
 Admin:
 - `/admin/dashboard`
@@ -103,6 +134,45 @@ Admin:
 - `/admin/teacher-approval`
 - `/admin/content/approvals`
 - `/admin/content/moderation`
+- `/admin/ai-usage-logs`
+
+## Phase 8 AI API Overview
+General AI:
+- `POST /api/v1/ai/availability`
+- `POST /api/v1/ai/chat`
+- `POST /api/v1/ai/vocabulary-helper`
+- `POST /api/v1/ai/sentence-practice`
+- `POST /api/v1/ai/quiz-generator`
+- `POST /api/v1/ai/story-generator`
+- `POST /api/v1/ai/learning-recommendation`
+- `POST /api/v1/ai/progress-insight`
+- `POST /api/v1/ai/teacher-assistant`
+- `POST /api/v1/ai/pronunciation-feedback`
+- `POST /api/v1/ai/writing-feedback`
+
+Admin:
+- `GET /api/v1/admin/ai/usage-logs`
+
+## AI Configuration
+The default AI provider is DeepSeek through backend environment variables only.
+
+Example placeholders:
+
+```env
+AI_PROVIDER=deepseek
+AI_API_BASE_URL=https://api.deepseek.com
+AI_API_KEY=replace-with-your-deepseek-api-key
+AI_MODEL_NAME=deepseek-chat
+AI_TIMEOUT_SECONDS=30
+AI_MAX_OUTPUT_TOKENS=1200
+AI_ENABLE_REAL_PROVIDER=false
+```
+
+Important:
+- Never put the real AI key in `frontend/.env`.
+- Never expose the key to Vue code or API responses.
+- The frontend does not receive the AI key.
+- If the key is missing, the backend returns friendly unavailable responses instead of crashing.
 
 ## Phase 7 API Overview
 Student learning:
@@ -187,3 +257,4 @@ npm run dev
 - Teacher verification workflow: [docs/teacher-verification-workflow.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/teacher-verification-workflow.md)
 - Content management: [docs/content-management.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/content-management.md)
 - Interactive learning: [docs/interactive-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/interactive-learning.md)
+- AI features: [docs/ai-features.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/ai-features.md)
