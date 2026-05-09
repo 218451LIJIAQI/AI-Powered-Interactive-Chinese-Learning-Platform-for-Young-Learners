@@ -9,6 +9,10 @@ const authStore = useAuthStore()
 const navItems = computed(() => [
   { key: 'student-dashboard', labelKey: 'nav.studentDashboard', routeName: 'student-dashboard', icon: 'House' },
   { key: 'student-lessons', labelKey: 'nav.studentLessons', routeName: 'student-lessons', icon: 'Reading' },
+  { key: 'student-cart', labelKey: 'nav.cart', routeName: 'student-cart', icon: 'ShoppingCart' },
+  { key: 'student-payments', labelKey: 'nav.paymentHistory', routeName: 'student-payments', icon: 'CreditCard' },
+  { key: 'student-subscription', labelKey: 'nav.subscription', routeName: 'student-subscription', icon: 'Tickets' },
+  { key: 'student-refunds', labelKey: 'nav.refundManagement', routeName: 'student-refunds', icon: 'RefreshLeft' },
   { key: 'student-ai-tutor', labelKey: 'nav.aiTutor', routeName: 'student-ai-tutor', icon: 'ChatDotRound' },
   { key: 'student-ai-vocabulary', labelKey: 'nav.aiVocabulary', routeName: 'student-ai-vocabulary', icon: 'CollectionTag' },
   {

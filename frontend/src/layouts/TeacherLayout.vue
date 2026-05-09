@@ -23,6 +23,8 @@ const navItems = computed(() => [
     routeName: 'teacher-verification-documents',
     icon: 'Upload',
   },
+  { key: 'teacher-earnings', labelKey: 'nav.earnings', routeName: 'teacher-earnings', icon: 'Coin' },
+  { key: 'teacher-payouts', labelKey: 'nav.payoutRequests', routeName: 'teacher-payouts', icon: 'Wallet' },
   {
     key: 'teacher-modules',
     labelKey: 'nav.moduleManagement',

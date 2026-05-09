@@ -34,6 +34,12 @@ public class OrderItem extends BaseEntity {
     @Column(name = "item_id", nullable = false)
     private Long itemId;
 
+    @Column(name = "item_title_snapshot", length = 200)
+    private String itemTitleSnapshot;
+
+    @Column(name = "feature_key", length = 100)
+    private String featureKey;
+
     @Column(name = "quantity", nullable = false)
     private Integer quantity = 1;
 
@@ -42,4 +48,8 @@ public class OrderItem extends BaseEntity {
 
     @Column(name = "line_total", precision = 10, scale = 2)
     private BigDecimal lineTotal;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "teacher_id")
+    private TeacherProfile teacher;
 }

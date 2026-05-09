@@ -123,7 +123,8 @@ public class StudentLearningService {
     public StudentLessonPlayerResponse getLessonPlayer(SecurityUserDetails currentUser, Long lessonId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Lesson lesson = studentLearningAccessService.requirePublishedLesson(lessonId);
-        boolean locked = studentLearningAccessService.isLocked(lesson);
+        boolean locked = !studentLearningAccessService.hasLessonAccess(student, lesson);
+        studentLearningAccessService.ensureLessonAccess(student, lesson);
         int completionPercent = studentLearningProgressService.lessonCompletionPercent(student, lesson);
 
         return new StudentLessonPlayerResponse(
@@ -142,14 +143,15 @@ public class StudentLearningService {
     public List<StudentLessonActivitySummaryResponse> getLessonActivities(SecurityUserDetails currentUser, Long lessonId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Lesson lesson = studentLearningAccessService.requirePublishedLesson(lessonId);
-        return buildLessonActivities(student, lesson, studentLearningAccessService.isLocked(lesson));
+        studentLearningAccessService.ensureLessonAccess(student, lesson);
+        return buildLessonActivities(student, lesson, !studentLearningAccessService.hasLessonAccess(student, lesson));
     }
 
     @Transactional(readOnly = true)
     public List<FlashcardOptionResponse> getFlashcards(SecurityUserDetails currentUser, Long lessonId) {
         studentLearningAccessService.requireStudent(currentUser);
         Lesson lesson = studentLearningAccessService.requirePublishedLesson(lessonId);
-        studentLearningAccessService.ensureFreeAccess(lesson);
+        studentLearningAccessService.ensureLessonAccess(studentLearningAccessService.requireStudent(currentUser), lesson);
         return flashcardRepository.findByLessonIdOrderBySortOrderAscCreatedAtAsc(lesson.getId()).stream()
                 .filter(card -> card.getContentStatus() != ContentStatus.ARCHIVED)
                 .map(learningActivityMapper::toFlashcardResponse)
@@ -160,7 +162,7 @@ public class StudentLearningService {
     public FlashcardPracticeResponse practiceFlashcard(SecurityUserDetails currentUser, Long flashcardId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Flashcard flashcard = studentLearningAccessService.requirePublishedFlashcard(flashcardId);
-        studentLearningAccessService.ensureFreeAccess(flashcard.getLesson());
+        studentLearningAccessService.ensureLessonAccess(student, flashcard.getLesson());
         StudentLearningProgressService.CompletionOutcome outcome = studentLearningProgressService.completeFlashcard(student, flashcard);
         return new FlashcardPracticeResponse(
                 flashcardId,
@@ -175,7 +177,7 @@ public class StudentLearningService {
     public StudentQuizResponse getQuiz(SecurityUserDetails currentUser, Long quizId) {
         studentLearningAccessService.requireStudent(currentUser);
         Quiz quiz = studentLearningAccessService.requirePublishedQuiz(quizId);
-        studentLearningAccessService.ensureFreeAccess(quiz.getLesson());
+        studentLearningAccessService.ensureLessonAccess(studentLearningAccessService.requireStudent(currentUser), quiz.getLesson());
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
         List<QuizOption> options = questions.stream()
                 .flatMap(question -> quizOptionRepository.findByQuestionIdOrderBySortOrderAscCreatedAtAsc(question.getId()).stream())
@@ -190,7 +192,7 @@ public class StudentLearningService {
     public QuizAttemptResultResponse submitQuizAttempt(SecurityUserDetails currentUser, Long quizId, SubmitQuizAttemptRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Quiz quiz = studentLearningAccessService.requirePublishedQuiz(quizId);
-        studentLearningAccessService.ensureFreeAccess(quiz.getLesson());
+        studentLearningAccessService.ensureLessonAccess(student, quiz.getLesson());
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
         if (questions.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Quiz must contain at least one question.");
@@ -350,7 +352,7 @@ public class StudentLearningService {
     public MatchingGamePlayResponse getMatchingGame(SecurityUserDetails currentUser, Long gameId) {
         studentLearningAccessService.requireStudent(currentUser);
         MatchingGame game = studentLearningAccessService.requirePublishedMatchingGame(gameId);
-        studentLearningAccessService.ensureFreeAccess(game.getLesson());
+        studentLearningAccessService.ensureLessonAccess(studentLearningAccessService.requireStudent(currentUser), game.getLesson());
         return learningActivityMapper.toMatchingGamePlayResponse(
                 game,
                 matchingGameItemRepository.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(game.getId()));
@@ -363,7 +365,7 @@ public class StudentLearningService {
             SubmitMatchingGameRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         MatchingGame game = studentLearningAccessService.requirePublishedMatchingGame(gameId);
-        studentLearningAccessService.ensureFreeAccess(game.getLesson());
+        studentLearningAccessService.ensureLessonAccess(student, game.getLesson());
         List<MatchingGameItem> items = matchingGameItemRepository.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(game.getId());
         Map<Long, String> submitted = request.pairs().stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -399,7 +401,7 @@ public class StudentLearningService {
     public ListeningExercisePlayResponse getListeningExercise(SecurityUserDetails currentUser, Long exerciseId) {
         studentLearningAccessService.requireStudent(currentUser);
         ListeningExercise exercise = studentLearningAccessService.requirePublishedListeningExercise(exerciseId);
-        studentLearningAccessService.ensureFreeAccess(exercise.getLesson());
+        studentLearningAccessService.ensureLessonAccess(studentLearningAccessService.requireStudent(currentUser), exercise.getLesson());
         return learningActivityMapper.toListeningExercisePlayResponse(
                 exercise,
                 learningPayloadCodec.deserializeListeningPayload(exercise.getQuestionPayload()));
@@ -412,7 +414,7 @@ public class StudentLearningService {
             SubmitListeningExerciseRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         ListeningExercise exercise = studentLearningAccessService.requirePublishedListeningExercise(exerciseId);
-        studentLearningAccessService.ensureFreeAccess(exercise.getLesson());
+        studentLearningAccessService.ensureLessonAccess(student, exercise.getLesson());
         var payload = learningPayloadCodec.deserializeListeningPayload(exercise.getQuestionPayload());
 
         String selectedAnswer = request.answerText().trim();
@@ -442,7 +444,7 @@ public class StudentLearningService {
     public TracingExercisePlayResponse getTracingExercise(SecurityUserDetails currentUser, Long exerciseId) {
         studentLearningAccessService.requireStudent(currentUser);
         TracingExercise exercise = studentLearningAccessService.requirePublishedTracingExercise(exerciseId);
-        studentLearningAccessService.ensureFreeAccess(exercise.getLesson());
+        studentLearningAccessService.ensureLessonAccess(studentLearningAccessService.requireStudent(currentUser), exercise.getLesson());
         return learningActivityMapper.toTracingExercisePlayResponse(exercise);
     }
 
@@ -453,7 +455,7 @@ public class StudentLearningService {
             CompleteTracingExerciseRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         TracingExercise exercise = studentLearningAccessService.requirePublishedTracingExercise(exerciseId);
-        studentLearningAccessService.ensureFreeAccess(exercise.getLesson());
+        studentLearningAccessService.ensureLessonAccess(student, exercise.getLesson());
         StudentLearningProgressService.CompletionOutcome outcome = studentLearningProgressService.completeTracingExercise(
                 student,
                 exercise);

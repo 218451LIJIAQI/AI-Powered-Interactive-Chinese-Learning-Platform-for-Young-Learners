@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { commerceService } from '../../services/commerceService'
 import { categoryService } from '../../services/categoryService'
 import { levelService } from '../../services/levelService'
 import { publicContentService } from '../../services/publicContentService'
+import { useAuthStore } from '../../stores/authStore'
 import type {
   AccessType,
   LearningCategory,
@@ -16,6 +20,8 @@ import type {
 } from '../../types/contentManagement'
 
 const { t } = useI18n()
+const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const loadingFilters = ref(true)
@@ -69,6 +75,30 @@ function formatPrice(item: PublicCourseSummary) {
   }
 
   return `RM ${Number(item.price ?? 0).toFixed(2)}`
+}
+
+async function addToCart(item: PublicCourseSummary) {
+  if (!authStore.isAuthenticated || !authStore.hasRole('STUDENT')) {
+    await router.push({ name: 'login', query: { redirect: '/student/cart' } })
+    return
+  }
+
+  await commerceService.addCartItem({ itemType: item.type, itemId: item.contentId })
+  ElMessage.success(t('commerce.messages.cartUpdated'))
+}
+
+async function buyNow(item: PublicCourseSummary) {
+  if (!authStore.isAuthenticated || !authStore.hasRole('STUDENT')) {
+    await router.push({ name: 'login', query: { redirect: '/student/cart' } })
+    return
+  }
+
+  const result = await commerceService.buyNow({ itemType: item.type, itemId: item.contentId })
+  if (result.checkoutUrl) {
+    window.location.assign(result.checkoutUrl)
+    return
+  }
+  ElMessage.warning(result.message)
 }
 
 async function loadFilters() {
@@ -225,7 +255,7 @@ onMounted(async () => {
               </p>
             </div>
 
-            <div class="course-card__footer">
+              <div class="course-card__footer">
               <div>
                 <strong>{{ formatPrice(item) }}</strong>
                 <p>{{ item.locked ? t('content.locked') : t('content.freeToBrowse') }}</p>
@@ -234,7 +264,11 @@ onMounted(async () => {
                 <router-link :to="{ name: 'course-detail', params: { id: item.id } }">
                   <el-button plain type="primary">{{ t('content.reviewDetail') }}</el-button>
                 </router-link>
-                <router-link :to="{ name: 'login' }">
+                <template v-if="item.accessType === 'PAID'">
+                  <el-button plain type="primary" @click="addToCart(item)">{{ t('commerce.addToCart') }}</el-button>
+                  <el-button type="primary" @click="buyNow(item)">{{ t('commerce.buyNow') }}</el-button>
+                </template>
+                <router-link v-else :to="{ name: 'login' }">
                   <el-button type="primary">{{ t('nav.login') }}</el-button>
                 </router-link>
               </div>

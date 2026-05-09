@@ -1,19 +1,57 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { commerceService } from '../../services/commerceService'
 import { publicContentService } from '../../services/publicContentService'
+import { useAuthStore } from '../../stores/authStore'
 import type { PublicCourseDetail } from '../../types/contentManagement'
 
 const route = useRoute()
 const { t } = useI18n()
+const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const course = ref<PublicCourseDetail | null>(null)
 
 const courseId = computed(() => String(route.params.id))
+
+async function addToCart() {
+  if (!course.value) {
+    return
+  }
+
+  if (!authStore.isAuthenticated || !authStore.hasRole('STUDENT')) {
+    await router.push({ name: 'login', query: { redirect: '/student/cart' } })
+    return
+  }
+
+  await commerceService.addCartItem({ itemType: course.value.type, itemId: course.value.contentId })
+  ElMessage.success(t('commerce.messages.cartUpdated'))
+}
+
+async function buyNow() {
+  if (!course.value) {
+    return
+  }
+
+  if (!authStore.isAuthenticated || !authStore.hasRole('STUDENT')) {
+    await router.push({ name: 'login', query: { redirect: '/student/cart' } })
+    return
+  }
+
+  const result = await commerceService.buyNow({ itemType: course.value.type, itemId: course.value.contentId })
+  if (result.checkoutUrl) {
+    window.location.assign(result.checkoutUrl)
+    return
+  }
+  ElMessage.warning(result.message)
+}
 
 async function loadCourse() {
   loading.value = true
@@ -40,8 +78,8 @@ onMounted(() => {
     <el-skeleton :loading="loading" animated :rows="10">
       <template #default>
         <el-card class="simple-page-card" shadow="hover">
-          <div class="feature-banner__content">
-            <div>
+            <div class="feature-banner__content">
+              <div>
               <div class="tag-list">
                 <el-tag round>{{ course?.type }}</el-tag>
                 <el-tag type="success" round>{{ course?.accessType }}</el-tag>
@@ -60,6 +98,10 @@ onMounted(() => {
                 </router-link>
                 <span v-else>{{ course?.teacher.displayName }}</span>
               </p>
+              <div v-if="course?.accessType === 'PAID'" class="table-actions" style="margin-top: 1rem;">
+                <el-button plain type="primary" @click="addToCart">{{ t('commerce.addToCart') }}</el-button>
+                <el-button type="primary" @click="buyNow">{{ t('commerce.buyNow') }}</el-button>
+              </div>
             </div>
             <div class="dashboard-bubble">
               <span class="dashboard-bubble__label">{{ t('content.callToAction') }}</span>

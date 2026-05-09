@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Overview
-This document explains how to run the project locally through Phase 8.
+This document explains how to run the project locally through Phase 9.
 
 ## Prerequisites
 - Node.js and npm
@@ -42,6 +42,16 @@ Important variables:
 - `AI_TIMEOUT_SECONDS`
 - `AI_MAX_OUTPUT_TOKENS`
 - `AI_ENABLE_REAL_PROVIDER`
+- `PAYMENT_PROVIDER`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_PUBLIC_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `PAYMENT_SUCCESS_URL`
+- `PAYMENT_CANCEL_URL`
+- `PAYMENT_CURRENCY`
+- `PAYMENT_ENABLE_REAL_PROVIDER`
+- `PAYMENT_TIMEOUT_SECONDS`
+- `PAYMENT_MOCK_SUCCESS_ENABLED`
 
 Example:
 
@@ -65,6 +75,16 @@ AI_MODEL_NAME=deepseek-chat
 AI_TIMEOUT_SECONDS=30
 AI_MAX_OUTPUT_TOKENS=1200
 AI_ENABLE_REAL_PROVIDER=false
+PAYMENT_PROVIDER=stripe
+STRIPE_SECRET_KEY=replace-with-your-stripe-test-secret-key
+STRIPE_PUBLIC_KEY=replace-with-your-stripe-test-public-key
+STRIPE_WEBHOOK_SECRET=replace-with-your-stripe-webhook-secret
+PAYMENT_SUCCESS_URL=http://localhost:5173/payment/success
+PAYMENT_CANCEL_URL=http://localhost:5173/payment/cancel
+PAYMENT_CURRENCY=MYR
+PAYMENT_ENABLE_REAL_PROVIDER=false
+PAYMENT_TIMEOUT_SECONDS=30
+PAYMENT_MOCK_SUCCESS_ENABLED=true
 ```
 
 Notes:
@@ -76,6 +96,9 @@ Notes:
 - The real `AI_API_KEY` must only be set in the backend environment locally.
 - Never place the real `AI_API_KEY` in frontend files or commit it.
 - If `AI_ENABLE_REAL_PROVIDER=false` or the key is missing, the backend stays runnable and AI features return friendly unavailable responses.
+- The real `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` must only be set in the backend environment locally.
+- Never place Stripe secret keys in frontend files or commit them.
+- If `PAYMENT_ENABLE_REAL_PROVIDER=false` or the Stripe secret key is missing, the backend still starts and checkout returns safe mock or unavailable responses.
 
 ## 3. Run the Backend
 From the `backend` folder:

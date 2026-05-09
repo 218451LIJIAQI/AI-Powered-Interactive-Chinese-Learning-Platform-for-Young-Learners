@@ -1,12 +1,23 @@
 package com.example.aichinese.repository;
 
+import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.example.aichinese.entity.Order;
+import com.example.aichinese.entity.enums.PaymentStatus;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByOrderNumber(String orderNumber);
+
+    @EntityGraph(attributePaths = { "student", "student.user" })
+    List<Order> findByStudentUserIdOrderByCreatedAtDesc(Long userId);
+
+    @EntityGraph(attributePaths = { "student", "student.user" })
+    Optional<Order> findByIdAndStudentUserId(Long id, Long userId);
+
+    List<Order> findByPaymentStatus(PaymentStatus paymentStatus);
 }

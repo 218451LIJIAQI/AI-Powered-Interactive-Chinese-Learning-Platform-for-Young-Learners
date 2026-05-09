@@ -9,8 +9,13 @@ import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vu
 import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
 import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
 import AdminAiUsageLogsPage from '../pages/admin/AdminAiUsageLogsPage.vue'
+import CommissionSettingPage from '../pages/admin/CommissionSettingPage.vue'
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
+import PaymentManagementPage from '../pages/admin/PaymentManagementPage.vue'
+import PayoutManagementPage from '../pages/admin/PayoutManagementPage.vue'
+import RefundManagementPage from '../pages/admin/RefundManagementPage.vue'
 import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
+import SubscriptionPlanManagementPage from '../pages/admin/SubscriptionPlanManagementPage.vue'
 import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
 import AdminTeacherVerificationDetailPage from '../pages/admin/AdminTeacherVerificationDetailPage.vue'
 import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage.vue'
@@ -35,16 +40,22 @@ import AiStoryGeneratorPage from '../pages/student/AiStoryGeneratorPage.vue'
 import AiTutorPage from '../pages/student/AiTutorPage.vue'
 import AiVocabularyHelperPage from '../pages/student/AiVocabularyHelperPage.vue'
 import AiWritingFeedbackPage from '../pages/student/AiWritingFeedbackPage.vue'
+import CartPage from '../pages/student/CartPage.vue'
 import LessonPlayerPage from '../pages/student/LessonPlayerPage.vue'
 import ListenAndChoosePage from '../pages/student/ListenAndChoosePage.vue'
 import MatchingGamePage from '../pages/student/MatchingGamePage.vue'
+import PaymentHistoryPage from '../pages/student/PaymentHistoryPage.vue'
+import PaymentResultPage from '../pages/student/PaymentResultPage.vue'
 import ProgressPage from '../pages/student/ProgressPage.vue'
 import QuizPage from '../pages/student/QuizPage.vue'
 import QuizResultPage from '../pages/student/QuizResultPage.vue'
+import RefundHistoryPage from '../pages/student/RefundHistoryPage.vue'
 import RewardsPage from '../pages/student/RewardsPage.vue'
 import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
 import StudentLessonsPage from '../pages/student/StudentLessonsPage.vue'
+import SubscriptionPage from '../pages/student/SubscriptionPage.vue'
 import WrongAnswerReviewPage from '../pages/student/WrongAnswerReviewPage.vue'
+import EarningsDashboardPage from '../pages/teacher/EarningsDashboardPage.vue'
 import FlashcardEditorPage from '../pages/teacher/FlashcardEditorPage.vue'
 import LessonEditorPage from '../pages/teacher/LessonEditorPage.vue'
 import LessonManagementPage from '../pages/teacher/LessonManagementPage.vue'
@@ -57,6 +68,7 @@ import TeacherAiQuizGeneratorPage from '../pages/teacher/TeacherAiQuizGeneratorP
 import TeacherAiStoryGeneratorPage from '../pages/teacher/TeacherAiStoryGeneratorPage.vue'
 import TeacherAiTeacherAssistantPage from '../pages/teacher/TeacherAiTeacherAssistantPage.vue'
 import TeacherAiVocabularyHelperPage from '../pages/teacher/TeacherAiVocabularyHelperPage.vue'
+import PayoutRequestPage from '../pages/teacher/PayoutRequestPage.vue'
 import QuizEditorPage from '../pages/teacher/QuizEditorPage.vue'
 import QuizResultsViewerPage from '../pages/teacher/QuizResultsViewerPage.vue'
 import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
@@ -161,6 +173,36 @@ const studentChildren: RouteRecordRaw[] = [
     name: 'student-progress',
     component: ProgressPage,
     meta: { titleKey: 'nav.progress' },
+  },
+  {
+    path: 'cart',
+    name: 'student-cart',
+    component: CartPage,
+    meta: { titleKey: 'nav.cart' },
+  },
+  {
+    path: 'payments',
+    name: 'student-payments',
+    component: PaymentHistoryPage,
+    meta: { titleKey: 'nav.paymentHistory' },
+  },
+  {
+    path: 'payment-result',
+    name: 'student-payment-result',
+    component: PaymentResultPage,
+    meta: { titleKey: 'commerce.paymentResultTitle', navKey: 'student-payments' },
+  },
+  {
+    path: 'subscription',
+    name: 'student-subscription',
+    component: SubscriptionPage,
+    meta: { titleKey: 'nav.subscription' },
+  },
+  {
+    path: 'refunds',
+    name: 'student-refunds',
+    component: RefundHistoryPage,
+    meta: { titleKey: 'commerce.refundTitle' },
   },
   {
     path: 'ai/tutor',
@@ -345,6 +387,18 @@ const teacherChildren: RouteRecordRaw[] = [
     component: TeacherAiStoryGeneratorPage,
     meta: { titleKey: 'nav.aiStoryGenerator' },
   },
+  {
+    path: 'earnings',
+    name: 'teacher-earnings',
+    component: EarningsDashboardPage,
+    meta: { titleKey: 'nav.earnings' },
+  },
+  {
+    path: 'payouts',
+    name: 'teacher-payouts',
+    component: PayoutRequestPage,
+    meta: { titleKey: 'nav.payoutRequests' },
+  },
 ]
 
 const adminChildren: RouteRecordRaw[] = [
@@ -402,46 +456,36 @@ const adminChildren: RouteRecordRaw[] = [
     component: AdminAiUsageLogsPage,
     meta: { titleKey: 'nav.aiUsageLogs' },
   },
-  createPlaceholderRoute(
-    'payments',
-    'admin-payments',
-    'nav.paymentManagement',
-    'admin',
-    'Payment Management',
-    'Payment management is prepared for the commerce phase',
-    'This page will later host transaction review, order lookups, and Stripe sandbox monitoring.',
-    ['Review payment records', 'Inspect failed transactions', 'Track revenue by period'],
-  ),
-  createPlaceholderRoute(
-    'refunds',
-    'admin-refunds',
-    'nav.refundManagement',
-    'admin',
-    'Refund Management',
-    'Refund workflows will appear here later',
-    'Admins will later review refund requests, decisions, and refund-processing history from this section.',
-    ['View pending refund requests', 'Approve or reject cases', 'Track refund outcomes'],
-  ),
-  createPlaceholderRoute(
-    'payouts',
-    'admin-payouts',
-    'nav.payoutManagement',
-    'admin',
-    'Payout Management',
-    'Payout review workflows will be added later',
-    'This page is ready for teacher payout requests, approvals, and finance notes.',
-    ['Review payout requests', 'Approve or reject requests', 'Track paid-out records'],
-  ),
-  createPlaceholderRoute(
-    'subscription-plans',
-    'admin-subscription-plans',
-    'nav.subscriptionPlans',
-    'admin',
-    'Subscription Plans',
-    'Subscription management will be implemented later',
-    'This section will later support plan pricing, activation, benefits, and premium access configuration.',
-    ['Manage Free, Basic, Premium, and Family plans', 'Update pricing and benefits', 'Enable or disable plan visibility'],
-  ),
+  {
+    path: 'payments',
+    name: 'admin-payments',
+    component: PaymentManagementPage,
+    meta: { titleKey: 'nav.paymentManagement' },
+  },
+  {
+    path: 'refunds',
+    name: 'admin-refunds',
+    component: RefundManagementPage,
+    meta: { titleKey: 'nav.refundManagement' },
+  },
+  {
+    path: 'payouts',
+    name: 'admin-payouts',
+    component: PayoutManagementPage,
+    meta: { titleKey: 'nav.payoutManagement' },
+  },
+  {
+    path: 'subscription-plans',
+    name: 'admin-subscription-plans',
+    component: SubscriptionPlanManagementPage,
+    meta: { titleKey: 'nav.subscriptionPlans' },
+  },
+  {
+    path: 'commission-settings',
+    name: 'admin-commission-settings',
+    component: CommissionSettingPage,
+    meta: { titleKey: 'commerce.commissionTitle' },
+  },
   createPlaceholderRoute(
     'reports',
     'admin-reports',
@@ -505,6 +549,18 @@ const adminChildren: RouteRecordRaw[] = [
 ]
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/payment/success',
+    name: 'payment-success',
+    component: PaymentResultPage,
+    meta: { titleKey: 'commerce.paymentResultTitle', requiresAuth: true, roles: ['STUDENT'], navKey: 'student-payments' },
+  },
+  {
+    path: '/payment/cancel',
+    name: 'payment-cancel',
+    component: PaymentResultPage,
+    meta: { titleKey: 'commerce.paymentCancelTitle', requiresAuth: true, roles: ['STUDENT'], navKey: 'student-payments' },
+  },
   {
     path: '/',
     component: PublicLayout,

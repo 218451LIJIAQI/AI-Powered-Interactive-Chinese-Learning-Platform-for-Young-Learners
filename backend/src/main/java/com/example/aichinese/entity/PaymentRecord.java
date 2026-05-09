@@ -1,6 +1,7 @@
 package com.example.aichinese.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.PaymentStatus;
@@ -32,6 +33,10 @@ public class PaymentRecord extends BaseEntity {
     @JoinColumn(name = "order_id")
     private Order order;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "student_id")
+    private StudentProfile student;
+
     @Column(name = "provider_name", nullable = false, length = 100)
     private String providerName;
 
@@ -47,4 +52,13 @@ public class PaymentRecord extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false, length = 30)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
+    @Column(name = "payment_method", length = 100)
+    private String paymentMethod;
+
+    @Column(name = "provider_status", length = 100)
+    private String providerStatus;
+
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
 }

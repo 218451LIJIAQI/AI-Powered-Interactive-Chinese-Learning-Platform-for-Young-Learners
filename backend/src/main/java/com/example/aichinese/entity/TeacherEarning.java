@@ -33,6 +33,9 @@ public class TeacherEarning extends BaseEntity {
     @JoinColumn(name = "order_item_id")
     private OrderItem orderItem;
 
+    @Column(name = "earning_status", nullable = false, length = 30)
+    private String earningStatus = "AVAILABLE";
+
     @Column(name = "gross_amount", precision = 10, scale = 2)
     private BigDecimal grossAmount;
 

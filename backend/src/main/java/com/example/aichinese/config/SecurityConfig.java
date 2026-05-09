@@ -21,7 +21,7 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({ SecurityProperties.class, UploadProperties.class, AiProperties.class })
+@EnableConfigurationProperties({ SecurityProperties.class, UploadProperties.class, AiProperties.class, PaymentProperties.class })
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -60,6 +60,7 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/ai/**").authenticated()
+                        .requestMatchers("/api/v1/payments/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/teachers/**").hasRole("TEACHER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

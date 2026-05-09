@@ -38,6 +38,12 @@ const navItems = [
     routeName: 'admin-subscription-plans',
     icon: 'Tickets',
   },
+  {
+    key: 'admin-commission-settings',
+    labelKey: 'commerce.commissionTitle',
+    routeName: 'admin-commission-settings',
+    icon: 'Setting',
+  },
   { key: 'admin-reports', labelKey: 'nav.reports', routeName: 'admin-reports', icon: 'Warning' },
   { key: 'admin-reviews', labelKey: 'nav.reviewsModeration', routeName: 'admin-reviews', icon: 'ChatRound' },
   {

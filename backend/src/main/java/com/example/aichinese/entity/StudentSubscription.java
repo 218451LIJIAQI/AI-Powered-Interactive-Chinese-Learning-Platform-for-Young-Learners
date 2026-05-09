@@ -36,6 +36,10 @@ public class StudentSubscription extends BaseEntity {
     @JoinColumn(name = "plan_id", nullable = false)
     private SubscriptionPlan plan;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payment_record_id")
+    private PaymentRecord paymentRecord;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "subscription_status", nullable = false, length = 30)
     private PaymentStatus subscriptionStatus = PaymentStatus.PENDING;

@@ -3,7 +3,7 @@
 ## Project Overview
 This project is a full-stack final-year-project web application for young learners aged 7-12. It is designed as an interactive and gamified Chinese learning platform for the Malaysian context, with support for student, teacher, and admin roles.
 
-Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 now adds the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility.
+Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 added the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility. Phase 9 now adds payment and commerce workflows with Stripe-ready backend configuration, cart and checkout flows, subscriptions, entitlements, teacher earnings, refunds, and payouts.
 
 ## Tech Stack
 - Frontend: Vue 3, Vite, TypeScript, Element Plus, Vue Router, Pinia, Axios, Vue I18n, npm
@@ -12,7 +12,7 @@ Phase 1 established the monorepo scaffold. Phase 2 added the backend database fo
 - Tooling: Docker Compose
 
 ## Current Status
-Completed through Phase 8:
+Completed through Phase 9 work-in-progress:
 - Monorepo scaffold created
 - Vue frontend created with required packages and folder structure
 - Public, student, teacher, and admin layouts added and polished
@@ -63,9 +63,24 @@ Completed through Phase 8:
   - admin AI usage logs page
   - safe unavailable mode when no real AI key is configured
   - backend AI integration tests
+- Phase 9 commerce foundation added:
+  - backend payment provider abstraction with unavailable, mock, and Stripe-ready clients
+  - student cart, buy now, checkout, payment history, and refund request flows
+  - subscription plan management and student subscription checkout flow
+  - backend payment records, order items, entitlements, and payment status verification
+  - teacher earnings, commission setting, payout request flow, and admin payout management
+  - admin payment and refund management views
+  - public paid-content purchase entry points
+  - backend commerce integration tests
 
-Intentionally not implemented in Phase 8:
-- payment, subscription, cart, refund, payout, or entitlement logic
+Phase 9 known limitations:
+- Stripe sandbox/test mode only
+- real Stripe keys must stay in backend environment variables only
+- payout is simulated by admin approval and mark-paid workflow
+- refund handling is prototype-friendly when no live Stripe refund integration is configured
+- no real bank transfer automation
+
+Still intentionally not implemented:
 - leaderboard
 - live class scheduling workflows
 - recorded video upload or player workflows
@@ -173,6 +188,29 @@ Important:
 - Never expose the key to Vue code or API responses.
 - The frontend does not receive the AI key.
 - If the key is missing, the backend returns friendly unavailable responses instead of crashing.
+
+## Payment Configuration
+The default payment provider is Stripe sandbox/test mode through backend environment variables only.
+
+Example placeholders:
+
+```env
+PAYMENT_PROVIDER=stripe
+STRIPE_SECRET_KEY=replace-with-your-stripe-test-secret-key
+STRIPE_PUBLIC_KEY=replace-with-your-stripe-test-public-key
+STRIPE_WEBHOOK_SECRET=replace-with-your-stripe-webhook-secret
+PAYMENT_SUCCESS_URL=http://localhost:5173/payment/success
+PAYMENT_CANCEL_URL=http://localhost:5173/payment/cancel
+PAYMENT_CURRENCY=MYR
+PAYMENT_ENABLE_REAL_PROVIDER=false
+PAYMENT_TIMEOUT_SECONDS=30
+PAYMENT_MOCK_SUCCESS_ENABLED=true
+```
+
+Important:
+- Never place the real Stripe secret key or webhook secret in frontend code.
+- The frontend does not store card data.
+- If Stripe keys are missing or the real provider is disabled, the backend remains runnable and returns safe unavailable or mock-mode checkout behavior.
 
 ## Phase 7 API Overview
 Student learning:

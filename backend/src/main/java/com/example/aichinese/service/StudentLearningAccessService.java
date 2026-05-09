@@ -35,6 +35,7 @@ public class StudentLearningAccessService {
     private final MatchingGameRepository matchingGameRepository;
     private final ListeningExerciseRepository listeningExerciseRepository;
     private final TracingExerciseRepository tracingExerciseRepository;
+    private final EntitlementService entitlementService;
 
     public StudentLearningAccessService(
             StudentProfileRepository studentProfileRepository,
@@ -43,7 +44,8 @@ public class StudentLearningAccessService {
             QuizRepository quizRepository,
             MatchingGameRepository matchingGameRepository,
             ListeningExerciseRepository listeningExerciseRepository,
-            TracingExerciseRepository tracingExerciseRepository) {
+            TracingExerciseRepository tracingExerciseRepository,
+            EntitlementService entitlementService) {
         this.studentProfileRepository = studentProfileRepository;
         this.lessonRepository = lessonRepository;
         this.flashcardRepository = flashcardRepository;
@@ -51,6 +53,7 @@ public class StudentLearningAccessService {
         this.matchingGameRepository = matchingGameRepository;
         this.listeningExerciseRepository = listeningExerciseRepository;
         this.tracingExerciseRepository = tracingExerciseRepository;
+        this.entitlementService = entitlementService;
     }
 
     @Transactional(readOnly = true)
@@ -121,10 +124,29 @@ public class StudentLearningAccessService {
         return lesson.getAccessType() == AccessType.PAID;
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasLessonAccess(StudentProfile student, Lesson lesson) {
+        if (!isLocked(lesson)) {
+            return true;
+        }
+
+        boolean directLessonAccess = entitlementService.hasAccessToItem(student.getId(), "LESSON", lesson.getId());
+        boolean moduleAccess = lesson.getModule() != null
+                && entitlementService.hasAccessToItem(student.getId(), "MODULE", lesson.getModule().getId());
+        return directLessonAccess || moduleAccess;
+    }
+
     public void ensureFreeAccess(Lesson lesson) {
         if (isLocked(lesson)) {
             throw new ResponseStatusException(FORBIDDEN,
                     "Paid content is locked until payment workflows are implemented.");
+        }
+    }
+
+    public void ensureLessonAccess(StudentProfile student, Lesson lesson) {
+        if (!hasLessonAccess(student, lesson)) {
+            throw new ResponseStatusException(FORBIDDEN,
+                    "Paid content is locked until payment is completed.");
         }
     }
 
