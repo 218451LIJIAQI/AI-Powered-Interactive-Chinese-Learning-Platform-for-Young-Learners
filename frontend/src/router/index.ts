@@ -786,6 +786,11 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, roles: ['ADMIN'], titleKey: 'nav.adminDashboard' },
     children: adminChildren,
   },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    redirect: { name: 'landing' },
+  },
 ]
 
 export const router = createRouter({

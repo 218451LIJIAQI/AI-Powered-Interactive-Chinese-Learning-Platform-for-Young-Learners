@@ -37,6 +37,7 @@ import com.example.aichinese.security.JwtService;
 import com.example.aichinese.security.SecurityUserDetails;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @Service
@@ -186,6 +187,10 @@ public class AuthService {
         if (trimToNull(request.token()).isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Reset token is required.");
         }
+        throw new ResponseStatusException(
+                SERVICE_UNAVAILABLE,
+                "Password reset is currently unavailable because email-based token delivery is not configured. "
+                        + "Please contact an administrator for assistance.");
     }
 
     public boolean isTeacherApproved(User user) {

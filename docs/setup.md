@@ -10,9 +10,9 @@
 Maven does not need to be installed globally because the backend uses `mvnw.cmd`.
 
 ## Project Structure
-- [frontend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/frontend)
-- [backend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend)
-- [docs](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs)
+- [frontend](../frontend)
+- [backend](../backend)
+- [docs](../docs)
 
 ## 1. Start MySQL
 From the project root:
@@ -36,8 +36,8 @@ docker compose config
 
 ## 2. Configure Backend Environment Variables
 Use placeholders only. Reference files:
-- [backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/.env.example)
-- [backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/src/main/resources/application-example.yml)
+- [backend/.env.example](../backend/.env.example)
+- [backend/src/main/resources/application-example.yml](../backend/src/main/resources/application-example.yml)
 
 Important groups:
 - Database: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
@@ -97,7 +97,7 @@ Important notes:
 - AI and payment providers must fail gracefully when unavailable
 
 ## 3. Run the Backend
-From [backend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend):
+From [backend](../backend):
 
 ```powershell
 .\mvnw.cmd spring-boot:run
@@ -110,7 +110,7 @@ GET http://localhost:8080/api/v1/health
 ```
 
 ## 4. Run the Frontend
-From [frontend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/frontend):
+From [frontend](../frontend):
 
 ```powershell
 npm install

@@ -66,7 +66,7 @@ Phase 12 focuses on final analytics, dashboard charts, UI polish, responsive imp
 ```
 
 ## Frontend Setup
-From [frontend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/frontend):
+From [frontend](./frontend):
 
 ```powershell
 npm install
@@ -84,7 +84,7 @@ Default frontend URL:
 - `http://localhost:5173`
 
 ## Backend Setup
-From [backend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend):
+From [backend](./backend):
 
 ```powershell
 .\mvnw.cmd spring-boot:run
@@ -118,8 +118,8 @@ Default local MySQL settings:
 
 ## Environment Variables
 Use placeholders only. See:
-- [backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/.env.example)
-- [backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/src/main/resources/application-example.yml)
+- [backend/.env.example](./backend/.env.example)
+- [backend/src/main/resources/application-example.yml](./backend/src/main/resources/application-example.yml)
 
 Important environment groups:
 - Database: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
@@ -273,7 +273,7 @@ Role checks are enforced both in frontend routing and backend authorization.
 - Communication and trust workflows through notifications, reports, reviews, support tickets, moderation actions, and audit logs
 
 ## Database Notes
-See [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/database-notes.md) for table groups, enum notes, analytics data sources, and schema guidance.
+See [docs/database-notes.md](./docs/database-notes.md) for table groups, enum notes, analytics data sources, and schema guidance.
 
 ## Known Limitations
 - External AI provider integration only; no custom model training
@@ -294,9 +294,9 @@ See [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Inter
 - Stronger observability and deployment automation
 
 ## Documentation
-- Setup guide: [docs/setup.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/setup.md)
-- API overview: [docs/api-overview.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/api-overview.md)
-- Database notes: [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/database-notes.md)
-- Testing checklist: [docs/testing-checklist.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/testing-checklist.md)
-- Demo guide: [docs/demo-script.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/demo-script.md)
-- Communication, moderation, support, and audit reference: [docs/communication-moderation-support-audit.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/communication-moderation-support-audit.md)
+- Setup guide: [docs/setup.md](./docs/setup.md)
+- API overview: [docs/api-overview.md](./docs/api-overview.md)
+- Database notes: [docs/database-notes.md](./docs/database-notes.md)
+- Testing checklist: [docs/testing-checklist.md](./docs/testing-checklist.md)
+- Demo guide: [docs/demo-script.md](./docs/demo-script.md)
+- Communication, moderation, support, and audit reference: [docs/communication-moderation-support-audit.md](./docs/communication-moderation-support-audit.md)

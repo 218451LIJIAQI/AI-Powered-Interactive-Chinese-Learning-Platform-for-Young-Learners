@@ -33,8 +33,8 @@ Important:
 
 ## Safe Configuration
 Use:
-- [../backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/backend/.env.example)
-- [../backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/backend/src/main/resources/application-example.yml)
+- [../backend/.env.example](../backend/.env.example)
+- [../backend/src/main/resources/application-example.yml](../backend/src/main/resources/application-example.yml)
 
 Set the real key locally in the backend environment only.
 

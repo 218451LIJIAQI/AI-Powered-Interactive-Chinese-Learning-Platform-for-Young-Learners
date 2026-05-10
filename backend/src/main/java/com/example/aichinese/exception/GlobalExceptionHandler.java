@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
@@ -33,6 +34,17 @@ public class GlobalExceptionHandler {
                 .map(this::formatFieldError)
                 .collect(Collectors.toList());
         ApiResponse<Void> response = ApiResponse.failure("Validation failed", errors);
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException exception) {
+        Throwable cause = exception.getMostSpecificCause();
+        String causeSummary = cause == null ? exception.getMessage() : cause.getClass().getSimpleName();
+        log.warn("Malformed or unreadable request body rejected with HTTP 400: {}", causeSummary);
+        String message = "Request body is missing or malformed. Please check the JSON payload and try again.";
+        ApiResponse<Void> response = ApiResponse.failure(message, List.of(message));
         return ResponseEntity.badRequest().body(response);
     }
 
