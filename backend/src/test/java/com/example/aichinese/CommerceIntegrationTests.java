@@ -362,6 +362,32 @@ class CommerceIntegrationTests {
     }
 
     @Test
+    void publicSubscriptionPlansEndpointReturnsActivePlansWithoutAuthentication() throws Exception {
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String planName = "Public Plan " + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/admin/subscription-plans")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "name", planName,
+                        "price", 19.90,
+                        "benefits", "Public preview benefits",
+                        "active", true))))
+                .andExpect(status().isOk());
+
+        MvcResult publicResult = mockMvc.perform(get("/api/v1/subscription-plans"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andReturn();
+
+        String body = publicResult.getResponse().getContentAsString();
+        assertThat(body).contains(planName);
+    }
+
+    @Test
     void paidLessonShowsLockedBeforePaymentAndRefundedPaymentUpdatesStatuses() throws Exception {
         String teacherEmail = uniqueEmail("lock-refund-t");
         approveTeacherProfile(teacherEmail);

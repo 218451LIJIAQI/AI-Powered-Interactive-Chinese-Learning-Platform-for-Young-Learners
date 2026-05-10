@@ -27,7 +27,7 @@ if (authStore.token) {
     authStore.clearAuthState()
   })
 } else {
-  authStore.initialized = true
+  authStore.clearAuthState()
 }
 
 app.mount('#app')

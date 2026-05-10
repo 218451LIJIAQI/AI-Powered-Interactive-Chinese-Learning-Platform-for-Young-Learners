@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
@@ -6,7 +7,7 @@ import PlaceholderCard from '../../components/common/PlaceholderCard.vue'
 
 const { t } = useI18n()
 
-const featureCards = [
+const featureCards = computed(() => [
   {
     title: t('landing.featureAiTutorTitle'),
     description: t('landing.featureAiTutorDescription'),
@@ -19,7 +20,7 @@ const featureCards = [
     title: t('landing.featureTeacherTitle'),
     description: t('landing.featureTeacherDescription'),
   },
-]
+])
 </script>
 
 <template>

@@ -261,6 +261,35 @@ class AuthControllerIntegrationTests {
                 .andExpect(jsonPath("$.data.user.teacherStatus").value("PENDING"));
     }
 
+    @Test
+    void shouldReturnBadRequestWhenRequestBodyIsMalformedJson() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"broken"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        assertThat(responseBody).contains("malformed");
+        assertThat(responseBody).doesNotContain("Exception");
+    }
+
+    @Test
+    void shouldReturnServiceUnavailableForResetPasswordBecauseEmailDeliveryIsNotConfigured() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/reset-password")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "token", "any-token",
+                        "password", "Password123!",
+                        "confirmPassword", "Password123!"))))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("unavailable")));
+    }
+
     private void registerStudent(String email, String password) throws Exception {
         mockMvc.perform(post("/api/v1/auth/register/student")
                 .with(csrf())
