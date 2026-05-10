@@ -5,12 +5,14 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { reportService } from '../../services/reportService'
 import type { ReportItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 
 const route = useRoute()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const report = ref<ReportItem | null>(null)
 
@@ -61,8 +63,8 @@ onMounted(() => {
 
     <el-card v-loading="loading" class="dashboard-panel" shadow="hover">
       <el-descriptions v-if="report" :column="2" border>
-        <el-descriptions-item :label="t('phase11.reportTargetType')">{{ report.targetType }}</el-descriptions-item>
-        <el-descriptions-item :label="t('commerce.status')">{{ report.reportStatus }}</el-descriptions-item>
+        <el-descriptions-item :label="t('phase11.reportTargetType')">{{ translateEnum('reportTargetType', report.targetType) }}</el-descriptions-item>
+        <el-descriptions-item :label="t('commerce.status')">{{ translateEnum('reportStatus', report.reportStatus) }}</el-descriptions-item>
         <el-descriptions-item :label="t('phase11.reporter')">{{ report.reporterName || '-' }}</el-descriptions-item>
         <el-descriptions-item :label="t('phase11.relatedTeacher')">{{ report.relatedTeacherName || '-' }}</el-descriptions-item>
         <el-descriptions-item :label="t('phase11.reportReason')" :span="2">{{ report.reason }}</el-descriptions-item>

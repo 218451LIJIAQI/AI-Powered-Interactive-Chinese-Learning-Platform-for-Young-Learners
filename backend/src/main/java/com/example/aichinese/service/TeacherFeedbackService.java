@@ -22,7 +22,6 @@ import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherFeedback;
 import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.TeacherFeedbackType;
 import com.example.aichinese.repository.LessonProgressRepository;

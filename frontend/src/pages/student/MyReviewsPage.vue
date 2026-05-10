@@ -4,11 +4,13 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { reviewService } from '../../services/reviewService'
 import type { CreateReviewPayload, ReviewItem, UpdateReviewPayload } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -102,10 +104,16 @@ onMounted(() => {
       </div>
 
       <el-table v-loading="loading" :data="reviews" class="phase-table">
-        <el-table-column prop="targetType" :label="t('phase11.reviewTargetType')" min-width="140" />
+        <el-table-column :label="t('phase11.reviewTargetType')" min-width="140">
+          <template #default="{ row }">{{ translateEnum('reviewTargetType', row.targetType) }}</template>
+        </el-table-column>
         <el-table-column prop="targetTitle" :label="t('phase11.reviewTargetTitle')" min-width="220" />
         <el-table-column prop="rating" :label="t('phase11.rating')" min-width="120" />
-        <el-table-column prop="reviewStatus" :label="t('commerce.status')" min-width="140" />
+        <el-table-column :label="t('commerce.status')" min-width="140">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('reviewStatus', row.reviewStatus) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="comment" :label="t('phase11.reviewComment')" min-width="320" />
         <el-table-column width="220">
           <template #default="{ row }">

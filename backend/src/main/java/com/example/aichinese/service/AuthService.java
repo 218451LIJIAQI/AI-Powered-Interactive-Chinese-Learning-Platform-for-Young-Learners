@@ -178,10 +178,22 @@ public class AuthService {
                 teacherSummary);
     }
 
+    /**
+     * Accepts a forgot-password request without confirming whether the email exists, to avoid
+     * leaking which addresses are registered. The actual reset email is not delivered in this
+     * prototype because token-based email delivery is intentionally not configured. The public
+     * controller response always says the same thing regardless of email existence.
+     */
     public void forgotPassword(ForgotPasswordRequest request) {
         normalizeEmail(request.email());
     }
 
+    /**
+     * Reset password is intentionally unavailable in this prototype because the email-based
+     * delivery of reset tokens is not implemented. The endpoint validates the request shape and
+     * then returns a clear 503 so that automated tests, the frontend, and examiners all get a
+     * consistent and honest "feature not available" signal rather than a fake success.
+     */
     public void resetPassword(ResetPasswordRequest request) {
         validatePasswords(request.password(), request.confirmPassword());
         if (trimToNull(request.token()).isEmpty()) {

@@ -5,20 +5,19 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { notificationService } from '../../services/notificationService'
 import type { NotificationItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const notifications = ref<NotificationItem[]>([])
 
 const unreadCount = computed(() => notifications.value.filter((item) => item.status === 'UNREAD').length)
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadNotifications() {
   loading.value = true
@@ -84,14 +83,18 @@ onMounted(() => {
       <el-table v-loading="loading" :data="notifications" class="phase-table">
         <el-table-column :label="t('phase11.notificationType')" min-width="150">
           <template #default="{ row }">
-            <el-tag round :type="row.status === 'UNREAD' ? 'warning' : 'info'">{{ row.type }}</el-tag>
+            <el-tag round :type="row.status === 'UNREAD' ? 'warning' : 'info'">
+              {{ translateEnum('notification.type', row.type) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="title" :label="t('phase11.notificationTitle')" min-width="220" />
         <el-table-column prop="message" :label="t('phase11.notificationMessage')" min-width="320" />
         <el-table-column :label="t('commerce.status')" min-width="140">
           <template #default="{ row }">
-            <el-tag round :type="row.status === 'UNREAD' ? 'danger' : 'success'">{{ row.status }}</el-tag>
+            <el-tag round :type="row.status === 'UNREAD' ? 'danger' : 'success'">
+              {{ translateEnum('notification.status', row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('commerce.createdAt')" min-width="180">

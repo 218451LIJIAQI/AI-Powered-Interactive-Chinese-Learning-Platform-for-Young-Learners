@@ -5,20 +5,20 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { supportTicketService } from '../../services/supportTicketService'
 import type { SupportTicketDetail } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const detail = ref<SupportTicketDetail | null>(null)
 const replying = ref(false)
 const form = reactive({ message: '' })
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadDetail() {
   loading.value = true
@@ -67,8 +67,8 @@ onMounted(() => {
 
     <el-card class="dashboard-panel" shadow="hover">
       <el-descriptions v-if="detail" :column="2" border>
-        <el-descriptions-item :label="t('phase11.ticketStatus')">{{ detail.ticket.status }}</el-descriptions-item>
-        <el-descriptions-item :label="t('phase11.ticketPriority')">{{ detail.ticket.priority }}</el-descriptions-item>
+        <el-descriptions-item :label="t('phase11.ticketStatus')">{{ translateEnum('ticketStatus', detail.ticket.status) }}</el-descriptions-item>
+        <el-descriptions-item :label="t('phase11.ticketPriority')">{{ translateEnum('ticketPriority', detail.ticket.priority) }}</el-descriptions-item>
         <el-descriptions-item :label="t('commerce.createdAt')">{{ formatDateTime(detail.ticket.createdAt) }}</el-descriptions-item>
         <el-descriptions-item :label="t('phase11.ticketRequester')">{{ detail.ticket.requesterName || '-' }}</el-descriptions-item>
       </el-descriptions>

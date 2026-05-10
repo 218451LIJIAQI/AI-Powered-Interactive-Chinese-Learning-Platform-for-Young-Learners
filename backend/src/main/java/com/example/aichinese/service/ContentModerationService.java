@@ -1,6 +1,5 @@
 package com.example.aichinese.service;
 
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.Comparator;

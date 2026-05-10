@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import { publicContentService } from '../../services/publicContentService'
 import { useAuthStore } from '../../stores/authStore'
@@ -15,6 +16,7 @@ const route = useRoute()
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const course = ref<PublicCourseDetail | null>(null)
@@ -81,8 +83,8 @@ onMounted(() => {
             <div class="feature-banner__content">
               <div>
               <div class="tag-list">
-                <el-tag round>{{ course?.type }}</el-tag>
-                <el-tag type="success" round>{{ course?.accessType }}</el-tag>
+                <el-tag round>{{ translateEnum('managedContentType', course?.type) }}</el-tag>
+                <el-tag type="success" round>{{ translateEnum('accessType', course?.accessType) }}</el-tag>
                 <el-tag v-if="course?.locked" type="warning" round>{{ t('content.locked') }}</el-tag>
               </div>
               <h1>{{ course?.title }}</h1>

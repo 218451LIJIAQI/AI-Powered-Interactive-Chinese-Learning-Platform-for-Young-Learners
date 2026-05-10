@@ -24,7 +24,6 @@ import com.example.aichinese.entity.ListeningExercise;
 import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.PointsTransaction;
 import com.example.aichinese.entity.Quiz;
-import com.example.aichinese.entity.QuizAttemptAnswer;
 import com.example.aichinese.entity.StudentActivityProgress;
 import com.example.aichinese.entity.StudentBadge;
 import com.example.aichinese.entity.StudentProfile;

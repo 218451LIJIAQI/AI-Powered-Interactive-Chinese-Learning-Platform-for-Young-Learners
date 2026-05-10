@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import PageHero from '../../components/common/PageHero.vue'
 import { liveClassService } from '../../services/liveClassService'
 import type { LiveClass } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -14,10 +15,6 @@ const { t } = useI18n()
 const loading = ref(true)
 const item = ref<LiveClass | null>(null)
 
-function formatDateTime(value: string | null) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadDetail() {
   loading.value = true

@@ -66,13 +66,14 @@ public class AuthController {
     public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
         return ApiResponse.success(
-                "If the email exists, a password reset instruction will be sent when email service is available.",
+                "If the email is registered, a password reset instruction will be sent once email delivery is configured.",
                 null);
     }
 
     @PostMapping("/reset-password")
     public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
+        // Defensive return: the service intentionally throws SERVICE_UNAVAILABLE for this prototype.
         return ApiResponse.success("Password reset request processed successfully.", null);
     }
 }

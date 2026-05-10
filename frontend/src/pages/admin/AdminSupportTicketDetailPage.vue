@@ -8,6 +8,7 @@ import PageHero from '../../components/common/PageHero.vue'
 import { supportTicketService } from '../../services/supportTicketService'
 import type { SupportTicketDetail, SupportTicketPriority, SupportTicketStatus } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -24,9 +25,6 @@ const controls = reactive<{
   priority: 'MEDIUM',
 })
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadDetail() {
   loading.value = true

@@ -4,12 +4,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { adminTeacherService } from '../../services/adminTeacherService'
 import type { AdminTeacherDetail } from '../../types/adminManagement'
 import { downloadProtectedFile } from '../../utils/fileDownload'
 
 const route = useRoute()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const working = ref(false)
 const detail = ref<AdminTeacherDetail | null>(null)
@@ -110,7 +112,7 @@ onMounted(() => {
             <div class="profile-summary">
               <p><strong>{{ t('auth.fields.fullName') }}:</strong> {{ detail?.fullName }}</p>
               <p><strong>{{ t('auth.fields.email') }}:</strong> {{ detail?.email }}</p>
-              <p><strong>{{ t('dashboard.teacherStatus') }}:</strong> {{ detail?.teacherStatus }}</p>
+              <p><strong>{{ t('dashboard.teacherStatus') }}:</strong> {{ translateEnum('teacherStatus', detail?.teacherStatus) }}</p>
               <p><strong>{{ t('auth.fields.bio') }}:</strong> {{ detail?.bio || t('dashboard.noBio') }}</p>
               <p v-if="detail?.shortIntroduction"><strong>{{ t('teacherVerification.shortIntroduction') }}:</strong> {{ detail.shortIntroduction }}</p>
               <p v-if="detail?.teachingCategories.length"><strong>{{ t('teacherVerification.teachingCategories') }}:</strong> {{ detail.teachingCategories.join(', ') }}</p>
@@ -201,7 +203,7 @@ onMounted(() => {
                 class="summary-row"
               >
                 <div>
-                  <strong>{{ log.actionType }}</strong>
+                  <strong>{{ translateEnum('moderationAction', log.actionType) }}</strong>
                   <p>{{ log.description || t('dashboard.activityRecorded') }}</p>
                 </div>
               </article>

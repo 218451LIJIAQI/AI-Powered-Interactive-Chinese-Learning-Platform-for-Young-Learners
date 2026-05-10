@@ -5,13 +5,16 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { liveClassService } from '../../services/liveClassService'
 import { teacherContentService } from '../../services/teacherContentService'
 import type { CoursePackageItem, LessonItem } from '../../types/contentManagement'
 import type { LiveClass, LiveClassEnrolment, LiveClassFormPayload, MeetingPlatform } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
 const route = useRoute()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -56,9 +59,6 @@ function resetForm() {
   editingId.value = null
 }
 
-function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString('en-MY') : '-'
-}
 
 async function loadData() {
   loading.value = true
@@ -194,7 +194,11 @@ onMounted(() => {
         <el-table-column :label="t('phase10.endTime')" min-width="180">
           <template #default="{ row }">{{ formatDateTime(row.endTime) }}</template>
         </el-table-column>
-        <el-table-column prop="liveClassStatus" :label="t('commerce.status')" min-width="140" />
+        <el-table-column :label="t('commerce.status')" min-width="140">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('liveClassStatus', row.liveClassStatus) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="enrolledCount" :label="t('phase10.enrolledStudents')" min-width="140" />
         <el-table-column width="360">
           <template #default="{ row }">
@@ -272,8 +276,14 @@ onMounted(() => {
       <el-table v-loading="enrolmentLoading" :data="enrolments" class="phase-table">
         <el-table-column prop="studentName" :label="t('phase10.studentLabel')" min-width="220" />
         <el-table-column prop="studentEmail" :label="t('auth.fields.email')" min-width="220" />
-        <el-table-column prop="enrolmentStatus" :label="t('phase10.enrolment')" min-width="140" />
-        <el-table-column prop="enrolledAt" :label="t('phase10.enrolledAt')" min-width="180" />
+        <el-table-column :label="t('phase10.enrolment')" min-width="140">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('liveClassEnrolmentStatus', row.enrolmentStatus) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('phase10.enrolledAt')" min-width="180">
+          <template #default="{ row }">{{ formatDateTime(row.enrolledAt) }}</template>
+        </el-table-column>
       </el-table>
       <el-empty v-if="!enrolmentLoading && !enrolments.length" :description="t('phase10.emptyEnrolments')" />
     </el-dialog>

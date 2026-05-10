@@ -4,17 +4,17 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { reportService } from '../../services/reportService'
 import type { ReportItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const reports = ref<ReportItem[]>([])
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadReports() {
   loading.value = true
@@ -52,9 +52,15 @@ onMounted(() => {
       </div>
 
       <el-table v-loading="loading" :data="reports" class="phase-table">
-        <el-table-column prop="targetType" :label="t('phase11.reportTargetType')" min-width="150" />
+        <el-table-column :label="t('phase11.reportTargetType')" min-width="150">
+          <template #default="{ row }">{{ translateEnum('reportTargetType', row.targetType) }}</template>
+        </el-table-column>
         <el-table-column prop="targetTitle" :label="t('phase11.reportTargetTitle')" min-width="220" />
-        <el-table-column prop="reportStatus" :label="t('commerce.status')" min-width="160" />
+        <el-table-column :label="t('commerce.status')" min-width="160">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('reportStatus', row.reportStatus) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="reason" :label="t('phase11.reportReason')" min-width="320" />
         <el-table-column :label="t('commerce.createdAt')" min-width="180">
           <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>

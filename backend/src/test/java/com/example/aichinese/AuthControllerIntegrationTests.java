@@ -246,6 +246,30 @@ class AuthControllerIntegrationTests {
     }
 
     @Test
+    void shouldReturnForbiddenWhenTeacherAccessesAdminRoute() throws Exception {
+        String email = uniqueEmail("forbidden-teacher");
+        registerTeacher(email, "Password123!");
+        String token = loginAndExtractToken(email, "Password123!");
+
+        mockMvc.perform(get("/api/v1/admin/dashboard")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void shouldReturnForbiddenWhenStudentAccessesTeacherRoute() throws Exception {
+        String email = uniqueEmail("student-on-teacher");
+        registerStudent(email, "Password123!");
+        String token = loginAndExtractToken(email, "Password123!");
+
+        mockMvc.perform(get("/api/v1/teachers/dashboard")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
     void shouldIncludeTeacherStatusWhenTeacherLogsIn() throws Exception {
         String email = uniqueEmail("teacher-login");
         registerTeacher(email, "Password123!");
@@ -277,6 +301,42 @@ class AuthControllerIntegrationTests {
     }
 
     @Test
+    void shouldReturnBadRequestWhenPathVariableTypeDoesNotMatch() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/public/teachers/not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("Invalid value for parameter")))
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        assertThat(responseBody).doesNotContain("Exception");
+        assertThat(responseBody).doesNotContain("at org.springframework");
+    }
+
+    @Test
+    void shouldReturnNotFoundForUnknownAuthenticatedApiRoute() throws Exception {
+        // After the default-deny SecurityConfig change, an unmapped path is only
+        // reachable when the request is authenticated. We therefore log in as a student
+        // and hit a non-existent path under the student namespace so that Spring Security
+        // permits the request and the GlobalExceptionHandler can handle the resulting
+        // NoResourceFoundException with a clean 404 response.
+        String email = uniqueEmail("not-found");
+        registerStudent(email, "Password123!");
+        String token = loginAndExtractToken(email, "Password123!");
+
+        MvcResult result = mockMvc.perform(get("/api/v1/students/this-route-does-not-exist-" + UUID.randomUUID())
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("not found")))
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        assertThat(responseBody).doesNotContain("Exception");
+        assertThat(responseBody).doesNotContain("at org.springframework");
+    }
+
+    @Test
     void shouldReturnServiceUnavailableForResetPasswordBecauseEmailDeliveryIsNotConfigured() throws Exception {
         mockMvc.perform(post("/api/v1/auth/reset-password")
                 .with(csrf())
@@ -288,6 +348,50 @@ class AuthControllerIntegrationTests {
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("unavailable")));
+    }
+
+    @Test
+    void shouldReturnConsistentForgotPasswordResponseRegardlessOfEmailExistence() throws Exception {
+        // Register a real account first so we can compare responses for a known-existing
+        // email and a definitely-non-existent email. The endpoint must return the same
+        // public message in both cases so attackers cannot probe which addresses are
+        // registered on the platform.
+        String registeredEmail = uniqueEmail("forgot-existing");
+        registerStudent(registeredEmail, "Password123!");
+
+        MvcResult existingResult = mockMvc.perform(post("/api/v1/auth/forgot-password")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("email", registeredEmail))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn();
+
+        MvcResult missingResult = mockMvc.perform(post("/api/v1/auth/forgot-password")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "email", "definitely-not-registered-" + UUID.randomUUID() + "@example.com"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn();
+
+        JsonNode existingBody = objectMapper.readTree(existingResult.getResponse().getContentAsString());
+        JsonNode missingBody = objectMapper.readTree(missingResult.getResponse().getContentAsString());
+
+        assertThat(existingBody.path("message").asText()).isEqualTo(missingBody.path("message").asText());
+        assertThat(existingBody.path("data").isNull()).isTrue();
+        assertThat(missingBody.path("data").isNull()).isTrue();
+    }
+
+    @Test
+    void shouldReturnUnauthorizedForUnmappedApiRouteWithoutToken() throws Exception {
+        // Default-deny check: if a request path that is not explicitly listed in
+        // SecurityConfig is reached without authentication, the application must
+        // respond with 401, not silently allow the request through.
+        mockMvc.perform(get("/api/v1/some-future-route-without-explicit-rule"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     private void registerStudent(String email, String password) throws Exception {

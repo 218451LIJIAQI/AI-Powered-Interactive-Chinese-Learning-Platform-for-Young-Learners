@@ -8,8 +8,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;

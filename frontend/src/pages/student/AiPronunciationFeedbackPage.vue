@@ -4,12 +4,14 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { aiService } from '../../services/aiService'
 import { useAuthStore } from '../../stores/authStore'
 import type { AiPronunciationFeedbackResponse } from '../../types/ai'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(false)
 const selectedFile = ref<File | null>(null)
@@ -103,7 +105,7 @@ async function submitFeedback() {
           <p class="section-label">{{ t('ai.feedbackLabel') }}</p>
           <h2>{{ result.feedback }}</h2>
         </div>
-        <el-tag round>{{ result.status }}</el-tag>
+        <el-tag round>{{ translateEnum('aiStatus', result.status) }}</el-tag>
       </div>
 
       <div class="stacked-summary-list">

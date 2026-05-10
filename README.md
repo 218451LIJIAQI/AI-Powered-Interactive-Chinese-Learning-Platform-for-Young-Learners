@@ -3,7 +3,7 @@
 ## Project Overview
 This repository contains a full-stack final-year-project prototype for young learners aged 7 to 12. The platform combines structured Chinese learning, teacher-created content, age-appropriate AI-assisted learning tools, payments in sandbox-friendly mode, live and recorded lesson delivery, communication workflows, moderation tools, and analytics dashboards for student, teacher, and admin roles.
 
-Phase 12 focuses on final analytics, dashboard charts, UI polish, responsive improvements, i18n completion, legal and safety pages, testing, documentation, and demonstration readiness. The project remains a university prototype rather than a production system.
+The project has completed Phase 1 through Phase 12 plus a final excellence pass. The codebase has clean role-based access control, a friendly 404 page, a locale-aware date formatter, frontend regression tests around the API client and auth store, and consistent translation coverage across English, Bahasa Melayu, and Simplified Chinese for demo-facing surfaces. The project remains a university prototype rather than a production system.
 
 ## Target Users
 - Students learning Chinese in a guided and encouraging environment

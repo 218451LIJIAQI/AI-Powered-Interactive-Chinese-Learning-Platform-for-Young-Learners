@@ -4,12 +4,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { adminContentService } from '../../services/adminContentService'
 import type { ContentSubmissionDetail, ManagedContentType } from '../../types/contentManagement'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const working = ref(false)
@@ -135,13 +137,13 @@ onMounted(() => {
               </div>
             </div>
             <div class="profile-summary">
-              <p><strong>{{ t('content.type') }}:</strong> {{ detail?.contentType }}</p>
-              <p><strong>{{ t('content.status') }}:</strong> {{ detail?.contentStatus }}</p>
+              <p><strong>{{ t('content.type') }}:</strong> {{ translateEnum('managedContentType', detail?.contentType) }}</p>
+              <p><strong>{{ t('content.status') }}:</strong> {{ translateEnum('contentStatus', detail?.contentStatus) }}</p>
               <p><strong>{{ t('content.teacher') }}:</strong> {{ detail?.teacher?.fullName || '-' }}</p>
               <p><strong>{{ t('content.level') }}:</strong> {{ detail?.level?.name || '-' }}</p>
               <p><strong>{{ t('content.category') }}:</strong> {{ detail?.category?.name || '-' }}</p>
-              <p><strong>{{ t('content.learningType') }}:</strong> {{ detail?.learningType || '-' }}</p>
-              <p><strong>{{ t('content.accessType') }}:</strong> {{ detail?.accessType }}</p>
+              <p><strong>{{ t('content.learningType') }}:</strong> {{ detail?.learningType ? translateEnum('learningType', detail.learningType) : '-' }}</p>
+              <p><strong>{{ t('content.accessType') }}:</strong> {{ translateEnum('accessType', detail?.accessType) }}</p>
               <p><strong>{{ t('content.price') }}:</strong> RM {{ detail?.price ?? 0 }}</p>
               <p v-if="detail?.rejectionReason"><strong>{{ t('content.rejectionReason') }}:</strong> {{ detail.rejectionReason }}</p>
             </div>
@@ -190,8 +192,8 @@ onMounted(() => {
             <div v-else class="stacked-summary-list">
               <article v-for="item in detail?.packageItems" :key="item.id" class="summary-row">
                 <div>
-                  <strong>{{ item.titleSnapshot || `${item.itemType} #${item.itemId}` }}</strong>
-                  <p>{{ item.itemType }} - {{ t('content.displayOrder') }} {{ item.displayOrder }}</p>
+                  <strong>{{ item.titleSnapshot || `${translateEnum('managedContentType', item.itemType)} #${item.itemId}` }}</strong>
+                  <p>{{ translateEnum('managedContentType', item.itemType) }} - {{ t('content.displayOrder') }} {{ item.displayOrder }}</p>
                 </div>
               </article>
             </div>

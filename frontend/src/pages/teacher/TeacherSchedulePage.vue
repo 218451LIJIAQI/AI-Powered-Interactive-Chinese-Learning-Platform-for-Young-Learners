@@ -3,16 +3,16 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { scheduleService } from '../../services/scheduleService'
 import type { TeacherSchedule } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const schedule = ref<TeacherSchedule | null>(null)
 
-function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString('en-MY') : '-'
-}
 
 async function loadSchedule() {
   loading.value = true
@@ -43,7 +43,11 @@ onMounted(() => {
         <el-table-column :label="t('phase10.startTime')" min-width="180">
           <template #default="{ row }">{{ formatDateTime(row.startTime) }}</template>
         </el-table-column>
-        <el-table-column prop="status" :label="t('commerce.status')" min-width="140" />
+        <el-table-column :label="t('commerce.status')" min-width="140">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('liveClassStatus', row.status) }}</el-tag>
+          </template>
+        </el-table-column>
       </el-table>
 
       <h2>{{ t('phase10.recordedLessons') }}</h2>

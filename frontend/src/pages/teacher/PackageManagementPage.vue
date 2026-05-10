@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { teacherContentService } from '../../services/teacherContentService'
 import { useAuthStore } from '../../stores/authStore'
 import type { CoursePackageItem } from '../../types/contentManagement'
@@ -11,6 +12,7 @@ import type { CoursePackageItem } from '../../types/contentManagement'
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const packages = ref<CoursePackageItem[]>([])
@@ -76,16 +78,16 @@ onMounted(() => {
           <template #default="{ row }">{{ row.level?.name || '-' }}</template>
         </el-table-column>
         <el-table-column :label="t('content.learningType')" min-width="140">
-          <template #default="{ row }">{{ row.learningType }}</template>
+          <template #default="{ row }">{{ translateEnum('learningType', row.learningType) }}</template>
         </el-table-column>
         <el-table-column :label="t('content.accessType')" min-width="120">
           <template #default="{ row }">
-            <el-tag :type="row.accessType === 'PAID' ? 'warning' : 'success'" round>{{ row.accessType }}</el-tag>
+            <el-tag :type="row.accessType === 'PAID' ? 'warning' : 'success'" round>{{ translateEnum('accessType', row.accessType) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('content.status')" min-width="120">
           <template #default="{ row }">
-            <el-tag round>{{ row.contentStatus }}</el-tag>
+            <el-tag round>{{ translateEnum('contentStatus', row.contentStatus) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('content.fields.itemCount')" min-width="120">

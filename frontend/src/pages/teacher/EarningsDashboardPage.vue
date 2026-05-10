@@ -3,10 +3,12 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import type { TeacherEarning, TeacherEarningSummary } from '../../types/commerce'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const summary = ref<TeacherEarningSummary | null>(null)
 const earnings = ref<TeacherEarning[]>([])
@@ -56,7 +58,11 @@ onMounted(() => {
     <el-card class="dashboard-panel" shadow="hover">
       <el-table v-loading="loading" :data="earnings" class="phase-table">
         <el-table-column prop="itemTitle" :label="t('commerce.item')" min-width="220" />
-        <el-table-column prop="earningStatus" :label="t('commerce.status')" min-width="120" />
+        <el-table-column :label="t('commerce.status')" min-width="120">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('paymentStatus', row.earningStatus) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('commerce.grossAmount')" min-width="120">
           <template #default="{ row }">{{ formatMoney(row.grossAmount) }}</template>
         </el-table-column>

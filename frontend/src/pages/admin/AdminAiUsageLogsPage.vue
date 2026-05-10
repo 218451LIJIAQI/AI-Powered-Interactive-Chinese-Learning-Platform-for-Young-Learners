@@ -2,10 +2,13 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { aiService } from '../../services/aiService'
 import type { AdminAiUsageLogPage } from '../../types/ai'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const logs = ref<AdminAiUsageLogPage | null>(null)
@@ -90,13 +93,21 @@ onMounted(() => {
 
     <el-card class="dashboard-panel" shadow="hover">
       <el-table v-loading="loading" :data="logs?.items || []" class="phase-table">
-        <el-table-column prop="createdAt" :label="t('teacherVerification.createdAt')" min-width="180" />
+        <el-table-column :label="t('teacherVerification.createdAt')" min-width="180">
+          <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+        </el-table-column>
         <el-table-column prop="featureKey" :label="t('ai.featureType')" min-width="180" />
         <el-table-column prop="userName" :label="t('auth.fields.fullName')" min-width="180" />
         <el-table-column prop="userRole" :label="t('dashboard.roles')" min-width="120" />
         <el-table-column prop="providerName" :label="t('ai.providerLabel')" min-width="120" />
         <el-table-column prop="modelName" :label="t('ai.modelLabel')" min-width="140" />
-        <el-table-column prop="status" :label="t('content.status')" min-width="120" />
+        <el-table-column :label="t('content.status')" min-width="120">
+          <template #default="{ row }">
+            <el-tag round size="small" :type="row.status === 'SUCCESS' ? 'success' : row.status === 'UNAVAILABLE' ? 'warning' : 'danger'">
+              {{ translateEnum('aiStatus', row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="errorSummary" :label="t('ai.errorSummary')" min-width="260" />
       </el-table>
 

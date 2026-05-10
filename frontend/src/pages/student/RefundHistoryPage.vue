@@ -4,10 +4,12 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import type { RefundRequest } from '../../types/commerce'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const refunds = ref<RefundRequest[]>([])
@@ -54,7 +56,11 @@ onMounted(() => {
       <el-table v-loading="loading" :data="refunds" class="phase-table">
         <el-table-column prop="orderNumber" :label="t('commerce.order')" min-width="160" />
         <el-table-column prop="amount" :label="t('commerce.amount')" min-width="120" />
-        <el-table-column prop="refundStatus" :label="t('commerce.status')" min-width="120" />
+        <el-table-column :label="t('commerce.status')" min-width="120">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('refundStatus', row.refundStatus) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="reason" :label="t('commerce.reason')" min-width="220" />
         <el-table-column prop="decisionReason" :label="t('commerce.decisionReason')" min-width="220" />
       </el-table>

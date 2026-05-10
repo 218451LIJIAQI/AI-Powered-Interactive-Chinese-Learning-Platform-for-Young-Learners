@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { categoryService } from '../../services/categoryService'
 import { levelService } from '../../services/levelService'
 import { teacherContentService } from '../../services/teacherContentService'
@@ -11,6 +12,7 @@ import type { LearningCategory, LearningLevel, LearningModuleItem, ModuleFormPay
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -179,12 +181,12 @@ onMounted(() => {
         </el-table-column>
         <el-table-column :label="t('content.accessType')" min-width="120">
           <template #default="{ row }">
-            <el-tag :type="row.accessType === 'PAID' ? 'warning' : 'success'" round>{{ row.accessType }}</el-tag>
+            <el-tag :type="row.accessType === 'PAID' ? 'warning' : 'success'" round>{{ translateEnum('accessType', row.accessType) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('content.status')" min-width="120">
           <template #default="{ row }">
-            <el-tag round>{{ row.contentStatus }}</el-tag>
+            <el-tag round>{{ translateEnum('contentStatus', row.contentStatus) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('content.rejectionReason')" min-width="220">

@@ -6,15 +6,12 @@ import { useI18n } from 'vue-i18n'
 import PageHero from '../../components/common/PageHero.vue'
 import { scheduleService } from '../../services/scheduleService'
 import type { StudentSchedule } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
 const router = useRouter()
 const loading = ref(true)
 const schedule = ref<StudentSchedule | null>(null)
-
-function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString('en-MY') : '-'
-}
 
 async function openRoute(routePath: string | null) {
   if (!routePath) {

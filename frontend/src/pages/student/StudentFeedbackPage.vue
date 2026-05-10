@@ -7,14 +7,12 @@ import PageHero from '../../components/common/PageHero.vue'
 import { feedbackService } from '../../services/feedbackService'
 import type { TeacherFeedbackItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
 const loading = ref(true)
 const feedbackItems = ref<TeacherFeedbackItem[]>([])
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadFeedback() {
   loading.value = true

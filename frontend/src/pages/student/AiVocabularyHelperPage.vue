@@ -4,12 +4,14 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { aiService } from '../../services/aiService'
 import { useAuthStore } from '../../stores/authStore'
 import type { AiVocabularyHelperResponse } from '../../types/ai'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -97,7 +99,7 @@ async function generateVocabulary() {
           <p class="section-label">{{ t('ai.resultLabel') }}</p>
           <h2>{{ result.chineseWord || form.word }}</h2>
         </div>
-        <el-tag round>{{ result.status }}</el-tag>
+        <el-tag round>{{ translateEnum('aiStatus', result.status) }}</el-tag>
       </div>
 
       <div class="ai-result-grid">

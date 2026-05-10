@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import { categoryService } from '../../services/categoryService'
 import { levelService } from '../../services/levelService'
@@ -22,6 +23,7 @@ import type {
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const loadingFilters = ref(true)
@@ -221,13 +223,13 @@ onMounted(async () => {
                 class="course-card__image"
               />
               <div v-else class="course-card__placeholder">
-                <span>{{ item.type }}</span>
+                <span>{{ translateEnum('managedContentType', item.type) }}</span>
               </div>
             </div>
 
             <div class="course-card__body">
               <div class="tag-list">
-                <el-tag round>{{ item.type }}</el-tag>
+                <el-tag round>{{ translateEnum('managedContentType', item.type) }}</el-tag>
                 <el-tag :type="item.accessType === 'PAID' ? 'warning' : 'success'" round>
                   {{ formatAccessType(item.accessType) }}
                 </el-tag>

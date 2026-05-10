@@ -3,16 +3,16 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { liveClassService } from '../../services/liveClassService'
 import type { LiveClass } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const items = ref<LiveClass[]>([])
 
-function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString('en-MY') : '-'
-}
 
 async function loadClasses() {
   loading.value = true
@@ -45,7 +45,11 @@ onMounted(() => {
         <el-table-column :label="t('phase10.startTime')" min-width="180">
           <template #default="{ row }">{{ formatDateTime(row.startTime) }}</template>
         </el-table-column>
-        <el-table-column prop="liveClassStatus" :label="t('commerce.status')" min-width="140" />
+        <el-table-column :label="t('commerce.status')" min-width="140">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('liveClassStatus', row.liveClassStatus) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="enrolledCount" :label="t('phase10.enrolledStudents')" min-width="140" />
       </el-table>
     </el-card>

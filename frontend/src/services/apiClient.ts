@@ -1,7 +1,19 @@
 import axios from 'axios'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
-const PUBLIC_PROTECTED_PATHS = ['/student', '/teacher', '/admin', '/notifications', '/support-tickets']
+
+const TOKEN_KEY = 'ai-chinese-learning-token'
+
+const PUBLIC_PROTECTED_PATH_PREFIXES = [
+  '/student',
+  '/teacher',
+  '/admin',
+  '/notifications',
+  '/support-tickets',
+  '/payment',
+]
+
+const AUTH_ENDPOINT_FRAGMENTS = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password']
 
 export const apiClient = axios.create({
   baseURL: apiBaseUrl,
@@ -12,7 +24,7 @@ export const apiClient = axios.create({
 })
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('ai-chinese-learning-token')
+  const token = localStorage.getItem(TOKEN_KEY)
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -21,20 +33,27 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+function isProtectedClientPath(pathname: string) {
+  return PUBLIC_PROTECTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function isAuthRequestUrl(requestUrl: string) {
+  return AUTH_ENDPOINT_FRAGMENTS.some((fragment) => requestUrl.includes(fragment))
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const status = error.response?.status
     const requestUrl = typeof error.config?.url === 'string' ? error.config.url : ''
-    const isAuthRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register')
 
-    if (status === 401 && !isAuthRequest) {
-      localStorage.removeItem('ai-chinese-learning-token')
+    if (status === 401 && !isAuthRequestUrl(requestUrl)) {
+      localStorage.removeItem(TOKEN_KEY)
 
       if (
         typeof window !== 'undefined' &&
         window.location.pathname !== '/login' &&
-        PUBLIC_PROTECTED_PATHS.some((path) => window.location.pathname.startsWith(path))
+        isProtectedClientPath(window.location.pathname)
       ) {
         const redirect = `${window.location.pathname}${window.location.search}`
         window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)

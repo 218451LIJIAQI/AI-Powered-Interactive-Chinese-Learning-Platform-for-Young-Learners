@@ -3,11 +3,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { adminContentService } from '../../services/adminContentService'
 import type { ContentStatus, ContentSubmissionItem, ManagedContentType, PageResponse } from '../../types/contentManagement'
 
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const page = ref<PageResponse<ContentSubmissionItem> | null>(null)
 
@@ -69,13 +71,17 @@ onMounted(() => {
       </div>
 
       <el-table v-loading="loading" :data="items" class="phase-table">
-        <el-table-column prop="contentType" :label="t('content.type')" min-width="120" />
+        <el-table-column :label="t('content.type')" min-width="120">
+          <template #default="{ row }">
+            <el-tag round size="small" type="info">{{ translateEnum('managedContentType', row.contentType) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="title" :label="t('content.fields.title')" min-width="220" />
         <el-table-column :label="t('content.teacher')" min-width="180">
           <template #default="{ row }">{{ row.teacher?.fullName || '-' }}</template>
         </el-table-column>
         <el-table-column :label="t('content.status')" min-width="120">
-          <template #default="{ row }"><el-tag round>{{ row.contentStatus }}</el-tag></template>
+          <template #default="{ row }"><el-tag round>{{ translateEnum('contentStatus', row.contentStatus) }}</el-tag></template>
         </el-table-column>
         <el-table-column width="160">
           <template #default="{ row }">

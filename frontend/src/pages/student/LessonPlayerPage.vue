@@ -5,14 +5,17 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { liveClassService } from '../../services/liveClassService'
 import { studentLearningService } from '../../services/studentLearningService'
 import type { StudentLessonActivitySummary, StudentLessonPlayer } from '../../types/learning'
 import type { LiveClass, RecordedLessonVideo } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -26,9 +29,6 @@ const recordedVideos = computed(() => lesson.value?.recordedVideos ?? [])
 const showLiveSection = computed(() => liveClasses.value.length > 0 || lesson.value?.learningType === 'LIVE' || lesson.value?.learningType === 'HYBRID')
 const showRecordedSection = computed(() => recordedVideos.value.length > 0 || lesson.value?.learningType === 'RECORDED' || lesson.value?.learningType === 'HYBRID')
 
-function formatDateTime(value: string | null) {
-  return value ? new Date(value).toLocaleString('en-MY') : '-'
-}
 
 function statusType(status: string | null) {
   if (status === 'ONGOING') return 'success'
@@ -181,10 +181,12 @@ onMounted(() => {
             <el-table-column :label="t('phase10.startTime')" min-width="180">
               <template #default="{ row }">{{ formatDateTime(row.startTime) }}</template>
             </el-table-column>
-            <el-table-column prop="meetingPlatform" :label="t('phase10.meetingPlatform')" min-width="150" />
+            <el-table-column :label="t('phase10.meetingPlatform')" min-width="150">
+              <template #default="{ row }">{{ row.meetingPlatform ? translateEnum('meetingPlatform', row.meetingPlatform) : '-' }}</template>
+            </el-table-column>
             <el-table-column :label="t('commerce.status')" min-width="140">
               <template #default="{ row }">
-                <el-tag round :type="statusType(row.liveClassStatus)">{{ row.liveClassStatus }}</el-tag>
+                <el-tag round :type="statusType(row.liveClassStatus)">{{ translateEnum('liveClassStatus', row.liveClassStatus) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column width="340">

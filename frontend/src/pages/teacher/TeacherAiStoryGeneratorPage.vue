@@ -4,12 +4,14 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { aiService } from '../../services/aiService'
 import { useAuthStore } from '../../stores/authStore'
 import type { AiStoryGeneratorResponse } from '../../types/ai'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 const loading = ref(false)
@@ -95,7 +97,7 @@ async function generateDraft() {
           <h2>{{ result.title }}</h2>
           <p>{{ t('ai.teacherDraftNotice') }}</p>
         </div>
-        <el-tag round>{{ result.status }}</el-tag>
+        <el-tag round>{{ translateEnum('aiStatus', result.status) }}</el-tag>
       </div>
 
       <div class="stacked-summary-list">

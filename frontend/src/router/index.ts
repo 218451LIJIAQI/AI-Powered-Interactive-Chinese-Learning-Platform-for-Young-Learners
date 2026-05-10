@@ -39,6 +39,7 @@ import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
 import FAQPage from '../pages/public/FAQPage.vue'
 import LandingPage from '../pages/public/LandingPage.vue'
 import LoginPage from '../pages/public/LoginPage.vue'
+import NotFoundPage from '../pages/public/NotFoundPage.vue'
 import PrivacyPage from '../pages/public/PrivacyPage.vue'
 import RegisterPage from '../pages/public/RegisterPage.vue'
 import TeacherPublicProfilePage from '../pages/public/TeacherPublicProfilePage.vue'
@@ -742,6 +743,12 @@ const routes: RouteRecordRaw[] = [
         component: TeacherPublicProfilePage,
         meta: { titleKey: 'nav.teacherPublicProfile' },
       },
+      {
+        path: ':pathMatch(.*)*',
+        name: 'not-found',
+        component: NotFoundPage,
+        meta: { titleKey: 'notFound.title' },
+      },
     ],
   },
   {
@@ -785,11 +792,6 @@ const routes: RouteRecordRaw[] = [
     component: AdminLayout,
     meta: { requiresAuth: true, roles: ['ADMIN'], titleKey: 'nav.adminDashboard' },
     children: adminChildren,
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'not-found',
-    redirect: { name: 'landing' },
   },
 ]
 

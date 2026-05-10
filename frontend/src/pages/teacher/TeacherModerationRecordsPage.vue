@@ -4,11 +4,13 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { moderationService } from '../../services/moderationService'
 import type { ModerationRecordItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const records = ref<ModerationRecordItem[]>([])
 
@@ -38,9 +40,15 @@ onMounted(() => {
 
     <el-card class="dashboard-panel" shadow="hover">
       <el-table v-loading="loading" :data="records" class="phase-table">
-        <el-table-column prop="targetType" :label="t('phase11.moderationTargetType')" min-width="140" />
+        <el-table-column :label="t('phase11.moderationTargetType')" min-width="140">
+          <template #default="{ row }">{{ translateEnum('moderationTargetType', row.targetType) }}</template>
+        </el-table-column>
         <el-table-column prop="targetTitle" :label="t('phase11.moderationTargetTitle')" min-width="220" />
-        <el-table-column prop="actionTaken" :label="t('phase11.moderationAction')" min-width="180" />
+        <el-table-column :label="t('phase11.moderationAction')" min-width="180">
+          <template #default="{ row }">
+            <el-tag round size="small" type="warning">{{ translateEnum('moderationAction', row.actionTaken) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="note" :label="t('phase11.reason')" min-width="320" />
       </el-table>
 

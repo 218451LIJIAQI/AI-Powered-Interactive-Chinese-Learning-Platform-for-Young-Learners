@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsChartCard from '../../components/common/AnalyticsChartCard.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { dashboardService } from '../../services/dashboardService'
 import { useAuthStore } from '../../stores/authStore'
 import type { AdminAnalyticsResponse } from '../../types/analytics'
@@ -18,6 +19,7 @@ import {
 
 const authStore = useAuthStore()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const user = computed(() => authStore.currentUser)
 const dashboard = ref<AdminDashboardSummary | null>(null)
 const analytics = ref<AdminAnalyticsResponse | null>(null)
@@ -304,10 +306,10 @@ onMounted(() => {
             <div v-else class="stacked-summary-list">
               <article v-for="report in dashboard.recentReports" :key="report.reportId" class="summary-row">
                 <div>
-                  <strong>{{ report.targetType }}</strong>
-                  <p>{{ report.status }}</p>
+                  <strong>{{ translateEnum('reportTargetType', report.targetType) }}</strong>
+                  <p>{{ translateEnum('reportStatus', report.status) }}</p>
                 </div>
-                <el-tag round type="warning">{{ report.status }}</el-tag>
+                <el-tag round type="warning">{{ translateEnum('reportStatus', report.status) }}</el-tag>
               </article>
             </div>
           </el-card>
@@ -324,10 +326,10 @@ onMounted(() => {
             <div v-else class="stacked-summary-list">
               <article v-for="log in dashboard.recentAuditLogs" :key="log.auditLogId" class="summary-row">
                 <div>
-                  <strong>{{ log.actionType }}</strong>
+                  <strong>{{ translateEnum('moderationAction', log.actionType) }}</strong>
                   <p>{{ log.description || t('dashboard.activityRecorded') }}</p>
                 </div>
-                <el-tag round>{{ log.targetType || 'SYSTEM' }}</el-tag>
+                <el-tag round>{{ translateEnum('moderationTargetType', log.targetType || 'SYSTEM') }}</el-tag>
               </article>
             </div>
           </el-card>

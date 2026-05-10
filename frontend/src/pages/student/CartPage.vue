@@ -4,10 +4,12 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import type { Cart } from '../../types/commerce'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 
 const loading = ref(true)
 const checkingOut = ref(false)
@@ -68,7 +70,9 @@ onMounted(() => {
         <template v-else>
           <el-table :data="cart?.items ?? []" class="phase-table">
             <el-table-column prop="title" :label="t('commerce.item')" min-width="220" />
-            <el-table-column prop="itemType" :label="t('commerce.itemType')" min-width="120" />
+            <el-table-column :label="t('commerce.itemType')" min-width="120">
+              <template #default="{ row }">{{ translateEnum('managedContentType', row.itemType) }}</template>
+            </el-table-column>
             <el-table-column :label="t('commerce.price')" min-width="120">
               <template #default="{ row }">{{ formatMoney(row.unitPrice) }}</template>
             </el-table-column>

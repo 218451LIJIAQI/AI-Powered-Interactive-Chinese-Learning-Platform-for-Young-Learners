@@ -4,12 +4,14 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { aiService } from '../../services/aiService'
 import { useAuthStore } from '../../stores/authStore'
 import type { AiStoryGeneratorResponse } from '../../types/ai'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const translateEnum = useEnumLabel()
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -82,7 +84,7 @@ async function generateStory() {
           <p class="section-label">{{ t('ai.storyLabel') }}</p>
           <h2>{{ result.title }}</h2>
         </div>
-        <el-tag round>{{ result.status }}</el-tag>
+        <el-tag round>{{ translateEnum('aiStatus', result.status) }}</el-tag>
       </div>
 
       <div class="stacked-summary-list">

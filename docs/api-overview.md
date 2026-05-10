@@ -32,6 +32,7 @@ Authorization: Bearer <jwt-token>
 - `GET /api/v1/public/courses`
 - `GET /api/v1/public/courses/{id}`
 - `GET /api/v1/public/reviews`
+- `GET /api/v1/subscription-plans`
 
 ## Authentication APIs
 - `POST /api/v1/auth/register/student`

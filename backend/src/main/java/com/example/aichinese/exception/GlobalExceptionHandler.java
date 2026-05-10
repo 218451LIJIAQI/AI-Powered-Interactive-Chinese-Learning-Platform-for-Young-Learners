@@ -1,7 +1,6 @@
 package com.example.aichinese.exception;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,11 +13,15 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.example.aichinese.dto.ApiResponse;
+
+import jakarta.validation.ConstraintViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -32,7 +35,7 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .stream()
                 .map(this::formatFieldError)
-                .collect(Collectors.toList());
+                .toList();
         ApiResponse<Void> response = ApiResponse.failure("Validation failed", errors);
         return ResponseEntity.badRequest().body(response);
     }
@@ -61,6 +64,43 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException exception) {
         ApiResponse<Void> response = ApiResponse.failure(exception.getMessage(), List.of(exception.getMessage()));
         return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
+            ConstraintViolationException exception) {
+        List<String> errors = exception.getConstraintViolations()
+                .stream()
+                .map(violation -> {
+                    String path = violation.getPropertyPath() == null
+                            ? ""
+                            : violation.getPropertyPath().toString();
+                    return path.isBlank()
+                            ? violation.getMessage()
+                            : path + ": " + violation.getMessage();
+                })
+                .toList();
+        ApiResponse<Void> response = ApiResponse.failure("Validation failed", errors);
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatchException(
+            MethodArgumentTypeMismatchException exception) {
+        String parameterName = exception.getName() == null ? "parameter" : exception.getName();
+        String message = "Invalid value for parameter '" + parameterName + "'.";
+        ApiResponse<Void> response = ApiResponse.failure(message, List.of(message));
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(NoResourceFoundException exception) {
+        String resource = exception.getResourcePath() == null || exception.getResourcePath().isBlank()
+                ? "Requested resource"
+                : "Resource '" + exception.getResourcePath() + "'";
+        String message = resource + " was not found.";
+        ApiResponse<Void> response = ApiResponse.failure(message, List.of(message));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
     @ExceptionHandler({ AccessDeniedException.class, AuthorizationDeniedException.class })

@@ -2,10 +2,13 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { adminTeacherService } from '../../services/adminTeacherService'
 import type { AdminTeacherListItem } from '../../types/adminManagement'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const items = ref<AdminTeacherListItem[]>([])
 
@@ -46,13 +49,15 @@ onMounted(() => {
       <el-table v-loading="loading" :data="items" class="phase-table">
         <el-table-column prop="fullName" :label="t('auth.fields.fullName')" min-width="180" />
         <el-table-column prop="email" :label="t('auth.fields.email')" min-width="220" />
-        <el-table-column prop="teacherStatus" :label="t('dashboard.teacherStatus')" width="140">
+        <el-table-column :label="t('dashboard.teacherStatus')" width="140">
           <template #default="{ row }">
-            <el-tag type="warning" round>{{ row.teacherStatus }}</el-tag>
+            <el-tag type="warning" round>{{ translateEnum('teacherStatus', row.teacherStatus) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="verificationDocumentCount" :label="t('teacherVerification.documentCount')" width="140" />
-        <el-table-column prop="latestSubmissionTime" :label="t('teacherVerification.latestSubmission')" min-width="180" />
+        <el-table-column :label="t('teacherVerification.latestSubmission')" min-width="180">
+          <template #default="{ row }">{{ formatDateTime(row.latestSubmissionTime) }}</template>
+        </el-table-column>
         <el-table-column width="140">
           <template #default="{ row }">
             <router-link :to="{ name: 'admin-teacher-approval-detail', params: { id: row.teacherId } }">

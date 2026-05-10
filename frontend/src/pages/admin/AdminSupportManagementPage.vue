@@ -5,12 +5,14 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { supportTicketService } from '../../services/supportTicketService'
 import type { SupportTicketItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const tickets = ref<SupportTicketItem[]>([])
 
@@ -42,8 +44,16 @@ onMounted(() => {
       <el-table v-loading="loading" :data="tickets" class="phase-table">
         <el-table-column prop="subject" :label="t('phase11.ticketSubject')" min-width="220" />
         <el-table-column prop="requesterName" :label="t('phase11.ticketRequester')" min-width="180" />
-        <el-table-column prop="status" :label="t('phase11.ticketStatus')" min-width="160" />
-        <el-table-column prop="priority" :label="t('phase11.ticketPriority')" min-width="140" />
+        <el-table-column :label="t('phase11.ticketStatus')" min-width="160">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('ticketStatus', row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('phase11.ticketPriority')" min-width="140">
+          <template #default="{ row }">
+            <el-tag round size="small" type="info">{{ translateEnum('ticketPriority', row.priority) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column width="160">
           <template #default="{ row }">
             <el-button plain type="primary" @click="router.push(`/admin/support-tickets/${row.id}`)">

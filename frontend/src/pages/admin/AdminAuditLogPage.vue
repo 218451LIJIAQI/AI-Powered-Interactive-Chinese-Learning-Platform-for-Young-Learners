@@ -4,11 +4,14 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { auditLogService } from '../../services/auditLogService'
 import type { AuditLogItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const logs = ref<AuditLogItem[]>([])
 const filters = reactive({
@@ -17,9 +20,6 @@ const filters = reactive({
   actor: '',
 })
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('en-MY')
-}
 
 async function loadLogs() {
   loading.value = true
@@ -54,8 +54,12 @@ onMounted(() => {
       </div>
 
       <el-table v-loading="loading" :data="logs" class="phase-table">
-        <el-table-column prop="actionType" :label="t('phase11.actionType')" min-width="180" />
-        <el-table-column prop="targetType" :label="t('phase11.moderationTargetType')" min-width="160" />
+        <el-table-column :label="t('phase11.actionType')" min-width="180">
+          <template #default="{ row }">{{ translateEnum('moderationAction', row.actionType) }}</template>
+        </el-table-column>
+        <el-table-column :label="t('phase11.moderationTargetType')" min-width="160">
+          <template #default="{ row }">{{ translateEnum('moderationTargetType', row.targetType) }}</template>
+        </el-table-column>
         <el-table-column prop="targetId" :label="t('phase11.targetId')" min-width="120" />
         <el-table-column prop="actorEmail" :label="t('phase11.actor')" min-width="220" />
         <el-table-column prop="description" :label="t('phase11.description')" min-width="320" />

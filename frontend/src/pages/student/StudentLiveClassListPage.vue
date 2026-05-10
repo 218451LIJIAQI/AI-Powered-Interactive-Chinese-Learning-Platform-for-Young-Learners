@@ -4,17 +4,16 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { liveClassService } from '../../services/liveClassService'
 import type { LiveClass } from '../../types/liveLearning'
+import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const items = ref<LiveClass[]>([])
 
-function formatDateTime(value: string | null) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString('en-MY')
-}
 
 function statusType(status: string | null) {
   if (status === 'ONGOING') return 'success'
@@ -80,7 +79,7 @@ onMounted(() => {
       <el-table v-loading="loading" :data="items" class="phase-table">
         <el-table-column prop="title" :label="t('phase10.liveClasses')" min-width="220" />
         <el-table-column :label="t('phase10.meetingPlatform')" min-width="140">
-          <template #default="{ row }">{{ row.meetingPlatform || '-' }}</template>
+          <template #default="{ row }">{{ row.meetingPlatform ? translateEnum('meetingPlatform', row.meetingPlatform) : '-' }}</template>
         </el-table-column>
         <el-table-column :label="t('phase10.startTime')" min-width="180">
           <template #default="{ row }">{{ formatDateTime(row.startTime) }}</template>
@@ -90,7 +89,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column :label="t('commerce.status')" min-width="140">
           <template #default="{ row }">
-            <el-tag round :type="statusType(row.liveClassStatus)">{{ row.liveClassStatus }}</el-tag>
+            <el-tag round :type="statusType(row.liveClassStatus)">{{ translateEnum('liveClassStatus', row.liveClassStatus) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('phase10.enrolment')" min-width="120">

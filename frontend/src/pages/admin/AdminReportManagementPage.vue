@@ -5,12 +5,14 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { reportService } from '../../services/reportService'
 import type { ReportItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const loading = ref(true)
 const reports = ref<ReportItem[]>([])
 
@@ -40,11 +42,22 @@ onMounted(() => {
 
     <el-card class="dashboard-panel" shadow="hover">
       <el-table v-loading="loading" :data="reports" class="phase-table">
-        <el-table-column prop="targetType" :label="t('phase11.reportTargetType')" min-width="140" />
+        <el-table-column :label="t('phase11.reportTargetType')" min-width="140">
+          <template #default="{ row }">{{ translateEnum('reportTargetType', row.targetType) }}</template>
+        </el-table-column>
         <el-table-column prop="targetTitle" :label="t('phase11.reportTargetTitle')" min-width="220" />
         <el-table-column prop="reporterName" :label="t('phase11.reporter')" min-width="180" />
-        <el-table-column prop="reportStatus" :label="t('commerce.status')" min-width="160" />
-        <el-table-column prop="teacherRevisionRequested" :label="t('phase11.requestRevision')" min-width="160" />
+        <el-table-column :label="t('commerce.status')" min-width="160">
+          <template #default="{ row }">
+            <el-tag round size="small">{{ translateEnum('reportStatus', row.reportStatus) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('phase11.requestRevision')" min-width="160">
+          <template #default="{ row }">
+            <el-tag v-if="row.teacherRevisionRequested" round size="small" type="warning">{{ t('common.yes') }}</el-tag>
+            <el-tag v-else round size="small" type="info">{{ t('common.no') }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column width="160">
           <template #default="{ row }">
             <el-button plain type="primary" @click="router.push(`/admin/reports/${row.id}`)">

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsChartCard from '../../components/common/AnalyticsChartCard.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { dashboardService } from '../../services/dashboardService'
 import { useAuthStore } from '../../stores/authStore'
 import type { TeacherAnalyticsResponse } from '../../types/analytics'
@@ -22,6 +23,7 @@ import {
 const authStore = useAuthStore()
 const router = useRouter()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 
 const user = computed(() => authStore.currentUser)
 const teacherStatus = computed(() => authStore.teacherStatus)
@@ -402,7 +404,7 @@ onMounted(() => {
                   <strong>{{ notification.title }}</strong>
                   <p>{{ notification.message }}</p>
                 </div>
-                <el-tag round>{{ notification.status }}</el-tag>
+                <el-tag round>{{ translateEnum('notification.status', notification.status) }}</el-tag>
               </article>
             </div>
           </el-card>

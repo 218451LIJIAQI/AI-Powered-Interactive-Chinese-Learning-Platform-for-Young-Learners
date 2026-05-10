@@ -76,7 +76,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/teachers/**").hasRole("TEACHER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .anyRequest().permitAll())
+                        // Default-deny: any future endpoint that is not explicitly listed
+                        // above must be authenticated. This prevents accidentally exposing
+                        // a newly-added route as public when the developer forgets to
+                        // configure an explicit rule.
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

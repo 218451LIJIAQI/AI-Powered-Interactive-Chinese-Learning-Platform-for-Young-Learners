@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsChartCard from '../../components/common/AnalyticsChartCard.vue'
+import { useEnumLabel } from '../../composables/useEnumLabel'
 import { dashboardService } from '../../services/dashboardService'
 import { useAuthStore } from '../../stores/authStore'
 import type { StudentAnalyticsResponse } from '../../types/analytics'
@@ -18,6 +19,7 @@ import {
 
 const authStore = useAuthStore()
 const { t } = useI18n()
+const translateEnum = useEnumLabel()
 const user = computed(() => authStore.currentUser)
 
 const loading = ref(true)
@@ -420,7 +422,7 @@ onMounted(() => {
             <div v-else class="stacked-summary-list">
               <article v-for="item in dashboard.savedItems" :key="item.savedItemId" class="summary-row">
                 <div>
-                  <strong>{{ item.itemType }}</strong>
+                  <strong>{{ translateEnum('notification.savedItem', item.itemType) }}</strong>
                   <p>{{ item.note || t('dashboard.savedItemReady') }}</p>
                 </div>
                 <el-tag round>{{ t('dashboard.saved') }}</el-tag>
@@ -451,7 +453,7 @@ onMounted(() => {
                   <p>{{ notification.message }}</p>
                 </div>
                 <el-tag round :type="notification.status === 'UNREAD' ? 'danger' : 'info'">
-                  {{ notification.status }}
+                  {{ translateEnum('notification.status', notification.status) }}
                 </el-tag>
               </article>
             </div>

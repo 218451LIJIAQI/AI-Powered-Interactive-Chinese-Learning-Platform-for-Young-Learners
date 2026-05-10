@@ -40,8 +40,11 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
   security:
     jwt:
+      # JWT_SECRET must be supplied via environment variable; the default is empty so the
+      # SecurityProperties @NotBlank validation fails fast at startup if it is not set.
       secret: ${JWT_SECRET:}
-      expiration: ${JWT_EXPIRATION:0}
+      # Default token lifetime is one hour. Override via the JWT_EXPIRATION env variable.
+      expiration: ${JWT_EXPIRATION:3600000}
   upload:
     directory: ${UPLOAD_DIR:./uploads}
     max-file-size: ${MAX_FILE_SIZE:5MB}
