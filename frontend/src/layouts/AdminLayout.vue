@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import AppShell from '../components/common/AppShell.vue'
 import { useNotificationUnreadCount } from '../composables/useNotificationUnreadCount'
 
 const { unreadCount } = useNotificationUnreadCount(true)
+const { t } = useI18n()
 
 const navItems = computed(() => [
   { key: 'admin-dashboard', labelKey: 'nav.adminDashboard', routeName: 'admin-dashboard', icon: 'House' },
@@ -85,8 +87,8 @@ const navItems = computed(() => [
 <template>
   <AppShell
     variant="admin"
-    title="Admin Control Center"
-    subtitle="Track platform health, live learning schedules, approvals, and operational signals from a dashboard-ready workspace."
+    :title="t('shell.adminTitle')"
+    :subtitle="t('shell.adminSubtitle')"
     :nav-items="navItems"
   />
 </template>

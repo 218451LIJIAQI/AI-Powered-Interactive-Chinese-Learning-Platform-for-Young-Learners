@@ -8,16 +8,16 @@ const { t } = useI18n()
 
 const featureCards = [
   {
-    title: 'AI Tutor',
-    description: 'Friendly AI tutoring, vocabulary help, and sentence guidance are central to the learning experience.',
+    title: t('landing.featureAiTutorTitle'),
+    description: t('landing.featureAiTutorDescription'),
   },
   {
-    title: 'Interactive Practice',
-    description: 'Flashcards, quizzes, tracing, matching games, and listening activities support playful repetition.',
+    title: t('landing.featurePracticeTitle'),
+    description: t('landing.featurePracticeDescription'),
   },
   {
-    title: 'Teacher-led Learning',
-    description: 'Teacher-created live, recorded, and hybrid lessons will fit into a moderated learning platform.',
+    title: t('landing.featureTeacherTitle'),
+    description: t('landing.featureTeacherDescription'),
   },
 ]
 </script>
@@ -58,9 +58,9 @@ const featureCards = [
     </section>
 
     <section class="placeholder-grid">
-      <PlaceholderCard title="Gamified rewards" description="Points, badges, levels, and daily streaks will keep progress encouraging and child-friendly." />
-      <PlaceholderCard title="Teacher dashboards" description="Teachers will manage future lessons, student progress, and AI-assisted content tools from dedicated workspaces." />
-      <PlaceholderCard title="Admin oversight" description="Admins will review approvals, safety signals, AI usage, and operational health with protected controls." />
+      <PlaceholderCard :title="t('landing.rewardFeatureTitle')" :description="t('landing.rewardFeatureDescription')" />
+      <PlaceholderCard :title="t('landing.teacherFeatureTitle')" :description="t('landing.teacherFeatureDescription')" />
+      <PlaceholderCard :title="t('landing.adminFeatureTitle')" :description="t('landing.adminFeatureDescription')" />
     </section>
   </div>
 </template>

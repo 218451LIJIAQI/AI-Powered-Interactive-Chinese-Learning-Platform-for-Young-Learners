@@ -2,9 +2,19 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AnalyticsChartCard from '../../components/common/AnalyticsChartCard.vue'
 import { dashboardService } from '../../services/dashboardService'
 import { useAuthStore } from '../../stores/authStore'
+import type { StudentAnalyticsResponse } from '../../types/analytics'
 import type { StudentDashboardSummary } from '../../types/dashboard'
+import {
+  buildDonutChartOption,
+  buildLineChartOption,
+  hasBreakdownData,
+  hasTrendData,
+  normalizeBreakdown,
+  translateAnalyticsKey,
+} from '../../utils/analytics'
 
 const authStore = useAuthStore()
 const { t } = useI18n()
@@ -12,18 +22,40 @@ const user = computed(() => authStore.currentUser)
 
 const loading = ref(true)
 const dashboard = ref<StudentDashboardSummary | null>(null)
+const analytics = ref<StudentAnalyticsResponse | null>(null)
+const analyticsError = ref('')
 
 const quickActions = computed(() => [
-  { title: 'Lessons', description: 'Jump into published lessons and playful practice.', icon: 'Reading', routeName: 'student-lessons' },
+  {
+    title: t('dashboard.quickActionLessons'),
+    description: t('dashboard.quickActionLessonsDesc'),
+    icon: 'Reading',
+    routeName: 'student-lessons',
+  },
   {
     title: t('nav.aiTutor'),
     description: t('ai.quickTutorDescription'),
     icon: 'ChatDotRound',
     routeName: 'student-ai-tutor',
   },
-  { title: 'Flashcards', description: 'Review words with visual cards and pinyin hints.', icon: 'Files', routeName: 'student-lessons' },
-  { title: 'Wrong Answers', description: 'Review mistakes and try again with confidence.', icon: 'DocumentDelete', routeName: 'student-wrong-answers' },
-  { title: 'Rewards', description: 'See your points, badges, and daily streak.', icon: 'TrophyBase', routeName: 'student-rewards' },
+  {
+    title: t('dashboard.quickActionFlashcards'),
+    description: t('dashboard.quickActionFlashcardsDesc'),
+    icon: 'Files',
+    routeName: 'student-lessons',
+  },
+  {
+    title: t('dashboard.quickActionWrongAnswers'),
+    description: t('dashboard.quickActionWrongAnswersDesc'),
+    icon: 'DocumentDelete',
+    routeName: 'student-wrong-answers',
+  },
+  {
+    title: t('dashboard.quickActionRewards'),
+    description: t('dashboard.quickActionRewardsDesc'),
+    icon: 'TrophyBase',
+    routeName: 'student-rewards',
+  },
 ])
 
 const statCards = computed(() => [
@@ -34,11 +66,99 @@ const statCards = computed(() => [
   { label: t('dashboard.badges'), value: dashboard.value?.badgeCount ?? 0, accent: 'plum' },
 ])
 
+const studentOverviewCards = computed(() => [
+  {
+    label: t('analytics.cards.completedLessons'),
+    value: analytics.value?.overview.completedLessons ?? 0,
+    accent: 'sun',
+  },
+  {
+    label: t('analytics.cards.averageQuizScore'),
+    value: `${analytics.value?.overview.averageQuizScore ?? 0}%`,
+    accent: 'sea',
+  },
+  {
+    label: t('analytics.cards.completedVideos'),
+    value: analytics.value?.overview.completedVideos ?? 0,
+    accent: 'berry',
+  },
+  {
+    label: t('analytics.cards.upcomingLiveClasses'),
+    value: analytics.value?.overview.upcomingLiveClasses ?? 0,
+    accent: 'lime',
+  },
+  {
+    label: t('analytics.cards.unreadNotifications'),
+    value: analytics.value?.overview.unreadNotifications ?? 0,
+    accent: 'plum',
+  },
+])
+
+const lessonBreakdown = computed(() =>
+  normalizeBreakdown(analytics.value?.lessonStatusBreakdown ?? [], ['COMPLETED', 'IN_PROGRESS']),
+)
+
+const learningModeBreakdown = computed(() =>
+  normalizeBreakdown(analytics.value?.learningModeBreakdown ?? [], ['LIVE', 'RECORDED', 'HYBRID']),
+)
+
+const quizTrendOption = computed(() =>
+  buildLineChartOption(analytics.value?.quizScoreTrend ?? [], t, {
+    color: '#3bb3c3',
+    seriesName: t('analytics.charts.quizScoreTrend'),
+    valueSuffix: '%',
+    decimals: 0,
+    area: true,
+  }),
+)
+
+const activityTrendOption = computed(() =>
+  buildLineChartOption(analytics.value?.activityTrend ?? [], t, {
+    color: '#ff8f42',
+    seriesName: t('analytics.charts.activityTrend'),
+    decimals: 0,
+    area: true,
+  }),
+)
+
+const lessonBreakdownOption = computed(() =>
+  buildDonutChartOption(lessonBreakdown.value, t, {
+    centerLabel: t('analytics.charts.lessonStatusBreakdown'),
+  }),
+)
+
+const learningModeOption = computed(() =>
+  buildDonutChartOption(learningModeBreakdown.value, t, {
+    centerLabel: t('analytics.charts.learningModeBreakdown'),
+  }),
+)
+
+const quizTrendEmpty = computed(() => !hasTrendData(analytics.value?.quizScoreTrend ?? []))
+const activityTrendEmpty = computed(() => !hasTrendData(analytics.value?.activityTrend ?? []))
+const lessonBreakdownEmpty = computed(() => !hasBreakdownData(lessonBreakdown.value))
+const learningModeEmpty = computed(() => !hasBreakdownData(learningModeBreakdown.value))
+
+const weakAreasList = computed(() =>
+  (analytics.value?.weakAreaBreakdown ?? []).map((item) => ({
+    label: translateAnalyticsKey(item.key, t),
+    value: item.value,
+  })),
+)
+
 async function loadDashboard() {
   loading.value = true
+  analyticsError.value = ''
 
   try {
-    dashboard.value = await dashboardService.getStudentDashboard()
+    const [dashboardResponse, analyticsResponse] = await Promise.all([
+      dashboardService.getStudentDashboard(),
+      dashboardService.getStudentAnalytics().catch((error) => {
+        analyticsError.value = error instanceof Error ? error.message : t('analytics.loadFailed')
+        return null
+      }),
+    ])
+    dashboard.value = dashboardResponse
+    analytics.value = analyticsResponse
   } finally {
     loading.value = false
   }
@@ -83,6 +203,19 @@ onMounted(() => {
         <section class="student-stat-grid">
           <el-card
             v-for="card in statCards"
+            :key="card.label"
+            class="metric-card metric-card--student"
+            :class="`metric-card--${card.accent}`"
+            shadow="hover"
+          >
+            <p>{{ card.label }}</p>
+            <strong>{{ card.value }}</strong>
+          </el-card>
+        </section>
+
+        <section class="student-stat-grid">
+          <el-card
+            v-for="card in studentOverviewCards"
             :key="card.label"
             class="metric-card metric-card--student"
             :class="`metric-card--${card.accent}`"
@@ -164,6 +297,48 @@ onMounted(() => {
         </section>
 
         <section class="dashboard-grid">
+          <AnalyticsChartCard
+            :title="t('analytics.charts.quizScoreTrend')"
+            :subtitle="t('analytics.studentQuizTrendDescription')"
+            :option="quizTrendOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="quizTrendEmpty"
+            :empty-description="t('analytics.emptyTrend')"
+          />
+
+          <AnalyticsChartCard
+            :title="t('analytics.charts.activityTrend')"
+            :subtitle="t('analytics.studentActivityDescription')"
+            :option="activityTrendOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="activityTrendEmpty"
+            :empty-description="t('analytics.emptyActivity')"
+          />
+
+          <AnalyticsChartCard
+            :title="t('analytics.charts.lessonStatusBreakdown')"
+            :subtitle="t('analytics.studentLessonStatusDescription')"
+            :option="lessonBreakdownOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="lessonBreakdownEmpty"
+            :empty-description="t('analytics.emptyBreakdown')"
+          />
+
+          <AnalyticsChartCard
+            :title="t('analytics.charts.learningModeBreakdown')"
+            :subtitle="t('analytics.studentLearningModeDescription')"
+            :option="learningModeOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="learningModeEmpty"
+            :empty-description="t('analytics.emptyBreakdown')"
+          />
+        </section>
+
+        <section class="dashboard-grid">
           <el-card class="dashboard-panel" shadow="hover">
             <div class="panel-header">
               <div>
@@ -195,7 +370,16 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-if="dashboard?.weakAreas.length" class="tag-list">
+            <div v-if="weakAreasList.length" class="stacked-summary-list">
+              <article v-for="area in weakAreasList" :key="area.label" class="summary-row">
+                <div>
+                  <strong>{{ area.label }}</strong>
+                  <p>{{ t('analytics.weakAreaItemDescription') }}</p>
+                </div>
+                <el-tag round type="warning">{{ area.value }}</el-tag>
+              </article>
+            </div>
+            <div v-else-if="dashboard?.weakAreas.length" class="tag-list">
               <el-tag v-for="area in dashboard.weakAreas" :key="area" round type="warning">{{ area }}</el-tag>
             </div>
             <el-empty v-else :description="t('dashboard.noWeakAreas')" />

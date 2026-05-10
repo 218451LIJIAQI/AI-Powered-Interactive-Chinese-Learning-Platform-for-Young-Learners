@@ -15,8 +15,8 @@ const currentLocale = computed({
 
 <template>
   <el-select v-model="currentLocale" size="small" class="toolbar-select" :aria-label="t('common.language')">
-    <el-option label="English" value="en" />
-    <el-option label="Bahasa Melayu" value="ms" />
-    <el-option label="中文" value="zh" />
+    <el-option :label="t('ai.languages.en')" value="en" />
+    <el-option :label="t('ai.languages.ms')" value="ms" />
+    <el-option :label="t('ai.languages.zh')" value="zh" />
   </el-select>
 </template>

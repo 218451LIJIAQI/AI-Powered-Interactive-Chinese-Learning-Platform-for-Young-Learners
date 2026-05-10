@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import AppShell from '../components/common/AppShell.vue'
 import { useNotificationUnreadCount } from '../composables/useNotificationUnreadCount'
@@ -7,6 +8,7 @@ import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
 const { unreadCount } = useNotificationUnreadCount(true)
+const { t } = useI18n()
 
 const isLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 
@@ -33,7 +35,7 @@ const navItems = computed(() => [
     routeName: 'teacher-live-classes',
     icon: 'VideoCamera',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-schedule',
@@ -41,7 +43,7 @@ const navItems = computed(() => [
     routeName: 'teacher-schedule',
     icon: 'Calendar',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-recorded-lessons',
@@ -49,7 +51,7 @@ const navItems = computed(() => [
     routeName: 'teacher-recorded-lessons',
     icon: 'Film',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   { key: 'notifications', labelKey: 'nav.notifications', routeName: 'notifications', icon: 'Bell', badgeCount: unreadCount.value },
   { key: 'support-tickets', labelKey: 'nav.supportTickets', routeName: 'support-tickets', icon: 'Service' },
@@ -59,7 +61,7 @@ const navItems = computed(() => [
     routeName: 'teacher-reviews',
     icon: 'ChatDotRound',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-feedback',
@@ -67,7 +69,7 @@ const navItems = computed(() => [
     routeName: 'teacher-feedback',
     icon: 'Memo',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-reports',
@@ -75,7 +77,7 @@ const navItems = computed(() => [
     routeName: 'teacher-reports',
     icon: 'Warning',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-moderation-records',
@@ -83,7 +85,7 @@ const navItems = computed(() => [
     routeName: 'teacher-moderation-records',
     icon: 'Finished',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-modules',
@@ -91,7 +93,7 @@ const navItems = computed(() => [
     routeName: 'teacher-modules',
     icon: 'Collection',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-lessons',
@@ -99,7 +101,7 @@ const navItems = computed(() => [
     routeName: 'teacher-lessons',
     icon: 'Notebook',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-packages',
@@ -107,7 +109,7 @@ const navItems = computed(() => [
     routeName: 'teacher-packages',
     icon: 'Tickets',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-quizzes',
@@ -115,7 +117,7 @@ const navItems = computed(() => [
     routeName: 'teacher-quizzes',
     icon: 'DocumentChecked',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-flashcards',
@@ -123,7 +125,7 @@ const navItems = computed(() => [
     routeName: 'teacher-flashcards',
     icon: 'Files',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-matching-games',
@@ -131,7 +133,7 @@ const navItems = computed(() => [
     routeName: 'teacher-matching-games',
     icon: 'Connection',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-listening-exercises',
@@ -139,7 +141,7 @@ const navItems = computed(() => [
     routeName: 'teacher-listening-exercises',
     icon: 'Headset',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-tracing-exercises',
@@ -147,7 +149,7 @@ const navItems = computed(() => [
     routeName: 'teacher-tracing-exercises',
     icon: 'EditPen',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   { key: 'teacher-quiz-results', labelKey: 'nav.quizResults', routeName: 'teacher-quiz-results', icon: 'Histogram' },
   {
@@ -156,7 +158,7 @@ const navItems = computed(() => [
     routeName: 'teacher-ai-assistant',
     icon: 'ChatLineRound',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-ai-vocabulary',
@@ -164,7 +166,7 @@ const navItems = computed(() => [
     routeName: 'teacher-ai-vocabulary',
     icon: 'CollectionTag',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-ai-quiz-generator',
@@ -172,7 +174,7 @@ const navItems = computed(() => [
     routeName: 'teacher-ai-quiz-generator',
     icon: 'MagicStick',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
   {
     key: 'teacher-ai-story-generator',
@@ -180,16 +182,17 @@ const navItems = computed(() => [
     routeName: 'teacher-ai-story-generator',
     icon: 'Notebook',
     disabled: isLocked.value,
-    chip: isLocked.value ? 'Locked' : undefined,
+    chip: isLocked.value ? t('shell.lockedChip') : undefined,
   },
 ])
 
-const subtitle = computed(() => {
-  const status = authStore.teacherStatus ?? 'PENDING'
-  return `Manage your teaching workspace, schedule live lessons, prepare recorded materials, and track approval status. Current status: ${status}.`
-})
+const subtitle = computed(() =>
+  t('shell.teacherSubtitle', {
+    status: authStore.teacherStatus ?? 'PENDING',
+  }),
+)
 </script>
 
 <template>
-  <AppShell variant="teacher" title="Teacher Workspace" :subtitle="subtitle" :nav-items="navItems" />
+  <AppShell variant="teacher" :title="t('shell.teacherTitle')" :subtitle="subtitle" :nav-items="navItems" />
 </template>

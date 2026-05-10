@@ -2,30 +2,93 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AnalyticsChartCard from '../../components/common/AnalyticsChartCard.vue'
 import { dashboardService } from '../../services/dashboardService'
 import { useAuthStore } from '../../stores/authStore'
+import type { AdminAnalyticsResponse } from '../../types/analytics'
 import type { AdminDashboardSummary } from '../../types/dashboard'
+import {
+  buildBarChartOption,
+  buildDonutChartOption,
+  currency,
+  hasBreakdownData,
+  hasTrendData,
+  normalizeBreakdown,
+} from '../../utils/analytics'
 
 const authStore = useAuthStore()
 const { t } = useI18n()
 const user = computed(() => authStore.currentUser)
 const dashboard = ref<AdminDashboardSummary | null>(null)
+const analytics = ref<AdminAnalyticsResponse | null>(null)
 const loading = ref(true)
+const analyticsError = ref('')
 
 const summaryCards = computed(() => [
-  { label: t('dashboard.totalStudents'), value: dashboard.value?.totalStudents ?? 0 },
-  { label: t('dashboard.totalTeachers'), value: dashboard.value?.totalTeachers ?? 0 },
-  { label: t('dashboard.pendingTeacherApprovals'), value: dashboard.value?.pendingTeacherApprovals ?? 0 },
-  { label: t('dashboard.totalModules'), value: dashboard.value?.totalModules ?? 0 },
-  { label: t('dashboard.totalLessons'), value: dashboard.value?.totalLessons ?? 0 },
-  { label: t('dashboard.totalQuizzesGames'), value: (dashboard.value?.totalQuizzes ?? 0) + (dashboard.value?.totalGames ?? 0) },
+  { label: t('analytics.cards.totalStudents'), value: analytics.value?.overview.totalStudents ?? dashboard.value?.totalStudents ?? 0 },
+  { label: t('analytics.cards.totalTeachers'), value: analytics.value?.overview.totalTeachers ?? dashboard.value?.totalTeachers ?? 0 },
+  { label: t('analytics.cards.pendingTeacherApprovals'), value: analytics.value?.overview.pendingTeacherApprovals ?? dashboard.value?.pendingTeacherApprovals ?? 0 },
+  { label: t('analytics.cards.publishedContentItems'), value: analytics.value?.overview.publishedContentItems ?? (dashboard.value?.totalModules ?? 0) + (dashboard.value?.totalLessons ?? 0) },
+  { label: t('analytics.cards.totalRevenue'), value: currency(analytics.value?.overview.totalRevenue ?? dashboard.value?.paymentRevenueSummary.totalRevenue ?? 0) },
+  { label: t('analytics.cards.aiRequests'), value: analytics.value?.overview.aiRequests ?? dashboard.value?.aiUsageSummary.totalRequests ?? 0 },
 ])
+
+const userRegistrationTrendOption = computed(() =>
+  buildBarChartOption(analytics.value?.userRegistrationTrend ?? [], t, {
+    color: '#22c55e',
+    seriesName: t('analytics.charts.userRegistrationTrend'),
+  }),
+)
+
+const teacherApprovalBreakdown = computed(() =>
+  normalizeBreakdown(analytics.value?.teacherApprovalBreakdown ?? [], ['PENDING', 'APPROVED', 'REJECTED']),
+)
+
+const paymentStatusBreakdown = computed(() =>
+  normalizeBreakdown(analytics.value?.paymentStatusBreakdown ?? [], ['PENDING', 'PAID', 'FAILED', 'CANCELLED', 'REFUNDED']),
+)
+
+const supportTicketStatusBreakdown = computed(() =>
+  normalizeBreakdown(analytics.value?.supportTicketStatusBreakdown ?? [], ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']),
+)
+
+const teacherApprovalOption = computed(() =>
+  buildDonutChartOption(teacherApprovalBreakdown.value, t, {
+    centerLabel: t('analytics.charts.teacherApprovalBreakdown'),
+  }),
+)
+
+const paymentStatusOption = computed(() =>
+  buildDonutChartOption(paymentStatusBreakdown.value, t, {
+    centerLabel: t('analytics.charts.paymentStatusBreakdown'),
+  }),
+)
+
+const supportTicketOption = computed(() =>
+  buildDonutChartOption(supportTicketStatusBreakdown.value, t, {
+    centerLabel: t('analytics.charts.supportTicketStatusBreakdown'),
+  }),
+)
+
+const userRegistrationEmpty = computed(() => !hasTrendData(analytics.value?.userRegistrationTrend ?? []))
+const teacherApprovalEmpty = computed(() => !hasBreakdownData(teacherApprovalBreakdown.value))
+const paymentStatusEmpty = computed(() => !hasBreakdownData(paymentStatusBreakdown.value))
+const supportTicketEmpty = computed(() => !hasBreakdownData(supportTicketStatusBreakdown.value))
 
 async function loadDashboard() {
   loading.value = true
+  analyticsError.value = ''
 
   try {
-    dashboard.value = await dashboardService.getAdminDashboard()
+    const [dashboardResponse, analyticsResponse] = await Promise.all([
+      dashboardService.getAdminDashboard(),
+      dashboardService.getAdminAnalytics().catch((error) => {
+        analyticsError.value = error instanceof Error ? error.message : t('analytics.loadFailed')
+        return null
+      }),
+    ])
+    dashboard.value = dashboardResponse
+    analytics.value = analyticsResponse
   } finally {
     loading.value = false
   }
@@ -51,11 +114,11 @@ onMounted(() => {
             <div class="dashboard-hero__aside">
               <div class="dashboard-bubble">
                 <span class="dashboard-bubble__label">{{ t('dashboard.paymentRevenueSummary') }}</span>
-                <strong>RM {{ (dashboard?.paymentRevenueSummary.totalRevenue ?? 0).toFixed(2) }}</strong>
+                <strong>{{ currency(analytics?.overview.totalRevenue ?? dashboard?.paymentRevenueSummary.totalRevenue ?? 0) }}</strong>
               </div>
               <div class="dashboard-bubble">
                 <span class="dashboard-bubble__label">{{ t('dashboard.aiUsageSummary') }}</span>
-                <strong>{{ dashboard?.aiUsageSummary.totalRequests ?? 0 }}</strong>
+                <strong>{{ analytics?.overview.aiRequests ?? dashboard?.aiUsageSummary.totalRequests ?? 0 }}</strong>
               </div>
             </div>
           </div>
@@ -140,6 +203,48 @@ onMounted(() => {
         </section>
 
         <section class="dashboard-grid">
+          <AnalyticsChartCard
+            :title="t('analytics.charts.userRegistrationTrend')"
+            :subtitle="t('analytics.adminUserRegistrationDescription')"
+            :option="userRegistrationTrendOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="userRegistrationEmpty"
+            :empty-description="t('analytics.emptyTrend')"
+          />
+
+          <AnalyticsChartCard
+            :title="t('analytics.charts.teacherApprovalBreakdown')"
+            :subtitle="t('analytics.adminTeacherApprovalDescription')"
+            :option="teacherApprovalOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="teacherApprovalEmpty"
+            :empty-description="t('analytics.emptyBreakdown')"
+          />
+
+          <AnalyticsChartCard
+            :title="t('analytics.charts.paymentStatusBreakdown')"
+            :subtitle="t('analytics.adminPaymentStatusDescription')"
+            :option="paymentStatusOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="paymentStatusEmpty"
+            :empty-description="t('analytics.emptyBreakdown')"
+          />
+
+          <AnalyticsChartCard
+            :title="t('analytics.charts.supportTicketStatusBreakdown')"
+            :subtitle="t('analytics.adminSupportStatusDescription')"
+            :option="supportTicketOption"
+            :loading="loading"
+            :error="analyticsError"
+            :empty="supportTicketEmpty"
+            :empty-description="t('analytics.emptyBreakdown')"
+          />
+        </section>
+
+        <section class="dashboard-grid">
           <el-card class="dashboard-panel" shadow="hover">
             <div class="panel-header">
               <div>
@@ -176,7 +281,7 @@ onMounted(() => {
                 <div>
                   <strong>{{ t('dashboard.totalAiRequests') }}</strong>
                 </div>
-                <el-tag round>{{ dashboard?.aiUsageSummary.totalRequests ?? 0 }}</el-tag>
+                <el-tag round>{{ analytics?.overview?.aiRequests ?? dashboard?.aiUsageSummary.totalRequests ?? 0 }}</el-tag>
               </article>
               <article class="summary-row">
                 <div>

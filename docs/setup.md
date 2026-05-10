@@ -1,15 +1,18 @@
 # Setup Guide
 
-## Overview
-This document explains how to run the project locally through Phase 11.
-
 ## Prerequisites
-- Node.js and npm
-- Java 21
+- Node.js 26.x or another modern Node 20+ runtime that works with the frontend toolchain
+- npm 11.x or compatible
+- Java 21 LTS
 - Docker Desktop with Docker Compose
+- A Windows shell or terminal capable of running the provided commands
 
-Note:
-- Maven does not need to be installed globally because the backend includes the Maven Wrapper.
+Maven does not need to be installed globally because the backend uses `mvnw.cmd`.
+
+## Project Structure
+- [frontend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/frontend)
+- [backend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend)
+- [docs](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs)
 
 ## 1. Start MySQL
 From the project root:
@@ -18,50 +21,34 @@ From the project root:
 docker compose up -d
 ```
 
-This starts:
-- MySQL 8.4
-- Database name: `ai_chinese_learning`
-- Host port: `3307`
+Default local database values:
+- Host: `localhost`
+- Port: `3307`
+- Database: `ai_chinese_learning`
+- Username: `root`
+- Password: `root`
+
+Optional validation:
+
+```powershell
+docker compose config
+```
 
 ## 2. Configure Backend Environment Variables
-Use:
-- [../backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/backend/.env.example)
-- [../backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/backend/src/main/resources/application-example.yml)
+Use placeholders only. Reference files:
+- [backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/.env.example)
+- [backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/src/main/resources/application-example.yml)
 
-Important variables:
-- `JWT_SECRET`
-- `JWT_EXPIRATION`
-- `DEFAULT_ADMIN_EMAIL`
-- `DEFAULT_ADMIN_PASSWORD`
-- `UPLOAD_DIR`
-- `MAX_FILE_SIZE`
-- `RECORDED_VIDEO_UPLOAD_DIR`
-- `MAX_VIDEO_FILE_SIZE`
-- `AI_PROVIDER`
-- `AI_API_BASE_URL`
-- `AI_API_KEY`
-- `AI_MODEL_NAME`
-- `AI_TIMEOUT_SECONDS`
-- `AI_MAX_OUTPUT_TOKENS`
-- `AI_ENABLE_REAL_PROVIDER`
-- `PAYMENT_PROVIDER`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_PUBLIC_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `PAYMENT_SUCCESS_URL`
-- `PAYMENT_CANCEL_URL`
-- `PAYMENT_CURRENCY`
-- `PAYMENT_ENABLE_REAL_PROVIDER`
-- `PAYMENT_TIMEOUT_SECONDS`
-- `PAYMENT_MOCK_SUCCESS_ENABLED`
-- `SMTP_ENABLED`
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USERNAME`
-- `SMTP_PASSWORD`
-- `SMTP_FROM`
+Important groups:
+- Database: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
+- Security: `APP_CORS_ALLOWED_ORIGINS`, `JWT_SECRET`, `JWT_EXPIRATION`
+- Default admin: `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`
+- Uploads: `UPLOAD_DIR`, `MAX_FILE_SIZE`, `RECORDED_VIDEO_UPLOAD_DIR`, `MAX_VIDEO_FILE_SIZE`
+- AI: `AI_PROVIDER`, `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL_NAME`, `AI_TIMEOUT_SECONDS`, `AI_MAX_OUTPUT_TOKENS`, `AI_ENABLE_REAL_PROVIDER`
+- Payment: `PAYMENT_PROVIDER`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`, `PAYMENT_SUCCESS_URL`, `PAYMENT_CANCEL_URL`, `PAYMENT_CURRENCY`, `PAYMENT_ENABLE_REAL_PROVIDER`, `PAYMENT_TIMEOUT_SECONDS`, `PAYMENT_MOCK_SUCCESS_ENABLED`
+- SMTP: `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`
 
-Example:
+Example placeholders:
 
 ```env
 DB_HOST=localhost
@@ -103,25 +90,14 @@ SMTP_PASSWORD=
 SMTP_FROM=
 ```
 
-Notes:
-- Do not use real production secrets in local demo setup files.
-- `JWT_SECRET` should be a strong plain-text secret with at least 32 characters or bytes.
-- If you need to provide a Base64-encoded JWT secret, use the prefix `base64:`.
-- Invalid or short JWT secrets now fail clearly during backend startup instead of producing a runtime login `500`.
-- If `DEFAULT_ADMIN_EMAIL` or `DEFAULT_ADMIN_PASSWORD` is missing, the backend still starts safely and skips admin creation.
-- The real `AI_API_KEY` must only be set in the backend environment locally.
-- Never place the real `AI_API_KEY` in frontend files or commit it.
-- If `AI_ENABLE_REAL_PROVIDER=false` or the key is missing, the backend stays runnable and AI features return friendly unavailable responses.
-- The real `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` must only be set in the backend environment locally.
-- Never place Stripe secret keys in frontend files or commit them.
-- If `PAYMENT_ENABLE_REAL_PROVIDER=false` or the Stripe secret key is missing, the backend still starts and checkout returns safe mock or unavailable responses.
-- If `SMTP_ENABLED=false` or `SMTP_HOST` is empty, the backend still starts and email sending safely falls back to a no-op implementation.
-- In-app notifications continue to work even when SMTP is not configured.
-- Recorded lesson uploads should stay in backend-managed directories only.
-- Do not commit uploaded lesson videos or temporary runtime media files.
+Important notes:
+- Never commit real secrets
+- Never put backend secrets into frontend files
+- SMTP is optional
+- AI and payment providers must fail gracefully when unavailable
 
 ## 3. Run the Backend
-From the `backend` folder:
+From [backend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend):
 
 ```powershell
 .\mvnw.cmd spring-boot:run
@@ -134,343 +110,57 @@ GET http://localhost:8080/api/v1/health
 ```
 
 ## 4. Run the Frontend
-From the `frontend` folder:
+From [frontend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/frontend):
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Default frontend URL:
+Frontend URL:
 - `http://localhost:5173`
 
-## 5. Authentication and Route Protection
-Implemented auth endpoints:
-- `POST /api/v1/auth/register/student`
-- `POST /api/v1/auth/register/teacher`
-- `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/forgot-password`
-- `POST /api/v1/auth/reset-password`
+## 5. Frontend and Backend Verification Commands
+Frontend:
 
-Frontend auth behavior:
-- JWT token is stored in local storage
-- Axios automatically sends `Authorization: Bearer <token>`
-- Vue Router guards protect role pages
-- Role redirects after login:
-  - `STUDENT -> /student/dashboard`
-  - `TEACHER -> /teacher/dashboard`
-  - `ADMIN -> /admin/dashboard`
+```powershell
+npm run build
+npm run test
+```
 
-## 6. Main Frontend Routes
-Public routes:
-- `/`
-- `/courses`
-- `/courses/:id`
-- `/faq`
-- `/terms`
-- `/privacy`
-- `/child-safety`
-- `/ai-disclaimer`
-- `/login`
-- `/register`
-- `/teachers/:id`
+Backend:
 
-Student routes:
-- `/notifications`
-- `/support-tickets`
-- `/support-tickets/create`
-- `/support-tickets/:id`
-- `/student/dashboard`
-- `/student/lessons`
-- `/student/live-classes`
-- `/student/live-classes/:id`
-- `/student/schedule`
-- `/student/reports`
-- `/student/reports/create`
-- `/student/reviews`
-- `/student/feedback`
-- `/student/lessons/:lessonId`
-- `/student/recorded-lessons/:id`
-- `/student/lessons/:lessonId/flashcards`
-- `/student/quizzes/:quizId`
-- `/student/quiz-attempts/:attemptId`
-- `/student/matching-games/:gameId`
-- `/student/listening-exercises/:exerciseId`
-- `/student/tracing-exercises/:exerciseId`
-- `/student/progress`
-- `/student/rewards`
-- `/student/wrong-answers`
+```powershell
+.\mvnw.cmd test
+.\mvnw.cmd -DskipTests compile
+```
 
-Teacher routes:
-- `/notifications`
-- `/support-tickets`
-- `/support-tickets/create`
-- `/support-tickets/:id`
-- `/teacher/dashboard`
-- `/teacher/profile`
-- `/teacher/verification-status`
-- `/teacher/verification-documents`
-- `/teacher/live-classes`
-- `/teacher/live-classes/create`
-- `/teacher/live-classes/:id/edit`
-- `/teacher/schedule`
-- `/teacher/recorded-lessons`
-- `/teacher/reviews`
-- `/teacher/feedback`
-- `/teacher/reports`
-- `/teacher/moderation-records`
-- `/teacher/modules`
-- `/teacher/lessons`
-- `/teacher/lessons/new`
-- `/teacher/lessons/:id/edit`
-- `/teacher/packages`
-- `/teacher/packages/new`
-- `/teacher/packages/:id/edit`
-- `/teacher/flashcards`
-- `/teacher/quizzes`
-- `/teacher/matching-games`
-- `/teacher/listening-exercises`
-- `/teacher/tracing-exercises`
-- `/teacher/quiz-results`
+Infrastructure:
 
-Admin routes:
-- `/notifications`
-- `/support-tickets`
-- `/support-tickets/create`
-- `/support-tickets/:id`
-- `/admin/dashboard`
-- `/admin/live-classes`
-- `/admin/schedule`
-- `/admin/users`
-- `/admin/students`
-- `/admin/teacher-approval`
-- `/admin/teacher-approval/:id`
-- `/admin/content/approvals`
-- `/admin/content/approvals/:type/:id`
-- `/admin/content/moderation`
-- `/admin/reports`
-- `/admin/reports/:id`
-- `/admin/reviews`
-- `/admin/notifications`
-- `/admin/support-tickets`
-- `/admin/support-tickets/:id`
-- `/admin/audit-logs`
-- `/admin/moderation`
-- `/admin/ai-usage-logs`
+```powershell
+docker compose config
+```
 
-AI student routes:
-- `/student/ai/tutor`
-- `/student/ai/vocabulary`
-- `/student/ai/sentence-practice`
-- `/student/ai/quiz-generator`
-- `/student/ai/story-generator`
-- `/student/ai/pronunciation-feedback`
-- `/student/ai/writing-feedback`
+## 6. Common Troubleshooting
+- Backend fails at startup:
+  - confirm MySQL is running on `localhost:3307`
+  - confirm `JWT_SECRET` is set and long enough
+  - confirm `DB_*` values match the local Docker setup
+- Frontend cannot call the API:
+  - confirm backend is on port `8080`
+  - confirm `APP_CORS_ALLOWED_ORIGINS` includes `http://localhost:5173`
+- AI pages show unavailable messages:
+  - this is acceptable if `AI_ENABLE_REAL_PROVIDER=false` or the key is not configured
+- Stripe checkout is unavailable:
+  - this is acceptable in test mode or when real provider mode is disabled
+- Email is not sent:
+  - this is acceptable when SMTP is disabled; in-app notifications should still work
+- Charts show empty states:
+  - this is acceptable when the underlying database has limited demo data
 
-AI teacher routes:
-- `/teacher/ai/assistant`
-- `/teacher/ai/vocabulary`
-- `/teacher/ai/quiz-generator`
-- `/teacher/ai/story-generator`
-
-## 7. Dashboard Summary APIs
-Student dashboard:
-- `GET /api/v1/students/dashboard`
-- Requires `STUDENT`
-
-Teacher dashboard:
-- `GET /api/v1/teachers/dashboard`
-- Requires `TEACHER`
-
-Admin dashboard:
-- `GET /api/v1/admin/dashboard`
-- Requires `ADMIN`
-
-Behavior:
-- Returns real counts where the database already contains relevant records
-- Returns safe defaults or empty arrays for later-phase workflows
-- Uses the shared `ApiResponse` response format
-
-## 8. Teacher Verification And Admin Management APIs
-Teacher APIs:
-- `GET /api/v1/teachers/me`
-- `PUT /api/v1/teachers/me/profile`
-- `GET /api/v1/teachers/verification-status`
-- `POST /api/v1/teachers/verification-documents`
-- `POST /api/v1/teachers/resubmit-verification`
-- `GET /api/v1/teachers/verification-documents/{id}`
-
-Admin APIs:
-- `GET /api/v1/admin/teachers`
-- `GET /api/v1/admin/teachers/{id}`
-- `GET /api/v1/admin/teachers/pending`
-- `POST /api/v1/admin/teachers/{id}/approve`
-- `POST /api/v1/admin/teachers/{id}/reject`
-- `GET /api/v1/admin/teacher-documents/{id}`
-- `GET /api/v1/admin/users`
-- `GET /api/v1/admin/students`
-
-Public API:
-- `GET /api/v1/public/teachers/{id}`
-
-## 9. Phase 6 Content Management APIs
-Public:
-- `GET /api/v1/public/levels`
-- `GET /api/v1/public/categories`
-- `GET /api/v1/public/courses`
-- `GET /api/v1/public/courses/{id}`
-
-Teacher:
-- `GET /api/v1/teachers/modules`
-- `POST /api/v1/teachers/modules`
-- `GET /api/v1/teachers/modules/{id}`
-- `PUT /api/v1/teachers/modules/{id}`
-- `PATCH /api/v1/teachers/modules/{id}/archive`
-- `POST /api/v1/teachers/modules/{id}/submit`
-- `GET /api/v1/teachers/lessons`
-- `POST /api/v1/teachers/lessons`
-- `GET /api/v1/teachers/lessons/{id}`
-- `PUT /api/v1/teachers/lessons/{id}`
-- `PATCH /api/v1/teachers/lessons/{id}/archive`
-- `POST /api/v1/teachers/lessons/{id}/submit`
-- `GET /api/v1/teachers/lessons/{lessonId}/activities`
-- `POST /api/v1/teachers/lessons/{lessonId}/activities`
-- `PUT /api/v1/teachers/lesson-activities/{activityId}`
-- `PATCH /api/v1/teachers/lesson-activities/{activityId}/archive`
-- `GET /api/v1/teachers/packages`
-- `POST /api/v1/teachers/packages`
-- `GET /api/v1/teachers/packages/{id}`
-- `PUT /api/v1/teachers/packages/{id}`
-- `PATCH /api/v1/teachers/packages/{id}/archive`
-- `POST /api/v1/teachers/packages/{id}/submit`
-- `POST /api/v1/teachers/packages/{id}/items`
-- `DELETE /api/v1/teachers/packages/{packageId}/items/{itemId}`
-
-Admin:
-- `GET /api/v1/admin/levels`
-- `GET /api/v1/admin/categories`
-- `GET /api/v1/admin/content/submissions`
-- `GET /api/v1/admin/content/submissions/{contentType}/{id}`
-- `POST /api/v1/admin/content/{contentType}/{id}/approve`
-- `POST /api/v1/admin/content/{contentType}/{id}/reject`
-- `POST /api/v1/admin/content/{contentType}/{id}/publish`
-- `POST /api/v1/admin/content/{contentType}/{id}/archive`
-
-## 10. Manual Phase 6 and Phase 7 Testing Guide
-Teacher content creation:
-- Log in as an approved teacher
-- Open `/teacher/modules` and create a module
-- Open `/teacher/lessons` and create a lesson
-- Add at least one lesson activity placeholder
-- Open `/teacher/packages` and create a package
-- Add one module or lesson to the package
-- Submit the content for review
-
-Admin content moderation:
-- Log in as an admin
-- Open `/admin/content/approvals`
-- Review submitted content
-- Approve or reject content with a reason
-
-## 11. Manual Phase 8 AI Testing Guide
-AI unavailable mode:
-- Leave `AI_ENABLE_REAL_PROVIDER=false` or do not set `AI_API_KEY`
-- Start backend and frontend
-- Log in as student
-- Open the AI tutor or vocabulary helper
-- Submit a request
-- Confirm the UI shows a friendly unavailable response and the app does not crash
-- Log in as admin and review `/admin/ai-usage-logs`
-
-AI real-provider mode:
-- Set the real `AI_API_KEY` locally in the backend environment only
-- Set `AI_ENABLE_REAL_PROVIDER=true`
-- Start backend
-- Test:
-  - AI tutor
-  - vocabulary helper
-  - sentence practice
-  - quiz generator
-  - story generator
-  - teacher assistant
-  - admin AI usage logs
-
-Prototype upload feedback:
-- Open student pronunciation feedback and upload a small audio file
-- Open student writing feedback and submit a canvas image or PNG/JPG
-- Confirm the current workflow returns a safe prototype/unavailable response rather than a crash
-- Publish approved content
-- Open `/admin/content/moderation` to confirm status visibility
-
-Public discovery:
-- Open `/courses`
-- Filter by level, category, access type, or learning type
-- Confirm only published content appears
-- Open `/courses/{id}` and confirm paid content remains locked
-
-Phase 7 interactive learning:
-- log in as an approved teacher
-- add flashcards to an owned draft or rejected lesson
-- add a quiz and at least one question
-- add matching, listening, and tracing activities
-- submit and publish the lesson through the existing Phase 6 workflow
-- log in as a student
-- open `/student/lessons`
-- open the published lesson player
-- practise flashcards
-- submit a quiz and review the result
-- open wrong-answer review
-- submit matching and listening activities
-- complete tracing
-- open `/student/progress`
-- open `/student/rewards`
-
-## 11. What Exists Through Phase 11
-- Frontend app scaffold
-- Role-based layouts and navigation
-- Real login page
-- Real student and teacher registration page
-- Auth store, JWT handling, and route guards
-- Student, teacher, and admin dashboards with real API-backed summary structure
-- Teacher profile and verification workflow
-- Admin teacher approval workflow
-- Public approved teacher profile page
-- Teacher module, lesson, and package management pages
-- Admin content approval and moderation pages
-- Public course discovery and course detail pages
-- Student lesson player, flashcard practice, quiz pages, wrong-answer review, progress, and rewards pages
-- Teacher flashcard, quiz, matching, listening, tracing, and quiz-results pages
-- Spring Boot backend
-- `/api/v1/health`
-- Database foundation and seed data
-- Spring Security and JWT authentication
-- Current user API
-- Role-based backend protection
-- Dashboard summary APIs
-- Content management workflow APIs
-- Interactive learning APIs, scoring, progress tracking, and rewards
-- Backend integration tests for content workflow, security, and interactive learning
-- Live class APIs, enrolment flow, and protected join-link checks
-- Recorded lesson video APIs and protected streaming
-- Video progress tracking APIs
-- Student, teacher, and admin schedule APIs
-- Notification APIs and notification center UI
-- Report, review, teacher feedback, and support ticket workflows
-- Content moderation actions and moderation history pages
-- Admin audit log APIs and audit log page
-
-## 12. What Is Intentionally Deferred
-- AI integration logic
-- Payment and subscription workflows
-- Checkout and cart logic
-- Advanced AI tutor and AI explanations
-- Commerce unlock logic
-- Leaderboard
-- Professional handwriting recognition
-- Professional pronunciation scoring
-- Internal video conferencing
-- WebRTC
-- Advanced streaming, CDN, or transcoding
-- Phase 12 analytics and final UI polish
+## 7. Safe Demo Setup Notes
+- Do not commit `frontend/dist`
+- Do not commit `backend/target`
+- Do not commit uploads, logs, temp files, or local env files
+- Do not expose SMTP, AI, Stripe, JWT, or database secrets
+- Demo fallback behaviour should be explained honestly rather than hidden

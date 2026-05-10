@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
+import com.example.aichinese.dto.analytics.StudentAnalyticsResponse;
 import com.example.aichinese.dto.dashboard.StudentDashboardResponse;
 import com.example.aichinese.dto.learning.BadgeSummaryResponse;
 import com.example.aichinese.dto.learning.CompleteTracingExerciseRequest;
@@ -52,6 +53,7 @@ import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.RecordedLessonService;
 import com.example.aichinese.service.ScheduleService;
+import com.example.aichinese.service.AnalyticsService;
 import com.example.aichinese.service.StudentLearningService;
 import com.example.aichinese.service.VideoProgressService;
 
@@ -63,6 +65,7 @@ import jakarta.validation.Valid;
 public class StudentController {
 
     private final DashboardService dashboardService;
+    private final AnalyticsService analyticsService;
     private final StudentLearningService studentLearningService;
     private final LiveClassService liveClassService;
     private final RecordedLessonService recordedLessonService;
@@ -71,12 +74,14 @@ public class StudentController {
 
     public StudentController(
             DashboardService dashboardService,
+            AnalyticsService analyticsService,
             StudentLearningService studentLearningService,
             LiveClassService liveClassService,
             RecordedLessonService recordedLessonService,
             VideoProgressService videoProgressService,
             ScheduleService scheduleService) {
         this.dashboardService = dashboardService;
+        this.analyticsService = analyticsService;
         this.studentLearningService = studentLearningService;
         this.liveClassService = liveClassService;
         this.recordedLessonService = recordedLessonService;
@@ -90,6 +95,14 @@ public class StudentController {
         return ApiResponse.success(
                 "Student dashboard retrieved successfully.",
                 dashboardService.getStudentDashboard(currentUser));
+    }
+
+    @GetMapping("/analytics")
+    public ApiResponse<StudentAnalyticsResponse> getAnalytics(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Student analytics retrieved successfully.",
+                analyticsService.getStudentAnalytics(currentUser));
     }
 
     @GetMapping("/lessons/{lessonId}")

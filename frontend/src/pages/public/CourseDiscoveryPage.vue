@@ -198,10 +198,10 @@ onMounted(async () => {
           <el-option :label="t('content.hybrid')" value="HYBRID" />
         </el-select>
         <el-select v-model="filters.sort" class="content-filter">
-          <el-option label="Newest" value="newest" />
-          <el-option label="Title" value="title" />
-          <el-option label="Rating" value="rating" />
-          <el-option label="Popular" value="popular" />
+          <el-option :label="t('content.sortNewest')" value="newest" />
+          <el-option :label="t('content.sortTitle')" value="title" />
+          <el-option :label="t('content.sortRating')" value="rating" />
+          <el-option :label="t('content.sortPopular')" value="popular" />
         </el-select>
         <el-button type="primary" @click="applyFilters">{{ t('content.applyFilters') }}</el-button>
       </div>

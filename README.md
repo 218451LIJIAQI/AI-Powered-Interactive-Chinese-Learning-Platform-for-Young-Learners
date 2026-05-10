@@ -1,236 +1,142 @@
 # AI-Powered Interactive Chinese Learning Platform for Young Learners
 
 ## Project Overview
-This project is a full-stack final-year-project web application for young learners aged 7-12. It is designed as an interactive and gamified Chinese learning platform for the Malaysian context, with support for student, teacher, and admin roles.
+This repository contains a full-stack final-year-project prototype for young learners aged 7 to 12. The platform combines structured Chinese learning, teacher-created content, age-appropriate AI-assisted learning tools, payments in sandbox-friendly mode, live and recorded lesson delivery, communication workflows, moderation tools, and analytics dashboards for student, teacher, and admin roles.
 
-Phase 1 established the monorepo scaffold. Phase 2 added the backend database foundation with JPA entities, repositories, seed data, and MySQL-ready configuration. Phase 3 introduced real authentication, JWT-based access control, role-protected backend routes, and frontend login and registration flows. Phase 4 added polished role-based layouts, dashboard summary APIs, and dashboard-ready UI for public, student, teacher, and admin users. Phase 5 added teacher profile management, verification document upload, admin teacher approval and rejection, basic admin user management, and approved public teacher profiles. Phase 6 added the learning content management foundation for modules, lessons, lesson activity placeholders, packages, admin review, and public discovery. Phase 7 added interactive learning activities, quiz attempts, wrong-answer review, progress tracking, and a reward system. Phase 8 added the core backend-integrated AI layer with DeepSeek-ready configuration, AI tutor workflows, teacher AI drafting tools, prototype feedback uploads, and admin AI usage visibility. Phase 9 added payment and commerce workflows with Stripe-ready backend configuration, cart and checkout flows, subscriptions, entitlements, teacher earnings, refunds, and payouts. Phase 10 added live classes, recorded lesson videos, hybrid lesson delivery, protected join-link access, video progress tracking, and student/teacher/admin schedule views. Phase 11 adds notifications, optional SMTP email, reports, reviews, teacher feedback, support tickets, content moderation actions, and audit log visibility.
+Phase 12 focuses on final analytics, dashboard charts, UI polish, responsive improvements, i18n completion, legal and safety pages, testing, documentation, and demonstration readiness. The project remains a university prototype rather than a production system.
 
-## Tech Stack
-- Frontend: Vue 3, Vite, TypeScript, Element Plus, Vue Router, Pinia, Axios, Vue I18n, npm
-- Backend: Java 21, Spring Boot 3.5.14, Spring Security, JWT, Spring Data JPA, Bean Validation, Maven Wrapper
+## Target Users
+- Students learning Chinese in a guided and encouraging environment
+- Teachers creating and managing educational content and feedback
+- Admins supervising approvals, moderation, support, analytics, and operations
+
+## Main Features
+- JWT authentication with role-based access for `STUDENT`, `TEACHER`, and `ADMIN`
+- Public landing, course discovery, FAQ, and legal/safety pages
+- Student lessons, activities, rewards, progress, notifications, reports, reviews, and support tickets
+- Teacher lesson/package/activity management, verification workflow, feedback, reviews, reports, moderation visibility, and earnings views
+- Admin teacher approval, user management, content approvals, AI usage visibility, payments, refunds, payouts, support handling, moderation actions, and audit logs
+- Phase 12 analytics dashboards with responsive charts for all three roles
+
+## AI Features
+- AI tutor
+- AI vocabulary helper
+- AI sentence practice
+- AI quiz generator
+- AI story generator
+- AI learning recommendation and progress insight flows where already supported
+- Teacher AI assistant and AI drafting workflows
+- Prototype-friendly pronunciation and writing feedback flows
+- Friendly unavailable fallback when a real AI provider is not enabled
+
+## Learning Features
+- Published lessons and structured lesson player flow
+- Flashcards, quizzes, matching games, listening exercises, and tracing exercises
+- Progress tracking, wrong-answer review, points, badges, and daily streaks
+- Live classes, recorded lessons, hybrid delivery support, schedules, and protected meeting-link access
+
+## Payment, Subscription, and Communication Features
+- Cart, buy-now, checkout, payment history, refund requests, subscription plans, teacher earnings, payout requests
+- In-app notifications with unread count and mark-as-read actions
+- Optional SMTP-backed email with safe no-op fallback
+- Reports, reviews, teacher feedback, support tickets, content moderation actions, and audit logs
+
+## Analytics and Dashboard Features
+- `GET /api/v1/students/analytics`
+- `GET /api/v1/teachers/analytics`
+- `GET /api/v1/admin/analytics`
+- ECharts-based dashboard cards with safe empty states, zero states, and friendly load-failure behaviour
+- Student analytics for lesson completion, activity trends, quiz trends, weak areas, and learning mode mix
+- Teacher analytics for content status, recent quiz performance, earnings trend, and review distribution
+- Admin analytics for registrations, teacher approvals, payment status, support status, and platform activity summaries
+
+## Technology Stack
+- Frontend: Vue 3, Vite, TypeScript, Element Plus, Vue Router, Pinia, Axios, Vue I18n, ECharts
+- Backend: Java 21, Spring Boot 3.5.x, Spring Security, JWT, Spring Data JPA, Bean Validation, Maven Wrapper
 - Database: MySQL 8.4 LTS
 - Tooling: Docker Compose
 
-## Current Status
-Completed through Phase 11 work-in-progress:
-- Monorepo scaffold created
-- Vue frontend created with required packages and folder structure
-- Public, student, teacher, and admin layouts added and polished
-- Vue Router, Pinia, Axios, Element Plus, and Vue I18n configured
-- Spring Boot backend scaffolded with `com.example.aichinese`
-- `/api/v1/health` endpoint added
-- Database entities, repositories, enums, and seed data added
-- Real student registration and teacher registration added
-- Spring Security, JWT login, current-user API, and role-based backend route protection added
-- Dashboard APIs and role-based dashboard pages added
-- Teacher verification workflow and admin teacher approval added
-- Admin user and student management added
-- Public approved teacher profile added
-- Phase 6 content workflow added:
-  - levels and categories
-  - modules, lessons, lesson placeholders, packages
-  - admin content review and publish workflow
-  - public course discovery and detail pages
-- Phase 7 interactive learning foundation added:
-  - student lesson player
-  - flashcard practice
-  - quiz loading, submission, scoring, and results
-  - wrong-answer review
-  - matching game submission
-  - listening exercise submission
-  - tracing completion with canvas capture
-  - student progress summary
-  - points, badges, and streak summary
-  - teacher flashcard, quiz, matching, listening, and tracing editors
-  - teacher quiz attempt viewer
-- Backend integration tests added for Phase 7 learning and reward flows
-- Phase 8 AI foundation added:
-  - backend AI provider abstraction
-  - DeepSeek-compatible backend provider client
-  - AI chat tutor endpoint
-  - AI vocabulary helper endpoint
-  - AI sentence practice endpoint
-  - AI quiz generator endpoint
-  - AI story generator endpoint
-  - AI learning recommendation endpoint
-  - AI progress insight endpoint
-  - AI teacher assistant endpoint
-  - AI pronunciation feedback prototype endpoint
-  - AI writing feedback prototype endpoint
-  - admin AI usage logs endpoint
-  - student AI pages
-  - teacher AI pages
-  - admin AI usage logs page
-  - safe unavailable mode when no real AI key is configured
-  - backend AI integration tests
-- Phase 9 commerce foundation added:
-  - backend payment provider abstraction with unavailable, mock, and Stripe-ready clients
-  - student cart, buy now, checkout, payment history, and refund request flows
-  - subscription plan management and student subscription checkout flow
-  - backend payment records, order items, entitlements, and payment status verification
-  - teacher earnings, commission setting, payout request flow, and admin payout management
-  - admin payment and refund management views
-  - public paid-content purchase entry points
-  - backend commerce integration tests
-- Phase 10 live and recorded learning foundation added:
-  - teacher live class create, update, cancel, reschedule, and enrolment list flows
-  - student live class list, detail, enrolment, and protected join-link flow
-  - admin live class overview and schedule overview
-  - recorded lesson video support with uploaded-file or external-URL sources
-  - protected recorded video streaming through backend access checks
-  - video progress save, update, resume, and completion flow
-  - hybrid lesson player support for live classes plus recorded videos
-  - student, teacher, and admin schedule pages
-  - backend integration tests for live and recorded learning security
-- Phase 11 communication, moderation, support, and audit foundation added:
-  - in-app notifications with unread count, mark-as-read, and mark-all-as-read
-  - optional SMTP email service with safe no-op fallback
-  - student reports with admin review and teacher revision visibility
-  - student reviews with teacher visibility and admin moderation
-  - teacher feedback to students with linked-student checks
-  - support tickets with threaded replies, admin status updates, and priority updates
-  - admin content moderation actions with teacher moderation history visibility
-  - admin audit log visibility
-  - backend integration tests for Phase 11 communication and moderation flows
+## Monorepo Structure
+```text
+.
+├─ frontend/   Vue 3 application
+├─ backend/    Spring Boot API
+├─ docs/       Project, setup, testing, and demo documentation
+└─ docker-compose.yml
+```
 
-Phase 11 known limitations:
-- Stripe sandbox/test mode only
-- real Stripe keys must stay in backend environment variables only
-- payout is simulated by admin approval and mark-paid workflow
-- refund handling is prototype-friendly when no live Stripe refund integration is configured
-- no real bank transfer automation
-- SMTP currently uses simple plain-text message bodies rather than a full template engine
-- audit log IP addresses remain optional when request IP context is not passed into the reusable logging service
+## Frontend Setup
+From [frontend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/frontend):
 
-Still intentionally not implemented:
-- leaderboard
-- custom AI model training
-- professional handwriting recognition
-- professional pronunciation scoring
-- professional tone scoring
-- Phase 12 analytics and final polish workflows
+```powershell
+npm install
+npm run dev
+```
 
-## Key Routes
-Public:
-- `/`
-- `/courses`
-- `/courses/:id`
-- `/teachers/:id`
-- `/login`
-- `/register`
+Useful commands:
 
-Student:
-- `/notifications`
-- `/support-tickets`
-- `/support-tickets/create`
-- `/support-tickets/:id`
-- `/student/dashboard`
-- `/student/lessons`
-- `/student/live-classes`
-- `/student/live-classes/:id`
-- `/student/schedule`
-- `/student/reports`
-- `/student/reports/create`
-- `/student/reviews`
-- `/student/feedback`
-- `/student/lessons/:lessonId`
-- `/student/recorded-lessons/:id`
-- `/student/lessons/:lessonId/flashcards`
-- `/student/quizzes/:quizId`
-- `/student/quiz-attempts/:attemptId`
-- `/student/matching-games/:gameId`
-- `/student/listening-exercises/:exerciseId`
-- `/student/tracing-exercises/:exerciseId`
-- `/student/progress`
-- `/student/rewards`
-- `/student/wrong-answers`
-- `/student/ai/tutor`
-- `/student/ai/vocabulary`
-- `/student/ai/sentence-practice`
-- `/student/ai/quiz-generator`
-- `/student/ai/story-generator`
-- `/student/ai/pronunciation-feedback`
-- `/student/ai/writing-feedback`
+```powershell
+npm run build
+npm run test
+```
 
-Teacher:
-- `/notifications`
-- `/support-tickets`
-- `/support-tickets/create`
-- `/support-tickets/:id`
-- `/teacher/dashboard`
-- `/teacher/profile`
-- `/teacher/verification-status`
-- `/teacher/live-classes`
-- `/teacher/live-classes/create`
-- `/teacher/live-classes/:id/edit`
-- `/teacher/schedule`
-- `/teacher/recorded-lessons`
-- `/teacher/reviews`
-- `/teacher/feedback`
-- `/teacher/reports`
-- `/teacher/moderation-records`
-- `/teacher/modules`
-- `/teacher/lessons`
-- `/teacher/lessons/new`
-- `/teacher/lessons/:id/edit`
-- `/teacher/packages`
-- `/teacher/packages/new`
-- `/teacher/packages/:id/edit`
-- `/teacher/flashcards`
-- `/teacher/quizzes`
-- `/teacher/matching-games`
-- `/teacher/listening-exercises`
-- `/teacher/tracing-exercises`
-- `/teacher/quiz-results`
-- `/teacher/ai/assistant`
-- `/teacher/ai/vocabulary`
-- `/teacher/ai/quiz-generator`
-- `/teacher/ai/story-generator`
+Default frontend URL:
+- `http://localhost:5173`
 
-Admin:
-- `/notifications`
-- `/support-tickets`
-- `/support-tickets/create`
-- `/support-tickets/:id`
-- `/admin/dashboard`
-- `/admin/live-classes`
-- `/admin/schedule`
-- `/admin/users`
-- `/admin/students`
-- `/admin/teacher-approval`
-- `/admin/content/approvals`
-- `/admin/content/moderation`
-- `/admin/reports`
-- `/admin/reports/:id`
-- `/admin/reviews`
-- `/admin/notifications`
-- `/admin/support-tickets`
-- `/admin/support-tickets/:id`
-- `/admin/audit-logs`
-- `/admin/moderation`
-- `/admin/ai-usage-logs`
+## Backend Setup
+From [backend](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend):
 
-## Phase 8 AI API Overview
-General AI:
-- `POST /api/v1/ai/availability`
-- `POST /api/v1/ai/chat`
-- `POST /api/v1/ai/vocabulary-helper`
-- `POST /api/v1/ai/sentence-practice`
-- `POST /api/v1/ai/quiz-generator`
-- `POST /api/v1/ai/story-generator`
-- `POST /api/v1/ai/learning-recommendation`
-- `POST /api/v1/ai/progress-insight`
-- `POST /api/v1/ai/teacher-assistant`
-- `POST /api/v1/ai/pronunciation-feedback`
-- `POST /api/v1/ai/writing-feedback`
+```powershell
+.\mvnw.cmd spring-boot:run
+```
 
-Admin:
-- `GET /api/v1/admin/ai/usage-logs`
+Useful commands:
 
-## AI Configuration
-The default AI provider is DeepSeek through backend environment variables only.
+```powershell
+.\mvnw.cmd test
+.\mvnw.cmd -DskipTests compile
+```
 
-Example placeholders:
+Default backend URL:
+- `http://localhost:8080`
+- Health endpoint: `GET /api/v1/health`
+
+## MySQL and Docker Compose Setup
+From the project root:
+
+```powershell
+docker compose up -d
+docker compose config
+```
+
+Default local MySQL settings:
+- Host: `localhost`
+- Port: `3307`
+- Database: `ai_chinese_learning`
+- Username: `root`
+- Password: `root`
+
+## Environment Variables
+Use placeholders only. See:
+- [backend/.env.example](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/.env.example)
+- [backend/src/main/resources/application-example.yml](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/backend/src/main/resources/application-example.yml)
+
+Important environment groups:
+- Database: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
+- CORS and JWT: `APP_CORS_ALLOWED_ORIGINS`, `JWT_SECRET`, `JWT_EXPIRATION`
+- Default admin: `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`
+- Uploads: `UPLOAD_DIR`, `MAX_FILE_SIZE`, `RECORDED_VIDEO_UPLOAD_DIR`, `MAX_VIDEO_FILE_SIZE`
+- AI provider: `AI_PROVIDER`, `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL_NAME`, `AI_TIMEOUT_SECONDS`, `AI_MAX_OUTPUT_TOKENS`, `AI_ENABLE_REAL_PROVIDER`
+- Stripe/payment: `PAYMENT_PROVIDER`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`, `PAYMENT_SUCCESS_URL`, `PAYMENT_CANCEL_URL`, `PAYMENT_CURRENCY`, `PAYMENT_ENABLE_REAL_PROVIDER`, `PAYMENT_TIMEOUT_SECONDS`, `PAYMENT_MOCK_SUCCESS_ENABLED`
+- SMTP: `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`
+
+## Default Admin Setup
+If `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` are set, the backend creates a default admin account during startup. If they are omitted, startup continues safely and admin creation is skipped.
+
+## AI Provider Configuration
+The backend is DeepSeek-ready, but real AI access is optional.
+
+Example placeholder values:
 
 ```env
 AI_PROVIDER=deepseek
@@ -243,15 +149,14 @@ AI_ENABLE_REAL_PROVIDER=false
 ```
 
 Important:
-- Never put the real AI key in `frontend/.env`.
-- Never expose the key to Vue code or API responses.
-- The frontend does not receive the AI key.
-- If the key is missing, the backend returns friendly unavailable responses instead of crashing.
+- Do not place real AI keys in frontend code
+- Do not commit real AI keys
+- If AI is unavailable, the frontend should still show a friendly fallback
 
-## Payment Configuration
-The default payment provider is Stripe sandbox/test mode through backend environment variables only.
+## Stripe Sandbox Configuration
+Payments remain sandbox-friendly and prototype-oriented.
 
-Example placeholders:
+Example placeholder values:
 
 ```env
 PAYMENT_PROVIDER=stripe
@@ -267,26 +172,14 @@ PAYMENT_MOCK_SUCCESS_ENABLED=true
 ```
 
 Important:
-- Never place the real Stripe secret key or webhook secret in frontend code.
-- The frontend does not store card data.
-- If Stripe keys are missing or the real provider is disabled, the backend remains runnable and returns safe unavailable or mock-mode checkout behavior.
+- Stripe secret values must stay backend-only
+- Test mode and mock-friendly behaviour are acceptable for demos
+- Do not claim live production payment support
 
-## Live And Recorded Learning Configuration
-Recorded lesson uploads use backend-only filesystem configuration:
+## SMTP Configuration
+SMTP is optional.
 
-```env
-RECORDED_VIDEO_UPLOAD_DIR=./uploads/recorded-videos
-MAX_VIDEO_FILE_SIZE=100MB
-```
-
-Important:
-- Meeting links are never exposed in public course or lesson APIs.
-- Students only receive the meeting link from the protected join endpoint after enrolment and entitlement checks pass.
-- Uploaded recorded videos are served through backend-protected endpoints and do not expose private storage paths.
-- Do not commit uploaded runtime video files.
-
-## Phase 11 Email Configuration
-Optional SMTP placeholders are backend-only:
+Example placeholder values:
 
 ```env
 SMTP_ENABLED=false
@@ -298,135 +191,31 @@ SMTP_FROM=
 ```
 
 Important:
-- SMTP is optional and the backend still starts when it is not configured.
-- In-app notifications continue to work even when email sending is skipped.
-- Never commit real SMTP credentials or expose them in frontend code.
+- The system still works without SMTP
+- In-app notifications still work when SMTP is disabled or unavailable
+- Do not commit real SMTP credentials
 
-## Phase 11 API Overview
-Communication and moderation:
-- `GET /api/v1/notifications`
-- `GET /api/v1/notifications/unread-count`
-- `PATCH /api/v1/notifications/{id}/read`
-- `PATCH /api/v1/notifications/read-all`
-- `POST /api/v1/reports`
-- `GET /api/v1/reports/my`
-- `GET /api/v1/reports/my/{id}`
-- `POST /api/v1/reviews`
-- `GET /api/v1/reviews/my`
-- `PUT /api/v1/reviews/{id}`
-- `DELETE /api/v1/reviews/{id}`
-- `GET /api/v1/public/reviews`
-- `GET /api/v1/students/feedback`
-- `GET /api/v1/students/feedback/{id}`
-- `POST /api/v1/teachers/feedback`
-- `GET /api/v1/teachers/feedback`
-- `PUT /api/v1/teachers/feedback/{id}`
-- `GET /api/v1/teachers/feedback/candidates`
-- `GET /api/v1/teachers/reviews`
-- `GET /api/v1/teachers/reports`
-- `GET /api/v1/teachers/reports/{id}`
-- `GET /api/v1/teachers/moderation-records`
-- `POST /api/v1/support-tickets`
-- `GET /api/v1/support-tickets/my`
-- `GET /api/v1/support-tickets/{id}`
-- `POST /api/v1/support-tickets/{id}/messages`
-- `GET /api/v1/admin/notifications`
-- `GET /api/v1/admin/reports`
-- `GET /api/v1/admin/reports/{id}`
-- `PATCH /api/v1/admin/reports/{id}/review`
-- `PATCH /api/v1/admin/reports/{id}/dismiss`
-- `PATCH /api/v1/admin/reports/{id}/mark-action-taken`
-- `PATCH /api/v1/admin/reports/{id}/request-revision`
-- `GET /api/v1/admin/reviews`
-- `PATCH /api/v1/admin/reviews/{id}/hide`
-- `PATCH /api/v1/admin/reviews/{id}/show`
-- `PATCH /api/v1/admin/reviews/{id}/flag`
-- `GET /api/v1/admin/support-tickets`
-- `GET /api/v1/admin/support-tickets/{id}`
-- `POST /api/v1/admin/support-tickets/{id}/messages`
-- `PATCH /api/v1/admin/support-tickets/{id}/status`
-- `PATCH /api/v1/admin/support-tickets/{id}/priority`
-- `GET /api/v1/admin/moderation-records`
-- `GET /api/v1/admin/moderation-records/{id}`
-- `POST /api/v1/admin/moderation/hide`
-- `POST /api/v1/admin/moderation/unpublish`
-- `POST /api/v1/admin/moderation/archive`
-- `POST /api/v1/admin/moderation/request-revision`
-- `POST /api/v1/admin/moderation/restore`
-- `GET /api/v1/admin/audit-logs`
-- `GET /api/v1/admin/audit-logs/{id}`
-- `GET /api/v1/admin/feedback`
+## File Upload Configuration
+Prototype uploads use backend-managed directories only.
 
-## Phase 7 API Overview
-Student learning:
-- `GET /api/v1/students/lessons/{lessonId}`
-- `GET /api/v1/students/lessons/{lessonId}/activities`
-- `GET /api/v1/students/lessons/{lessonId}/flashcards`
-- `POST /api/v1/students/flashcards/{flashcardId}/practice`
-- `GET /api/v1/students/quizzes/{quizId}`
-- `POST /api/v1/students/quizzes/{quizId}/attempts`
-- `GET /api/v1/students/quiz-attempts/{attemptId}`
-- `GET /api/v1/students/wrong-answers`
-- `GET /api/v1/students/quiz-attempts/{attemptId}/wrong-answers`
-- `GET /api/v1/students/matching-games/{gameId}`
-- `POST /api/v1/students/matching-games/{gameId}/submit`
-- `GET /api/v1/students/listening-exercises/{exerciseId}`
-- `POST /api/v1/students/listening-exercises/{exerciseId}/submit`
-- `GET /api/v1/students/tracing-exercises/{exerciseId}`
-- `POST /api/v1/students/tracing-exercises/{exerciseId}/complete`
-- `GET /api/v1/students/progress`
-- `GET /api/v1/students/rewards`
-- `GET /api/v1/students/rewards/badges`
-- `GET /api/v1/students/rewards/points-history`
-- `GET /api/v1/students/rewards/streak`
+Example:
 
-Teacher activity management:
-- `GET/POST /api/v1/teachers/lessons/{lessonId}/flashcards`
-- `PUT/DELETE /api/v1/teachers/flashcards/{flashcardId}`
-- `GET/POST /api/v1/teachers/lessons/{lessonId}/quizzes`
-- `PUT/DELETE /api/v1/teachers/quizzes/{quizId}`
-- `POST /api/v1/teachers/quizzes/{quizId}/questions`
-- `PUT/DELETE /api/v1/teachers/quiz-questions/{questionId}`
-- `GET /api/v1/teachers/quizzes/{quizId}/attempts`
-- `GET/POST /api/v1/teachers/lessons/{lessonId}/matching-games`
-- `PUT/DELETE /api/v1/teachers/matching-games/{gameId}`
-- `GET/POST /api/v1/teachers/lessons/{lessonId}/listening-exercises`
-- `PUT/DELETE /api/v1/teachers/listening-exercises/{exerciseId}`
-- `GET/POST /api/v1/teachers/lessons/{lessonId}/tracing-exercises`
-- `PUT/DELETE /api/v1/teachers/tracing-exercises/{exerciseId}`
-
-## Learning And Reward Rules
-- Students can only access `PUBLISHED` lessons and activities.
-- Paid content remains visible but locked. No checkout or unlock logic exists in Phase 7.
-- Teachers must still be `APPROVED` to create or edit activities.
-- Teachers can only manage activities for their own lessons.
-- Quiz scores are calculated on the backend.
-- Correct answers are not exposed before student submission.
-- Wrong answers are only visible to the owning student.
-- Reward values currently used:
-  - flashcard set completion: `5`
-  - matching game completion: `10`
-  - listening exercise completion: `10`
-  - tracing exercise completion: `10`
-  - quiz completion: `20`
-  - quiz score at least `80%`: `10` bonus
-  - lesson completion: `25`
-
-## Local Setup
-Start MySQL:
-
-```powershell
-docker compose up -d
+```env
+UPLOAD_DIR=./uploads
+MAX_FILE_SIZE=5MB
+RECORDED_VIDEO_UPLOAD_DIR=./uploads/recorded-videos
+MAX_VIDEO_FILE_SIZE=100MB
 ```
 
-Run backend:
+Do not commit:
+- uploaded runtime files
+- backend `target/`
+- frontend `dist/`
+- logs
+- temp files
 
-```powershell
-cd backend
-.\mvnw.cmd spring-boot:run
-```
-
-Run frontend:
+## How To Run
+Frontend:
 
 ```powershell
 cd frontend
@@ -434,15 +223,80 @@ npm install
 npm run dev
 ```
 
+Backend:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+MySQL:
+
+```powershell
+docker compose up -d
+```
+
+## How To Test
+Frontend:
+
+```powershell
+cd frontend
+npm run build
+npm run test
+```
+
+Backend:
+
+```powershell
+cd backend
+.\mvnw.cmd test
+.\mvnw.cmd -DskipTests compile
+```
+
+Infrastructure:
+
+```powershell
+docker compose config
+```
+
+## User Roles and Access Overview
+- `STUDENT`: learning, progress, rewards, AI tools, notifications, reports, reviews, support, payments, and personal analytics
+- `TEACHER`: content creation, verification, live/recorded learning management, reviews, feedback, moderation visibility, earnings, payouts, and teacher analytics
+- `ADMIN`: teacher approvals, content approvals, support, moderation, audit logs, AI usage visibility, finance oversight, and platform analytics
+
+Role checks are enforced both in frontend routing and backend authorization.
+
+## Main Workflows
+- Student registration, login, dashboard, lesson practice, rewards, and AI learning support
+- Teacher registration, verification, content creation, live/recorded learning delivery, feedback, and earnings
+- Admin approval, moderation, payments, support handling, analytics review, and audit visibility
+- Communication and trust workflows through notifications, reports, reviews, support tickets, moderation actions, and audit logs
+
+## Database Notes
+See [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/database-notes.md) for table groups, enum notes, analytics data sources, and schema guidance.
+
+## Known Limitations
+- External AI provider integration only; no custom model training
+- Stripe sandbox/test-mode only
+- SMTP is optional and may remain in no-op mode
+- External meeting links only; no internal video conferencing stack
+- Pronunciation and writing feedback remain prototype-friendly rather than production-grade scoring
+- No `Parent` role
+- No production legal review
+- No production deployment hardening
+- No complete production-grade security audit
+
+## Future Enhancements
+- More complete analytics filtering and export flows
+- Broader frontend test coverage
+- Production-grade email templates and delivery tracking
+- Richer moderation tooling and reporting
+- Stronger observability and deployment automation
+
 ## Documentation
-- Setup guide: [docs/setup.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/setup.md)
-- API overview: [docs/api-overview.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/api-overview.md)
-- Database notes: [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/database-notes.md)
-- Testing checklist: [docs/testing-checklist.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/testing-checklist.md)
-- Teacher verification workflow: [docs/teacher-verification-workflow.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/teacher-verification-workflow.md)
-- Content management: [docs/content-management.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/content-management.md)
-- Interactive learning: [docs/interactive-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/interactive-learning.md)
-- AI features: [docs/ai-features.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/ai-features.md)
-- Payment and commerce: [docs/payment-commerce.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/payment-commerce.md)
-- Live, recorded, and hybrid learning: [docs/live-recorded-hybrid-learning.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/live-recorded-hybrid-learning.md)
-- Communication, moderation, support, and audit: [docs/communication-moderation-support-audit.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered Interactive Chinese Learning Platform for Young Learners/docs/communication-moderation-support-audit.md)
+- Setup guide: [docs/setup.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/setup.md)
+- API overview: [docs/api-overview.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/api-overview.md)
+- Database notes: [docs/database-notes.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/database-notes.md)
+- Testing checklist: [docs/testing-checklist.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/testing-checklist.md)
+- Demo guide: [docs/demo-script.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/demo-script.md)
+- Communication, moderation, support, and audit reference: [docs/communication-moderation-support-audit.md](/C:/Users/leeji/OneDrive/Desktop/AI-Powered%20Interactive%20Chinese%20Learning%20Platform%20for%20Young%20Learners/docs/communication-moderation-support-audit.md)

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.example.aichinese.dto.ApiResponse;
+import com.example.aichinese.dto.analytics.TeacherAnalyticsResponse;
 import com.example.aichinese.dto.content.CoursePackageResponse;
 import com.example.aichinese.dto.content.CreateCoursePackageRequest;
 import com.example.aichinese.dto.content.CreateLessonActivityRequest;
@@ -61,6 +62,7 @@ import com.example.aichinese.dto.teacher.TeacherVerificationStatusResponse;
 import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.DashboardService;
+import com.example.aichinese.service.AnalyticsService;
 import com.example.aichinese.service.LessonActivityService;
 import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.RecordedLessonService;
@@ -80,6 +82,7 @@ import jakarta.validation.Valid;
 public class TeacherController {
 
     private final DashboardService dashboardService;
+    private final AnalyticsService analyticsService;
     private final TeacherManagementService teacherManagementService;
     private final TeacherModuleService teacherModuleService;
     private final TeacherLessonService teacherLessonService;
@@ -93,6 +96,7 @@ public class TeacherController {
 
     public TeacherController(
             DashboardService dashboardService,
+            AnalyticsService analyticsService,
             TeacherManagementService teacherManagementService,
             TeacherModuleService teacherModuleService,
             TeacherLessonService teacherLessonService,
@@ -104,6 +108,7 @@ public class TeacherController {
             VideoProgressService videoProgressService,
             ScheduleService scheduleService) {
         this.dashboardService = dashboardService;
+        this.analyticsService = analyticsService;
         this.teacherManagementService = teacherManagementService;
         this.teacherModuleService = teacherModuleService;
         this.teacherLessonService = teacherLessonService;
@@ -122,6 +127,14 @@ public class TeacherController {
         return ApiResponse.success(
                 "Teacher dashboard retrieved successfully.",
                 dashboardService.getTeacherDashboard(currentUser));
+    }
+
+    @GetMapping("/analytics")
+    public ApiResponse<TeacherAnalyticsResponse> getAnalytics(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Teacher analytics retrieved successfully.",
+                analyticsService.getTeacherAnalytics(currentUser));
     }
 
     @GetMapping("/me")

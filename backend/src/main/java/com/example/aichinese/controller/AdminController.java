@@ -29,6 +29,7 @@ import com.example.aichinese.dto.admin.AdminUserListItemResponse;
 import com.example.aichinese.dto.admin.ApproveTeacherRequest;
 import com.example.aichinese.dto.admin.RejectTeacherRequest;
 import com.example.aichinese.dto.ai.AdminAiUsageLogResponse;
+import com.example.aichinese.dto.analytics.AdminAnalyticsResponse;
 import com.example.aichinese.dto.content.ContentApprovalRequest;
 import com.example.aichinese.dto.content.ContentRejectionRequest;
 import com.example.aichinese.dto.content.ContentSubmissionDetailResponse;
@@ -43,6 +44,7 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AdminContentReviewService;
 import com.example.aichinese.service.AdminTeacherManagementService;
 import com.example.aichinese.service.AdminUserManagementService;
+import com.example.aichinese.service.AnalyticsService;
 import com.example.aichinese.service.AiService;
 import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LearningCatalogService;
@@ -57,6 +59,7 @@ import jakarta.validation.Valid;
 public class AdminController {
 
     private final DashboardService dashboardService;
+    private final AnalyticsService analyticsService;
     private final AdminTeacherManagementService adminTeacherManagementService;
     private final AdminUserManagementService adminUserManagementService;
     private final AdminContentReviewService adminContentReviewService;
@@ -67,6 +70,7 @@ public class AdminController {
 
     public AdminController(
             DashboardService dashboardService,
+            AnalyticsService analyticsService,
             AdminTeacherManagementService adminTeacherManagementService,
             AdminUserManagementService adminUserManagementService,
             AdminContentReviewService adminContentReviewService,
@@ -75,6 +79,7 @@ public class AdminController {
             LiveClassService liveClassService,
             ScheduleService scheduleService) {
         this.dashboardService = dashboardService;
+        this.analyticsService = analyticsService;
         this.adminTeacherManagementService = adminTeacherManagementService;
         this.adminUserManagementService = adminUserManagementService;
         this.adminContentReviewService = adminContentReviewService;
@@ -90,6 +95,14 @@ public class AdminController {
         return ApiResponse.success(
                 "Admin dashboard retrieved successfully.",
                 dashboardService.getAdminDashboard(currentUser));
+    }
+
+    @GetMapping("/analytics")
+    public ApiResponse<AdminAnalyticsResponse> getAnalytics(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success(
+                "Admin analytics retrieved successfully.",
+                analyticsService.getAdminAnalytics(currentUser));
     }
 
     @GetMapping("/schedule")

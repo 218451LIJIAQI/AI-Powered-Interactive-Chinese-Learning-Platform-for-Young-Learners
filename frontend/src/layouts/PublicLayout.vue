@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 import AppShell from '../components/common/AppShell.vue'
+
+const { t } = useI18n()
 
 const navItems = [
   { key: 'landing', labelKey: 'nav.home', routeName: 'landing', icon: 'House' },
@@ -20,8 +24,8 @@ const footerLinks = [
 <template>
   <AppShell
     variant="public"
-    :title="'AI-Powered Interactive Chinese Learning Platform'"
-    :subtitle="'A bright, child-friendly learning experience for Malaysian young Mandarin learners.'"
+    :title="t('shell.publicTitle')"
+    :subtitle="t('shell.publicSubtitle')"
     :nav-items="navItems"
     :footer-links="footerLinks"
   />

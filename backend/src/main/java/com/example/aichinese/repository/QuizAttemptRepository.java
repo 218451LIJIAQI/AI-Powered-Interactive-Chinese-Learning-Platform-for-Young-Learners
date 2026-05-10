@@ -16,6 +16,8 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 
     List<QuizAttempt> findTop5ByQuizTeacherIdOrderByCreatedAtDesc(Long teacherId);
 
+    List<QuizAttempt> findByQuizTeacherIdOrderByCompletedAtDescCreatedAtDesc(Long teacherId);
+
     @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "student", "student.user" })
     List<QuizAttempt> findByQuizIdOrderByCompletedAtDescCreatedAtDesc(Long quizId);
 
@@ -37,4 +39,7 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
 
     @Query("select avg(qa.score * 1.0) from QuizAttempt qa where qa.quiz.teacher.id = :teacherId and qa.score is not null")
     Double findAverageScoreByTeacherId(@Param("teacherId") Long teacherId);
+
+    @Query("select avg(qa.score * 100.0 / qa.maxScore) from QuizAttempt qa where qa.quiz.teacher.id = :teacherId and qa.submitted = true and qa.maxScore is not null and qa.maxScore > 0 and qa.score is not null")
+    Double findAveragePercentageByTeacherId(@Param("teacherId") Long teacherId);
 }

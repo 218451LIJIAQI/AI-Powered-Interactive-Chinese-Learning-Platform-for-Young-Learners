@@ -1,74 +1,193 @@
 # Testing Checklist
 
-## Automated Commands
+Use this checklist for final manual verification and FYP demonstration readiness. Mark each item as `PASS`, `FAIL`, or `N/A`.
 
+## 1. Environment Setup
+- [ ] Start MySQL with `docker compose up -d`
+- [ ] Run `docker compose config`
+- [ ] Start backend with `.\mvnw.cmd spring-boot:run`
+- [ ] Start frontend with `npm run dev`
+- [ ] Confirm `GET /api/v1/health` returns `UP`
+
+## 2. Authentication
+- [ ] Student registration
+- [ ] Teacher registration
+- [ ] Admin login
+- [ ] Login failure with invalid credentials
+- [ ] Logout
+- [ ] Current user API
+- [ ] Route protection redirect for unauthenticated users
+
+## 3. Role-Based Access
+- [ ] Student cannot access teacher pages
+- [ ] Student cannot access admin pages
+- [ ] Teacher cannot access admin pages
+- [ ] Admin can access admin pages
+- [ ] Guest cannot access protected pages
+- [ ] Unauthorized backend access returns `401`
+- [ ] Wrong-role backend access returns `403`
+
+## 4. Teacher Verification
+- [ ] Teacher starts in `PENDING`
+- [ ] Verification document upload works
+- [ ] Admin approval works
+- [ ] Admin rejection works
+- [ ] Teacher dashboard shows verification state clearly
+
+## 5. Student Learning Flow
+- [ ] View learning modules or lessons
+- [ ] Start a lesson
+- [ ] Complete an activity
+- [ ] Submit a quiz
+- [ ] View wrong answers
+- [ ] View progress
+- [ ] Earn points or a reward
+
+## 6. Interactive Activities
+- [ ] Flashcards
+- [ ] Quiz
+- [ ] Matching game
+- [ ] Listening activity
+- [ ] Character tracing
+
+## 7. AI Features
+- [ ] AI Tutor
+- [ ] AI Vocabulary Helper
+- [ ] AI Sentence Practice
+- [ ] AI Pronunciation Feedback prototype
+- [ ] AI Writing Feedback prototype
+- [ ] AI Quiz Generator
+- [ ] AI Story Generator
+- [ ] AI Learning Recommendation
+- [ ] AI Progress Insight
+- [ ] AI Teacher Assistant
+- [ ] Friendly AI unavailable fallback when no real key is enabled
+
+## 8. Payment and Subscription
+- [ ] Add to cart
+- [ ] Buy now
+- [ ] Stripe sandbox checkout or unavailable mode
+- [ ] Payment success or mock success behaviour
+- [ ] Payment failure or cancel handling
+- [ ] Subscription checkout
+- [ ] Paid content unlock behaviour where applicable
+- [ ] Payment history
+
+## 9. Refund and Payout
+- [ ] Student refund request
+- [ ] Admin refund approval or rejection
+- [ ] Teacher earnings view
+- [ ] Teacher payout request
+- [ ] Admin payout approval or rejection
+
+## 10. Live, Recorded, and Hybrid Learning
+- [ ] Teacher creates a live class
+- [ ] Student enrols in a live class
+- [ ] Student joins only when allowed
+- [ ] Meeting link remains protected
+- [ ] Teacher adds a recorded video or external video link
+- [ ] Student watches a recorded lesson
+- [ ] Video progress updates
+- [ ] Student schedule
+- [ ] Teacher schedule
+- [ ] Admin schedule
+
+## 11. Reports and Reviews
+- [ ] Student submits a report
+- [ ] Admin handles a report
+- [ ] Student submits a review
+- [ ] Teacher views own reviews
+- [ ] Admin moderates a review
+
+## 12. Support Tickets
+- [ ] Student submits a support ticket
+- [ ] Teacher submits a support ticket
+- [ ] Admin replies to a ticket
+- [ ] Admin updates ticket status
+- [ ] Closed ticket behaviour is enforced
+
+## 13. Notifications
+- [ ] Student notifications load
+- [ ] Teacher notifications load
+- [ ] Admin notifications load
+- [ ] Unread count updates
+- [ ] Mark as read works
+- [ ] Mark all as read works
+
+## 14. File Uploads
+- [ ] Teacher verification document upload
+- [ ] Image upload flow
+- [ ] Audio upload flow
+- [ ] Video upload flow
+- [ ] Invalid file type handling
+- [ ] Oversized file handling
+
+## 15. Analytics
+- [ ] Student dashboard analytics loads
+- [ ] Teacher dashboard analytics loads
+- [ ] Admin dashboard analytics loads
+- [ ] Analytics charts handle empty data cleanly
+- [ ] No role leakage across analytics endpoints
+
+## 16. Responsive Design
+- [ ] Desktop layout
+- [ ] Tablet layout
+- [ ] Mobile layout
+
+## 17. i18n
+- [ ] English
+- [ ] Bahasa Melayu
+- [ ] Chinese
+- [ ] Main pages do not show raw translation keys
+
+## 18. Theme
+- [ ] Light mode
+- [ ] Dark mode
+- [ ] Text contrast remains readable
+
+## 19. Legal and Safety Pages
+- [ ] Terms of Service
+- [ ] Privacy Policy
+- [ ] Child Safety
+- [ ] AI Use Disclaimer
+
+## 20. Final Demo Flow
+- [ ] Suggested demo order is rehearsed
+- [ ] Talking points are prepared
+- [ ] Backup plan is ready if AI keys are missing
+- [ ] Backup plan is ready if Stripe is unavailable
+- [ ] Backup plan is ready if SMTP is disabled
+
+## Automated Verification Commands
 Frontend:
 
-- `cd frontend`
-- `npm run build`
+```powershell
+cd frontend
+npm run build
+npm run test
+```
 
 Backend:
 
-- `cd backend`
-- `.\mvnw.cmd test`
-- `.\mvnw.cmd -DskipTests compile`
+```powershell
+cd backend
+.\mvnw.cmd test
+.\mvnw.cmd -DskipTests compile
+```
 
 Infrastructure:
 
-- `docker compose config`
-- verify MySQL is healthy on `localhost:3307`
-- start backend locally and verify `GET /api/v1/health`
-
-## Phase 11 Manual Checks
-
-### Student
-
-1. Log in as a student.
-2. Open `/notifications` and verify unread count and mark-as-read behavior.
-3. Open `/student/reports/create`, submit a report, then verify it appears in `/student/reports`.
-4. Open `/student/reviews`, create a review, and verify it appears in the personal list.
-5. Open `/student/feedback` and verify owned teacher feedback is visible only to the student.
-6. Open `/support-tickets/create`, create a ticket, open `/support-tickets/{id}`, and add a reply.
-
-### Teacher
-
-1. Log in as a teacher.
-2. Open `/notifications` and verify teacher-facing notifications load.
-3. Open `/teacher/reviews` and confirm only owned-content reviews are shown.
-4. Open `/teacher/feedback`, create feedback for a linked student, and confirm the save succeeds.
-5. Open `/teacher/reports` and verify owned-content report visibility.
-6. Open `/teacher/moderation-records` and verify related moderation records load.
-7. Open shared support ticket pages and verify teacher-owned ticket access works.
-
-### Admin
-
-1. Log in as an admin.
-2. Open `/admin/notifications`.
-3. Open `/admin/reports` and `/admin/reports/{id}` and perform review, dismiss, or revision actions.
-4. Open `/admin/reviews` and hide/show a review.
-5. Open `/admin/support-tickets` and `/admin/support-tickets/{id}` and verify reply, status, and priority updates.
-6. Open `/admin/moderation` and create at least one moderation action.
-7. Open `/admin/audit-logs` and verify audit records appear.
+```powershell
+docker compose config
+```
 
 ## Security and Static Checks
-
-- confirm no `javax.persistence` imports remain
-- confirm guest access to protected endpoints returns `401`
-- confirm wrong-role access to admin routes returns `403`
-- confirm users cannot access another user’s notifications
-- confirm users cannot access another user’s support tickets
-- confirm students cannot access another student’s feedback or reports
-- confirm teachers cannot access unrelated private records
-- confirm no password hashes are exposed in Phase 11 DTOs or APIs
-- confirm no SMTP credentials are committed or exposed in frontend files
-- confirm no AI provider keys, Stripe secrets, or JWT secrets are committed
-- confirm `frontend/dist`, `backend/target`, uploads, logs, and temp/runtime files are not staged
-- confirm `frontend/src/i18n/messages/zh.ts` remains clean UTF-8
-
-## SMTP No-Op Verification
-
-1. Leave `SMTP_ENABLED=false` or leave `SMTP_HOST` empty.
-2. Start the backend.
-3. Trigger a workflow that sends email, such as an admin support reply.
-4. Confirm the main workflow succeeds and the backend does not crash.
-5. Confirm in-app notifications continue to work.
+- [ ] No `javax.persistence` imports
+- [ ] No password hash exposure
+- [ ] No hard-coded real AI key
+- [ ] No hard-coded real Stripe secret
+- [ ] No hard-coded real SMTP credential
+- [ ] No hard-coded JWT secret
+- [ ] No backend secrets exposed in frontend
+- [ ] No staged runtime, upload, log, build, target, or temp files
+- [ ] `frontend/src/i18n/messages/zh.ts` remains clean UTF-8

@@ -34,9 +34,9 @@ const teacherForm = reactive({
 })
 
 const languageOptions = computed(() => [
-  { label: 'English', value: 'en' },
-  { label: 'Bahasa Melayu', value: 'ms' },
-  { label: '中文', value: 'zh' },
+  { label: t('ai.languages.en'), value: 'en' },
+  { label: t('ai.languages.ms'), value: 'ms' },
+  { label: t('ai.languages.zh'), value: 'zh' },
 ])
 
 function validateCommonFields(fullName: string, email: string, password: string, confirmPassword: string) {
@@ -199,7 +199,7 @@ async function handleRegister() {
           </el-form-item>
         </el-form>
 
-        <div class="auth-card__note" v-if="activeRole === 'TEACHER'">
+        <div v-if="activeRole === 'TEACHER'" class="auth-card__note">
           {{ t('auth.teacherPendingNotice') }}
         </div>
 

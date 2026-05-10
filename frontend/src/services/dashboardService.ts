@@ -1,4 +1,9 @@
 import { apiClient } from './apiClient'
+import type {
+  AdminAnalyticsResponse,
+  StudentAnalyticsResponse,
+  TeacherAnalyticsResponse,
+} from '../types/analytics'
 import type { AdminDashboardSummary, StudentDashboardSummary, TeacherDashboardSummary } from '../types/dashboard'
 
 type ApiResponse<T> = {
@@ -19,6 +24,18 @@ export const dashboardService = {
   },
   async getAdminDashboard() {
     const response = await apiClient.get<ApiResponse<AdminDashboardSummary>>('/admin/dashboard')
+    return response.data.data
+  },
+  async getStudentAnalytics() {
+    const response = await apiClient.get<ApiResponse<StudentAnalyticsResponse>>('/students/analytics')
+    return response.data.data
+  },
+  async getTeacherAnalytics() {
+    const response = await apiClient.get<ApiResponse<TeacherAnalyticsResponse>>('/teachers/analytics')
+    return response.data.data
+  },
+  async getAdminAnalytics() {
+    const response = await apiClient.get<ApiResponse<AdminAnalyticsResponse>>('/admin/analytics')
     return response.data.data
   },
 }

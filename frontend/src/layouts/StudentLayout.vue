@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import AppShell from '../components/common/AppShell.vue'
 import { useNotificationUnreadCount } from '../composables/useNotificationUnreadCount'
@@ -7,6 +8,7 @@ import { useAuthStore } from '../stores/authStore'
 
 const authStore = useAuthStore()
 const { unreadCount } = useNotificationUnreadCount(true)
+const { t } = useI18n()
 
 const navItems = computed(() => [
   { key: 'student-dashboard', labelKey: 'nav.studentDashboard', routeName: 'student-dashboard', icon: 'House' },
@@ -49,12 +51,13 @@ const navItems = computed(() => [
   { key: 'student-wrong-answers', labelKey: 'nav.wrongAnswers', routeName: 'student-wrong-answers', icon: 'DocumentDelete' },
 ])
 
-const subtitle = computed(() => {
-  const name = authStore.currentUser?.fullName ?? 'young learner'
-  return `Welcome back, ${name}. Explore lessons, join live classes, continue recorded practice, and celebrate your progress from one playful dashboard.`
-})
+const subtitle = computed(() =>
+  t('shell.studentSubtitle', {
+    name: authStore.currentUser?.fullName ?? t('auth.studentTab'),
+  }),
+)
 </script>
 
 <template>
-  <AppShell variant="student" title="Student Learning Space" :subtitle="subtitle" :nav-items="navItems" />
+  <AppShell variant="student" :title="t('shell.studentTitle')" :subtitle="subtitle" :nav-items="navItems" />
 </template>

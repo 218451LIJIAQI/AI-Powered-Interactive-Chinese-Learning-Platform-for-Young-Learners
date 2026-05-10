@@ -1,0 +1,322 @@
+export default {
+  shell: {
+    publicTitle: 'AI-Powered Interactive Chinese Learning Platform',
+    publicSubtitle: 'A bright, child-friendly Mandarin learning experience designed for Malaysian young learners.',
+    studentTitle: 'Student Learning Space',
+    studentSubtitle:
+      'Welcome back, {name}. Continue lessons, join live classes, explore AI practice tools, and celebrate your progress from one playful dashboard.',
+    teacherTitle: 'Teacher Workspace',
+    teacherSubtitle:
+      'Manage lessons, live teaching, recorded materials, student feedback, and approval status from one professional workspace. Current status: {status}.',
+    adminTitle: 'Admin Control Center',
+    adminSubtitle:
+      'Monitor platform health, teacher approvals, payments, support activity, moderation, and final demo readiness from one operational dashboard.',
+    lockedChip: 'Locked',
+  },
+  common: {
+    forbidden: 'You do not have permission to access that page.',
+  },
+  analytics: {
+    sectionLabel: 'Analytics',
+    loadFailed: 'Analytics could not be loaded right now.',
+    emptyMessage: 'No analytics data is available yet.',
+    emptyTrend: 'There is not enough trend data yet.',
+    emptyActivity: 'Recent learning activity will appear here after students practise.',
+    emptyBreakdown: 'This distribution will appear when more records are available.',
+    emptyFinancialTrend: 'Financial activity will appear here after payouts or earnings are recorded.',
+    ratingBucket: '{count} star',
+    activeLearnerLabel: 'Active learner',
+    noCommentProvided: 'No written comment was provided.',
+    weakAreaItemDescription: 'This area may need a little more revision and confidence-building practice.',
+    series: {
+      value: 'Value',
+      distribution: 'Distribution',
+    },
+    cards: {
+      completedLessons: 'Completed lessons',
+      averageQuizScore: 'Average quiz score',
+      completedVideos: 'Completed videos',
+      upcomingLiveClasses: 'Upcoming live classes',
+      unreadNotifications: 'Unread notifications',
+      totalLessons: 'Total lessons',
+      totalActiveStudents: 'Active students',
+      averageRating: 'Average rating',
+      netEarnings: 'Net earnings',
+      totalModules: 'Total modules',
+      totalPackages: 'Total packages',
+      availableBalance: 'Available balance',
+      aiDraftRequests: 'AI draft requests',
+      totalStudents: 'Total students',
+      totalTeachers: 'Total teachers',
+      pendingTeacherApprovals: 'Pending teacher approvals',
+      publishedContentItems: 'Published content items',
+      totalRevenue: 'Total revenue',
+      aiRequests: 'AI requests',
+    },
+    charts: {
+      quizScoreTrend: 'Quiz score trend',
+      activityTrend: 'Recent learning activity',
+      lessonStatusBreakdown: 'Lesson completion status',
+      learningModeBreakdown: 'Learning mode mix',
+      earningsTrend: 'Earnings trend',
+      contentStatusBreakdown: 'Content status distribution',
+      reviewRatingBreakdown: 'Review rating distribution',
+      userRegistrationTrend: 'Recent registrations',
+      teacherApprovalBreakdown: 'Teacher approval status',
+      paymentStatusBreakdown: 'Payment status distribution',
+      supportTicketStatusBreakdown: 'Support ticket status',
+    },
+    studentQuizTrendDescription: 'Track the latest quiz percentages without pretending extra results exist.',
+    studentActivityDescription: 'See how often lessons, quizzes, and recorded practice were touched recently.',
+    studentLessonStatusDescription: 'Compare completed lessons with in-progress learning items.',
+    studentLearningModeDescription: 'See how your tracked lessons are split across live, recorded, and hybrid learning.',
+    teacherQuizTrendDescription: 'Review the recent average performance of student quiz submissions for your content.',
+    teacherEarningsDescription: 'Follow earnings month by month using real payout and sales data only.',
+    teacherContentStatusDescription: 'See how your content is distributed across draft, submitted, approved, published, and archived states.',
+    teacherReviewRatingDescription: 'Monitor how student ratings are distributed across your visible reviews.',
+    adminUserRegistrationDescription: 'Track recently created accounts without exposing private details on the chart.',
+    adminTeacherApprovalDescription: 'Compare pending, approved, and rejected teacher verification counts.',
+    adminPaymentStatusDescription: 'Review the current distribution of payment states across recorded transactions.',
+    adminSupportStatusDescription: 'See the support ticket queue by status for quick operational triage.',
+    enums: {
+      ACTION_TAKEN: 'Action taken',
+      APPROVED: 'Approved',
+      ARCHIVED: 'Archived',
+      CANCELLED: 'Cancelled',
+      CLOSED: 'Closed',
+      COMPLETED: 'Completed',
+      DRAFT: 'Draft',
+      DISMISSED: 'Dismissed',
+      FAILED: 'Failed',
+      FLAGGED: 'Flagged',
+      HIDDEN: 'Hidden',
+      HYBRID: 'Hybrid',
+      IN_PROGRESS: 'In progress',
+      LIVE: 'Live',
+      OPEN: 'Open',
+      PAID: 'Paid',
+      PENDING: 'Pending',
+      PUBLISHED: 'Published',
+      RECORDED: 'Recorded',
+      REFUNDED: 'Refunded',
+      REJECTED: 'Rejected',
+      RESOLVED: 'Resolved',
+      REVIEWED: 'Reviewed',
+      SUBMITTED: 'Submitted',
+      SUCCESS: 'Successful',
+      UNKNOWN: 'Unknown',
+      VISIBLE: 'Visible',
+    },
+  },
+  dashboard: {
+    quickActionLessons: 'Lessons',
+    quickActionLessonsDesc: 'Jump into published lessons and playful practice.',
+    quickActionFlashcards: 'Flashcards',
+    quickActionFlashcardsDesc: 'Review words with visual cards and pinyin hints.',
+    quickActionWrongAnswers: 'Wrong Answers',
+    quickActionWrongAnswersDesc: 'Review mistakes and try again with confidence.',
+    quickActionRewards: 'Rewards',
+    quickActionRewardsDesc: 'See your points, badges, and daily streak.',
+  },
+  landing: {
+    featureAiTutorTitle: 'AI learning support',
+    featureAiTutorDescription:
+      'Friendly AI tutoring, vocabulary help, and sentence guidance are part of a safe and encouraging learning journey.',
+    featurePracticeTitle: 'Interactive practice',
+    featurePracticeDescription:
+      'Flashcards, quizzes, tracing, matching games, and listening activities keep revision playful and memorable.',
+    featureTeacherTitle: 'Teacher-guided learning',
+    featureTeacherDescription:
+      'Teacher-created live, recorded, and hybrid lessons stay inside a moderated, student-friendly platform.',
+    rewardFeatureTitle: 'Gamified motivation',
+    rewardFeatureDescription:
+      'Points, badges, streaks, and progress indicators keep learners encouraged without overwhelming them.',
+    teacherFeatureTitle: 'Teacher dashboards',
+    teacherFeatureDescription:
+      'Teachers can manage learning content, review engagement, monitor analytics, and give personalised feedback.',
+    adminFeatureTitle: 'Admin oversight',
+    adminFeatureDescription:
+      'Admins can review approvals, support tickets, reports, moderation actions, and audit activity from one space.',
+  },
+  legal: {
+    faqEyebrow: 'Help & Guidance',
+    faqTitle: 'Frequently asked questions',
+    faqDescription: 'Clear answers for students, teachers, guardians, and examiners who want to understand how the prototype works.',
+    faqItems: [
+      {
+        question: 'Who is this platform designed for?',
+        answer: 'The platform is designed for young learners aged 7 to 12 who are learning Chinese with support from teachers, interactive activities, and prototype AI tools.',
+      },
+      {
+        question: 'Can teachers publish content immediately?',
+        answer: 'Teachers can register and prepare content, but verification and moderation workflows are used before official teaching content is approved for wider use.',
+      },
+      {
+        question: 'What happens if AI, Stripe, or SMTP is unavailable during a demo?',
+        answer: 'The system is designed to fail gracefully. AI tools show a friendly unavailable state, payments remain documented as sandbox or unavailable flows, and in-app notifications still work without SMTP.',
+      },
+      {
+        question: 'Is this a production-ready commercial product?',
+        answer: 'No. This is a final-year-project prototype that demonstrates integrated learning, AI, commerce, moderation, and analytics workflows in a responsible way.',
+      },
+    ],
+    terms: {
+      eyebrow: 'Platform Terms',
+      title: 'Terms of Service',
+      description: 'A clear overview of how this university prototype should be used by students, teachers, and administrators.',
+      sections: [
+        {
+          title: 'Platform purpose',
+          points: [
+            'This platform is a university final-year-project prototype for interactive Chinese learning.',
+            'It demonstrates role-based dashboards, AI-assisted learning support, content workflows, and moderated teaching experiences.',
+          ],
+        },
+        {
+          title: 'User roles',
+          points: [
+            'Students can access age-appropriate learning tools, progress features, and communication workflows.',
+            'Teachers can create content, manage lessons, and provide feedback after following approval workflows.',
+            'Admins can supervise approvals, moderation, support, and audit activity.',
+          ],
+        },
+        {
+          title: 'Learning, content, and payments',
+          points: [
+            'Teacher-created content may be reviewed before publication.',
+            'Paid content and subscription flows are prototype-ready and may rely on sandbox or unavailable states during a demo.',
+            'Refund decisions follow the prototype workflow shown in the system rather than formal commercial policy.',
+          ],
+        },
+        {
+          title: 'Acceptable use and account responsibility',
+          points: [
+            'Users should behave respectfully, avoid abusive content, and not misuse learning or support features.',
+            'Students should use the platform with appropriate guidance, and purchases should be made with guardian permission.',
+            'Users are responsible for keeping their login credentials private.',
+          ],
+        },
+        {
+          title: 'Prototype limitation',
+          points: [
+            'This project is intended for educational demonstration and evaluation.',
+            'Features, data handling, and policies are not presented as production-ready legal or operational guarantees.',
+          ],
+        },
+      ],
+    },
+    privacy: {
+      eyebrow: 'Privacy Overview',
+      title: 'Privacy Policy',
+      description: 'A practical summary of what data the prototype stores, why it is stored, and how it is used responsibly.',
+      sections: [
+        {
+          title: 'Data collected',
+          points: [
+            'Account data such as names, email addresses, roles, and preferred language settings.',
+            'Learning progress data such as quiz attempts, lesson progress, badges, streaks, and recorded video progress.',
+            'Support, report, review, moderation, and notification records created through normal platform use.',
+          ],
+        },
+        {
+          title: 'Special records',
+          points: [
+            'AI interaction logs may be stored for feature troubleshooting and usage summaries.',
+            'Payment-related records may be stored for sandbox or prototype transaction tracking.',
+            'Uploaded files such as verification documents or learning assets may be stored according to the configured upload workflow.',
+          ],
+        },
+        {
+          title: 'How data is used',
+          points: [
+            'Data is used to authenticate users, deliver lessons, show progress, support moderation, and demonstrate system workflows.',
+            'The prototype does not claim to sell personal data to third parties.',
+          ],
+        },
+        {
+          title: 'Protection and limitations',
+          points: [
+            'Role-based access controls are used to limit access to private records.',
+            'This project is a prototype and does not claim complete production hardening, legal review, or enterprise data governance.',
+          ],
+        },
+      ],
+    },
+    childSafety: {
+      eyebrow: 'Safe Learning',
+      title: 'Child Safety Guidelines',
+      description: 'Simple safety guidance for a young-learner platform that includes teacher-created content, AI assistance, and paid features.',
+      sections: [
+        {
+          title: 'Safe and respectful learning',
+          points: [
+            'The platform is designed for learners aged 7 to 12 and should be used in a respectful, supportive way.',
+            'Students should not share sensitive personal information in lessons, reviews, support tickets, or AI prompts.',
+          ],
+        },
+        {
+          title: 'Content and moderation',
+          points: [
+            'Teacher-created content can be reviewed, moderated, and reported when it seems confusing or inappropriate.',
+            'Students and teachers can use reports and support tickets to ask for help or flag concerns.',
+          ],
+        },
+        {
+          title: 'Purchases and guidance',
+          points: [
+            'Purchases should be made with guardian permission.',
+            'The current system does not implement a Parent role, so guardians should supervise student use outside the platform role system.',
+          ],
+        },
+        {
+          title: 'Using AI carefully',
+          points: [
+            'AI features should be used with care and guidance because responses may not always be perfect.',
+            'Students should ask teachers or guardians for help when they are unsure about a result.',
+          ],
+        },
+      ],
+    },
+    aiDisclaimer: {
+      eyebrow: 'AI Use Notice',
+      title: 'AI Use Disclaimer',
+      description: 'A realistic explanation of how AI is used in this prototype and where human review still matters.',
+      sections: [
+        {
+          title: 'Learning support only',
+          points: [
+            'AI is used to support learning, practice, and draft preparation, but it may still make mistakes.',
+            'AI feedback is supportive guidance rather than a formal academic assessment.',
+          ],
+        },
+        {
+          title: 'Prototype-level feedback',
+          points: [
+            'Pronunciation and writing feedback features are prototype-friendly and should not be treated as professional scoring tools.',
+            'Students should ask teachers or guardians for help when AI output seems unclear or incomplete.',
+          ],
+        },
+        {
+          title: 'Teacher and admin review',
+          points: [
+            'AI-generated teaching drafts and content ideas should be reviewed before publication.',
+            'AI-generated content may still require teacher or admin moderation before it becomes official platform content.',
+          ],
+        },
+        {
+          title: 'Model scope',
+          points: [
+            'This project does not train a custom AI model for students.',
+            'External AI provider availability may affect feature behaviour during demonstrations.',
+          ],
+        },
+      ],
+    },
+  },
+  content: {
+    sortNewest: 'Newest',
+    sortTitle: 'Title',
+    sortRating: 'Rating',
+    sortPopular: 'Popular',
+  },
+}
