@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { moderationService } from '../../services/moderationService'
 import type { ModerationAction, ModerationRecordItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
@@ -42,7 +43,7 @@ async function submit() {
     })
     ElMessage.success(t('phase11.messages.moderationApplied'))
     form.reason = ''
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     await loadRecords()
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))

@@ -1,6 +1,29 @@
-import type { EChartsOption } from 'echarts'
+import type { ComposeOption } from 'echarts/core'
+import type { BarSeriesOption, LineSeriesOption, PieSeriesOption } from 'echarts/charts'
+import type {
+  GridComponentOption,
+  LegendComponentOption,
+  TitleComponentOption,
+  TooltipComponentOption,
+} from 'echarts/components'
 
 import type { AnalyticsBreakdownItem, AnalyticsTrendPoint } from '../types/analytics'
+
+/**
+ * Narrow ECharts option type matching exactly what `AnalyticsChartCard`
+ * registers via `use(...)`. Using this consistently across page-level option
+ * builders and the consuming chart card means we can never accidentally
+ * configure a series type whose runtime is not bundled.
+ */
+export type ChartOption = ComposeOption<
+  | BarSeriesOption
+  | LineSeriesOption
+  | PieSeriesOption
+  | GridComponentOption
+  | LegendComponentOption
+  | TitleComponentOption
+  | TooltipComponentOption
+>
 
 type Translator = (key: string, named?: Record<string, unknown>) => string
 type AxisTooltipPoint = {
@@ -118,7 +141,7 @@ export function buildLineChartOption(
     decimals?: number
     area?: boolean
   },
-): EChartsOption {
+): ChartOption {
   const palette = chartPalette()
   const lineColor = options?.color ?? palette[1]
   const decimals = options?.decimals ?? 0
@@ -127,7 +150,7 @@ export function buildLineChartOption(
     color: [lineColor],
     tooltip: {
       trigger: 'axis',
-      formatter: (params) => {
+      formatter: (params: unknown) => {
         const point = (Array.isArray(params) ? params[0] : params) as AxisTooltipPoint | undefined
         const value = Number(point?.value ?? 0)
         const suffix = options?.valueSuffix ?? ''
@@ -190,7 +213,7 @@ export function buildBarChartOption(
     valueSuffix?: string
     decimals?: number
   },
-): EChartsOption {
+): ChartOption {
   const palette = chartPalette()
   const barColor = options?.color ?? palette[2]
   const decimals = options?.decimals ?? 0
@@ -199,7 +222,7 @@ export function buildBarChartOption(
     color: [barColor],
     tooltip: {
       trigger: 'axis',
-      formatter: (params) => {
+      formatter: (params: unknown) => {
         const point = (Array.isArray(params) ? params[0] : params) as AxisTooltipPoint | undefined
         const value = Number(point?.value ?? 0)
         const suffix = options?.valueSuffix ?? ''
@@ -249,14 +272,14 @@ export function buildDonutChartOption(
   options?: {
     centerLabel?: string
   },
-): EChartsOption {
+): ChartOption {
   const palette = chartPalette()
 
   return {
     color: palette,
     tooltip: {
       trigger: 'item',
-      formatter: (params) => {
+      formatter: (params: unknown) => {
         const point = params as PieTooltipPoint
         return `${point.name ?? ''}: ${point.value ?? 0}`
       },
@@ -289,8 +312,4 @@ export function buildDonutChartOption(
       },
     ],
   }
-}
-
-export function currency(value: number) {
-  return `RM ${Number(value ?? 0).toFixed(2)}`
 }

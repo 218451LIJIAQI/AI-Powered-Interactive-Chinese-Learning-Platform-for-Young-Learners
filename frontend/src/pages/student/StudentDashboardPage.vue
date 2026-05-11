@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AnalyticsChartCard from '../../components/common/AnalyticsChartCard.vue'
+import KidStatCard from '../../components/common/KidStatCard.vue'
+import MascotPanda from '../../components/common/MascotPanda.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
 import { dashboardService } from '../../services/dashboardService'
 import { useAuthStore } from '../../stores/authStore'
@@ -32,67 +34,102 @@ const quickActions = computed(() => [
     title: t('dashboard.quickActionLessons'),
     description: t('dashboard.quickActionLessonsDesc'),
     icon: 'Reading',
+    emoji: '\ud83d\udcda',
     routeName: 'student-lessons',
   },
   {
     title: t('nav.aiTutor'),
     description: t('ai.quickTutorDescription'),
     icon: 'ChatDotRound',
+    emoji: '\ud83e\udd16',
     routeName: 'student-ai-tutor',
   },
   {
     title: t('dashboard.quickActionFlashcards'),
     description: t('dashboard.quickActionFlashcardsDesc'),
     icon: 'Files',
+    emoji: '\ud83c\udfb4',
     routeName: 'student-lessons',
   },
   {
     title: t('dashboard.quickActionWrongAnswers'),
     description: t('dashboard.quickActionWrongAnswersDesc'),
     icon: 'DocumentDelete',
+    emoji: '\ud83d\udd0d',
     routeName: 'student-wrong-answers',
   },
   {
     title: t('dashboard.quickActionRewards'),
     description: t('dashboard.quickActionRewardsDesc'),
     icon: 'TrophyBase',
+    emoji: '\ud83c\udfc6',
     routeName: 'student-rewards',
   },
 ])
 
 const statCards = computed(() => [
-  { label: t('dashboard.currentLevel'), value: dashboard.value?.currentLevel ?? 'Beginner', accent: 'sun' },
-  { label: t('dashboard.learningProgress'), value: `${dashboard.value?.learningProgressPercent ?? 0}%`, accent: 'sea' },
-  { label: t('dashboard.dailyStreak'), value: `${dashboard.value?.dailyStreak ?? 0} ${t('dashboard.days')}`, accent: 'berry' },
-  { label: t('dashboard.points'), value: dashboard.value?.points ?? 0, accent: 'lime' },
-  { label: t('dashboard.badges'), value: dashboard.value?.badgeCount ?? 0, accent: 'plum' },
+  {
+    label: t('kid.statLevel'),
+    value: dashboard.value?.currentLevel ?? 'Beginner',
+    accent: 'sun' as const,
+    emoji: '\ud83c\udf1f',
+  },
+  {
+    label: t('kid.statProgress'),
+    value: `${dashboard.value?.learningProgressPercent ?? 0}%`,
+    accent: 'sea' as const,
+    emoji: '\ud83d\ude80',
+  },
+  {
+    label: t('kid.statStreak'),
+    value: `${dashboard.value?.dailyStreak ?? 0} ${t('dashboard.days')}`,
+    accent: 'berry' as const,
+    emoji: '\ud83d\udd25',
+  },
+  {
+    label: t('kid.statPoints'),
+    value: dashboard.value?.points ?? 0,
+    accent: 'lime' as const,
+    emoji: '\u2b50',
+  },
+  {
+    label: t('kid.statBadges'),
+    value: dashboard.value?.badgeCount ?? 0,
+    accent: 'plum' as const,
+    emoji: '\ud83c\udfc5',
+  },
 ])
 
 const studentOverviewCards = computed(() => [
   {
-    label: t('analytics.cards.completedLessons'),
+    label: t('kid.statLessonsDone'),
     value: analytics.value?.overview.completedLessons ?? 0,
-    accent: 'sun',
+    accent: 'sun' as const,
+    emoji: '\ud83d\udcd6',
   },
   {
-    label: t('analytics.cards.averageQuizScore'),
+    label: t('kid.statQuizScore'),
     value: `${analytics.value?.overview.averageQuizScore ?? 0}%`,
-    accent: 'sea',
+    accent: 'sea' as const,
+    emoji: '\ud83c\udfaf',
   },
   {
-    label: t('analytics.cards.completedVideos'),
+    label: t('kid.statVideos'),
     value: analytics.value?.overview.completedVideos ?? 0,
-    accent: 'berry',
+    accent: 'berry' as const,
+    emoji: '\ud83c\udfa5',
   },
   {
-    label: t('analytics.cards.upcomingLiveClasses'),
+    label: t('kid.statLiveClasses'),
     value: analytics.value?.overview.upcomingLiveClasses ?? 0,
-    accent: 'lime',
+    accent: 'lime' as const,
+    emoji: '\ud83c\udf93',
   },
   {
-    label: t('analytics.cards.unreadNotifications'),
+    label: t('kid.statMessages'),
     value: analytics.value?.overview.unreadNotifications ?? 0,
-    accent: 'plum',
+    accent: 'plum' as const,
+    emoji: '\ud83d\udce8',
   },
 ])
 
@@ -184,48 +221,51 @@ onMounted(() => {
       <template #default>
         <el-card class="dashboard-hero dashboard-hero--student" shadow="hover">
           <div class="dashboard-hero__split">
-            <div>
-              <p class="section-label">{{ t('nav.studentDashboard') }}</p>
-              <h1>{{ t('dashboard.studentWelcome', { name: user?.fullName ?? dashboard?.fullName ?? 'Learner' }) }}</h1>
-              <p>{{ t('dashboard.studentOverview') }}</p>
+            <div class="dashboard-hero__copy">
+              <p class="section-label">✨ {{ t('nav.studentDashboard') }} ✨</p>
+              <h1>
+                {{
+                  user?.fullName || dashboard?.fullName
+                    ? t('kid.dashboardWelcome', { name: user?.fullName ?? dashboard?.fullName })
+                    : t('kid.dashboardWelcomeDefault')
+                }}
+              </h1>
+              <p>{{ t('kid.dashboardSubtitle') }}</p>
             </div>
 
             <div class="dashboard-hero__aside dashboard-hero__aside--student">
+              <MascotPanda size="lg" />
               <div class="dashboard-bubble">
-                <span class="dashboard-bubble__label">{{ t('dashboard.recommendedNextStep') }}</span>
+                <span class="dashboard-bubble__label">📍 {{ t('dashboard.recommendedNextStep') }}</span>
                 <strong>{{ dashboard?.recommendedNextStep ?? t('dashboard.studentDefaultNextStep') }}</strong>
               </div>
               <el-button type="primary" size="large" round>
-                {{ t('dashboard.continueLearning') }}
+                🚀 {{ t('dashboard.continueLearning') }}
               </el-button>
             </div>
           </div>
         </el-card>
 
         <section class="student-stat-grid">
-          <el-card
+          <KidStatCard
             v-for="card in statCards"
             :key="card.label"
-            class="metric-card metric-card--student"
-            :class="`metric-card--${card.accent}`"
-            shadow="hover"
-          >
-            <p>{{ card.label }}</p>
-            <strong>{{ card.value }}</strong>
-          </el-card>
+            :label="card.label"
+            :value="card.value"
+            :emoji="card.emoji"
+            :accent="card.accent"
+          />
         </section>
 
         <section class="student-stat-grid">
-          <el-card
+          <KidStatCard
             v-for="card in studentOverviewCards"
             :key="card.label"
-            class="metric-card metric-card--student"
-            :class="`metric-card--${card.accent}`"
-            shadow="hover"
-          >
-            <p>{{ card.label }}</p>
-            <strong>{{ card.value }}</strong>
-          </el-card>
+            :label="card.label"
+            :value="card.value"
+            :emoji="card.emoji"
+            :accent="card.accent"
+          />
         </section>
 
         <section class="dashboard-grid dashboard-grid--two-thirds">
@@ -278,8 +318,8 @@ onMounted(() => {
           <el-card class="dashboard-panel" shadow="hover">
             <div class="panel-header">
               <div>
-                <p class="section-label">{{ t('dashboard.quickAccess') }}</p>
-                <h2>{{ t('dashboard.quickStart') }}</h2>
+                <p class="section-label">🎮 {{ t('kid.quickStartTitle') }}</p>
+                <h2>{{ t('kid.quickStartSubtitle') }}</h2>
               </div>
             </div>
 
@@ -290,7 +330,7 @@ onMounted(() => {
                 :to="{ name: action.routeName }"
                 class="quick-action-card"
               >
-                <el-icon class="quick-action-card__icon"><component :is="action.icon" /></el-icon>
+                <span class="quick-action-card__icon" aria-hidden="true">{{ action.emoji }}</span>
                 <h3>{{ action.title }}</h3>
                 <p>{{ action.description }}</p>
               </router-link>

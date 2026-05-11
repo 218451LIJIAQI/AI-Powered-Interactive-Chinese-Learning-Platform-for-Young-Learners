@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type {
   LearningCategory,
   LearningLevel,
@@ -6,13 +7,6 @@ import type {
   PublicCourseDetail,
   PublicCourseSummary,
 } from '../types/contentManagement'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const publicContentService = {
   async getLevels() {

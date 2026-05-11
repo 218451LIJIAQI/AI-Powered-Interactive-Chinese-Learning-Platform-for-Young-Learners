@@ -33,7 +33,7 @@ public class QuizAttemptAnswer extends BaseEntity {
     private QuizQuestion question;
 
     @Lob
-    @Column(name = "answer_text")
+    @Column(name = "answer_text", columnDefinition = "LONGTEXT")
     private String answerText;
 
     @Column(name = "correct", nullable = false)

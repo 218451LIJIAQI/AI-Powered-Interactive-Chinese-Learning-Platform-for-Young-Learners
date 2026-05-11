@@ -1,8 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { APP_EVENTS } from '../constants/appEvents'
+import { STORAGE_KEYS } from '../constants/storageKeys'
 import { apiClient } from './apiClient'
 
-const TOKEN_KEY = 'ai-chinese-learning-token'
+const TOKEN_KEY = STORAGE_KEYS.AUTH_TOKEN
+
+/**
+ * axios stores its registered interceptors in an internal `handlers` array.
+ * Reaching into it lets us run the registered functions deterministically in
+ * unit tests (instead of trying to mock the network layer).
+ */
+type AxiosHandler = {
+  fulfilled?: (value: unknown) => unknown
+  rejected?: (reason: unknown) => unknown
+}
+
+function getRequestHandlers(): AxiosHandler[] {
+  return (apiClient.interceptors.request as unknown as { handlers: AxiosHandler[] }).handlers
+}
+
+function getResponseHandlers(): AxiosHandler[] {
+  return (apiClient.interceptors.response as unknown as { handlers: AxiosHandler[] }).handlers
+}
+
+function getRequestFulfilled(): NonNullable<AxiosHandler['fulfilled']> {
+  const handler = getRequestHandlers().find((h) => typeof h?.fulfilled === 'function')
+  if (!handler?.fulfilled) {
+    throw new Error('No fulfilled request interceptor registered')
+  }
+  return handler.fulfilled
+}
+
+function getResponseRejected(): NonNullable<AxiosHandler['rejected']> {
+  const handler = getResponseHandlers().find((h) => typeof h?.rejected === 'function')
+  if (!handler?.rejected) {
+    throw new Error('No rejected response interceptor registered')
+  }
+  return handler.rejected
+}
 
 describe('apiClient request interceptor', () => {
   beforeEach(() => {
@@ -16,31 +52,37 @@ describe('apiClient request interceptor', () => {
   it('attaches the Authorization header when a token is present', async () => {
     localStorage.setItem(TOKEN_KEY, 'test-token-123')
 
-    // Walk through the registered request interceptor manually.
-    // axios stores handlers in an internal `handlers` array.
-    const handlers = (apiClient.interceptors.request as unknown as {
-      handlers: Array<{ fulfilled?: (config: unknown) => unknown }>
-    }).handlers
-    const fulfilled = handlers.find((handler) => typeof handler?.fulfilled === 'function')
-
-    expect(fulfilled).toBeDefined()
-
+    const fulfilled = getRequestFulfilled()
     const baseConfig = { headers: {} as Record<string, string>, url: '/auth/me' }
-    const result = (await fulfilled!.fulfilled!(baseConfig)) as { headers: Record<string, string> }
+    const result = (await fulfilled(baseConfig)) as { headers: Record<string, string> }
 
     expect(result.headers.Authorization).toBe('Bearer test-token-123')
   })
 
   it('does not attach an Authorization header when no token is stored', async () => {
-    const handlers = (apiClient.interceptors.request as unknown as {
-      handlers: Array<{ fulfilled?: (config: unknown) => unknown }>
-    }).handlers
-    const fulfilled = handlers.find((handler) => typeof handler?.fulfilled === 'function')
-
+    const fulfilled = getRequestFulfilled()
     const baseConfig = { headers: {} as Record<string, string>, url: '/auth/login' }
-    const result = (await fulfilled!.fulfilled!(baseConfig)) as { headers: Record<string, string> }
+    const result = (await fulfilled(baseConfig)) as { headers: Record<string, string> }
 
     expect(result.headers.Authorization).toBeUndefined()
+  })
+
+  it('rejects requests whose URL contains an invalid numeric path segment', async () => {
+    const fulfilled = getRequestFulfilled()
+    const baseConfig = { headers: {} as Record<string, string>, url: '/students/lessons/NaN' }
+
+    expect(() => fulfilled(baseConfig)).toThrow('Invalid numeric route or query parameter.')
+  })
+
+  it('rejects requests whose query params contain non-finite numbers', async () => {
+    const fulfilled = getRequestFulfilled()
+    const baseConfig = {
+      headers: {} as Record<string, string>,
+      url: '/public/courses',
+      params: { page: Number.NaN, size: 12 },
+    }
+
+    expect(() => fulfilled(baseConfig)).toThrow('Invalid numeric route or query parameter.')
   })
 })
 
@@ -55,43 +97,29 @@ describe('apiClient response interceptor', () => {
   })
 
   it('clears the stored token on a 401 response from a non-auth endpoint', async () => {
-    const handlers = (apiClient.interceptors.response as unknown as {
-      handlers: Array<{ rejected?: (error: unknown) => unknown }>
-    }).handlers
-    const rejected = handlers.find((handler) => typeof handler?.rejected === 'function')
-
-    expect(rejected).toBeDefined()
-
+    const rejected = getResponseRejected()
     const error = {
       response: { status: 401 },
       config: { url: '/students/dashboard' },
     }
 
-    await expect(rejected!.rejected!(error)).rejects.toBe(error)
+    await expect(rejected(error)).rejects.toBe(error)
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
   })
 
   it('does not clear the stored token on a 401 from /auth/login', async () => {
-    const handlers = (apiClient.interceptors.response as unknown as {
-      handlers: Array<{ rejected?: (error: unknown) => unknown }>
-    }).handlers
-    const rejected = handlers.find((handler) => typeof handler?.rejected === 'function')
-
+    const rejected = getResponseRejected()
     const error = {
       response: { status: 401 },
       config: { url: '/auth/login' },
     }
 
-    await expect(rejected!.rejected!(error)).rejects.toBe(error)
+    await expect(rejected(error)).rejects.toBe(error)
     expect(localStorage.getItem(TOKEN_KEY)).toBe('will-be-cleared')
   })
 
   it('dispatches the app:forbidden custom event on a 403 response', async () => {
-    const handlers = (apiClient.interceptors.response as unknown as {
-      handlers: Array<{ rejected?: (error: unknown) => unknown }>
-    }).handlers
-    const rejected = handlers.find((handler) => typeof handler?.rejected === 'function')
-
+    const rejected = getResponseRejected()
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
 
     const error = {
@@ -99,10 +127,11 @@ describe('apiClient response interceptor', () => {
       config: { url: '/admin/users' },
     }
 
-    await expect(rejected!.rejected!(error)).rejects.toBe(error)
+    await expect(rejected(error)).rejects.toBe(error)
 
-    expect(dispatchSpy).toHaveBeenCalled()
-    const dispatched = dispatchSpy.mock.calls.find(([event]) => (event as Event).type === 'app:forbidden')
+    const dispatched = dispatchSpy.mock.calls.find(
+      ([event]) => (event as Event).type === APP_EVENTS.FORBIDDEN,
+    )
     expect(dispatched).toBeDefined()
 
     dispatchSpy.mockRestore()

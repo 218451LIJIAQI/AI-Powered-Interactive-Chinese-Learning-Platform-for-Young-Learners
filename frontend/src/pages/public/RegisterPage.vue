@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
@@ -13,6 +14,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const { locale, t } = useI18n()
 
+const studentFormRef = ref<FormInstance | null>(null)
+const teacherFormRef = ref<FormInstance | null>(null)
 const activeRole = ref<RegisterRole>('STUDENT')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -39,21 +42,54 @@ const languageOptions = computed(() => [
   { label: t('ai.languages.zh'), value: 'zh' },
 ])
 
-function validateCommonFields(fullName: string, email: string, password: string, confirmPassword: string) {
-  if (!fullName.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
-    return t('auth.validation.registerRequired')
+/**
+ * Builds a fresh confirm-password validator each render. The validator closes
+ * over the *current* value of `form.password`, so we recreate it whenever the
+ * rules computed re-runs. This avoids a stale-password bug where the user
+ * types a new password but the rule still compares against the old one.
+ */
+function makeConfirmPasswordRule(form: { password: string }): FormItemRule {
+  return {
+    validator: (_rule, value: string, callback) => {
+      if (!value) {
+        callback(new Error(t('auth.validation.confirmPasswordRequired')))
+        return
+      }
+      if (value !== form.password) {
+        callback(new Error(t('auth.validation.passwordMismatch')))
+        return
+      }
+      callback()
+    },
+    trigger: ['blur', 'change'],
   }
-
-  if (password.length < 8) {
-    return t('auth.validation.passwordMin')
-  }
-
-  if (password !== confirmPassword) {
-    return t('auth.validation.passwordMismatch')
-  }
-
-  return ''
 }
+
+const studentRules = computed<FormRules<typeof studentForm>>(() => ({
+  fullName: [{ required: true, message: t('auth.validation.fullNameRequired'), trigger: 'blur' }],
+  email: [
+    { required: true, message: t('auth.validation.emailRequired'), trigger: 'blur' },
+    { type: 'email', message: t('auth.validation.emailInvalid'), trigger: ['blur', 'change'] },
+  ],
+  password: [
+    { required: true, message: t('auth.validation.passwordRequired'), trigger: 'blur' },
+    { min: 8, message: t('auth.validation.passwordMin'), trigger: ['blur', 'change'] },
+  ],
+  confirmPassword: [makeConfirmPasswordRule(studentForm)],
+}))
+
+const teacherRules = computed<FormRules<typeof teacherForm>>(() => ({
+  fullName: [{ required: true, message: t('auth.validation.fullNameRequired'), trigger: 'blur' }],
+  email: [
+    { required: true, message: t('auth.validation.emailRequired'), trigger: 'blur' },
+    { type: 'email', message: t('auth.validation.emailInvalid'), trigger: ['blur', 'change'] },
+  ],
+  password: [
+    { required: true, message: t('auth.validation.passwordRequired'), trigger: 'blur' },
+    { min: 8, message: t('auth.validation.passwordMin'), trigger: ['blur', 'change'] },
+  ],
+  confirmPassword: [makeConfirmPasswordRule(teacherForm)],
+}))
 
 async function handleRegister() {
   loading.value = true
@@ -61,15 +97,10 @@ async function handleRegister() {
 
   try {
     if (activeRole.value === 'STUDENT') {
-      const validationMessage = validateCommonFields(
-        studentForm.fullName,
-        studentForm.email,
-        studentForm.password,
-        studentForm.confirmPassword,
-      )
-
-      if (validationMessage) {
-        errorMessage.value = validationMessage
+      if (!studentFormRef.value) return
+      try {
+        await studentFormRef.value.validate()
+      } catch {
         return
       }
 
@@ -82,15 +113,10 @@ async function handleRegister() {
       })
       ElMessage.success(t('auth.messages.studentRegisterSuccess'))
     } else {
-      const validationMessage = validateCommonFields(
-        teacherForm.fullName,
-        teacherForm.email,
-        teacherForm.password,
-        teacherForm.confirmPassword,
-      )
-
-      if (validationMessage) {
-        errorMessage.value = validationMessage
+      if (!teacherFormRef.value) return
+      try {
+        await teacherFormRef.value.validate()
+      } catch {
         return
       }
 
@@ -138,20 +164,28 @@ async function handleRegister() {
 
         <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
 
-        <el-form v-if="activeRole === 'STUDENT'" class="auth-form auth-form--grid" label-position="top">
-          <el-form-item :label="t('auth.fields.fullName')">
+        <el-form
+          v-if="activeRole === 'STUDENT'"
+          ref="studentFormRef"
+          class="auth-form auth-form--grid"
+          label-position="top"
+          :model="studentForm"
+          :rules="studentRules"
+          @submit.prevent="handleRegister"
+        >
+          <el-form-item :label="t('auth.fields.fullName')" prop="fullName">
             <el-input v-model="studentForm.fullName" />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.email')">
+          <el-form-item :label="t('auth.fields.email')" prop="email">
             <el-input v-model="studentForm.email" type="email" autocomplete="email" />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.password')">
+          <el-form-item :label="t('auth.fields.password')" prop="password">
             <el-input v-model="studentForm.password" type="password" show-password autocomplete="new-password" />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.confirmPassword')">
+          <el-form-item :label="t('auth.fields.confirmPassword')" prop="confirmPassword">
             <el-input
               v-model="studentForm.confirmPassword"
               type="password"
@@ -160,7 +194,7 @@ async function handleRegister() {
             />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.preferredLanguage')">
+          <el-form-item :label="t('auth.fields.preferredLanguage')" prop="preferredLanguage">
             <el-select v-model="studentForm.preferredLanguage">
               <el-option
                 v-for="option in languageOptions"
@@ -172,20 +206,28 @@ async function handleRegister() {
           </el-form-item>
         </el-form>
 
-        <el-form v-else class="auth-form auth-form--grid" label-position="top">
-          <el-form-item :label="t('auth.fields.fullName')">
+        <el-form
+          v-else
+          ref="teacherFormRef"
+          class="auth-form auth-form--grid"
+          label-position="top"
+          :model="teacherForm"
+          :rules="teacherRules"
+          @submit.prevent="handleRegister"
+        >
+          <el-form-item :label="t('auth.fields.fullName')" prop="fullName">
             <el-input v-model="teacherForm.fullName" />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.email')">
+          <el-form-item :label="t('auth.fields.email')" prop="email">
             <el-input v-model="teacherForm.email" type="email" autocomplete="email" />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.password')">
+          <el-form-item :label="t('auth.fields.password')" prop="password">
             <el-input v-model="teacherForm.password" type="password" show-password autocomplete="new-password" />
           </el-form-item>
 
-          <el-form-item :label="t('auth.fields.confirmPassword')">
+          <el-form-item :label="t('auth.fields.confirmPassword')" prop="confirmPassword">
             <el-input
               v-model="teacherForm.confirmPassword"
               type="password"
@@ -194,7 +236,7 @@ async function handleRegister() {
             />
           </el-form-item>
 
-          <el-form-item class="auth-form__full" :label="t('auth.fields.bio')">
+          <el-form-item class="auth-form__full" :label="t('auth.fields.bio')" prop="bio">
             <el-input v-model="teacherForm.bio" type="textarea" :rows="4" maxlength="2000" show-word-limit />
           </el-form-item>
         </el-form>

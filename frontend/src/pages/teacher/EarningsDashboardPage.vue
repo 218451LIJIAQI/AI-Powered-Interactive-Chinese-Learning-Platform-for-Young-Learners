@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import type { TeacherEarning, TeacherEarningSummary } from '../../types/commerce'
+import { extractApiError } from '../../utils/apiError'
+import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
 const loading = ref(true)
 const summary = ref<TeacherEarningSummary | null>(null)
 const earnings = ref<TeacherEarning[]>([])
-
-function formatMoney(amount: number) {
-  return `RM ${Number(amount ?? 0).toFixed(2)}`
-}
 
 async function loadData() {
   loading.value = true
@@ -26,6 +25,8 @@ async function loadData() {
     ])
     summary.value = summaryResponse
     earnings.value = earningList
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   } finally {
     loading.value = false
   }

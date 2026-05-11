@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { studentLearningService } from '../../services/studentLearningService'
 import type { QuizAttemptResult } from '../../types/learning'
 
-const route = useRoute()
 const { t } = useI18n()
+const attemptId = useNumericRouteParam('attemptId')
 const loading = ref(true)
 const result = ref<QuizAttemptResult | null>(null)
 const errorMessage = ref('')
@@ -16,7 +16,7 @@ const errorMessage = ref('')
 async function loadResult() {
   loading.value = true
   try {
-    result.value = await studentLearningService.getQuizAttempt(Number(route.params.attemptId))
+    result.value = await studentLearningService.getQuizAttempt(attemptId.value)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('content.messages.saveFailed')
   } finally {

@@ -43,7 +43,7 @@ public class Review extends BaseEntity {
     private BigDecimal rating;
 
     @Lob
-    @Column(name = "review_comment")
+    @Column(name = "review_comment", columnDefinition = "LONGTEXT")
     private String reviewComment;
 
     @Enumerated(EnumType.STRING)

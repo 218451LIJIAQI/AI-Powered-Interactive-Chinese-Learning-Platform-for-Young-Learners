@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import KidConfetti from '../../components/common/KidConfetti.vue'
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { studentLearningService } from '../../services/studentLearningService'
 import type { TracingExercisePlay } from '../../types/learning'
 
-const route = useRoute()
 const { t } = useI18n()
 const loading = ref(true)
 const completing = ref(false)
@@ -16,25 +16,26 @@ const exercise = ref<TracingExercisePlay | null>(null)
 const errorMessage = ref('')
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const isDrawing = ref(false)
+const confettiTrigger = ref(0)
 let context: CanvasRenderingContext2D | null = null
 
-const exerciseId = computed(() => Number(route.params.exerciseId))
+const exerciseId = useNumericRouteParam('exerciseId')
 
 function startDrawing(event: MouseEvent | TouchEvent) {
   if (!context || !canvasRef.value) {
     return
   }
   isDrawing.value = true
-  const { x, y } = getCoordinates(event)
+  const { x, y } = getCoordinates(event, canvasRef.value)
   context.beginPath()
   context.moveTo(x, y)
 }
 
 function draw(event: MouseEvent | TouchEvent) {
-  if (!isDrawing.value || !context) {
+  if (!isDrawing.value || !context || !canvasRef.value) {
     return
   }
-  const { x, y } = getCoordinates(event)
+  const { x, y } = getCoordinates(event, canvasRef.value)
   context.lineTo(x, y)
   context.stroke()
 }
@@ -43,8 +44,8 @@ function stopDrawing() {
   isDrawing.value = false
 }
 
-function getCoordinates(event: MouseEvent | TouchEvent) {
-  const rect = canvasRef.value!.getBoundingClientRect()
+function getCoordinates(event: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
+  const rect = canvas.getBoundingClientRect()
   const point = 'touches' in event ? event.touches[0] ?? event.changedTouches[0] : event
   return {
     x: point.clientX - rect.left,
@@ -77,6 +78,7 @@ async function completeTracing() {
     const result = await studentLearningService.completeTracingExercise(exerciseId.value, {
       canvasImageUrl: imageUrl,
     })
+    confettiTrigger.value += 1
     ElMessage.success(t('learning.messages.tracingCompleted', { points: result.earnedPoints }))
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t('learning.messages.tracingSubmitFailed'))
@@ -100,10 +102,15 @@ onMounted(async () => {
 
 <template>
   <div class="page-stack student-learning-page">
+    <KidConfetti :trigger="confettiTrigger" />
     <PageHero
+      kid
+      show-mascot
       :eyebrow="t('learning.tracingEyebrow')"
       :title="exercise?.title || t('learning.tracingPlayTitle')"
       :description="t('learning.tracingPlayDescription')"
+      :mascot-message="`✏️ ${t('kid.traceItSlow')}`"
+      mascot-holding="写"
     />
 
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
@@ -136,8 +143,8 @@ onMounted(async () => {
           />
 
           <div class="student-practice-card__actions">
-            <el-button round @click="clearCanvas">{{ t('learning.clearCanvas') }}</el-button>
-            <el-button type="primary" round :loading="completing" @click="completeTracing">{{ t('learning.markCompleted') }}</el-button>
+            <el-button round size="large" @click="clearCanvas">🧹 {{ t('learning.clearCanvas') }}</el-button>
+            <el-button type="primary" round size="large" :loading="completing" @click="completeTracing">✨ {{ t('learning.markCompleted') }}</el-button>
           </div>
         </el-card>
       </template>

@@ -1,26 +1,27 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import type { PaymentRecord } from '../../types/commerce'
+import { extractApiError } from '../../utils/apiError'
 import { formatDateTime } from '../../utils/datetime'
+import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
 const loading = ref(true)
 const payments = ref<PaymentRecord[]>([])
 
-function formatMoney(amount: number) {
-  return `RM ${Number(amount ?? 0).toFixed(2)}`
-}
-
 async function loadPayments() {
   loading.value = true
   try {
     payments.value = await commerceService.getPayments()
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   } finally {
     loading.value = false
   }

@@ -1,25 +1,26 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { reportService } from '../../services/reportService'
 import type { ReportItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 
-const route = useRoute()
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
+const reportId = useNumericRouteParam('id')
 const loading = ref(true)
 const report = ref<ReportItem | null>(null)
 
 async function loadReport() {
   loading.value = true
   try {
-    report.value = await reportService.getAdminReport(Number(route.params.id))
+    report.value = await reportService.getAdminReport(reportId.value)
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.loadFailed')))
   } finally {
@@ -41,7 +42,7 @@ async function promptAction(action: 'review' | 'dismiss' | 'actionTaken' | 'requ
       await reportService.requestRevision(report.value.id, { note: prompt.value })
     }
     ElMessage.success(t('phase11.messages.reportUpdated'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     await loadReport()
   } catch {
     // Dialog cancellation can be ignored.

@@ -24,12 +24,7 @@ import type {
   WrongAnswerItem,
 } from '../types/learning'
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
+import type { ApiResponse } from '../types/api'
 
 export const studentLearningService = {
   async getLessonPlayer(lessonId: number) {

@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import * as echarts from 'echarts'
-import type { ECharts, EChartsOption } from 'echarts'
+import { init, use } from 'echarts/core'
+import { BarChart, LineChart, PieChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
+
+import type { ChartOption } from '../../utils/analytics'
+
+// Register only the chart types and components actually used in the project,
+// so the tree-shaken `echarts/core` build is roughly half the size of the
+// monolithic `echarts` import.
+use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TitleComponent, TooltipComponent, CanvasRenderer])
 
 const props = withDefaults(
   defineProps<{
     title: string
     subtitle?: string
-    option?: EChartsOption | null
+    option?: ChartOption | null
     loading?: boolean
     error?: string
     empty?: boolean
@@ -28,7 +37,10 @@ const props = withDefaults(
 
 const { t } = useI18n()
 const chartElement = ref<HTMLDivElement | null>(null)
-const chart = shallowRef<ECharts | null>(null)
+// Use the return type of `init` directly so the ref aligns with whatever the
+// modular echarts/core build exposes (avoids private-field clashes between
+// `ECharts` and `EChartsType`).
+const chart = shallowRef<ReturnType<typeof init> | null>(null)
 let resizeObserver: ResizeObserver | null = null
 
 function handleResize() {
@@ -44,7 +56,7 @@ async function renderChart() {
   }
 
   if (!chart.value) {
-    chart.value = echarts.init(chartElement.value)
+    chart.value = init(chartElement.value)
   }
 
   chart.value.setOption(props.option, true)

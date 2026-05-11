@@ -31,7 +31,7 @@ public class QuizQuestion extends BaseEntity {
     private String questionType;
 
     @Lob
-    @Column(name = "question_text", nullable = false)
+    @Column(name = "question_text", nullable = false, columnDefinition = "LONGTEXT")
     private String questionText;
 
     @Column(name = "correct_answer_text", length = 1000)

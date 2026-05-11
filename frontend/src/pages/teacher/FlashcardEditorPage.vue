@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { teacherActivityService } from '../../services/teacherActivityService'
@@ -20,6 +21,7 @@ const selectedLessonId = ref<number | null>(null)
 const editingId = ref<number | null>(null)
 const lessons = ref<LessonItem[]>([])
 const flashcards = ref<FlashcardItem[]>([])
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive<FlashcardFormPayload>({
   chineseText: '',
@@ -31,6 +33,15 @@ const form = reactive<FlashcardFormPayload>({
   extraPayload: '',
   displayOrder: 1,
 })
+
+const rules = computed<FormRules>(() => ({
+  chineseText: [
+    { required: true, message: t('learning.validation.flashcardRequired'), trigger: 'blur' },
+  ],
+  englishMeaning: [
+    { required: true, message: t('learning.validation.flashcardRequired'), trigger: 'blur' },
+  ],
+}))
 
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 const selectedLesson = computed(() => lessons.value.find((lesson) => lesson.id === selectedLessonId.value) ?? null)
@@ -109,8 +120,12 @@ async function saveFlashcard() {
     return
   }
 
-  if (!form.chineseText.trim() || !form.englishMeaning.trim()) {
-    ElMessage.error(t('learning.validation.flashcardRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -161,9 +176,10 @@ watch(selectedLessonId, async () => {
   await loadFlashcards()
 })
 
-onMounted(async () => {
-  await loadLessons()
-  await loadFlashcards()
+// `loadLessons()` sets `selectedLessonId` which triggers the watch above and
+// already calls `loadFlashcards()`. Re-calling it here would double-fetch.
+onMounted(() => {
+  loadLessons()
 })
 </script>
 
@@ -242,15 +258,15 @@ onMounted(async () => {
       :title="editingId ? t('learning.editFlashcard') : t('learning.addFlashcard')"
       width="720px"
     >
-      <el-form label-position="top">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="content-form-grid">
-          <el-form-item :label="t('learning.fields.chineseText')">
+          <el-form-item :label="t('learning.fields.chineseText')" prop="chineseText">
             <el-input v-model="form.chineseText" maxlength="500" />
           </el-form-item>
           <el-form-item :label="t('learning.fields.pinyin')">
             <el-input v-model="form.pinyin" maxlength="255" />
           </el-form-item>
-          <el-form-item :label="t('learning.fields.englishMeaning')">
+          <el-form-item :label="t('learning.fields.englishMeaning')" prop="englishMeaning">
             <el-input v-model="form.englishMeaning" maxlength="500" />
           </el-form-item>
           <el-form-item :label="t('learning.fields.malayMeaning')">

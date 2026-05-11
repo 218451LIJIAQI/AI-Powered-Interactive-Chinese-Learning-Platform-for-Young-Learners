@@ -55,7 +55,7 @@ public class Flashcard extends BaseEntity {
     private Integer sortOrder = 0;
 
     @Lob
-    @Column(name = "extra_payload")
+    @Column(name = "extra_payload", columnDefinition = "LONGTEXT")
     private String extraPayload;
 
     @Enumerated(EnumType.STRING)

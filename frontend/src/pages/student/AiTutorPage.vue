@@ -103,9 +103,13 @@ watch(
 <template>
   <div class="page-stack student-learning-page">
     <PageHero
+      kid
+      show-mascot
       :eyebrow="t('ai.tutorEyebrow')"
       :title="t('ai.tutorTitle')"
       :description="t('ai.tutorDescription')"
+      :mascot-message="t('kid.aiTutorWelcome')"
+      mascot-holding="智"
     />
 
     <el-alert
@@ -154,8 +158,8 @@ watch(
             :placeholder="t('ai.tutorPlaceholder')"
           />
           <div class="student-practice-card__actions ai-composer__actions">
-            <el-button type="primary" round :loading="sending" @click="sendMessage">
-              {{ t('ai.sendMessage') }}
+            <el-button type="primary" round size="large" :loading="sending" @click="sendMessage">
+              🚀 {{ t('ai.sendMessage') }}
             </el-button>
           </div>
         </div>

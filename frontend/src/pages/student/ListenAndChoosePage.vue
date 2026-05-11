@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import KidConfetti from '../../components/common/KidConfetti.vue'
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { studentLearningService } from '../../services/studentLearningService'
 import type { ListeningExercisePlay } from '../../types/learning'
 
-const route = useRoute()
 const { t } = useI18n()
 const loading = ref(true)
 const submitting = ref(false)
@@ -16,8 +16,9 @@ const exercise = ref<ListeningExercisePlay | null>(null)
 const selectedAnswer = ref('')
 const feedback = ref('')
 const errorMessage = ref('')
+const confettiTrigger = ref(0)
 
-const exerciseId = computed(() => Number(route.params.exerciseId))
+const exerciseId = useNumericRouteParam('exerciseId')
 
 async function loadExercise() {
   loading.value = true
@@ -51,9 +52,12 @@ async function submitAnswer() {
     const result = await studentLearningService.submitListeningExercise(exerciseId.value, {
       answerText: selectedAnswer.value,
     })
-    feedback.value = result.correct
-      ? t('learning.listeningCorrect', { points: result.earnedPoints })
-      : t('learning.listeningIncorrect', { answer: result.correctAnswer })
+    if (result.correct) {
+      confettiTrigger.value += 1
+      feedback.value = t('kid.correctYay', { points: result.earnedPoints })
+    } else {
+      feedback.value = t('kid.incorrectOk', { answer: result.correctAnswer })
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t('learning.messages.listeningSubmitFailed'))
   } finally {
@@ -68,10 +72,15 @@ onMounted(() => {
 
 <template>
   <div class="page-stack student-learning-page">
+    <KidConfetti :trigger="confettiTrigger" />
     <PageHero
+      kid
+      show-mascot
       :eyebrow="t('learning.listeningEyebrow')"
       :title="exercise?.title || t('learning.listeningPlayTitle')"
       :description="t('learning.listeningPlayDescription')"
+      :mascot-message="`🎧 ${t('kid.listenCarefully')}`"
+      mascot-holding="听"
     />
 
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
@@ -84,7 +93,7 @@ onMounted(() => {
               <p class="section-label">{{ t('learning.audioPrompt') }}</p>
               <h2>{{ exercise.chineseText }}</h2>
             </div>
-            <el-button round @click="speakText">{{ t('learning.playAudio') }}</el-button>
+            <el-button type="primary" round size="large" @click="speakText">🔊 {{ t('kid.listenAgain') }}</el-button>
           </div>
 
           <el-radio-group v-model="selectedAnswer" class="student-option-group">
@@ -94,7 +103,7 @@ onMounted(() => {
           </el-radio-group>
 
           <div class="student-practice-card__actions">
-            <el-button type="primary" round :loading="submitting" @click="submitAnswer">{{ t('learning.submitAnswer') }}</el-button>
+            <el-button type="primary" round size="large" :loading="submitting" @click="submitAnswer">✨ {{ t('kid.submitFun') }}</el-button>
           </div>
 
           <el-alert v-if="feedback" :title="feedback" type="success" show-icon :closable="false" />

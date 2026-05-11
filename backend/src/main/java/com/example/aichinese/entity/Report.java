@@ -38,7 +38,7 @@ public class Report extends BaseEntity {
     private Long targetId;
 
     @Lob
-    @Column(name = "reason", nullable = false)
+    @Column(name = "reason", nullable = false, columnDefinition = "LONGTEXT")
     private String reason;
 
     @Enumerated(EnumType.STRING)
@@ -50,7 +50,7 @@ public class Report extends BaseEntity {
     private TeacherProfile relatedTeacher;
 
     @Lob
-    @Column(name = "admin_note")
+    @Column(name = "admin_note", columnDefinition = "LONGTEXT")
     private String adminNote;
 
     @Column(name = "teacher_revision_requested", nullable = false)

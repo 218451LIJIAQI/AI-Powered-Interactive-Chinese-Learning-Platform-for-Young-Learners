@@ -55,7 +55,7 @@ public class Lesson extends BaseEntity {
     private String summary;
 
     @Lob
-    @Column(name = "lesson_content")
+    @Column(name = "lesson_content", columnDefinition = "LONGTEXT")
     private String lessonContent;
 
     @Enumerated(EnumType.STRING)

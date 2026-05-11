@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
@@ -16,12 +17,44 @@ const saving = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const reviews = ref<ReviewItem[]>([])
+const formRef = ref<FormInstance | null>(null)
 const form = reactive<CreateReviewPayload & UpdateReviewPayload>({
   targetType: 'LESSON',
   targetId: 0,
   rating: 5,
   comment: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  targetId: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (editingId.value) {
+          callback()
+          return
+        }
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+          callback(new Error(t('phase11.validation.targetIdRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+  rating: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (typeof value !== 'number' || value < 1) {
+          callback(new Error(t('phase11.validation.ratingRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
+  ],
+}))
 
 async function loadReviews() {
   loading.value = true
@@ -53,6 +86,14 @@ function openEdit(item: ReviewItem) {
 }
 
 async function save() {
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
   saving.value = true
   try {
     if (editingId.value) {
@@ -129,17 +170,17 @@ onMounted(() => {
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? t('phase11.editReview') : t('phase11.createReview')" width="640px">
-      <el-form label-position="top">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <el-form-item v-if="!editingId" :label="t('phase11.reviewTargetType')">
           <el-select v-model="form.targetType" class="w-full">
             <el-option label="LESSON" value="LESSON" />
             <el-option label="PACKAGE" value="PACKAGE" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="!editingId" :label="t('phase11.reviewTargetId')">
+        <el-form-item v-if="!editingId" :label="t('phase11.reviewTargetId')" prop="targetId">
           <el-input-number v-model="form.targetId" :min="1" />
         </el-form-item>
-        <el-form-item :label="t('phase11.rating')">
+        <el-form-item :label="t('phase11.rating')" prop="rating">
           <el-rate v-model="form.rating" />
         </el-form-item>
         <el-form-item :label="t('phase11.reviewComment')">

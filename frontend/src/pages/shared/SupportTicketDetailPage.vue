@@ -1,29 +1,37 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { supportTicketService } from '../../services/supportTicketService'
 import type { SupportTicketDetail } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 import { formatDateTime } from '../../utils/datetime'
 
-const route = useRoute()
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
+const ticketId = useNumericRouteParam('id')
 const loading = ref(true)
 const detail = ref<SupportTicketDetail | null>(null)
 const replying = ref(false)
+const replyFormRef = ref<FormInstance | null>(null)
 const form = reactive({ message: '' })
 
+const replyRules = computed<FormRules>(() => ({
+  message: [
+    { required: true, message: t('phase11.validation.replyRequired'), trigger: 'blur' },
+  ],
+}))
 
 async function loadDetail() {
   loading.value = true
   try {
-    detail.value = await supportTicketService.getMyTicket(Number(route.params.id))
+    detail.value = await supportTicketService.getMyTicket(ticketId.value)
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.loadFailed')))
   } finally {
@@ -32,12 +40,21 @@ async function loadDetail() {
 }
 
 async function reply() {
+  if (!replyFormRef.value) {
+    return
+  }
+  try {
+    await replyFormRef.value.validate()
+  } catch {
+    return
+  }
   replying.value = true
   try {
-    detail.value = await supportTicketService.addMyMessage(Number(route.params.id), { message: form.message })
+    detail.value = await supportTicketService.addMyMessage(ticketId.value, { message: form.message.trim() })
     form.message = ''
+    replyFormRef.value.clearValidate()
     ElMessage.success(t('phase11.messages.supportTicketReplied'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))
   } finally {
@@ -45,12 +62,9 @@ async function reply() {
   }
 }
 
-watch(
-  () => route.params.id,
-  () => {
-    loadDetail()
-  },
-)
+watch(ticketId, () => {
+  loadDetail()
+})
 
 onMounted(() => {
   loadDetail()
@@ -92,14 +106,23 @@ onMounted(() => {
         </el-timeline>
       </div>
 
-      <el-form v-if="detail" label-position="top" class="support-reply-form">
-        <el-form-item :label="t('phase11.reply')">
+      <el-form
+        v-if="detail"
+        ref="replyFormRef"
+        :model="form"
+        :rules="replyRules"
+        label-position="top"
+        class="support-reply-form"
+        @submit.prevent="reply"
+      >
+        <el-form-item :label="t('phase11.reply')" prop="message">
           <el-input v-model="form.message" type="textarea" :rows="4" maxlength="4000" show-word-limit />
         </el-form-item>
         <el-button
           type="primary"
           :loading="replying"
           :disabled="detail.ticket.status === 'CLOSED'"
+          native-type="submit"
           @click="reply"
         >
           {{ t('phase11.reply') }}

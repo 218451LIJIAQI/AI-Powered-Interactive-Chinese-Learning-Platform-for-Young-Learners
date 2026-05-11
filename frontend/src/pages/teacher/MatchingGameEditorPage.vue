@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { teacherActivityService } from '../../services/teacherActivityService'
@@ -21,11 +22,18 @@ const editingId = ref<number | null>(null)
 const lessons = ref<LessonItem[]>([])
 const games = ref<MatchingGame[]>([])
 const items = ref<MatchingGameItemFormPayload[]>([])
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive<MatchingGameFormPayload>({
   title: '',
   items: [],
 })
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('content.validation.titleRequired'), trigger: 'blur' },
+  ],
+}))
 
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 const selectedLesson = computed(() => lessons.value.find((lesson) => lesson.id === selectedLessonId.value) ?? null)
@@ -124,8 +132,12 @@ async function saveGame() {
     return
   }
 
-  if (!form.title.trim()) {
-    ElMessage.error(t('content.validation.titleRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -182,10 +194,11 @@ watch(selectedLessonId, async () => {
   await loadGames()
 })
 
-onMounted(async () => {
+// `loadLessons()` sets `selectedLessonId` which triggers the watch above and
+// already calls `loadGames()`. Re-calling it here would double-fetch.
+onMounted(() => {
   resetForm()
-  await loadLessons()
-  await loadGames()
+  loadLessons()
 })
 </script>
 
@@ -266,8 +279,8 @@ onMounted(async () => {
       :title="editingId ? t('learning.editMatchingGame') : t('learning.addMatchingGame')"
       width="820px"
     >
-      <el-form label-position="top">
-        <el-form-item :label="t('content.fields.title')">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+        <el-form-item :label="t('content.fields.title')" prop="title">
           <el-input v-model="form.title" maxlength="200" />
         </el-form-item>
 

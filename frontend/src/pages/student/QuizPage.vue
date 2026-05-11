@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { studentLearningService } from '../../services/studentLearningService'
 import type { StudentQuiz } from '../../types/learning'
 
-const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
@@ -18,7 +18,7 @@ const errorMessage = ref('')
 const quiz = ref<StudentQuiz | null>(null)
 const answers = reactive<Record<number, string>>({})
 
-const quizId = computed(() => Number(route.params.quizId))
+const quizId = useNumericRouteParam('quizId')
 
 async function loadQuiz() {
   loading.value = true
@@ -68,9 +68,13 @@ onMounted(() => {
 <template>
   <div class="page-stack student-learning-page">
     <PageHero
+      kid
+      show-mascot
       :eyebrow="t('learning.quizzesEyebrow')"
-      :title="quiz?.title || t('learning.quizPageTitle')"
+      :title="quiz?.title || t('kid.quizTimeFun')"
       :description="quiz?.description || t('learning.quizPageDescription')"
+      :mascot-message="t('kid.quizTimeFun')"
+      mascot-holding="题"
     />
 
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
@@ -89,7 +93,7 @@ onMounted(() => {
                 <p class="section-label">{{ question.questionType }}</p>
                 <h2>{{ question.questionText }}</h2>
               </div>
-              <el-tag round>{{ question.points }} pts</el-tag>
+              <el-tag round>{{ question.points }} {{ t('learning.points') }}</el-tag>
             </div>
 
             <div v-if="question.options.length" class="student-option-list">
@@ -115,7 +119,7 @@ onMounted(() => {
           </el-card>
 
           <div class="student-practice-card__actions">
-            <el-button type="primary" round :loading="submitting" @click="submitQuiz">{{ t('learning.submitQuiz') }}</el-button>
+            <el-button type="primary" round size="large" :loading="submitting" @click="submitQuiz">🚀 {{ t('learning.submitQuiz') }}</el-button>
           </div>
         </div>
       </template>

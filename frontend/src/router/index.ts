@@ -5,106 +5,131 @@ import PublicLayout from '../layouts/PublicLayout.vue'
 import StudentLayout from '../layouts/StudentLayout.vue'
 import TeacherLayout from '../layouts/TeacherLayout.vue'
 import { i18n } from '../i18n'
-import AdminContentApprovalPage from '../pages/admin/AdminContentApprovalPage.vue'
-import AdminContentDetailReviewPage from '../pages/admin/AdminContentDetailReviewPage.vue'
-import AdminContentModerationPage from '../pages/admin/AdminContentModerationPage.vue'
-import AdminContentModerationListPage from '../pages/admin/AdminContentModerationListPage.vue'
-import AdminAiUsageLogsPage from '../pages/admin/AdminAiUsageLogsPage.vue'
-import AdminAuditLogPage from '../pages/admin/AdminAuditLogPage.vue'
-import AdminLiveClassOverviewPage from '../pages/admin/AdminLiveClassOverviewPage.vue'
-import AdminReportDetailPage from '../pages/admin/AdminReportDetailPage.vue'
-import AdminReportManagementPage from '../pages/admin/AdminReportManagementPage.vue'
-import AdminReviewModerationPage from '../pages/admin/AdminReviewModerationPage.vue'
-import AdminScheduleOverviewPage from '../pages/admin/AdminScheduleOverviewPage.vue'
-import AdminSupportManagementPage from '../pages/admin/AdminSupportManagementPage.vue'
-import AdminSupportTicketDetailPage from '../pages/admin/AdminSupportTicketDetailPage.vue'
-import CommissionSettingPage from '../pages/admin/CommissionSettingPage.vue'
-import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
-import PaymentManagementPage from '../pages/admin/PaymentManagementPage.vue'
-import PayoutManagementPage from '../pages/admin/PayoutManagementPage.vue'
-import RefundManagementPage from '../pages/admin/RefundManagementPage.vue'
-import AdminStudentListPage from '../pages/admin/AdminStudentListPage.vue'
-import SubscriptionPlanManagementPage from '../pages/admin/SubscriptionPlanManagementPage.vue'
-import AdminTeacherApprovalListPage from '../pages/admin/AdminTeacherApprovalListPage.vue'
-import AdminTeacherVerificationDetailPage from '../pages/admin/AdminTeacherVerificationDetailPage.vue'
-import AdminUserManagementPage from '../pages/admin/AdminUserManagementPage.vue'
-import NotificationCenterPage from '../pages/shared/NotificationCenterPage.vue'
-import CreateSupportTicketPage from '../pages/shared/CreateSupportTicketPage.vue'
-import SupportTicketDetailPage from '../pages/shared/SupportTicketDetailPage.vue'
-import SupportTicketListPage from '../pages/shared/SupportTicketListPage.vue'
-import AiDisclaimerPage from '../pages/public/AiDisclaimerPage.vue'
-import ChildSafetyPage from '../pages/public/ChildSafetyPage.vue'
-import CourseDetailPage from '../pages/public/CourseDetailPage.vue'
-import CourseDiscoveryPage from '../pages/public/CourseDiscoveryPage.vue'
-import FAQPage from '../pages/public/FAQPage.vue'
-import LandingPage from '../pages/public/LandingPage.vue'
-import LoginPage from '../pages/public/LoginPage.vue'
-import NotFoundPage from '../pages/public/NotFoundPage.vue'
-import PrivacyPage from '../pages/public/PrivacyPage.vue'
-import RegisterPage from '../pages/public/RegisterPage.vue'
-import TeacherPublicProfilePage from '../pages/public/TeacherPublicProfilePage.vue'
-import TermsPage from '../pages/public/TermsPage.vue'
-import CharacterTracingPage from '../pages/student/CharacterTracingPage.vue'
-import FlashcardPracticePage from '../pages/student/FlashcardPracticePage.vue'
-import AiPronunciationFeedbackPage from '../pages/student/AiPronunciationFeedbackPage.vue'
-import AiQuizGeneratorPage from '../pages/student/AiQuizGeneratorPage.vue'
-import AiSentencePracticePage from '../pages/student/AiSentencePracticePage.vue'
-import AiStoryGeneratorPage from '../pages/student/AiStoryGeneratorPage.vue'
-import AiTutorPage from '../pages/student/AiTutorPage.vue'
-import AiVocabularyHelperPage from '../pages/student/AiVocabularyHelperPage.vue'
-import AiWritingFeedbackPage from '../pages/student/AiWritingFeedbackPage.vue'
-import CartPage from '../pages/student/CartPage.vue'
-import LessonPlayerPage from '../pages/student/LessonPlayerPage.vue'
-import ListenAndChoosePage from '../pages/student/ListenAndChoosePage.vue'
-import MatchingGamePage from '../pages/student/MatchingGamePage.vue'
-import PaymentHistoryPage from '../pages/student/PaymentHistoryPage.vue'
-import PaymentResultPage from '../pages/student/PaymentResultPage.vue'
-import ProgressPage from '../pages/student/ProgressPage.vue'
-import QuizPage from '../pages/student/QuizPage.vue'
-import QuizResultPage from '../pages/student/QuizResultPage.vue'
-import RecordedLessonPlayerPage from '../pages/student/RecordedLessonPlayerPage.vue'
-import RefundHistoryPage from '../pages/student/RefundHistoryPage.vue'
-import RewardsPage from '../pages/student/RewardsPage.vue'
-import MyReportsPage from '../pages/student/MyReportsPage.vue'
-import MyReviewsPage from '../pages/student/MyReviewsPage.vue'
-import ReportFormPage from '../pages/student/ReportFormPage.vue'
-import StudentDashboardPage from '../pages/student/StudentDashboardPage.vue'
-import StudentFeedbackPage from '../pages/student/StudentFeedbackPage.vue'
-import StudentLessonsPage from '../pages/student/StudentLessonsPage.vue'
-import StudentLiveClassDetailPage from '../pages/student/StudentLiveClassDetailPage.vue'
-import StudentLiveClassListPage from '../pages/student/StudentLiveClassListPage.vue'
-import StudentSchedulePage from '../pages/student/StudentSchedulePage.vue'
-import SubscriptionPage from '../pages/student/SubscriptionPage.vue'
-import WrongAnswerReviewPage from '../pages/student/WrongAnswerReviewPage.vue'
-import EarningsDashboardPage from '../pages/teacher/EarningsDashboardPage.vue'
-import FlashcardEditorPage from '../pages/teacher/FlashcardEditorPage.vue'
-import LessonEditorPage from '../pages/teacher/LessonEditorPage.vue'
-import LessonManagementPage from '../pages/teacher/LessonManagementPage.vue'
-import ListeningExerciseEditorPage from '../pages/teacher/ListeningExerciseEditorPage.vue'
-import MatchingGameEditorPage from '../pages/teacher/MatchingGameEditorPage.vue'
-import ModuleManagementPage from '../pages/teacher/ModuleManagementPage.vue'
-import PackageEditorPage from '../pages/teacher/PackageEditorPage.vue'
-import PackageManagementPage from '../pages/teacher/PackageManagementPage.vue'
-import TeacherAiQuizGeneratorPage from '../pages/teacher/TeacherAiQuizGeneratorPage.vue'
-import TeacherAiStoryGeneratorPage from '../pages/teacher/TeacherAiStoryGeneratorPage.vue'
-import TeacherAiTeacherAssistantPage from '../pages/teacher/TeacherAiTeacherAssistantPage.vue'
-import TeacherAiVocabularyHelperPage from '../pages/teacher/TeacherAiVocabularyHelperPage.vue'
-import PayoutRequestPage from '../pages/teacher/PayoutRequestPage.vue'
-import QuizEditorPage from '../pages/teacher/QuizEditorPage.vue'
-import QuizResultsViewerPage from '../pages/teacher/QuizResultsViewerPage.vue'
-import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage.vue'
-import TeacherFeedbackPage from '../pages/teacher/TeacherFeedbackPage.vue'
-import TeacherLiveClassManagementPage from '../pages/teacher/TeacherLiveClassManagementPage.vue'
-import TeacherProfilePage from '../pages/teacher/TeacherProfilePage.vue'
-import TeacherRecordedLessonManagementPage from '../pages/teacher/TeacherRecordedLessonManagementPage.vue'
-import TeacherReportsRevisionRequestsPage from '../pages/teacher/TeacherReportsRevisionRequestsPage.vue'
-import TeacherReviewsPage from '../pages/teacher/TeacherReviewsPage.vue'
-import TeacherSchedulePage from '../pages/teacher/TeacherSchedulePage.vue'
-import TeacherVerificationUploadPage from '../pages/teacher/TeacherVerificationUploadPage.vue'
-import TeacherModerationRecordsPage from '../pages/teacher/TeacherModerationRecordsPage.vue'
-import TracingExerciseEditorPage from '../pages/teacher/TracingExerciseEditorPage.vue'
 import { pinia } from '../stores'
 import { useAuthStore, type UserRole } from '../stores/authStore'
+
+// ----------------------------------------------------------------------------
+// Lazy-loaded page components.
+//
+// Each `() => import(...)` call is treated as a code-splitting boundary by
+// Vite, which means each route's component lands in its own JavaScript chunk
+// fetched on-demand. The combined effect is dramatic: instead of shipping all
+// ~100 page components in the initial bundle, the browser only downloads the
+// chunk for the route the user is actually visiting (plus any chunks that
+// share dependencies, hoisted automatically by rollup).
+//
+// The layouts above are intentionally kept as eager imports because they are
+// always rendered for an authenticated session — making them lazy would just
+// add an unnecessary network round-trip on the very first navigation.
+// ----------------------------------------------------------------------------
+
+// Admin pages
+const AdminContentApprovalPage = () => import('../pages/admin/AdminContentApprovalPage.vue')
+const AdminContentDetailReviewPage = () => import('../pages/admin/AdminContentDetailReviewPage.vue')
+const AdminContentModerationPage = () => import('../pages/admin/AdminContentModerationPage.vue')
+const AdminContentModerationListPage = () => import('../pages/admin/AdminContentModerationListPage.vue')
+const AdminAiUsageLogsPage = () => import('../pages/admin/AdminAiUsageLogsPage.vue')
+const AdminAuditLogPage = () => import('../pages/admin/AdminAuditLogPage.vue')
+const AdminLiveClassOverviewPage = () => import('../pages/admin/AdminLiveClassOverviewPage.vue')
+const AdminReportDetailPage = () => import('../pages/admin/AdminReportDetailPage.vue')
+const AdminReportManagementPage = () => import('../pages/admin/AdminReportManagementPage.vue')
+const AdminReviewModerationPage = () => import('../pages/admin/AdminReviewModerationPage.vue')
+const AdminScheduleOverviewPage = () => import('../pages/admin/AdminScheduleOverviewPage.vue')
+const AdminSupportManagementPage = () => import('../pages/admin/AdminSupportManagementPage.vue')
+const AdminSupportTicketDetailPage = () => import('../pages/admin/AdminSupportTicketDetailPage.vue')
+const CommissionSettingPage = () => import('../pages/admin/CommissionSettingPage.vue')
+const AdminDashboardPage = () => import('../pages/admin/AdminDashboardPage.vue')
+const PaymentManagementPage = () => import('../pages/admin/PaymentManagementPage.vue')
+const PayoutManagementPage = () => import('../pages/admin/PayoutManagementPage.vue')
+const RefundManagementPage = () => import('../pages/admin/RefundManagementPage.vue')
+const AdminStudentListPage = () => import('../pages/admin/AdminStudentListPage.vue')
+const SubscriptionPlanManagementPage = () => import('../pages/admin/SubscriptionPlanManagementPage.vue')
+const AdminTeacherApprovalListPage = () => import('../pages/admin/AdminTeacherApprovalListPage.vue')
+const AdminTeacherVerificationDetailPage = () => import('../pages/admin/AdminTeacherVerificationDetailPage.vue')
+const AdminUserManagementPage = () => import('../pages/admin/AdminUserManagementPage.vue')
+
+// Shared pages (notifications, support tickets — used by every role)
+const NotificationCenterPage = () => import('../pages/shared/NotificationCenterPage.vue')
+const CreateSupportTicketPage = () => import('../pages/shared/CreateSupportTicketPage.vue')
+const SupportTicketDetailPage = () => import('../pages/shared/SupportTicketDetailPage.vue')
+const SupportTicketListPage = () => import('../pages/shared/SupportTicketListPage.vue')
+
+// Public marketing pages
+const AiDisclaimerPage = () => import('../pages/public/AiDisclaimerPage.vue')
+const ChildSafetyPage = () => import('../pages/public/ChildSafetyPage.vue')
+const CourseDetailPage = () => import('../pages/public/CourseDetailPage.vue')
+const CourseDiscoveryPage = () => import('../pages/public/CourseDiscoveryPage.vue')
+const FAQPage = () => import('../pages/public/FAQPage.vue')
+const LandingPage = () => import('../pages/public/LandingPage.vue')
+const LoginPage = () => import('../pages/public/LoginPage.vue')
+const NotFoundPage = () => import('../pages/public/NotFoundPage.vue')
+const PrivacyPage = () => import('../pages/public/PrivacyPage.vue')
+const RegisterPage = () => import('../pages/public/RegisterPage.vue')
+const TeacherPublicProfilePage = () => import('../pages/public/TeacherPublicProfilePage.vue')
+const TermsPage = () => import('../pages/public/TermsPage.vue')
+
+// Student pages
+const CharacterTracingPage = () => import('../pages/student/CharacterTracingPage.vue')
+const FlashcardPracticePage = () => import('../pages/student/FlashcardPracticePage.vue')
+const AiPronunciationFeedbackPage = () => import('../pages/student/AiPronunciationFeedbackPage.vue')
+const AiQuizGeneratorPage = () => import('../pages/student/AiQuizGeneratorPage.vue')
+const AiSentencePracticePage = () => import('../pages/student/AiSentencePracticePage.vue')
+const AiStoryGeneratorPage = () => import('../pages/student/AiStoryGeneratorPage.vue')
+const AiTutorPage = () => import('../pages/student/AiTutorPage.vue')
+const AiVocabularyHelperPage = () => import('../pages/student/AiVocabularyHelperPage.vue')
+const AiWritingFeedbackPage = () => import('../pages/student/AiWritingFeedbackPage.vue')
+const CartPage = () => import('../pages/student/CartPage.vue')
+const LessonPlayerPage = () => import('../pages/student/LessonPlayerPage.vue')
+const ListenAndChoosePage = () => import('../pages/student/ListenAndChoosePage.vue')
+const MatchingGamePage = () => import('../pages/student/MatchingGamePage.vue')
+const PaymentHistoryPage = () => import('../pages/student/PaymentHistoryPage.vue')
+const PaymentResultPage = () => import('../pages/student/PaymentResultPage.vue')
+const ProgressPage = () => import('../pages/student/ProgressPage.vue')
+const QuizPage = () => import('../pages/student/QuizPage.vue')
+const QuizResultPage = () => import('../pages/student/QuizResultPage.vue')
+const RecordedLessonPlayerPage = () => import('../pages/student/RecordedLessonPlayerPage.vue')
+const RefundHistoryPage = () => import('../pages/student/RefundHistoryPage.vue')
+const RewardsPage = () => import('../pages/student/RewardsPage.vue')
+const MyReportsPage = () => import('../pages/student/MyReportsPage.vue')
+const MyReviewsPage = () => import('../pages/student/MyReviewsPage.vue')
+const ReportFormPage = () => import('../pages/student/ReportFormPage.vue')
+const StudentDashboardPage = () => import('../pages/student/StudentDashboardPage.vue')
+const StudentFeedbackPage = () => import('../pages/student/StudentFeedbackPage.vue')
+const StudentLessonsPage = () => import('../pages/student/StudentLessonsPage.vue')
+const StudentLiveClassDetailPage = () => import('../pages/student/StudentLiveClassDetailPage.vue')
+const StudentLiveClassListPage = () => import('../pages/student/StudentLiveClassListPage.vue')
+const StudentSchedulePage = () => import('../pages/student/StudentSchedulePage.vue')
+const SubscriptionPage = () => import('../pages/student/SubscriptionPage.vue')
+const WrongAnswerReviewPage = () => import('../pages/student/WrongAnswerReviewPage.vue')
+
+// Teacher pages
+const EarningsDashboardPage = () => import('../pages/teacher/EarningsDashboardPage.vue')
+const FlashcardEditorPage = () => import('../pages/teacher/FlashcardEditorPage.vue')
+const LessonEditorPage = () => import('../pages/teacher/LessonEditorPage.vue')
+const LessonManagementPage = () => import('../pages/teacher/LessonManagementPage.vue')
+const ListeningExerciseEditorPage = () => import('../pages/teacher/ListeningExerciseEditorPage.vue')
+const MatchingGameEditorPage = () => import('../pages/teacher/MatchingGameEditorPage.vue')
+const ModuleManagementPage = () => import('../pages/teacher/ModuleManagementPage.vue')
+const PackageEditorPage = () => import('../pages/teacher/PackageEditorPage.vue')
+const PackageManagementPage = () => import('../pages/teacher/PackageManagementPage.vue')
+const TeacherAiQuizGeneratorPage = () => import('../pages/teacher/TeacherAiQuizGeneratorPage.vue')
+const TeacherAiStoryGeneratorPage = () => import('../pages/teacher/TeacherAiStoryGeneratorPage.vue')
+const TeacherAiTeacherAssistantPage = () => import('../pages/teacher/TeacherAiTeacherAssistantPage.vue')
+const TeacherAiVocabularyHelperPage = () => import('../pages/teacher/TeacherAiVocabularyHelperPage.vue')
+const PayoutRequestPage = () => import('../pages/teacher/PayoutRequestPage.vue')
+const QuizEditorPage = () => import('../pages/teacher/QuizEditorPage.vue')
+const QuizResultsViewerPage = () => import('../pages/teacher/QuizResultsViewerPage.vue')
+const TeacherDashboardPage = () => import('../pages/teacher/TeacherDashboardPage.vue')
+const TeacherFeedbackPage = () => import('../pages/teacher/TeacherFeedbackPage.vue')
+const TeacherLiveClassManagementPage = () => import('../pages/teacher/TeacherLiveClassManagementPage.vue')
+const TeacherProfilePage = () => import('../pages/teacher/TeacherProfilePage.vue')
+const TeacherRecordedLessonManagementPage = () => import('../pages/teacher/TeacherRecordedLessonManagementPage.vue')
+const TeacherReportsRevisionRequestsPage = () => import('../pages/teacher/TeacherReportsRevisionRequestsPage.vue')
+const TeacherReviewsPage = () => import('../pages/teacher/TeacherReviewsPage.vue')
+const TeacherSchedulePage = () => import('../pages/teacher/TeacherSchedulePage.vue')
+const TeacherVerificationUploadPage = () => import('../pages/teacher/TeacherVerificationUploadPage.vue')
+const TeacherModerationRecordsPage = () => import('../pages/teacher/TeacherModerationRecordsPage.vue')
+const TracingExerciseEditorPage = () => import('../pages/teacher/TracingExerciseEditorPage.vue')
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -309,6 +334,30 @@ const studentChildren: RouteRecordRaw[] = [
     component: WrongAnswerReviewPage,
     meta: { titleKey: 'nav.wrongAnswers' },
   },
+  {
+    path: 'notifications',
+    name: 'student-notifications',
+    component: NotificationCenterPage,
+    meta: { titleKey: 'phase11.notificationsTitle' },
+  },
+  {
+    path: 'support-tickets',
+    name: 'student-support-tickets',
+    component: SupportTicketListPage,
+    meta: { titleKey: 'phase11.supportTicketsTitle' },
+  },
+  {
+    path: 'support-tickets/create',
+    name: 'student-support-ticket-create',
+    component: CreateSupportTicketPage,
+    meta: { titleKey: 'phase11.createSupportTicket', navKey: 'student-support-tickets' },
+  },
+  {
+    path: 'support-tickets/:id',
+    name: 'student-support-ticket-detail',
+    component: SupportTicketDetailPage,
+    meta: { titleKey: 'phase11.supportTicketDetailTitle', navKey: 'student-support-tickets' },
+  },
 ]
 
 const teacherChildren: RouteRecordRaw[] = [
@@ -503,6 +552,30 @@ const teacherChildren: RouteRecordRaw[] = [
     name: 'teacher-payouts',
     component: PayoutRequestPage,
     meta: { titleKey: 'nav.payoutRequests' },
+  },
+  {
+    path: 'notifications',
+    name: 'teacher-notifications',
+    component: NotificationCenterPage,
+    meta: { titleKey: 'phase11.notificationsTitle' },
+  },
+  {
+    path: 'support-tickets',
+    name: 'teacher-support-tickets',
+    component: SupportTicketListPage,
+    meta: { titleKey: 'phase11.supportTicketsTitle' },
+  },
+  {
+    path: 'support-tickets/create',
+    name: 'teacher-support-ticket-create',
+    component: CreateSupportTicketPage,
+    meta: { titleKey: 'phase11.createSupportTicket', navKey: 'teacher-support-tickets' },
+  },
+  {
+    path: 'support-tickets/:id',
+    name: 'teacher-support-ticket-detail',
+    component: SupportTicketDetailPage,
+    meta: { titleKey: 'phase11.supportTicketDetailTitle', navKey: 'teacher-support-tickets' },
   },
 ]
 
@@ -751,29 +824,33 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  // Top-level deep-link aliases — automatically redirect into the right
+  // role-scoped layout so the user always keeps their sidebar. If the user is
+  // not signed in yet, fall back to /login with the original path preserved
+  // (instead of returning the same path, which would create a redirect loop).
   {
     path: '/notifications',
     name: 'notifications',
-    component: NotificationCenterPage,
-    meta: { titleKey: 'phase11.notificationsTitle', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+    redirect: () => roleScopedRedirect('/notifications'),
+    meta: { requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   },
   {
     path: '/support-tickets',
     name: 'support-tickets',
-    component: SupportTicketListPage,
-    meta: { titleKey: 'phase11.supportTicketsTitle', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+    redirect: () => roleScopedRedirect('/support-tickets'),
+    meta: { requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   },
   {
     path: '/support-tickets/create',
     name: 'support-ticket-create',
-    component: CreateSupportTicketPage,
-    meta: { titleKey: 'phase11.createSupportTicket', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+    redirect: () => roleScopedRedirect('/support-tickets/create'),
+    meta: { requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   },
   {
     path: '/support-tickets/:id',
     name: 'support-ticket-detail',
-    component: SupportTicketDetailPage,
-    meta: { titleKey: 'phase11.supportTicketDetailTitle', requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+    redirect: (to) => roleScopedRedirect(`/support-tickets/${to.params.id}`),
+    meta: { requiresAuth: true, roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   },
   {
     path: '/student',
@@ -830,11 +907,46 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to: RouteLocationNormalized) => {
-  const titleKey = typeof to.meta.titleKey === 'string' ? to.meta.titleKey : 'common.appName'
   const translate = i18n.global.t as (key: string) => string
-  const pageTitle = translate(titleKey)
-  document.title = `${pageTitle} | ${translate('common.appName')}`
+  const appName = translate('common.appName')
+  // Prefer a per-route title when provided; otherwise fall back to the app
+  // name alone (avoiding the "App Name | App Name" duplication that happens
+  // when a route omits `meta.titleKey`).
+  const titleKey = typeof to.meta.titleKey === 'string' ? to.meta.titleKey : null
+  if (titleKey) {
+    const pageTitle = translate(titleKey)
+    document.title = pageTitle === appName ? appName : `${pageTitle} | ${appName}`
+  } else {
+    document.title = appName
+  }
 })
+
+/** Returns the layout-scoped base path for the currently signed-in user. */
+function currentRoleBase(): '/student' | '/teacher' | '/admin' | null {
+  const auth = useAuthStore(pinia)
+  if (auth.hasRole('STUDENT')) return '/student'
+  if (auth.hasRole('TEACHER')) return '/teacher'
+  if (auth.hasRole('ADMIN')) return '/admin'
+  return null
+}
+
+/**
+ * Resolves a role-aware redirect target for a shared deep link. When the user
+ * is not yet authenticated, hand back a `/login` location with the original
+ * path preserved as `?redirect=`, so they land directly on the deep link
+ * after signing in instead of bouncing through the default role dashboard.
+ *
+ * The bare-suffix form (e.g. `/notifications`) is required because route
+ * redirects run **before** `router.beforeEach`, so returning the same path
+ * here would create an infinite redirect loop.
+ */
+function roleScopedRedirect(pathSuffix: string) {
+  const base = currentRoleBase()
+  if (base) {
+    return { path: `${base}${pathSuffix}` }
+  }
+  return { name: 'login' as const, query: { redirect: pathSuffix } }
+}
 
 function redirectByRole(role: UserRole | null) {
   if (role === 'STUDENT') {

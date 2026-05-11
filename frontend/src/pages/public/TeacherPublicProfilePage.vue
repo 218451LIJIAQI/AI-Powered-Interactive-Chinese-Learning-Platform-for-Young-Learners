@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { publicTeacherService } from '../../services/publicTeacherService'
 import type { TeacherProfilePublicResponse } from '../../types/teacherManagement'
 
-const route = useRoute()
 const { t } = useI18n()
 const loading = ref(true)
 const profile = ref<TeacherProfilePublicResponse | null>(null)
 
-const teacherId = computed(() => Number(route.params.id))
+const teacherId = useNumericRouteParam('id')
 
 async function loadProfile() {
   loading.value = true

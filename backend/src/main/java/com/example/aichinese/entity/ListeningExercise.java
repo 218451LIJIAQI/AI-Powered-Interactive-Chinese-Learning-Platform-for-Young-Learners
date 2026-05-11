@@ -37,7 +37,7 @@ public class ListeningExercise extends BaseEntity {
     private String audioUrl;
 
     @Lob
-    @Column(name = "question_payload")
+    @Column(name = "question_payload", columnDefinition = "LONGTEXT")
     private String questionPayload;
 
     @Enumerated(EnumType.STRING)

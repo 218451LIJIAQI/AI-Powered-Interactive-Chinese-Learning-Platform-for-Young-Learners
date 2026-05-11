@@ -19,6 +19,8 @@ import type {
   PageResponse,
   PublicCourseSummary,
 } from '../../types/contentManagement'
+import { extractApiError } from '../../utils/apiError'
+import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -76,7 +78,7 @@ function formatPrice(item: PublicCourseSummary) {
     return t('content.freeToBrowse')
   }
 
-  return `RM ${Number(item.price ?? 0).toFixed(2)}`
+  return formatMoney(item.price)
 }
 
 async function addToCart(item: PublicCourseSummary) {
@@ -85,8 +87,12 @@ async function addToCart(item: PublicCourseSummary) {
     return
   }
 
-  await commerceService.addCartItem({ itemType: item.type, itemId: item.contentId })
-  ElMessage.success(t('commerce.messages.cartUpdated'))
+  try {
+    await commerceService.addCartItem({ itemType: item.type, itemId: item.contentId })
+    ElMessage.success(t('commerce.messages.cartUpdated'))
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
+  }
 }
 
 async function buyNow(item: PublicCourseSummary) {
@@ -95,12 +101,16 @@ async function buyNow(item: PublicCourseSummary) {
     return
   }
 
-  const result = await commerceService.buyNow({ itemType: item.type, itemId: item.contentId })
-  if (result.checkoutUrl) {
-    window.location.assign(result.checkoutUrl)
-    return
+  try {
+    const result = await commerceService.buyNow({ itemType: item.type, itemId: item.contentId })
+    if (result.checkoutUrl) {
+      window.location.assign(result.checkoutUrl)
+      return
+    }
+    ElMessage.warning(result.message)
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   }
-  ElMessage.warning(result.message)
 }
 
 async function loadFilters() {

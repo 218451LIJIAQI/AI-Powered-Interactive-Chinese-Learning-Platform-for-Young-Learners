@@ -7,6 +7,8 @@ import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
 import { commerceService } from '../../services/commerceService'
 import type { Cart } from '../../types/commerce'
+import { extractApiError } from '../../utils/apiError'
+import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
@@ -17,27 +19,33 @@ const cart = ref<Cart | null>(null)
 
 const hasItems = computed(() => (cart.value?.items.length ?? 0) > 0)
 
-function formatMoney(amount: number) {
-  return `RM ${Number(amount ?? 0).toFixed(2)}`
-}
-
 async function loadCart() {
   loading.value = true
   try {
     cart.value = await commerceService.getCart()
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   } finally {
     loading.value = false
   }
 }
 
 async function removeItem(cartItemId: number) {
-  cart.value = await commerceService.removeCartItem(cartItemId)
-  ElMessage.success(t('commerce.messages.cartUpdated'))
+  try {
+    cart.value = await commerceService.removeCartItem(cartItemId)
+    ElMessage.success(t('commerce.messages.cartUpdated'))
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
+  }
 }
 
 async function clearCart() {
-  cart.value = await commerceService.clearCart()
-  ElMessage.success(t('commerce.messages.cartCleared'))
+  try {
+    cart.value = await commerceService.clearCart()
+    ElMessage.success(t('commerce.messages.cartCleared'))
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
+  }
 }
 
 async function checkoutCart() {
@@ -49,6 +57,8 @@ async function checkoutCart() {
       return
     }
     ElMessage.warning(result.message)
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   } finally {
     checkingOut.value = false
   }
@@ -86,7 +96,7 @@ onMounted(() => {
             </el-table-column>
           </el-table>
 
-          <div class="table-actions" style="justify-content: space-between; margin-top: 1rem;">
+          <div class="cart-summary">
             <div>
               <strong>{{ t('commerce.total') }}: {{ formatMoney(cart?.totalAmount ?? 0) }}</strong>
             </div>
@@ -100,3 +110,14 @@ onMounted(() => {
     </el-card>
   </div>
 </template>
+
+<style scoped>
+.cart-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 1rem;
+}
+</style>

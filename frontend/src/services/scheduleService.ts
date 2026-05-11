@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { AdminSchedule, StudentSchedule, TeacherSchedule } from '../types/liveLearning'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const scheduleService = {
   async getStudentSchedule() {

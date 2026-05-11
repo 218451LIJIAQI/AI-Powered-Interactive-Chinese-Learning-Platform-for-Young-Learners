@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { reviewService } from '../../services/reviewService'
 import type { ReviewItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
@@ -35,7 +36,7 @@ async function apply(action: 'hide' | 'show' | 'flag', id: number) {
       await reviewService.flagReview(id)
     }
     ElMessage.success(t('phase11.messages.reviewUpdated'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     await loadReviews()
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))

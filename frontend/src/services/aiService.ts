@@ -22,12 +22,7 @@ import type {
   AiWritingFeedbackResponse,
 } from '../types/ai'
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
+import type { ApiResponse } from '../types/api'
 
 export const aiService = {
   async getAvailability() {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { teacherActivityService } from '../../services/teacherActivityService'
@@ -25,6 +26,7 @@ const editingId = ref<number | null>(null)
 const lessons = ref<LessonItem[]>([])
 const exercises = ref<ListeningExercise[]>([])
 const options = ref<ListeningOptionFormPayload[]>([])
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive<ListeningExerciseFormPayload>({
   title: '',
@@ -34,6 +36,15 @@ const form = reactive<ListeningExerciseFormPayload>({
   options: [],
   explanation: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('learning.validation.listeningRequired'), trigger: 'blur' },
+  ],
+  chineseText: [
+    { required: true, message: t('learning.validation.listeningRequired'), trigger: 'blur' },
+  ],
+}))
 
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 const selectedLesson = computed(() => lessons.value.find((lesson) => lesson.id === selectedLessonId.value) ?? null)
@@ -134,8 +145,12 @@ async function saveExercise() {
     return
   }
 
-  if (!form.title.trim() || !form.chineseText.trim()) {
-    ElMessage.error(t('learning.validation.listeningRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -193,10 +208,11 @@ watch(selectedLessonId, async () => {
   await loadExercises()
 })
 
-onMounted(async () => {
+// `loadLessons()` sets `selectedLessonId` which triggers the watch above and
+// already calls `loadExercises()`. Re-calling it here would double-fetch.
+onMounted(() => {
   resetForm()
-  await loadLessons()
-  await loadExercises()
+  loadLessons()
 })
 </script>
 
@@ -270,12 +286,12 @@ onMounted(async () => {
       :title="editingId ? t('learning.editListeningExercise') : t('learning.addListeningExercise')"
       width="820px"
     >
-      <el-form label-position="top">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="content-form-grid">
-          <el-form-item :label="t('content.fields.title')">
+          <el-form-item :label="t('content.fields.title')" prop="title">
             <el-input v-model="form.title" maxlength="200" />
           </el-form-item>
-          <el-form-item :label="t('learning.fields.chineseText')">
+          <el-form-item :label="t('learning.fields.chineseText')" prop="chineseText">
             <el-input v-model="form.chineseText" maxlength="500" />
           </el-form-item>
           <el-form-item :label="t('learning.fields.pinyin')">

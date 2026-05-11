@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
@@ -27,6 +28,7 @@ const enrolmentDialogVisible = ref(false)
 const enrolmentLoading = ref(false)
 const selectedLiveClass = ref<LiveClass | null>(null)
 const enrolments = ref<LiveClassEnrolment[]>([])
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive<LiveClassFormPayload>({
   title: '',
@@ -44,6 +46,31 @@ const form = reactive<LiveClassFormPayload>({
 const dialogTitle = computed(() =>
   editingId.value ? t('phase10.editLiveClass') : t('phase10.createLiveClass'),
 )
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('content.validation.titleRequired'), trigger: 'blur' },
+  ],
+  startTime: [
+    { required: true, message: t('phase10.validation.startTimeRequired'), trigger: 'change' },
+  ],
+  endTime: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (typeof value !== 'string' || !value) {
+          callback(new Error(t('phase10.validation.endTimeRequired')))
+          return
+        }
+        if (form.startTime && value <= form.startTime) {
+          callback(new Error(t('phase10.validation.endAfterStart')))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
+  ],
+}))
 
 function resetForm() {
   form.title = ''
@@ -111,6 +138,15 @@ async function openEnrolments(item: LiveClass) {
 }
 
 async function save() {
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+
   saving.value = true
   try {
     if (editingId.value) {
@@ -213,8 +249,8 @@ onMounted(() => {
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="680px">
-      <el-form label-position="top">
-        <el-form-item :label="t('content.fields.title')">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+        <el-form-item :label="t('content.fields.title')" prop="title">
           <el-input v-model="form.title" />
         </el-form-item>
         <el-form-item :label="t('content.fields.description')">
@@ -231,10 +267,10 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <div class="content-toolbar">
-          <el-form-item :label="t('phase10.startTime')" class="content-filter content-filter--wide">
+          <el-form-item :label="t('phase10.startTime')" prop="startTime" class="content-filter content-filter--wide">
             <el-date-picker v-model="form.startTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" class="w-full" />
           </el-form-item>
-          <el-form-item :label="t('phase10.endTime')" class="content-filter content-filter--wide">
+          <el-form-item :label="t('phase10.endTime')" prop="endTime" class="content-filter content-filter--wide">
             <el-date-picker v-model="form.endTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" class="w-full" />
           </el-form-item>
         </div>

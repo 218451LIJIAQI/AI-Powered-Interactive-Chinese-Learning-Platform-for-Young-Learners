@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { VideoProgress, VideoProgressPayload } from '../types/liveLearning'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const videoProgressService = {
   async getVideoProgress(videoId: number) {

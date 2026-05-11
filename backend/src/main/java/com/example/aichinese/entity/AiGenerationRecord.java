@@ -32,11 +32,11 @@ public class AiGenerationRecord extends BaseEntity {
     private String featureKey;
 
     @Lob
-    @Column(name = "prompt_text")
+    @Column(name = "prompt_text", columnDefinition = "LONGTEXT")
     private String promptText;
 
     @Lob
-    @Column(name = "response_text")
+    @Column(name = "response_text", columnDefinition = "LONGTEXT")
     private String responseText;
 
     @Column(name = "language_preference", length = 20)

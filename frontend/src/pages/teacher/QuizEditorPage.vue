@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { teacherActivityService } from '../../services/teacherActivityService'
@@ -31,6 +32,8 @@ const editingQuestionId = ref<number | null>(null)
 const lessons = ref<LessonItem[]>([])
 const quizzes = ref<TeacherQuiz[]>([])
 const options = ref<QuizOptionFormPayload[]>([])
+const quizFormRef = ref<FormInstance | null>(null)
+const questionFormRef = ref<FormInstance | null>(null)
 
 const quizForm = reactive<QuizFormPayload>({
   title: '',
@@ -56,6 +59,35 @@ const lessonEditable = computed(() =>
 )
 
 const optionBasedTypes = ['MULTIPLE_CHOICE', 'TRUE_FALSE', 'CHOOSE_PINYIN', 'CHOOSE_TONE']
+
+const quizRules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('content.validation.titleRequired'), trigger: 'blur' },
+  ],
+}))
+
+const questionRules = computed<FormRules>(() => ({
+  questionText: [
+    { required: true, message: t('learning.validation.quizQuestionRequired'), trigger: 'blur' },
+  ],
+  correctAnswerText: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (optionBasedTypes.includes(questionForm.questionType)) {
+          callback()
+          return
+        }
+        if (typeof value !== 'string' || !value.trim()) {
+          callback(new Error(t('learning.validation.correctAnswerRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}))
+
 const quizQuestionTypes = [
   'MULTIPLE_CHOICE',
   'TRUE_FALSE',
@@ -151,8 +183,12 @@ async function saveQuiz() {
     return
   }
 
-  if (!quizForm.title.trim()) {
-    ElMessage.error(t('content.validation.titleRequired'))
+  if (!quizFormRef.value) {
+    return
+  }
+  try {
+    await quizFormRef.value.validate()
+  } catch {
     return
   }
 
@@ -234,8 +270,12 @@ async function saveQuestion() {
     return
   }
 
-  if (!questionForm.questionText.trim()) {
-    ElMessage.error(t('learning.validation.quizQuestionRequired'))
+  if (!questionFormRef.value) {
+    return
+  }
+  try {
+    await questionFormRef.value.validate()
+  } catch {
     return
   }
 
@@ -244,9 +284,6 @@ async function saveQuestion() {
       ElMessage.error(t('learning.validation.quizOptionsRequired'))
       return
     }
-  } else if (!questionForm.correctAnswerText?.trim()) {
-    ElMessage.error(t('learning.validation.correctAnswerRequired'))
-    return
   }
 
   savingQuestion.value = true
@@ -321,11 +358,12 @@ watch(
   },
 )
 
-onMounted(async () => {
+// `loadLessons()` sets `selectedLessonId` which triggers the watch above and
+// already calls `loadQuizzes()`. Re-calling it here would double-fetch.
+onMounted(() => {
   resetQuizForm()
   resetQuestionForm()
-  await loadLessons()
-  await loadQuizzes()
+  loadLessons()
 })
 </script>
 
@@ -419,8 +457,8 @@ onMounted(async () => {
       :title="editingQuizId ? t('learning.editQuiz') : t('learning.addQuiz')"
       width="720px"
     >
-      <el-form label-position="top">
-        <el-form-item :label="t('content.fields.title')">
+      <el-form ref="quizFormRef" :model="quizForm" :rules="quizRules" label-position="top">
+        <el-form-item :label="t('content.fields.title')" prop="title">
           <el-input v-model="quizForm.title" maxlength="200" />
         </el-form-item>
         <el-form-item :label="t('content.fields.description')">
@@ -444,7 +482,7 @@ onMounted(async () => {
       :title="editingQuestionId ? t('learning.editQuestion') : t('learning.addQuestion')"
       width="860px"
     >
-      <el-form label-position="top">
+      <el-form ref="questionFormRef" :model="questionForm" :rules="questionRules" label-position="top">
         <div class="content-form-grid">
           <el-form-item :label="t('learning.fields.questionType')">
             <el-select v-model="questionForm.questionType">
@@ -459,11 +497,11 @@ onMounted(async () => {
           </el-form-item>
         </div>
 
-        <el-form-item :label="t('learning.fields.questionText')">
+        <el-form-item :label="t('learning.fields.questionText')" prop="questionText">
           <el-input v-model="questionForm.questionText" type="textarea" :rows="3" maxlength="1000" show-word-limit />
         </el-form-item>
 
-        <el-form-item v-if="!optionBasedTypes.includes(questionForm.questionType)" :label="t('learning.fields.correctAnswer')">
+        <el-form-item v-if="!optionBasedTypes.includes(questionForm.questionType)" :label="t('learning.fields.correctAnswer')" prop="correctAnswerText">
           <el-input v-model="questionForm.correctAnswerText" maxlength="500" />
         </el-form-item>
 

@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { CreateReviewPayload, ReviewItem, UpdateReviewPayload } from '../types/communication'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const reviewService = {
   async createReview(payload: CreateReviewPayload) {

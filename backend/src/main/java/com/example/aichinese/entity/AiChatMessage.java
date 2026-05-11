@@ -31,6 +31,6 @@ public class AiChatMessage extends BaseEntity {
     private String senderRole;
 
     @Lob
-    @Column(name = "message_text", nullable = false)
+    @Column(name = "message_text", nullable = false, columnDefinition = "LONGTEXT")
     private String messageText;
 }

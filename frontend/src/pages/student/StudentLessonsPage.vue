@@ -12,6 +12,7 @@ import type {
   PageResponse,
   PublicCourseSummary,
 } from '../../types/contentManagement'
+import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
 
@@ -116,9 +117,12 @@ onMounted(async () => {
 <template>
   <div class="page-stack student-learning-page">
     <PageHero
+      kid
+      show-mascot
       :eyebrow="t('learning.lessonsEyebrow')"
       :title="t('learning.lessonsTitle')"
       :description="t('learning.lessonsDescription')"
+      mascot-holding="课"
     />
 
     <el-card class="dashboard-panel" shadow="hover">
@@ -217,7 +221,7 @@ onMounted(async () => {
 
             <div class="course-card__footer">
               <div>
-                <strong>{{ item.accessType === 'PAID' ? `RM ${Number(item.price ?? 0).toFixed(2)}` : t('content.free') }}</strong>
+                <strong>{{ item.accessType === 'PAID' ? formatMoney(item.price) : t('content.free') }}</strong>
                 <p>{{ item.locked ? t('learning.paidLockedMessage') : t('learning.readyToPlay') }}</p>
               </div>
               <div class="table-actions">

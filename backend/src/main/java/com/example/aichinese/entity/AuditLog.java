@@ -42,7 +42,7 @@ public class AuditLog extends BaseEntity {
     private Long targetId;
 
     @Lob
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "LONGTEXT")
     private String description;
 
     @Column(name = "ip_address", length = 64)

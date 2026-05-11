@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { ModerationAction, ModerationActionPayload, ModerationRecordItem } from '../types/communication'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 const actionPath: Record<ModerationAction, string> = {
   HIDE: 'hide',

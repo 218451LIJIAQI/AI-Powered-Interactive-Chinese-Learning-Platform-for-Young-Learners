@@ -11,12 +11,7 @@ import type {
   PackageItemFormPayload,
 } from '../types/contentManagement'
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
+import type { ApiResponse } from '../types/api'
 
 export const teacherContentService = {
   async getModules() {

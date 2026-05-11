@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { feedbackService } from '../../services/feedbackService'
 import type { FeedbackCandidate, TeacherFeedbackItem, TeacherFeedbackType } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
@@ -13,6 +15,19 @@ const loading = ref(true)
 const saving = ref(false)
 const items = ref<TeacherFeedbackItem[]>([])
 const candidates = ref<FeedbackCandidate[]>([])
+const formRef = ref<FormInstance | null>(null)
+
+// `el-select :value` requires a non-null primitive. The lesson-/quiz-specific
+// candidate dropdowns therefore only render rows where the relevant id is set.
+const lessonCandidates = computed(() =>
+  candidates.value.filter((candidate): candidate is FeedbackCandidate & { lessonId: number } => candidate.lessonId !== null),
+)
+const quizCandidates = computed(() =>
+  candidates.value.filter(
+    (candidate): candidate is FeedbackCandidate & { quizAttemptId: number } => candidate.quizAttemptId !== null,
+  ),
+)
+
 const form = reactive({
   studentId: 0,
   lessonId: null as number | null,
@@ -20,6 +35,25 @@ const form = reactive({
   feedbackType: 'GENERAL' as TeacherFeedbackType,
   message: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  studentId: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+          callback(new Error(t('phase11.validation.targetIdRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
+  ],
+  message: [
+    { required: true, message: t('phase11.validation.messageRequired'), trigger: 'blur' },
+    { min: 10, message: t('phase11.validation.messageMin'), trigger: 'blur' },
+  ],
+}))
 
 async function loadData() {
   loading.value = true
@@ -44,12 +78,24 @@ async function loadData() {
 }
 
 async function submit() {
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
   saving.value = true
   try {
-    await feedbackService.createTeacherFeedback(form)
+    await feedbackService.createTeacherFeedback({
+      ...form,
+      message: form.message.trim(),
+    })
     form.message = ''
+    formRef.value.clearValidate()
     ElMessage.success(t('phase11.messages.feedbackCreated'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     await loadData()
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))
@@ -79,8 +125,8 @@ onMounted(() => {
         </div>
       </div>
 
-      <el-form label-position="top">
-        <el-form-item :label="t('phase11.studentLabel')">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+        <el-form-item :label="t('phase11.studentLabel')" prop="studentId">
           <el-select v-model="form.studentId" class="w-full">
             <el-option
               v-for="candidate in candidates"
@@ -93,12 +139,12 @@ onMounted(() => {
         <div class="content-toolbar">
           <el-form-item :label="t('content.lesson')" class="content-filter content-filter--wide">
             <el-select v-model="form.lessonId" class="w-full" clearable>
-              <el-option v-for="candidate in candidates" :key="`lesson-${candidate.lessonId}`" :label="candidate.lessonTitle || '-'" :value="candidate.lessonId" />
+              <el-option v-for="candidate in lessonCandidates" :key="`lesson-${candidate.lessonId}`" :label="candidate.lessonTitle || '-'" :value="candidate.lessonId" />
             </el-select>
           </el-form-item>
           <el-form-item :label="t('learning.quizTitleLabel')" class="content-filter content-filter--wide">
             <el-select v-model="form.quizAttemptId" class="w-full" clearable>
-              <el-option v-for="candidate in candidates" :key="`attempt-${candidate.quizAttemptId}`" :label="candidate.quizTitle || '-'" :value="candidate.quizAttemptId" />
+              <el-option v-for="candidate in quizCandidates" :key="`attempt-${candidate.quizAttemptId}`" :label="candidate.quizTitle || '-'" :value="candidate.quizAttemptId" />
             </el-select>
           </el-form-item>
         </div>
@@ -111,7 +157,7 @@ onMounted(() => {
             <el-option label="WEAK_AREA" value="WEAK_AREA" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="t('phase11.feedbackMessage')">
+        <el-form-item :label="t('phase11.feedbackMessage')" prop="message">
           <el-input v-model="form.message" type="textarea" :rows="4" maxlength="2000" show-word-limit />
         </el-form-item>
         <el-button type="primary" :loading="saving" @click="submit">{{ t('phase11.submitFeedback') }}</el-button>

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useNumericRouteParam, useStringRouteParam } from '../../composables/useRouteParam'
 import { adminContentService } from '../../services/adminContentService'
 import type { ContentSubmissionDetail, ManagedContentType } from '../../types/contentManagement'
 
-const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
@@ -17,8 +17,16 @@ const loading = ref(true)
 const working = ref(false)
 const detail = ref<ContentSubmissionDetail | null>(null)
 
-const contentType = computed(() => String(route.params.type).toUpperCase() as ManagedContentType)
-const contentId = computed(() => Number(route.params.id))
+const VALID_CONTENT_TYPES: readonly ManagedContentType[] = ['MODULE', 'LESSON', 'PACKAGE']
+
+const contentTypeParam = useStringRouteParam('type')
+const contentType = computed<ManagedContentType>(() => {
+  const upper = contentTypeParam.value.toUpperCase()
+  return (VALID_CONTENT_TYPES as readonly string[]).includes(upper)
+    ? (upper as ManagedContentType)
+    : 'MODULE'
+})
+const contentId = useNumericRouteParam('id')
 const canApprove = computed(() => detail.value?.contentStatus === 'SUBMITTED')
 const canReject = computed(() => detail.value?.contentStatus === 'SUBMITTED')
 const canPublish = computed(() => detail.value?.contentStatus === 'APPROVED')

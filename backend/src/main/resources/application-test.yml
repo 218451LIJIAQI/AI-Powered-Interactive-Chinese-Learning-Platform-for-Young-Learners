@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:aichinese-${random.uuid};MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+  sql:
+    init:
+      mode: never
+
+logging:
+  level:
+    root: warn
+
+app:
+  security:
+    jwt:
+      # Local runtime verification still expects JWT_SECRET from the
+      # environment; this profile only swaps the datasource/upload settings.
+      secret: ${JWT_SECRET:}
+      expiration: 3600000
+  upload:
+    directory: ./target/test-uploads
+    max-file-size: 5MB

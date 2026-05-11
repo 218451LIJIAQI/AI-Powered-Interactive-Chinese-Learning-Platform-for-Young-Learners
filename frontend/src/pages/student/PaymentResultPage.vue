@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { commerceService } from '../../services/commerceService'
 import type { PaymentRecord } from '../../types/commerce'
+import { extractApiError } from '../../utils/apiError'
+import { formatMoney } from '../../utils/money'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -13,12 +16,12 @@ const { t } = useI18n()
 const loading = ref(true)
 const payment = ref<PaymentRecord | null>(null)
 
-const paymentId = computed(() => Number(route.query.paymentId ?? 0))
+const paymentId = computed(() => {
+  const raw = route.query.paymentId
+  const numeric = Number(typeof raw === 'string' ? raw : 0)
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0
+})
 const cancelled = computed(() => route.name === 'payment-cancel' || route.query.cancelled === 'true')
-
-function formatMoney(amount: number) {
-  return `RM ${Number(amount ?? 0).toFixed(2)}`
-}
 
 async function loadPayment() {
   if (!paymentId.value) {
@@ -29,6 +32,8 @@ async function loadPayment() {
   loading.value = true
   try {
     payment.value = await commerceService.verifyPaymentStatus(paymentId.value)
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   } finally {
     loading.value = false
   }

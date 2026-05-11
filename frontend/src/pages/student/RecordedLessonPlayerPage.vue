@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { recordedLessonService } from '../../services/recordedLessonService'
 import { videoProgressService } from '../../services/videoProgressService'
 import type { RecordedLessonVideo, VideoProgress } from '../../types/liveLearning'
@@ -17,7 +18,7 @@ const video = ref<RecordedLessonVideo | null>(null)
 const progress = ref<VideoProgress | null>(null)
 const watchedSeconds = ref(0)
 
-const videoId = computed(() => Number(route.params.id))
+const videoId = useNumericRouteParam('id')
 
 async function loadVideo() {
   loading.value = true

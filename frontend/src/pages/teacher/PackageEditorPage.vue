@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import type { FormInstance, FormRules } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { categoryService } from '../../services/categoryService'
 import { levelService } from '../../services/levelService'
 import { teacherContentService } from '../../services/teacherContentService'
@@ -18,21 +20,18 @@ import type {
   PackageItemFormPayload,
 } from '../../types/contentManagement'
 
-const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const authStore = useAuthStore()
 
-const packageId = computed(() => {
-  const raw = route.params.id
-  return raw ? Number(raw) : null
-})
-
+const routePackageId = useNumericRouteParam('id')
+const packageId = computed(() => (Number.isFinite(routePackageId.value) ? routePackageId.value : null))
 const isEditMode = computed(() => packageId.value !== null)
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 const loading = ref(true)
 const saving = ref(false)
 const itemSaving = ref(false)
+const formRef = ref<FormInstance | null>(null)
 const levels = ref<LearningLevel[]>([])
 const categories = ref<LearningCategory[]>([])
 const modules = ref<LearningModuleItem[]>([])
@@ -49,6 +48,24 @@ const form = reactive<CoursePackageFormPayload>({
   price: 0,
   coverImageUrl: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('content.validation.titleRequired'), trigger: 'blur' },
+  ],
+  price: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (form.accessType === 'PAID' && (typeof value !== 'number' || value < 0)) {
+          callback(new Error(t('content.validation.priceRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}))
 
 const newItem = reactive<PackageItemFormPayload>({
   itemType: 'LESSON',
@@ -112,8 +129,12 @@ async function savePackage() {
     return
   }
 
-  if (!form.title.trim()) {
-    ElMessage.error(t('content.validation.titleRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -211,8 +232,8 @@ onMounted(() => {
         <el-alert v-if="teacherLocked" :title="t('content.teacherApprovalRequired')" type="warning" show-icon :closable="false" />
 
         <el-card class="dashboard-panel" shadow="hover">
-          <el-form label-position="top">
-            <el-form-item :label="t('content.fields.title')">
+          <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+            <el-form-item :label="t('content.fields.title')" prop="title">
               <el-input v-model="form.title" maxlength="200" :disabled="teacherLocked" />
             </el-form-item>
             <el-form-item :label="t('content.fields.description')">
@@ -242,7 +263,7 @@ onMounted(() => {
                   <el-option label="PAID" value="PAID" />
                 </el-select>
               </el-form-item>
-              <el-form-item :label="t('content.price')">
+              <el-form-item :label="t('content.price')" prop="price">
                 <el-input-number v-model="form.price" :min="0" :disabled="teacherLocked || form.accessType === 'FREE'" />
               </el-form-item>
               <el-form-item :label="t('content.fields.coverImage')">

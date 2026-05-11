@@ -5,12 +5,7 @@ import type {
   RecordedLessonVideoPayload,
 } from '../types/liveLearning'
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
+import type { ApiResponse } from '../types/api'
 
 function buildFormData(payload: RecordedLessonVideoPayload, file?: File | null) {
   const formData = new FormData()

@@ -6,10 +6,17 @@ import msLocale from 'element-plus/es/locale/lang/ms'
 import zhCnLocale from 'element-plus/es/locale/lang/zh-cn'
 import { useI18n } from 'vue-i18n'
 
+import { useIdlePrefetch } from './composables/useIdlePrefetch'
+import { APP_EVENTS } from './constants/appEvents'
 import { useLanguageStore } from './stores/languageStore'
 
 const { t } = useI18n()
 const languageStore = useLanguageStore()
+
+// Warm up role-appropriate page chunks during browser idle time so first
+// post-login navigation feels instant. Skips automatically on slow/data-saver
+// connections.
+useIdlePrefetch()
 
 const elementLocale = computed(() => {
   if (languageStore.locale === 'ms') {
@@ -29,11 +36,11 @@ function handleForbidden(event: Event) {
 }
 
 onMounted(() => {
-  window.addEventListener('app:forbidden', handleForbidden)
+  window.addEventListener(APP_EVENTS.FORBIDDEN, handleForbidden)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('app:forbidden', handleForbidden)
+  window.removeEventListener(APP_EVENTS.FORBIDDEN, handleForbidden)
 })
 </script>
 

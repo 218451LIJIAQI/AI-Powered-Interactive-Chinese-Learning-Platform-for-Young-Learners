@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type {
   CreateSupportTicketPayload,
   SupportTicketDetail,
@@ -7,13 +8,6 @@ import type {
   UpdateSupportTicketPriorityPayload,
   UpdateSupportTicketStatusPayload,
 } from '../types/communication'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const supportTicketService = {
   async createTicket(payload: CreateSupportTicketPayload) {

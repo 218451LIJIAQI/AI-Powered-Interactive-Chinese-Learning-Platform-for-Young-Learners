@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { notificationService } from '../../services/notificationService'
 import type { NotificationItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
@@ -23,7 +24,7 @@ async function loadNotifications() {
   loading.value = true
   try {
     notifications.value = await notificationService.getNotifications()
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.loadFailed')))
   } finally {
@@ -34,7 +35,7 @@ async function loadNotifications() {
 async function markAsRead(item: NotificationItem) {
   try {
     await notificationService.markAsRead(item.id)
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     if (item.targetPath) {
       await router.push(item.targetPath)
       return
@@ -49,7 +50,7 @@ async function markAllAsRead() {
   try {
     await notificationService.markAllAsRead()
     ElMessage.success(t('phase11.messages.notificationsUpdated'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     await loadNotifications()
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))

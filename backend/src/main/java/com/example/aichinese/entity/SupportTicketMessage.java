@@ -32,6 +32,6 @@ public class SupportTicketMessage extends BaseEntity {
     private User senderUser;
 
     @Lob
-    @Column(name = "message", nullable = false)
+    @Column(name = "message", nullable = false, columnDefinition = "LONGTEXT")
     private String message;
 }

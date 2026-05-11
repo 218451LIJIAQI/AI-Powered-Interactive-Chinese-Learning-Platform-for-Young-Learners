@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { AdminTeacherDetail, AdminTeacherListItem, PageResponse } from '../types/adminManagement'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const adminTeacherService = {
   async getPendingTeachers() {

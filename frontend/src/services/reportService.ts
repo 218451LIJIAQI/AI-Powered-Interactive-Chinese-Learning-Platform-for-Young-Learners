@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { AdminReportActionPayload, CreateReportPayload, ReportItem } from '../types/communication'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const reportService = {
   async createReport(payload: CreateReportPayload) {

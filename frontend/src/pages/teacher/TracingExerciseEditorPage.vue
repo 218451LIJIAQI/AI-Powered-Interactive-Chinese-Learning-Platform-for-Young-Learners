@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { teacherActivityService } from '../../services/teacherActivityService'
@@ -20,6 +21,7 @@ const selectedLessonId = ref<number | null>(null)
 const editingId = ref<number | null>(null)
 const lessons = ref<LessonItem[]>([])
 const exercises = ref<TracingExercise[]>([])
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive<TracingExerciseFormPayload>({
   title: '',
@@ -29,6 +31,15 @@ const form = reactive<TracingExerciseFormPayload>({
   worksheetUrl: '',
   instructions: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('learning.validation.tracingRequired'), trigger: 'blur' },
+  ],
+  targetCharacter: [
+    { required: true, message: t('learning.validation.tracingRequired'), trigger: 'blur' },
+  ],
+}))
 
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 const selectedLesson = computed(() => lessons.value.find((lesson) => lesson.id === selectedLessonId.value) ?? null)
@@ -102,8 +113,12 @@ async function saveExercise() {
     return
   }
 
-  if (!form.title.trim() || !form.targetCharacter.trim()) {
-    ElMessage.error(t('learning.validation.tracingRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -152,9 +167,10 @@ watch(selectedLessonId, async () => {
   await loadExercises()
 })
 
-onMounted(async () => {
-  await loadLessons()
-  await loadExercises()
+// `loadLessons()` sets `selectedLessonId` which triggers the watch above and
+// already calls `loadExercises()`. Re-calling it here would double-fetch.
+onMounted(() => {
+  loadLessons()
 })
 </script>
 
@@ -229,12 +245,12 @@ onMounted(async () => {
       :title="editingId ? t('learning.editTracingExercise') : t('learning.addTracingExercise')"
       width="720px"
     >
-      <el-form label-position="top">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="content-form-grid">
-          <el-form-item :label="t('content.fields.title')">
+          <el-form-item :label="t('content.fields.title')" prop="title">
             <el-input v-model="form.title" maxlength="200" />
           </el-form-item>
-          <el-form-item :label="t('learning.fields.targetCharacter')">
+          <el-form-item :label="t('learning.fields.targetCharacter')" prop="targetCharacter">
             <el-input v-model="form.targetCharacter" maxlength="100" />
           </el-form-item>
           <el-form-item :label="t('learning.fields.pinyin')">

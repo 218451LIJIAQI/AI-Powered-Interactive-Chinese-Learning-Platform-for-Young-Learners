@@ -1,25 +1,24 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { liveClassService } from '../../services/liveClassService'
 import type { LiveClass } from '../../types/liveLearning'
 import { formatDateTime } from '../../utils/datetime'
 
-const route = useRoute()
 const { t } = useI18n()
+const liveClassId = useNumericRouteParam('id')
 
 const loading = ref(true)
 const item = ref<LiveClass | null>(null)
 
-
 async function loadDetail() {
   loading.value = true
   try {
-    item.value = await liveClassService.getStudentLiveClass(Number(route.params.id))
+    item.value = await liveClassService.getStudentLiveClass(liveClassId.value)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t('content.messages.saveFailed'))
   } finally {

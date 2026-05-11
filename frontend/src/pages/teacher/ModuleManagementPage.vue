@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { useEnumLabel } from '../../composables/useEnumLabel'
@@ -21,6 +22,7 @@ const editingId = ref<number | null>(null)
 const modules = ref<LearningModuleItem[]>([])
 const levels = ref<LearningLevel[]>([])
 const categories = ref<LearningCategory[]>([])
+const formRef = ref<FormInstance | null>(null)
 
 const teacherLocked = computed(() => authStore.teacherStatus !== 'APPROVED')
 
@@ -33,6 +35,24 @@ const form = reactive<ModuleFormPayload>({
   price: 0,
   coverImageUrl: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('content.validation.titleRequired'), trigger: 'blur' },
+  ],
+  price: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (form.accessType === 'PAID' && (typeof value !== 'number' || value < 0)) {
+          callback(new Error(t('content.validation.priceRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}))
 
 function resetForm() {
   editingId.value = null
@@ -87,8 +107,12 @@ async function saveModule() {
     return
   }
 
-  if (!form.title.trim()) {
-    ElMessage.error(t('content.validation.titleRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -213,8 +237,8 @@ onMounted(() => {
     </el-card>
 
     <el-dialog v-model="showDialog" :title="editingId ? t('content.editModule') : t('content.createModule')" width="680px">
-      <el-form label-position="top">
-        <el-form-item :label="t('content.fields.title')">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+        <el-form-item :label="t('content.fields.title')" prop="title">
           <el-input v-model="form.title" maxlength="200" />
         </el-form-item>
         <el-form-item :label="t('content.fields.description')">
@@ -237,7 +261,7 @@ onMounted(() => {
               <el-option label="PAID" value="PAID" />
             </el-select>
           </el-form-item>
-          <el-form-item :label="t('content.price')">
+          <el-form-item :label="t('content.price')" prop="price">
             <el-input-number v-model="form.price" :min="0" :disabled="form.accessType === 'FREE'" />
           </el-form-item>
         </div>

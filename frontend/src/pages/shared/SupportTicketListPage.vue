@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useRoleBasePath } from '../../composables/useRoleBasePath'
 import { supportTicketService } from '../../services/supportTicketService'
 import type { SupportTicketItem } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
@@ -12,6 +13,7 @@ import { formatDateTime } from '../../utils/datetime'
 
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
+const basePath = useRoleBasePath()
 const loading = ref(true)
 const tickets = ref<SupportTicketItem[]>([])
 
@@ -46,7 +48,7 @@ onMounted(() => {
           <p class="section-label">{{ t('nav.supportTickets') }}</p>
           <h2>{{ t('phase11.mySupportTickets') }}</h2>
         </div>
-        <router-link :to="{ path: '/support-tickets/create' }">
+        <router-link :to="{ path: `${basePath}/support-tickets/create` }">
           <el-button type="primary">{{ t('phase11.createSupportTicket') }}</el-button>
         </router-link>
       </div>
@@ -68,7 +70,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column width="160">
           <template #default="{ row }">
-            <router-link :to="{ path: `/support-tickets/${row.id}` }">
+            <router-link :to="{ path: `${basePath}/support-tickets/${row.id}` }">
               <el-button plain type="primary">{{ t('content.reviewDetail') }}</el-button>
             </router-link>
           </template>

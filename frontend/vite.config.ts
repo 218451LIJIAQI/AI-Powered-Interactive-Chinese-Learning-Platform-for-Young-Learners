@@ -1,13 +1,32 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // Auto-imports Vue/router/i18n/pinia composables and (importantly here)
+    // Element Plus *function* APIs like `ElMessage`, `ElMessageBox`,
+    // `ElNotification`, `ElLoading` along with their CSS — so we no longer
+    // need to ship the entire Element Plus bundle.
+    AutoImport({
+      imports: ['vue', 'vue-router', 'vue-i18n', 'pinia'],
+      resolvers: [ElementPlusResolver()],
+      dts: 'src/auto-imports.d.ts',
+      eslintrc: { enabled: false },
+    }),
+    // Auto-resolves <el-*> components on demand. Only the components actually
+    // referenced in templates land in the final bundle.
+    Components({
+      resolvers: [ElementPlusResolver()],
+      dts: 'src/components.d.ts',
+      dirs: [], // we don't want every local component auto-registered
+    }),
+  ],
   build: {
-    // Demo builds stay under a single vendor bundle plus app bundle, which is
-    // acceptable for an FYP. The manual chunks below split the heaviest
-    // dependencies into their own files so initial parse is snappier.
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {

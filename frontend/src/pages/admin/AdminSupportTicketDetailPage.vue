@@ -1,21 +1,24 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
+import { APP_EVENTS, dispatchAppEvent } from '../../constants/appEvents'
 import { supportTicketService } from '../../services/supportTicketService'
 import type { SupportTicketDetail, SupportTicketPriority, SupportTicketStatus } from '../../types/communication'
 import { extractApiError } from '../../utils/apiError'
 import { formatDateTime } from '../../utils/datetime'
 
-const route = useRoute()
 const { t } = useI18n()
+const ticketId = useNumericRouteParam('id')
 const loading = ref(true)
 const replying = ref(false)
 const updating = ref(false)
 const detail = ref<SupportTicketDetail | null>(null)
+const replyFormRef = ref<FormInstance | null>(null)
 const replyForm = reactive({ message: '' })
 const controls = reactive<{
   status: SupportTicketStatus
@@ -25,11 +28,16 @@ const controls = reactive<{
   priority: 'MEDIUM',
 })
 
+const replyRules = computed<FormRules>(() => ({
+  message: [
+    { required: true, message: t('phase11.validation.replyRequired'), trigger: 'blur' },
+  ],
+}))
 
 async function loadDetail() {
   loading.value = true
   try {
-    detail.value = await supportTicketService.getAdminTicket(Number(route.params.id))
+    detail.value = await supportTicketService.getAdminTicket(ticketId.value)
     if (detail.value) {
       controls.status = detail.value.ticket.status
       controls.priority = detail.value.ticket.priority
@@ -42,12 +50,21 @@ async function loadDetail() {
 }
 
 async function reply() {
+  if (!replyFormRef.value) {
+    return
+  }
+  try {
+    await replyFormRef.value.validate()
+  } catch {
+    return
+  }
   replying.value = true
   try {
-    detail.value = await supportTicketService.addAdminMessage(Number(route.params.id), replyForm)
+    detail.value = await supportTicketService.addAdminMessage(ticketId.value, { message: replyForm.message.trim() })
     replyForm.message = ''
+    replyFormRef.value.clearValidate()
     ElMessage.success(t('phase11.messages.supportTicketReplied'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))
   } finally {
@@ -58,10 +75,10 @@ async function reply() {
 async function updateControls() {
   updating.value = true
   try {
-    await supportTicketService.updateAdminStatus(Number(route.params.id), { status: controls.status })
-    await supportTicketService.updateAdminPriority(Number(route.params.id), { priority: controls.priority })
+    await supportTicketService.updateAdminStatus(ticketId.value, { status: controls.status })
+    await supportTicketService.updateAdminPriority(ticketId.value, { priority: controls.priority })
     ElMessage.success(t('phase11.messages.supportTicketUpdated'))
-    window.dispatchEvent(new CustomEvent('notifications:refresh'))
+    dispatchAppEvent(APP_EVENTS.NOTIFICATIONS_REFRESH)
     await loadDetail()
   } catch (error) {
     ElMessage.error(extractApiError(error, t('phase11.messages.actionFailed')))
@@ -69,6 +86,10 @@ async function updateControls() {
     updating.value = false
   }
 }
+
+watch(ticketId, () => {
+  loadDetail()
+})
 
 onMounted(() => {
   loadDetail()
@@ -117,11 +138,18 @@ onMounted(() => {
         </el-timeline-item>
       </el-timeline>
 
-      <el-form label-position="top" class="support-reply-form">
-        <el-form-item :label="t('phase11.reply')">
+      <el-form
+        ref="replyFormRef"
+        :model="replyForm"
+        :rules="replyRules"
+        label-position="top"
+        class="support-reply-form"
+        @submit.prevent="reply"
+      >
+        <el-form-item :label="t('phase11.reply')" prop="message">
           <el-input v-model="replyForm.message" type="textarea" :rows="4" maxlength="4000" show-word-limit />
         </el-form-item>
-        <el-button type="primary" :loading="replying" @click="reply">{{ t('phase11.reply') }}</el-button>
+        <el-button type="primary" :loading="replying" native-type="submit" @click="reply">{{ t('phase11.reply') }}</el-button>
       </el-form>
     </el-card>
   </div>

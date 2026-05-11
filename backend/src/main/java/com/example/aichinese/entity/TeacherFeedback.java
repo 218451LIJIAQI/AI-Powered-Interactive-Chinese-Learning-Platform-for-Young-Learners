@@ -46,6 +46,6 @@ public class TeacherFeedback extends BaseEntity {
     private String feedbackType;
 
     @Lob
-    @Column(name = "feedback_message", nullable = false)
+    @Column(name = "feedback_message", nullable = false, columnDefinition = "LONGTEXT")
     private String feedbackMessage;
 }

@@ -6,16 +6,14 @@ import { useI18n } from 'vue-i18n'
 import PageHero from '../../components/common/PageHero.vue'
 import { commerceService } from '../../services/commerceService'
 import type { StudentSubscription, SubscriptionPlan } from '../../types/commerce'
+import { extractApiError } from '../../utils/apiError'
+import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
 
 const loading = ref(true)
 const plans = ref<SubscriptionPlan[]>([])
 const currentSubscription = ref<StudentSubscription | null>(null)
-
-function formatMoney(amount: number) {
-  return `RM ${Number(amount ?? 0).toFixed(2)}`
-}
 
 async function loadData() {
   loading.value = true
@@ -26,18 +24,24 @@ async function loadData() {
     ])
     plans.value = planList
     currentSubscription.value = current
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   } finally {
     loading.value = false
   }
 }
 
 async function checkoutPlan(planId: number) {
-  const result = await commerceService.checkoutSubscription({ itemType: 'SUBSCRIPTION', itemId: planId })
-  if (result.checkoutUrl) {
-    window.location.assign(result.checkoutUrl)
-    return
+  try {
+    const result = await commerceService.checkoutSubscription({ itemType: 'SUBSCRIPTION', itemId: planId })
+    if (result.checkoutUrl) {
+      window.location.assign(result.checkoutUrl)
+      return
+    }
+    ElMessage.warning(result.message)
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   }
-  ElMessage.warning(result.message)
 }
 
 onMounted(() => {
@@ -77,7 +81,7 @@ onMounted(() => {
           </div>
           <p>{{ plan.benefits }}</p>
           <strong>{{ formatMoney(plan.price) }}</strong>
-          <div class="table-actions" style="margin-top: 1rem;">
+          <div class="table-actions subscription-card__actions">
             <el-button type="primary" @click="checkoutPlan(plan.id)">{{ t('commerce.subscribeNow') }}</el-button>
           </div>
         </el-card>
@@ -85,3 +89,9 @@ onMounted(() => {
     </el-card>
   </div>
 </template>
+
+<style scoped>
+.subscription-card__actions {
+  margin-top: 1rem;
+}
+</style>

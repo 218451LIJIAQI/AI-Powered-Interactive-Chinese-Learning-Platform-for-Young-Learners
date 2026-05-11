@@ -32,7 +32,7 @@ public class SubscriptionPlan extends BaseEntity {
     private String currencyCode = "MYR";
 
     @Lob
-    @Column(name = "benefits")
+    @Column(name = "benefits", columnDefinition = "LONGTEXT")
     private String benefits;
 
     @Column(name = "active", nullable = false)

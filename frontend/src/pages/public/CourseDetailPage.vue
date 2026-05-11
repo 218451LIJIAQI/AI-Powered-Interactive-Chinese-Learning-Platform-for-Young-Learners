@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useStringRouteParam } from '../../composables/useRouteParam'
 import { commerceService } from '../../services/commerceService'
 import { publicContentService } from '../../services/publicContentService'
 import { useAuthStore } from '../../stores/authStore'
 import type { PublicCourseDetail } from '../../types/contentManagement'
+import { extractApiError } from '../../utils/apiError'
 
-const route = useRoute()
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -21,7 +21,7 @@ const translateEnum = useEnumLabel()
 const loading = ref(true)
 const course = ref<PublicCourseDetail | null>(null)
 
-const courseId = computed(() => String(route.params.id))
+const courseId = useStringRouteParam('id')
 
 async function addToCart() {
   if (!course.value) {
@@ -33,8 +33,12 @@ async function addToCart() {
     return
   }
 
-  await commerceService.addCartItem({ itemType: course.value.type, itemId: course.value.contentId })
-  ElMessage.success(t('commerce.messages.cartUpdated'))
+  try {
+    await commerceService.addCartItem({ itemType: course.value.type, itemId: course.value.contentId })
+    ElMessage.success(t('commerce.messages.cartUpdated'))
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
+  }
 }
 
 async function buyNow() {
@@ -47,18 +51,24 @@ async function buyNow() {
     return
   }
 
-  const result = await commerceService.buyNow({ itemType: course.value.type, itemId: course.value.contentId })
-  if (result.checkoutUrl) {
-    window.location.assign(result.checkoutUrl)
-    return
+  try {
+    const result = await commerceService.buyNow({ itemType: course.value.type, itemId: course.value.contentId })
+    if (result.checkoutUrl) {
+      window.location.assign(result.checkoutUrl)
+      return
+    }
+    ElMessage.warning(result.message)
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('commerce.messages.actionFailed')))
   }
-  ElMessage.warning(result.message)
 }
 
 async function loadCourse() {
   loading.value = true
   try {
     course.value = await publicContentService.getCourseDetail(courseId.value)
+  } catch (error) {
+    ElMessage.error(extractApiError(error, t('content.messages.saveFailed')))
   } finally {
     loading.value = false
   }

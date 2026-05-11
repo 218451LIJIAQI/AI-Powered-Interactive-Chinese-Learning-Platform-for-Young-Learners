@@ -11,11 +11,11 @@ import type { AdminDashboardSummary } from '../../types/dashboard'
 import {
   buildBarChartOption,
   buildDonutChartOption,
-  currency,
   hasBreakdownData,
   hasTrendData,
   normalizeBreakdown,
 } from '../../utils/analytics'
+import { formatMoney } from '../../utils/money'
 
 const authStore = useAuthStore()
 const { t } = useI18n()
@@ -31,7 +31,7 @@ const summaryCards = computed(() => [
   { label: t('analytics.cards.totalTeachers'), value: analytics.value?.overview.totalTeachers ?? dashboard.value?.totalTeachers ?? 0 },
   { label: t('analytics.cards.pendingTeacherApprovals'), value: analytics.value?.overview.pendingTeacherApprovals ?? dashboard.value?.pendingTeacherApprovals ?? 0 },
   { label: t('analytics.cards.publishedContentItems'), value: analytics.value?.overview.publishedContentItems ?? (dashboard.value?.totalModules ?? 0) + (dashboard.value?.totalLessons ?? 0) },
-  { label: t('analytics.cards.totalRevenue'), value: currency(analytics.value?.overview.totalRevenue ?? dashboard.value?.paymentRevenueSummary.totalRevenue ?? 0) },
+  { label: t('analytics.cards.totalRevenue'), value: formatMoney(analytics.value?.overview.totalRevenue ?? dashboard.value?.paymentRevenueSummary.totalRevenue ?? 0) },
   { label: t('analytics.cards.aiRequests'), value: analytics.value?.overview.aiRequests ?? dashboard.value?.aiUsageSummary.totalRequests ?? 0 },
 ])
 
@@ -116,7 +116,7 @@ onMounted(() => {
             <div class="dashboard-hero__aside">
               <div class="dashboard-bubble">
                 <span class="dashboard-bubble__label">{{ t('dashboard.paymentRevenueSummary') }}</span>
-                <strong>{{ currency(analytics?.overview.totalRevenue ?? dashboard?.paymentRevenueSummary.totalRevenue ?? 0) }}</strong>
+                <strong>{{ formatMoney(analytics?.overview.totalRevenue ?? dashboard?.paymentRevenueSummary.totalRevenue ?? 0) }}</strong>
               </div>
               <div class="dashboard-bubble">
                 <span class="dashboard-bubble__label">{{ t('dashboard.aiUsageSummary') }}</span>

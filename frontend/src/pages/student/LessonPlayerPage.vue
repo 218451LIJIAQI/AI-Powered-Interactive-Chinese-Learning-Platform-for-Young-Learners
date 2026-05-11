@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 import { liveClassService } from '../../services/liveClassService'
 import { studentLearningService } from '../../services/studentLearningService'
 import type { StudentLessonActivitySummary, StudentLessonPlayer } from '../../types/learning'
 import type { LiveClass, RecordedLessonVideo } from '../../types/liveLearning'
 import { formatDateTime } from '../../utils/datetime'
 
-const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
@@ -21,7 +21,7 @@ const loading = ref(true)
 const errorMessage = ref('')
 const lesson = ref<StudentLessonPlayer | null>(null)
 
-const lessonId = computed(() => Number(route.params.lessonId))
+const lessonId = useNumericRouteParam('lessonId')
 
 const activityCards = computed(() => lesson.value?.activities ?? [])
 const liveClasses = computed(() => lesson.value?.liveClasses ?? [])

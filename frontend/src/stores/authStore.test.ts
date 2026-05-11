@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
+import { STORAGE_KEYS } from '../constants/storageKeys'
 import { useAuthStore } from './authStore'
 
-const TOKEN_KEY = 'ai-chinese-learning-token'
+const TOKEN_KEY = STORAGE_KEYS.AUTH_TOKEN
 
 describe('authStore', () => {
   beforeEach(() => {

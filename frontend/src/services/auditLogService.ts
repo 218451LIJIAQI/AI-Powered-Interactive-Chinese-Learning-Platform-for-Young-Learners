@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { AuditLogItem } from '../types/communication'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const auditLogService = {
   async getAuditLogs(params?: Record<string, string | number | undefined>) {

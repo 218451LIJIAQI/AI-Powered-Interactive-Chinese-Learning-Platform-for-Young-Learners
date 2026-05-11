@@ -15,13 +15,9 @@ export type LessonActivityType =
   | 'VIDEO_PLACEHOLDER'
 export type PackageItemType = 'MODULE' | 'LESSON' | 'ACTIVITY'
 
-export type PageResponse<T> = {
-  items: T[]
-  page: number
-  size: number
-  totalItems: number
-  totalPages: number
-}
+// Re-export the shared PageResponse so existing consumers that import from
+// this module continue to work without changes.
+export type { PageResponse } from './api'
 
 export type LearningLevel = {
   id: number

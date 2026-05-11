@@ -37,16 +37,16 @@ function startDrawing(event: MouseEvent | TouchEvent) {
     return
   }
   isDrawing.value = true
-  const { x, y } = getCoordinates(event)
+  const { x, y } = getCoordinates(event, canvasRef.value)
   context.beginPath()
   context.moveTo(x, y)
 }
 
 function draw(event: MouseEvent | TouchEvent) {
-  if (!isDrawing.value || !context) {
+  if (!isDrawing.value || !context || !canvasRef.value) {
     return
   }
-  const { x, y } = getCoordinates(event)
+  const { x, y } = getCoordinates(event, canvasRef.value)
   context.lineTo(x, y)
   context.stroke()
 }
@@ -55,8 +55,8 @@ function stopDrawing() {
   isDrawing.value = false
 }
 
-function getCoordinates(event: MouseEvent | TouchEvent) {
-  const rect = canvasRef.value!.getBoundingClientRect()
+function getCoordinates(event: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) {
+  const rect = canvas.getBoundingClientRect()
   const point = 'touches' in event ? event.touches[0] ?? event.changedTouches[0] : event
   return {
     x: point.clientX - rect.left,

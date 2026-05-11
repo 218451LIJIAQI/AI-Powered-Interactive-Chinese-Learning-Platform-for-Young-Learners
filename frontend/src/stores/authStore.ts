@@ -1,8 +1,11 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { STORAGE_KEYS } from '../constants/storageKeys'
 import { apiClient } from '../services/apiClient'
+import type { ApiResponse } from '../types/api'
 import { extractApiError } from '../utils/apiError'
+import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
 export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | null
@@ -32,13 +35,6 @@ export type CurrentUser = {
   teacherProfile: TeacherProfileSummary | null
 }
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
-
 type LoginResponse = {
   token: string
   user: {
@@ -65,10 +61,8 @@ type TeacherRegistrationPayload = RegisterPayloadBase & {
   bio?: string
 }
 
-const TOKEN_KEY = 'ai-chinese-learning-token'
-
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+  const token = ref<string | null>(safeGetItem(STORAGE_KEYS.AUTH_TOKEN))
   const currentUser = ref<CurrentUser | null>(null)
   const initialized = ref(false)
   const isFetchingCurrentUser = ref(false)
@@ -80,11 +74,11 @@ export const useAuthStore = defineStore('auth', () => {
   function setToken(nextToken: string | null) {
     token.value = nextToken
     if (nextToken) {
-      localStorage.setItem(TOKEN_KEY, nextToken)
+      safeSetItem(STORAGE_KEYS.AUTH_TOKEN, nextToken)
       return
     }
 
-    localStorage.removeItem(TOKEN_KEY)
+    safeRemoveItem(STORAGE_KEYS.AUTH_TOKEN)
   }
 
   function clearAuthState() {

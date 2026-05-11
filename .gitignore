@@ -22,3 +22,6 @@ backend/phase5-*.log
 # IDE
 .idea/
 .vscode/
+
+# Dev script state (created by start.ps1 / stop.ps1)
+.run-state.json

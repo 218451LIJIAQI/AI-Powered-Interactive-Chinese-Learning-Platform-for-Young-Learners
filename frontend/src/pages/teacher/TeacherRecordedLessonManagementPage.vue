@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
@@ -20,6 +21,7 @@ const videos = ref<RecordedLessonVideo[]>([])
 const sourceType = ref<'UPLOADED_FILE' | 'EXTERNAL_URL'>('EXTERNAL_URL')
 const uploadFile = ref<File | null>(null)
 const editingVideoId = ref<number | null>(null)
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive<RecordedLessonVideoPayload>({
   title: '',
@@ -29,6 +31,28 @@ const form = reactive<RecordedLessonVideoPayload>({
   durationSeconds: null,
   sortOrder: 0,
 })
+
+const rules = computed<FormRules>(() => ({
+  title: [
+    { required: true, message: t('content.validation.titleRequired'), trigger: 'blur' },
+  ],
+  externalVideoUrl: [
+    {
+      validator: (_rule, value: unknown, callback) => {
+        if (sourceType.value !== 'EXTERNAL_URL') {
+          callback()
+          return
+        }
+        if (typeof value !== 'string' || !value.trim()) {
+          callback(new Error(t('phase10.validation.externalUrlRequired')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}))
 
 const selectedLesson = computed(() => lessons.value.find((lesson) => lesson.id === selectedLessonId.value) || null)
 
@@ -56,6 +80,21 @@ async function loadVideos() {
 
 async function addVideo() {
   if (!selectedLessonId.value) return
+
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+
+  if (sourceType.value === 'UPLOADED_FILE' && !uploadFile.value && !editingVideoId.value) {
+    ElMessage.error(t('phase10.validation.uploadFileRequired'))
+    return
+  }
+
   saving.value = true
   try {
     form.sourceType = sourceType.value
@@ -133,8 +172,8 @@ onMounted(async () => {
         </el-select>
       </div>
 
-      <el-form label-position="top">
-        <el-form-item :label="t('content.fields.title')">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+        <el-form-item :label="t('content.fields.title')" prop="title">
           <el-input v-model="form.title" />
         </el-form-item>
         <el-form-item :label="t('content.fields.description')">
@@ -159,7 +198,7 @@ onMounted(async () => {
             <el-input-number v-model="form.sortOrder" :min="0" />
           </el-form-item>
         </div>
-        <el-form-item v-if="sourceType === 'EXTERNAL_URL'" :label="t('phase10.externalVideoUrl')">
+        <el-form-item v-if="sourceType === 'EXTERNAL_URL'" :label="t('phase10.externalVideoUrl')" prop="externalVideoUrl">
           <el-input v-model="form.externalVideoUrl" />
         </el-form-item>
         <el-form-item v-else :label="t('phase10.uploadRecordedVideo')">

@@ -1,17 +1,11 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type {
   AdminAnalyticsResponse,
   StudentAnalyticsResponse,
   TeacherAnalyticsResponse,
 } from '../types/analytics'
 import type { AdminDashboardSummary, StudentDashboardSummary, TeacherDashboardSummary } from '../types/dashboard'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const dashboardService = {
   async getStudentDashboard() {

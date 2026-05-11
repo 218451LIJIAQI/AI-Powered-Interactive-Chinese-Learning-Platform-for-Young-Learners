@@ -43,7 +43,7 @@ public class LessonActivity extends BaseEntity {
     private String instructions;
 
     @Lob
-    @Column(name = "content_payload")
+    @Column(name = "content_payload", columnDefinition = "LONGTEXT")
     private String contentPayload;
 
     @Enumerated(EnumType.STRING)

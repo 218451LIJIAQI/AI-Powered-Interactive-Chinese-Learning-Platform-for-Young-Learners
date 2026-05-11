@@ -14,12 +14,7 @@ import type {
   TracingExerciseFormPayload,
 } from '../types/learning'
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
+import type { ApiResponse } from '../types/api'
 
 export const teacherActivityService = {
   async getFlashcards(lessonId: number) {

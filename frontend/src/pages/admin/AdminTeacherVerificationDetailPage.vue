@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+
+import { useNumericRouteParam } from '../../composables/useRouteParam'
 
 import { useEnumLabel } from '../../composables/useEnumLabel'
 import { adminTeacherService } from '../../services/adminTeacherService'
 import type { AdminTeacherDetail } from '../../types/adminManagement'
 import { downloadProtectedFile } from '../../utils/fileDownload'
 
-const route = useRoute()
 const { t } = useI18n()
 const translateEnum = useEnumLabel()
 const loading = ref(true)
 const working = ref(false)
 const detail = ref<AdminTeacherDetail | null>(null)
 
-const teacherId = computed(() => Number(route.params.id))
+const teacherId = useNumericRouteParam('id')
 
 async function loadDetail() {
   loading.value = true

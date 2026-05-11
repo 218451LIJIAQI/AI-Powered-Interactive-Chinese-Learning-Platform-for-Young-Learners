@@ -38,7 +38,7 @@ public class ContentModerationRecord extends BaseEntity {
     private String actionTaken;
 
     @Lob
-    @Column(name = "note")
+    @Column(name = "note", columnDefinition = "LONGTEXT")
     private String note;
 
     @ManyToOne(fetch = FetchType.LAZY)

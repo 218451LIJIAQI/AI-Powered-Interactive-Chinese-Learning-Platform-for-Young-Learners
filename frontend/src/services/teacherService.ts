@@ -5,12 +5,7 @@ import type {
   UpdateTeacherProfilePayload,
 } from '../types/teacherManagement'
 
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
+import type { ApiResponse } from '../types/api'
 
 export const teacherService = {
   async getMyProfile() {

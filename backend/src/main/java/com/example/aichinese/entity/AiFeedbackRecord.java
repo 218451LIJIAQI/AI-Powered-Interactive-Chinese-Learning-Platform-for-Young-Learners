@@ -39,11 +39,11 @@ public class AiFeedbackRecord extends BaseEntity {
     private UploadedFile uploadedFile;
 
     @Lob
-    @Column(name = "input_text")
+    @Column(name = "input_text", columnDefinition = "LONGTEXT")
     private String inputText;
 
     @Lob
-    @Column(name = "feedback_text")
+    @Column(name = "feedback_text", columnDefinition = "LONGTEXT")
     private String feedbackText;
 
     @Column(name = "language_preference", length = 20)

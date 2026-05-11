@@ -36,7 +36,7 @@ public class SupportTicket extends BaseEntity {
     private String subject;
 
     @Lob
-    @Column(name = "description", nullable = false)
+    @Column(name = "description", nullable = false, columnDefinition = "LONGTEXT")
     private String description;
 
     @Enumerated(EnumType.STRING)

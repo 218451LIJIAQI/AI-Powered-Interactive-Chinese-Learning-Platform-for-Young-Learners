@@ -37,7 +37,7 @@ public class Notification extends BaseEntity {
     private String title;
 
     @Lob
-    @Column(name = "message", nullable = false)
+    @Column(name = "message", nullable = false, columnDefinition = "LONGTEXT")
     private String message;
 
     @Enumerated(EnumType.STRING)

@@ -13,12 +13,12 @@ import {
   buildBarChartOption,
   buildDonutChartOption,
   buildLineChartOption,
-  currency,
   hasBreakdownData,
   hasTrendData,
   normalizeBreakdown,
   translateAnalyticsKey,
 } from '../../utils/analytics'
+import { formatMoney } from '../../utils/money'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -33,15 +33,17 @@ const loading = ref(true)
 const analyticsError = ref('')
 const contentLocked = computed(() => teacherStatus.value !== 'APPROVED')
 
-const statusType = computed(() => {
-  if (teacherStatus.value === 'APPROVED') {
-    return 'success'
-  }
+// el-tag uses 'danger' while el-alert uses 'error' for the same colour bucket,
+// so we expose two computed values to satisfy each component's strict types.
+const statusTagType = computed<'success' | 'warning' | 'danger'>(() => {
+  if (teacherStatus.value === 'APPROVED') return 'success'
+  if (teacherStatus.value === 'REJECTED') return 'danger'
+  return 'warning'
+})
 
-  if (teacherStatus.value === 'REJECTED') {
-    return 'danger'
-  }
-
+const statusAlertType = computed<'success' | 'warning' | 'error'>(() => {
+  if (teacherStatus.value === 'APPROVED') return 'success'
+  if (teacherStatus.value === 'REJECTED') return 'error'
   return 'warning'
 })
 
@@ -64,7 +66,7 @@ const analyticsCards = computed(() => [
   { label: t('analytics.cards.averageRating'), value: analytics.value?.overview.averageRating ?? dashboard.value?.ratingAverage ?? 0 },
   {
     label: t('analytics.cards.netEarnings'),
-    value: currency(analytics.value?.overview.netEarnings ?? dashboard.value?.earningsSummary.netAmount ?? 0),
+    value: formatMoney(analytics.value?.overview.netEarnings ?? dashboard.value?.earningsSummary.netAmount ?? 0),
   },
 ])
 
@@ -79,7 +81,7 @@ const secondaryAnalyticsCards = computed(() => [
   },
   {
     label: t('analytics.cards.availableBalance'),
-    value: currency(analytics.value?.overview.availableBalance ?? dashboard.value?.earningsSummary.availableBalance ?? 0),
+    value: formatMoney(analytics.value?.overview.availableBalance ?? dashboard.value?.earningsSummary.availableBalance ?? 0),
   },
   {
     label: t('analytics.cards.upcomingLiveClasses'),
@@ -209,7 +211,7 @@ onMounted(() => {
             </div>
 
             <div class="dashboard-hero__aside">
-              <el-tag :type="statusType" size="large" round>{{ teacherStatus ?? 'PENDING' }}</el-tag>
+              <el-tag :type="statusTagType" size="large" round>{{ teacherStatus ?? 'PENDING' }}</el-tag>
               <el-button
                 type="primary"
                 size="large"
@@ -222,7 +224,7 @@ onMounted(() => {
           </div>
         </el-card>
 
-        <el-alert :title="statusMessage" :type="statusType" show-icon :closable="false" />
+        <el-alert :title="statusMessage" :type="statusAlertType" show-icon :closable="false" />
 
         <section class="teacher-analytics-grid">
           <el-card v-for="card in analyticsCards" :key="card.label" class="metric-card metric-card--teacher" shadow="hover">

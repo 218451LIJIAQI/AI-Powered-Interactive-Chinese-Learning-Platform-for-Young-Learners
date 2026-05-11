@@ -1,12 +1,8 @@
 import type { TeacherStatus, TeacherVerificationDocumentSummary, TeacherVerificationReviewSummary } from './teacherManagement'
 
-export type PageResponse<T> = {
-  items: T[]
-  page: number
-  size: number
-  totalItems: number
-  totalPages: number
-}
+// Re-export the shared PageResponse so existing consumers that import from
+// this module continue to work without changes.
+export type { PageResponse } from './api'
 
 export type AdminTeacherListItem = {
   teacherId: number

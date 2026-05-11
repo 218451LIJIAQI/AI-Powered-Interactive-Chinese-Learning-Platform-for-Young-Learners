@@ -1,12 +1,6 @@
 import { apiClient } from './apiClient'
+import type { ApiResponse } from '../types/api'
 import type { TeacherProfilePublicResponse } from '../types/teacherManagement'
-
-type ApiResponse<T> = {
-  success: boolean
-  message: string
-  data: T
-  errors: string[]
-}
 
 export const publicTeacherService = {
   async getTeacherProfile(teacherId: number) {

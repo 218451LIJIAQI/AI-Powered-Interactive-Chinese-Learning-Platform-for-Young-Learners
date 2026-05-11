@@ -53,9 +53,12 @@ async function generateVocabulary() {
 <template>
   <div class="page-stack student-learning-page">
     <PageHero
+      kid
+      show-mascot
       :eyebrow="t('ai.vocabularyEyebrow')"
       :title="t('ai.vocabularyTitle')"
       :description="t('ai.vocabularyDescription')"
+      mascot-holding="词"
     />
 
     <el-card class="dashboard-panel" shadow="hover">
@@ -85,8 +88,8 @@ async function generateVocabulary() {
       </div>
 
       <div class="student-practice-card__actions">
-        <el-button type="primary" round :loading="loading" @click="generateVocabulary">
-          {{ t('ai.generateVocabulary') }}
+        <el-button type="primary" round size="large" :loading="loading" @click="generateVocabulary">
+          ✨ {{ t('ai.generateVocabulary') }}
         </el-button>
       </div>
     </el-card>

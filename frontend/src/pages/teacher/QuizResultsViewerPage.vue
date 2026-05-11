@@ -93,10 +93,11 @@ watch(selectedQuizId, async () => {
   await loadAttempts()
 })
 
-onMounted(async () => {
-  await loadLessons()
-  await loadQuizzes()
-  await loadAttempts()
+// `loadLessons()` sets `selectedLessonId` on success which triggers the watch
+// above, which in turn cascades to `loadQuizzes` → `loadAttempts`. Calling
+// them again here would fire 3 extra duplicate API requests on every mount.
+onMounted(() => {
+  loadLessons()
 })
 </script>
 

@@ -28,7 +28,7 @@ public class QuizOption extends BaseEntity {
     private QuizQuestion question;
 
     @Lob
-    @Column(name = "option_text", nullable = false)
+    @Column(name = "option_text", nullable = false, columnDefinition = "LONGTEXT")
     private String optionText;
 
     @Column(name = "correct_option", nullable = false)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { teacherService } from '../../services/teacherService'
@@ -12,6 +13,7 @@ const { t } = useI18n()
 
 const loading = ref(true)
 const saving = ref(false)
+const formRef = ref<FormInstance | null>(null)
 const profile = ref<TeacherProfileResponse | null>(null)
 
 const form = reactive({
@@ -20,6 +22,12 @@ const form = reactive({
   shortIntroduction: '',
   teachingCategoriesText: '',
 })
+
+const rules = computed<FormRules>(() => ({
+  fullName: [
+    { required: true, message: t('teacherVerification.validation.fullNameRequired'), trigger: 'blur' },
+  ],
+}))
 
 const teacherStatus = computed(() => profile.value?.teacherStatus ?? authStore.teacherStatus ?? 'PENDING')
 
@@ -38,8 +46,12 @@ async function loadProfile() {
 }
 
 async function saveProfile() {
-  if (!form.fullName.trim()) {
-    ElMessage.error(t('teacherVerification.validation.fullNameRequired'))
+  if (!formRef.value) {
+    return
+  }
+  try {
+    await formRef.value.validate()
+  } catch {
     return
   }
 
@@ -97,8 +109,15 @@ onMounted(() => {
               </div>
             </div>
 
-            <el-form label-position="top" class="teacher-profile-form">
-              <el-form-item :label="t('auth.fields.fullName')">
+            <el-form
+              ref="formRef"
+              :model="form"
+              :rules="rules"
+              label-position="top"
+              class="teacher-profile-form"
+              @submit.prevent="saveProfile"
+            >
+              <el-form-item :label="t('auth.fields.fullName')" prop="fullName">
                 <el-input v-model="form.fullName" maxlength="120" />
               </el-form-item>
 
@@ -117,7 +136,7 @@ onMounted(() => {
                 />
               </el-form-item>
 
-              <el-button type="primary" :loading="saving" @click="saveProfile">
+              <el-button type="primary" :loading="saving" native-type="submit" @click="saveProfile">
                 {{ t('teacherVerification.saveProfile') }}
               </el-button>
             </el-form>
