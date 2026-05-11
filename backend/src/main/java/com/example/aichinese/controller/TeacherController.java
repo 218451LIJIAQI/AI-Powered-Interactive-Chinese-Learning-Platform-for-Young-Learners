@@ -1,6 +1,10 @@
 package com.example.aichinese.controller;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
@@ -67,6 +71,7 @@ import com.example.aichinese.service.LessonActivityService;
 import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.RecordedLessonService;
 import com.example.aichinese.service.ScheduleService;
+import com.example.aichinese.service.StoredFileDownload;
 import com.example.aichinese.service.TeacherLearningActivityService;
 import com.example.aichinese.service.TeacherLessonService;
 import com.example.aichinese.service.TeacherManagementService;
@@ -185,16 +190,12 @@ public class TeacherController {
     public ResponseEntity<Resource> getTeacherOwnedDocument(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
-        Resource resource = teacherManagementService.getTeacherOwnedDocument(currentUser, id);
-        return ResponseEntity.ok()
-                .contentType(MediaTypeFactory.getMediaType(resource)
-                        .orElse(MediaType.APPLICATION_OCTET_STREAM))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
-                .body(resource);
+        StoredFileDownload download = teacherManagementService.getTeacherOwnedDocument(currentUser, id);
+        return buildInlineDownloadResponse(download);
     }
 
     @GetMapping("/modules")
-    public ApiResponse<java.util.List<LearningModuleResponse>> getTeacherModules(
+    public ApiResponse<List<LearningModuleResponse>> getTeacherModules(
             @AuthenticationPrincipal SecurityUserDetails currentUser) {
         return ApiResponse.success(
                 "Teacher modules retrieved successfully.",
@@ -248,7 +249,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons")
-    public ApiResponse<java.util.List<LessonResponse>> getTeacherLessons(
+    public ApiResponse<List<LessonResponse>> getTeacherLessons(
             @AuthenticationPrincipal SecurityUserDetails currentUser) {
         return ApiResponse.success(
                 "Teacher lessons retrieved successfully.",
@@ -282,7 +283,7 @@ public class TeacherController {
     }
 
     @GetMapping("/live-classes")
-    public ApiResponse<java.util.List<LiveClassResponse>> getTeacherLiveClasses(
+    public ApiResponse<List<LiveClassResponse>> getTeacherLiveClasses(
             @AuthenticationPrincipal SecurityUserDetails currentUser) {
         return ApiResponse.success(
                 "Teacher live classes retrieved successfully.",
@@ -347,7 +348,7 @@ public class TeacherController {
     }
 
     @GetMapping("/live-classes/{id}/enrolments")
-    public ApiResponse<java.util.List<LiveClassEnrolmentResponse>> getLiveClassEnrolments(
+    public ApiResponse<List<LiveClassEnrolmentResponse>> getLiveClassEnrolments(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
         return ApiResponse.success(
@@ -356,7 +357,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/recorded-videos")
-    public ApiResponse<java.util.List<RecordedLessonVideoResponse>> getRecordedVideos(
+    public ApiResponse<List<RecordedLessonVideoResponse>> getRecordedVideos(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
@@ -432,13 +433,36 @@ public class TeacherController {
                 recordedLessonService.archiveRecordedVideo(currentUser, lessonId, videoId));
     }
 
+    @GetMapping("/lessons/{lessonId}/recorded-videos/{videoId}/stream")
+    public ResponseEntity<Resource> streamRecordedVideo(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId,
+            @PathVariable Long videoId) {
+        StoredFileDownload download = recordedLessonService.loadTeacherRecordedVideoDownload(currentUser, lessonId, videoId);
+        return buildInlineDownloadResponse(download);
+    }
+
     @GetMapping("/lessons/{lessonId}/video-progress")
-    public ApiResponse<java.util.List<LessonVideoProgressSummaryResponse>> getLessonVideoProgress(
+    public ApiResponse<List<LessonVideoProgressSummaryResponse>> getLessonVideoProgress(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
                 "Lesson video progress retrieved successfully.",
                 videoProgressService.getTeacherLessonProgress(currentUser, lessonId));
+    }
+
+    private ResponseEntity<Resource> buildInlineDownloadResponse(StoredFileDownload download) {
+        MediaType mediaType = download.contentType().isBlank()
+                ? MediaTypeFactory.getMediaType(download.resource()).orElse(MediaType.APPLICATION_OCTET_STREAM)
+                : MediaType.parseMediaType(download.contentType());
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(download.originalFileName(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(download.resource());
     }
 
     @PutMapping("/lessons/{id}")
@@ -470,7 +494,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/activities")
-    public ApiResponse<java.util.List<LessonActivityResponse>> getLessonActivities(
+    public ApiResponse<List<LessonActivityResponse>> getLessonActivities(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
@@ -508,7 +532,7 @@ public class TeacherController {
     }
 
     @GetMapping("/packages")
-    public ApiResponse<java.util.List<CoursePackageResponse>> getTeacherPackages(
+    public ApiResponse<List<CoursePackageResponse>> getTeacherPackages(
             @AuthenticationPrincipal SecurityUserDetails currentUser) {
         return ApiResponse.success(
                 "Teacher packages retrieved successfully.",
@@ -582,7 +606,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/flashcards")
-    public ApiResponse<java.util.List<FlashcardOptionResponse>> getLessonFlashcards(
+    public ApiResponse<List<FlashcardOptionResponse>> getLessonFlashcards(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
@@ -619,7 +643,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/quizzes")
-    public ApiResponse<java.util.List<TeacherQuizResponse>> getLessonQuizzes(
+    public ApiResponse<List<TeacherQuizResponse>> getLessonQuizzes(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
@@ -685,7 +709,7 @@ public class TeacherController {
     }
 
     @GetMapping("/quizzes/{quizId}/attempts")
-    public ApiResponse<java.util.List<TeacherQuizAttemptSummaryResponse>> getQuizAttempts(
+    public ApiResponse<List<TeacherQuizAttemptSummaryResponse>> getQuizAttempts(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long quizId) {
         return ApiResponse.success(
@@ -694,7 +718,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/matching-games")
-    public ApiResponse<java.util.List<MatchingGameResponse>> getMatchingGames(
+    public ApiResponse<List<MatchingGameResponse>> getMatchingGames(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
@@ -731,7 +755,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/listening-exercises")
-    public ApiResponse<java.util.List<ListeningExerciseResponse>> getListeningExercises(
+    public ApiResponse<List<ListeningExerciseResponse>> getListeningExercises(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(
@@ -768,7 +792,7 @@ public class TeacherController {
     }
 
     @GetMapping("/lessons/{lessonId}/tracing-exercises")
-    public ApiResponse<java.util.List<TracingExerciseResponse>> getTracingExercises(
+    public ApiResponse<List<TracingExerciseResponse>> getTracingExercises(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId) {
         return ApiResponse.success(

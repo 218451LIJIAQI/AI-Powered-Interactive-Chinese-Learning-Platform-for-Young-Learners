@@ -25,8 +25,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("select count(distinct u) from User u join u.roles r where r.name = :roleName")
     long countByRoleName(@Param("roleName") RoleName roleName);
 
-    @EntityGraph(attributePaths = { "roles" })
-    Page<User> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    java.util.List<User> findTop5ByOrderByCreatedAtDesc();
 
     @EntityGraph(attributePaths = { "roles" })
     java.util.List<User> findAllByOrderByCreatedAtDesc();

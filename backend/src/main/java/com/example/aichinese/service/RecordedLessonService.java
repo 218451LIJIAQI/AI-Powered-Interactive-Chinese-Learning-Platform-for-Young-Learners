@@ -4,7 +4,6 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.util.List;
 
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -136,10 +135,9 @@ public class RecordedLessonService {
 
     @Transactional(readOnly = true)
     public List<RecordedLessonVideoResponse> getStudentRecordedVideos(SecurityUserDetails currentUser, Long lessonId) {
-        liveLearningAccessService.requirePublishedLesson(lessonId);
-        liveLearningAccessService.ensureStudentHasLessonAccess(
-                liveLearningAccessService.requireStudent(currentUser),
-                liveLearningAccessService.requirePublishedLesson(lessonId));
+        var student = liveLearningAccessService.requireStudent(currentUser);
+        var lesson = liveLearningAccessService.requirePublishedLesson(lessonId);
+        liveLearningAccessService.ensureStudentHasLessonAccess(student, lesson);
         return recordedLessonVideoRepository.findByLessonIdAndActiveTrueOrderBySortOrderAscCreatedAtAsc(lessonId).stream()
                 .filter(video -> canStudentAccessVideo(currentUser, video))
                 .map(this::toStudentResponse)
@@ -152,9 +150,21 @@ public class RecordedLessonService {
     }
 
     @Transactional(readOnly = true)
-    public Resource loadRecordedVideoResource(SecurityUserDetails currentUser, Long videoId) {
+    public StoredFileDownload loadStudentRecordedVideoDownload(SecurityUserDetails currentUser, Long videoId) {
         UploadedFile uploadedFile = liveLearningAccessService.requireAccessibleRecordedFile(currentUser, videoId);
-        return recordedVideoStorageService.loadAsResource(uploadedFile);
+        return recordedVideoStorageService.loadAsDownload(uploadedFile);
+    }
+
+    @Transactional(readOnly = true)
+    public StoredFileDownload loadTeacherRecordedVideoDownload(
+            SecurityUserDetails currentUser,
+            Long lessonId,
+            Long videoId) {
+        RecordedLessonVideo video = liveLearningAccessService.requireTeacherOwnedRecordedVideo(currentUser, lessonId, videoId);
+        if (video.getUploadedFile() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Uploaded file is required for recorded video.");
+        }
+        return recordedVideoStorageService.loadAsDownload(video.getUploadedFile());
     }
 
     private void applyVideoUpdate(
@@ -193,7 +203,7 @@ public class RecordedLessonService {
 
     private RecordedLessonVideoResponse toTeacherResponse(RecordedLessonVideo video) {
         String streamUrl = video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
-                ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
+                ? "/api/v1/teachers/lessons/" + video.getLesson().getId() + "/recorded-videos/" + video.getId() + "/stream"
                 : null;
         String externalUrl = video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
         return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl);

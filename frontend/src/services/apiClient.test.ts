@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APP_EVENTS } from '../constants/appEvents'
@@ -40,6 +41,14 @@ function getResponseRejected(): NonNullable<AxiosHandler['rejected']> {
   return handler.rejected
 }
 
+function buildRequestConfig(overrides: Partial<AxiosRequestConfig> = {}): AxiosRequestConfig {
+  return {
+    headers: {},
+    url: '/auth/me',
+    ...overrides,
+  }
+}
+
 describe('apiClient request interceptor', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -53,34 +62,31 @@ describe('apiClient request interceptor', () => {
     localStorage.setItem(TOKEN_KEY, 'test-token-123')
 
     const fulfilled = getRequestFulfilled()
-    const baseConfig = { headers: {} as Record<string, string>, url: '/auth/me' }
-    const result = (await fulfilled(baseConfig)) as { headers: Record<string, string> }
+    const result = (await fulfilled(buildRequestConfig())) as AxiosRequestConfig
 
-    expect(result.headers.Authorization).toBe('Bearer test-token-123')
+    expect(result.headers?.Authorization).toBe('Bearer test-token-123')
   })
 
   it('does not attach an Authorization header when no token is stored', async () => {
     const fulfilled = getRequestFulfilled()
-    const baseConfig = { headers: {} as Record<string, string>, url: '/auth/login' }
-    const result = (await fulfilled(baseConfig)) as { headers: Record<string, string> }
+    const result = (await fulfilled(buildRequestConfig({ url: '/auth/login' }))) as AxiosRequestConfig
 
-    expect(result.headers.Authorization).toBeUndefined()
+    expect(result.headers?.Authorization).toBeUndefined()
   })
 
   it('rejects requests whose URL contains an invalid numeric path segment', async () => {
     const fulfilled = getRequestFulfilled()
-    const baseConfig = { headers: {} as Record<string, string>, url: '/students/lessons/NaN' }
+    const baseConfig = buildRequestConfig({ url: '/students/lessons/NaN' })
 
     expect(() => fulfilled(baseConfig)).toThrow('Invalid numeric route or query parameter.')
   })
 
   it('rejects requests whose query params contain non-finite numbers', async () => {
     const fulfilled = getRequestFulfilled()
-    const baseConfig = {
-      headers: {} as Record<string, string>,
+    const baseConfig = buildRequestConfig({
       url: '/public/courses',
       params: { page: Number.NaN, size: 12 },
-    }
+    })
 
     expect(() => fulfilled(baseConfig)).toThrow('Invalid numeric route or query parameter.')
   })

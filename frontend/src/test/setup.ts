@@ -2,6 +2,20 @@
 // jsdom 29 in this project does not provide localStorage/sessionStorage,
 // so we install simple in-memory shims that are reset between tests.
 
+function overrideNodeStorageProperty(name: 'localStorage' | 'sessionStorage') {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, name)
+  if (descriptor?.configurable) {
+    Object.defineProperty(globalThis, name, {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    })
+  }
+}
+
+overrideNodeStorageProperty('localStorage')
+overrideNodeStorageProperty('sessionStorage')
+
 class MemoryStorage implements Storage {
   private store = new Map<string, string>()
 

@@ -1,9 +1,11 @@
 package com.example.aichinese.controller;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
@@ -50,6 +52,7 @@ import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LearningCatalogService;
 import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.ScheduleService;
+import com.example.aichinese.service.StoredFileDownload;
 
 import jakarta.validation.Valid;
 
@@ -180,12 +183,8 @@ public class AdminController {
     public ResponseEntity<Resource> getTeacherDocument(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
-        Resource resource = adminTeacherManagementService.getTeacherDocument(currentUser, id);
-        return ResponseEntity.ok()
-                .contentType(MediaTypeFactory.getMediaType(resource)
-                        .orElse(MediaType.APPLICATION_OCTET_STREAM))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
-                .body(resource);
+        StoredFileDownload download = adminTeacherManagementService.getTeacherDocument(currentUser, id);
+        return buildInlineDownloadResponse(download);
     }
 
     @GetMapping("/users")
@@ -319,5 +318,19 @@ public class AdminController {
                         ManagedContentType.fromValue(contentType),
                         id,
                         request != null ? request.note() : null));
+    }
+
+    private ResponseEntity<Resource> buildInlineDownloadResponse(StoredFileDownload download) {
+        MediaType mediaType = download.contentType().isBlank()
+                ? MediaTypeFactory.getMediaType(download.resource()).orElse(MediaType.APPLICATION_OCTET_STREAM)
+                : MediaType.parseMediaType(download.contentType());
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(download.originalFileName(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(download.resource());
     }
 }

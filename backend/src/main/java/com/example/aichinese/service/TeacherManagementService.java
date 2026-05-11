@@ -6,7 +6,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -175,14 +174,14 @@ public class TeacherManagementService {
     }
 
     @Transactional
-    public Resource getTeacherOwnedDocument(SecurityUserDetails currentUser, Long documentId) {
+    public StoredFileDownload getTeacherOwnedDocument(SecurityUserDetails currentUser, Long documentId) {
         TeacherVerificationDocument document = teacherVerificationDocumentRepository
                 .findByIdAndTeacherUserId(documentId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested verification document was not found."));
 
         auditLogService.record(getUserById(currentUser.getUserId()), "TEACHER_VERIFICATION_DOCUMENT_VIEW",
                 "TeacherVerificationDocument", documentId, "Teacher viewed their verification document.");
-        return fileStorageService.loadAsResource(document.getUploadedFile());
+        return fileStorageService.loadAsDownload(document.getUploadedFile());
     }
 
     @Transactional(readOnly = true)

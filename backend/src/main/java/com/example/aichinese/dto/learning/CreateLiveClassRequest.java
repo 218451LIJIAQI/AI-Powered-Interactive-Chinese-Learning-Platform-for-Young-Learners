@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record CreateLiveClassRequest(
@@ -27,6 +28,7 @@ public record CreateLiveClassRequest(
         LocalDateTime endTime,
 
         @NotBlank(message = "Meeting link is required.")
+        @Pattern(regexp = "^https?://.+$", message = "Meeting link must start with http:// or https://.")
         @Size(max = 500, message = "Meeting link must be 500 characters or fewer.")
         String meetingLink,
 

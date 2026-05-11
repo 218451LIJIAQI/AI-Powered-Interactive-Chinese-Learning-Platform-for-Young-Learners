@@ -1,5 +1,7 @@
 package com.example.aichinese.controller;
 
+import java.util.List;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -47,14 +49,14 @@ public class PublicController {
     }
 
     @GetMapping("/levels")
-    public ApiResponse<java.util.List<LearningLevelResponse>> getPublicLevels() {
+    public ApiResponse<List<LearningLevelResponse>> getPublicLevels() {
         return ApiResponse.success(
                 "Learning levels retrieved successfully.",
                 learningCatalogService.getPublicLevels());
     }
 
     @GetMapping("/categories")
-    public ApiResponse<java.util.List<LearningCategoryResponse>> getPublicCategories() {
+    public ApiResponse<List<LearningCategoryResponse>> getPublicCategories() {
         return ApiResponse.success(
                 "Learning categories retrieved successfully.",
                 learningCatalogService.getPublicCategories());
@@ -83,7 +85,7 @@ public class PublicController {
     }
 
     @GetMapping("/reviews")
-    public ApiResponse<java.util.List<ReviewResponse>> getPublicReviews(
+    public ApiResponse<List<ReviewResponse>> getPublicReviews(
             @RequestParam("targetType") String targetType,
             @RequestParam("targetId") Long targetId) {
         return ApiResponse.success(

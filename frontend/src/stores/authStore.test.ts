@@ -1,8 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { STORAGE_KEYS } from '../constants/storageKeys'
-import { useAuthStore } from './authStore'
+import { useAuthStore, type CurrentUser } from './authStore'
+
+const { apiClientGet, apiClientPost } = vi.hoisted(() => ({
+  apiClientGet: vi.fn(),
+  apiClientPost: vi.fn(),
+}))
+
+vi.mock('../services/apiClient', () => ({
+  apiClient: {
+    get: apiClientGet,
+    post: apiClientPost,
+  },
+}))
 
 const TOKEN_KEY = STORAGE_KEYS.AUTH_TOKEN
 
@@ -10,10 +22,13 @@ describe('authStore', () => {
   beforeEach(() => {
     localStorage.clear()
     setActivePinia(createPinia())
+    apiClientGet.mockReset()
+    apiClientPost.mockReset()
   })
 
   afterEach(() => {
     localStorage.clear()
+    vi.clearAllMocks()
   })
 
   it('initialises without a token, without a user, and not authenticated', () => {
@@ -68,5 +83,48 @@ describe('authStore', () => {
     expect(store.hasRole('TEACHER')).toBe(true)
     expect(store.hasRole('ADMIN')).toBe(false)
     expect(store.isTeacherApproved()).toBe(true)
+  })
+
+  it('shares the same in-flight fetchCurrentUser request across concurrent callers', async () => {
+    localStorage.setItem(TOKEN_KEY, 'restored-token')
+
+    let resolveRequest: ((value: { data: { data: CurrentUser } }) => void) | undefined
+    apiClientGet.mockReturnValue(new Promise((resolve) => {
+      resolveRequest = resolve
+    }))
+
+    const store = useAuthStore()
+    const firstCall = store.fetchCurrentUser()
+    const secondCall = store.fetchCurrentUser()
+
+    expect(apiClientGet).toHaveBeenCalledTimes(1)
+    expect(store.isFetchingCurrentUser).toBe(true)
+
+    resolveRequest?.({
+      data: {
+        data: {
+          id: 3,
+          fullName: 'Concurrent Student',
+          email: 'student@example.com',
+          preferredLanguage: 'en',
+          roles: ['STUDENT'],
+          studentProfile: {
+            id: 7,
+            displayName: 'Concurrent Student',
+            currentLevel: 'Beginner',
+            totalPoints: 25,
+          },
+          teacherProfile: null,
+        },
+      },
+    })
+
+    const [firstResult, secondResult] = await Promise.all([firstCall, secondCall])
+    expect(firstResult?.email).toBe('student@example.com')
+    expect(secondResult?.email).toBe('student@example.com')
+    expect(store.currentUser?.email).toBe('student@example.com')
+    expect(store.isAuthenticated).toBe(true)
+    expect(store.initialized).toBe(true)
+    expect(store.isFetchingCurrentUser).toBe(false)
   })
 })

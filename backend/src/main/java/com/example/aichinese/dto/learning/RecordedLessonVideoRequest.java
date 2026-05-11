@@ -2,6 +2,7 @@ package com.example.aichinese.dto.learning;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -18,6 +19,7 @@ public record RecordedLessonVideoRequest(
         @NotBlank(message = "Source type is required.")
         String sourceType,
 
+        @Pattern(regexp = "^(https?://.+)?$", message = "External video URL must start with http:// or https://.")
         String externalVideoUrl,
 
         @PositiveOrZero(message = "Duration must not be negative.")

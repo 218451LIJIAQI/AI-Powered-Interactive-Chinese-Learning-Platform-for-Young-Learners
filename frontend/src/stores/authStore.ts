@@ -9,7 +9,6 @@ import { safeGetItem, safeRemoveItem, safeSetItem } from '../utils/safeStorage'
 
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
 export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | null
-export type SupportedLocale = 'en' | 'ms' | 'zh'
 
 type StudentProfileSummary = {
   id: number
@@ -66,6 +65,8 @@ export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<CurrentUser | null>(null)
   const initialized = ref(false)
   const isFetchingCurrentUser = ref(false)
+  let fetchCurrentUserPromise: Promise<CurrentUser | null> | null = null
+  let authStateVersion = 0
 
   const isAuthenticated = computed(() => Boolean(token.value) && Boolean(currentUser.value))
   const roles = computed<UserRole[]>(() => currentUser.value?.roles ?? [])
@@ -82,6 +83,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearAuthState() {
+    authStateVersion += 1
+    fetchCurrentUserPromise = null
     setToken(null)
     currentUser.value = null
     initialized.value = true
@@ -119,19 +122,34 @@ export const useAuthStore = defineStore('auth', () => {
       return null
     }
 
-    isFetchingCurrentUser.value = true
-
-    try {
-      const response = await apiClient.get<ApiResponse<CurrentUser>>('/auth/me')
-      currentUser.value = response.data.data
-      initialized.value = true
-      return currentUser.value
-    } catch (error) {
-      clearAuthState()
-      throw new Error(extractApiError(error, 'Session expired. Please log in again.'))
-    } finally {
-      isFetchingCurrentUser.value = false
+    if (fetchCurrentUserPromise) {
+      return fetchCurrentUserPromise
     }
+
+    const versionAtStart = authStateVersion
+    isFetchingCurrentUser.value = true
+    fetchCurrentUserPromise = (async () => {
+      try {
+        const response = await apiClient.get<ApiResponse<CurrentUser>>('/auth/me')
+        if (versionAtStart !== authStateVersion) {
+          return currentUser.value
+        }
+
+        currentUser.value = response.data.data
+        initialized.value = true
+        return currentUser.value
+      } catch (error) {
+        if (versionAtStart === authStateVersion) {
+          clearAuthState()
+        }
+        throw new Error(extractApiError(error, 'Session expired. Please log in again.'))
+      } finally {
+        isFetchingCurrentUser.value = false
+        fetchCurrentUserPromise = null
+      }
+    })()
+
+    return fetchCurrentUserPromise
   }
 
   async function logout() {

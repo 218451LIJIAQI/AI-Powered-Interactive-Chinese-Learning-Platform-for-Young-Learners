@@ -6,7 +6,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.util.List;
 import java.util.Locale;
 
-import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -194,14 +193,14 @@ public class AdminTeacherManagementService {
     }
 
     @Transactional
-    public Resource getTeacherDocument(SecurityUserDetails currentUser, Long documentId) {
+    public StoredFileDownload getTeacherDocument(SecurityUserDetails currentUser, Long documentId) {
         User adminUser = findActor(currentUser);
         TeacherVerificationDocument document = teacherVerificationDocumentRepository.findById(documentId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested teacher document was not found."));
 
         auditLogService.record(adminUser, "ADMIN_TEACHER_DOCUMENT_VIEW", "TeacherVerificationDocument", documentId,
                 "Admin viewed teacher verification document.");
-        return fileStorageService.loadAsResource(document.getUploadedFile());
+        return fileStorageService.loadAsDownload(document.getUploadedFile());
     }
 
     private AdminTeacherDetailResponse buildTeacherDetail(TeacherProfile teacherProfile) {

@@ -1,8 +1,10 @@
 package com.example.aichinese.controller;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
@@ -54,6 +56,7 @@ import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.RecordedLessonService;
 import com.example.aichinese.service.ScheduleService;
 import com.example.aichinese.service.AnalyticsService;
+import com.example.aichinese.service.StoredFileDownload;
 import com.example.aichinese.service.StudentLearningService;
 import com.example.aichinese.service.VideoProgressService;
 
@@ -189,11 +192,18 @@ public class StudentController {
     public ResponseEntity<Resource> streamRecordedVideo(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long videoId) {
-        Resource resource = recordedLessonService.loadRecordedVideoResource(currentUser, videoId);
+        StoredFileDownload download = recordedLessonService.loadStudentRecordedVideoDownload(currentUser, videoId);
+        MediaType mediaType = download.contentType().isBlank()
+                ? MediaTypeFactory.getMediaType(download.resource()).orElse(MediaType.APPLICATION_OCTET_STREAM)
+                : MediaType.parseMediaType(download.contentType());
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(download.originalFileName(), StandardCharsets.UTF_8)
+                .build();
+
         return ResponseEntity.ok()
-                .contentType(MediaTypeFactory.getMediaType(resource).orElse(MediaType.APPLICATION_OCTET_STREAM))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
-                .body(resource);
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(download.resource());
     }
 
     @GetMapping("/video-progress/{videoId}")

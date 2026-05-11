@@ -62,7 +62,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException exception) {
-        ApiResponse<Void> response = ApiResponse.failure(exception.getMessage(), List.of(exception.getMessage()));
+        String message = safeMessage(exception, "Request was invalid. Please check the input and try again.");
+        ApiResponse<Void> response = ApiResponse.failure(message, List.of(message));
         return ResponseEntity.badRequest().body(response);
     }
 
@@ -105,9 +106,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({ AccessDeniedException.class, AuthorizationDeniedException.class })
     public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(RuntimeException exception) {
-        String message = exception.getMessage() == null || exception.getMessage().isBlank()
-                ? "You do not have permission to perform this action."
-                : exception.getMessage();
+        String message = safeMessage(exception, "You do not have permission to perform this action.");
         ApiResponse<Void> response = ApiResponse.failure(message, List.of(message));
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
@@ -138,5 +137,19 @@ public class GlobalExceptionHandler {
 
     private String formatFieldError(FieldError error) {
         return error.getField() + ": " + error.getDefaultMessage();
+    }
+
+    /**
+     * Returns the exception message when present and non-blank, otherwise the
+     * supplied user-facing fallback. Guards every error response against a null
+     * `message` field and a `["null"]` errors list when a thrown exception did
+     * not carry a meaningful description.
+     */
+    private String safeMessage(Throwable exception, String fallback) {
+        if (exception == null) {
+            return fallback;
+        }
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? fallback : message;
     }
 }

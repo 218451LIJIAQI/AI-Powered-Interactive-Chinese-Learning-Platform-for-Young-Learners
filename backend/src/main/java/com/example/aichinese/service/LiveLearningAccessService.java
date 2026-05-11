@@ -160,12 +160,15 @@ public class LiveLearningAccessService {
 
     @Transactional(readOnly = true)
     public UploadedFile requireAccessibleRecordedFile(SecurityUserDetails currentUser, Long videoId) {
-        RecordedLessonVideo video = requireAccessibleRecordedVideo(
-                currentUser,
-                requireActiveRecordedVideo(videoId).getLesson().getId(),
-                videoId);
+        StudentProfile student = requireStudent(currentUser);
+        RecordedLessonVideo video = requireActiveRecordedVideo(videoId);
+        Lesson lesson = requirePublishedLesson(video.getLesson().getId());
+        ensureStudentHasLessonAccess(student, lesson);
         if (video.getUploadedFile() == null) {
             throw new ResponseStatusException(NOT_FOUND, "Recorded video file was not found.");
+        }
+        if (video.getCoursePackage() != null) {
+            ensureStudentHasPackageAccess(student, video.getCoursePackage());
         }
         return uploadedFileRepository.findById(video.getUploadedFile().getId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Recorded video file was not found."));

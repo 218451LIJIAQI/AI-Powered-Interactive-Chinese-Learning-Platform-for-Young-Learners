@@ -252,7 +252,9 @@ public class AuthService {
     }
 
     private String normalizePreferredLanguage(String preferredLanguage) {
-        return trimToNull(preferredLanguage).orElse("en");
+        return trimToNull(preferredLanguage)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .orElse("en");
     }
 
     private Optional<String> trimToNull(String value) {

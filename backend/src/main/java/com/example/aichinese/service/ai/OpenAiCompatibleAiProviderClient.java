@@ -31,8 +31,8 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
     public OpenAiCompatibleAiProviderClient(AiProperties aiProperties, RestTemplateBuilder restTemplateBuilder) {
         this.aiProperties = aiProperties;
         this.restTemplate = restTemplateBuilder
-                .setConnectTimeout(Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1)))
-                .setReadTimeout(Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1)))
+                .connectTimeout(Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1)))
+                .readTimeout(Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1)))
                 .build();
     }
 

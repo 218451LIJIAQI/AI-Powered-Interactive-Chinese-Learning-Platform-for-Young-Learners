@@ -73,6 +73,7 @@ import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderPrompt;
 import com.example.aichinese.service.ai.AiProviderRouter;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
@@ -1119,7 +1120,8 @@ public class AiService {
 
     private Map<String, Object> parseJsonMap(String responseText) {
         try {
-            return objectMapper.readValue(responseText, Map.class);
+            return objectMapper.readValue(responseText, new TypeReference<Map<String, Object>>() {
+            });
         } catch (JsonProcessingException exception) {
             log.warn("AI JSON parsing fallback triggered: {}", exception.getMessage());
             return Map.of();

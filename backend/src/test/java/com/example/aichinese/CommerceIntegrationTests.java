@@ -118,6 +118,18 @@ class CommerceIntegrationTests {
     }
 
     @Test
+    void studentCanFetchAnEmptyCartBeforeAddingAnyItems() throws Exception {
+        String studentToken = registerStudentAndLogin(uniqueEmail("commerce-empty-cart-student"));
+
+        mockMvc.perform(get("/api/v1/students/cart")
+                .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.empty").value(true));
+    }
+
+    @Test
     void cartCheckoutCreatesPaymentAndUnlocksAccessInMockMode() throws Exception {
         String teacherEmail = uniqueEmail("commerce-checkout-teacher");
         approveTeacherProfile(teacherEmail);

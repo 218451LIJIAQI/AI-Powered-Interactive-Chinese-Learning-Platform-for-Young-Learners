@@ -50,7 +50,7 @@ describe('safeStorage', () => {
     const spy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
       throw new Error('QuotaExceededError')
     })
-    // Must not throw — a disabled/full storage is not a crash condition for
+    // Must not throw: a disabled/full storage is not a crash condition for
     // the caller; the value just won't persist across reloads.
     expect(() => safeSetItem('k', 'v')).not.toThrow()
     expect(spy).toHaveBeenCalledWith('k', 'v')

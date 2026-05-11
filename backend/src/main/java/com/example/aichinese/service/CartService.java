@@ -47,7 +47,7 @@ public class CartService {
         this.commerceSettingsService = commerceSettingsService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public CartResponse getCart(SecurityUserDetails currentUser) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Cart cart = cartRepository.findByStudentUserId(currentUser.getUserId())

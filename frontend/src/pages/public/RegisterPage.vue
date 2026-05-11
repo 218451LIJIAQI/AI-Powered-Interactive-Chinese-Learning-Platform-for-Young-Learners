@@ -156,8 +156,8 @@ async function handleRegister() {
               <h2>{{ t('auth.registerHeading') }}</h2>
             </div>
             <el-radio-group v-model="activeRole" size="large">
-              <el-radio-button label="STUDENT">{{ t('auth.studentTab') }}</el-radio-button>
-              <el-radio-button label="TEACHER">{{ t('auth.teacherTab') }}</el-radio-button>
+              <el-radio-button value="STUDENT">{{ t('auth.studentTab') }}</el-radio-button>
+              <el-radio-button value="TEACHER">{{ t('auth.teacherTab') }}</el-radio-button>
             </el-radio-group>
           </div>
         </template>

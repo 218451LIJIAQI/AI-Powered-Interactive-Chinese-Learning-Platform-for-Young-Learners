@@ -7,7 +7,6 @@ import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -255,7 +254,7 @@ public class DashboardService {
                 + tracingExerciseRepository.count();
 
         List<AdminDashboardResponse.RecentUserActivity> recentUserActivity = userRepository
-                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, 5)).stream()
+                .findTop5ByOrderByCreatedAtDesc().stream()
                 .map(user -> new AdminDashboardResponse.RecentUserActivity(
                         user.getId(),
                         user.getDisplayName(),
