@@ -25,3 +25,7 @@ backend/phase5-*.log
 
 # Dev script state (created by start.ps1 / stop.ps1)
 .run-state.json
+
+# Playwright CLI debug artifacts
+.playwright-cli/
+output/

@@ -54,9 +54,29 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public java.util.List<AuditLogResponse> getAuditLogs() {
-        return auditLogRepository.findAll().stream()
-                .sorted(java.util.Comparator.comparing(AuditLog::getCreatedAt).reversed())
+        // DB-side ordering replaces the previous JVM sort over the full
+        // audit_log table. Since audit_log grows on every privileged action,
+        // pushing the sort down to SQL avoids a worst-case O(N log N) JVM
+        // pass plus an additional copy of the entity list per request.
+        return auditLogRepository.findAll(
+                        org.springframework.data.domain.Sort.by(
+                                org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
+                .stream()
                 .map(communicationMapper::toAuditLogResponse)
                 .toList();
+    }
+
+    /**
+     * Look up a single audit log by its identifier. Uses the repository's
+     * primary-key index instead of streaming the entire table the way the
+     * controller previously did.
+     */
+    @Transactional(readOnly = true)
+    public AuditLogResponse getAuditLog(Long id) {
+        AuditLog auditLog = auditLogRepository.findById(id)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND,
+                        "Audit log was not found."));
+        return communicationMapper.toAuditLogResponse(auditLog);
     }
 }

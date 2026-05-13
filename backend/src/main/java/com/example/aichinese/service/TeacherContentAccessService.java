@@ -24,6 +24,7 @@ import com.example.aichinese.repository.LearningCategoryRepository;
 import com.example.aichinese.repository.LearningLevelRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class TeacherContentAccessService {
@@ -105,7 +106,7 @@ public class TeacherContentAccessService {
         }
     }
 
-    public BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
+    private BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
         if (accessType == AccessType.FREE) {
             return BigDecimal.ZERO;
         }
@@ -127,10 +128,10 @@ public class TeacherContentAccessService {
         module.setLevel(level);
         module.setCategory(category);
         module.setTitle(title.trim());
-        module.setDescription(trimToNull(description));
+        module.setDescription(TextUtils.trimToNull(description));
         module.setAccessType(accessType);
         module.setPrice(normalizePrice(accessType, price));
-        module.setCoverImageUrl(trimToNull(coverImageUrl));
+        module.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
     }
 
     public void attachLessonMetadata(
@@ -152,13 +153,13 @@ public class TeacherContentAccessService {
         lesson.setLevel(level);
         lesson.setCategory(category);
         lesson.setTitle(title.trim());
-        lesson.setSummary(trimToNull(description));
-        lesson.setLessonContent(trimToNull(lessonContent));
+        lesson.setSummary(TextUtils.trimToNull(description));
+        lesson.setLessonContent(TextUtils.trimToNull(lessonContent));
         lesson.setAccessType(accessType);
         lesson.setPrice(normalizePrice(accessType, price));
         lesson.setLearningType(learningType);
         lesson.setEstimatedDurationMinutes(estimatedDurationMinutes);
-        lesson.setCoverImageUrl(trimToNull(coverImageUrl));
+        lesson.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
     }
 
     public void attachPackageMetadata(
@@ -176,19 +177,10 @@ public class TeacherContentAccessService {
         coursePackage.setLevel(level);
         coursePackage.setCategory(category);
         coursePackage.setTitle(title.trim());
-        coursePackage.setDescription(trimToNull(description));
+        coursePackage.setDescription(TextUtils.trimToNull(description));
         coursePackage.setAccessType(accessType);
         coursePackage.setPrice(normalizePrice(accessType, price));
         coursePackage.setLearningType(learningType);
-        coursePackage.setCoverImageUrl(trimToNull(coverImageUrl));
-    }
-
-    public String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String trimmed = value.trim();
-        return trimmed.isBlank() ? null : trimmed;
+        coursePackage.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
     }
 }

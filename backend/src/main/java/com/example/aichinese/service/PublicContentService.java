@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,6 +27,9 @@ import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonActivityRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.PackageItemRepository;
+import com.example.aichinese.util.TextUtils;
+
+import jakarta.persistence.criteria.Predicate;
 
 @Service
 public class PublicContentService {
@@ -61,36 +65,84 @@ public class PublicContentService {
             int size) {
         AccessType accessTypeFilter = parseAccessType(accessType);
         LearningType learningTypeFilter = parseLearningType(learningType);
-        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim().toLowerCase(Locale.ROOT);
+        // Shared trim/lowercase/blank-to-null via TextUtils so this matches
+        // the identical normalisation in AdminContentReviewService and
+        // AdminTeacherManagementService — making future cross-cutting tweaks
+        // (e.g. NFKC-normalising user input) a single-place change.
+        String normalizedKeyword = TextUtils.trimToOptional(keyword)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .orElse(null);
+
+        // Filter at the database layer using JPA Specifications. Previously this
+        // method called findAll() on both repositories and filtered every row
+        // in-memory, which scaled poorly as the catalog grew. Pushing the
+        // predicates down to SQL ensures the query planner can use the existing
+        // content_status / category / level indexes.
+        Specification<Lesson> lessonSpec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED));
+            if (levelId != null) {
+                predicates.add(cb.equal(root.get("level").get("id"), levelId));
+            }
+            if (categoryId != null) {
+                predicates.add(cb.equal(root.get("category").get("id"), categoryId));
+            }
+            if (accessTypeFilter != null) {
+                predicates.add(cb.equal(root.get("accessType"), accessTypeFilter));
+            }
+            if (learningTypeFilter != null) {
+                predicates.add(cb.equal(root.get("learningType"), learningTypeFilter));
+            }
+            if (normalizedKeyword != null) {
+                String like = "%" + normalizedKeyword + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("title")), like),
+                        cb.like(cb.lower(cb.coalesce(root.get("summary"), "")), like)));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Specification<CoursePackage> packageSpec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED));
+            if (levelId != null) {
+                predicates.add(cb.equal(root.get("level").get("id"), levelId));
+            }
+            if (categoryId != null) {
+                predicates.add(cb.equal(root.get("category").get("id"), categoryId));
+            }
+            if (accessTypeFilter != null) {
+                predicates.add(cb.equal(root.get("accessType"), accessTypeFilter));
+            }
+            if (learningTypeFilter != null) {
+                predicates.add(cb.equal(root.get("learningType"), learningTypeFilter));
+            }
+            if (normalizedKeyword != null) {
+                String like = "%" + normalizedKeyword + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("title")), like),
+                        cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
 
         List<PublicCourseSummaryResponse> results = new ArrayList<>();
+        for (Lesson lesson : lessonRepository.findAll(lessonSpec)) {
+            results.add(contentManagementMapper.toPublicCourseSummary(lesson));
+        }
+        for (CoursePackage coursePackage : coursePackageRepository.findAll(packageSpec)) {
+            results.add(contentManagementMapper.toPublicCourseSummary(coursePackage));
+        }
 
-        results.addAll(lessonRepository.findAll().stream()
-                .filter(lesson -> lesson.getContentStatus() == ContentStatus.PUBLISHED)
-                .filter(lesson -> levelId == null || (lesson.getLevel() != null && lesson.getLevel().getId().equals(levelId)))
-                .filter(lesson -> categoryId == null || (lesson.getCategory() != null && lesson.getCategory().getId().equals(categoryId)))
-                .filter(lesson -> accessTypeFilter == null || lesson.getAccessType() == accessTypeFilter)
-                .filter(lesson -> learningTypeFilter == null || lesson.getLearningType() == learningTypeFilter)
-                .filter(lesson -> matchesKeyword(lesson.getTitle(), lesson.getSummary(), normalizedKeyword))
-                .map(contentManagementMapper::toPublicCourseSummary)
-                .toList());
-
-        results.addAll(coursePackageRepository.findAll().stream()
-                .filter(coursePackage -> coursePackage.getContentStatus() == ContentStatus.PUBLISHED)
-                .filter(coursePackage -> levelId == null || (coursePackage.getLevel() != null && coursePackage.getLevel().getId().equals(levelId)))
-                .filter(coursePackage -> categoryId == null || (coursePackage.getCategory() != null && coursePackage.getCategory().getId().equals(categoryId)))
-                .filter(coursePackage -> accessTypeFilter == null || coursePackage.getAccessType() == accessTypeFilter)
-                .filter(coursePackage -> learningTypeFilter == null || coursePackage.getLearningType() == learningTypeFilter)
-                .filter(coursePackage -> matchesKeyword(coursePackage.getTitle(), coursePackage.getDescription(), normalizedKeyword))
-                .map(contentManagementMapper::toPublicCourseSummary)
-                .toList());
-
+        // Two entity types still have to be merged + sorted in-memory because
+        // they live in different tables, but the working set is now bounded by
+        // the active filters rather than the full catalog.
         List<PublicCourseSummaryResponse> sorted = sortCourses(results, sort);
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(size, 1);
         int startIndex = Math.min(safePage * safeSize, sorted.size());
         int endIndex = Math.min(startIndex + safeSize, sorted.size());
-        List<PublicCourseSummaryResponse> items = sorted.subList(startIndex, endIndex);
+        List<PublicCourseSummaryResponse> items = new ArrayList<>(sorted.subList(startIndex, endIndex));
         int totalPages = sorted.isEmpty() ? 0 : (int) Math.ceil((double) sorted.size() / safeSize);
 
         return new PageResponse<>(items, safePage, safeSize, sorted.size(), totalPages);
@@ -130,15 +182,6 @@ public class PublicContentService {
             default -> Comparator.comparing(PublicCourseSummaryResponse::contentId).reversed();
         };
         return items.stream().sorted(comparator).toList();
-    }
-
-    private boolean matchesKeyword(String title, String description, String keyword) {
-        if (keyword == null) {
-            return true;
-        }
-
-        String haystack = ((title == null ? "" : title) + " " + (description == null ? "" : description)).toLowerCase(Locale.ROOT);
-        return haystack.contains(keyword);
     }
 
     private AccessType parseAccessType(String accessType) {

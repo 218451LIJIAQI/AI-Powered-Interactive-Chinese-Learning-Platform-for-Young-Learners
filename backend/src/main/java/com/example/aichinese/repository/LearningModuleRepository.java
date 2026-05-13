@@ -32,4 +32,14 @@ public interface LearningModuleRepository extends JpaRepository<LearningModule, 
     long countByTeacherId(Long teacherId);
 
     long countByContentStatus(ContentStatus contentStatus);
+
+    /**
+     * One row per distinct {@code contentStatus} for the admin analytics
+     * dashboard. Lets the admin breakdown query the database for module
+     * status counts directly instead of loading every module into JVM
+     * memory to count them.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "select m.contentStatus as status, count(m) as count from LearningModule m group by m.contentStatus")
+    List<com.example.aichinese.repository.projection.StatusCountProjection> groupByContentStatus();
 }

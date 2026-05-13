@@ -72,6 +72,8 @@ import com.example.aichinese.service.ai.AiExecutionResult;
 import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderPrompt;
 import com.example.aichinese.service.ai.AiProviderRouter;
+import com.example.aichinese.util.AiInputSanitizer;
+import com.example.aichinese.util.TextUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -225,8 +227,8 @@ public class AiService {
             return new AiQuizGeneratorResponse(
                     "Practice Quiz",
                     request.topic().trim(),
-                    nullableText(request.level()),
-                    nullableText(request.category()),
+                    TextUtils.trimToNull(request.level()),
+                    TextUtils.trimToNull(request.category()),
                     usageMode,
                     fallbackQuizQuestions(request.topic()),
                     execution.status().name());
@@ -362,7 +364,7 @@ public class AiService {
 
         UploadedFile uploadedFile = aiFileStorageService.storePronunciationAudio(audioFile, user);
         String language = resolveLanguage(user, languagePreference);
-        String inputSummary = "Target text: " + targetText.trim() + "; Pinyin: " + nullableText(pinyin) + "; Tone: " + nullableText(tone);
+        String inputSummary = "Target text: " + targetText.trim() + "; Pinyin: " + TextUtils.trimToNull(pinyin) + "; Tone: " + TextUtils.trimToNull(tone);
 
         aiLogService.createFeedbackRecord(
                 user,
@@ -641,10 +643,16 @@ public class AiService {
     }
 
     private String buildChatPrompt(AiChatRequest request) {
+        // Sanitise user-supplied prompt fragments before concatenating them
+        // into the AI prompt. See {@link AiInputSanitizer} for the rules
+        // (length cap, ChatML sentinel-token strip, control-char strip).
         StringBuilder builder = new StringBuilder();
-        builder.append("Help the learner with this message: ").append(request.message().trim()).append(".");
-        if (request.context() != null && !request.context().isBlank()) {
-            builder.append(" Context: ").append(request.context().trim()).append(".");
+        builder.append("Help the learner with this message: ")
+                .append(AiInputSanitizer.sanitizeLong(request.message()))
+                .append(".");
+        String sanitizedContext = AiInputSanitizer.sanitizeLong(request.context());
+        if (sanitizedContext != null) {
+            builder.append(" Context: ").append(sanitizedContext).append(".");
         }
         if (request.relatedLessonId() != null) {
             builder.append(" Related lesson id: ").append(request.relatedLessonId()).append(".");
@@ -654,24 +662,32 @@ public class AiService {
     }
 
     private String buildVocabularyPrompt(AiVocabularyHelperRequest request, String language) {
-        return "Create a beginner-friendly vocabulary helper in structured JSON for the word \"" + request.word().trim()
-                + "\". Input language: " + nullableText(request.inputLanguage())
+        return "Create a beginner-friendly vocabulary helper in structured JSON for the word \""
+                + AiInputSanitizer.sanitizeShort(request.word())
+                + "\". Input language: " + AiInputSanitizer.sanitizeShort(request.inputLanguage())
                 + ". Output language preference: " + language
                 + ". Learner level: " + defaultLevel(request.learnerLevel())
                 + ". Return keys: chineseWord, pinyin, englishMeaning, bahasaMelayuMeaning, simpleExplanation, exampleSentence, exampleSentencePinyin, exampleSentenceTranslation, imagePromptOrDescription, miniPracticeQuestion, encouragement.";
     }
 
     private String buildSentencePrompt(AiSentencePracticeRequest request, String language) {
-        return "Check this beginner Chinese learning sentence and return structured JSON: \"" + request.sentence().trim()
+        // Student-supplied sentence flows directly into the AI prompt — apply
+        // the same sanitisation pass as the other prompt builders (length
+        // cap + ChatML sentinel-token strip + control-char strip) so a
+        // malicious or oversized sentence cannot poison the prompt or burn
+        // token quota. See AiInputSanitizer + AiInputSanitizerTests.
+        return "Check this beginner Chinese learning sentence and return structured JSON: \""
+                + AiInputSanitizer.sanitizeLong(request.sentence())
                 + "\". Learner level: " + defaultLevel(request.learnerLevel())
                 + ". Language preference: " + language
                 + ". Return keys: correctedSentence, pinyin, englishMeaning, bahasaMelayuMeaning, improvementExplanation, naturalSentenceVersion, practiceTask, encouragement.";
     }
 
     private String buildQuizPrompt(AiQuizGeneratorRequest request, String language, String usageMode) {
-        return "Generate a child-friendly Chinese learning quiz draft in JSON. Topic: " + request.topic().trim()
-                + ". Level: " + nullableText(request.level())
-                + ". Category: " + nullableText(request.category())
+        return "Generate a child-friendly Chinese learning quiz draft in JSON. Topic: "
+                + AiInputSanitizer.sanitizeShort(request.topic())
+                + ". Level: " + AiInputSanitizer.sanitizeShort(request.level())
+                + ". Category: " + AiInputSanitizer.sanitizeShort(request.category())
                 + ". Number of questions: " + request.numberOfQuestions()
                 + ". Question types: " + (request.questionTypes() == null || request.questionTypes().isEmpty()
                         ? "MIXED_BEGINNER_TYPES"
@@ -682,9 +698,10 @@ public class AiService {
     }
 
     private String buildStoryPrompt(AiStoryGeneratorRequest request, String language, String usageMode) {
-        return "Generate a short, child-friendly beginner Chinese story in JSON. Topic: " + request.topic().trim()
+        return "Generate a short, child-friendly beginner Chinese story in JSON. Topic: "
+                + AiInputSanitizer.sanitizeShort(request.topic())
                 + ". Level: " + defaultLevel(request.level())
-                + ". Length preference: " + nullableText(request.lengthPreference())
+                + ". Length preference: " + AiInputSanitizer.sanitizeShort(request.lengthPreference())
                 + ". Usage mode: " + usageMode
                 + ". Language preference: " + language
                 + ". Return keys: title, chineseStory, pinyin, englishTranslation, bahasaMelayuTranslation, vocabularyList, comprehensionQuestions, encouragement.";
@@ -693,7 +710,7 @@ public class AiService {
     private String buildLearningRecommendationPrompt(AiLearningRecommendationRequest request, String summary, String language) {
         return "Based on this student learning summary, return a short structured learning recommendation in JSON. Summary: "
                 + summary
-                + ". Current level override: " + nullableText(request.currentLevel())
+                + ". Current level override: " + AiInputSanitizer.sanitizeShort(request.currentLevel())
                 + ". Language preference: " + language
                 + ". Return keys: recommendedNextStep, recommendedLessonOrActivity, weakAreaSummary, revisionSuggestion, shortEncouragement, suggestedPracticeTypes.";
     }
@@ -707,10 +724,11 @@ public class AiService {
     }
 
     private String buildTeacherAssistantPrompt(AiTeacherAssistantRequest request, String language) {
-        return "Create a teacher-facing beginner Chinese lesson support draft in JSON. Topic: " + request.topic().trim()
-                + ". Level: " + nullableText(request.level())
-                + ". Category: " + nullableText(request.category())
-                + ". Learning objective: " + nullableText(request.learningObjective())
+        return "Create a teacher-facing beginner Chinese lesson support draft in JSON. Topic: "
+                + AiInputSanitizer.sanitizeShort(request.topic())
+                + ". Level: " + AiInputSanitizer.sanitizeShort(request.level())
+                + ". Category: " + AiInputSanitizer.sanitizeShort(request.category())
+                + ". Learning objective: " + AiInputSanitizer.sanitizeLong(request.learningObjective())
                 + ". Activity types: " + (request.activityTypes() == null ? List.of() : request.activityTypes())
                 + ". Language preference: " + language
                 + ". Return keys: lessonOutline, vocabularyList, exampleSentences, quizQuestions, flashcardContent, matchingGameContent, storyBasedLessonIdea, teachingNotes.";
@@ -931,13 +949,13 @@ public class AiService {
                 text(map, "pinyin"),
                 text(map, "englishMeaning"),
                 text(map, "bahasaMelayuMeaning"),
-                defaultIfBlank(text(map, "simpleExplanation"), "This word is useful for beginner practice."),
+                TextUtils.defaultIfBlank(text(map, "simpleExplanation"), "This word is useful for beginner practice."),
                 text(map, "exampleSentence"),
                 text(map, "exampleSentencePinyin"),
                 text(map, "exampleSentenceTranslation"),
                 text(map, "imagePromptOrDescription"),
                 text(map, "miniPracticeQuestion"),
-                defaultIfBlank(text(map, "encouragement"), "Great job learning new words!"),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Great job learning new words!"),
                 status);
     }
 
@@ -945,18 +963,17 @@ public class AiService {
         Map<String, Object> map = parseJsonMap(responseText);
         return new AiSentencePracticeResponse(
                 originalSentence,
-                defaultIfBlank(text(map, "correctedSentence"), originalSentence),
+                TextUtils.defaultIfBlank(text(map, "correctedSentence"), originalSentence),
                 text(map, "pinyin"),
                 text(map, "englishMeaning"),
                 text(map, "bahasaMelayuMeaning"),
-                defaultIfBlank(text(map, "improvementExplanation"), "Your sentence is a good try. Keep practising."),
-                defaultIfBlank(text(map, "naturalSentenceVersion"), originalSentence),
-                defaultIfBlank(text(map, "practiceTask"), "Write one more short sentence about the same topic."),
-                defaultIfBlank(text(map, "encouragement"), "Good effort. Keep practising!"),
+                TextUtils.defaultIfBlank(text(map, "improvementExplanation"), "Your sentence is a good try. Keep practising."),
+                TextUtils.defaultIfBlank(text(map, "naturalSentenceVersion"), originalSentence),
+                TextUtils.defaultIfBlank(text(map, "practiceTask"), "Write one more short sentence about the same topic."),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Good effort. Keep practising!"),
                 status);
     }
 
-    @SuppressWarnings("unchecked")
     private AiQuizGeneratorResponse parseQuizResponse(
             AiQuizGeneratorRequest request,
             String usageMode,
@@ -970,7 +987,7 @@ public class AiService {
                 if (item instanceof Map<?, ?> question) {
                     questions.add(new AiGeneratedQuizQuestionResponse(
                             text(question, "questionText"),
-                            defaultIfBlank(text(question, "questionType"), "MULTIPLE_CHOICE"),
+                            TextUtils.defaultIfBlank(text(question, "questionType"), "MULTIPLE_CHOICE"),
                             stringList(question.get("options")),
                             text(question, "correctAnswer"),
                             text(question, "explanation"),
@@ -984,16 +1001,15 @@ public class AiService {
         }
 
         return new AiQuizGeneratorResponse(
-                defaultIfBlank(text(map, "title"), request.topic().trim() + " Quiz"),
+                TextUtils.defaultIfBlank(text(map, "title"), request.topic().trim() + " Quiz"),
                 request.topic().trim(),
-                nullableText(request.level()),
-                nullableText(request.category()),
+                TextUtils.trimToNull(request.level()),
+                TextUtils.trimToNull(request.category()),
                 usageMode,
                 questions,
                 status);
     }
 
-    @SuppressWarnings("unchecked")
     private AiStoryGeneratorResponse parseStoryResponse(
             AiStoryGeneratorRequest request,
             String usageMode,
@@ -1030,14 +1046,14 @@ public class AiService {
         }
 
         return new AiStoryGeneratorResponse(
-                defaultIfBlank(text(map, "title"), request.topic().trim()),
-                defaultIfBlank(text(map, "chineseStory"), "AI tutor is currently unavailable. Please try again later."),
+                TextUtils.defaultIfBlank(text(map, "title"), request.topic().trim()),
+                TextUtils.defaultIfBlank(text(map, "chineseStory"), "AI tutor is currently unavailable. Please try again later."),
                 text(map, "pinyin"),
                 text(map, "englishTranslation"),
                 text(map, "bahasaMelayuTranslation"),
                 vocabularyList,
                 comprehensionQuestions,
-                defaultIfBlank(text(map, "encouragement"), "Great reading practice!"),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Great reading practice!"),
                 usageMode,
                 status);
     }
@@ -1047,11 +1063,11 @@ public class AiService {
             String status) {
         Map<String, Object> map = parseJsonMap(responseText);
         return new AiLearningRecommendationResponse(
-                defaultIfBlank(text(map, "recommendedNextStep"), "Continue with a short lesson and one revision activity."),
-                defaultIfBlank(text(map, "recommendedLessonOrActivity"), "Vocabulary review"),
-                defaultIfBlank(text(map, "weakAreaSummary"), "Keep reviewing any difficult words slowly."),
-                defaultIfBlank(text(map, "revisionSuggestion"), "Repeat one short activity from your recent lesson."),
-                defaultIfBlank(text(map, "shortEncouragement"), "You are improving with each practice session!"),
+                TextUtils.defaultIfBlank(text(map, "recommendedNextStep"), "Continue with a short lesson and one revision activity."),
+                TextUtils.defaultIfBlank(text(map, "recommendedLessonOrActivity"), "Vocabulary review"),
+                TextUtils.defaultIfBlank(text(map, "weakAreaSummary"), "Keep reviewing any difficult words slowly."),
+                TextUtils.defaultIfBlank(text(map, "revisionSuggestion"), "Repeat one short activity from your recent lesson."),
+                TextUtils.defaultIfBlank(text(map, "shortEncouragement"), "You are improving with each practice session!"),
                 stringList(map.get("suggestedPracticeTypes")).isEmpty()
                         ? List.of("flashcards", "quiz", "story")
                         : stringList(map.get("suggestedPracticeTypes")),
@@ -1061,17 +1077,16 @@ public class AiService {
     private AiProgressInsightResponse parseProgressInsight(String responseText, String audience, String status) {
         Map<String, Object> map = parseJsonMap(responseText);
         return new AiProgressInsightResponse(
-                defaultIfBlank(text(map, "performanceSummary"), "Keep building your Chinese practice step by step."),
+                TextUtils.defaultIfBlank(text(map, "performanceSummary"), "Keep building your Chinese practice step by step."),
                 stringList(map.get("weakAreas")),
                 stringList(map.get("nextStepSuggestions")).isEmpty()
                         ? List.of("Review one weak area", "Try one short activity")
                         : stringList(map.get("nextStepSuggestions")),
-                defaultIfBlank(text(map, "studentEncouragement"), "Keep going. Practice a little every day!"),
+                TextUtils.defaultIfBlank(text(map, "studentEncouragement"), "Keep going. Practice a little every day!"),
                 "STUDENT".equals(audience) ? null : text(map, "teacherSuggestion"),
                 status);
     }
 
-    @SuppressWarnings("unchecked")
     private AiTeacherAssistantResponse parseTeacherAssistant(String responseText, String status) {
         Map<String, Object> map = parseJsonMap(responseText);
 
@@ -1096,7 +1111,7 @@ public class AiService {
                 if (item instanceof Map<?, ?> question) {
                     quizQuestions.add(new AiGeneratedQuizQuestionResponse(
                             text(question, "questionText"),
-                            defaultIfBlank(text(question, "questionType"), "MULTIPLE_CHOICE"),
+                            TextUtils.defaultIfBlank(text(question, "questionType"), "MULTIPLE_CHOICE"),
                             stringList(question.get("options")),
                             text(question, "correctAnswer"),
                             text(question, "explanation"),
@@ -1107,14 +1122,14 @@ public class AiService {
         }
 
         return new AiTeacherAssistantResponse(
-                defaultIfBlank(text(map, "lessonOutline"), "Create a short outline with vocabulary, practice, and review."),
+                TextUtils.defaultIfBlank(text(map, "lessonOutline"), "Create a short outline with vocabulary, practice, and review."),
                 vocabularyList,
                 stringList(map.get("exampleSentences")),
                 quizQuestions,
                 stringList(map.get("flashcardContent")),
                 stringList(map.get("matchingGameContent")),
                 text(map, "storyBasedLessonIdea"),
-                defaultIfBlank(text(map, "teachingNotes"), "Review and refine the draft before saving it."),
+                TextUtils.defaultIfBlank(text(map, "teachingNotes"), "Review and refine the draft before saving it."),
                 status);
     }
 
@@ -1153,20 +1168,8 @@ public class AiService {
                 .toList());
     }
 
-    private String nullableText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String defaultIfBlank(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value;
-    }
-
     private String defaultLevel(String value) {
-        return defaultIfBlank(nullableText(value), "Beginner");
+        return TextUtils.defaultIfBlank(TextUtils.trimToNull(value), "Beginner");
     }
 
     private String primaryRole(User user) {

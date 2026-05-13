@@ -228,14 +228,14 @@ public class AdminController {
     public ApiResponse<List<LearningLevelResponse>> listLevels() {
         return ApiResponse.success(
                 "Learning levels retrieved successfully.",
-                learningCatalogService.getAdminLevels());
+                learningCatalogService.getPublicLevels());
     }
 
     @GetMapping("/categories")
     public ApiResponse<List<LearningCategoryResponse>> listCategories() {
         return ApiResponse.success(
                 "Learning categories retrieved successfully.",
-                learningCatalogService.getAdminCategories());
+                learningCatalogService.getPublicCategories());
     }
 
     @GetMapping("/content/submissions")

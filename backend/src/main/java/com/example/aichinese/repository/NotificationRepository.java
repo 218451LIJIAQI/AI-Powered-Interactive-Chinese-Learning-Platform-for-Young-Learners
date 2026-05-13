@@ -15,9 +15,6 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findTop5ByUserIdOrderByCreatedAtDesc(Long userId);
 
     @EntityGraph(attributePaths = { "user", "createdByUser" })
-    List<Notification> findTop10ByUserIdOrderByCreatedAtDesc(Long userId);
-
-    @EntityGraph(attributePaths = { "user", "createdByUser" })
     List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     @EntityGraph(attributePaths = { "user", "createdByUser" })

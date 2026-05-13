@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.security.authentication.AuthenticationManager;
@@ -35,6 +34,7 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.JwtService;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
@@ -112,7 +112,7 @@ public class AuthService {
 
         TeacherProfile profile = new TeacherProfile();
         profile.setUser(savedUser);
-        profile.setBio(trimToNull(request.bio()).orElse(null));
+        profile.setBio(TextUtils.trimToNull(request.bio()));
         profile.setTeacherStatus(TeacherStatus.PENDING);
         profile.setPublicVisible(false);
         teacherProfileRepository.save(profile);
@@ -196,19 +196,13 @@ public class AuthService {
      */
     public void resetPassword(ResetPasswordRequest request) {
         validatePasswords(request.password(), request.confirmPassword());
-        if (trimToNull(request.token()).isEmpty()) {
+        if (TextUtils.trimToNull(request.token()) == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Reset token is required.");
         }
         throw new ResponseStatusException(
                 SERVICE_UNAVAILABLE,
                 "Password reset is currently unavailable because email-based token delivery is not configured. "
                         + "Please contact an administrator for assistance.");
-    }
-
-    public boolean isTeacherApproved(User user) {
-        return teacherProfileRepository.findByUserId(user.getId())
-                .map(profile -> profile.getTeacherStatus() == TeacherStatus.APPROVED)
-                .orElse(false);
     }
 
     private void ensureEmailIsAvailable(String email) {
@@ -246,23 +240,14 @@ public class AuthService {
     }
 
     private String normalizeEmail(String email) {
-        return trimToNull(email)
+        return TextUtils.trimToOptional(email)
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Email is required."));
     }
 
     private String normalizePreferredLanguage(String preferredLanguage) {
-        return trimToNull(preferredLanguage)
+        return TextUtils.trimToOptional(preferredLanguage)
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElse("en");
-    }
-
-    private Optional<String> trimToNull(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? Optional.empty() : Optional.of(trimmed);
     }
 }

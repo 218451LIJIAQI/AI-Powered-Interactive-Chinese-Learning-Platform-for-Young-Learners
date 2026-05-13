@@ -18,6 +18,7 @@ import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.LessonActivityRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class LessonActivityService {
@@ -65,9 +66,9 @@ public class LessonActivityService {
         activity.setLesson(lesson);
         activity.setTitle(request.title().trim());
         activity.setActivityType(request.activityType());
-        activity.setInstructions(teacherContentAccessService.trimToNull(request.instruction()));
-        activity.setDescription(teacherContentAccessService.trimToNull(request.description()));
-        activity.setContentPayload(teacherContentAccessService.trimToNull(request.placeholderContent()));
+        activity.setInstructions(TextUtils.trimToNull(request.instruction()));
+        activity.setDescription(TextUtils.trimToNull(request.description()));
+        activity.setContentPayload(TextUtils.trimToNull(request.placeholderContent()));
         activity.setSortOrder(request.displayOrder() == null ? 0 : request.displayOrder());
         activity.setContentStatus(lesson.getContentStatus());
 
@@ -93,9 +94,9 @@ public class LessonActivityService {
 
         activity.setTitle(request.title().trim());
         activity.setActivityType(request.activityType());
-        activity.setInstructions(teacherContentAccessService.trimToNull(request.instruction()));
-        activity.setDescription(teacherContentAccessService.trimToNull(request.description()));
-        activity.setContentPayload(teacherContentAccessService.trimToNull(request.placeholderContent()));
+        activity.setInstructions(TextUtils.trimToNull(request.instruction()));
+        activity.setDescription(TextUtils.trimToNull(request.description()));
+        activity.setContentPayload(TextUtils.trimToNull(request.placeholderContent()));
         activity.setSortOrder(request.displayOrder() == null ? 0 : request.displayOrder());
 
         LessonActivity saved = lessonActivityRepository.save(activity);

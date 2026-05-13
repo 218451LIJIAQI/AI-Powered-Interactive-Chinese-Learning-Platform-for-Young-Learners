@@ -26,20 +26,16 @@ import com.example.aichinese.dto.analytics.AnalyticsTrendPointResponse;
 import com.example.aichinese.dto.analytics.StudentAnalyticsResponse;
 import com.example.aichinese.dto.analytics.TeacherAnalyticsResponse;
 import com.example.aichinese.entity.AiUsageLog;
-import com.example.aichinese.entity.ContentModerationRecord;
 import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LessonProgress;
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
-import com.example.aichinese.entity.PaymentRecord;
 import com.example.aichinese.entity.QuizAttempt;
-import com.example.aichinese.entity.Report;
 import com.example.aichinese.entity.Review;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.StudentProgress;
-import com.example.aichinese.entity.SupportTicket;
 import com.example.aichinese.entity.TeacherEarning;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
@@ -208,13 +204,44 @@ public class AnalyticsService {
         List<QuizAttempt> attempts = quizAttemptRepository.findByQuizTeacherIdOrderByCompletedAtDescCreatedAtDesc(teacher.getId());
         List<TeacherEarning> earnings = teacherEarningRepository.findByTeacherUserIdOrderByCreatedAtDesc(currentUser.getUserId());
         List<LiveClass> liveClasses = liveClassRepository.findByTeacherUserIdOrderByScheduledStartAtAsc(currentUser.getUserId());
-        List<LiveClassEnrolment> liveEnrolments = liveClassEnrolmentRepository.findAll();
-        List<Review> ownedReviews = reviewRepository.findAll().stream()
-                .filter(review -> belongsToTeacher(review, currentUser.getUserId()))
-                .toList();
-        List<AiUsageLog> teacherAiLogs = aiUsageLogRepository.findAll().stream()
-                .filter(log -> log.getUser() != null && log.getUser().getId().equals(currentUser.getUserId()))
-                .toList();
+
+        // PREVIOUSLY: liveClassEnrolmentRepository.findAll() loaded every
+        // enrolment row in the database to count this teacher's enrolments.
+        // The new repository query counts at the SQL layer scoped to the
+        // teacher, so this is O(1) regardless of total platform activity.
+        long teacherLiveEnrolmentsCount = liveClassEnrolmentRepository
+                .countByLiveClassTeacherIdAndEnrolmentStatusNot(teacher.getId(), LiveClassEnrolmentStatus.CANCELLED);
+
+        // PREVIOUSLY: reviewRepository.findAll().stream().filter(belongsToTeacher)
+        // — for *every* row in the reviews table, this also re-resolved the
+        // lesson/package one-by-one (the same 2N+1 anti-pattern we already
+        // fixed in ReviewService.getTeacherReviews). The new approach is the
+        // same pattern: collect the teacher's owned lesson + package ids
+        // once, then issue at most two bounded IN-list queries.
+        java.util.Set<Long> ownedLessonIds = new java.util.HashSet<>();
+        for (Lesson lesson : lessons) {
+            ownedLessonIds.add(lesson.getId());
+        }
+        java.util.Set<Long> ownedPackageIds = new java.util.HashSet<>();
+        for (CoursePackage coursePackage : packages) {
+            ownedPackageIds.add(coursePackage.getId());
+        }
+        List<Review> ownedReviews = new ArrayList<>();
+        if (!ownedLessonIds.isEmpty()) {
+            ownedReviews.addAll(reviewRepository.findByTargetTypeAndTargetIdInOrderByCreatedAtDesc(
+                    com.example.aichinese.entity.enums.ReviewTargetType.LESSON.name(), ownedLessonIds));
+        }
+        if (!ownedPackageIds.isEmpty()) {
+            ownedReviews.addAll(reviewRepository.findByTargetTypeAndTargetIdInOrderByCreatedAtDesc(
+                    com.example.aichinese.entity.enums.ReviewTargetType.PACKAGE.name(), ownedPackageIds));
+        }
+
+        // PREVIOUSLY: aiUsageLogRepository.findAll().stream().filter(user.id
+        // == teacher) — the single worst N+1 in the analytics module because
+        // ai_usage_log grows on every AI invocation across the platform. The
+        // new derived query filters on the indexed user_id column at SQL.
+        List<AiUsageLog> teacherAiLogs = aiUsageLogRepository
+                .findByUserIdOrderByCreatedAtDesc(currentUser.getUserId());
 
         return new TeacherAnalyticsResponse(
                 new TeacherAnalyticsResponse.Overview(
@@ -229,7 +256,7 @@ public class AnalyticsService {
                         defaultMoney(teacherEarningRepository.sumNetAmountByTeacherId(teacher.getId())),
                         defaultMoney(teacherEarningRepository.sumAvailableNetAmountByTeacherId(teacher.getId())),
                         countUpcomingTeacherLiveClasses(liveClasses),
-                        countTeacherLiveEnrolments(liveEnrolments, teacher.getId()),
+                        teacherLiveEnrolmentsCount,
                         teacherAiLogs.size(),
                         teacherAiLogs.stream().filter(this::isSuccessfulAiLog).count()),
                 buildTeacherQuizTrend(attempts),
@@ -240,21 +267,30 @@ public class AnalyticsService {
 
     @Transactional(readOnly = true)
     public AdminAnalyticsResponse getAdminAnalytics(SecurityUserDetails currentUser) {
-        List<User> users = userRepository.findAllByOrderByCreatedAtDesc();
-        List<Report> reports = reportRepository.findAll();
-        List<Review> reviews = reviewRepository.findAll();
-        List<SupportTicket> tickets = supportTicketRepository.findAll();
-        List<ContentModerationRecord> moderationRecords = contentModerationRecordRepository.findAll();
-        List<AiUsageLog> aiUsageLogs = aiUsageLogRepository.findAll();
-        List<LearningModule> modules = learningModuleRepository.findAll();
-        List<Lesson> lessons = lessonRepository.findAll();
-        List<CoursePackage> packages = coursePackageRepository.findAll();
-        List<PaymentRecord> payments = paymentRecordRepository.findAll();
+        // PREVIOUSLY: this method loaded 10 entire tables (reports, reviews,
+        // tickets, moderation records, AI logs, modules, lessons, packages,
+        // payments, users) just to compute summary statistics and per-status
+        // breakdowns. That worked at demo scale but scaled linearly with the
+        // entire platform's history on every admin dashboard load.
+        //
+        // The new implementation pays exactly:
+        //   * 14 indexed COUNT queries for the overview (one per number)
+        //   * 8 GROUP BY queries for the breakdowns (one per breakdown,
+        //     returning at most |enum values| rows each)
+        //   * 1 windowed SELECT for the 7-day registration trend
+        // Memory footprint per request is therefore bounded by the number of
+        // *enum values* rather than the table sizes.
 
-        long openSupportTickets = tickets.stream()
-                .filter(ticket -> ticket.getTicketStatus() == SupportTicketStatus.OPEN
-                        || ticket.getTicketStatus() == SupportTicketStatus.IN_PROGRESS)
-                .count();
+        // Trend window is exactly RECENT_ACTIVITY_DAYS days — the previous
+        // implementation loaded every user row and dropped all but the most
+        // recent week in JVM, paying for IO it would immediately discard.
+        java.time.LocalDateTime trendWindowStart =
+                LocalDate.now().minusDays(RECENT_ACTIVITY_DAYS - 1L).atStartOfDay();
+        List<User> recentUsers = userRepository
+                .findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(trendWindowStart);
+
+        long openSupportTickets = supportTicketRepository.countByTicketStatusIn(
+                java.util.Set.of(SupportTicketStatus.OPEN, SupportTicketStatus.IN_PROGRESS));
 
         return new AdminAnalyticsResponse(
                 new AdminAnalyticsResponse.Overview(
@@ -270,21 +306,32 @@ public class AnalyticsService {
                         refundRequestRepository.countByRefundStatus(RefundStatus.PENDING),
                         payoutRequestRepository.countByPayoutStatus(PayoutStatus.PENDING),
                         openSupportTickets,
-                        reports.stream().filter(report -> report.getReportStatus() == ReportStatus.PENDING).count(),
-                        moderationRecords.size(),
+                        reportRepository.countByReportStatus(ReportStatus.PENDING),
+                        contentModerationRecordRepository.count(),
                         auditLogRepository.count(),
                         notificationRepository.countByUserIdAndNotificationStatus(
                                 currentUser.getUserId(),
                                 NotificationStatus.UNREAD),
-                        aiUsageLogs.size()),
-                buildUserRegistrationTrend(users),
+                        aiUsageLogRepository.countAll()),
+                buildUserRegistrationTrend(recentUsers),
                 buildTeacherApprovalBreakdown(),
-                buildAdminContentStatusBreakdown(modules, lessons, packages),
-                buildPaymentStatusBreakdown(payments),
-                buildReportStatusBreakdown(reports),
-                buildReviewStatusBreakdown(reviews),
-                buildSupportTicketStatusBreakdown(tickets),
-                buildAiStatusBreakdown(aiUsageLogs));
+                buildContentStatusBreakdownFromProjections(
+                        learningModuleRepository.groupByContentStatus(),
+                        lessonRepository.groupByContentStatus(),
+                        coursePackageRepository.groupByContentStatus()),
+                buildBreakdownFromProjections(
+                        paymentRecordRepository.groupByPaymentStatus(),
+                        enumNames(PaymentStatus.class)),
+                buildBreakdownFromProjections(
+                        reportRepository.groupByReportStatus(),
+                        enumNames(ReportStatus.class)),
+                buildBreakdownFromProjections(
+                        reviewRepository.groupByReviewStatus(),
+                        enumNames(ReviewStatus.class)),
+                buildBreakdownFromProjections(
+                        supportTicketRepository.groupByTicketStatus(),
+                        enumNames(SupportTicketStatus.class)),
+                buildAiStatusBreakdownFromProjections(aiUsageLogRepository.groupByAiStatus()));
     }
 
     private List<AnalyticsTrendPointResponse> buildQuizTrend(List<QuizAttempt> attempts) {
@@ -333,7 +380,10 @@ public class AnalyticsService {
         for (String value : latestProgress.getWeakAreas().split(",")) {
             String trimmed = value.trim();
             if (!trimmed.isEmpty()) {
-                counts.merge(trimmed, 1L, Long::sum);
+                // Lambda form (instead of Long::sum) keeps Eclipse's
+                // null-analysis happy without changing the behaviour: both
+                // expressions resolve to a BiFunction<Long, Long, Long>.
+                counts.merge(trimmed, 1L, (a, b) -> a + b);
             }
         }
         return buildBreakdownFromMap(counts);
@@ -346,7 +396,7 @@ public class AnalyticsService {
             if (lesson == null || lesson.getLearningType() == null) {
                 continue;
             }
-            counts.merge(lesson.getLearningType().name(), 1L, Long::sum);
+            counts.merge(lesson.getLearningType().name(), 1L, (a, b) -> a + b);
         }
         return buildBreakdownFromMap(counts);
     }
@@ -409,7 +459,7 @@ public class AnalyticsService {
                 continue;
             }
             int bucket = review.getRating().setScale(0, RoundingMode.HALF_UP).intValue();
-            counts.merge(String.valueOf(bucket), 1L, Long::sum);
+            counts.merge(String.valueOf(bucket), 1L, (a, b) -> a + b);
         }
         return buildBreakdownFromMap(counts);
     }
@@ -434,84 +484,75 @@ public class AnalyticsService {
         return buildBreakdownFromMap(counts);
     }
 
-    private List<AnalyticsBreakdownItemResponse> buildAdminContentStatusBreakdown(
-            List<LearningModule> modules,
-            List<Lesson> lessons,
-            List<CoursePackage> packages) {
+    /**
+     * Builds a breakdown that always exposes every enum constant (including
+     * the ones with zero rows), then overlays the actual counts returned by
+     * a {@code GROUP BY status} repository projection. Keeps the JSON
+     * contract identical to the previous JVM-side helpers so the frontend
+     * chart cards do not need to change.
+     */
+    private List<AnalyticsBreakdownItemResponse> buildBreakdownFromProjections(
+            List<com.example.aichinese.repository.projection.StatusCountProjection> projections,
+            String[] expectedStatuses) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (String status : expectedStatuses) {
+            counts.put(status, 0L);
+        }
+        for (com.example.aichinese.repository.projection.StatusCountProjection projection : projections) {
+            if (projection.getStatus() != null) {
+                counts.merge(projection.getStatus(), projection.getCount(), (a, b) -> a + b);
+            }
+        }
+        return buildBreakdownFromMap(counts);
+    }
+
+    /**
+     * Specialised content-status breakdown that merges three repositories'
+     * {@code groupByContentStatus()} results into a single ContentStatus
+     * breakdown — modules + lessons + packages are reported as a unified
+     * pipeline (mirrors the previous {@link #buildAdminContentStatusBreakdown}
+     * behaviour while avoiding three full table loads).
+     */
+    private List<AnalyticsBreakdownItemResponse> buildContentStatusBreakdownFromProjections(
+            List<com.example.aichinese.repository.projection.StatusCountProjection> moduleCounts,
+            List<com.example.aichinese.repository.projection.StatusCountProjection> lessonCounts,
+            List<com.example.aichinese.repository.projection.StatusCountProjection> packageCounts) {
         Map<String, Long> counts = initializeContentStatusCounts();
-        modules.forEach(module -> incrementContentStatus(counts, module.getContentStatus()));
-        lessons.forEach(lesson -> incrementContentStatus(counts, lesson.getContentStatus()));
-        packages.forEach(coursePackage -> incrementContentStatus(counts, coursePackage.getContentStatus()));
+        java.util.function.Consumer<List<com.example.aichinese.repository.projection.StatusCountProjection>> mergeAll =
+                projections -> {
+                    for (com.example.aichinese.repository.projection.StatusCountProjection projection : projections) {
+                        if (projection.getStatus() != null) {
+                            counts.merge(projection.getStatus(), projection.getCount(), (a, b) -> a + b);
+                        }
+                    }
+                };
+        mergeAll.accept(moduleCounts);
+        mergeAll.accept(lessonCounts);
+        mergeAll.accept(packageCounts);
         return buildBreakdownFromMap(counts);
     }
 
-    private List<AnalyticsBreakdownItemResponse> buildPaymentStatusBreakdown(List<PaymentRecord> payments) {
+    /**
+     * AI status breakdown follows the same projection pattern but normalises
+     * status strings the same way the legacy in-JVM helper did, so blank or
+     * miscased statuses still aggregate cleanly under "UNKNOWN".
+     */
+    private List<AnalyticsBreakdownItemResponse> buildAiStatusBreakdownFromProjections(
+            List<com.example.aichinese.repository.projection.StatusCountProjection> projections) {
         Map<String, Long> counts = new LinkedHashMap<>();
-        for (PaymentStatus status : PaymentStatus.values()) {
-            counts.put(status.name(), 0L);
+        for (com.example.aichinese.repository.projection.StatusCountProjection projection : projections) {
+            counts.merge(normalizeStatus(projection.getStatus()), projection.getCount(), (a, b) -> a + b);
         }
-        payments.forEach(payment -> counts.merge(payment.getPaymentStatus().name(), 1L, Long::sum));
         return buildBreakdownFromMap(counts);
     }
 
-    private List<AnalyticsBreakdownItemResponse> buildReportStatusBreakdown(List<Report> reports) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (ReportStatus status : ReportStatus.values()) {
-            counts.put(status.name(), 0L);
+    private static String[] enumNames(Class<? extends Enum<?>> enumClass) {
+        Enum<?>[] constants = enumClass.getEnumConstants();
+        String[] names = new String[constants.length];
+        for (int i = 0; i < constants.length; i++) {
+            names[i] = constants[i].name();
         }
-        reports.forEach(report -> counts.merge(report.getReportStatus().name(), 1L, Long::sum));
-        return buildBreakdownFromMap(counts);
-    }
-
-    private List<AnalyticsBreakdownItemResponse> buildReviewStatusBreakdown(List<Review> reviews) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (ReviewStatus status : ReviewStatus.values()) {
-            counts.put(status.name(), 0L);
-        }
-        reviews.forEach(review -> counts.merge(review.getReviewStatus().name(), 1L, Long::sum));
-        return buildBreakdownFromMap(counts);
-    }
-
-    private List<AnalyticsBreakdownItemResponse> buildSupportTicketStatusBreakdown(List<SupportTicket> tickets) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (SupportTicketStatus status : SupportTicketStatus.values()) {
-            counts.put(status.name(), 0L);
-        }
-        tickets.forEach(ticket -> counts.merge(ticket.getTicketStatus().name(), 1L, Long::sum));
-        return buildBreakdownFromMap(counts);
-    }
-
-    private List<AnalyticsBreakdownItemResponse> buildAiStatusBreakdown(List<AiUsageLog> aiUsageLogs) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        aiUsageLogs.forEach(log -> counts.merge(normalizeStatus(log.getStatus()), 1L, Long::sum));
-        return buildBreakdownFromMap(counts);
-    }
-
-    private boolean belongsToTeacher(Review review, Long teacherUserId) {
-        if (review.getTargetType() == null || review.getTargetId() == null) {
-            return false;
-        }
-
-        String targetType = review.getTargetType().trim().toUpperCase(Locale.ROOT);
-        if ("LESSON".equals(targetType)) {
-            return lessonRepository.findById(review.getTargetId())
-                    .map(Lesson::getTeacher)
-                    .map(TeacherProfile::getUser)
-                    .map(User::getId)
-                    .filter(teacherUserId::equals)
-                    .isPresent();
-        }
-
-        if ("PACKAGE".equals(targetType)) {
-            return coursePackageRepository.findById(review.getTargetId())
-                    .map(CoursePackage::getTeacher)
-                    .map(TeacherProfile::getUser)
-                    .map(User::getId)
-                    .filter(teacherUserId::equals)
-                    .isPresent();
-        }
-
-        return false;
+        return names;
     }
 
     private long countByStatus(
@@ -557,15 +598,6 @@ public class AnalyticsService {
                 .count();
     }
 
-    private long countTeacherLiveEnrolments(List<LiveClassEnrolment> enrolments, Long teacherId) {
-        return enrolments.stream()
-                .filter(enrolment -> enrolment.getLiveClass() != null
-                        && enrolment.getLiveClass().getTeacher() != null
-                        && teacherId.equals(enrolment.getLiveClass().getTeacher().getId())
-                        && enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.CANCELLED)
-                .count();
-    }
-
     private Map<String, Long> initializeContentStatusCounts() {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (ContentStatus status : ContentStatus.values()) {
@@ -576,7 +608,7 @@ public class AnalyticsService {
 
     private void incrementContentStatus(Map<String, Long> counts, ContentStatus status) {
         if (status != null) {
-            counts.merge(status.name(), 1L, Long::sum);
+            counts.merge(status.name(), 1L, (a, b) -> a + b);
         }
     }
 

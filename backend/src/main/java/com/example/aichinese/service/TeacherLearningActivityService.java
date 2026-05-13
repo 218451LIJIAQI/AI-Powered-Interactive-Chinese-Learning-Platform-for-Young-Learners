@@ -52,6 +52,7 @@ import com.example.aichinese.repository.QuizQuestionRepository;
 import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.TracingExerciseRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class TeacherLearningActivityService {
@@ -174,7 +175,7 @@ public class TeacherLearningActivityService {
         quiz.setLesson(lesson);
         quiz.setTeacher(teacherProfile);
         quiz.setTitle(request.title().trim());
-        quiz.setDescription(teacherContentAccessService.trimToNull(request.description()));
+        quiz.setDescription(TextUtils.trimToNull(request.description()));
         quiz.setTimeLimitMinutes(request.timeLimitMinutes());
         quiz.setContentStatus(lesson.getContentStatus());
         quiz.setTotalPoints(0);
@@ -192,7 +193,7 @@ public class TeacherLearningActivityService {
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
 
         quiz.setTitle(request.title().trim());
-        quiz.setDescription(teacherContentAccessService.trimToNull(request.description()));
+        quiz.setDescription(TextUtils.trimToNull(request.description()));
         quiz.setTimeLimitMinutes(request.timeLimitMinutes());
         Quiz saved = quizRepository.save(quiz);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_UPDATE", "Quiz", saved.getId(),
@@ -344,11 +345,11 @@ public class TeacherLearningActivityService {
         ListeningExercise exercise = new ListeningExercise();
         exercise.setLesson(lesson);
         exercise.setTitle(request.title().trim());
-        exercise.setAudioUrl(teacherContentAccessService.trimToNull(request.audioUrl()));
+        exercise.setAudioUrl(TextUtils.trimToNull(request.audioUrl()));
         exercise.setQuestionPayload(learningPayloadCodec.serializeListeningPayload(
                 request.chineseText().trim(),
-                teacherContentAccessService.trimToNull(request.pinyin()),
-                teacherContentAccessService.trimToNull(request.explanation()),
+                TextUtils.trimToNull(request.pinyin()),
+                TextUtils.trimToNull(request.explanation()),
                 request.options()));
         exercise.setContentStatus(lesson.getContentStatus());
 
@@ -370,11 +371,11 @@ public class TeacherLearningActivityService {
         validateListeningOptions(request.options());
 
         exercise.setTitle(request.title().trim());
-        exercise.setAudioUrl(teacherContentAccessService.trimToNull(request.audioUrl()));
+        exercise.setAudioUrl(TextUtils.trimToNull(request.audioUrl()));
         exercise.setQuestionPayload(learningPayloadCodec.serializeListeningPayload(
                 request.chineseText().trim(),
-                teacherContentAccessService.trimToNull(request.pinyin()),
-                teacherContentAccessService.trimToNull(request.explanation()),
+                TextUtils.trimToNull(request.pinyin()),
+                TextUtils.trimToNull(request.explanation()),
                 request.options()));
         ListeningExercise saved = listeningExerciseRepository.save(exercise);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_LISTENING_UPDATE", "ListeningExercise", saved.getId(),
@@ -475,12 +476,12 @@ public class TeacherLearningActivityService {
             Integer displayOrder) {
         flashcard.setFrontText(chineseText.trim());
         flashcard.setBackText(englishMeaning.trim());
-        flashcard.setPinyin(teacherContentAccessService.trimToNull(pinyin));
+        flashcard.setPinyin(TextUtils.trimToNull(pinyin));
         flashcard.setEnglishMeaning(englishMeaning.trim());
-        flashcard.setMalayMeaning(teacherContentAccessService.trimToNull(malayMeaning));
-        flashcard.setImageUrl(teacherContentAccessService.trimToNull(imageUrl));
-        flashcard.setAudioUrl(teacherContentAccessService.trimToNull(audioUrl));
-        flashcard.setExtraPayload(teacherContentAccessService.trimToNull(extraPayload));
+        flashcard.setMalayMeaning(TextUtils.trimToNull(malayMeaning));
+        flashcard.setImageUrl(TextUtils.trimToNull(imageUrl));
+        flashcard.setAudioUrl(TextUtils.trimToNull(audioUrl));
+        flashcard.setExtraPayload(TextUtils.trimToNull(extraPayload));
         flashcard.setSortOrder(displayOrder == null ? 0 : displayOrder);
     }
 
@@ -504,7 +505,7 @@ public class TeacherLearningActivityService {
         question.setQuestionText(questionText.trim());
         question.setPoints(points);
         question.setSortOrder(displayOrder == null ? 0 : displayOrder);
-        question.setExplanation(teacherContentAccessService.trimToNull(explanation));
+        question.setExplanation(TextUtils.trimToNull(explanation));
 
         List<com.example.aichinese.dto.learning.QuizOptionRequest> safeOptions = options == null ? List.of() : options;
         if (questionType.isOptionBased()) {
@@ -569,9 +570,9 @@ public class TeacherLearningActivityService {
             matchingItem.setMatchingGame(game);
             matchingItem.setLeftText(item.leftText().trim());
             matchingItem.setRightText(item.rightText().trim());
-            matchingItem.setLeftImageUrl(teacherContentAccessService.trimToNull(item.leftImageUrl()));
-            matchingItem.setRightImageUrl(teacherContentAccessService.trimToNull(item.rightImageUrl()));
-            matchingItem.setPinyin(teacherContentAccessService.trimToNull(item.pinyin()));
+            matchingItem.setLeftImageUrl(TextUtils.trimToNull(item.leftImageUrl()));
+            matchingItem.setRightImageUrl(TextUtils.trimToNull(item.rightImageUrl()));
+            matchingItem.setPinyin(TextUtils.trimToNull(item.pinyin()));
             matchingItem.setSortOrder(item.displayOrder() == null ? 0 : item.displayOrder());
             matchingGameItemRepository.save(matchingItem);
         });
@@ -609,9 +610,9 @@ public class TeacherLearningActivityService {
             String instructions) {
         exercise.setTitle(title.trim());
         exercise.setTargetCharacter(targetCharacter.trim());
-        exercise.setPinyin(teacherContentAccessService.trimToNull(pinyin));
-        exercise.setMeaning(teacherContentAccessService.trimToNull(meaning));
-        exercise.setWorksheetUrl(teacherContentAccessService.trimToNull(worksheetUrl));
-        exercise.setInstructions(teacherContentAccessService.trimToNull(instructions));
+        exercise.setPinyin(TextUtils.trimToNull(pinyin));
+        exercise.setMeaning(TextUtils.trimToNull(meaning));
+        exercise.setWorksheetUrl(TextUtils.trimToNull(worksheetUrl));
+        exercise.setInstructions(TextUtils.trimToNull(instructions));
     }
 }

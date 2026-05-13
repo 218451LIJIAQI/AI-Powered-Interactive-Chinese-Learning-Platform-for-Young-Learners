@@ -30,4 +30,14 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
             LiveClassEnrolmentStatus enrolmentStatus);
 
     boolean existsByStudentIdAndLiveClassTeacherUserId(Long studentId, Long teacherUserId);
+
+    /**
+     * Counts active enrolments (i.e. anything other than {@code CANCELLED})
+     * across every live class owned by the given teacher. Used by the
+     * teacher analytics overview so it no longer has to load every enrolment
+     * row in the database and filter in JVM memory.
+     */
+    long countByLiveClassTeacherIdAndEnrolmentStatusNot(
+            Long teacherId,
+            LiveClassEnrolmentStatus excludedStatus);
 }

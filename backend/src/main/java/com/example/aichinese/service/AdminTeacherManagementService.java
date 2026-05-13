@@ -29,6 +29,7 @@ import com.example.aichinese.repository.TeacherVerificationDocumentRepository;
 import com.example.aichinese.repository.TeacherVerificationReviewRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -82,9 +83,14 @@ public class AdminTeacherManagementService {
                 resolveTeacherSort(sort));
 
         TeacherStatus parsedStatus = parseTeacherStatus(status);
-        String normalizedKeyword = keyword == null || keyword.isBlank()
-                ? null
-                : "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+        // Centralise the trim/lowercase/blank-to-null normalisation through
+        // the shared TextUtils helper. The previous inline ternary repeated
+        // the same pattern that appears in PublicContentService and
+        // AdminContentReviewService, so we now share a single contract that
+        // is unit-tested in TextUtilsTests.
+        String normalizedKeyword = TextUtils.trimToOptional(keyword)
+                .map(value -> "%" + value.toLowerCase(Locale.ROOT) + "%")
+                .orElse(null);
 
         Page<TeacherProfile> teachers = teacherProfileRepository.findAll((root, query, cb) -> {
             java.util.List<Predicate> predicates = new java.util.ArrayList<>();
@@ -140,7 +146,7 @@ public class AdminTeacherManagementService {
         review.setDocument(teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(teacherId).orElse(null));
         review.setReviewerUser(adminUser);
         review.setDecisionStatus(TeacherStatus.APPROVED);
-        review.setReviewNote(note == null || note.isBlank() ? null : note.trim());
+        review.setReviewNote(TextUtils.trimToNull(note));
         review.setReviewedAt(java.time.LocalDateTime.now());
         teacherVerificationReviewRepository.save(review);
 

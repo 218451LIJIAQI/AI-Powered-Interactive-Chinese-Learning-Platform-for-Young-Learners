@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -71,14 +70,6 @@ public class RecordedVideoStorageService {
                 uploadProperties.getRecordedVideoDirectory(),
                 uploadedFile,
                 "Requested video could not be found.");
-    }
-
-    public long getMaxVideoFileSizeBytes() {
-        return uploadProperties.getMaxVideoFileSize().toBytes();
-    }
-
-    public List<String> getAllowedContentTypes() {
-        return ALLOWED_CONTENT_TYPES.stream().sorted().toList();
     }
 
     private void validateMultipartFile(MultipartFile multipartFile) {

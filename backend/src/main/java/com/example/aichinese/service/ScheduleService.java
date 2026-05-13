@@ -15,7 +15,6 @@ import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
-import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.VideoProgress;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.repository.LearningTaskRepository;
@@ -78,15 +77,18 @@ public class ScheduleService {
 
     @Transactional(readOnly = true)
     public TeacherScheduleResponse getTeacherSchedule(SecurityUserDetails currentUser) {
-        TeacherProfile teacher = liveLearningAccessService.requireApprovedTeacher(currentUser);
+        liveLearningAccessService.requireApprovedTeacher(currentUser);
 
         List<ScheduleItemResponse> liveClasses = liveClassRepository.findByTeacherUserIdOrderByScheduledStartAtAsc(currentUser.getUserId()).stream()
                 .map(this::toTeacherLiveClassItem)
                 .toList();
 
-        List<ScheduleItemResponse> recordedUpdates = recordedLessonVideoRepository.findAll().stream()
-                .filter(video -> video.isActive() && video.getLesson() != null && video.getLesson().getTeacher() != null
-                        && teacher.getId().equals(video.getLesson().getTeacher().getId()))
+        // DB-side filter on lesson.teacher.user.id avoids the previous pattern
+        // of pulling every recorded video in the system into memory just to
+        // discard rows that belong to other teachers.
+        List<ScheduleItemResponse> recordedUpdates = recordedLessonVideoRepository
+                .findByActiveTrueAndLessonTeacherUserIdOrderByCreatedAtDesc(currentUser.getUserId())
+                .stream()
                 .map(this::toRecordedVideoItem)
                 .toList();
 
@@ -95,7 +97,9 @@ public class ScheduleService {
 
     @Transactional(readOnly = true)
     public AdminScheduleResponse getAdminSchedule(SecurityUserDetails currentUser) {
-        List<ScheduleItemResponse> items = liveClassRepository.findAll().stream()
+        // Sort at the database layer so admins do not pay an in-memory Java
+        // sort cost on top of fetching every live class in the system.
+        List<ScheduleItemResponse> items = liveClassRepository.findAllByOrderByScheduledStartAtAsc().stream()
                 .map(this::toAdminLiveClassItem)
                 .toList();
         return new AdminScheduleResponse(items);

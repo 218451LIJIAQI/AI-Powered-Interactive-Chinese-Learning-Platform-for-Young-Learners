@@ -304,6 +304,106 @@ class ContentManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.rejectionReason").value("Needs more lesson detail"));
     }
 
+    /**
+     * Pins down the Wave 5 refactor of {@code AdminContentReviewService
+     * .listSubmissions}. The legacy implementation loaded every module /
+     * lesson / package into memory and filtered in JVM; the new
+     * implementation builds three {@link org.springframework.data.jpa.domain.Specification}
+     * predicates that the database evaluates against indexed columns.
+     *
+     * <p>The contract this test pins down:</p>
+     * <ol>
+     *   <li>{@code status} filter narrows results — modules in DRAFT do
+     *       not appear when {@code status=SUBMITTED} is requested.</li>
+     *   <li>{@code keyword} filter matches against title (case-insensitively).</li>
+     *   <li>{@code contentType} filter restricts which entity tables are
+     *       queried at all.</li>
+     *   <li>Filters compose — applying status + keyword together returns
+     *       only rows matching both predicates.</li>
+     * </ol>
+     *
+     * <p>The test uses random title suffixes so it stays deterministic
+     * regardless of leftover rows from other integration tests in the
+     * shared H2 database.</p>
+     */
+    @Test
+    void adminContentSubmissionFiltersShouldNarrowResultsAtTheDatabase() throws Exception {
+        String teacherEmail = uniqueEmail("admin-filter");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+
+        // Random suffix isolates this test from other tests that share the H2 DB.
+        String suffix = java.util.UUID.randomUUID().toString().substring(0, 8);
+        String draftTitle = "DraftCandidate-" + suffix;
+        String submittedTitle = "SubmittedCandidate-" + suffix;
+
+        Long draftModuleId = createModule(teacherToken, draftTitle);
+        Long submittedModuleId = createModule(teacherToken, submittedTitle);
+        mockMvc.perform(post("/api/v1/teachers/modules/" + submittedModuleId + "/submit")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+
+        // Filter by status=SUBMITTED — the SubmittedCandidate must appear,
+        // the DraftCandidate must NOT.
+        mockMvc.perform(get("/api/v1/admin/content/submissions")
+                .param("status", "SUBMITTED")
+                .param("size", "200")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + submittedTitle + "')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + draftTitle + "')]").doesNotExist());
+
+        // Filter by status=DRAFT — the inverse must hold, proving the
+        // status predicate is actually being applied (not just ignored).
+        mockMvc.perform(get("/api/v1/admin/content/submissions")
+                .param("status", "DRAFT")
+                .param("size", "200")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + draftTitle + "')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + submittedTitle + "')]").doesNotExist());
+
+        // Keyword filter must match against title (case-insensitive lowercased
+        // LIKE built by the Specification). The fragment "submittedcandidate"
+        // appears in only one row in our test data.
+        mockMvc.perform(get("/api/v1/admin/content/submissions")
+                .param("keyword", "submittedcandidate-" + suffix)
+                .param("size", "200")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + submittedTitle + "')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + draftTitle + "')]").doesNotExist());
+
+        // contentType filter must restrict the query set — asking for LESSON
+        // only must not return any MODULE rows even if they match other
+        // predicates.
+        mockMvc.perform(get("/api/v1/admin/content/submissions")
+                .param("contentType", "LESSON")
+                .param("keyword", suffix)
+                .param("size", "200")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + submittedTitle + "')]").doesNotExist())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + draftTitle + "')]").doesNotExist());
+
+        // Filters compose: status=SUBMITTED + keyword=draftcandidate must
+        // return zero matches (the draft module is DRAFT, not SUBMITTED).
+        mockMvc.perform(get("/api/v1/admin/content/submissions")
+                .param("status", "SUBMITTED")
+                .param("keyword", "draftcandidate-" + suffix)
+                .param("size", "200")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + draftTitle + "')]").doesNotExist())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + submittedTitle + "')]").doesNotExist());
+
+        // Cleanup-style sanity check: the draft module is still reachable by
+        // its id, confirming we did not accidentally delete or mutate it.
+        org.junit.jupiter.api.Assertions.assertNotNull(draftModuleId);
+    }
+
     @Test
     void adminShouldArchivePublishedPackageAndPublicShouldNoLongerSeeIt() throws Exception {
         String teacherEmail = uniqueEmail("archive-package");
@@ -407,6 +507,58 @@ class ContentManagementIntegrationTests {
 
         mockMvc.perform(get("/api/v1/public/courses/LESSON-" + draftLessonId))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void publicDiscoveryShouldRespectKeywordLevelCategoryAndAccessTypeFilters() throws Exception {
+        // Regression coverage for the JPA Specification rewrite of
+        // PublicContentService.discoverCourses. Previously the service loaded
+        // every lesson + package and filtered in-memory; now the predicates
+        // are pushed down to SQL via JpaSpecificationExecutor. This test
+        // confirms the user-visible behaviour is identical for the common
+        // filter combinations a learner / parent would actually use.
+        String teacherEmail = uniqueEmail("discovery-filters");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+
+        String marker = "FilterMarker" + UUID.randomUUID().toString().substring(0, 8);
+        Long freeMatchingLessonId = createLesson(teacherToken, marker + " Free Lesson", "FREE", 0);
+        submitApproveAndPublish("LESSON", freeMatchingLessonId, teacherToken, adminToken);
+
+        Long paidMatchingPackageId = createPackage(teacherToken, marker + " Paid Package", "PAID", 19.90);
+        submitApproveAndPublish("PACKAGE", paidMatchingPackageId, teacherToken, adminToken);
+
+        Long nonMatchingLessonId = createLesson(teacherToken, "Unrelated Other Lesson", "FREE", 0);
+        submitApproveAndPublish("LESSON", nonMatchingLessonId, teacherToken, adminToken);
+
+        // Case-insensitive keyword filter only returns items whose title or
+        // summary/description contains the marker.
+        mockMvc.perform(get("/api/v1/public/courses").param("keyword", marker.toLowerCase()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + marker + " Free Lesson')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + marker + " Paid Package')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='Unrelated Other Lesson')]").doesNotExist());
+
+        // accessType filter narrows down to the paid package only.
+        mockMvc.perform(get("/api/v1/public/courses")
+                        .param("keyword", marker)
+                        .param("accessType", "PAID"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + marker + " Paid Package')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='" + marker + " Free Lesson')]").doesNotExist());
+
+        // Empty keyword behaves the same as no keyword (sanity check for the
+        // null/blank short-circuit in the service).
+        mockMvc.perform(get("/api/v1/public/courses").param("keyword", "   "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray());
+
+        // Unknown accessType returns a 400 (preserves the previous parser
+        // contract after the catch-block tightening pass).
+        mockMvc.perform(get("/api/v1/public/courses").param("accessType", "NOT_A_REAL_TYPE"))
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
 

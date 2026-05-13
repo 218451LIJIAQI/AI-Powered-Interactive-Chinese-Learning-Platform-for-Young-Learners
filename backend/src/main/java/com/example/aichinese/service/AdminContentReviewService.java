@@ -32,6 +32,7 @@ import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class AdminContentReviewService {
@@ -78,43 +79,60 @@ public class AdminContentReviewService {
             String keyword,
             int page,
             int size) {
+        // PREVIOUSLY: this method called {@code learningModuleRepository.findAll()},
+        // {@code lessonRepository.findAll()} and {@code coursePackageRepository.findAll()}
+        // unconditionally, then filtered by status / teacher / keyword in JVM.
+        // The IO cost scaled linearly with the global content catalogue on
+        // every admin search request, regardless of how narrow the filter was.
+        //
+        // The new implementation builds three JPA {@link org.springframework.data.jpa.domain.Specification}
+        // predicates (one per entity, since the keyword field name differs:
+        // module=description / lesson=summary / package=description) and lets
+        // the database execute the {@code WHERE status = ? AND teacher_id = ?
+        // AND (LOWER(title) LIKE ? OR LOWER(description) LIKE ?)} clause
+        // against the appropriate column indexes. The eager-fetch joins
+        // (teacher/level/category) are preserved via the repositories' own
+        // {@code @EntityGraph} overrides of {@code findAll(Specification)}.
         ManagedContentType filterType = contentType == null || contentType.isBlank()
                 ? null
                 : ManagedContentType.fromValue(contentType);
         ContentStatus filterStatus = parseStatus(status);
-        String normalizedKeyword = keyword == null || keyword.isBlank()
-                ? null
-                : keyword.trim().toLowerCase(Locale.ROOT);
+        // Shared normalisation via TextUtils mirrors the same pattern in
+        // PublicContentService / AdminTeacherManagementService.
+        String normalizedKeyword = TextUtils.trimToOptional(keyword)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .orElse(null);
 
         List<ContentSubmissionResponse> submissions = new ArrayList<>();
 
         if (filterType == null || filterType == ManagedContentType.MODULE) {
-            submissions.addAll(learningModuleRepository.findAll().stream()
-                    .filter(module -> matches(module.getTeacher(), teacherId))
-                    .filter(module -> filterStatus == null || module.getContentStatus() == filterStatus)
-                    .filter(module -> matches(module.getTitle(), module.getDescription(), normalizedKeyword))
+            submissions.addAll(learningModuleRepository
+                    .findAll(buildModuleSpecification(filterStatus, teacherId, normalizedKeyword))
+                    .stream()
                     .map(contentManagementMapper::toSubmissionResponse)
                     .toList());
         }
 
         if (filterType == null || filterType == ManagedContentType.LESSON) {
-            submissions.addAll(lessonRepository.findAll().stream()
-                    .filter(lesson -> matches(lesson.getTeacher(), teacherId))
-                    .filter(lesson -> filterStatus == null || lesson.getContentStatus() == filterStatus)
-                    .filter(lesson -> matches(lesson.getTitle(), lesson.getSummary(), normalizedKeyword))
+            submissions.addAll(lessonRepository
+                    .findAll(buildLessonSpecification(filterStatus, teacherId, normalizedKeyword))
+                    .stream()
                     .map(contentManagementMapper::toSubmissionResponse)
                     .toList());
         }
 
         if (filterType == null || filterType == ManagedContentType.PACKAGE) {
-            submissions.addAll(coursePackageRepository.findAll().stream()
-                    .filter(coursePackage -> matches(coursePackage.getTeacher(), teacherId))
-                    .filter(coursePackage -> filterStatus == null || coursePackage.getContentStatus() == filterStatus)
-                    .filter(coursePackage -> matches(coursePackage.getTitle(), coursePackage.getDescription(), normalizedKeyword))
+            submissions.addAll(coursePackageRepository
+                    .findAll(buildPackageSpecification(filterStatus, teacherId, normalizedKeyword))
+                    .stream()
                     .map(contentManagementMapper::toSubmissionResponse)
                     .toList());
         }
 
+        // The in-memory sort + paginate is unavoidable here because the
+        // result spans three tables; however it now operates on
+        // already-filtered rows (typically tens at most) rather than the
+        // entire content catalogue.
         List<ContentSubmissionResponse> sorted = submissions.stream()
                 .sorted(Comparator.comparing(ContentSubmissionResponse::updatedAt).reversed())
                 .toList();
@@ -127,6 +145,76 @@ public class AdminContentReviewService {
         int totalPages = sorted.isEmpty() ? 0 : (int) Math.ceil((double) sorted.size() / safeSize);
 
         return new PageResponse<>(items, safePage, safeSize, sorted.size(), totalPages);
+    }
+
+    /**
+     * Builds a {@link org.springframework.data.jpa.domain.Specification} for
+     * the admin module search. Predicate composition uses
+     * {@link jakarta.persistence.criteria.Predicate} so JPA emits one
+     * compound {@code WHERE} clause with all three filters in a single
+     * statement.
+     */
+    private static org.springframework.data.jpa.domain.Specification<LearningModule> buildModuleSpecification(
+            ContentStatus status, Long teacherId, String normalizedKeyword) {
+        return (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (status != null) {
+                predicates.add(cb.equal(root.get("contentStatus"), status));
+            }
+            if (teacherId != null) {
+                predicates.add(cb.equal(root.get("teacher").get("id"), teacherId));
+            }
+            if (normalizedKeyword != null) {
+                String like = "%" + normalizedKeyword + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("title")), like),
+                        cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
+            }
+            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    private static org.springframework.data.jpa.domain.Specification<Lesson> buildLessonSpecification(
+            ContentStatus status, Long teacherId, String normalizedKeyword) {
+        return (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (status != null) {
+                predicates.add(cb.equal(root.get("contentStatus"), status));
+            }
+            if (teacherId != null) {
+                predicates.add(cb.equal(root.get("teacher").get("id"), teacherId));
+            }
+            if (normalizedKeyword != null) {
+                String like = "%" + normalizedKeyword + "%";
+                // Lesson uses {@code summary} (not {@code description}) for
+                // the searchable secondary text field — matches the legacy
+                // JVM-side filter exactly so the search contract is preserved.
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("title")), like),
+                        cb.like(cb.lower(cb.coalesce(root.get("summary"), "")), like)));
+            }
+            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    private static org.springframework.data.jpa.domain.Specification<CoursePackage> buildPackageSpecification(
+            ContentStatus status, Long teacherId, String normalizedKeyword) {
+        return (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (status != null) {
+                predicates.add(cb.equal(root.get("contentStatus"), status));
+            }
+            if (teacherId != null) {
+                predicates.add(cb.equal(root.get("teacher").get("id"), teacherId));
+            }
+            if (normalizedKeyword != null) {
+                String like = "%" + normalizedKeyword + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("title")), like),
+                        cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
+            }
+            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
     }
 
     @Transactional(readOnly = true)
@@ -357,19 +445,6 @@ public class AdminContentReviewService {
         return response;
     }
 
-    private boolean matches(TeacherProfile teacherProfile, Long teacherId) {
-        return teacherId == null || (teacherProfile != null && teacherProfile.getId().equals(teacherId));
-    }
-
-    private boolean matches(String title, String description, String keyword) {
-        if (keyword == null) {
-            return true;
-        }
-
-        String haystack = ((title == null ? "" : title) + " " + (description == null ? "" : description)).toLowerCase(Locale.ROOT);
-        return haystack.contains(keyword);
-    }
-
     private ContentStatus parseStatus(String status) {
         if (status == null || status.isBlank()) {
             return null;
@@ -420,7 +495,7 @@ public class AdminContentReviewService {
         record.setTargetType(contentType.name());
         record.setTargetId(id);
         record.setActionTaken(action);
-        record.setNote(note == null || note.isBlank() ? null : note.trim());
+        record.setNote(TextUtils.trimToNull(note));
         contentModerationRecordRepository.save(record);
     }
 }

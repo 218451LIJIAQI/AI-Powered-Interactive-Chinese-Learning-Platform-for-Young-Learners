@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.dto.ai.AiAvailabilityResponse;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class AiAvailabilityService {
@@ -28,13 +29,13 @@ public class AiAvailabilityService {
 
     public AiAvailabilityResponse getAvailability() {
         String provider = normalizedProvider();
-        String model = trimmed(aiProperties.getModelName());
+        String model = TextUtils.trimToNull(aiProperties.getModelName());
         if (!aiProperties.isEnableRealProvider()) {
             return new AiAvailabilityResponse(false, provider, model, "UNAVAILABLE",
                     "AI provider is disabled in the current backend configuration.");
         }
 
-        if (trimmed(aiProperties.getApiKey()) == null) {
+        if (TextUtils.trimToNull(aiProperties.getApiKey()) == null) {
             return new AiAvailabilityResponse(false, provider, model, "UNAVAILABLE",
                     "AI API key is missing in the current backend configuration.");
         }
@@ -44,7 +45,7 @@ public class AiAvailabilityService {
                     "AI model name is missing in the current backend configuration.");
         }
 
-        if (!isValidUrl(trimmed(aiProperties.getApiBaseUrl()))) {
+        if (!isValidUrl(TextUtils.trimToNull(aiProperties.getApiBaseUrl()))) {
             return new AiAvailabilityResponse(false, provider, model, "UNAVAILABLE",
                     "AI API base URL is missing or invalid in the current backend configuration.");
         }
@@ -52,12 +53,8 @@ public class AiAvailabilityService {
         return new AiAvailabilityResponse(true, provider, model, "AVAILABLE", "AI provider is configured.");
     }
 
-    public boolean isAvailable() {
-        return getAvailability().available();
-    }
-
     public String normalizedProvider() {
-        String value = trimmed(aiProperties.getProvider());
+        String value = TextUtils.trimToNull(aiProperties.getProvider());
         return value == null ? "deepseek" : value.toLowerCase(Locale.ROOT);
     }
 
@@ -72,14 +69,5 @@ public class AiAvailabilityService {
         } catch (IllegalArgumentException exception) {
             return false;
         }
-    }
-
-    private String trimmed(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 }

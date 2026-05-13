@@ -18,4 +18,12 @@ public interface StudentSubscriptionRepository extends JpaRepository<StudentSubs
     Optional<StudentSubscription> findFirstByStudentUserIdAndSubscriptionStatusOrderByCreatedAtDesc(
             Long userId,
             PaymentStatus subscriptionStatus);
+
+    /**
+     * Returns the subscription(s) attached to a specific payment record. Used by
+     * the payment activation pipeline to flip the matching subscription row to
+     * PAID without scanning every subscription in the database.
+     */
+    @EntityGraph(attributePaths = { "student", "student.user", "plan", "paymentRecord" })
+    List<StudentSubscription> findByPaymentRecordId(Long paymentRecordId);
 }

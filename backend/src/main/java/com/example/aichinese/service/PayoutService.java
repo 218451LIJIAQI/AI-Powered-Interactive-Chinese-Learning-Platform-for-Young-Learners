@@ -5,6 +5,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -30,22 +31,22 @@ public class PayoutService {
     private final TeacherEarningRepository teacherEarningRepository;
     private final PayoutRequestRepository payoutRequestRepository;
     private final CommerceMoneyService commerceMoneyService;
-    private final CommerceNotificationService commerceNotificationService;
-    private final CommerceAuditService commerceAuditService;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     public PayoutService(
             TeacherProfileRepository teacherProfileRepository,
             TeacherEarningRepository teacherEarningRepository,
             PayoutRequestRepository payoutRequestRepository,
             CommerceMoneyService commerceMoneyService,
-            CommerceNotificationService commerceNotificationService,
-            CommerceAuditService commerceAuditService) {
+            NotificationService notificationService,
+            AuditLogService auditLogService) {
         this.teacherProfileRepository = teacherProfileRepository;
         this.teacherEarningRepository = teacherEarningRepository;
         this.payoutRequestRepository = payoutRequestRepository;
         this.commerceMoneyService = commerceMoneyService;
-        this.commerceNotificationService = commerceNotificationService;
-        this.commerceAuditService = commerceAuditService;
+        this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -94,12 +95,12 @@ public class PayoutService {
         payoutRequest.setPayoutStatus(PayoutStatus.PENDING);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
 
-        commerceNotificationService.notifyUser(
+        notificationService.createNotification(
                 teacher.getUser(),
                 "Payout request submitted",
                 "Your payout request has been submitted for review.",
                 "/teacher/payouts");
-        commerceAuditService.record(
+        auditLogService.record(
                 currentUser.getUser(),
                 "PAYOUT_REQUESTED",
                 "PAYOUT_REQUEST",
@@ -117,7 +118,10 @@ public class PayoutService {
 
     @Transactional(readOnly = true)
     public List<PayoutRequestResponse> getAllPayoutRequests() {
-        return payoutRequestRepository.findAll().stream()
+        // Newest payout requests first, sorted by the database. The repo's
+        // EntityGraph override eliminates a hidden N+1 on teacher/teacher.user
+        // lookups that the mapper performs row-by-row.
+        return payoutRequestRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(this::mapPayout)
                 .toList();
     }
@@ -129,7 +133,7 @@ public class PayoutService {
         payoutRequest.setPayoutStatus(PayoutStatus.APPROVED);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout approved", "Your payout request has been approved.");
-        commerceAuditService.record(currentUser.getUser(), "PAYOUT_APPROVED", "PAYOUT_REQUEST", id, "Payout approved.");
+        auditLogService.record(currentUser.getUser(), "PAYOUT_APPROVED", "PAYOUT_REQUEST", id, "Payout approved.");
         return mapPayout(saved);
     }
 
@@ -141,7 +145,7 @@ public class PayoutService {
         payoutRequest.setDecisionReason(request.reason());
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout rejected", "Your payout request was rejected.");
-        commerceAuditService.record(currentUser.getUser(), "PAYOUT_REJECTED", "PAYOUT_REQUEST", id, "Payout rejected.");
+        auditLogService.record(currentUser.getUser(), "PAYOUT_REJECTED", "PAYOUT_REQUEST", id, "Payout rejected.");
         return mapPayout(saved);
     }
 
@@ -152,7 +156,7 @@ public class PayoutService {
         payoutRequest.setPayoutStatus(PayoutStatus.PAID);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout paid", "Your payout has been marked as paid.");
-        commerceAuditService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id, "Payout marked paid.");
+        auditLogService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id, "Payout marked paid.");
         return mapPayout(saved);
     }
 
@@ -184,7 +188,7 @@ public class PayoutService {
 
     private void notifyPayoutStatus(PayoutRequest payoutRequest, String title, String message) {
         if (payoutRequest.getTeacher() != null && payoutRequest.getTeacher().getUser() != null) {
-            commerceNotificationService.notifyUser(payoutRequest.getTeacher().getUser(), title, message, "/teacher/payouts");
+            notificationService.createNotification(payoutRequest.getTeacher().getUser(), title, message, "/teacher/payouts");
         }
     }
 }

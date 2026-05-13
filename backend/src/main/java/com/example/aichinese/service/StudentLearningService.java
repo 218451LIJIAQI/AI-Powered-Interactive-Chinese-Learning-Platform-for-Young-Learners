@@ -656,9 +656,16 @@ public class StudentLearningService {
     private List<com.example.aichinese.dto.learning.LiveClassResponse> buildLessonLiveClasses(StudentProfile student, Lesson lesson) {
         Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
 
-        return liveClassRepository.findAll().stream()
-                .filter(liveClass -> liveClass.getLesson() != null && Objects.equals(liveClass.getLesson().getId(), lesson.getId())
-                        || liveClass.getCoursePackage() != null && relatedPackageIds.contains(liveClass.getCoursePackage().getId()))
+        // Targeted query so we only pull live classes that target this lesson
+        // or one of its related packages, instead of scanning every live class
+        // in the system and filtering in-memory. When the related package set
+        // is empty we still need to send a sentinel value because Hibernate
+        // rejects `IN ()` against an empty collection.
+        java.util.Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
+                ? java.util.Collections.singleton(-1L)
+                : relatedPackageIds;
+
+        return liveClassRepository.findRelatedToLessonOrPackages(lesson.getId(), packageIdsForQuery).stream()
                 .filter(liveClass -> liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
                         && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
                 .map(liveClass -> {
@@ -688,10 +695,14 @@ public class StudentLearningService {
     private List<com.example.aichinese.dto.learning.RecordedLessonVideoResponse> buildRecordedVideos(StudentProfile student, Lesson lesson) {
         Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
 
-        return recordedLessonVideoRepository.findAll().stream()
-                .filter(RecordedLessonVideo::isActive)
-                .filter(video -> video.getLesson() != null && Objects.equals(video.getLesson().getId(), lesson.getId())
-                        || video.getCoursePackage() != null && relatedPackageIds.contains(video.getCoursePackage().getId()))
+        // Same DB-side filtering pattern as live classes above: ask the
+        // database for only the videos that target this lesson or one of its
+        // related packages. The sentinel id guards the `IN ()` edge case.
+        java.util.Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
+                ? java.util.Collections.singleton(-1L)
+                : relatedPackageIds;
+
+        return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), packageIdsForQuery).stream()
                 .filter(video -> canAccessVideo(student, video))
                 .map(video -> liveLearningMapper.toRecordedVideoResponse(
                         video,

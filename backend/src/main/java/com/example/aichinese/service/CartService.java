@@ -113,7 +113,7 @@ public class CartService {
         return cartRepository.save(cart);
     }
 
-    public CartResponse buildCartResponse(Cart cart, List<CartItem> cartItems) {
+    private CartResponse buildCartResponse(Cart cart, List<CartItem> cartItems) {
         List<CartItemResponse> items = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
         String currencyCode = commerceSettingsService.getDefaultCurrency();

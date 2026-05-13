@@ -25,8 +25,28 @@ public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, Lo
     @EntityGraph(attributePaths = { "order", "student", "student.user" })
     Optional<PaymentRecord> findById(Long id);
 
-    Optional<PaymentRecord> findByProviderReference(String providerReference);
+    /**
+     * Returns every {@link PaymentRecord} attached to the given order, used by
+     * the refund pipeline to mark the related payment row as REFUNDED. Loading
+     * the targeted rows directly (instead of pulling every payment record into
+     * memory and filtering) keeps refund processing O(1) per order regardless
+     * of how many historical payments the platform has recorded.
+     */
+    @EntityGraph(attributePaths = { "order", "student", "student.user" })
+    List<PaymentRecord> findByOrderId(Long orderId);
+
+    @EntityGraph(attributePaths = { "order", "student", "student.user" })
+    List<PaymentRecord> findAllByOrderByCreatedAtDesc();
 
     @Query("select coalesce(sum(pr.amount), 0) from PaymentRecord pr where pr.paymentStatus = :paymentStatus")
     BigDecimal sumAmountByPaymentStatus(@Param("paymentStatus") PaymentStatus paymentStatus);
+
+    /**
+     * One row per distinct {@code paymentStatus} for the admin analytics
+     * dashboard. The previous breakdown loaded the entire payment_record
+     * table; this query lets the database use the existing status index
+     * directly and only returns at most one row per enum value.
+     */
+    @Query("select pr.paymentStatus as status, count(pr) as count from PaymentRecord pr group by pr.paymentStatus")
+    List<com.example.aichinese.repository.projection.StatusCountProjection> groupByPaymentStatus();
 }

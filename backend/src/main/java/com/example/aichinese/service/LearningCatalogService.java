@@ -39,17 +39,7 @@ public class LearningCatalogService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public List<LearningLevelResponse> getAdminLevels() {
-        return getPublicLevels();
-    }
-
-    @Transactional(readOnly = true)
-    public List<LearningCategoryResponse> getAdminCategories() {
-        return getPublicCategories();
-    }
-
-    public LearningLevelResponse toLevelResponse(LearningLevel level) {
+    private LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
             return null;
         }
@@ -57,7 +47,7 @@ public class LearningCatalogService {
         return new LearningLevelResponse(level.getId(), level.getName(), level.getDescription());
     }
 
-    public LearningCategoryResponse toCategoryResponse(LearningCategory category) {
+    private LearningCategoryResponse toCategoryResponse(LearningCategory category) {
         if (category == null) {
             return null;
         }

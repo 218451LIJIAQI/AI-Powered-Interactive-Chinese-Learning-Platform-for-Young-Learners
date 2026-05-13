@@ -6,8 +6,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { useNumericRouteParam } from '../../composables/useRouteParam'
-import { categoryService } from '../../services/categoryService'
-import { levelService } from '../../services/levelService'
+import { publicContentService } from '../../services/publicContentService'
 import { teacherContentService } from '../../services/teacherContentService'
 import { useAuthStore } from '../../stores/authStore'
 import type {
@@ -91,8 +90,8 @@ async function loadEditor() {
   loading.value = true
   try {
     const [levelList, categoryList, moduleList, lessonList] = await Promise.all([
-      levelService.getLevels(),
-      categoryService.getCategories(),
+      publicContentService.getLevels(),
+      publicContentService.getCategories(),
       teacherContentService.getModules(),
       teacherContentService.getLessons(),
     ])

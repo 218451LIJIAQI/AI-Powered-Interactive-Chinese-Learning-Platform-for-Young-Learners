@@ -121,7 +121,7 @@ public class StudentLearningAccessService {
         return exercise;
     }
 
-    public boolean isLocked(Lesson lesson) {
+    private boolean isLocked(Lesson lesson) {
         return lesson.getAccessType() == AccessType.PAID;
     }
 
@@ -144,13 +144,6 @@ public class StudentLearningAccessService {
         }
 
         return entitlementService.hasAccessToItem(student.getId(), "PACKAGE", coursePackage.getId());
-    }
-
-    public void ensureFreeAccess(Lesson lesson) {
-        if (isLocked(lesson)) {
-            throw new ResponseStatusException(FORBIDDEN,
-                    "Paid content is locked until payment workflows are implemented.");
-        }
     }
 
     public void ensureLessonAccess(StudentProfile student, Lesson lesson) {

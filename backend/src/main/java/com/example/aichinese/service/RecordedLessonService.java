@@ -18,6 +18,7 @@ import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class RecordedLessonService {
@@ -181,7 +182,7 @@ public class RecordedLessonService {
         video.setLesson(lesson);
         video.setCoursePackage(coursePackage);
         video.setTitle(request.title().trim());
-        video.setDescription(request.description() == null || request.description().isBlank() ? null : request.description().trim());
+        video.setDescription(TextUtils.trimToNull(request.description()));
         video.setSourceType(sourceType);
         video.setExternalVideoUrl(sourceType == RecordedVideoSourceType.EXTERNAL_URL && request.externalVideoUrl() != null
                 ? request.externalVideoUrl().trim()

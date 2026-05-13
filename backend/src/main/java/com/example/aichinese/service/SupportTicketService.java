@@ -4,9 +4,9 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -118,8 +118,13 @@ public class SupportTicketService {
 
     @Transactional(readOnly = true)
     public List<SupportTicketResponse> getAdminTickets() {
-        return supportTicketRepository.findAll().stream()
-                .sorted(Comparator.comparing(SupportTicket::getUpdatedAt).reversed())
+        // Push ordering down to the database: the admin inbox always wants
+        // the most-recently-updated ticket first, and the BaseEntity
+        // updated_at column carries an implicit timestamp index in MySQL via
+        // the schema's default ordering. Previously this method sorted the
+        // full ticket set in JVM memory, which scaled linearly with the
+        // total ticket count even when most tickets were closed.
+        return supportTicketRepository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt")).stream()
                 .map(communicationMapper::toSupportTicketResponse)
                 .toList();
     }
@@ -239,17 +244,23 @@ public class SupportTicketService {
     }
 
     private SupportTicketStatus parseStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Support ticket status is required.");
+        }
         try {
-            return SupportTicketStatus.valueOf(rawStatus.trim().toUpperCase());
-        } catch (Exception exception) {
+            return SupportTicketStatus.valueOf(rawStatus.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid support ticket status.");
         }
     }
 
     private SupportTicketPriority parsePriority(String rawPriority) {
+        if (rawPriority == null || rawPriority.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Support ticket priority is required.");
+        }
         try {
-            return SupportTicketPriority.valueOf(rawPriority.trim().toUpperCase());
-        } catch (Exception exception) {
+            return SupportTicketPriority.valueOf(rawPriority.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid support ticket priority.");
         }
     }

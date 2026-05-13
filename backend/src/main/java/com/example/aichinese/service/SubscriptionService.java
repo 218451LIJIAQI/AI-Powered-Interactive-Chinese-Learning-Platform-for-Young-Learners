@@ -114,10 +114,16 @@ public class SubscriptionService {
 
     @Transactional
     public void activateSubscription(Long paymentId) {
-        studentSubscriptionRepository.findAll().stream()
-                .filter(subscription -> subscription.getPaymentRecord() != null
-                        && java.util.Objects.equals(subscription.getPaymentRecord().getId(), paymentId))
-                .forEach(subscription -> subscription.setSubscriptionStatus(PaymentStatus.PAID));
+        // Direct lookup by payment record id keeps activation O(matches) instead
+        // of scanning every StudentSubscription in the database. The result list
+        // is typically of size 0 or 1, but we still iterate to remain robust if
+        // a future payment retry ever produces multiple linked rows.
+        if (paymentId == null) {
+            return;
+        }
+        for (StudentSubscription subscription : studentSubscriptionRepository.findByPaymentRecordId(paymentId)) {
+            subscription.setSubscriptionStatus(PaymentStatus.PAID);
+        }
     }
 
     private SubscriptionPlanResponse mapPlan(SubscriptionPlan plan) {

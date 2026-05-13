@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -145,8 +146,9 @@ public class TeacherFeedbackService {
 
     @Transactional(readOnly = true)
     public List<TeacherFeedbackResponse> getAdminFeedback() {
-        return teacherFeedbackRepository.findAll().stream()
-                .sorted(Comparator.comparing(TeacherFeedback::getCreatedAt).reversed())
+        // Database-side ordering keeps the admin feedback list O(N) in SQL
+        // and O(N) once in JVM, rather than O(N) twice (load + sort).
+        return teacherFeedbackRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(communicationMapper::toTeacherFeedbackResponse)
                 .toList();
     }

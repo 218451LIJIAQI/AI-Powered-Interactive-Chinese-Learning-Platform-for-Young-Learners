@@ -6,9 +6,8 @@ import { useRouter } from 'vue-router'
 
 import PageHero from '../../components/common/PageHero.vue'
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useRequestToken } from '../../composables/useRequestToken'
 import { commerceService } from '../../services/commerceService'
-import { categoryService } from '../../services/categoryService'
-import { levelService } from '../../services/levelService'
 import { publicContentService } from '../../services/publicContentService'
 import { useAuthStore } from '../../stores/authStore'
 import type {
@@ -117,22 +116,41 @@ async function loadFilters() {
   loadingFilters.value = true
   try {
     const [levelList, categoryList] = await Promise.all([
-      levelService.getLevels(),
-      categoryService.getCategories(),
+      publicContentService.getLevels(),
+      publicContentService.getCategories(),
     ])
     levels.value = levelList
     categories.value = categoryList
+  } catch (error) {
+    // Filter loading is non-fatal: a network blip on /public/levels or
+    // /public/categories should still let the user browse the course list
+    // with text search and sort. Previously this method had no catch and
+    // any failure here would propagate up through onMounted, *prevent
+    // loadCourses() from running*, and leave the user staring at an empty
+    // page with only a transient toast. We now degrade gracefully — empty
+    // dropdowns, but the catalog still loads.
+    // eslint-disable-next-line no-console
+    console.warn('[CourseDiscoveryPage] Failed to load filter options.', error)
   } finally {
     loadingFilters.value = false
   }
 }
 
+// Monotonically-increasing request token guard. A new loadCourses() call
+// allocates a fresh token; only the response whose token is still current
+// commits to state. This stops the well-known "user clicks Apply then
+// quickly switches page" race from rendering stale results when the
+// slower in-flight request resolves last. See useRequestToken.test.ts
+// for the canonical race scenario this guards against.
+const coursesToken = useRequestToken()
+
 async function loadCourses() {
+  const token = coursesToken.start()
   loading.value = true
   errorMessage.value = ''
 
   try {
-    page.value = await publicContentService.discoverCourses({
+    const result = await publicContentService.discoverCourses({
       keyword: filters.keyword.trim() || undefined,
       levelId: filters.levelId,
       categoryId: filters.categoryId,
@@ -142,10 +160,21 @@ async function loadCourses() {
       page: filters.page - 1,
       size: filters.size,
     })
+
+    if (!coursesToken.isCurrent(token)) {
+      // A newer request has already started; discard this stale response.
+      return
+    }
+    page.value = result
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : t('content.messages.saveFailed')
+    if (!coursesToken.isCurrent(token)) {
+      return
+    }
+    errorMessage.value = extractApiError(error, t('content.messages.saveFailed'))
   } finally {
-    loading.value = false
+    if (coursesToken.isCurrent(token)) {
+      loading.value = false
+    }
   }
 }
 
@@ -159,9 +188,13 @@ async function handlePageChange(nextPage: number) {
   await loadCourses()
 }
 
-onMounted(async () => {
-  await loadFilters()
-  await loadCourses()
+onMounted(() => {
+  // Load filters and courses in parallel — they are independent queries and
+  // serialising them with `await loadFilters()` then `await loadCourses()`
+  // delayed first-paint for no good reason. The two functions also catch
+  // their own errors, so a failure in one no longer blocks the other.
+  void loadFilters()
+  void loadCourses()
 })
 </script>
 

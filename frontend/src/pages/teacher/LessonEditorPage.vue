@@ -7,8 +7,7 @@ import { useI18n } from 'vue-i18n'
 
 import LessonActivityPlaceholderSection from '../../components/content/LessonActivityPlaceholderSection.vue'
 import { useNumericRouteParam } from '../../composables/useRouteParam'
-import { categoryService } from '../../services/categoryService'
-import { levelService } from '../../services/levelService'
+import { publicContentService } from '../../services/publicContentService'
 import { teacherContentService } from '../../services/teacherContentService'
 import { useAuthStore } from '../../stores/authStore'
 import type { LearningCategory, LearningLevel, LearningModuleItem, LessonActivityItem, LessonFormPayload } from '../../types/contentManagement'
@@ -66,8 +65,8 @@ async function loadEditor() {
   loading.value = true
   try {
     const [levelList, categoryList, moduleList] = await Promise.all([
-      levelService.getLevels(),
-      categoryService.getCategories(),
+      publicContentService.getLevels(),
+      publicContentService.getCategories(),
       teacherContentService.getModules(),
     ])
     levels.value = levelList

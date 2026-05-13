@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useEnumLabel } from '../../composables/useEnumLabel'
+import { useRequestToken } from '../../composables/useRequestToken'
 import { aiService } from '../../services/aiService'
 import type { AdminAiUsageLogPage } from '../../types/ai'
 import { formatDateTime } from '../../utils/datetime'
@@ -21,18 +22,33 @@ const filters = reactive({
   size: 20,
 })
 
+// Monotonic request token guard against the "admin clicks Apply then
+// quickly switches page" race where the slower in-flight request
+// resolves last and overwrites the newer (correct) page of results.
+// See useRequestToken.test.ts for the canonical race scenario.
+const logsToken = useRequestToken()
+
 async function loadLogs() {
+  const token = logsToken.start()
   loading.value = true
   try {
-    logs.value = await aiService.getAdminUsageLogs({
+    const result = await aiService.getAdminUsageLogs({
       featureType: filters.featureType || undefined,
       status: filters.status || undefined,
       userRole: filters.userRole || undefined,
       page: filters.page - 1,
       size: filters.size,
     })
+
+    if (!logsToken.isCurrent(token)) {
+      // A newer request has already started; discard this stale response.
+      return
+    }
+    logs.value = result
   } finally {
-    loading.value = false
+    if (logsToken.isCurrent(token)) {
+      loading.value = false
+    }
   }
 }
 
@@ -47,7 +63,7 @@ async function handlePageChange(nextPage: number) {
 }
 
 onMounted(() => {
-  loadLogs()
+  void loadLogs()
 })
 </script>
 

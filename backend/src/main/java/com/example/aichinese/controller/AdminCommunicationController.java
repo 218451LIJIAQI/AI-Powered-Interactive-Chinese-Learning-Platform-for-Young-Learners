@@ -288,13 +288,7 @@ public class AdminCommunicationController {
 
     @GetMapping("/audit-logs/{id}")
     public ApiResponse<AuditLogResponse> getAuditLog(@PathVariable Long id) {
-        AuditLogResponse auditLog = auditLogService.getAuditLogs().stream()
-                .filter(item -> item.id().equals(id))
-                .findFirst()
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.NOT_FOUND,
-                        "Audit log was not found."));
-        return ApiResponse.success("Audit log retrieved successfully.", auditLog);
+        return ApiResponse.success("Audit log retrieved successfully.", auditLogService.getAuditLog(id));
     }
 
     @GetMapping("/feedback")

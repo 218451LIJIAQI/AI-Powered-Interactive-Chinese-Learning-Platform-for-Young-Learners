@@ -151,25 +151,34 @@ public class CommunicationTargetResolver {
     }
 
     private ReportTargetType parseReportTargetType(String rawTargetType) {
+        if (rawTargetType == null || rawTargetType.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Report target type is required.");
+        }
         try {
             return ReportTargetType.valueOf(rawTargetType.trim().toUpperCase(Locale.ROOT));
-        } catch (Exception exception) {
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid report target type.");
         }
     }
 
     private ReviewTargetType parseReviewTargetType(String rawTargetType) {
+        if (rawTargetType == null || rawTargetType.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Review target type is required.");
+        }
         try {
             return ReviewTargetType.valueOf(rawTargetType.trim().toUpperCase(Locale.ROOT));
-        } catch (Exception exception) {
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid review target type.");
         }
     }
 
     private ContentModerationTargetType parseModerationTargetType(String rawTargetType) {
+        if (rawTargetType == null || rawTargetType.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Moderation target type is required.");
+        }
         try {
             return ContentModerationTargetType.valueOf(rawTargetType.trim().toUpperCase(Locale.ROOT));
-        } catch (Exception exception) {
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid moderation target type.");
         }
     }

@@ -5,8 +5,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
 import { useEnumLabel } from '../../composables/useEnumLabel'
-import { categoryService } from '../../services/categoryService'
-import { levelService } from '../../services/levelService'
+import { publicContentService } from '../../services/publicContentService'
 import { teacherContentService } from '../../services/teacherContentService'
 import { useAuthStore } from '../../stores/authStore'
 import type { LearningCategory, LearningLevel, LearningModuleItem, ModuleFormPayload } from '../../types/contentManagement'
@@ -87,8 +86,8 @@ async function loadPage() {
   try {
     const [moduleList, levelList, categoryList] = await Promise.all([
       teacherContentService.getModules(),
-      levelService.getLevels(),
-      categoryService.getCategories(),
+      publicContentService.getLevels(),
+      publicContentService.getCategories(),
     ])
     modules.value = moduleList
     levels.value = levelList

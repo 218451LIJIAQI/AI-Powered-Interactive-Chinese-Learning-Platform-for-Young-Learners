@@ -14,15 +14,15 @@ public class CommissionService {
 
     private final SystemSettingRepository systemSettingRepository;
     private final CommerceSettingsService commerceSettingsService;
-    private final CommerceAuditService commerceAuditService;
+    private final AuditLogService auditLogService;
 
     public CommissionService(
             SystemSettingRepository systemSettingRepository,
             CommerceSettingsService commerceSettingsService,
-            CommerceAuditService commerceAuditService) {
+            AuditLogService auditLogService) {
         this.systemSettingRepository = systemSettingRepository;
         this.commerceSettingsService = commerceSettingsService;
-        this.commerceAuditService = commerceAuditService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -41,7 +41,7 @@ public class CommissionService {
                 .orElseThrow();
         setting.setSettingValue(request.commissionRate().toPlainString());
         systemSettingRepository.save(setting);
-        commerceAuditService.record(
+        auditLogService.record(
                 currentUser.getUser(),
                 "COMMISSION_RATE_CHANGED",
                 "SYSTEM_SETTING",

@@ -2,9 +2,9 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.util.Comparator;
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -51,8 +51,9 @@ public class ContentModerationService {
 
     @Transactional(readOnly = true)
     public List<ModerationRecordResponse> getAdminModerationRecords() {
-        return contentModerationRecordRepository.findAll().stream()
-                .sorted(Comparator.comparing(ContentModerationRecord::getCreatedAt).reversed())
+        // Sort at the DB layer rather than materialising the full list and
+        // sorting in JVM memory afterwards.
+        return contentModerationRecordRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(communicationMapper::toModerationRecordResponse)
                 .toList();
     }

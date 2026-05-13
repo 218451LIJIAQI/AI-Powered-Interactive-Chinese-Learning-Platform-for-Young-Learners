@@ -7,7 +7,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -36,7 +35,6 @@ import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
-import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UploadedFileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
@@ -47,7 +45,6 @@ public class LiveLearningAccessService {
             EnumSet.of(LiveClassStatus.SCHEDULED, LiveClassStatus.ONGOING);
 
     private final StudentProfileRepository studentProfileRepository;
-    private final TeacherProfileRepository teacherProfileRepository;
     private final LessonRepository lessonRepository;
     private final CoursePackageRepository coursePackageRepository;
     private final LiveClassRepository liveClassRepository;
@@ -60,7 +57,6 @@ public class LiveLearningAccessService {
 
     public LiveLearningAccessService(
             StudentProfileRepository studentProfileRepository,
-            TeacherProfileRepository teacherProfileRepository,
             LessonRepository lessonRepository,
             CoursePackageRepository coursePackageRepository,
             LiveClassRepository liveClassRepository,
@@ -71,7 +67,6 @@ public class LiveLearningAccessService {
             TeacherContentAccessService teacherContentAccessService,
             EntitlementService entitlementService) {
         this.studentProfileRepository = studentProfileRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
         this.lessonRepository = lessonRepository;
         this.coursePackageRepository = coursePackageRepository;
         this.liveClassRepository = liveClassRepository;
@@ -110,12 +105,6 @@ public class LiveLearningAccessService {
     public CoursePackage requireOwnedPackage(SecurityUserDetails currentUser, Long packageId) {
         return coursePackageRepository.findByIdAndTeacherUserId(packageId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested package was not found."));
-    }
-
-    @Transactional(readOnly = true)
-    public CoursePackage requirePublishedPackage(Long packageId) {
-        return coursePackageRepository.findByIdAndContentStatus(packageId, ContentStatus.PUBLISHED)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published package was not found."));
     }
 
     @Transactional(readOnly = true)
@@ -257,9 +246,12 @@ public class LiveLearningAccessService {
     }
 
     public MeetingPlatform parseMeetingPlatform(String value) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is required.");
+        }
         try {
-            return MeetingPlatform.valueOf(value.trim().toUpperCase());
-        } catch (Exception exception) {
+            return MeetingPlatform.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is invalid.");
         }
     }
@@ -277,9 +269,12 @@ public class LiveLearningAccessService {
     }
 
     public RecordedVideoSourceType parseRecordedVideoSourceType(String value) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Recorded video source type is required.");
+        }
         try {
-            return RecordedVideoSourceType.valueOf(value.trim().toUpperCase());
-        } catch (Exception exception) {
+            return RecordedVideoSourceType.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Recorded video source type is invalid.");
         }
     }
@@ -295,7 +290,7 @@ public class LiveLearningAccessService {
         }
     }
 
-    public void validateExternalVideoUrl(String value) {
+    private void validateExternalVideoUrl(String value) {
         try {
             URI uri = new URI(value);
             if (uri.getScheme() == null || uri.getHost() == null) {
@@ -331,15 +326,6 @@ public class LiveLearningAccessService {
                 liveClassId,
                 studentId,
                 LiveClassEnrolmentStatus.ENROLLED);
-    }
-
-    public boolean belongsToPaidPackage(Lesson lesson) {
-        List<com.example.aichinese.entity.PackageItem> packageItems =
-                packageItemRepository.findByItemTypeAndItemId(com.example.aichinese.entity.enums.PackageItemType.LESSON, lesson.getId());
-        return packageItems.stream().anyMatch(item ->
-                item.getCoursePackage() != null
-                        && item.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED
-                        && item.getCoursePackage().getAccessType() == AccessType.PAID);
     }
 
     public Set<Long> findPublishedPackageIdsContainingLesson(Lesson lesson) {

@@ -28,6 +28,7 @@ import com.example.aichinese.repository.TeacherVerificationDocumentRepository;
 import com.example.aichinese.repository.TeacherVerificationReviewRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class TeacherManagementService {
@@ -76,8 +77,8 @@ public class TeacherManagementService {
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
 
         user.setDisplayName(request.fullName().trim());
-        profile.setBio(trimToNull(request.bio()));
-        profile.setQualificationSummary(trimToNull(request.shortIntroduction()));
+        profile.setBio(TextUtils.trimToNull(request.bio()));
+        profile.setQualificationSummary(TextUtils.trimToNull(request.shortIntroduction()));
         profile.setTeachingCategories(teacherManagementMapper.joinCategories(request.teachingCategories()));
 
         userRepository.save(user);
@@ -126,7 +127,7 @@ public class TeacherManagementService {
         document.setTeacher(profile);
         document.setUploadedFile(uploadedFile);
         document.setDocumentType(normalizedDocumentType);
-        document.setDocumentNote(trimToNull(description));
+        document.setDocumentNote(TextUtils.trimToNull(description));
         document.setSubmittedAt(LocalDateTime.now());
         document.setCurrentVersion(true);
         teacherVerificationDocumentRepository.save(document);
@@ -184,22 +185,6 @@ public class TeacherManagementService {
         return fileStorageService.loadAsDownload(document.getUploadedFile());
     }
 
-    @Transactional(readOnly = true)
-    public TeacherProfile getTeacherProfileEntity(Long teacherId) {
-        return teacherProfileRepository.findDetailedById(teacherId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile was not found."));
-    }
-
-    @Transactional(readOnly = true)
-    public List<TeacherVerificationDocument> getTeacherDocuments(Long teacherId) {
-        return teacherVerificationDocumentRepository.findByTeacherIdOrderBySubmittedAtDesc(teacherId);
-    }
-
-    @Transactional(readOnly = true)
-    public List<TeacherVerificationReview> getTeacherReviews(Long teacherId) {
-        return teacherVerificationReviewRepository.findByTeacherIdOrderByReviewedAtDesc(teacherId);
-    }
-
     private TeacherProfile getTeacherProfileByUserId(Long userId) {
         return teacherProfileRepository.findDetailedByUserId(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
@@ -208,15 +193,6 @@ public class TeacherManagementService {
     private User getUserById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
-    }
-
-    private String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String trimmed = value.trim();
-        return trimmed.isBlank() ? null : trimmed;
     }
 
     private void notificationAdmins(String title, String message, String targetPath) {

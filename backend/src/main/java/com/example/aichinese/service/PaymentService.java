@@ -37,8 +37,8 @@ public class PaymentService {
     private final CartService cartService;
     private final TeacherEarningService teacherEarningService;
     private final SubscriptionService subscriptionService;
-    private final CommerceNotificationService commerceNotificationService;
-    private final CommerceAuditService commerceAuditService;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     public PaymentService(
             PaymentRecordRepository paymentRecordRepository,
@@ -49,8 +49,8 @@ public class PaymentService {
             CartService cartService,
             TeacherEarningService teacherEarningService,
             SubscriptionService subscriptionService,
-            CommerceNotificationService commerceNotificationService,
-            CommerceAuditService commerceAuditService) {
+            NotificationService notificationService,
+            AuditLogService auditLogService) {
         this.paymentRecordRepository = paymentRecordRepository;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
@@ -59,8 +59,8 @@ public class PaymentService {
         this.cartService = cartService;
         this.teacherEarningService = teacherEarningService;
         this.subscriptionService = subscriptionService;
-        this.commerceNotificationService = commerceNotificationService;
-        this.commerceAuditService = commerceAuditService;
+        this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -107,7 +107,7 @@ public class PaymentService {
             markPaymentPaid(paymentRecord, "MOCK", result.providerStatus());
         }
 
-        commerceAuditService.record(
+        auditLogService.record(
                 currentUser.getUser(),
                 "PAYMENT_SESSION_CREATED",
                 "PAYMENT_RECORD",
@@ -162,8 +162,9 @@ public class PaymentService {
 
     @Transactional(readOnly = true)
     public List<PaymentRecordResponse> getAllPayments() {
-        return paymentRecordRepository.findAll().stream()
-                .sorted(java.util.Comparator.comparing(PaymentRecord::getCreatedAt).reversed())
+        // Use a DB-side ORDER BY so we don't have to sort the entire result set
+        // in-memory after fetching.
+        return paymentRecordRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::mapPaymentResponse)
                 .toList();
     }
@@ -198,7 +199,7 @@ public class PaymentService {
         subscriptionService.activateSubscription(paymentRecord.getId());
 
         if (paymentRecord.getStudent() != null && paymentRecord.getStudent().getUser() != null) {
-            commerceNotificationService.notifyUser(
+            notificationService.createNotification(
                     paymentRecord.getStudent().getUser(),
                     "Payment successful",
                     "Your payment was successful and access has been unlocked.",
@@ -206,7 +207,7 @@ public class PaymentService {
         }
     }
 
-    public PaymentRecordResponse mapPaymentResponse(PaymentRecord paymentRecord) {
+    private PaymentRecordResponse mapPaymentResponse(PaymentRecord paymentRecord) {
         List<OrderItem> orderItems = paymentRecord.getOrder() != null
                 ? orderItemRepository.findByOrderIdOrderByCreatedAtAsc(paymentRecord.getOrder().getId())
                 : List.of();

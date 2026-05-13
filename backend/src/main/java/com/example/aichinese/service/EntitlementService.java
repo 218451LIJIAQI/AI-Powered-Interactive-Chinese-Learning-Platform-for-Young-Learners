@@ -36,12 +36,6 @@ public class EntitlementService {
         return paymentEntitlementRepository.existsByStudentIdAndItemTypeAndItemIdAndActiveTrue(studentId, itemType, itemId);
     }
 
-    @Transactional(readOnly = true)
-    public boolean canUsePremiumAiFeature(Long studentId, String featureKey) {
-        return paymentEntitlementRepository.existsByStudentIdAndFeatureKeyAndActiveTrue(studentId, featureKey)
-                || paymentEntitlementRepository.existsByStudentIdAndFeatureKeyAndActiveTrue(studentId, "ALL_PREMIUM_AI");
-    }
-
     @Transactional
     public void grantAccessAfterPayment(Order order, PaymentRecord paymentRecord) {
         StudentProfile student = order.getStudent();
@@ -82,11 +76,6 @@ public class EntitlementService {
                 }
             }
         }
-    }
-
-    @Transactional
-    public void grantPremiumFeature(StudentProfile student, Order order, PaymentRecord paymentRecord, String featureKey) {
-        grantItemEntitlement(student, order, paymentRecord, "PREMIUM_AI", 0L, featureKey);
     }
 
     @Transactional

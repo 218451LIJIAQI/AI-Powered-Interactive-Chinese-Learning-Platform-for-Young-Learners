@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -55,18 +54,6 @@ public class AiFileStorageService {
         validateMultipartFile(multipartFile, ALLOWED_IMAGE_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS,
                 "Unsupported image file type. Allowed types are PNG, JPG, and JPEG.");
         return storeFile(multipartFile, ownerUser, "PRIVATE");
-    }
-
-    public long getMaxFileSizeBytes() {
-        return uploadProperties.getMaxFileSize().toBytes();
-    }
-
-    public List<String> getAllowedAudioContentTypes() {
-        return ALLOWED_AUDIO_CONTENT_TYPES.stream().sorted().toList();
-    }
-
-    public List<String> getAllowedImageContentTypes() {
-        return ALLOWED_IMAGE_CONTENT_TYPES.stream().sorted().toList();
     }
 
     private UploadedFile storeFile(MultipartFile multipartFile, User ownerUser, String accessLevel) {

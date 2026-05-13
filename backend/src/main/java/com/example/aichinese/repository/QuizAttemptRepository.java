@@ -30,8 +30,6 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
     @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "student", "student.user" })
     List<QuizAttempt> findByStudentIdOrderByCompletedAtDescCreatedAtDesc(Long studentId);
 
-    boolean existsByStudentIdAndQuizIdAndSubmittedTrue(Long studentId, Long quizId);
-
     boolean existsByStudentIdAndQuizTeacherUserId(Long studentId, Long teacherUserId);
 
     @Query("select avg(qa.score * 100.0 / qa.maxScore) from QuizAttempt qa where qa.student.id = :studentId and qa.submitted = true and qa.maxScore is not null and qa.maxScore > 0 and qa.score is not null")

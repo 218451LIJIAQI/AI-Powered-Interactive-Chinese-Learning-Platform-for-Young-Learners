@@ -284,6 +284,60 @@ class CommunicationModerationIntegrationTests {
                 .andExpect(jsonPath("$.data.reviewStatus").value("HIDDEN"));
     }
 
+    /**
+     * Regression test for the {@code ReviewService.getTeacherReviews}
+     * refactor. The previous implementation loaded every review in the
+     * system via {@code reviewRepository.findAll()} and filtered in-memory by
+     * re-resolving each review's target one row at a time (2N+1 SQL). The new
+     * implementation first collects the lessons + packages owned by the
+     * teacher and then queries reviews via {@code targetId IN (...)} — which
+     * is faster *and* must continue to enforce strict cross-teacher
+     * isolation so a teacher never sees another teacher's reviews. This test
+     * pins down that invariant so future refactors cannot regress it.
+     */
+    @Test
+    void teacherReviewsAreScopedToTheTeachersOwnLessonsOnly() throws Exception {
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+
+        String teacherAEmail = uniqueEmail("review-isolation-teacher-a");
+        approveTeacherProfile(teacherAEmail);
+        String teacherAToken = loginAndExtractToken(teacherAEmail, "Password123!");
+        Long lessonAId = createPublishedLesson(teacherAToken, adminToken, "Teacher A Lesson");
+
+        String teacherBEmail = uniqueEmail("review-isolation-teacher-b");
+        approveTeacherProfile(teacherBEmail);
+        String teacherBToken = loginAndExtractToken(teacherBEmail, "Password123!");
+        Long lessonBId = createPublishedLesson(teacherBToken, adminToken, "Teacher B Lesson");
+
+        String studentToken = registerStudentAndLogin(uniqueEmail("review-isolation-student"));
+        createReview(studentToken, lessonAId, 5.0, "Teacher A's review.");
+        createReview(studentToken, lessonBId, 4.0, "Teacher B's review.");
+
+        // Teacher A must only see the review on lesson A, never lesson B.
+        mockMvc.perform(get("/api/v1/teachers/reviews")
+                .header("Authorization", "Bearer " + teacherAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].targetId").value(lessonAId))
+                .andExpect(jsonPath("$.data[?(@.targetId == %s)]", lessonBId).isEmpty());
+
+        // Teacher B must only see the review on lesson B, never lesson A.
+        mockMvc.perform(get("/api/v1/teachers/reviews")
+                .header("Authorization", "Bearer " + teacherBToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].targetId").value(lessonBId))
+                .andExpect(jsonPath("$.data[?(@.targetId == %s)]", lessonAId).isEmpty());
+
+        // The admin view, in contrast, must surface both reviews so the
+        // admin moderation queue still works end-to-end.
+        mockMvc.perform(get("/api/v1/admin/reviews")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.targetId == %s)]", lessonAId).exists())
+                .andExpect(jsonPath("$.data[?(@.targetId == %s)]", lessonBId).exists());
+    }
+
     @Test
     void teacherFeedbackRequiresLinkedStudentsAndStaysPrivateToOwner() throws Exception {
         String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");

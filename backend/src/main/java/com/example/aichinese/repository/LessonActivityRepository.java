@@ -7,18 +7,11 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.example.aichinese.entity.LessonActivity;
-import com.example.aichinese.entity.enums.LessonActivityType;
 
 public interface LessonActivityRepository extends JpaRepository<LessonActivity, Long> {
 
     @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user" })
     List<LessonActivity> findByLessonIdAndContentStatusNotOrderBySortOrderAscCreatedAtAsc(Long lessonId, com.example.aichinese.entity.enums.ContentStatus contentStatus);
-
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user" })
-    List<LessonActivity> findByLessonIdAndActivityTypeAndContentStatusNotOrderBySortOrderAscCreatedAtAsc(
-            Long lessonId,
-            LessonActivityType activityType,
-            com.example.aichinese.entity.enums.ContentStatus contentStatus);
 
     @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user" })
     List<LessonActivity> findByLessonIdOrderBySortOrderAscCreatedAtAsc(Long lessonId);

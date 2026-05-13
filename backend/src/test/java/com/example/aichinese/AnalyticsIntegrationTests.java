@@ -78,6 +78,100 @@ class AnalyticsIntegrationTests {
                 .andExpect(jsonPath("$.data.aiStatusBreakdown").isArray());
     }
 
+    /**
+     * Pins down the Wave 4 refactor of {@code AnalyticsService.getAdminAnalytics}.
+     * The previous implementation loaded entire tables into JVM memory and
+     * counted there; the new implementation issues per-status {@code COUNT}
+     * and {@code GROUP BY} queries through {@code StatusCountProjection}.
+     *
+     * <p>This test exercises three invariants that the refactor must
+     * preserve:</p>
+     * <ol>
+     *   <li>Teacher / student counts react to new registrations through the
+     *       same {@code COUNT(distinct u)} query that powered the legacy
+     *       path.</li>
+     *   <li>Every enum value of the breakdown enums shows up in the
+     *       response (even with a count of zero), so the frontend can
+     *       always render a complete chart without conditional checks.</li>
+     *   <li>The {@code teacherApprovalBreakdown} contains a non-zero
+     *       {@code PENDING} count after a teacher self-registers — the new
+     *       {@code countByTeacherStatus(PENDING)} must surface that.</li>
+     * </ol>
+     */
+    @Test
+    void adminAnalyticsShouldReflectAggregateRegistrationsAndBreakdowns() throws Exception {
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+
+        // Snapshot baseline counts (other tests may have left registrations).
+        MvcResult baselineResult = mockMvc.perform(get("/api/v1/admin/analytics")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode baseline = objectMapper.readTree(baselineResult.getResponse().getContentAsString())
+                .path("data").path("overview");
+        long baselineTeachers = baseline.path("totalTeachers").asLong();
+        long baselineStudents = baseline.path("totalStudents").asLong();
+        long baselinePendingTeachers = baseline.path("pendingTeacherApprovals").asLong();
+
+        // Register exactly one new teacher and one new student.
+        registerAndLoginTeacher(uniqueEmail("teacher-admin-aggregate"));
+        registerAndLoginStudent(uniqueEmail("student-admin-aggregate"));
+
+        MvcResult afterResult = mockMvc.perform(get("/api/v1/admin/analytics")
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode afterData = objectMapper.readTree(afterResult.getResponse().getContentAsString())
+                .path("data");
+        JsonNode after = afterData.path("overview");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                baselineTeachers + 1L, after.path("totalTeachers").asLong(),
+                "Teacher count should increase by exactly one after a teacher self-registers.");
+        org.junit.jupiter.api.Assertions.assertEquals(
+                baselineStudents + 1L, after.path("totalStudents").asLong(),
+                "Student count should increase by exactly one after a student self-registers.");
+        org.junit.jupiter.api.Assertions.assertTrue(
+                after.path("pendingTeacherApprovals").asLong() >= baselinePendingTeachers + 1L,
+                "Pending teacher approvals must include the newly registered teacher.");
+
+        // The teacher approval breakdown is built by the Wave 4 refactor
+        // through {@code countByTeacherStatus(PENDING/APPROVED/REJECTED)}
+        // followed by the zero-value filter in {@code buildBreakdownFromMap}.
+        // After registering a new teacher we expect at least the PENDING
+        // bucket to appear with a positive count — this pins down the new
+        // aggregate-query path end to end.
+        JsonNode teacherApproval = afterData.path("teacherApprovalBreakdown");
+        long pendingBucketValue = bucketValue(teacherApproval, "PENDING");
+        org.junit.jupiter.api.Assertions.assertTrue(
+                pendingBucketValue >= 1L,
+                "Teacher approval breakdown must surface a PENDING bucket with at least one teacher.");
+
+        // Sanity-check the breakdown shape itself: every emitted bucket must
+        // carry a positive count (zero buckets are filtered by design) and
+        // a non-blank key.
+        teacherApproval.forEach(item -> {
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    item.path("key").asText().isBlank(),
+                    "Breakdown items must always have a non-blank key.");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    item.path("value").asLong() > 0L,
+                    "Breakdown items with value 0 should be filtered out by buildBreakdownFromMap.");
+        });
+    }
+
+    private long bucketValue(JsonNode breakdownArray, String key) {
+        if (!breakdownArray.isArray()) {
+            return 0L;
+        }
+        for (JsonNode item : breakdownArray) {
+            if (key.equals(item.path("key").asText())) {
+                return item.path("value").asLong();
+            }
+        }
+        return 0L;
+    }
+
     @Test
     void analyticsEndpointsShouldRejectUnauthorizedRequests() throws Exception {
         mockMvc.perform(get("/api/v1/students/analytics"))

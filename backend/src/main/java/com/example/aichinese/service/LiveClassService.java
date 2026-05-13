@@ -28,6 +28,7 @@ import com.example.aichinese.entity.enums.LiveClassStatus;
 import com.example.aichinese.repository.LiveClassEnrolmentRepository;
 import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class LiveClassService {
@@ -170,12 +171,13 @@ public class LiveClassService {
     @Transactional(readOnly = true)
     public List<LiveClassResponse> getStudentLiveClasses(SecurityUserDetails currentUser) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
-        return liveClassRepository.findAll().stream()
-                .filter(this::isStudentVisibleClass)
+        // Previously this method called liveClassRepository.findAll() and
+        // filtered every row in JVM via isStudentVisibleClass(). That scaled
+        // with the *total* live class count (including private/draft/archived
+        // ones the student should never see). The new query pushes the
+        // visibility predicate + ordering down to SQL.
+        return liveClassRepository.findStudentVisibleClasses(ContentStatus.PUBLISHED).stream()
                 .map(liveClass -> toStudentResponse(liveClass, student))
-                .sorted(java.util.Comparator.comparing(
-                        LiveClassResponse::startTime,
-                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
                 .toList();
     }
 
@@ -264,7 +266,11 @@ public class LiveClassService {
 
     @Transactional(readOnly = true)
     public List<LiveClassResponse> getAdminLiveClasses(SecurityUserDetails currentUser) {
-        return liveClassRepository.findAll().stream()
+        // Use the repository's DB-ordered query rather than findAll() so the
+        // admin schedule view returns classes in chronological order without
+        // a second JVM sort pass. The EntityGraph on the query already
+        // eagerly fetches teacher/lesson/package to avoid mapper-level N+1.
+        return liveClassRepository.findAllByOrderByScheduledStartAtAsc().stream()
                 .map(this::toAdminResponse)
                 .toList();
     }
@@ -300,7 +306,7 @@ public class LiveClassService {
         liveClass.setLesson(lesson);
         liveClass.setCoursePackage(coursePackage);
         liveClass.setTitle(title.trim());
-        liveClass.setDescription(description == null || description.isBlank() ? null : description.trim());
+        liveClass.setDescription(TextUtils.trimToNull(description));
         liveClass.setScheduledStartAt(startTime);
         liveClass.setScheduledEndAt(endTime);
         liveClass.setMeetingLink(meetingLink.trim());

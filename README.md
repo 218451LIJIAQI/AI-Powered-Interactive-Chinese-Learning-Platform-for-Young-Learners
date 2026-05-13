@@ -293,6 +293,17 @@ See [docs/database-notes.md](./docs/database-notes.md) for table groups, enum no
 - Richer moderation tooling and reporting
 - Stronger observability and deployment automation
 
+## Continuous Integration
+A GitHub Actions workflow at [.github/workflows/ci.yml](./.github/workflows/ci.yml) runs on every push and pull request and verifies, in parallel:
+
+- **Backend**: Java 21 + Maven wrapper builds the project and runs the full integration + unit test suite (133 tests) against the embedded H2 profile.
+- **Frontend**: Node 20 installs from the locked `package-lock.json`, runs the production type-check / build (`npm run build`), and executes every Vitest unit test (95 tests).
+
+In-flight runs for the same branch or pull request are cancelled automatically when a new commit arrives.
+
+## Contributing
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full contributor workflow, code-style expectations, repository conventions (centralised storage keys, centralised event names, DB-side filtering pattern), and security notes.
+
 ## Documentation
 - Setup guide: [docs/setup.md](./docs/setup.md)
 - API overview: [docs/api-overview.md](./docs/api-overview.md)

@@ -15,8 +15,6 @@ import com.example.aichinese.entity.enums.RoleName;
 
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
-    Optional<User> findByEmail(String email);
-
     boolean existsByEmailIgnoreCase(String email);
 
     @Query("select distinct u from User u left join fetch u.roles where lower(u.email) = lower(:email)")
@@ -36,4 +34,14 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @EntityGraph(attributePaths = { "roles" })
     @Query("select distinct u from User u join u.roles r where r.name = :roleName")
     java.util.List<User> findAllByRoleName(@Param("roleName") RoleName roleName);
+
+    /**
+     * Returns users created on or after the supplied threshold, ordered by
+     * creation date ascending so the admin registration-trend chart can be
+     * built without loading the entire user table. The previous
+     * implementation called {@code findAllByOrderByCreatedAtDesc()} and then
+     * filtered/sorted in JVM — that paid an O(users_total) cost on every
+     * admin analytics request.
+     */
+    java.util.List<User> findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(java.time.LocalDateTime threshold);
 }

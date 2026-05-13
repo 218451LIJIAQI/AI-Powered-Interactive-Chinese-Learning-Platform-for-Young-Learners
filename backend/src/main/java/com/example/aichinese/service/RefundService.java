@@ -4,7 +4,9 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
+import java.util.Objects;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -32,8 +34,8 @@ public class RefundService {
     private final RefundRequestRepository refundRequestRepository;
     private final EntitlementService entitlementService;
     private final CommerceMoneyService commerceMoneyService;
-    private final CommerceNotificationService commerceNotificationService;
-    private final CommerceAuditService commerceAuditService;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
     private final TeacherEarningService teacherEarningService;
 
     public RefundService(
@@ -43,8 +45,8 @@ public class RefundService {
             RefundRequestRepository refundRequestRepository,
             EntitlementService entitlementService,
             CommerceMoneyService commerceMoneyService,
-            CommerceNotificationService commerceNotificationService,
-            CommerceAuditService commerceAuditService,
+            NotificationService notificationService,
+            AuditLogService auditLogService,
             TeacherEarningService teacherEarningService) {
         this.studentLearningAccessService = studentLearningAccessService;
         this.orderRepository = orderRepository;
@@ -52,8 +54,8 @@ public class RefundService {
         this.refundRequestRepository = refundRequestRepository;
         this.entitlementService = entitlementService;
         this.commerceMoneyService = commerceMoneyService;
-        this.commerceNotificationService = commerceNotificationService;
-        this.commerceAuditService = commerceAuditService;
+        this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
         this.teacherEarningService = teacherEarningService;
     }
 
@@ -78,12 +80,12 @@ public class RefundService {
         refundRequest.setRefundStatus(RefundStatus.PENDING);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
 
-        commerceNotificationService.notifyUser(
+        notificationService.createNotification(
                 student.getUser(),
                 "Refund request submitted",
                 "Your refund request has been submitted for review.",
                 "/student/refunds");
-        commerceAuditService.record(currentUser.getUser(), "REFUND_REQUESTED", "REFUND_REQUEST", saved.getId(), "Refund request submitted.");
+        auditLogService.record(currentUser.getUser(), "REFUND_REQUESTED", "REFUND_REQUEST", saved.getId(), "Refund request submitted.");
         return mapRefund(saved);
     }
 
@@ -96,54 +98,62 @@ public class RefundService {
 
     @Transactional(readOnly = true)
     public List<RefundRequestResponse> getAllRefundRequests() {
-        return refundRequestRepository.findAll().stream()
+        // Two improvements compared to the previous version:
+        //   * Newest-first ordering is delegated to the DB so the admin
+        //     refund queue is consistent with every other admin list.
+        //   * The repository's EntityGraph override prevents a hidden N+1 on
+        //     student/order accesses inside the mapper.
+        return refundRequestRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(this::mapRefund)
                 .toList();
     }
 
     @Transactional
     public RefundRequestResponse approveRefund(SecurityUserDetails currentUser, Long id) {
-        RefundRequest refundRequest = refundRequestRepository.findById(id)
+        Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
+        RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
         refundRequest.setRefundStatus(RefundStatus.APPROVED);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund approved", "Your refund request has been approved.");
-        commerceAuditService.record(currentUser.getUser(), "REFUND_APPROVED", "REFUND_REQUEST", id, "Refund approved.");
+        auditLogService.record(currentUser.getUser(), "REFUND_APPROVED", "REFUND_REQUEST", refundId, "Refund approved.");
         return mapRefund(saved);
     }
 
     @Transactional
     public RefundRequestResponse rejectRefund(SecurityUserDetails currentUser, Long id, RefundDecisionRequest request) {
-        RefundRequest refundRequest = refundRequestRepository.findById(id)
+        Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
+        RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
         refundRequest.setRefundStatus(RefundStatus.REJECTED);
         refundRequest.setDecisionReason(request.reason());
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund rejected", "Your refund request was rejected.");
-        commerceAuditService.record(currentUser.getUser(), "REFUND_REJECTED", "REFUND_REQUEST", id, "Refund rejected.");
+        auditLogService.record(currentUser.getUser(), "REFUND_REJECTED", "REFUND_REQUEST", refundId, "Refund rejected.");
         return mapRefund(saved);
     }
 
     @Transactional
     public RefundRequestResponse markRefunded(SecurityUserDetails currentUser, Long id) {
-        RefundRequest refundRequest = refundRequestRepository.findById(id)
+        Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
+        RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
         refundRequest.setRefundStatus(RefundStatus.REFUNDED);
         if (refundRequest.getOrder() != null) {
+            Long orderId = refundRequest.getOrder().getId();
             refundRequest.getOrder().setPaymentStatus(PaymentStatus.REFUNDED);
-            for (PaymentRecord paymentRecord : paymentRecordRepository.findAll()) {
-                if (paymentRecord.getOrder() != null
-                        && java.util.Objects.equals(paymentRecord.getOrder().getId(), refundRequest.getOrder().getId())) {
-                    paymentRecord.setPaymentStatus(PaymentStatus.REFUNDED);
-                    paymentRecord.setProviderStatus("REFUNDED");
-                }
+            // Targeted lookup by order id instead of pulling every PaymentRecord row
+            // into memory just to find the one(s) attached to this refund's order.
+            for (PaymentRecord paymentRecord : paymentRecordRepository.findByOrderId(orderId)) {
+                paymentRecord.setPaymentStatus(PaymentStatus.REFUNDED);
+                paymentRecord.setProviderStatus("REFUNDED");
             }
             entitlementService.revokeAccessAfterRefund(refundRequest.getOrder());
-            teacherEarningService.markRefundedForOrder(refundRequest.getOrder().getId());
+            teacherEarningService.markRefundedForOrder(orderId);
         }
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund completed", "Your refund has been marked as completed.");
-        commerceAuditService.record(currentUser.getUser(), "REFUND_MARKED_REFUNDED", "REFUND_REQUEST", id, "Refund marked refunded.");
+        auditLogService.record(currentUser.getUser(), "REFUND_MARKED_REFUNDED", "REFUND_REQUEST", id, "Refund marked refunded.");
         return mapRefund(saved);
     }
 
@@ -161,7 +171,7 @@ public class RefundService {
 
     private void notifyRefundStatus(RefundRequest refundRequest, String title, String message) {
         if (refundRequest.getStudent() != null && refundRequest.getStudent().getUser() != null) {
-            commerceNotificationService.notifyUser(refundRequest.getStudent().getUser(), title, message, "/student/refunds");
+            notificationService.createNotification(refundRequest.getStudent().getUser(), title, message, "/student/refunds");
         }
     }
 }

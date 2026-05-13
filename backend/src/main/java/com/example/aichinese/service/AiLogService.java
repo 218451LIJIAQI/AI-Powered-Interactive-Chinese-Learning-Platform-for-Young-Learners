@@ -158,7 +158,7 @@ public class AiLogService {
         return truncateUtf8Bytes(value, TINYTEXT_SAFE_BYTES);
     }
 
-    public static String truncateUtf8Bytes(String value, int maxBytes) {
+    private static String truncateUtf8Bytes(String value, int maxBytes) {
         if (value == null) {
             return null;
         }

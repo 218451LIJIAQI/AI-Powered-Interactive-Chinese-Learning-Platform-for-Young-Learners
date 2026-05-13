@@ -209,8 +209,7 @@ public class TeacherPackageService {
         return toCoursePackageResponse(coursePackage);
     }
 
-    @Transactional(readOnly = true)
-    public CoursePackage findOwnedPackage(SecurityUserDetails currentUser, Long packageId) {
+    private CoursePackage findOwnedPackage(SecurityUserDetails currentUser, Long packageId) {
         return coursePackageRepository.findByIdAndTeacherUserId(packageId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested package was not found."));
     }

@@ -2,9 +2,9 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.util.Comparator;
 import java.util.List;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -105,8 +105,10 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public List<ReportResponse> getAdminReports() {
-        return reportRepository.findAll().stream()
-                .sorted(Comparator.comparing(Report::getCreatedAt).reversed())
+        // Delegate ordering to the database (uses the BaseEntity created_at
+        // column) so admins no longer pay an O(N log N) JVM sort over the
+        // full report set on every page load.
+        return reportRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
                 .map(report -> communicationMapper.toReportResponse(report, resolveTitle(report), true))
                 .toList();
     }

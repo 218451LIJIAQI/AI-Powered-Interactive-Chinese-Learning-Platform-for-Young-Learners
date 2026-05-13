@@ -1,9 +1,10 @@
 package com.example.aichinese.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.data.jpa.repository.Query;
 
 import com.example.aichinese.entity.AiUsageLog;
 
@@ -17,6 +18,31 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long>, J
             org.springframework.data.jpa.domain.Specification<AiUsageLog> specification,
             org.springframework.data.domain.Pageable pageable);
 
-    @Query("select count(a) from AiUsageLog a where lower(a.status) = 'success'")
-    long countSuccessfulRequests();
+    /**
+     * Teacher-scoped AI usage history. Used by the teacher analytics overview
+     * so it no longer has to call {@code findAll().stream().filter(user.id ==
+     * teacher)} — that pattern scaled linearly with the *global* AI
+     * invocation count and was the worst offender in the analytics module.
+     */
+    @EntityGraph(attributePaths = "user")
+    List<AiUsageLog> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    /**
+     * One row per distinct AI status (success / failed / unavailable) for
+     * the admin analytics dashboard. ai_usage_log grows on every AI
+     * invocation across the platform, so loading the entire table just to
+     * count statuses was the highest-volume hotspot in admin analytics
+     * before this query existed.
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "select log.status as status, count(log) as count from AiUsageLog log group by log.status")
+    List<com.example.aichinese.repository.projection.StatusCountProjection> groupByAiStatus();
+
+    /**
+     * Total AI invocations across the platform — replaces
+     * {@code findAll().size()} which previously paid a full table load just
+     * to count rows.
+     */
+    @org.springframework.data.jpa.repository.Query("select count(log) from AiUsageLog log")
+    long countAll();
 }

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PageHero from '../../components/common/PageHero.vue'
+import { useRequestToken } from '../../composables/useRequestToken'
 import { publicContentService } from '../../services/publicContentService'
 import type {
   AccessType,
@@ -12,6 +13,7 @@ import type {
   PageResponse,
   PublicCourseSummary,
 } from '../../types/contentManagement'
+import { extractApiError } from '../../utils/apiError'
 import { formatMoney } from '../../utils/money'
 
 const { t } = useI18n()
@@ -71,17 +73,32 @@ async function loadFilters() {
     ])
     levels.value = levelList
     categories.value = categoryList
+  } catch (error) {
+    // Filter loading is non-fatal: if /public/levels or /public/categories
+    // fails, the student can still browse the lesson list with keyword
+    // search and pagination. Previously a network blip here would propagate
+    // up through onMounted, prevent loadLessons() from running, and leave
+    // the student looking at an empty page with only a transient toast.
+    // eslint-disable-next-line no-console
+    console.warn('[StudentLessonsPage] Failed to load filter options.', error)
   } finally {
     loadingFilters.value = false
   }
 }
 
+// Monotonic request token guard against "user clicks Apply then quickly
+// switches page" races where the slower in-flight request resolves last
+// and overwrites the newer (correct) page of results. See
+// useRequestToken.test.ts for the canonical race scenario.
+const lessonsToken = useRequestToken()
+
 async function loadLessons() {
+  const token = lessonsToken.start()
   loading.value = true
   errorMessage.value = ''
 
   try {
-    page.value = await publicContentService.discoverCourses({
+    const result = await publicContentService.discoverCourses({
       keyword: filters.keyword.trim() || undefined,
       levelId: filters.levelId,
       categoryId: filters.categoryId,
@@ -91,10 +108,20 @@ async function loadLessons() {
       size: filters.size,
       sort: 'newest',
     })
+
+    if (!lessonsToken.isCurrent(token)) {
+      return
+    }
+    page.value = result
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : t('content.messages.saveFailed')
+    if (!lessonsToken.isCurrent(token)) {
+      return
+    }
+    errorMessage.value = extractApiError(error, t('content.messages.saveFailed'))
   } finally {
-    loading.value = false
+    if (lessonsToken.isCurrent(token)) {
+      loading.value = false
+    }
   }
 }
 
@@ -108,9 +135,12 @@ async function handlePageChange(nextPage: number) {
   await loadLessons()
 }
 
-onMounted(async () => {
-  await loadFilters()
-  await loadLessons()
+onMounted(() => {
+  // Independent in parallel: filters failing should not block lesson load,
+  // and we no longer pay an unnecessary round-trip waiting for one before
+  // starting the other.
+  void loadFilters()
+  void loadLessons()
 })
 </script>
 
