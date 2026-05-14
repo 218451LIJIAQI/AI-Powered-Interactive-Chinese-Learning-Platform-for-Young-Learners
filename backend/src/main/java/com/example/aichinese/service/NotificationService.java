@@ -110,14 +110,15 @@ public class NotificationService {
 
     @Transactional
     public BulkOperationResponse markAllAsRead(SecurityUserDetails currentUser) {
-        long updatedCount = 0;
-        for (Notification notification : notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getUserId())) {
-            if (notification.getNotificationStatus() == NotificationStatus.UNREAD) {
-                notification.setNotificationStatus(NotificationStatus.READ);
-                notification.setReadAt(LocalDateTime.now());
-                updatedCount++;
-            }
-        }
+        // Single bulk UPDATE — see NotificationRepository#markAllAsReadForUser
+        // for why this replaces the previous N+1 iterate-and-set loop. We
+        // intentionally do not load notifications first because the only thing
+        // the API exposes is the count of rows that transitioned to READ.
+        int updatedCount = notificationRepository.markAllAsReadForUser(
+                currentUser.getUserId(),
+                NotificationStatus.UNREAD,
+                NotificationStatus.READ,
+                LocalDateTime.now());
         return new BulkOperationResponse(updatedCount);
     }
 }

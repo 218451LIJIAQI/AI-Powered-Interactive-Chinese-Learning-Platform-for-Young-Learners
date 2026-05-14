@@ -116,6 +116,14 @@ public class LessonActivityService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested lesson activity was not found."));
         teacherContentAccessService.validateEditableStatus(activity.getLesson().getContentStatus(), "Lesson");
 
+        // Idempotency guard mirroring AdminContentReviewService.archiveContent
+        // and RecordedLessonService.archiveRecordedVideo: refuse double-archive
+        // so a teacher double-clicking the button does not write a duplicate
+        // audit-log row.
+        if (activity.getContentStatus() == ContentStatus.ARCHIVED) {
+            return contentManagementMapper.toLessonActivityResponse(activity);
+        }
+
         activity.setContentStatus(ContentStatus.ARCHIVED);
         LessonActivity saved = lessonActivityRepository.save(activity);
         auditLogService.record(

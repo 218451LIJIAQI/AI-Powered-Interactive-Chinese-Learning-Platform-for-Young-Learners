@@ -1,5 +1,6 @@
 package com.example.aichinese.service;
 
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -33,11 +34,13 @@ import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.JwtService;
+import com.example.aichinese.security.LoginAttemptLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
+import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @Service
@@ -50,6 +53,8 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final LoginAttemptLimiter loginAttemptLimiter;
+    private final AuditLogService auditLogService;
 
     public AuthService(
             UserRepository userRepository,
@@ -58,7 +63,9 @@ public class AuthService {
             TeacherProfileRepository teacherProfileRepository,
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
-            JwtService jwtService) {
+            JwtService jwtService,
+            LoginAttemptLimiter loginAttemptLimiter,
+            AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.studentProfileRepository = studentProfileRepository;
@@ -66,6 +73,8 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.loginAttemptLimiter = loginAttemptLimiter;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -120,24 +129,44 @@ public class AuthService {
         return toRegistrationResponse(savedUser, profile.getTeacherStatus());
     }
 
-    public AuthResponse login(LoginRequest request) {
+    /**
+     * Authenticates a user. The {@code clientIp} is used to scope the
+     * brute-force rate limiter so a misbehaving network does not lock out
+     * every user account behind the same gateway.
+     */
+    public AuthResponse login(LoginRequest request, String clientIp) {
         String email = normalizeEmail(request.email());
+
+        if (!loginAttemptLimiter.isAllowed(email, clientIp)) {
+            Duration retryAfter = loginAttemptLimiter.retryAfter(email, clientIp);
+            long retrySeconds = Math.max(1L, retryAfter.toSeconds());
+            throw new ResponseStatusException(
+                    TOO_MANY_REQUESTS,
+                    "Too many failed login attempts. Please try again in " + retrySeconds + " seconds.");
+        }
 
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(email, request.password()));
         } catch (BadCredentialsException exception) {
+            recordLoginFailure(email, clientIp);
             throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.");
         } catch (AuthenticationException exception) {
+            recordLoginFailure(email, clientIp);
             throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.", exception);
         }
 
         User user = userRepository.findByEmailWithRoles(email)
-                .orElseThrow(() -> new ResponseStatusException(UNAUTHORIZED, "Invalid email or password."));
+                .orElseThrow(() -> {
+                    recordLoginFailure(email, clientIp);
+                    return new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.");
+                });
 
         TeacherStatus teacherStatus = teacherProfileRepository.findByUserId(user.getId())
                 .map(TeacherProfile::getTeacherStatus)
                 .orElse(null);
+
+        loginAttemptLimiter.recordSuccess(email, clientIp);
 
         String token = jwtService.generateToken(user);
         return new AuthResponse(token, new AuthResponse.UserSummary(
@@ -203,6 +232,27 @@ public class AuthService {
                 SERVICE_UNAVAILABLE,
                 "Password reset is currently unavailable because email-based token delivery is not configured. "
                         + "Please contact an administrator for assistance.");
+    }
+
+    /**
+     * Records a login failure against the rate limiter and, when that failure
+     * is the one that trips the lockout threshold, emits a structured audit
+     * log entry so admins viewing {@code /admin/audit-logs} can see brute
+     * force / credential-stuffing attempts. Uses {@code safeRecord} so a
+     * transient audit-log persistence failure never hides the 401 we owe
+     * the caller.
+     */
+    private void recordLoginFailure(String email, String clientIp) {
+        boolean nowLocked = loginAttemptLimiter.recordFailure(email, clientIp);
+        if (nowLocked) {
+            auditLogService.safeRecord(
+                    null,
+                    "LOGIN_LOCKOUT",
+                    "USER",
+                    null,
+                    "Login lockout engaged for " + email + " after repeated failed attempts.",
+                    clientIp);
+        }
     }
 
     private void ensureEmailIsAvailable(String email) {

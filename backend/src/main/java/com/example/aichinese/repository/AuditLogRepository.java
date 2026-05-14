@@ -33,4 +33,15 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     @EntityGraph(attributePaths = { "actorUser" })
     @NonNull
     List<AuditLog> findAll(@NonNull Sort sort);
+
+    /**
+     * Lookup used by the audit-log invariant tests to verify that a given
+     * privileged action produced an audit row. Filtering on
+     * {@code (actionType, targetType, targetId)} matches the natural key
+     * of an audit record without requiring callers to scan the full table.
+     */
+    boolean existsByActionTypeAndTargetTypeAndTargetId(
+            String actionType,
+            String targetType,
+            Long targetId);
 }

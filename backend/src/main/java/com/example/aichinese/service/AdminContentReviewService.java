@@ -415,12 +415,22 @@ public class AdminContentReviewService {
         ContentSubmissionDetailResponse response = switch (contentType) {
             case MODULE -> {
                 LearningModule module = findModule(id);
+                // Refuse double-archive — without this guard a second click on
+                // the Archive button would write a fresh ContentModerationRecord
+                // and a fresh AuditLog row even though the entity is already
+                // ARCHIVED, polluting the moderation history. Archive is
+                // intentionally permissive about the *prior* status (any
+                // state → ARCHIVED is allowed) but the no-op case must be
+                // refused, mirroring the refund/payout state-machine guards
+                // added in earlier waves.
+                requireNotAlreadyArchived(module.getContentStatus(), "module");
                 module.setContentStatus(ContentStatus.ARCHIVED);
                 learningModuleRepository.save(module);
                 yield contentManagementMapper.toSubmissionDetailResponse(module, List.of(), List.of());
             }
             case LESSON -> {
                 Lesson lesson = findLesson(id);
+                requireNotAlreadyArchived(lesson.getContentStatus(), "lesson");
                 lesson.setContentStatus(ContentStatus.ARCHIVED);
                 lessonRepository.save(lesson);
                 yield contentManagementMapper.toSubmissionDetailResponse(
@@ -431,6 +441,7 @@ public class AdminContentReviewService {
             }
             case PACKAGE -> {
                 CoursePackage coursePackage = findPackage(id);
+                requireNotAlreadyArchived(coursePackage.getContentStatus(), "package");
                 coursePackage.setContentStatus(ContentStatus.ARCHIVED);
                 coursePackageRepository.save(coursePackage);
                 yield contentManagementMapper.toSubmissionDetailResponse(
@@ -443,6 +454,14 @@ public class AdminContentReviewService {
         auditLogService.record(adminUser, "ADMIN_CONTENT_ARCHIVE", contentType.name(), id,
                 "Admin archived content.");
         return response;
+    }
+
+    private void requireNotAlreadyArchived(ContentStatus currentStatus, String entityName) {
+        if (currentStatus == ContentStatus.ARCHIVED) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "This " + entityName + " is already archived.");
+        }
     }
 
     private ContentStatus parseStatus(String status) {

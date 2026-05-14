@@ -1,5 +1,7 @@
 package com.example.aichinese.controller;
 
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +22,7 @@ import com.example.aichinese.dto.auth.ResetPasswordRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuthService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @Validated
@@ -48,13 +51,47 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.success("Login successful.", authService.login(request));
+    public ApiResponse<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.success("Login successful.", authService.login(request, resolveClientIp(httpRequest)));
+    }
+
+    /**
+     * Resolves the originating client IP. Honours the standard X-Forwarded-For
+     * header so the rate limiter still keys correctly when the API runs behind
+     * a reverse proxy / load balancer in deployment, while falling back to the
+     * direct remote address for local development.
+     */
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "";
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            // X-Forwarded-For is a comma-separated chain; the first entry is
+            // the original client. Trim aggressively against header whitespace.
+            int comma = forwarded.indexOf(',');
+            return (comma < 0 ? forwarded : forwarded.substring(0, comma)).trim();
+        }
+        String remote = request.getRemoteAddr();
+        return remote == null ? "" : remote;
     }
 
     @GetMapping("/me")
-    public ApiResponse<CurrentUserResponse> getCurrentUser(@AuthenticationPrincipal SecurityUserDetails currentUser) {
-        return ApiResponse.success("Current user retrieved successfully.", authService.getCurrentUser(currentUser));
+    public ResponseEntity<ApiResponse<CurrentUserResponse>> getCurrentUser(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        // Cache-Control: no-store keeps the JSON profile out of the browser
+        // disk and bfcache so a logged-out user pressing the back button
+        // cannot replay an authenticated /me response (which contains the
+        // user's email, role list, and teacher-status flag) from a stale
+        // cache entry. The complementary frontend behaviour clears the
+        // token and reloads on the back-forward navigation, but defense
+        // in depth at the response layer is cheap and worthwhile.
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success("Current user retrieved successfully.",
+                        authService.getCurrentUser(currentUser)));
     }
 
     @PostMapping("/logout")

@@ -50,8 +50,17 @@ function handleResize() {
 async function renderChart() {
   await nextTick()
 
+  // When the chart slot is replaced by the loading skeleton / error alert /
+  // empty placeholder, the underlying <div> is removed by v-else and the
+  // ECharts instance is left holding a detached canvas. Disposing here
+  // releases that canvas so the next time we re-enter the chart branch we
+  // construct a brand-new instance against the fresh element. Without
+  // this dispose, switching loading=false → loading=true → loading=false
+  // leaks one chart instance per cycle and the second render can throw
+  // because setOption() fires against the orphaned DOM node.
   if (!chartElement.value || props.loading || props.error || props.empty || !props.option) {
-    chart.value?.clear()
+    chart.value?.dispose()
+    chart.value = null
     return
   }
 

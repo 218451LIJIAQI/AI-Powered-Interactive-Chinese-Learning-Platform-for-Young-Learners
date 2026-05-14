@@ -135,6 +135,17 @@ public class AdminTeacherManagementService {
         User adminUser = findActor(currentUser);
         TeacherProfile teacherProfile = findTeacherProfile(teacherId);
 
+        // Idempotency guard. Without this, an admin double-clicking "Approve"
+        // on an already-APPROVED teacher would write a duplicate
+        // TeacherVerificationReview row, send a duplicate in-app
+        // notification, AND fire a duplicate approval email — the email
+        // duplicate is the worst of these because it is the only side
+        // effect that escapes the application boundary. Same bug family
+        // as PaymentService.markPaymentPaid (Wave 5.1).
+        if (teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED) {
+            return buildTeacherDetail(teacherProfile);
+        }
+
         teacherProfile.setTeacherStatus(TeacherStatus.APPROVED);
         teacherProfile.setRejectionReason(null);
         teacherProfile.setPublicVisible(true);
@@ -169,6 +180,14 @@ public class AdminTeacherManagementService {
 
         if (reason == null || reason.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, "Rejection reason is required.");
+        }
+
+        // Idempotency guard mirroring approveTeacher: prevents a duplicate
+        // rejection email + notification + audit row + verification-review
+        // row when the admin re-clicks reject on an already-REJECTED
+        // teacher (or refreshes the page mid-action).
+        if (teacherProfile.getTeacherStatus() == TeacherStatus.REJECTED) {
+            return buildTeacherDetail(teacherProfile);
         }
 
         teacherProfile.setTeacherStatus(TeacherStatus.REJECTED);

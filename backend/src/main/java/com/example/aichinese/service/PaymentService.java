@@ -185,6 +185,21 @@ public class PaymentService {
 
     @Transactional
     public void markPaymentPaid(PaymentRecord paymentRecord, String paymentMethod, String providerStatus) {
+        // Idempotency guard: if the payment is already PAID this is a redundant
+        // call from a concurrent verifyPaymentStatus invocation (e.g. the
+        // student opened two browser tabs and refreshed payment status on
+        // each). Without this short-circuit we would double-emit the
+        // "Payment successful" notification, re-run the order/payment update
+        // for no reason, and burn provider quota refreshing
+        // teacherEarningService / subscriptionService side effects (those
+        // two are already idempotent — only the notification was not).
+        // We intentionally still let REFUNDED short-circuit too because a
+        // refunded payment must never silently flip back to PAID.
+        if (paymentRecord.getPaymentStatus() == PaymentStatus.PAID
+                || paymentRecord.getPaymentStatus() == PaymentStatus.REFUNDED) {
+            return;
+        }
+
         paymentRecord.setPaymentStatus(PaymentStatus.PAID);
         paymentRecord.setPaymentMethod(paymentMethod);
         paymentRecord.setProviderStatus(providerStatus);

@@ -63,10 +63,19 @@ public class VideoProgressService {
 
         VideoProgress progress = videoProgressRepository.findByStudentIdAndRecordedVideoId(student.getId(), video.getId())
                 .orElseGet(() -> createDefaultProgress(student, video));
+        // Capture the prior completion flag BEFORE applyProgress mutates it.
+        // The completion notification + audit row should fire exactly once,
+        // on the transition from incomplete to complete. Without this guard
+        // a student who refreshes the player page after finishing a video
+        // would emit a fresh "completed" notification + audit row every
+        // time the player POSTs another progress heartbeat, polluting the
+        // teacher's notification feed and the audit log. Same bug family
+        // as PaymentService.markPaymentPaid (Wave 5.1).
+        boolean wasAlreadyCompleted = progress.isCompleted();
         applyProgress(progress, request, video);
         VideoProgress saved = videoProgressRepository.save(progress);
 
-        if (saved.isCompleted()) {
+        if (saved.isCompleted() && !wasAlreadyCompleted) {
             notificationService.createNotification(
                     video.getLesson().getTeacher().getUser(),
                     "Recorded video completed",

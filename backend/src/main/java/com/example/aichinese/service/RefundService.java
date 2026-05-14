@@ -113,6 +113,11 @@ public class RefundService {
         Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
         RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
+        // Only PENDING refunds may be approved. Without this guard an admin
+        // double-clicking "Approve" would emit a second notification and a
+        // second audit-log row for the exact same decision, and worse, would
+        // let a REJECTED or already-REFUNDED request slip back into APPROVED.
+        requireTransition(refundRequest.getRefundStatus(), RefundStatus.PENDING, "approved");
         refundRequest.setRefundStatus(RefundStatus.APPROVED);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund approved", "Your refund request has been approved.");
@@ -125,6 +130,7 @@ public class RefundService {
         Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
         RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
+        requireTransition(refundRequest.getRefundStatus(), RefundStatus.PENDING, "rejected");
         refundRequest.setRefundStatus(RefundStatus.REJECTED);
         refundRequest.setDecisionReason(request.reason());
         RefundRequest saved = refundRequestRepository.save(refundRequest);
@@ -138,6 +144,12 @@ public class RefundService {
         Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
         RefundRequest refundRequest = refundRequestRepository.findById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
+        // Only APPROVED refunds may transition to REFUNDED. Guards the same
+        // double-click / state-machine-violation cases described on
+        // approveRefund: refusing the second call here keeps entitlements
+        // from being revoked twice and prevents a spurious "Refund completed"
+        // notification.
+        requireTransition(refundRequest.getRefundStatus(), RefundStatus.APPROVED, "marked as refunded");
         refundRequest.setRefundStatus(RefundStatus.REFUNDED);
         if (refundRequest.getOrder() != null) {
             Long orderId = refundRequest.getOrder().getId();
@@ -155,6 +167,21 @@ public class RefundService {
         notifyRefundStatus(saved, "Refund completed", "Your refund has been marked as completed.");
         auditLogService.record(currentUser.getUser(), "REFUND_MARKED_REFUNDED", "REFUND_REQUEST", id, "Refund marked refunded.");
         return mapRefund(saved);
+    }
+
+    /**
+     * Enforces the refund state machine: a transition is only valid when the
+     * refund is currently in {@code expected}. Short-circuits the common
+     * mistake of an admin double-clicking the action button by returning a
+     * 400 with a human-readable message instead of silently duplicating
+     * notifications and audit rows.
+     */
+    private void requireTransition(RefundStatus current, RefundStatus expected, String action) {
+        if (current != expected) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Refund cannot be " + action + " because it is currently " + current + ".");
+        }
     }
 
     private RefundRequestResponse mapRefund(RefundRequest refundRequest) {

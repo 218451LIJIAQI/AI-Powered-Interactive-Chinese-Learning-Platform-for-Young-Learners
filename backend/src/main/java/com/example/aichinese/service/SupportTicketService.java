@@ -158,7 +158,16 @@ public class SupportTicketService {
         User admin = requireUser(currentUser.getUserId());
         SupportTicket ticket = supportTicketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Support ticket was not found."));
-        ticket.setTicketStatus(parseStatus(request.status()));
+        SupportTicketStatus newStatus = parseStatus(request.status());
+        // Skip the side effects when the requested status matches the current
+        // one. Without this guard, an admin clicking the same status pill
+        // twice (e.g. "Resolved" while already RESOLVED) would re-notify the
+        // requester and write a duplicate audit-log row, mirroring the same
+        // bug family fixed in PaymentService / RefundService / PayoutService.
+        if (ticket.getTicketStatus() == newStatus) {
+            return communicationMapper.toSupportTicketResponse(ticket);
+        }
+        ticket.setTicketStatus(newStatus);
         notifyRequester(ticket, "Support ticket status updated", "Your support ticket is now " + ticket.getTicketStatus().name() + ".", admin);
         auditLogService.safeRecord(
                 admin,
@@ -175,7 +184,14 @@ public class SupportTicketService {
         User admin = requireUser(currentUser.getUserId());
         SupportTicket ticket = supportTicketRepository.findById(ticketId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Support ticket was not found."));
-        ticket.setTicketPriority(parsePriority(request.priority()));
+        SupportTicketPriority newPriority = parsePriority(request.priority());
+        // No-op short-circuit (same rationale as updateStatus above) — keeps
+        // the audit log free of redundant priority-update rows when the
+        // admin re-clicks the active priority button.
+        if (ticket.getTicketPriority() == newPriority) {
+            return communicationMapper.toSupportTicketResponse(ticket);
+        }
+        ticket.setTicketPriority(newPriority);
         auditLogService.safeRecord(
                 admin,
                 "SUPPORT_TICKET_PRIORITY_UPDATED",

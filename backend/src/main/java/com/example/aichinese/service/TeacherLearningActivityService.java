@@ -150,6 +150,13 @@ public class TeacherLearningActivityService {
         Flashcard flashcard = flashcardRepository.findByIdAndLessonTeacherUserId(flashcardId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested flashcard was not found."));
         teacherContentAccessService.validateEditableStatus(flashcard.getLesson().getContentStatus(), "Lesson");
+        // Idempotency guard: refuse double-archive so the audit log does
+        // not accumulate redundant TEACHER_FLASHCARD_ARCHIVE rows. The
+        // lesson-level validateEditableStatus check above does not catch
+        // this because it gates on the lesson status, not the flashcard's.
+        if (flashcard.getContentStatus() == ContentStatus.ARCHIVED) {
+            return;
+        }
         flashcard.setContentStatus(ContentStatus.ARCHIVED);
         flashcardRepository.save(flashcard);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_FLASHCARD_ARCHIVE", "Flashcard", flashcard.getId(),
@@ -206,6 +213,9 @@ public class TeacherLearningActivityService {
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
+        if (quiz.getContentStatus() == ContentStatus.ARCHIVED) {
+            return;
+        }
         quiz.setContentStatus(ContentStatus.ARCHIVED);
         quizRepository.save(quiz);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_ARCHIVE", "Quiz", quiz.getId(),
@@ -317,6 +327,9 @@ public class TeacherLearningActivityService {
         MatchingGame game = matchingGameRepository.findByIdAndLessonTeacherUserId(gameId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested matching game was not found."));
         teacherContentAccessService.validateEditableStatus(game.getLesson().getContentStatus(), "Lesson");
+        if (game.getContentStatus() == ContentStatus.ARCHIVED) {
+            return;
+        }
         game.setContentStatus(ContentStatus.ARCHIVED);
         matchingGameRepository.save(game);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_MATCHING_GAME_ARCHIVE", "MatchingGame", game.getId(),
@@ -389,6 +402,9 @@ public class TeacherLearningActivityService {
         ListeningExercise exercise = listeningExerciseRepository.findByIdAndLessonTeacherUserId(exerciseId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested listening exercise was not found."));
         teacherContentAccessService.validateEditableStatus(exercise.getLesson().getContentStatus(), "Lesson");
+        if (exercise.getContentStatus() == ContentStatus.ARCHIVED) {
+            return;
+        }
         exercise.setContentStatus(ContentStatus.ARCHIVED);
         listeningExerciseRepository.save(exercise);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_LISTENING_ARCHIVE", "ListeningExercise", exercise.getId(),
@@ -447,6 +463,9 @@ public class TeacherLearningActivityService {
         TracingExercise exercise = tracingExerciseRepository.findByIdAndLessonTeacherUserId(exerciseId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested tracing exercise was not found."));
         teacherContentAccessService.validateEditableStatus(exercise.getLesson().getContentStatus(), "Lesson");
+        if (exercise.getContentStatus() == ContentStatus.ARCHIVED) {
+            return;
+        }
         exercise.setContentStatus(ContentStatus.ARCHIVED);
         tracingExerciseRepository.save(exercise);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_TRACING_ARCHIVE", "TracingExercise", exercise.getId(),

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -187,7 +188,12 @@ class AuthControllerIntegrationTests {
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andExpect(jsonPath("$.data.studentProfile").isMap())
                 .andExpect(jsonPath("$.data.roles[0]").value("STUDENT"))
-                .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
+                .andExpect(jsonPath("$.data.passwordHash").doesNotExist())
+                // Wave-6 regression: /auth/me returns Cache-Control: no-store
+                // so the JSON profile cannot be replayed from browser cache or
+                // bfcache after the user logs out.
+                .andExpect(header().string("Cache-Control",
+                        org.hamcrest.Matchers.containsString("no-store")));
     }
 
     @Test
@@ -392,6 +398,50 @@ class AuthControllerIntegrationTests {
         mockMvc.perform(get("/api/v1/some-future-route-without-explicit-rule"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void shouldLockOutLoginAfterRepeatedFailedAttempts() throws Exception {
+        // Verify the brute-force defence: after the LoginAttemptLimiter
+        // threshold (5 by default) is reached, further attempts must be
+        // refused with HTTP 429 BEFORE the password is even checked. We use
+        // a freshly registered student so this test is independent of the
+        // shared seeded admin account, and a unique email so other tests in
+        // the same JVM cannot poison the limiter's bucket.
+        String email = uniqueEmail("lockout-target");
+        registerStudent(email, "Password123!");
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            mockMvc.perform(post("/api/v1/auth/login")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(Map.of(
+                            "email", email,
+                            "password", "WrongPassword!"))))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        // Sixth attempt — still wrong password — should be refused at the
+        // rate-limiter layer with 429 Too Many Requests, not 401.
+        mockMvc.perform(post("/api/v1/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "email", email,
+                        "password", "WrongPassword!"))))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.success").value(false));
+
+        // And critically: even the *correct* password is refused while the
+        // bucket is locked, otherwise an attacker who finally guesses right
+        // would still slip through after the threshold.
+        mockMvc.perform(post("/api/v1/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "email", email,
+                        "password", "Password123!"))))
+                .andExpect(status().isTooManyRequests());
     }
 
     private void registerStudent(String email, String password) throws Exception {

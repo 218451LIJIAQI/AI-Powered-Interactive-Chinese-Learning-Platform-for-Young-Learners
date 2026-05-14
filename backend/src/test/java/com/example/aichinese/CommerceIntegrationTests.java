@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -23,14 +24,18 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.example.aichinese.entity.PaymentRecord;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
+import com.example.aichinese.repository.AuditLogRepository;
+import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.PaymentEntitlementRepository;
 import com.example.aichinese.repository.PaymentRecordRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.service.PaymentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -65,6 +70,93 @@ class CommerceIntegrationTests {
 
     @Autowired
     private PaymentEntitlementRepository paymentEntitlementRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+
+    @Autowired
+    private PaymentService paymentService;
+
+    @Test
+    void grantAccessAfterPaymentIsIdempotent() throws Exception {
+        // Regression test for the EntitlementService idempotency guard. The
+        // PaymentService.verifyPaymentStatus path has a small race window
+        // where two concurrent calls can both observe PENDING and both call
+        // markPaymentPaid before either has committed; before the guard was
+        // added this produced duplicate PaymentEntitlement rows for the same
+        // (order, item) tuple. The fix lets us call markPaymentPaid more
+        // than once on the same payment without double-granting access.
+        String teacherEmail = uniqueEmail("idem-t");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        Long lessonId = createPaidLesson(teacherToken, "Idempotency Lesson");
+        submitApproveAndPublishLesson(lessonId, teacherToken, adminToken);
+
+        String studentEmail = uniqueEmail("idem-s");
+        String studentToken = registerStudentAndLogin(studentEmail);
+
+        mockMvc.perform(post("/api/v1/students/cart/items")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "itemType", "LESSON",
+                        "itemId", lessonId))))
+                .andExpect(status().isOk());
+
+        MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/cart")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Long paymentId = objectMapper.readTree(checkoutResult.getResponse().getContentAsString())
+                .path("data").path("paymentId").asLong();
+
+        long entitlementsAfterFirstPayment = paymentEntitlementRepository.findAll().stream()
+                .filter(entitlement -> entitlement.getPaymentRecord() != null
+                        && entitlement.getPaymentRecord().getId().equals(paymentId)
+                        && "LESSON".equals(entitlement.getItemType())
+                        && lessonId.equals(entitlement.getItemId()))
+                .count();
+        assertThat(entitlementsAfterFirstPayment).isEqualTo(1L);
+
+        // Replay markPaymentPaid against the same payment record (simulating
+        // the concurrent verifyPaymentStatus race) and confirm the
+        // entitlement count does not grow.
+        PaymentRecord paymentRecord = paymentRecordRepository.findById(paymentId).orElseThrow();
+        paymentService.markPaymentPaid(paymentRecord, "REPLAY", "REPLAY");
+
+        long entitlementsAfterReplay = paymentEntitlementRepository.findAll().stream()
+                .filter(entitlement -> entitlement.getPaymentRecord() != null
+                        && entitlement.getPaymentRecord().getId().equals(paymentId)
+                        && "LESSON".equals(entitlement.getItemType())
+                        && lessonId.equals(entitlement.getItemId()))
+                .count();
+        assertThat(entitlementsAfterReplay)
+                .as("markPaymentPaid replay must not insert a duplicate entitlement row")
+                .isEqualTo(1L);
+
+        // Wave-5 regression: the replay must also not emit a duplicate
+        // "Payment successful" notification. Before the markPaymentPaid
+        // idempotency short-circuit was added, two concurrent
+        // verifyPaymentStatus calls (e.g. the student opened two browser
+        // tabs and refreshed payment status on each) would each fire a
+        // notification, spamming the recipient.
+        Long studentUserId = paymentRecord.getStudent().getUser().getId();
+        long paymentSuccessNotifications = notificationRepository
+                .findByUserIdOrderByCreatedAtDesc(studentUserId)
+                .stream()
+                .filter(notification -> "Payment successful".equals(notification.getTitle()))
+                .count();
+        assertThat(paymentSuccessNotifications)
+                .as("markPaymentPaid replay must not emit a duplicate Payment-successful notification")
+                .isEqualTo(1L);
+    }
 
     @Test
     void studentCanAddRemoveAndClearCart() throws Exception {
@@ -280,6 +372,24 @@ class CommerceIntegrationTests {
                 .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.refundStatus").value("REFUNDED"));
+
+        // Regression test for RefundService.requireTransition: once the
+        // refund has reached REFUNDED, clicking Approve again must fail
+        // with 400 instead of silently rewinding the state machine and
+        // emitting a duplicate "Refund approved" notification + audit row.
+        mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        // Double-clicking mark-refunded on a refund that is already REFUNDED
+        // must also fail — otherwise the admin could trigger
+        // revokeAccessAfterRefund twice against the same order.
+        mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -328,6 +438,15 @@ class CommerceIntegrationTests {
                 .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.payoutStatus").value("PAID"));
+
+        // Regression test for PayoutService.requireTransition: mark-paid on a
+        // PAID payout must fail, so a double-click doesn't emit a duplicate
+        // notification or audit-log row.
+        mockMvc.perform(post("/api/v1/admin/payout-requests/" + payoutId + "/mark-paid")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
@@ -355,6 +474,45 @@ class CommerceIntegrationTests {
                 .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.active").value(false));
+
+        // Wave-10 audit-log invariant: privileged subscription-plan
+        // mutations must each leave a corresponding row in the audit log.
+        // The Wave-9 SubscriptionService refactor added these audit calls;
+        // this assertion locks them in so a future regression that drops
+        // the audit-log call will fail loudly rather than silently
+        // weakening the financial admin trail.
+        assertThat(auditLogRepository.existsByActionTypeAndTargetTypeAndTargetId(
+                "ADMIN_SUBSCRIPTION_PLAN_CREATE", "SubscriptionPlan", planId))
+                .as("create-plan must produce an ADMIN_SUBSCRIPTION_PLAN_CREATE audit row")
+                .isTrue();
+        assertThat(auditLogRepository.existsByActionTypeAndTargetTypeAndTargetId(
+                "ADMIN_SUBSCRIPTION_PLAN_DEACTIVATE", "SubscriptionPlan", planId))
+                .as("deactivate-plan must produce an ADMIN_SUBSCRIPTION_PLAN_DEACTIVATE audit row")
+                .isTrue();
+
+        // Wave-10 idempotency assertion: deactivating an already-deactivated
+        // plan must NOT add a second DEACTIVATE row to the audit log. The
+        // SubscriptionService.setPlanActive no-op short-circuit (W9.2)
+        // returns early when the requested state matches the current one.
+        long deactivateRowsAfterFirstClick = auditLogRepository.findAll().stream()
+                .filter(row -> "ADMIN_SUBSCRIPTION_PLAN_DEACTIVATE".equals(row.getActionType())
+                        && "SubscriptionPlan".equals(row.getTargetType())
+                        && planId.equals(row.getTargetId()))
+                .count();
+
+        mockMvc.perform(patch("/api/v1/admin/subscription-plans/" + planId + "/deactivate")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        long deactivateRowsAfterSecondClick = auditLogRepository.findAll().stream()
+                .filter(row -> "ADMIN_SUBSCRIPTION_PLAN_DEACTIVATE".equals(row.getActionType())
+                        && "SubscriptionPlan".equals(row.getTargetType())
+                        && planId.equals(row.getTargetId()))
+                .count();
+        assertThat(deactivateRowsAfterSecondClick)
+                .as("repeat deactivate must not write a second DEACTIVATE audit row")
+                .isEqualTo(deactivateRowsAfterFirstClick);
 
         mockMvc.perform(put("/api/v1/admin/system-settings/commission")
                 .with(csrf())
@@ -460,7 +618,14 @@ class CommerceIntegrationTests {
         mockMvc.perform(get("/api/v1/students/payments/" + paymentId)
                 .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.paymentStatus").value("REFUNDED"));
+                .andExpect(jsonPath("$.data.paymentStatus").value("REFUNDED"))
+                // Wave-7 regression: SensitiveResponseHeadersConfig must add
+                // Cache-Control: no-store on the student payment-detail
+                // endpoint so the JSON body (PII: provider reference, amount,
+                // student email/displayName) cannot be replayed from disk
+                // cache or bfcache after the user logs out.
+                .andExpect(header().string("Cache-Control",
+                        org.hamcrest.Matchers.containsString("no-store")));
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId)
                 .header("Authorization", "Bearer " + studentToken))

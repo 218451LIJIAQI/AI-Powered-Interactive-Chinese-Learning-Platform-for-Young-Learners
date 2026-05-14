@@ -130,6 +130,11 @@ public class PayoutService {
     public PayoutRequestResponse approvePayout(SecurityUserDetails currentUser, Long id) {
         PayoutRequest payoutRequest = payoutRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
+        // Mirrors the RefundService state-machine guard: only PENDING payouts
+        // may be approved. Prevents duplicate notifications and audit-log rows
+        // from a double-clicked admin button, and forbids rewinding a REJECTED
+        // or already-PAID request back into APPROVED.
+        requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.PENDING, "approved");
         payoutRequest.setPayoutStatus(PayoutStatus.APPROVED);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout approved", "Your payout request has been approved.");
@@ -141,6 +146,7 @@ public class PayoutService {
     public PayoutRequestResponse rejectPayout(SecurityUserDetails currentUser, Long id, PayoutDecisionRequest request) {
         PayoutRequest payoutRequest = payoutRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
+        requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.PENDING, "rejected");
         payoutRequest.setPayoutStatus(PayoutStatus.REJECTED);
         payoutRequest.setDecisionReason(request.reason());
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
@@ -153,11 +159,23 @@ public class PayoutService {
     public PayoutRequestResponse markPayoutPaid(SecurityUserDetails currentUser, Long id) {
         PayoutRequest payoutRequest = payoutRequestRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
+        // Payout must transition APPROVED → PAID. Blocking the PENDING → PAID
+        // shortcut ensures every disbursement has a documented approval step
+        // in the audit trail, which is important for financial reviews.
+        requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.APPROVED, "marked as paid");
         payoutRequest.setPayoutStatus(PayoutStatus.PAID);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout paid", "Your payout has been marked as paid.");
         auditLogService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id, "Payout marked paid.");
         return mapPayout(saved);
+    }
+
+    private void requireTransition(PayoutStatus current, PayoutStatus expected, String action) {
+        if (current != expected) {
+            throw new ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Payout cannot be " + action + " because it is currently " + current + ".");
+        }
     }
 
     private TeacherEarningResponse mapEarning(TeacherEarning earning) {

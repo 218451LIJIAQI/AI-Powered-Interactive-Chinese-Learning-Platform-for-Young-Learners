@@ -335,10 +335,18 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsTrendPointResponse> buildQuizTrend(List<QuizAttempt> attempts) {
-        return attempts.stream()
+        // Materialise the filtered+sorted list once so we can compute the
+        // skip offset without re-streaming. The previous implementation
+        // re-evaluated {@code attempts.stream().filter(this::hasValidPercentage).count()}
+        // inside the same pipeline that was already filtering, which doubled
+        // the per-row cost on dashboards with many attempts.
+        List<QuizAttempt> validSortedAttempts = attempts.stream()
                 .filter(this::hasValidPercentage)
                 .sorted(Comparator.comparing(this::resolveAttemptTime))
-                .skip(Math.max(0, attempts.stream().filter(this::hasValidPercentage).count() - MAX_TREND_POINTS))
+                .toList();
+        long skipCount = Math.max(0, validSortedAttempts.size() - MAX_TREND_POINTS);
+        return validSortedAttempts.stream()
+                .skip(skipCount)
                 .map(attempt -> new AnalyticsTrendPointResponse(
                         DAY_LABEL_FORMATTER.format(resolveAttemptTime(attempt).toLocalDate()),
                         percentageForAttempt(attempt)))
@@ -364,8 +372,11 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsBreakdownItemResponse> buildStudentLessonStatusBreakdown(List<LessonProgress> lessonProgressList) {
+        // Single-pass partition. The previous version streamed the list twice
+        // — once with isCompleted, once with the inverse predicate — paying
+        // O(2N) for what is naturally O(N) work.
         long completed = lessonProgressList.stream().filter(LessonProgress::isCompleted).count();
-        long inProgress = lessonProgressList.stream().filter(progress -> !progress.isCompleted()).count();
+        long inProgress = lessonProgressList.size() - completed;
         return buildBreakdownFromMap(Map.of(
                 "COMPLETED", completed,
                 "IN_PROGRESS", inProgress));

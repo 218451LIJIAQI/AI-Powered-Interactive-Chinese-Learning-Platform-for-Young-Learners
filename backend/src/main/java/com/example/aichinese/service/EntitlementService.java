@@ -92,14 +92,27 @@ public class EntitlementService {
             String itemType,
             Long itemId,
             String featureKey) {
+        // Idempotency guard. PaymentService.verifyPaymentStatus has a small
+        // window where two concurrent calls can both observe PENDING and both
+        // call markPaymentPaid before either has committed; without this
+        // check the same (order, itemType, itemId, featureKey) tuple would
+        // produce duplicate entitlement rows. Once a row exists for the
+        // tuple we skip the insert — refunds use revokeAccessAfterRefund
+        // which deactivates every row owned by the order, so duplicate
+        // suppression here does not break the refund pipeline.
+        String normalisedFeatureKey = featureKey != null && featureKey.isBlank() ? null : featureKey;
+        if (paymentEntitlementRepository.existsForOrderItem(order.getId(), itemType, itemId, normalisedFeatureKey)) {
+            return;
+        }
+
         PaymentEntitlement entitlement = new PaymentEntitlement();
         entitlement.setStudent(student);
         entitlement.setOrder(order);
         entitlement.setPaymentRecord(paymentRecord);
         entitlement.setItemType(itemType);
         entitlement.setItemId(itemId);
-        entitlement.setFeatureKey(featureKey);
-        entitlement.setSourceType(featureKey != null && !featureKey.isBlank() ? featureKey : itemType);
+        entitlement.setFeatureKey(normalisedFeatureKey);
+        entitlement.setSourceType(normalisedFeatureKey != null ? normalisedFeatureKey : itemType);
         entitlement.setActive(true);
         paymentEntitlementRepository.save(entitlement);
     }

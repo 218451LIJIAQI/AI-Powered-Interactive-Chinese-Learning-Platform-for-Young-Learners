@@ -121,6 +121,12 @@ public class RecordedLessonService {
     @Transactional
     public RecordedLessonVideoResponse archiveRecordedVideo(SecurityUserDetails currentUser, Long lessonId, Long videoId) {
         RecordedLessonVideo video = liveLearningAccessService.requireTeacherOwnedRecordedVideo(currentUser, lessonId, videoId);
+        // Idempotency guard mirroring AdminContentReviewService.archiveContent
+        // (Wave 7.1): a teacher double-clicking the archive button on an
+        // already-inactive video must not produce a duplicate audit-log row.
+        if (!video.isActive()) {
+            return toTeacherResponse(video);
+        }
         video.setActive(false);
         RecordedLessonVideo saved = recordedLessonVideoRepository.save(video);
 

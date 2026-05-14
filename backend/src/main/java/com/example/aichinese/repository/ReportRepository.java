@@ -56,4 +56,19 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
      * full table load for a single number.
      */
     long countByReportStatus(com.example.aichinese.entity.enums.ReportStatus status);
+
+    /**
+     * Anti-spam probe used by {@code ReportService.createReport} to refuse a
+     * second PENDING report from the same reporter against the same target
+     * with the same reason. Two distinct concerns about the same target
+     * (e.g. "wrong translation" + "unclear instructions") remain allowed
+     * because the reason text differs; only verbatim duplicates are
+     * rejected, which is enough to defang the obvious spam-click case.
+     */
+    boolean existsByReporterIdAndTargetTypeAndTargetIdAndReasonAndReportStatus(
+            Long reporterId,
+            String targetType,
+            Long targetId,
+            String reason,
+            com.example.aichinese.entity.enums.ReportStatus status);
 }

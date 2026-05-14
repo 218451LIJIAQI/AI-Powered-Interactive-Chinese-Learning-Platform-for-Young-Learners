@@ -2,11 +2,14 @@ package com.example.aichinese.security;
 
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -19,6 +22,8 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
@@ -44,12 +49,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             email = jwtService.extractUsername(token);
         } catch (Exception exception) {
+            // Common cases here are expired tokens, malformed tokens, signature
+            // mismatches, and tokens signed with a rotated secret. Log at DEBUG
+            // so legitimate users with expired sessions do not flood WARN logs,
+            // but at WARN if it looks like an actively-malicious token (header
+            // present but parse failed for a non-trivial reason). We only log
+            // the exception class to avoid leaking the token contents.
+            if (log.isDebugEnabled()) {
+                log.debug("Rejecting unparsable bearer token from {}: {}",
+                        request.getRemoteAddr(), exception.getClass().getSimpleName());
+            }
             filterChain.doFilter(request, response);
             return;
         }
 
         if (StringUtils.hasText(email) && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            UserDetails userDetails;
+            try {
+                userDetails = userDetailsService.loadUserByUsername(email);
+            } catch (UsernameNotFoundException notFound) {
+                // Token signature was valid but the user has since been deleted
+                // or deactivated. Continue unauthenticated rather than 500ing.
+                log.debug("Token references unknown principal '{}'; continuing unauthenticated.", email);
+                filterChain.doFilter(request, response);
+                return;
+            }
             if (jwtService.isTokenValid(token, userDetails.getUsername())) {
                 UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails,

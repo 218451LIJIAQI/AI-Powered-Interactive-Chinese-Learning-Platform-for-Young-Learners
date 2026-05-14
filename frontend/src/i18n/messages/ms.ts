@@ -72,6 +72,8 @@ export default {
   common: {
     appName: 'Platform Pembelajaran Bahasa Cina AI',
     language: 'Bahasa',
+    active: 'Aktif',
+    inactive: 'Tidak aktif',
     viewDashboard: 'Lihat Papan Pemuka',
     learnMore: 'Ketahui Lebih Lanjut',
     startLearning: 'Mula Belajar',

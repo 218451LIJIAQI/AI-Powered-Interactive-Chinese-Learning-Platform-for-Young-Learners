@@ -24,7 +24,12 @@ import lombok.Setter;
 @Entity
 @Table(name = "student_subscriptions", indexes = {
         @Index(name = "idx_student_subscriptions_student_id", columnList = "student_id"),
-        @Index(name = "idx_student_subscriptions_plan_id", columnList = "plan_id")
+        @Index(name = "idx_student_subscriptions_plan_id", columnList = "plan_id"),
+        // Backs StudentSubscriptionRepository.findByPaymentRecordId which is
+        // the lookup used by SubscriptionService.activateSubscription when a
+        // payment finishes. Without this index the activation path would
+        // degenerate to a full table scan once the subscription table grows.
+        @Index(name = "idx_student_subscriptions_payment_record_id", columnList = "payment_record_id")
 })
 public class StudentSubscription extends BaseEntity {
 

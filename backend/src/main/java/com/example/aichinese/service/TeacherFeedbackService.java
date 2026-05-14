@@ -141,6 +141,17 @@ public class TeacherFeedbackService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Feedback was not found."));
         feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
         feedback.setFeedbackMessage(request.message().trim());
+        // Audit-log the edit so that admins reviewing feedback have a record
+        // of changes (the create path already audit-logs; this path was a
+        // gap that broke the "every teacher mutation is auditable"
+        // invariant the rest of the codebase enforces).
+        auditLogService.safeRecord(
+                feedback.getTeacher() != null ? feedback.getTeacher().getUser() : null,
+                "TEACHER_FEEDBACK_UPDATED",
+                "TEACHER_FEEDBACK",
+                feedback.getId(),
+                "Teacher updated feedback content.",
+                null);
         return communicationMapper.toTeacherFeedbackResponse(feedback);
     }
 
@@ -175,11 +186,15 @@ public class TeacherFeedbackService {
         });
 
         List<FeedbackCandidateResponse> progressCandidates = new ArrayList<>();
-        for (StudentProfile student : studentProfileRepository.findAll(org.springframework.data.domain.Sort.by("id").ascending())) {
-            boolean linked = lessonProgressRepository.existsByStudentIdAndLessonTeacherUserId(student.getId(), teacherUserId)
-                    || liveClassEnrolmentRepository.existsByStudentIdAndLiveClassTeacherUserId(student.getId(), teacherUserId)
-                    || quizAttemptRepository.existsByStudentIdAndQuizTeacherUserId(student.getId(), teacherUserId);
-            if (!linked || student.getUser() == null) {
+        // Fetch only the students linked to this teacher in a single SQL
+        // statement. The previous implementation called
+        // {@code studentProfileRepository.findAll(...)} (loading every
+        // student row in the database) and then ran three {@code exists}
+        // probes per student to filter — a 1 + 3N query pattern that
+        // scaled with the platform-wide student count even though the
+        // candidate list per teacher is typically small.
+        for (StudentProfile student : studentProfileRepository.findStudentsLinkedToTeacher(teacherUserId)) {
+            if (student.getUser() == null) {
                 continue;
             }
             progressCandidates.add(new FeedbackCandidateResponse(

@@ -1,5 +1,6 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
@@ -106,13 +107,27 @@ public class ContentModerationService {
                 request.targetType(),
                 request.targetId());
 
+        // Wave-11 state-machine validation. The previous {@link #mapContentStatus}
+        // implementation silently mapped the action to a target status
+        // regardless of the source state, which let an admin click HIDE on
+        // an already-ARCHIVED lesson and quietly send it back to APPROVED
+        // (a state regression), or click HIDE on an APPROVED-but-not-yet-
+        // published lesson and silently re-set it to APPROVED (a no-op
+        // that still produced a moderation record + audit row + teacher
+        // notification). Validating the source state up front converts
+        // these cases into a clear 400 instead of corrupting the audit
+        // trail.
         if (target.lesson() != null) {
+            requireValidContentTransition(target.lesson().getContentStatus(), action, "lesson");
             updateLessonStatus(target.lesson(), action);
         } else if (target.coursePackage() != null) {
+            requireValidContentTransition(target.coursePackage().getContentStatus(), action, "package");
             updatePackageStatus(target.coursePackage(), action);
         } else if (target.review() != null) {
+            requireValidVisibilityTransition(target.review().isVisible(), action, "review");
             updateReviewStatus(target.review(), action);
         } else if (target.teacherProfile() != null) {
+            requireValidVisibilityTransition(target.teacherProfile().isPublicVisible(), action, "teacher profile");
             updateTeacherProfileVisibility(target.teacherProfile(), action);
         }
 
@@ -187,6 +202,87 @@ public class ContentModerationService {
             case REQUEST_REVISION -> ContentStatus.REJECTED;
             case RESTORE -> currentStatus == ContentStatus.ARCHIVED ? ContentStatus.APPROVED : ContentStatus.PUBLISHED;
         };
+    }
+
+    /**
+     * Conservative state-machine validator for lesson and package targets.
+     * Refuses moderation actions whose source state would be nonsensical or
+     * regressive:
+     *
+     * <ul>
+     *   <li>{@code HIDE} / {@code UNPUBLISH}: only valid on PUBLISHED content.
+     *       Applying them to APPROVED, ARCHIVED, or REJECTED content would
+     *       either be a no-op or roll the state backwards.</li>
+     *   <li>{@code ARCHIVE}: valid from any non-ARCHIVED state. The double-
+     *       archive case is rejected here for parity with
+     *       {@code AdminContentReviewService.archiveContent}.</li>
+     *   <li>{@code REQUEST_REVISION}: valid only on content that is currently
+     *       reachable by students or pending publication, i.e. PUBLISHED or
+     *       APPROVED. Asking a teacher to revise a DRAFT or REJECTED item
+     *       does not make sense (it is already not public).</li>
+     *   <li>{@code RESTORE}: valid only when content is currently ARCHIVED.
+     *       Restoring a PUBLISHED or APPROVED item is a state no-op.</li>
+     * </ul>
+     */
+    private void requireValidContentTransition(
+            ContentStatus current,
+            ContentModerationAction action,
+            String entityName) {
+        switch (action) {
+            case HIDE, UNPUBLISH -> {
+                if (current != ContentStatus.PUBLISHED) {
+                    throw new ResponseStatusException(BAD_REQUEST,
+                            "Only published " + entityName + "s can be " + action.name().toLowerCase().replace('_', '-') + ".");
+                }
+            }
+            case ARCHIVE -> {
+                if (current == ContentStatus.ARCHIVED) {
+                    throw new ResponseStatusException(BAD_REQUEST, "This " + entityName + " is already archived.");
+                }
+            }
+            case REQUEST_REVISION -> {
+                if (current != ContentStatus.PUBLISHED && current != ContentStatus.APPROVED) {
+                    throw new ResponseStatusException(BAD_REQUEST,
+                            "Only published or approved " + entityName + "s can have a revision requested.");
+                }
+            }
+            case RESTORE -> {
+                if (current != ContentStatus.ARCHIVED) {
+                    throw new ResponseStatusException(BAD_REQUEST,
+                            "Only archived " + entityName + "s can be restored.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Visibility-flag analogue of {@link #requireValidContentTransition} for
+     * review and teacher-profile targets, which use a boolean visible flag
+     * rather than a {@link ContentStatus}. HIDE/UNPUBLISH/ARCHIVE/
+     * REQUEST_REVISION require the target to be currently visible; RESTORE
+     * requires it to be currently hidden. Without these guards, an admin
+     * clicking the same moderation button twice would write a duplicate
+     * moderation record + duplicate audit row + duplicate teacher
+     * notification for a state-no-op event.
+     */
+    private void requireValidVisibilityTransition(
+            boolean currentlyVisible,
+            ContentModerationAction action,
+            String entityName) {
+        switch (action) {
+            case HIDE, UNPUBLISH, ARCHIVE, REQUEST_REVISION -> {
+                if (!currentlyVisible) {
+                    throw new ResponseStatusException(BAD_REQUEST,
+                            "This " + entityName + " is already hidden.");
+                }
+            }
+            case RESTORE -> {
+                if (currentlyVisible) {
+                    throw new ResponseStatusException(BAD_REQUEST,
+                            "This " + entityName + " is already visible.");
+                }
+            }
+        }
     }
 
     private User requireUser(Long userId) {

@@ -127,29 +127,37 @@ public class AdminCommerceController {
 
     @PostMapping("/subscription-plans")
     public ApiResponse<SubscriptionPlanResponse> createSubscriptionPlan(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody SubscriptionPlanRequest request) {
-        return ApiResponse.success("Subscription plan created successfully.", subscriptionService.createPlan(request));
+        return ApiResponse.success("Subscription plan created successfully.",
+                subscriptionService.createPlan(currentUser, request));
     }
 
     @PutMapping("/subscription-plans/{id}")
     public ApiResponse<SubscriptionPlanResponse> updateSubscriptionPlan(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id,
             @Valid @RequestBody SubscriptionPlanRequest request) {
-        return ApiResponse.success("Subscription plan updated successfully.", subscriptionService.updatePlan(id, request));
+        return ApiResponse.success("Subscription plan updated successfully.",
+                subscriptionService.updatePlan(currentUser, id, request));
     }
 
     @PatchMapping("/subscription-plans/{id}/activate")
-    public ApiResponse<SubscriptionPlanResponse> activateSubscriptionPlan(@PathVariable Long id) {
+    public ApiResponse<SubscriptionPlanResponse> activateSubscriptionPlan(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
         return ApiResponse.success(
                 "Subscription plan activated successfully.",
-                subscriptionService.setPlanActive(id, true));
+                subscriptionService.setPlanActive(currentUser, id, true));
     }
 
     @PatchMapping("/subscription-plans/{id}/deactivate")
-    public ApiResponse<SubscriptionPlanResponse> deactivateSubscriptionPlan(@PathVariable Long id) {
+    public ApiResponse<SubscriptionPlanResponse> deactivateSubscriptionPlan(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
         return ApiResponse.success(
                 "Subscription plan deactivated successfully.",
-                subscriptionService.setPlanActive(id, false));
+                subscriptionService.setPlanActive(currentUser, id, false));
     }
 
     @GetMapping("/system-settings/commission")

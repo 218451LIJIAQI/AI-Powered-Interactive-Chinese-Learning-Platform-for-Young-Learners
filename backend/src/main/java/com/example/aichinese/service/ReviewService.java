@@ -83,6 +83,13 @@ public class ReviewService {
 
         Review review = reviewRepository.findByReviewerIdAndTargetTypeAndTargetId(student.getId(), target.targetType(), target.targetId())
                 .orElseGet(Review::new);
+        // Only fire the teacher notification when this is the FIRST review
+        // submission for this (student, target) tuple. Without this guard,
+        // a student who saved their review then changed their mind and
+        // re-submitted with a different rating would re-notify the teacher
+        // every time, polluting the teacher's notification feed. Edits go
+        // through updateMyReview which already does not notify.
+        boolean isFirstReview = review.getId() == null;
         review.setReviewer(student);
         review.setTargetType(target.targetType());
         review.setTargetId(target.targetId());
@@ -92,7 +99,7 @@ public class ReviewService {
         review.setVisible(true);
         Review saved = reviewRepository.save(review);
 
-        if (target.relatedTeacher() != null && target.relatedTeacher().getUser() != null) {
+        if (isFirstReview && target.relatedTeacher() != null && target.relatedTeacher().getUser() != null) {
             notificationService.safeCreateNotification(
                     target.relatedTeacher().getUser(),
                     NotificationType.REVIEW_RECEIVED,

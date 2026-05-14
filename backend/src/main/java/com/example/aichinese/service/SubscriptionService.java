@@ -16,9 +16,11 @@ import com.example.aichinese.entity.PaymentRecord;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.StudentSubscription;
 import com.example.aichinese.entity.SubscriptionPlan;
+import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.PaymentStatus;
 import com.example.aichinese.repository.StudentSubscriptionRepository;
 import com.example.aichinese.repository.SubscriptionPlanRepository;
+import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
 @Service
@@ -29,18 +31,24 @@ public class SubscriptionService {
     private final StudentLearningAccessService studentLearningAccessService;
     private final CommerceMoneyService commerceMoneyService;
     private final CommerceSettingsService commerceSettingsService;
+    private final AuditLogService auditLogService;
+    private final UserRepository userRepository;
 
     public SubscriptionService(
             SubscriptionPlanRepository subscriptionPlanRepository,
             StudentSubscriptionRepository studentSubscriptionRepository,
             StudentLearningAccessService studentLearningAccessService,
             CommerceMoneyService commerceMoneyService,
-            CommerceSettingsService commerceSettingsService) {
+            CommerceSettingsService commerceSettingsService,
+            AuditLogService auditLogService,
+            UserRepository userRepository) {
         this.subscriptionPlanRepository = subscriptionPlanRepository;
         this.studentSubscriptionRepository = studentSubscriptionRepository;
         this.studentLearningAccessService = studentLearningAccessService;
         this.commerceMoneyService = commerceMoneyService;
         this.commerceSettingsService = commerceSettingsService;
+        this.auditLogService = auditLogService;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -67,18 +75,30 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public SubscriptionPlanResponse createPlan(SubscriptionPlanRequest request) {
+    public SubscriptionPlanResponse createPlan(SecurityUserDetails currentUser, SubscriptionPlanRequest request) {
         SubscriptionPlan plan = new SubscriptionPlan();
         plan.setName(request.name().trim());
         plan.setPrice(commerceMoneyService.normalize(request.price()));
         plan.setCurrencyCode(commerceSettingsService.getDefaultCurrency());
         plan.setBenefits(request.benefits().trim());
         plan.setActive(request.active() == null || request.active());
-        return mapPlan(subscriptionPlanRepository.save(plan));
+        SubscriptionPlan saved = subscriptionPlanRepository.save(plan);
+        // Audit-log every privileged subscription-plan mutation. Subscription
+        // plans drive what students pay and what they receive, so an
+        // unattributed price/benefits change would be a real financial-trust
+        // gap. The previous version of this method had no audit row at all.
+        auditLogService.safeRecord(
+                resolveActor(currentUser),
+                "ADMIN_SUBSCRIPTION_PLAN_CREATE",
+                "SubscriptionPlan",
+                saved.getId(),
+                "Admin created subscription plan \"" + saved.getName() + "\".",
+                null);
+        return mapPlan(saved);
     }
 
     @Transactional
-    public SubscriptionPlanResponse updatePlan(Long id, SubscriptionPlanRequest request) {
+    public SubscriptionPlanResponse updatePlan(SecurityUserDetails currentUser, Long id, SubscriptionPlanRequest request) {
         SubscriptionPlan plan = subscriptionPlanRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Subscription plan was not found."));
         plan.setName(request.name().trim());
@@ -87,15 +107,53 @@ public class SubscriptionService {
         if (request.active() != null) {
             plan.setActive(request.active());
         }
-        return mapPlan(subscriptionPlanRepository.save(plan));
+        SubscriptionPlan saved = subscriptionPlanRepository.save(plan);
+        auditLogService.safeRecord(
+                resolveActor(currentUser),
+                "ADMIN_SUBSCRIPTION_PLAN_UPDATE",
+                "SubscriptionPlan",
+                saved.getId(),
+                "Admin updated subscription plan \"" + saved.getName() + "\".",
+                null);
+        return mapPlan(saved);
     }
 
     @Transactional
-    public SubscriptionPlanResponse setPlanActive(Long id, boolean active) {
+    public SubscriptionPlanResponse setPlanActive(SecurityUserDetails currentUser, Long id, boolean active) {
         SubscriptionPlan plan = subscriptionPlanRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Subscription plan was not found."));
+        // No-op short-circuit (mirrors the SupportTicketService.updateStatus
+        // / AdminTeacherManagementService.approveTeacher pattern from earlier
+        // waves): if the plan is already in the target state, skip the save
+        // and skip the audit-log entry rather than writing a redundant
+        // "activated" row that confuses the admin trail.
+        if (plan.isActive() == active) {
+            return mapPlan(plan);
+        }
         plan.setActive(active);
-        return mapPlan(subscriptionPlanRepository.save(plan));
+        SubscriptionPlan saved = subscriptionPlanRepository.save(plan);
+        auditLogService.safeRecord(
+                resolveActor(currentUser),
+                active ? "ADMIN_SUBSCRIPTION_PLAN_ACTIVATE" : "ADMIN_SUBSCRIPTION_PLAN_DEACTIVATE",
+                "SubscriptionPlan",
+                saved.getId(),
+                "Admin " + (active ? "activated" : "deactivated") + " subscription plan \"" + saved.getName() + "\".",
+                null);
+        return mapPlan(saved);
+    }
+
+    /**
+     * Resolves the {@link User} entity behind the JWT {@link SecurityUserDetails}
+     * so that audit rows record the admin acting on the plan. Returns {@code
+     * null} if the lookup fails — {@code auditLogService.safeRecord} accepts a
+     * null actor and falls back to "system" attribution rather than aborting
+     * the privileged operation when the audit write itself runs into trouble.
+     */
+    private User resolveActor(SecurityUserDetails currentUser) {
+        if (currentUser == null) {
+            return null;
+        }
+        return userRepository.findById(currentUser.getUserId()).orElse(null);
     }
 
     @Transactional

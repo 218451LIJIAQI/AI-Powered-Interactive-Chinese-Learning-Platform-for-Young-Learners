@@ -226,7 +226,50 @@ class CommunicationModerationIntegrationTests {
     }
 
     @Test
-    void reviewsFlowValidatesRatingAndPublicVisibility() throws Exception {
+    void reportSubmissionRefusesVerbatimDuplicateWhilePending() throws Exception {
+        // Wave-6 regression: ReportService now refuses a verbatim-identical
+        // PENDING report from the same reporter against the same target.
+        // Distinct concerns on the same target remain allowed because the
+        // reason text differs.
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherEmail = uniqueEmail("report-dup-teacher");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long lessonId = createPublishedLesson(teacherToken, adminToken, "Duplicate Report Lesson");
+        String studentToken = registerStudentAndLogin(uniqueEmail("report-dup-student"));
+
+        String spamReason = "This lesson has a typo on slide 2.";
+        // First submission succeeds.
+        createReport(studentToken, lessonId, spamReason);
+
+        // Verbatim re-submission must fail with 400 — exact same reporter,
+        // target, and reason, all while the first report is still PENDING.
+        mockMvc.perform(post("/api/v1/reports")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "targetType", "LESSON",
+                        "targetId", lessonId,
+                        "reason", spamReason))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        // A different reason about the same target is still allowed because
+        // it represents a genuinely distinct concern.
+        mockMvc.perform(post("/api/v1/reports")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "targetType", "LESSON",
+                        "targetId", lessonId,
+                        "reason", "The audio in lesson clip 3 is silent."))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void reviewsFlowSupportsStudentAdminAndTeacherViews() throws Exception {
         String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
         String teacherEmail = uniqueEmail("review-teacher");
         approveTeacherProfile(teacherEmail);
@@ -541,6 +584,59 @@ class CommunicationModerationIntegrationTests {
 
         mockMvc.perform(get("/api/v1/health"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void moderationActionsRejectInvalidStateTransitions() throws Exception {
+        // Wave-11 regression: ContentModerationService now refuses moderation
+        // actions whose source state would be a no-op or a state regression.
+        // The previous implementation silently mapped HIDE on an ARCHIVED
+        // lesson back to APPROVED, polluting the audit trail and the
+        // teacher's notification feed.
+        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherEmail = uniqueEmail("moderation-state-teacher");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long lessonId = createPublishedLesson(teacherToken, adminToken, "State Machine Lesson");
+
+        // RESTORE on a PUBLISHED (not ARCHIVED) lesson must fail. Otherwise
+        // a stray "Restore" click on a public lesson would silently
+        // re-emit a notification + audit row + moderation record for a
+        // state-no-op event.
+        mockMvc.perform(post("/api/v1/admin/moderation/restore")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "targetType", "LESSON",
+                        "targetId", lessonId,
+                        "reason", "Trying to restore a still-published lesson."))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        // First HIDE on PUBLISHED — succeeds (lesson goes back to APPROVED).
+        mockMvc.perform(post("/api/v1/admin/moderation/hide")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "targetType", "LESSON",
+                        "targetId", lessonId,
+                        "reason", "Hide for first-time review."))))
+                .andExpect(status().isOk());
+
+        // Second HIDE on the now-APPROVED (no longer PUBLISHED) lesson must
+        // fail — this is the bug the W11 state-machine guard catches.
+        mockMvc.perform(post("/api/v1/admin/moderation/hide")
+                .with(csrf())
+                .header("Authorization", "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "targetType", "LESSON",
+                        "targetId", lessonId,
+                        "reason", "Trying to hide an already-hidden lesson."))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     private Long createReport(String studentToken, Long lessonId, String reason) throws Exception {

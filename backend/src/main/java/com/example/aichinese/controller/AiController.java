@@ -1,13 +1,18 @@
 package com.example.aichinese.controller;
 
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.concurrent.TimeUnit;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.ai.AiAvailabilityResponse;
@@ -45,9 +50,18 @@ public class AiController {
         this.aiService = aiService;
     }
 
-    @PostMapping("/availability")
-    public ApiResponse<AiAvailabilityResponse> getAvailability() {
-        return ApiResponse.success("AI availability retrieved successfully.", aiService.getAvailability());
+    @GetMapping("/availability")
+    public ResponseEntity<ApiResponse<AiAvailabilityResponse>> getAvailability() {
+        // GET is the semantically-correct verb for an idempotent "what is the
+        // current AI provider state?" probe. Cache-Control: private, max-age=30
+        // lets the browser reuse the response across the several AI pages a
+        // student typically opens in a single session without holding the
+        // answer stale across backend config reloads. `private` ensures the
+        // body is never cached by shared proxies since the response is
+        // served behind JWT auth.
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(30, TimeUnit.SECONDS).cachePrivate())
+                .body(ApiResponse.success("AI availability retrieved successfully.", aiService.getAvailability()));
     }
 
     @PostMapping("/chat")

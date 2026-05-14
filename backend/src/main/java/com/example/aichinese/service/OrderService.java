@@ -38,7 +38,17 @@ public class OrderService {
     public Order createOrder(StudentProfile student, CheckoutSource source, List<ResolvedPurchasableItem> items) {
         Order order = new Order();
         order.setStudent(student);
-        order.setOrderNumber("ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT));
+        // The previous "ORD-" + 8-hex-char UUID prefix carried only 32 bits of
+        // entropy (~50% chance of collision after ~65K orders, per the
+        // birthday paradox). Because the orderNumber column is UNIQUE, a
+        // collision surfaces as a 500 to the student during checkout.
+        // Lifting the random suffix to a hyphenated 16-hex pattern raises
+        // entropy to 64 bits — birthday-safe past 4B orders — while still
+        // being short enough for a human-readable "ORD-XXXXXXXX-XXXXXXXX"
+        // identifier in receipts and admin views.
+        String uuid = UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
+        String suffix = uuid.substring(0, 8) + "-" + uuid.substring(8, 16);
+        order.setOrderNumber("ORD-" + suffix);
         order.setCurrencyCode(commerceSettingsService.getDefaultCurrency());
         order.setPaymentStatus(PaymentStatus.PENDING);
         order.setCheckoutSource(source.name());

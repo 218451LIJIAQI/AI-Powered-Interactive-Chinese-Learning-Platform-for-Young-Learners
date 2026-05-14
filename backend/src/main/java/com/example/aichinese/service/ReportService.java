@@ -1,5 +1,6 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
@@ -53,11 +54,30 @@ public class ReportService {
                 request.targetType(),
                 request.targetId());
 
+        // Anti-spam: refuse a verbatim-identical PENDING report from the same
+        // reporter against the same target. Without this guard a misbehaving
+        // or accidental retry of the exact same report would flood every
+        // admin's notification feed (admin notification fan-out below loops
+        // over all admins). Distinct concerns on the same target ("wrong
+        // translation" vs "unclear instructions") remain allowed because the
+        // reason text differs.
+        String trimmedReason = request.reason().trim();
+        if (reportRepository.existsByReporterIdAndTargetTypeAndTargetIdAndReasonAndReportStatus(
+                reporter.getId(),
+                target.targetType(),
+                target.targetId(),
+                trimmedReason,
+                ReportStatus.PENDING)) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "You already have a pending report with this exact reason. Please wait for an admin decision.");
+        }
+
         Report report = new Report();
         report.setReporter(reporter);
         report.setTargetType(target.targetType());
         report.setTargetId(target.targetId());
-        report.setReason(request.reason().trim());
+        report.setReason(trimmedReason);
         report.setRelatedTeacher(target.relatedTeacher());
         report.setReportStatus(ReportStatus.PENDING);
         report.setTeacherRevisionRequested(false);
