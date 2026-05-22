@@ -1,0 +1,18 @@
+package com.example.aichinese.entity.enums;
+
+public enum NotificationType {
+    SYSTEM,
+    TEACHER_FEEDBACK,
+    QUIZ_RESULT,
+    PROGRESS_UPDATE,
+    REWARD_EARNED,
+    PAYMENT_STATUS,
+    REFUND_STATUS,
+    PAYOUT_STATUS,
+    LIVE_CLASS_REMINDER,
+    TEACHER_APPROVAL,
+    CONTENT_REVIEW,
+    MODERATION_ACTION,
+    AI_REPORT_REVIEW,
+    ADMIN_TASK
+}

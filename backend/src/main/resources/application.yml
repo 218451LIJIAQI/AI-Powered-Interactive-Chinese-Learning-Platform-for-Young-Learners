@@ -1,0 +1,141 @@
+spring:
+  application:
+    name: ai-chinese-learning-platform-backend
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:ai_chinese_learning}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Singapore&connectionTimeZone=Asia/Singapore&useUnicode=true&characterEncoding=utf8
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      initialization-fail-timeout: 60000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+    clean-disabled: true
+  servlet:
+    multipart:
+      max-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
+      max-request-size: ${MAX_VIDEO_FILE_SIZE:100MB}
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH_ENABLED:true}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLED:true}
+            required: ${SMTP_STARTTLS_REQUIRED:false}
+          ssl:
+            enable: ${SMTP_SSL_ENABLED:false}
+          connectiontimeout: ${SMTP_CONNECTION_TIMEOUT_MS:5000}
+          timeout: ${SMTP_TIMEOUT_MS:5000}
+          writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
+
+server:
+  port: ${SERVER_PORT:8080}
+  # Allow Spring Boot to drain in-flight HTTP requests instead of severing them
+  # when the JVM receives SIGTERM. Critical when the deployment platform is
+  # rolling instances (Docker stop, Kubernetes rolling update) so that no
+  # request returns half-written or with a connection-reset error.
+  shutdown: graceful
+
+# Spring Boot Actuator: only expose health (liveness/readiness probes for
+# Docker/K8s/load balancers) and info (build metadata). Everything else stays
+# closed by default to avoid leaking internal information through unauthenticated
+# endpoints. The detailed health view (DB connectivity, disk space, etc.) is
+# kept off the wire because /api/v1/health already serves the public
+# liveness response and the management port is not separately firewalled.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    # Spring Boot auto-registers a MailHealthIndicator whenever
+    # spring-boot-starter-mail is on the classpath, and it actively opens an
+    # SMTP connection on every health check. SMTP is optional infrastructure
+    # here: when SMTP_ENABLED=false (the default) NoOpEmailService takes
+    # over and no mail is ever sent, so an unreachable SMTP host should NOT
+    # cause /actuator/health to flap to DOWN and fail the deployment platform's
+    # liveness probe. We therefore disable the mail indicator outright; if a
+    # real SMTP relay is wired up later, the application's own EmailService
+    # will surface failures through structured logs.
+    mail:
+      enabled: false
+
+# SpringDoc OpenAPI: customise the docs path so it matches the API prefix
+# convention. The Swagger UI lives at /swagger-ui.html (default) and reads
+# the JSON description from /v3/api-docs. The frontend can point its
+# OpenAPI client generator at /v3/api-docs to scaffold typed API clients.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+    display-request-duration: true
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176,http://localhost:5177,http://127.0.0.1:5177,http://localhost:5178,http://127.0.0.1:5178,http://localhost:5179,http://127.0.0.1:5179,http://localhost:5180,http://127.0.0.1:5180,http://localhost:5181,http://127.0.0.1:5181,http://localhost:5182,http://127.0.0.1:5182,http://localhost:5183,http://127.0.0.1:5183}
+  security:
+    jwt:
+      # JWT_SECRET must be supplied via environment variable; the default is empty so the
+      # SecurityProperties @NotBlank validation fails fast at startup if it is not set.
+      secret: ${JWT_SECRET:}
+      # Default token lifetime is one hour. Override via the JWT_EXPIRATION env variable.
+      expiration: ${JWT_EXPIRATION:3600000}
+    forwarded:
+      # Comma-separated proxy IPs/CIDRs that are allowed to supply
+      # X-Forwarded-For on auth endpoints. Loopback addresses are trusted
+      # automatically for local development and MockMvc tests.
+      trusted-proxies: ${APP_SECURITY_FORWARDED_TRUSTED_PROXIES:}
+  upload:
+    directory: ${UPLOAD_DIR:./uploads}
+    max-file-size: ${MAX_FILE_SIZE:5MB}
+    recorded-video-directory: ${RECORDED_VIDEO_UPLOAD_DIR:./uploads/recorded-videos}
+    max-video-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
+  ai:
+    provider: ${AI_PROVIDER:deepseek}
+    api-base-url: ${AI_API_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:}
+    model-name: ${AI_MODEL_NAME:deepseek-chat}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+    max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:1200}
+    enable-real-provider: ${AI_ENABLE_REAL_PROVIDER:false}
+  payment:
+    success-url: ${PAYMENT_SUCCESS_URL:${FRONTEND_BASE_URL:http://localhost:5173}/payment/success}
+    cancel-url: ${PAYMENT_CANCEL_URL:${FRONTEND_BASE_URL:http://localhost:5173}/payment/cancel}
+    mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}
+    provider: ${PAYMENT_PROVIDER:no-op}
+    stripe-api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com}
+    stripe-api-key: ${STRIPE_API_KEY:}
+    stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+  email:
+    enabled: ${SMTP_ENABLED:false}
+    from: ${SMTP_FROM:}
+    password-reset-base-url: ${PASSWORD_RESET_BASE_URL:${FRONTEND_BASE_URL:http://localhost:5173}/reset-password}

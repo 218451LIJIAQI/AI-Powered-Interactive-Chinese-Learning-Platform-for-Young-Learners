@@ -1,0 +1,15 @@
+package com.example.aichinese.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.example.aichinese.entity.LearningLevel;
+
+public interface LearningLevelRepository extends JpaRepository<LearningLevel, Long> {
+
+    Optional<LearningLevel> findByName(String name);
+
+    List<LearningLevel> findAllByOrderBySortOrderAscNameAsc();
+}

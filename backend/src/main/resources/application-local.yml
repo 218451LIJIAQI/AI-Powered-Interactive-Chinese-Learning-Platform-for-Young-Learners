@@ -1,0 +1,26 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    username: ${DB_USERNAME:aichinese_app}
+    password: ${DB_PASSWORD:replace-with-a-strong-application-db-password}
+
+server:
+  # Local profile is intentionally loopback-only so the built-in development
+  # JWT fallback cannot be reached from other machines on the network.
+  address: 127.0.0.1
+
+app:
+  security:
+    jwt:
+      # Development-only fallback used by `mvnw spring-boot:run` so the
+      # repository's documented local workflow can boot against docker-compose
+      # without requiring an extra shell export step. Override JWT_SECRET to
+      # test custom secrets or token-rotation behavior locally.
+      secret: ${JWT_SECRET:LocalComposeOnlyJwtSecret1234567890AB}
+  payment:
+    provider: stripe
+    stripe-api-key: sk_test_51T5W2KIDDo71McR0FHKigmkNqVKqW8E16XRrXifcppWlP5Nrd63tdl2tUDdAh6TfbkFZONicRiO8UyiOVxQM6KRF00EDiHHBzS
+
+

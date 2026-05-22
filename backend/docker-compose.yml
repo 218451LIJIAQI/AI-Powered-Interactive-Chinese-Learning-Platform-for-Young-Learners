@@ -1,0 +1,55 @@
+# Backend-local Compose stack.
+#
+# Spins up the MySQL 8.4 instance the backend expects on host port 3307. The
+# Spring Boot application is intentionally NOT included here so that the same
+# `./mvnw spring-boot:run` workflow used during day-to-day development still
+# applies. Run from this folder:
+#
+#   docker compose up -d        # start MySQL in the background
+#   docker compose logs -f mysql  # tail the database log
+#   docker compose down         # stop and remove containers (volume kept)
+#   docker compose down -v      # WIPES the database; be deliberate
+#
+# The container is healthchecked so other tooling can wait on MySQL being
+# ready before launching the backend or running migrations.
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ai-chinese-learning-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-replace-with-a-strong-root-db-password}
+      MYSQL_DATABASE: ${DB_NAME:-ai_chinese_learning}
+      MYSQL_USER: ${DB_USERNAME:-aichinese_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-replace-with-a-strong-application-db-password}
+      TZ: Asia/Singapore
+    ports:
+      # Host port 3307 keeps it out of the way of any locally-installed MySQL
+      # on the conventional port 3306. The backend application.yml defaults
+      # to 3307 to match this mapping.
+      - "${DB_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # MySQL 8.4 made caching_sha2_password the only built-in default and
+      # removed the --default-authentication-plugin option, so we no longer
+      # set it explicitly here.
+      # Disable strict GTID consistency checks that complicate Flyway repair
+      # operations during development; production deployments should re-enable
+      # the platform's preferred replication settings.
+      - --enforce-gtid-consistency=OFF
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u${DB_USERNAME:-aichinese_app}", "-p${DB_PASSWORD:-replace-with-a-strong-application-db-password}", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  # Named volume so the database survives `docker compose down`. Use
+  # `docker compose down -v` if you intentionally want to wipe it.
+  mysql-data:
+    name: ai-chinese-learning-mysql-data

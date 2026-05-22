@@ -1,0 +1,75 @@
+package com.example.aichinese.service;
+
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.aichinese.entity.SystemSetting;
+import com.example.aichinese.repository.SystemSettingRepository;
+
+@Service
+public class CommerceSettingsService {
+
+    public static final String DEFAULT_CURRENCY_KEY = "default_currency";
+    public static final String PLATFORM_COMMISSION_RATE_KEY = "platform_commission_rate";
+
+    private static final Pattern ISO_4217_PATTERN = Pattern.compile("[A-Z]{3}");
+    private static final BigDecimal DEFAULT_COMMISSION_RATE = new BigDecimal("0.20");
+    private static final BigDecimal MIN_COMMISSION_RATE = BigDecimal.ZERO;
+    private static final BigDecimal MAX_COMMISSION_RATE = BigDecimal.ONE;
+
+    private final SystemSettingRepository systemSettingRepository;
+    private final CommerceMoneyService commerceMoneyService;
+
+    public CommerceSettingsService(
+            SystemSettingRepository systemSettingRepository,
+            CommerceMoneyService commerceMoneyService) {
+        this.systemSettingRepository = systemSettingRepository;
+        this.commerceMoneyService = commerceMoneyService;
+    }
+
+    @Transactional(readOnly = true)
+    public String getDefaultCurrency() {
+        return systemSettingRepository.findBySettingKey(DEFAULT_CURRENCY_KEY)
+                .map(SystemSetting::getSettingValue)
+                .filter(value -> !value.isBlank())
+                .map(this::requireIsoCurrencyCode)
+                .orElse("MYR");
+    }
+
+    @Transactional(readOnly = true)
+    public BigDecimal getPlatformCommissionRate() {
+        return systemSettingRepository.findBySettingKey(PLATFORM_COMMISSION_RATE_KEY)
+                .map(SystemSetting::getSettingValue)
+                .filter(value -> !value.isBlank())
+                .map(this::requireCommissionRate)
+                .orElseGet(() -> commerceMoneyService.normalizeRate(DEFAULT_COMMISSION_RATE));
+    }
+
+    public BigDecimal normalizeCommissionRate(BigDecimal value) {
+        BigDecimal rate = commerceMoneyService.normalizeRate(value);
+        if (rate.compareTo(MIN_COMMISSION_RATE) < 0 || rate.compareTo(MAX_COMMISSION_RATE) > 0) {
+            throw new IllegalArgumentException("Platform commission rate must be between 0 and 1.");
+        }
+        return rate;
+    }
+
+    private String requireIsoCurrencyCode(String value) {
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (!ISO_4217_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalStateException("Default currency must be a three-letter ISO 4217 code.");
+        }
+        return normalized;
+    }
+
+    private BigDecimal requireCommissionRate(String value) {
+        try {
+            return normalizeCommissionRate(new BigDecimal(value.trim()));
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException("Platform commission rate must be numeric.", exception);
+        }
+    }
+}

@@ -1,0 +1,45 @@
+HELP.md
+target/
+$tmp
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+uploads/
+*.log
+.env*.local
+!.env.smtp.local.example
+!.env.ai.local.example
+BACKEND_AUDIT_LEDGER_*.md
+BACKEND_COMPREHENSIVE_AUDIT_PROMPT.md
+BACKEND_COMPREHENSIVE_AUDIT_PROMPT_ZH.md
+BACKEND_RISK_MARKER_REPORT_*.txt
+DATABASE_COMPREHENSIVE_AUDIT_PROMPT.md
+DATABASE_COMPREHENSIVE_AUDIT_PROMPT_ZH.md
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/

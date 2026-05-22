@@ -1,0 +1,69 @@
+package com.example.aichinese;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import com.example.aichinese.config.PaymentProperties;
+import com.example.aichinese.dto.commerce.PaymentProviderCheckoutResult;
+import com.example.aichinese.provider.MockPaymentProviderClient;
+import com.example.aichinese.service.model.CommerceCheckout;
+
+class MockPaymentProviderClientTests {
+
+    @Test
+    void checkoutUrlAppendsParametersWithAmpersandWhenSuccessUrlAlreadyHasQueryString() {
+        MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
+                "http://localhost:5173/payment/success",
+                "http://localhost:5173/payment/cancel",
+                true,
+                "mock",
+                "https://api.stripe.com",
+                "",
+                ""));
+
+        PaymentProviderCheckoutResult result = client.createCheckoutSession(new CommerceCheckout(
+                null,
+                null,
+                null,
+                List.of(),
+                BigDecimal.TEN,
+                "MYR",
+                "http://localhost:5173/payment/success?paymentId=123",
+                "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+
+        assertThat(result.available()).isTrue();
+        assertThat(result.checkoutUrl()).startsWith("http://localhost:5173/payment/success?paymentId=123&paymentRef=mock-checkout-");
+        assertThat(result.checkoutUrl()).contains("&status=success");
+        assertThat(result.checkoutUrl()).doesNotContain("??");
+        assertThat(result.checkoutUrl()).doesNotContain("?paymentId=123?paymentRef=");
+    }
+
+    @Test
+    void unavailableWhenMockSuccessIsDisabled() {
+        MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
+                "http://localhost:5173/payment/success",
+                "http://localhost:5173/payment/cancel",
+                false,
+                "mock",
+                "https://api.stripe.com",
+                "",
+                ""));
+
+        PaymentProviderCheckoutResult result = client.createCheckoutSession(new CommerceCheckout(
+                null,
+                null,
+                null,
+                List.of(),
+                BigDecimal.TEN,
+                "MYR",
+                "http://localhost:5173/payment/success?paymentId=123",
+                "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+
+        assertThat(result.available()).isFalse();
+        assertThat(result.checkoutUrl()).isNull();
+    }
+}

@@ -1,0 +1,368 @@
+你现在要作为全栈集成审计专家、API contract 审查专家、前后端联调 QA 和上线前 integration gate 负责人，检查整个项目的前端和后端是否已经 100% 接通。
+
+你的任务不是只看页面，也不是只看接口，更不是只确认项目能启动。
+
+你的任务是确认：
+
+前端每一个页面、按钮、表单、数据展示、用户操作和 execution flow，是否都真实连接到了正确的后端 API；
+后端每一个 controller endpoint，是否都有正确的前端调用、正确的 request / response 契约、正确的错误处理和真实业务效果。
+
+============================================================
+核心目标
+============================================================
+
+必须检查是否存在：
+
+- 前端页面存在，但没有调用真实后端
+- 前端使用 mock / fake / hardcoded data
+- 前端按钮点击后没有真实 API 请求
+- 前端表单提交后没有真实业务效果
+- 前端 API path 和后端 endpoint 不一致
+- HTTP method 不一致
+- request body 字段不一致
+- response DTO 字段不一致
+- query params / path params 不一致
+- auth header / token / cookie 没有正确传递
+- 后端 endpoint 存在，但前端没有使用
+- 前端调用了不存在的后端接口
+- API 返回成功，但前端没有更新 UI
+- API 失败，但前端没有正确显示 error state
+- API loading 时没有 loading state
+- 空数据没有 empty state
+- 权限失败没有正确跳转或提示
+- session 过期没有正确处理
+- CORS / CSRF / auth 配置导致真实请求失败
+- API 文档和真实实现不一致
+- OpenAPI contract 和前端 client 不一致
+- 后端返回 entity 或过多字段导致前端依赖不稳定
+- 前端吞掉错误，导致用户以为操作成功
+- 后端 no-op / mock / fallback 被前端当成真实成功
+
+============================================================
+检查方式
+============================================================
+
+你必须从 5 个角度检查：
+
+1. 前端调用点
+
+检查所有：
+
+- fetch
+- axios
+- API client
+- service function
+- hooks
+- mutations
+- queries
+- form submit handler
+- button click handler
+- route loader
+- dashboard data fetch
+- auth flow
+- upload / download flow
+- payment / AI / notification / admin / teacher / student flow
+
+确认每个调用是否对应真实后端 endpoint。
+
+2. 后端 endpoint
+
+检查所有：
+
+- controller
+- request mapping
+- service method
+- DTO
+- validation
+- auth / authorization
+- response body
+- status code
+- exception handling
+
+确认每个后端 endpoint 是否被前端正确使用，或者是否是合法的 public/internal/admin-only endpoint。
+
+3. API contract
+
+逐个比对：
+
+- URL path
+- HTTP method
+- path variables
+- query parameters
+- request body
+- request headers
+- auth requirements
+- response shape
+- error response shape
+- pagination format
+- enum values
+- date/time format
+- file upload format
+- content-type
+- status codes
+
+发现不一致必须修复。
+
+4. 浏览器真实验证
+
+必须启动项目，并用真实浏览器验证：
+
+- 打开页面
+- 点击按钮
+- 提交表单
+- 执行核心流程
+- 查看 Network 请求
+- 查看 request URL / method / payload / headers
+- 查看 response status / body
+- 查看 UI 是否根据 response 正确更新
+- 查看失败请求是否正确显示错误
+- 查看 console 是否有 error
+
+不要只看代码就说接通。
+
+5. 数据结果验证
+
+对于会改变数据的操作，必须验证：
+
+- API 是否真的执行
+- 数据库状态是否变化，或至少 UI 刷新后状态仍正确
+- 重复提交是否被处理
+- 失败时是否没有产生 partial update
+- 用户看到的状态是否和后端真实状态一致
+
+============================================================
+必须覆盖的业务域
+============================================================
+
+至少检查：
+
+- auth / login / register / logout
+- password reset / account recovery
+- public catalog / landing pages
+- student learning flows
+- teacher workflows
+- admin operations
+- AI features
+- commerce / payment / refund / entitlement
+- upload / download / file handling
+- notification
+- moderation
+- audit logs
+- dashboard / analytics / reports
+- profile / settings
+- error pages
+- permission denied pages
+
+如果某个业务域在项目中不存在，必须明确说明“未发现该业务域”，不能假装已检查通过。
+
+============================================================
+前后端接通状态分类
+============================================================
+
+每个功能必须按以下状态分类：
+
+- CONNECTED：前端真实调用后端，契约一致，浏览器验证通过，UI 状态正确。
+- PARTIAL：部分接通，但存在字段、状态、错误处理、权限、刷新或边界问题。
+- FRONTEND_ONLY：只有前端 UI，没有真实后端业务。
+- BACKEND_ONLY：后端接口存在，但没有前端入口或调用。
+- CONTRACT_MISMATCH：前后端 URL、method、payload、response、status code 或字段不一致。
+- MOCKED：使用 mock / fake / hardcoded / dummy data。
+- BROKEN：真实浏览器操作失败。
+- BLOCKED：因环境、账号、密钥、第三方服务等无法验证。
+
+不要把 PARTIAL / MOCKED / FRONTEND_ONLY / BACKEND_ONLY 说成 CONNECTED。
+
+============================================================
+发现问题时必须直接修复
+============================================================
+
+如果发现问题并且可以安全修复，必须直接修复，包括：
+
+- 修正前端 API path
+- 修正 HTTP method
+- 修正 request body
+- 修正 response DTO
+- 修正 API client
+- 接入真实后端
+- 删除或隔离 mock data
+- 修复按钮无效问题
+- 修复表单提交问题
+- 修复 loading / empty / error / success state
+- 修复 auth header / token 传递
+- 修复 CORS / auth integration
+- 修复后端 endpoint contract
+- 修复 status code / error envelope
+- 修复前端对错误响应的处理
+- 补充关键 integration test 或 E2E test
+
+修复后必须重新验证。
+
+============================================================
+必须搜索的关键词
+============================================================
+
+请在前端和后端代码中搜索：
+
+- mock
+- fake
+- dummy
+- stub
+- placeholder
+- hardcoded
+- sample
+- demo
+- TODO
+- FIXME
+- console.log
+- not implemented
+- coming soon
+- no-op
+- temporary
+- localhost
+- apiUrl
+- baseURL
+
+发现任何可能影响真实接通的地方，必须分析是否是问题。
+
+============================================================
+输出格式
+============================================================
+
+最终输出必须包含：
+
+1. Integration Audit Scope
+
+包括：
+
+- 检查了哪些前端目录
+- 检查了哪些后端目录
+- 检查了哪些页面
+- 检查了哪些 API
+- 检查了哪些角色
+- 检查了哪些 execution flows
+- 哪些区域未检查以及原因
+
+2. API Integration Matrix
+
+每一项必须包含：
+
+- Feature / Flow
+- Frontend page / component / function
+- Backend endpoint / controller / service
+- HTTP method
+- Request contract
+- Response contract
+- Auth requirement
+- Browser verified：yes / no
+- Status：CONNECTED / PARTIAL / FRONTEND_ONLY / BACKEND_ONLY / CONTRACT_MISMATCH / MOCKED / BROKEN / BLOCKED
+- Evidence
+
+3. Contract Mismatches
+
+每个 mismatch 必须包含：
+
+- severity
+- frontend file
+- backend file
+- endpoint
+- exact mismatch
+- actual behavior
+- expected behavior
+- user impact
+- fix status
+
+4. Mock / Fake / Hardcoded Findings
+
+列出所有影响真实前后端接通的：
+
+- mock data
+- fake response
+- dummy service
+- placeholder API
+- hardcoded sample data
+- no-op backend
+- console.log-only behavior
+
+每项必须说明是否修复，未修复原因是什么。
+
+5. Implemented Fixes
+
+每项必须包含：
+
+- changed files
+- what changed
+- root cause addressed
+- affected flow
+- why the fix is safe
+- verification result
+
+6. Browser Verification
+
+必须包含：
+
+- 检查过的页面
+- 操作步骤
+- Network 请求结果
+- Console 结果
+- UI 更新结果
+- 失败项和原因
+
+7. Remaining Integration Risks
+
+只列真实剩余风险：
+
+- risk
+- file path / endpoint / page
+- impact
+- why it remains
+- needed next step
+- priority
+
+8. Final Assessment
+
+必须明确回答：
+
+- 前后端是否已经完全接通？
+- 是否还有前端有入口但后端未实现？
+- 是否还有后端接口存在但前端未使用？
+- 是否还有 mock / fake / hardcoded data 影响真实流程？
+- 是否还有 contract mismatch？
+- 是否可以上线？
+- 如果不能上线，最关键阻塞是什么？
+
+============================================================
+停止条件
+============================================================
+
+只有全部满足以下条件，才可以说完成：
+
+1. 所有前端 API 调用点已检查。
+2. 所有后端 controller endpoint 已检查。
+3. 所有主要页面和 execution flows 已用浏览器验证。
+4. 所有 request / response contract 已比对。
+5. 所有 auth header / token / role requirements 已检查。
+6. 所有 mock / fake / hardcoded / no-op 接通风险已处理或明确 blocked。
+7. 所有 Critical / High contract mismatch 已修复或明确 blocked。
+8. 所有修复已重新验证。
+9. 最终报告列出真实证据，而不是笼统结论。
+
+如果没有满足停止条件，不允许说“完成”，必须继续检查或修复。
+
+============================================================
+如果中途停下来
+============================================================
+
+如果本轮无法全部完成，结束前必须输出：
+
+- CURRENT_AREA
+- COMPLETED_API_AREAS
+- COMPLETED_FRONTEND_PAGES
+- COMPLETED_BACKEND_ENDPOINTS
+- VERIFIED_FLOWS
+- FOUND_ISSUES
+- FIXED_ISSUES
+- OPEN_ISSUES
+- NEXT_EXACT_STEPS
+- RESUME_PROMPT
+
+现在开始执行前后端完整接通审计。

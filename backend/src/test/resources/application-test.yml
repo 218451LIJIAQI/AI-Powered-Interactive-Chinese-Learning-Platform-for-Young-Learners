@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:aichinese-${random.uuid};MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      # Test profile intentionally uses Hibernate create-drop with isolated H2
+      # databases for fast integration tests. Runtime profiles must use
+      # Flyway-managed migrations plus ddl-auto=validate.
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+  flyway:
+    # MySQL production migrations are validated in runtime profiles; H2 tests
+    # use create-drop schema generation to keep each test context isolated.
+    enabled: false
+  sql:
+    init:
+      mode: never
+
+logging:
+  level:
+    root: warn
+
+app:
+  security:
+    jwt:
+      secret: RuntimeStyleJwtSecretForTests1234567890AB
+      expiration: 3600000
+  upload:
+    directory: ./target/test-uploads
+    max-file-size: 1KB
+    recorded-video-directory: ./target/test-recorded-videos
+    max-video-file-size: 1KB

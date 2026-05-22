@@ -1,0 +1,107 @@
+import { createI18n } from 'vue-i18n'
+
+import type { AppLanguage } from '@/types/api'
+import { safeGetItem, storageKeys } from '@/utils/storage'
+
+const defaultLocale: AppLanguage = 'en'
+
+function readPersistedLocale(): AppLanguage {
+  const locale = safeGetItem(storageKeys.language)
+  return locale === 'en' || locale === 'ms' || locale === 'zh' ? locale : defaultLocale
+}
+
+const storedLocale = readPersistedLocale()
+
+const messages = {
+  en: {
+    nav: {
+      home: 'Home',
+      courses: 'Courses',
+      about: 'About',
+      safety: 'Safety',
+      learn: 'Learn',
+      practice: 'Practice',
+      classes: 'Classes',
+      rewards: 'Rewards',
+      achievements: 'Achievements',
+      aiHelper: 'AI Helper',
+      profile: 'Profile',
+      dashboard: 'Dashboard',
+      content: 'Content',
+      activityLibrary: 'Activity Library',
+      students: 'Students',
+      feedback: 'Feedback Center',
+      users: 'Users',
+      teacherVerification: 'Teacher Verification',
+      moderation: 'Reports & Moderation',
+      analytics: 'Analytics',
+      settings: 'Settings',
+      finance: 'Finance',
+      earnings: 'Earnings',
+      support: 'Support',
+    },
+  },
+  ms: {
+    nav: {
+      home: 'Laman Utama',
+      courses: 'Kursus',
+      about: 'Tentang',
+      safety: 'Keselamatan',
+      learn: 'Belajar',
+      practice: 'Latihan',
+      classes: 'Kelas',
+      rewards: 'Ganjaran',
+      achievements: 'Pencapaian',
+      aiHelper: 'Pembantu AI',
+      profile: 'Profil',
+      dashboard: 'Papan Pemuka',
+      content: 'Kandungan',
+      activityLibrary: 'Perpustakaan Aktiviti',
+      students: 'Pelajar',
+      feedback: 'Pusat Maklum Balas',
+      users: 'Pengguna',
+      teacherVerification: 'Pengesahan Guru',
+      moderation: 'Laporan & Moderasi',
+      analytics: 'Analitik',
+      settings: 'Tetapan',
+      finance: 'Kewangan',
+      earnings: 'Pendapatan',
+      support: 'Sokongan',
+    },
+  },
+  zh: {
+    nav: {
+      home: '首页',
+      courses: '课程',
+      about: '关于',
+      safety: '安全',
+      learn: '学习',
+      practice: '练习',
+      classes: '课堂',
+      rewards: '奖励',
+      achievements: '成就',
+      aiHelper: 'AI 助手',
+      profile: '个人资料',
+      dashboard: '仪表盘',
+      content: '内容',
+      activityLibrary: '活动资源库',
+      students: '学生',
+      feedback: '反馈中心',
+      users: '用户',
+      teacherVerification: '教师审核',
+      moderation: '报告与审核',
+      analytics: '分析',
+      settings: '设置',
+      finance: '财务',
+      earnings: '收益',
+      support: '支持',
+    },
+  },
+} as const
+
+export const i18n = createI18n({
+  legacy: false,
+  locale: storedLocale,
+  fallbackLocale: defaultLocale,
+  messages,
+})

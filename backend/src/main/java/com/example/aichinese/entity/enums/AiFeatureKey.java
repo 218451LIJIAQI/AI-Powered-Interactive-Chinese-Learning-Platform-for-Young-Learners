@@ -1,0 +1,12 @@
+package com.example.aichinese.entity.enums;
+
+public enum AiFeatureKey {
+    CHAT_TUTOR,
+    VOCABULARY_HELPER,
+    SENTENCE_PRACTICE,
+    QUIZ_GENERATOR,
+    STORY_GENERATOR,
+    LEARNING_RECOMMENDATION,
+    PRONUNCIATION_FEEDBACK,
+    WRITING_FEEDBACK
+}

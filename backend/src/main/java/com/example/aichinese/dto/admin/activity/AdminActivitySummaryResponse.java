@@ -1,0 +1,31 @@
+package com.example.aichinese.dto.admin.activity;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import com.example.aichinese.entity.enums.ActivityDifficulty;
+import com.example.aichinese.entity.enums.AgeBand;
+import com.example.aichinese.entity.enums.ContentStatus;
+
+/**
+ * Cross-type row used by the admin's global activity-library browser. Mixes
+ * all six activity tables behind a single {@link ActivityType} discriminator
+ * so the UI can show a unified, filterable list.
+ */
+public record AdminActivitySummaryResponse(
+        Long id,
+        ActivityType type,
+        String title,
+        ContentStatus status,
+        Integer hskLevel,
+        AgeBand ageBand,
+        ActivityDifficulty difficulty,
+        String topic,
+        List<String> tags,
+        Integer xpReward,
+        Integer estimatedSeconds,
+        Long createdByUserId,
+        String createdByDisplayName,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt) {
+}
