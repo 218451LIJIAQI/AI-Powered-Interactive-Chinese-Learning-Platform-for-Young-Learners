@@ -6,10 +6,13 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.commerce.CartItemRequest;
@@ -36,14 +39,25 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
  * pay twice for the same content.</p>
  *
  * <h2>Pricing</h2>
- * <p>Per-line and cart totals are computed via
- * {@link CommerceMoneyService} so currency precision and rounding
- * are uniform with the order / payment paths. The unit price is
- * captured at add-time, not look-up time, so a price change between
- * "add to cart" and "checkout" does not silently re-bill the student.</p>
+ * <p>Per-line and cart totals are computed from the
+ * {@link CartItem#getUnitPrice() captured unit price} that was frozen
+ * at add-time — not re-resolved live — so a price change between
+ * "add to cart" and "checkout" does not silently re-bill the student.
+ * Rounding and scale are delegated to {@link CommerceMoneyService}
+ * for consistency with the order / payment paths.</p>
+ *
+ * <h2>Stale item handling</h2>
+ * <p>If a cart line references a purchasable item that is no longer
+ * resolvable (e.g.&nbsp;the underlying lesson was unpublished or
+ * deleted after the student added it), the cart display gracefully
+ * omits the stale line and logs a warning. The stale row remains in
+ * the database so it can be explicitly removed by the student or
+ * garbage-collected by a future housekeeping job.</p>
  */
 @Service
 public class CartService {
+
+    private static final Logger log = LoggerFactory.getLogger(CartService.class);
 
     private final StudentLearningAccessService studentLearningAccessService;
     private final CartRepository cartRepository;
@@ -61,13 +75,13 @@ public class CartService {
             EntitlementService entitlementService,
             CommerceMoneyService commerceMoneyService,
             CommerceSettingsService commerceSettingsService) {
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.cartRepository = cartRepository;
-        this.cartItemRepository = cartItemRepository;
-        this.purchasableItemService = purchasableItemService;
-        this.entitlementService = entitlementService;
-        this.commerceMoneyService = commerceMoneyService;
-        this.commerceSettingsService = commerceSettingsService;
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.cartRepository = Objects.requireNonNull(cartRepository, "cartRepository");
+        this.cartItemRepository = Objects.requireNonNull(cartItemRepository, "cartItemRepository");
+        this.purchasableItemService = Objects.requireNonNull(purchasableItemService, "purchasableItemService");
+        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
     @Transactional
@@ -155,15 +169,27 @@ public class CartService {
         String currencyCode = commerceSettingsService.getDefaultCurrency();
 
         for (CartItem cartItem : cartItems) {
-            ResolvedPurchasableItem resolved = purchasableItemService.resolve(cartItem.getItemType(), cartItem.getItemId(), null);
-            BigDecimal subtotal = commerceMoneyService.multiply(resolved.unitPrice(), BigDecimal.valueOf(cartItem.getQuantity()));
-            totalAmount = totalAmount.add(subtotal);
+            ResolvedPurchasableItem resolved;
+            try {
+                resolved = purchasableItemService.resolve(
+                        cartItem.getItemType(), cartItem.getItemId(), null);
+            } catch (ResponseStatusException ex) {
+                log.warn("Skipping stale cart item id={} (type={}, itemId={}): {}",
+                        cartItem.getId(), cartItem.getItemType(),
+                        cartItem.getItemId(), ex.getReason());
+                continue;
+            }
+
+            BigDecimal capturedPrice = cartItem.getUnitPrice();
+            BigDecimal subtotal = commerceMoneyService.multiply(
+                    capturedPrice, BigDecimal.valueOf(cartItem.getQuantity()));
+            totalAmount = commerceMoneyService.add(totalAmount, subtotal);
             items.add(new CartItemResponse(
                     cartItem.getId(),
                     resolved.itemType().name(),
                     resolved.itemId(),
                     resolved.title(),
-                    resolved.unitPrice(),
+                    capturedPrice,
                     currencyCode,
                     cartItem.getQuantity(),
                     subtotal,

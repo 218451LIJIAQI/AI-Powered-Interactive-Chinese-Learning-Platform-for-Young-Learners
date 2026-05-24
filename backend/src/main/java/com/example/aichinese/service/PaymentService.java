@@ -3,6 +3,7 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,6 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +25,7 @@ import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.commerce.AdminPaymentRecordResponse;
 import com.example.aichinese.dto.commerce.CartItemResponse;
 import com.example.aichinese.dto.commerce.CheckoutResponse;
+import com.example.aichinese.dto.commerce.CheckoutSessionRequest.CheckoutSource;
 import com.example.aichinese.dto.commerce.PaymentProviderCheckoutResult;
 import com.example.aichinese.dto.commerce.PaymentProviderStatusResult;
 import com.example.aichinese.dto.commerce.StudentPaymentRecordResponse;
@@ -75,6 +79,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
     private final PaymentRecordRepository paymentRecordRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -97,16 +103,16 @@ public class PaymentService {
             NotificationService notificationService,
             AuditLogService auditLogService,
             CommerceMoneyService commerceMoneyService) {
-        this.paymentRecordRepository = paymentRecordRepository;
-        this.orderRepository = orderRepository;
-        this.orderItemRepository = orderItemRepository;
-        this.paymentProviderService = paymentProviderService;
-        this.entitlementService = entitlementService;
-        this.cartService = cartService;
-        this.teacherEarningService = teacherEarningService;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.commerceMoneyService = commerceMoneyService;
+        this.paymentRecordRepository = Objects.requireNonNull(paymentRecordRepository, "paymentRecordRepository");
+        this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository");
+        this.orderItemRepository = Objects.requireNonNull(orderItemRepository, "orderItemRepository");
+        this.paymentProviderService = Objects.requireNonNull(paymentProviderService, "paymentProviderService");
+        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
+        this.cartService = Objects.requireNonNull(cartService, "cartService");
+        this.teacherEarningService = Objects.requireNonNull(teacherEarningService, "teacherEarningService");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
     }
 
     @Transactional
@@ -199,12 +205,7 @@ public class PaymentService {
         } else if (providerStatus.available()
                 && (providerStatus.paymentStatus() == PaymentStatus.FAILED
                         || providerStatus.paymentStatus() == PaymentStatus.CANCELLED)) {
-            lockedPaymentRecord.setPaymentStatus(providerStatus.paymentStatus());
-            lockedPaymentRecord.setProviderStatus(providerStatus.providerStatus());
-            if (lockedPaymentRecord.getOrder() != null) {
-                lockedPaymentRecord.getOrder().setPaymentStatus(providerStatus.paymentStatus());
-                orderRepository.save(lockedPaymentRecord.getOrder());
-            }
+            applyTerminalStatus(lockedPaymentRecord, providerStatus);
         } else if (!providerStatus.available()) {
             lockedPaymentRecord.setProviderStatus("UNAVAILABLE");
         } else {
@@ -238,12 +239,7 @@ public class PaymentService {
                 markPaymentPaid(lockedPaymentRecord, providerName.toUpperCase(), providerStatus.providerStatus());
             } else if (providerStatus.paymentStatus() == PaymentStatus.FAILED
                     || providerStatus.paymentStatus() == PaymentStatus.CANCELLED) {
-                lockedPaymentRecord.setPaymentStatus(providerStatus.paymentStatus());
-                lockedPaymentRecord.setProviderStatus(providerStatus.providerStatus());
-                if (lockedPaymentRecord.getOrder() != null) {
-                    lockedPaymentRecord.getOrder().setPaymentStatus(providerStatus.paymentStatus());
-                    orderRepository.save(lockedPaymentRecord.getOrder());
-                }
+                applyTerminalStatus(lockedPaymentRecord, providerStatus);
                 paymentRecordRepository.save(lockedPaymentRecord);
             } else {
                 lockedPaymentRecord.setProviderStatus(providerStatus.providerStatus());
@@ -320,7 +316,7 @@ public class PaymentService {
 
         entitlementService.grantAccessAfterPayment(order, lockedPaymentRecord);
         teacherEarningService.createEarningsForOrder(order.getId());
-        if ("CART".equalsIgnoreCase(order.getCheckoutSource())) {
+        if (CheckoutSource.CART.name().equalsIgnoreCase(order.getCheckoutSource())) {
             if (order.getStudent() != null && order.getStudent().getUser() != null) {
                 cartService.clearCartIfExists(order.getStudent().getUser().getId());
             }
@@ -333,6 +329,23 @@ public class PaymentService {
                     "Your payment was successful and access has been unlocked.",
                     "/student/profile");
         }
+
+        log.info("Payment marked PAID: paymentId={}, orderId={}, amount={} {}, method={}",
+                lockedPaymentRecord.getId(), order.getId(),
+                lockedPaymentRecord.getAmount(), lockedPaymentRecord.getCurrencyCode(),
+                paymentMethod);
+    }
+
+    private void applyTerminalStatus(PaymentRecord record, PaymentProviderStatusResult status) {
+        record.setPaymentStatus(status.paymentStatus());
+        record.setProviderStatus(status.providerStatus());
+        Order order = record.getOrder();
+        if (order != null) {
+            order.setPaymentStatus(status.paymentStatus());
+            orderRepository.save(order);
+        }
+        log.info("Payment terminal status applied: paymentId={}, status={}, providerStatus={}",
+                record.getId(), status.paymentStatus(), status.providerStatus());
     }
 
     private Pageable newestPageable(int page, int size) {
@@ -429,11 +442,11 @@ public class PaymentService {
         }
 
         Map<Long, List<OrderItem>> grouped = new LinkedHashMap<>();
-        orderIds.forEach(orderId -> grouped.put(orderId, new java.util.ArrayList<>()));
+        orderIds.forEach(orderId -> grouped.put(orderId, new ArrayList<>()));
         orderItemRepository.findByOrderIdInOrderByOrderIdAscCreatedAtAsc(orderIds)
                 .forEach(orderItem -> {
                     if (orderItem.getOrder() != null && orderItem.getOrder().getId() != null) {
-                        grouped.computeIfAbsent(orderItem.getOrder().getId(), ignored -> new java.util.ArrayList<>())
+                        grouped.computeIfAbsent(orderItem.getOrder().getId(), ignored -> new ArrayList<>())
                                 .add(orderItem);
                     }
                 });
@@ -462,7 +475,7 @@ public class PaymentService {
                         orderItem.getItemId(),
                         orderItem.getItemTitleSnapshot(),
                         orderItem.getUnitPrice(),
-                        orderItem.getOrder().getCurrencyCode(),
+                        orderItem.getOrder() != null ? orderItem.getOrder().getCurrencyCode() : null,
                         orderItem.getQuantity(),
                         orderItem.getLineTotal(),
                         orderItem.getTeacher() != null))

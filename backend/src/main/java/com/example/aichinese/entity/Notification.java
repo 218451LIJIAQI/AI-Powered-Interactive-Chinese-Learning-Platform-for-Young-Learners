@@ -1,5 +1,7 @@
 package com.example.aichinese.entity;
 
+import java.time.LocalDateTime;
+
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.NotificationType;
@@ -92,5 +94,5 @@ public class Notification extends BaseEntity {
     private User createdByUser;
 
     @Column(name = "read_at")
-    private java.time.LocalDateTime readAt;
+    private LocalDateTime readAt;
 }

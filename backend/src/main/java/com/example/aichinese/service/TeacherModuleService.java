@@ -3,6 +3,7 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -45,10 +46,10 @@ public class TeacherModuleService {
             TeacherContentAccessService teacherContentAccessService,
             ContentManagementMapper contentManagementMapper,
             AuditLogService auditLogService) {
-        this.learningModuleRepository = learningModuleRepository;
-        this.teacherContentAccessService = teacherContentAccessService;
-        this.contentManagementMapper = contentManagementMapper;
-        this.auditLogService = auditLogService;
+        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
+        this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
+        this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)

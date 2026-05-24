@@ -14,6 +14,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -53,7 +56,31 @@ import lombok.Setter;
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_payment_records_provider_reference", columnNames = { "provider_name", "provider_reference" })
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used
+        // by every read in PaymentRecordRepository: the student / admin
+        // payment history views and the refund flow all need order +
+        // student + student.user hydrated in one round trip so the
+        // response mapper does not regress into per-row lazy lookups.
+        name = PaymentRecord.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode("order"),
+                @NamedAttributeNode(value = "student", subgraph = "PaymentRecord.studentWithUser")
+        },
+        subgraphs = @NamedSubgraph(
+                name = "PaymentRecord.studentWithUser",
+                attributeNodes = @NamedAttributeNode("user")
+        )
+)
 public class PaymentRecord extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code PaymentRecord}: {@code order} and {@code student}
+     * with its nested {@code student.user} sub-graph.
+     */
+    public static final String GRAPH_DETAIL = "PaymentRecord.detail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)

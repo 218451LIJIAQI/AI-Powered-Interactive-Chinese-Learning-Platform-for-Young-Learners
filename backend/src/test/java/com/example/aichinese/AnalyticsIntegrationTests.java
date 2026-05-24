@@ -1,5 +1,8 @@
 package com.example.aichinese;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -134,13 +137,13 @@ class AnalyticsIntegrationTests {
                 .path("data");
         JsonNode after = afterData.path("overview");
 
-        org.junit.jupiter.api.Assertions.assertEquals(
+        assertEquals(
                 baselineTeachers + 1L, after.path("totalTeachers").asLong(),
                 "Teacher count should increase by exactly one after a teacher self-registers.");
-        org.junit.jupiter.api.Assertions.assertEquals(
+        assertEquals(
                 baselineStudents + 1L, after.path("totalStudents").asLong(),
                 "Student count should increase by exactly one after a student self-registers.");
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
                 after.path("pendingTeacherApprovals").asLong() >= baselinePendingTeachers + 1L,
                 "Pending teacher approvals must include the newly registered teacher.");
 
@@ -152,7 +155,7 @@ class AnalyticsIntegrationTests {
         // aggregate-query path end to end.
         JsonNode teacherApproval = afterData.path("teacherApprovalBreakdown");
         long pendingBucketValue = bucketValue(teacherApproval, "PENDING");
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
                 pendingBucketValue >= 1L,
                 "Teacher approval breakdown must surface a PENDING bucket with at least one teacher.");
 
@@ -160,10 +163,10 @@ class AnalyticsIntegrationTests {
         // carry a positive count (zero buckets are filtered by design) and
         // a non-blank key.
         teacherApproval.forEach(item -> {
-            org.junit.jupiter.api.Assertions.assertFalse(
+            assertFalse(
                     item.path("label").asText().isBlank(),
                     "Breakdown items must always have a non-blank label.");
-            org.junit.jupiter.api.Assertions.assertTrue(
+            assertTrue(
                     item.path("value").asLong() > 0L,
                     "Breakdown items with value 0 should be filtered out by buildBreakdownFromMap.");
         });

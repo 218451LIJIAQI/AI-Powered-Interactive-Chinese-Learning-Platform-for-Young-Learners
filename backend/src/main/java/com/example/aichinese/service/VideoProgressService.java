@@ -4,6 +4,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,11 +53,11 @@ public class VideoProgressService {
             LiveLearningMapper liveLearningMapper,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.videoProgressRepository = videoProgressRepository;
-        this.liveLearningAccessService = liveLearningAccessService;
-        this.liveLearningMapper = liveLearningMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
+        this.videoProgressRepository = Objects.requireNonNull(videoProgressRepository, "videoProgressRepository");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)

@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of a {@code RefundRequest}.
@@ -38,16 +36,16 @@ public enum RefundStatus {
     REFUNDED;
 
     /** States in which the request cannot transition any further. */
-    public static final Set<RefundStatus> TERMINAL = Set.of(REJECTED, REFUNDED);
+    public static final Set<RefundStatus> TERMINAL =
+            Collections.unmodifiableSet(EnumSet.of(REJECTED, REFUNDED));
 
     /** States in which the request still requires action before becoming terminal. */
-    public static final Set<RefundStatus> ACTIONABLE = Set.of(PENDING, APPROVED);
+    public static final Set<RefundStatus> ACTIONABLE =
+            Collections.unmodifiableSet(EnumSet.of(PENDING, APPROVED));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, RefundStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, RefundStatus> LOOKUP =
+            EnumLookups.indexByName(RefundStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -57,14 +55,7 @@ public enum RefundStatus {
      *         is {@code null}, blank, or not a recognised refund status
      */
     public static Optional<RefundStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -74,12 +65,12 @@ public enum RefundStatus {
      *         blank, or not a recognised refund status
      */
     public static RefundStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Refund status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid refund status. Allowed values are PENDING, APPROVED, REJECTED, "
-                        + "or REFUNDED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Refund status is required.",
+                () -> "Invalid refund status. Allowed values are PENDING, APPROVED, REJECTED, "
+                        + "or REFUNDED.");
     }
 
     /** @return {@code true} when the refund request is still awaiting admin review. */

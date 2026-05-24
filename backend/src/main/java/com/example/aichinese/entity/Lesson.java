@@ -16,6 +16,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -55,7 +58,36 @@ import lombok.Setter;
         @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
         @Index(name = "idx_lessons_status", columnList = "content_status")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used
+        // by every read in LessonRepository: teacher dashboards, public
+        // catalogue and admin moderation all need teacher / teacher.user
+        // / module / level / category hydrated in one round trip. The
+        // teacher.user nested fetch is declared as a sub-graph so the
+        // mapper can render the teacher's display name without an N+1
+        // lazy load.
+        name = Lesson.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode(value = "teacher", subgraph = "Lesson.teacherWithUser"),
+                @NamedAttributeNode("module"),
+                @NamedAttributeNode("level"),
+                @NamedAttributeNode("category")
+        },
+        subgraphs = @NamedSubgraph(
+                name = "Lesson.teacherWithUser",
+                attributeNodes = @NamedAttributeNode("user")
+        )
+)
 public class Lesson extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code Lesson}: {@code teacher} (with the nested
+     * {@code teacher.user} sub-graph), {@code module}, {@code level}
+     * and {@code category}.
+     */
+    public static final String GRAPH_DETAIL = "Lesson.detail";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "module_id")

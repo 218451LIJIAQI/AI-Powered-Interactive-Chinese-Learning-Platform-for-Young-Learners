@@ -1,5 +1,5 @@
 <template>
-  <span class="status-pill" :class="toneClass">{{ label }}</span>
+  <span class="status-pill" :class="tone">{{ label }}</span>
 </template>
 
 <script setup lang="ts">
@@ -10,17 +10,14 @@
  * palette in main.css so the look stays consistent across every
  * surface that renders a pill.
  */
-import { computed } from 'vue'
+type PillTone = 'success' | 'warning' | 'danger' | 'info' | 'primary'
 
-const props = withDefaults(
-  defineProps<{
-    label: string
-    tone?: 'success' | 'warning' | 'danger' | 'info' | 'primary'
-  }>(),
-  {
-    tone: 'primary',
-  },
-)
+interface Props {
+  label: string
+  tone?: PillTone
+}
 
-const toneClass = computed(() => props.tone)
+withDefaults(defineProps<Props>(), {
+  tone: 'primary',
+})
 </script>

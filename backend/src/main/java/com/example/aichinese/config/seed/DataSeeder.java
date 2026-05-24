@@ -2,7 +2,9 @@ package com.example.aichinese.config.seed;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -99,13 +101,13 @@ public class DataSeeder implements CommandLineRunner {
             SystemSettingRepository systemSettingRepository,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder) {
-        this.roleRepository = roleRepository;
-        this.learningLevelRepository = learningLevelRepository;
-        this.learningCategoryRepository = learningCategoryRepository;
-        this.badgeRepository = badgeRepository;
-        this.systemSettingRepository = systemSettingRepository;
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
+        this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository");
+        this.learningLevelRepository = Objects.requireNonNull(learningLevelRepository, "learningLevelRepository");
+        this.learningCategoryRepository = Objects.requireNonNull(learningCategoryRepository, "learningCategoryRepository");
+        this.badgeRepository = Objects.requireNonNull(badgeRepository, "badgeRepository");
+        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.passwordEncoder = Objects.requireNonNull(passwordEncoder, "passwordEncoder");
     }
 
     @Override
@@ -201,45 +203,44 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedSystemSettings() {
-        Map<String, String[]> settings = new LinkedHashMap<>();
-        Map<String, Boolean> editableSettings = new LinkedHashMap<>();
-        addSetting(settings, editableSettings, "platform_name",
+        Map<String, SettingSeed> settings = new LinkedHashMap<>();
+        addSetting(settings, "platform_name",
                 "AI-Powered Interactive Chinese Learning Platform for Young Learners",
                 "Displayed platform name.",
                 false);
-        addSetting(settings, editableSettings, "default_currency",
+        addSetting(settings, "default_currency",
                 "MYR",
                 "Default currency for the Malaysian deployment context.",
                 true);
-        addSetting(settings, editableSettings, "platform_commission_rate",
+        addSetting(settings, "platform_commission_rate",
                 "0.20",
                 "Editable platform commission rate represented as a decimal.",
                 true);
-        addSetting(settings, editableSettings, "ai_disclaimer_text",
+        addSetting(settings, "ai_disclaimer_text",
                 "AI-generated content may not always be accurate. Please review before use.",
                 "Shown on AI-powered learning experiences.",
                 true);
-        addSetting(settings, editableSettings, "admin_email_notifications_enabled",
+        addSetting(settings, "admin_email_notifications_enabled",
                 "true",
                 "Enable email notifications for admin workflows.",
                 true);
-        addSetting(settings, editableSettings, "admin_in_app_notifications_enabled",
+        addSetting(settings, "admin_in_app_notifications_enabled",
                 "true",
                 "Enable in-app notifications for admin workflows.",
                 true);
-        addSetting(settings, editableSettings, "admin_daily_summary_enabled",
+        addSetting(settings, "admin_daily_summary_enabled",
                 "false",
                 "Enable daily admin summary delivery.",
                 true);
-        addSetting(settings, editableSettings, "strict_content_filtering_enabled",
+        addSetting(settings, "strict_content_filtering_enabled",
                 "true",
                 "Enable strict content filtering for safety-sensitive flows.",
                 true);
-        addSetting(settings, editableSettings, "sensitive_word_filter_enabled",
+        addSetting(settings, "sensitive_word_filter_enabled",
                 "true",
                 "Enable profanity and sensitive word filtering.",
                 true);
-        addSetting(settings, editableSettings, "ai_safety_check_enabled",
+        addSetting(settings, "ai_safety_check_enabled",
                 "true",
                 "Enable AI safety checks before AI guidance is shown.",
                 true);
@@ -247,22 +248,24 @@ public class DataSeeder implements CommandLineRunner {
         settings.forEach((key, seed) -> systemSettingRepository.findBySettingKey(key).orElseGet(() -> {
             SystemSetting setting = new SystemSetting();
             setting.setSettingKey(key);
-            setting.setSettingValue(seed[0]);
-            setting.setDescription(seed[1]);
-            setting.setEditable(Boolean.TRUE.equals(editableSettings.get(key)));
+            setting.setSettingValue(seed.value());
+            setting.setDescription(seed.description());
+            setting.setEditable(seed.editable());
             return systemSettingRepository.save(setting);
         }));
     }
 
-    private void addSetting(
-            Map<String, String[]> settings,
-            Map<String, Boolean> editableSettings,
+    private static void addSetting(
+            Map<String, SettingSeed> settings,
             String key,
             String value,
             String description,
             boolean editable) {
-        settings.put(key, new String[] {value, description});
-        editableSettings.put(key, editable);
+        settings.put(key, new SettingSeed(value, description, editable));
+    }
+
+    /** Small private tuple capturing the seed payload for one {@link SystemSetting} row. */
+    private record SettingSeed(String value, String description, boolean editable) {
     }
 
     private void seedDefaultAdmin() {
@@ -272,7 +275,7 @@ public class DataSeeder implements CommandLineRunner {
             return;
         }
 
-        String normalizedEmail = defaultAdminEmail.trim().toLowerCase(java.util.Locale.ROOT);
+        String normalizedEmail = defaultAdminEmail.strip().toLowerCase(Locale.ROOT);
 
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             return;

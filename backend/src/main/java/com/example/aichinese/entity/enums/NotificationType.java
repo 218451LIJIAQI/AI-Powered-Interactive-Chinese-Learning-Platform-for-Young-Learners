@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Topical category of an in-app notification.
@@ -66,22 +64,20 @@ public enum NotificationType {
     ADMIN_TASK;
 
     /** Notifications related to commerce / accounting flows. */
-    public static final Set<NotificationType> COMMERCE = Set.of(
-            PAYMENT_STATUS, REFUND_STATUS, PAYOUT_STATUS);
+    public static final Set<NotificationType> COMMERCE = Collections.unmodifiableSet(EnumSet.of(
+            PAYMENT_STATUS, REFUND_STATUS, PAYOUT_STATUS));
 
     /** Notifications that require admin attention rather than learner attention. */
-    public static final Set<NotificationType> ADMIN_FACING = Set.of(
-            CONTENT_REVIEW, MODERATION_ACTION, AI_REPORT_REVIEW, ADMIN_TASK, TEACHER_APPROVAL);
+    public static final Set<NotificationType> ADMIN_FACING = Collections.unmodifiableSet(EnumSet.of(
+            CONTENT_REVIEW, MODERATION_ACTION, AI_REPORT_REVIEW, ADMIN_TASK, TEACHER_APPROVAL));
 
     /** Notifications that relate to the learner's own pedagogical journey. */
-    public static final Set<NotificationType> LEARNER_PEDAGOGICAL = Set.of(
-            TEACHER_FEEDBACK, QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, LIVE_CLASS_REMINDER);
+    public static final Set<NotificationType> LEARNER_PEDAGOGICAL = Collections.unmodifiableSet(EnumSet.of(
+            TEACHER_FEEDBACK, QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, LIVE_CLASS_REMINDER));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, NotificationType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, NotificationType> LOOKUP =
+            EnumLookups.indexByName(NotificationType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -91,14 +87,7 @@ public enum NotificationType {
      *         is {@code null}, blank, or not a recognised type
      */
     public static Optional<NotificationType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -108,11 +97,14 @@ public enum NotificationType {
      *         blank, or not a recognised type
      */
     public static NotificationType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Notification type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid notification type: " + value + "."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Notification type is required.",
+                () -> "Invalid notification type. Allowed values are SYSTEM, TEACHER_FEEDBACK, "
+                        + "QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, PAYMENT_STATUS, "
+                        + "REFUND_STATUS, PAYOUT_STATUS, LIVE_CLASS_REMINDER, TEACHER_APPROVAL, "
+                        + "CONTENT_REVIEW, MODERATION_ACTION, AI_REPORT_REVIEW, or ADMIN_TASK.");
     }
 
     /**

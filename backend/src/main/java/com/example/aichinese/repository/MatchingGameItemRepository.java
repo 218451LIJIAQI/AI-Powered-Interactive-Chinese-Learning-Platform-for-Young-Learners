@@ -22,6 +22,15 @@ import com.example.aichinese.entity.MatchingGameItem;
  */
 public interface MatchingGameItemRepository extends JpaRepository<MatchingGameItem, Long> {
 
+    /**
+     * Returns every pair belonging to {@code matchingGameId} in the
+     * order the activity author intended. Sorts primarily by
+     * {@code sortOrder} (the explicit reorderable position the admin
+     * picks in the editor) with {@code createdAt} as a deterministic
+     * tie-breaker so two pairs sharing the same {@code sortOrder} still
+     * render in insertion order rather than in arbitrary database
+     * order.
+     */
     List<MatchingGameItem> findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(Long matchingGameId);
 
     /**

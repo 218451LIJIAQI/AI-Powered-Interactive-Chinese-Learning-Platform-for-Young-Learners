@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Question format for a single {@code QuizQuestion} row.
@@ -64,7 +62,7 @@ public enum QuizQuestionType {
      * {@code TeacherQuizService.persistQuizQuestion} via
      * {@link #isOptionBased()}.
      */
-    private static final Set<QuizQuestionType> OPTION_BASED_TYPES = Set.of(
+    private static final Set<QuizQuestionType> OPTION_BASED_TYPES = Collections.unmodifiableSet(EnumSet.of(
             MULTIPLE_CHOICE,
             TRUE_FALSE,
             MATCH_WORD_MEANING,
@@ -72,20 +70,37 @@ public enum QuizQuestionType {
             LISTEN_CHOOSE,
             CHOOSE_PINYIN,
             CHOOSE_TONE,
-            CHARACTER_MEANING);
+            CHARACTER_MEANING));
 
     /** Question types that accept free-text input rather than option rows. */
-    private static final Set<QuizQuestionType> FREE_TEXT_TYPES = Set.of(FILL_BLANK);
+    private static final Set<QuizQuestionType> FREE_TEXT_TYPES =
+            Collections.unmodifiableSet(EnumSet.of(FILL_BLANK));
 
     /** Question types that accept a structured (non-text, non-option) payload. */
     private static final Set<QuizQuestionType> STRUCTURED_PAYLOAD_TYPES =
-            Set.of(REARRANGE_SENTENCE);
+            Collections.unmodifiableSet(EnumSet.of(REARRANGE_SENTENCE));
+
+    /*
+     * Startup-time exhaustiveness guard: every constant must belong to
+     * exactly one of the three disjoint answer-format sets.  If a
+     * developer adds a new QuizQuestionType without classifying it,
+     * the JVM will throw an AssertionError the moment this class is
+     * loaded.
+     */
+    static {
+        EnumSet<QuizQuestionType> covered = EnumSet.copyOf(OPTION_BASED_TYPES);
+        covered.addAll(FREE_TEXT_TYPES);
+        covered.addAll(STRUCTURED_PAYLOAD_TYPES);
+        if (!covered.equals(EnumSet.allOf(QuizQuestionType.class))) {
+            EnumSet<QuizQuestionType> missing = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "QuizQuestionType category sets do not cover all constants; uncovered: " + missing);
+        }
+    }
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, QuizQuestionType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, QuizQuestionType> LOOKUP =
+            EnumLookups.indexByName(QuizQuestionType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -95,14 +110,7 @@ public enum QuizQuestionType {
      *         is {@code null}, blank, or not a recognised question type
      */
     public static Optional<QuizQuestionType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -119,13 +127,13 @@ public enum QuizQuestionType {
      *         blank, or not a recognised question type
      */
     public static QuizQuestionType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Question type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid question type. Allowed values are MULTIPLE_CHOICE, TRUE_FALSE, "
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Question type is required.",
+                () -> "Invalid question type. Allowed values are MULTIPLE_CHOICE, TRUE_FALSE, "
                         + "FILL_BLANK, MATCH_WORD_MEANING, MATCH_WORD_IMAGE, LISTEN_CHOOSE, "
-                        + "REARRANGE_SENTENCE, CHOOSE_PINYIN, CHOOSE_TONE, or CHARACTER_MEANING."));
+                        + "REARRANGE_SENTENCE, CHOOSE_PINYIN, CHOOSE_TONE, or CHARACTER_MEANING.");
     }
 
     /**

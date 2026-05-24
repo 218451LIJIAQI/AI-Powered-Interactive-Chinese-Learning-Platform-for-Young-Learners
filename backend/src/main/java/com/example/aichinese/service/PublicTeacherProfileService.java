@@ -2,6 +2,10 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.Objects;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,6 +33,8 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 @Service
 public class PublicTeacherProfileService {
 
+    private static final Logger log = LoggerFactory.getLogger(PublicTeacherProfileService.class);
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final LessonRepository lessonRepository;
     private final CoursePackageRepository coursePackageRepository;
@@ -39,10 +45,10 @@ public class PublicTeacherProfileService {
             LessonRepository lessonRepository,
             CoursePackageRepository coursePackageRepository,
             TeacherManagementMapper teacherManagementMapper) {
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.lessonRepository = lessonRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.teacherManagementMapper = teacherManagementMapper;
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
     }
 
     @Transactional(readOnly = true)

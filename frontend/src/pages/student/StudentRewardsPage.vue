@@ -355,8 +355,7 @@ const pageError = computed(
     historyResource.error.value ||
     dashboardResource.error.value ||
     progressResource.error.value ||
-    activitiesResource.error.value ||
-    null,
+    activitiesResource.error.value,
 )
 
 function levelTitleFor(levelNumber: number) {
@@ -383,7 +382,7 @@ const heroStats = computed(() => [
 
 const quizzesAbove80 = computed(
   () =>
-    dashboard.value.recentQuizResults.filter((item) => Math.round((item.score / item.maxScore) * 100) >= 80).length,
+    dashboard.value.recentQuizResults.filter((item) => item.maxScore > 0 && Math.round((item.score / item.maxScore) * 100) >= 80).length,
 )
 
 const earnedBadgeCards = computed(() => {

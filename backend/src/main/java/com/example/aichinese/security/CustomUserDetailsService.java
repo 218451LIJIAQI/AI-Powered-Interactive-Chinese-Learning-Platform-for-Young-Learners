@@ -1,9 +1,12 @@
 package com.example.aichinese.security;
 
+import java.util.Objects;
+
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.repository.UserRepository;
 
@@ -34,11 +37,29 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
 
     public CustomUserDetailsService(UserRepository userRepository) {
-        this.userRepository = userRepository;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
     }
 
+    /**
+     * Resolves a {@link SecurityUserDetails} for the supplied email
+     * (Spring Security calls this "username"). A {@code null} or blank
+     * argument is rejected with the same {@link UsernameNotFoundException}
+     * as a missing row so the auth entry point never has to differentiate
+     * between malformed-input and not-found cases.
+     *
+     * <p>Marked {@link Transactional @Transactional(readOnly = true)} so
+     * the eager role fetch inside
+     * {@link UserRepository#findByEmailWithRoles(String)} runs in a
+     * managed read-only transaction; this both lets Hibernate skip
+     * dirty-checking on the loaded entities and pins the connection
+     * to a follower replica when one is configured.</p>
+     */
     @Override
+    @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        if (username == null || username.isBlank()) {
+            throw new UsernameNotFoundException("User not found");
+        }
         return userRepository.findByEmailWithRoles(username)
                 .map(SecurityUserDetails::new)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));

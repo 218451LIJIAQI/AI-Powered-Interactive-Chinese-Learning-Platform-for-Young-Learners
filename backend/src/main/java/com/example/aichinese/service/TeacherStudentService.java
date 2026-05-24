@@ -4,14 +4,17 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.Objects;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -58,6 +61,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class TeacherStudentService {
 
+    private static final Logger log = LoggerFactory.getLogger(TeacherStudentService.class);
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final LessonProgressRepository lessonProgressRepository;
     private final QuizAttemptRepository quizAttemptRepository;
@@ -76,14 +81,14 @@ public class TeacherStudentService {
             StudentProfileRepository studentProfileRepository,
             StudentLearningAccessService studentLearningAccessService,
             LiveLearningAccessService liveLearningAccessService) {
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
-        this.teacherFeedbackRepository = teacherFeedbackRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.liveLearningAccessService = liveLearningAccessService;
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
+        this.teacherFeedbackRepository = Objects.requireNonNull(teacherFeedbackRepository, "teacherFeedbackRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
     }
 
     @Transactional(readOnly = true)
@@ -269,8 +274,8 @@ public class TeacherStudentService {
             Double quizAveragePercent = submittedAttemptCount > 0
                     ? submittedAttemptPercentTotal / (double) submittedAttemptCount
                     : null;
-            boolean atRisk = progressPercent > 0 && progressPercent < 60
-                    || quizAveragePercent != null && quizAveragePercent < 70
+            boolean atRisk = (progressPercent > 0 && progressPercent < 60)
+                    || (quizAveragePercent != null && quizAveragePercent < 70)
                     || !weakAreas.isEmpty();
 
             return new TeacherStudentSummaryResponse(
@@ -283,7 +288,7 @@ public class TeacherStudentService {
                     progressPercent,
                     quizAveragePercent,
                     atRisk,
-                    List.copyOf(weakAreas).stream().limit(4).toList(),
+                    weakAreas.stream().limit(4).toList(),
                     latestFeedbackType,
                     latestFeedbackAt,
                     latestActivityAt,

@@ -5,7 +5,9 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -284,7 +286,7 @@ class AdminTeacherManagementIntegrationTests {
         User studentUser = userRepository.findByEmailWithRoles(studentEmail).orElseThrow();
         String adminToken = adminToken();
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
+        mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
                 .with(csrf())
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -308,7 +310,7 @@ class AdminTeacherManagementIntegrationTests {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
+        mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
                 .with(csrf())
                 .header("Authorization", "Bearer " + adminToken)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -329,7 +331,7 @@ class AdminTeacherManagementIntegrationTests {
     void adminShouldNotDeactivateOwnAccount() throws Exception {
         User adminUser = userRepository.findByEmailWithRoles("admin@example.com").orElseThrow();
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/admin/users/" + adminUser.getId() + "/status")
+        mockMvc.perform(patch("/api/v1/admin/users/" + adminUser.getId() + "/status")
                 .with(csrf())
                 .header("Authorization", "Bearer " + adminToken())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -350,10 +352,8 @@ class AdminTeacherManagementIntegrationTests {
         mockMvc.perform(get("/api/v1/admin/teacher-documents/" + documentId)
                 .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
-                        .string("Content-Disposition", startsWith("attachment;")))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
-                        .string("Cache-Control", "no-store"));
+                .andExpect(header().string("Content-Disposition", startsWith("attachment;")))
+                .andExpect(header().string("Cache-Control", "no-store"));
     }
 
     private TeacherProfile registerTeacherWithDocument(String email) throws Exception {

@@ -2,6 +2,9 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
+import java.util.Objects;
+import java.util.function.Function;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -61,13 +64,13 @@ public class RecordedLessonService {
             NotificationService notificationService,
             AuditLogService auditLogService,
             ContentSafetyService contentSafetyService) {
-        this.recordedLessonVideoRepository = recordedLessonVideoRepository;
-        this.liveLearningAccessService = liveLearningAccessService;
-        this.recordedVideoStorageService = recordedVideoStorageService;
-        this.liveLearningMapper = liveLearningMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.contentSafetyService = contentSafetyService;
+        this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.recordedVideoStorageService = Objects.requireNonNull(recordedVideoStorageService, "recordedVideoStorageService");
+        this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
 
     @Transactional
@@ -243,7 +246,7 @@ public class RecordedLessonService {
             Page<RecordedLessonVideo> videoPage,
             int page,
             int size,
-            java.util.function.Function<RecordedLessonVideo, RecordedLessonVideoResponse> mapper) {
+            Function<RecordedLessonVideo, RecordedLessonVideoResponse> mapper) {
         return new PageResponse<>(
                 videoPage.getContent().stream()
                         .map(mapper)

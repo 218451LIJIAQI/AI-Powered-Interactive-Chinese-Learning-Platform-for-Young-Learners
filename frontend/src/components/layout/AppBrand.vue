@@ -17,12 +17,11 @@
  */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-withDefaults(
-  defineProps<{
-    compact?: boolean
-  }>(),
-  {
-    compact: false,
-  },
-)
+interface Props {
+  compact?: boolean
+}
+
+withDefaults(defineProps<Props>(), {
+  compact: false,
+})
 </script>

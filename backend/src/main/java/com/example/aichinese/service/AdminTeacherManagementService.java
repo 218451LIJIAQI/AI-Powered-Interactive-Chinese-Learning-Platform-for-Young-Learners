@@ -3,11 +3,16 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +63,8 @@ import jakarta.persistence.criteria.Predicate;
 @Service
 public class AdminTeacherManagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminTeacherManagementService.class);
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherVerificationDocumentRepository teacherVerificationDocumentRepository;
     private final TeacherVerificationReviewRepository teacherVerificationReviewRepository;
@@ -80,16 +87,16 @@ public class AdminTeacherManagementService {
             EmailService emailService,
             FileStorageService fileStorageService,
             AuditLogRepository auditLogRepository) {
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.teacherVerificationDocumentRepository = teacherVerificationDocumentRepository;
-        this.teacherVerificationReviewRepository = teacherVerificationReviewRepository;
-        this.userRepository = userRepository;
-        this.teacherManagementMapper = teacherManagementMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.emailService = emailService;
-        this.fileStorageService = fileStorageService;
-        this.auditLogRepository = auditLogRepository;
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.teacherVerificationDocumentRepository = Objects.requireNonNull(teacherVerificationDocumentRepository, "teacherVerificationDocumentRepository");
+        this.teacherVerificationReviewRepository = Objects.requireNonNull(teacherVerificationReviewRepository, "teacherVerificationReviewRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.emailService = Objects.requireNonNull(emailService, "emailService");
+        this.fileStorageService = Objects.requireNonNull(fileStorageService, "fileStorageService");
+        this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
     }
 
     @Transactional(readOnly = true)
@@ -115,7 +122,7 @@ public class AdminTeacherManagementService {
                 .orElse(null);
 
         Page<TeacherProfile> teachers = teacherProfileRepository.findAll((root, query, cb) -> {
-            java.util.List<Predicate> predicates = new java.util.ArrayList<>();
+            List<Predicate> predicates = new ArrayList<>();
 
             if (parsedStatus != null) {
                 predicates.add(cb.equal(root.get("teacherStatus"), parsedStatus));
@@ -183,7 +190,7 @@ public class AdminTeacherManagementService {
         teacherProfile.setTeacherStatus(TeacherStatus.APPROVED);
         teacherProfile.setRejectionReason(null);
         teacherProfile.setPublicVisible(true);
-        teacherProfile.setVerifiedAt(java.time.LocalDateTime.now());
+        teacherProfile.setVerifiedAt(LocalDateTime.now());
         teacherProfileRepository.save(teacherProfile);
 
         TeacherVerificationReview review = new TeacherVerificationReview();
@@ -192,7 +199,7 @@ public class AdminTeacherManagementService {
         review.setReviewerUser(adminUser);
         review.setDecisionStatus(TeacherStatus.APPROVED);
         review.setReviewNote(TextUtils.trimToNull(note));
-        review.setReviewedAt(java.time.LocalDateTime.now());
+        review.setReviewedAt(LocalDateTime.now());
         teacherVerificationReviewRepository.save(review);
 
         notificationService.safeCreateNotification(
@@ -200,6 +207,7 @@ public class AdminTeacherManagementService {
                 "Teacher account approved",
                 "Your teacher account has been approved by an administrator.",
                 "/teacher/profile");
+        log.info("Teacher approved: teacherId={}, adminUserId={}", teacherProfile.getId(), adminUser.getId());
         auditLogService.record(adminUser, "ADMIN_TEACHER_APPROVE", "TeacherProfile", teacherProfile.getId(),
                 "Admin approved teacher verification.");
         emailService.safeSendTeacherApprovalNotice(teacherProfile.getUser(), note);
@@ -224,8 +232,9 @@ public class AdminTeacherManagementService {
             return buildTeacherDetail(teacherProfile);
         }
 
+        String trimmedReason = reason.trim();
         teacherProfile.setTeacherStatus(TeacherStatus.REJECTED);
-        teacherProfile.setRejectionReason(reason.trim());
+        teacherProfile.setRejectionReason(trimmedReason);
         teacherProfile.setPublicVisible(false);
         teacherProfile.setVerifiedAt(null);
         teacherProfileRepository.save(teacherProfile);
@@ -235,8 +244,8 @@ public class AdminTeacherManagementService {
         review.setDocument(teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(teacherId).orElse(null));
         review.setReviewerUser(adminUser);
         review.setDecisionStatus(TeacherStatus.REJECTED);
-        review.setReviewNote(reason.trim());
-        review.setReviewedAt(java.time.LocalDateTime.now());
+        review.setReviewNote(trimmedReason);
+        review.setReviewedAt(LocalDateTime.now());
         teacherVerificationReviewRepository.save(review);
 
         notificationService.safeCreateNotification(
@@ -244,9 +253,10 @@ public class AdminTeacherManagementService {
                 "Teacher account rejected",
                 "Your teacher account was rejected. Please review the rejection reason and resubmit your verification.",
                 "/teacher/profile");
+        log.info("Teacher rejected: teacherId={}, adminUserId={}, reason={}", teacherProfile.getId(), adminUser.getId(), trimmedReason);
         auditLogService.record(adminUser, "ADMIN_TEACHER_REJECT", "TeacherProfile", teacherProfile.getId(),
-                "Admin rejected teacher verification.");
-        emailService.safeSendTeacherRejectionNotice(teacherProfile.getUser(), reason.trim());
+                "Admin rejected teacher verification. Reason: " + trimmedReason);
+        emailService.safeSendTeacherRejectionNotice(teacherProfile.getUser(), trimmedReason);
 
         return buildTeacherDetail(teacherProfile);
     }

@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.student.activity;
 
 import java.util.List;
+import java.util.Objects;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
 import com.example.aichinese.entity.enums.AgeBand;
@@ -27,6 +28,23 @@ import com.example.aichinese.entity.enums.AgeBand;
  * exercises reach this endpoint. {@link #completed} is pre-computed
  * server-side; see {@link StudentActivitySummaryResponse} for the
  * shared student-side metadata vocabulary contract.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces the wire-format contract so a
+ * malformed listening exercise never reaches the client:</p>
+ * <ul>
+ *   <li>{@link #id} and {@link #title} are required — they map to NOT
+ *       NULL schema columns and drive the URL and the card heading.</li>
+ *   <li>{@link #audioUrl} and {@link #questionPayload} are required —
+ *       they are the entire reason a listening exercise exists, and
+ *       the publication gate guarantees both are set on every payload
+ *       this endpoint emits.</li>
+ *   <li>{@link #tags} is null-coalesced to {@link List#of()} and
+ *       wrapped in {@link List#copyOf(java.util.Collection)} so the
+ *       wire format is always {@code []} (matching the frontend type
+ *       {@code tags: string[]}) and a downstream caller cannot mutate
+ *       a cached response.</li>
+ * </ul>
  */
 public record StudentListeningExerciseResponse(
         Long id,
@@ -41,4 +59,20 @@ public record StudentListeningExerciseResponse(
         Integer xpReward,
         Integer estimatedSeconds,
         boolean completed) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on
+     * {@code id}, {@code title}, {@code audioUrl} and
+     * {@code questionPayload} (the four fields the publication gate
+     * promises every listening exercise has) and normalises
+     * {@link #tags} to an unmodifiable defensive copy so external
+     * mutation cannot leak into an already-serialised response.
+     */
+    public StudentListeningExerciseResponse {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(title, "title must not be null");
+        Objects.requireNonNull(audioUrl, "audioUrl must not be null");
+        Objects.requireNonNull(questionPayload, "questionPayload must not be null");
+        tags = tags == null ? List.of() : List.copyOf(tags);
+    }
 }

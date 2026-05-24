@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Structured AI vocabulary helper response returned by
  * {@code POST /api/v1/ai/vocabulary-helper}.
@@ -33,7 +35,26 @@ package com.example.aichinese.dto.ai;
  * question; {@link #encouragement} is a short motivational
  * blurb. {@link #status} mirrors the
  * {@link AiChatResponse#status} convention.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
  */
+@JsonPropertyOrder({
+        "chineseWord",
+        "pinyin",
+        "englishMeaning",
+        "bahasaMelayuMeaning",
+        "simpleExplanation",
+        "exampleSentence",
+        "exampleSentencePinyin",
+        "exampleSentenceTranslation",
+        "imagePromptOrDescription",
+        "miniPracticeQuestion",
+        "encouragement",
+        "status"
+})
 public record AiVocabularyHelperResponse(
         String chineseWord,
         String pinyin,

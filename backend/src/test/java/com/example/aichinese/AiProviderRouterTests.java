@@ -45,6 +45,6 @@ class AiProviderRouterTests {
 
         assertThatThrownBy(router::resolveClient)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("AI_PROVIDER");
+                .hasMessageContaining("Unsupported AI provider");
     }
 }

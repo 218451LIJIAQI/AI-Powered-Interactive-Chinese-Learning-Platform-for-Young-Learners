@@ -49,6 +49,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Entity
 @Table(name = "orders", indexes = {
+        @Index(name = "idx_orders_order_number", columnList = "order_number", unique = true),
         @Index(name = "idx_orders_student_id", columnList = "student_id"),
         @Index(name = "idx_orders_payment_status", columnList = "payment_status")
 })

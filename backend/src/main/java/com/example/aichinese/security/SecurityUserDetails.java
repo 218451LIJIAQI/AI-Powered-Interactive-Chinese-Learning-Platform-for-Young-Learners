@@ -2,11 +2,14 @@ package com.example.aichinese.security;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
 
 /**
@@ -44,12 +47,29 @@ import com.example.aichinese.entity.User;
  * The case-insensitive uniqueness contract on the email column is
  * preserved everywhere this principal is consumed.</p>
  */
-public class SecurityUserDetails implements UserDetails {
+public final class SecurityUserDetails implements UserDetails {
+
+    private static final String ROLE_PREFIX = "ROLE_";
 
     private final User user;
+    private final List<GrantedAuthority> authorities;
+    private final List<String> roleNames;
 
     public SecurityUserDetails(User user) {
-        this.user = user;
+        this.user = Objects.requireNonNull(user, "user");
+        Set<Role> roles = user.getRoles();
+        if (roles == null || roles.isEmpty()) {
+            this.authorities = List.of();
+            this.roleNames = List.of();
+        } else {
+            this.authorities = roles.stream()
+                    .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(ROLE_PREFIX + role.getName().name()))
+                    .toList();
+            this.roleNames = roles.stream()
+                    .map(role -> role.getName().name())
+                    .sorted()
+                    .toList();
+        }
     }
 
     public Long getUserId() {
@@ -62,16 +82,11 @@ public class SecurityUserDetails implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName().name()))
-                .toList();
+        return authorities;
     }
 
     public List<String> getRoleNames() {
-        return user.getRoles().stream()
-                .map(role -> role.getName().name())
-                .sorted()
-                .toList();
+        return roleNames;
     }
 
     @Override
@@ -102,5 +117,31 @@ public class SecurityUserDetails implements UserDetails {
     @Override
     public boolean isEnabled() {
         return user.isActive();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof SecurityUserDetails that)) {
+            return false;
+        }
+        return Objects.equals(user.getId(), that.user.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(user.getId());
+    }
+
+    /**
+     * Diagnostic-only representation. Deliberately omits the password hash and
+     * email body so a stray {@code log.info(principal)} cannot leak credentials
+     * or PII into log aggregators.
+     */
+    @Override
+    public String toString() {
+        return "SecurityUserDetails[id=" + user.getId() + ", active=" + user.isActive() + "]";
     }
 }

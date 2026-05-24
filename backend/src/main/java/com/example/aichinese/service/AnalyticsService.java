@@ -15,7 +15,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Consumer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +70,7 @@ import com.example.aichinese.repository.TeacherEarningRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.repository.VideoProgressRepository;
+import com.example.aichinese.repository.projection.StatusCountProjection;
 import com.example.aichinese.security.SecurityUserDetails;
 
 /**
@@ -97,6 +102,8 @@ import com.example.aichinese.security.SecurityUserDetails;
  */
 @Service
 public class AnalyticsService {
+
+    private static final Logger log = LoggerFactory.getLogger(AnalyticsService.class);
 
     private static final int MAX_TREND_POINTS = 6;
     private static final int RECENT_ACTIVITY_DAYS = 7;
@@ -149,28 +156,28 @@ public class AnalyticsService {
             StudentLearningAccessService studentLearningAccessService,
             LiveLearningAccessService liveLearningAccessService,
             NotificationService notificationService) {
-        this.studentProfileRepository = studentProfileRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.quizAttemptAnswerRepository = quizAttemptAnswerRepository;
-        this.videoProgressRepository = videoProgressRepository;
-        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
-        this.learningModuleRepository = learningModuleRepository;
-        this.lessonRepository = lessonRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.teacherEarningRepository = teacherEarningRepository;
-        this.liveClassRepository = liveClassRepository;
-        this.userRepository = userRepository;
-        this.paymentRecordRepository = paymentRecordRepository;
-        this.refundRequestRepository = refundRequestRepository;
-        this.payoutRequestRepository = payoutRequestRepository;
-        this.contentModerationRecordRepository = contentModerationRecordRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.liveLearningAccessService = liveLearningAccessService;
-        this.notificationService = notificationService;
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
+        this.videoProgressRepository = Objects.requireNonNull(videoProgressRepository, "videoProgressRepository");
+        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
+        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.teacherEarningRepository = Objects.requireNonNull(teacherEarningRepository, "teacherEarningRepository");
+        this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.paymentRecordRepository = Objects.requireNonNull(paymentRecordRepository, "paymentRecordRepository");
+        this.refundRequestRepository = Objects.requireNonNull(refundRequestRepository, "refundRequestRepository");
+        this.payoutRequestRepository = Objects.requireNonNull(payoutRequestRepository, "payoutRequestRepository");
+        this.contentModerationRecordRepository = Objects.requireNonNull(contentModerationRecordRepository, "contentModerationRecordRepository");
+        this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
+        this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
     }
 
     @Transactional(readOnly = true)
@@ -270,7 +277,7 @@ public class AnalyticsService {
         // Trend window is exactly RECENT_ACTIVITY_DAYS days — the previous
         // implementation loaded every user row and dropped all but the most
         // recent week in JVM, paying for IO it would immediately discard.
-        java.time.LocalDateTime trendWindowStart =
+        LocalDateTime trendWindowStart =
                 LocalDate.now().minusDays(RECENT_ACTIVITY_DAYS - 1L).atStartOfDay();
         List<User> recentUsers = userRepository
                 .findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(trendWindowStart);
@@ -291,7 +298,7 @@ public class AnalyticsService {
                         contentModerationRecordRepository.count(),
                         auditLogRepository.count(),
                         notificationService.countAccessibleUnreadNotifications(currentUser),
-                        aiUsageLogRepository.countAll()),
+                        aiUsageLogRepository.count()),
                 buildUserRegistrationTrend(recentUsers),
                 buildTeacherApprovalBreakdown(),
                 buildContentStatusBreakdownFromProjections(
@@ -506,13 +513,13 @@ public class AnalyticsService {
      * chart cards do not need to change.
      */
     private List<AnalyticsBreakdownItemResponse> buildBreakdownFromProjections(
-            List<com.example.aichinese.repository.projection.StatusCountProjection> projections,
+            List<StatusCountProjection> projections,
             String[] expectedStatuses) {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (String status : expectedStatuses) {
             counts.put(status, 0L);
         }
-        for (com.example.aichinese.repository.projection.StatusCountProjection projection : projections) {
+        for (StatusCountProjection projection : projections) {
             if (projection.getStatus() != null) {
                 counts.merge(projection.getStatus(), projection.getCount(), (a, b) -> a + b);
             }
@@ -528,13 +535,13 @@ public class AnalyticsService {
      * behaviour while avoiding three full table loads).
      */
     private List<AnalyticsBreakdownItemResponse> buildContentStatusBreakdownFromProjections(
-            List<com.example.aichinese.repository.projection.StatusCountProjection> moduleCounts,
-            List<com.example.aichinese.repository.projection.StatusCountProjection> lessonCounts,
-            List<com.example.aichinese.repository.projection.StatusCountProjection> packageCounts) {
+            List<StatusCountProjection> moduleCounts,
+            List<StatusCountProjection> lessonCounts,
+            List<StatusCountProjection> packageCounts) {
         Map<String, Long> counts = initializeContentStatusCounts();
-        java.util.function.Consumer<List<com.example.aichinese.repository.projection.StatusCountProjection>> mergeAll =
+        Consumer<List<StatusCountProjection>> mergeAll =
                 projections -> {
-                    for (com.example.aichinese.repository.projection.StatusCountProjection projection : projections) {
+                    for (StatusCountProjection projection : projections) {
                         if (projection.getStatus() != null) {
                             counts.merge(projection.getStatus(), projection.getCount(), (a, b) -> a + b);
                         }
@@ -552,9 +559,9 @@ public class AnalyticsService {
      * miscased statuses still aggregate cleanly under "UNKNOWN".
      */
     private List<AnalyticsBreakdownItemResponse> buildAiStatusBreakdownFromProjections(
-            List<com.example.aichinese.repository.projection.StatusCountProjection> projections) {
+            List<StatusCountProjection> projections) {
         Map<String, Long> counts = new LinkedHashMap<>();
-        for (com.example.aichinese.repository.projection.StatusCountProjection projection : projections) {
+        for (StatusCountProjection projection : projections) {
             counts.merge(normalizeStatus(projection.getStatus()), projection.getCount(), (a, b) -> a + b);
         }
         return buildBreakdownFromMap(counts);

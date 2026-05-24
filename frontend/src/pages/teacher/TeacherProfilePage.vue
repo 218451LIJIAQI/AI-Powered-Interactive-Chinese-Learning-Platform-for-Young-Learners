@@ -264,7 +264,7 @@ const usingFallback = computed(
     notificationsResource.usingFallback.value,
 )
 const pageError = computed(
-  () => actionError.value || profileResource.error.value || verificationResource.error.value || notificationsResource.error.value || null,
+  () => actionError.value || profileResource.error.value || verificationResource.error.value || notificationsResource.error.value,
 )
 const profileHighlights = computed(() => [
   { label: 'Categories', value: String(profile.value.teachingCategories.length) },
@@ -350,6 +350,7 @@ function selectVerificationFile(event: Event) {
 }
 
 async function saveProfile() {
+  if (savingProfile.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
     actionError.value = 'Teacher profile cannot be changed while preview data is active.'
@@ -376,6 +377,7 @@ async function saveProfile() {
 }
 
 async function downloadVerificationDocument(documentId: number, originalFileName: string) {
+  if (downloadingDocumentId.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
     actionError.value = 'Verification document downloads are unavailable while using preview data.'
@@ -404,6 +406,7 @@ function markTeacherNotificationRead(notificationId: number) {
 }
 
 async function markAllNotificationsRead() {
+  if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionSuccess.value = null
     actionError.value = 'Notifications cannot be changed while using preview data.'
@@ -448,6 +451,7 @@ async function resubmitVerification() {
 }
 
 async function uploadDocument() {
+  if (uploading.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
     actionError.value = 'Verification document upload is unavailable while using preview data.'

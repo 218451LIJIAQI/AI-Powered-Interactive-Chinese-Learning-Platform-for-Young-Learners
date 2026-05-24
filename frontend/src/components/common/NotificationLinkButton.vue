@@ -24,11 +24,13 @@ import { useRouter } from 'vue-router'
 import { notificationsApi } from '@/api/services'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 
-const props = defineProps<{
+interface Props {
   notificationId?: number
   targetPath?: string | null
   fallbackTo?: string
-}>()
+}
+
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   read: [notificationId: number]
@@ -36,16 +38,19 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
-async function openTarget() {
+function openTarget(): void {
   const target = normalizeAppRoute(props.targetPath) ?? props.fallbackTo ?? '/'
+
   if (props.notificationId) {
-    try {
-      await notificationsApi.markAsRead(props.notificationId)
-      emit('read', props.notificationId)
-      window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { notificationId: props.notificationId } }))
-    } catch {
-    }
+    const id = props.notificationId
+    notificationsApi.markAsRead(id).then(() => {
+      emit('read', id)
+      window.dispatchEvent(
+        new CustomEvent('mandarin-spark:notification-read', { detail: { notificationId: id } }),
+      )
+    }).catch(() => { /* swallowed — navigation proceeds regardless */ })
   }
+
   void router.push(target)
 }
 </script>

@@ -6,9 +6,12 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +30,7 @@ import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
 import com.example.aichinese.entity.enums.MeetingPlatform;
+import com.example.aichinese.entity.enums.PackageItemType;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
@@ -91,16 +95,16 @@ public class LiveLearningAccessService {
             PackageItemRepository packageItemRepository,
             TeacherContentAccessService teacherContentAccessService,
             EntitlementService entitlementService) {
-        this.studentProfileRepository = studentProfileRepository;
-        this.lessonRepository = lessonRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.liveClassRepository = liveClassRepository;
-        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
-        this.recordedLessonVideoRepository = recordedLessonVideoRepository;
-        this.uploadedFileRepository = uploadedFileRepository;
-        this.packageItemRepository = packageItemRepository;
-        this.teacherContentAccessService = teacherContentAccessService;
-        this.entitlementService = entitlementService;
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
+        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
+        this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
+        this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
+        this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
+        this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
+        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
     }
 
     @Transactional(readOnly = true)
@@ -287,7 +291,7 @@ public class LiveLearningAccessService {
             throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is required.");
         }
         try {
-            return MeetingPlatform.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+            return MeetingPlatform.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is invalid.");
         }
@@ -299,7 +303,7 @@ public class LiveLearningAccessService {
         }
 
         try {
-            return LiveClassStatus.valueOf(value.trim().toUpperCase());
+            return LiveClassStatus.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Live class status is invalid.");
         }
@@ -310,7 +314,7 @@ public class LiveLearningAccessService {
             throw new ResponseStatusException(BAD_REQUEST, "Recorded video source type is required.");
         }
         try {
-            return RecordedVideoSourceType.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+            return RecordedVideoSourceType.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Recorded video source type is invalid.");
         }
@@ -338,7 +342,7 @@ public class LiveLearningAccessService {
         }
     }
 
-    public void validateLiveClassTiming(java.time.LocalDateTime startTime, java.time.LocalDateTime endTime) {
+    public void validateLiveClassTiming(LocalDateTime startTime, LocalDateTime endTime) {
         if (startTime == null || endTime == null || !endTime.isAfter(startTime)) {
             throw new ResponseStatusException(BAD_REQUEST, "End time must be after start time.");
         }
@@ -367,12 +371,12 @@ public class LiveLearningAccessService {
 
     public Set<Long> findPublishedPackageIdsContainingLesson(Lesson lesson) {
         return packageItemRepository
-                .findByItemTypeAndItemId(com.example.aichinese.entity.enums.PackageItemType.LESSON, lesson.getId())
+                .findByItemTypeAndItemId(PackageItemType.LESSON, lesson.getId())
                 .stream()
                 .filter(item -> item.getCoursePackage() != null
                         && item.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED)
                 .map(item -> item.getCoursePackage().getId())
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
     }
 
     private void ensureLiveClassVisibleToStudents(LiveClass liveClass) {
@@ -405,7 +409,7 @@ public class LiveLearningAccessService {
         if (uri == null || uri.getScheme() == null || uri.getHost() == null) {
             return false;
         }
-        String scheme = uri.getScheme().toLowerCase(java.util.Locale.ROOT);
+        String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
         return "http".equals(scheme) || "https".equals(scheme);
     }
 }

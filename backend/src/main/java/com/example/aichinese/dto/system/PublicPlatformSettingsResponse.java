@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.system;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Lean public-facing platform settings snapshot returned by
  * {@code GET /api/v1/public/platform-settings} — accessible to
@@ -28,7 +30,23 @@ package com.example.aichinese.dto.system;
  * <p>Cached client-side; the front-end refreshes on app load and
  * on settings-change events from the admin (the latter is not yet
  * pushed in real time — admins typically tell users to refresh).</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions
+ * (front-end branding/disclaimer rendering, marketing-page trust
+ * badges, snapshot tests). The primitive {@code boolean} flags
+ * always emit {@code true}/{@code false} so the front-end never
+ * has to tri-state on {@code null}.</p>
  */
+@JsonPropertyOrder({
+        "platformName",
+        "aiDisclaimerText",
+        "strictContentFiltering",
+        "sensitiveWordFilter",
+        "aiSafetyCheck"
+})
 public record PublicPlatformSettingsResponse(
         String platformName,
         String aiDisclaimerText,

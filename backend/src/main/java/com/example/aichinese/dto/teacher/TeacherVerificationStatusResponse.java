@@ -1,6 +1,9 @@
 package com.example.aichinese.dto.teacher;
 
 import java.util.List;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import com.example.aichinese.entity.enums.TeacherStatus;
 
@@ -44,9 +47,24 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * additionally retains historical versions for audit. This keeps the
  * dashboard widget compact.</p>
  *
- * @param teacherStatus              current verification state
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces non-null on {@link #teacherStatus}
+ * (every persisted profile has a verification state) and defensively
+ * copies {@link #latestSubmittedDocuments} (with {@code null} →
+ * {@link List#of()} normalisation) so external mutation cannot leak
+ * into an already-serialised payload. {@link #latestReviewResult} and
+ * {@link #rejectionReason} remain nullable per the documented rules.</p>
+ *
+ * @param teacherStatus              current verification state; never
+ *                                   {@code null}
  * @param latestSubmittedDocuments   one row per document type (current
- *                                   version only)
+ *                                   version only); never {@code null};
+ *                                   the wrapped list is unmodifiable
  * @param latestReviewResult         most recent admin decision;
  *                                   {@code null} when the profile has
  *                                   not yet been reviewed
@@ -58,10 +76,32 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  *                                   {@code boolean} so the wire format
  *                                   always emits a value
  */
+@JsonPropertyOrder({
+        "teacherStatus",
+        "latestSubmittedDocuments",
+        "latestReviewResult",
+        "rejectionReason",
+        "resubmissionAllowed"
+})
 public record TeacherVerificationStatusResponse(
         TeacherStatus teacherStatus,
         List<TeacherVerificationDocumentSummaryResponse> latestSubmittedDocuments,
         TeacherVerificationReviewSummaryResponse latestReviewResult,
         String rejectionReason,
         boolean resubmissionAllowed) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on
+     * {@link #teacherStatus} (every persisted profile has a state) and
+     * defensively copies {@link #latestSubmittedDocuments} so external
+     * mutation cannot leak into an already-serialised payload. Leaves
+     * the contextual nullable fields ({@code latestReviewResult},
+     * {@code rejectionReason}) untouched.
+     */
+    public TeacherVerificationStatusResponse {
+        Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
+        latestSubmittedDocuments = latestSubmittedDocuments == null
+                ? List.of()
+                : List.copyOf(latestSubmittedDocuments);
+    }
 }

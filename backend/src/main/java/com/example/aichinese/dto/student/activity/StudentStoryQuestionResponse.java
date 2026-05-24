@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.student.activity;
 
+import java.util.Objects;
+
 /**
  * One comprehension prompt attached to a student-facing story
  * activity, surfaced inside
@@ -23,6 +25,24 @@ package com.example.aichinese.dto.student.activity;
  * prompt even when they got it right. {@link #sortOrder} preserves
  * the author's canonical question order; the front-end may
  * optionally shuffle on each play.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces non-null on {@link #id},
+ * {@link #questionText} and {@link #optionsPayload} — they map to NOT
+ * NULL schema columns and are required by the rendering and grading
+ * paths (a story question without options is structurally meaningless).
+ * {@link #explanation} and {@link #sortOrder} may legitimately be
+ * {@code null} when the author left them unset.</p>
+ *
+ * @param id              database-assigned primary key; never
+ *                        {@code null}
+ * @param questionText    prompt the learner reads; never
+ *                        {@code null}
+ * @param optionsPayload  opaque JSON of multiple-choice options +
+ *                        correct-answer marker; never {@code null}
+ * @param explanation     post-submit explanation; nullable
+ * @param sortOrder       canonical authoring order; nullable when
+ *                        the author did not pin a sort position
  */
 public record StudentStoryQuestionResponse(
         Long id,
@@ -30,4 +50,17 @@ public record StudentStoryQuestionResponse(
         String optionsPayload,
         String explanation,
         Integer sortOrder) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the three
+     * required schema columns ({@code id}, {@code questionText},
+     * {@code optionsPayload}) so a malformed question cannot reach the
+     * wire format and break the front-end multiple-choice rendering or
+     * post-submit explanation overlay.
+     */
+    public StudentStoryQuestionResponse {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(questionText, "questionText must not be null");
+        Objects.requireNonNull(optionsPayload, "optionsPayload must not be null");
+    }
 }

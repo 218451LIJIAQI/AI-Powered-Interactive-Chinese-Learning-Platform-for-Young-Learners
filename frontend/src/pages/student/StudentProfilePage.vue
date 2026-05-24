@@ -469,8 +469,7 @@ const pageError = computed(
     rewardsResource.error.value ||
     progressResource.error.value ||
     activitiesResource.error.value ||
-    notificationsResource.error.value ||
-    null,
+    notificationsResource.error.value,
 )
 const profileNoticeDetail = computed(() => {
   if (actionError.value || pageError.value) {
@@ -517,10 +516,11 @@ const badgeCards = computed(() =>
     subtitle: badge.awardedAt ? `Awarded ${formatDate(badge.awardedAt)}` : badge.description,
     initials: badge.name
       .split(' ')
+      .filter(Boolean)
       .map((part) => part[0])
       .join('')
       .slice(0, 2)
-      .toUpperCase(),
+      .toUpperCase() || '?',
   })),
 )
 
@@ -578,6 +578,7 @@ function markStudentNotificationRead(notificationId: number) {
 }
 
 async function markAllNotificationsRead() {
+  if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionError.value = 'Notifications cannot be changed while using preview data.'
     actionSuccess.value = null
@@ -604,6 +605,7 @@ async function markAllNotificationsRead() {
 }
 
 async function submitRefund() {
+  if (submittingRefund.value) return
   if (refundReadOnly.value) {
     actionError.value = 'Refund requests cannot be submitted while preview payment data is active.'
     actionSuccess.value = null

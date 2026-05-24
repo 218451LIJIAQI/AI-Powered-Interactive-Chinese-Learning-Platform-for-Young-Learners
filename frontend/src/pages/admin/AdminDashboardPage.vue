@@ -409,8 +409,7 @@ const pageError = computed(
     notificationsResource.error.value ||
     auditResource.error.value ||
     aiReportsResource.error.value ||
-    healthResource.error.value ||
-    null,
+    healthResource.error.value,
 )
 const usingFallback = computed(
   () =>

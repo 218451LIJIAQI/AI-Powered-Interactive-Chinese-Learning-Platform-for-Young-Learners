@@ -1,5 +1,5 @@
 <template>
-  <div class="portrait-avatar" :class="[shapeClass, `is-${kind}`]" :style="{ '--portrait-size': `${size}px`, '--portrait-accent': accent }">
+  <div class="portrait-avatar" :class="[rounded === 'soft' ? 'is-soft' : 'is-circle', `is-${kind}`]" :style="{ '--portrait-size': `${size}px`, '--portrait-accent': accent }" role="img" aria-label="User avatar">
     <span class="portrait-backdrop" />
     <span class="portrait-shoulders" />
     <span class="portrait-neck" />
@@ -28,24 +28,22 @@
  * default avatars matters for first-time learners' sense of
  * belonging.
  */
-import { computed } from 'vue'
+type AvatarKind = 'female' | 'male' | 'hijab' | 'student'
+type AvatarShape = 'circle' | 'soft'
 
-const props = withDefaults(
-  defineProps<{
-    size?: number
-    kind?: 'female' | 'male' | 'hijab' | 'student'
-    accent?: string
-    rounded?: 'circle' | 'soft'
-  }>(),
-  {
-    size: 56,
-    kind: 'student',
-    accent: '#7b57ff',
-    rounded: 'circle',
-  },
-)
+interface Props {
+  size?: number
+  kind?: AvatarKind
+  accent?: string
+  rounded?: AvatarShape
+}
 
-const shapeClass = computed(() => (props.rounded === 'soft' ? 'is-soft' : 'is-circle'))
+withDefaults(defineProps<Props>(), {
+  size: 56,
+  kind: 'student',
+  accent: '#7b57ff',
+  rounded: 'circle',
+})
 </script>
 
 <style scoped>
@@ -54,6 +52,7 @@ const shapeClass = computed(() => (props.rounded === 'soft' ? 'is-soft' : 'is-ci
   width: var(--portrait-size);
   height: var(--portrait-size);
   overflow: hidden;
+  contain: layout paint;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
     0 10px 22px rgba(135, 144, 198, 0.14);

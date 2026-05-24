@@ -2,7 +2,6 @@ package com.example.aichinese.controller;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import java.util.Optional;
 
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
@@ -86,8 +85,7 @@ final class FileDownloadResponseBuilder {
                 return DEFAULT_MEDIA_TYPE;
             }
         }
-        Optional<MediaType> detectedMediaType = MediaTypeFactory.getMediaType(download.resource());
-        return detectedMediaType.isPresent() ? Objects.requireNonNull(detectedMediaType.get()) : DEFAULT_MEDIA_TYPE;
+        return Objects.requireNonNull(MediaTypeFactory.getMediaType(download.resource()).orElse(DEFAULT_MEDIA_TYPE));
     }
 
     private static String resolveFileName(StoredFileDownload download) {

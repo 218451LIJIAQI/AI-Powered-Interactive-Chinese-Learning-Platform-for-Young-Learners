@@ -36,6 +36,21 @@ import com.example.aichinese.entity.enums.PaymentStatus;
  * platform must not optimistically mark the payment as
  * {@code PAID}. The student can retry later; the webhook will
  * still resolve the true state.</p>
+ *
+ * @param available        {@code true} when the provider returned a
+ *                         usable status fetch
+ * @param providerName     lower-case provider identifier echoed
+ *                         from {@code PaymentProviderClient.providerName()}
+ * @param sessionReference provider session id correlated against
+ *                         {@link com.example.aichinese.entity.PaymentRecord#getProviderReference()};
+ *                         {@code null} when {@link #available} is
+ *                         {@code false}
+ * @param paymentStatus    canonical platform-side mapped status
+ *                         that the consumer branches on
+ * @param providerStatus   raw status string echoed for diagnostics,
+ *                         or {@link #UNAVAILABLE_PROVIDER_STATUS}
+ *                         for soft failures
+ * @param message          human-readable status / error blurb
  */
 public record PaymentProviderStatusResult(
         boolean available,
@@ -44,6 +59,18 @@ public record PaymentProviderStatusResult(
         PaymentStatus paymentStatus,
         String providerStatus,
         String message) {
+
+    /**
+     * Canonical {@link #providerStatus} value reported by the
+     * {@link #unavailable(String, String)} soft-failure factory and
+     * mirrored in
+     * {@link PaymentProviderCheckoutResult#UNAVAILABLE_PROVIDER_STATUS}.
+     * Aliased here so callers depending on a {@link PaymentProviderStatusResult}
+     * do not need to import the sibling DTO just to reach the
+     * sentinel.
+     */
+    public static final String UNAVAILABLE_PROVIDER_STATUS =
+            PaymentProviderCheckoutResult.UNAVAILABLE_PROVIDER_STATUS;
 
     /**
      * Soft-failure factory for transient provider unavailability.
@@ -55,9 +82,11 @@ public record PaymentProviderStatusResult(
      *         {@link #paymentStatus()} {@code == PaymentStatus.FAILED}
      *         (the safe default — never optimistically mark a
      *         payment paid when the provider is unreachable), and
-     *         {@link #providerStatus()} {@code == "UNAVAILABLE"}
+     *         {@link #providerStatus()} {@code ==}
+     *         {@link #UNAVAILABLE_PROVIDER_STATUS}
      */
     public static PaymentProviderStatusResult unavailable(String providerName, String message) {
-        return new PaymentProviderStatusResult(false, providerName, null, PaymentStatus.FAILED, "UNAVAILABLE", message);
+        return new PaymentProviderStatusResult(
+                false, providerName, null, PaymentStatus.FAILED, UNAVAILABLE_PROVIDER_STATUS, message);
     }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
@@ -109,7 +110,7 @@ class CorsConfigTests {
                 .entrySet()
                 .stream()
                 .filter(entry -> entry.getKey().equals("/api/**"))
-                .map(java.util.Map.Entry::getValue)
+                .map(Map.Entry::getValue)
                 .toList();
         assertThat(matched).hasSize(1);
         return matched.get(0);

@@ -2,7 +2,6 @@ package com.example.aichinese.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -93,17 +92,17 @@ public class StudentLearningProgressService {
             QuizAttemptRepository quizAttemptRepository,
             QuizAttemptAnswerRepository quizAttemptAnswerRepository,
             StudentLearningAccessService studentLearningAccessService) {
-        this.studentQuizProgressRepository = studentQuizProgressRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.pointsTransactionRepository = pointsTransactionRepository;
-        this.dailyStreakRepository = dailyStreakRepository;
-        this.badgeRepository = badgeRepository;
-        this.studentBadgeRepository = studentBadgeRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.quizRepository = quizRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.quizAttemptAnswerRepository = quizAttemptAnswerRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
+        this.studentQuizProgressRepository = Objects.requireNonNull(studentQuizProgressRepository, "studentQuizProgressRepository");
+        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
+        this.pointsTransactionRepository = Objects.requireNonNull(pointsTransactionRepository, "pointsTransactionRepository");
+        this.dailyStreakRepository = Objects.requireNonNull(dailyStreakRepository, "dailyStreakRepository");
+        this.badgeRepository = Objects.requireNonNull(badgeRepository, "badgeRepository");
+        this.studentBadgeRepository = Objects.requireNonNull(studentBadgeRepository, "studentBadgeRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
     }
 
     @Transactional
@@ -201,7 +200,7 @@ public class StudentLearningProgressService {
 
     @Transactional(readOnly = true)
     public RewardSummaryResponse getRewardSummary(StudentProfile student) {
-        DailyStreak streak = dailyStreakRepository.findFirstByStudentIdOrderByCreatedAtDesc(student.getId()).orElse(null);
+        DailyStreak streak = dailyStreakRepository.findByStudentId(student.getId()).orElse(null);
         List<BadgeSummaryResponse> badges = getBadges(student, 0, 10).items();
 
         List<PointsTransactionResponse> recentPoints = pointsTransactionRepository
@@ -263,7 +262,7 @@ public class StudentLearningProgressService {
 
     @Transactional(readOnly = true)
     public DailyStreakResponse getStreak(StudentProfile student) {
-        DailyStreak streak = dailyStreakRepository.findFirstByStudentIdOrderByCreatedAtDesc(student.getId()).orElse(null);
+        DailyStreak streak = dailyStreakRepository.findByStudentId(student.getId()).orElse(null);
         return new DailyStreakResponse(
                 streak != null && streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0,
                 streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,

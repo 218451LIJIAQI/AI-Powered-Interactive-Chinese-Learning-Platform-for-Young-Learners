@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.system;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Admin-facing platform settings snapshot returned by:
  * <ul>
@@ -41,7 +43,26 @@ package com.example.aichinese.dto.system;
  *
  * <p>The lighter {@link PublicPlatformSettingsResponse} is the
  * subset visible without authentication.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions
+ * (snapshot tests, the admin settings page form layout). The
+ * primitive {@code boolean} flags always emit
+ * {@code true}/{@code false} so the front-end never has to
+ * tri-state on {@code null}.</p>
  */
+@JsonPropertyOrder({
+        "platformName",
+        "aiDisclaimerText",
+        "emailNotifications",
+        "inAppNotifications",
+        "dailySummary",
+        "strictContentFiltering",
+        "sensitiveWordFilter",
+        "aiSafetyCheck"
+})
 public record AdminPlatformSettingsResponse(
         String platformName,
         String aiDisclaimerText,

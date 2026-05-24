@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -71,7 +72,7 @@ public class LoginAttemptLimiter {
         if (maxTrackedAttemptRecords < 1) {
             throw new IllegalArgumentException("maxTrackedAttemptRecords must be positive");
         }
-        this.clock = clock;
+        this.clock = Objects.requireNonNull(clock, "clock");
         this.maxTrackedAttemptRecords = maxTrackedAttemptRecords;
     }
 
@@ -88,21 +89,21 @@ public class LoginAttemptLimiter {
         }
 
         Instant now = clock.instant();
-        if (record.lockedUntil != null && record.lockedUntil.isAfter(now)) {
-            return false;
-        }
-
-        if (record.lockedUntil != null && !record.lockedUntil.isAfter(now)) {
+        if (record.lockedUntil != null) {
+            if (record.lockedUntil.isAfter(now)) {
+                return false;
+            }
             // Lock window has elapsed; clear the slot so the user gets a fresh
-            // attempt budget from this point onwards.
-            attempts.remove(key);
+            // attempt budget from this point onwards. Use the two-arg remove so a
+            // concurrent failure update is not silently discarded.
+            attempts.remove(key, record);
             return true;
         }
 
         // Drop stale records whose window has elapsed without ever locking;
         // keeps the map size bounded in long-running deployments.
         if (record.firstFailureAt.plus(ATTEMPT_WINDOW).isBefore(now)) {
-            attempts.remove(key);
+            attempts.remove(key, record);
         }
         return true;
     }
@@ -204,13 +205,30 @@ public class LoginAttemptLimiter {
     }
 
     private String key(String email, String clientIp) {
-        String normalisedEmail = truncate(email == null ? "" : email.trim().toLowerCase(Locale.ROOT), MAX_EMAIL_KEY_LENGTH);
-        String normalisedIp = truncate(clientIp == null ? "" : clientIp.trim(), MAX_IP_KEY_LENGTH);
+        // strip() (vs trim()) is Unicode-aware, so a stray CJK fullwidth space
+        // before the email cannot produce a different bucket than the
+        // normalised form the login pipeline submits.
+        String normalisedEmail = truncate(
+                email == null ? "" : email.strip().toLowerCase(Locale.ROOT), MAX_EMAIL_KEY_LENGTH);
+        String normalisedIp = truncate(
+                clientIp == null ? "" : clientIp.strip(), MAX_IP_KEY_LENGTH);
         return normalisedEmail + "|" + normalisedIp;
     }
 
-    private String truncate(String value, int maxLength) {
-        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    /**
+     * Truncates {@code value} to {@code maxLength} UTF-16 code units, taking
+     * care not to split a surrogate pair in half. Email / IP keys should
+     * never contain non-BMP characters, but we still guard against it so a
+     * malformed input cannot produce an invalid Java String.
+     */
+    private static String truncate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        if (maxLength > 0 && Character.isHighSurrogate(value.charAt(maxLength - 1))) {
+            return value.substring(0, maxLength - 1);
+        }
+        return value.substring(0, maxLength);
     }
 
     private String anonymizedKey(String email, String clientIp) {

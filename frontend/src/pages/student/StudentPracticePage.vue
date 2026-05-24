@@ -368,8 +368,7 @@ const pageError = computed(
     wrongAnswersResource.error.value ||
     flashcardResource.error.value ||
     dashboardResource.error.value ||
-    progressResource.error.value ||
-    null,
+    progressResource.error.value,
 )
 
 const totalPracticeItems = computed(() => Math.max(activities.value.items.length, 1))
@@ -455,7 +454,7 @@ const activityOptions = computed(() => [
 
 const quizAttemptCards = computed(() =>
   dashboard.value.recentQuizResults.map((result) => {
-    const scorePercent = Math.round((result.score / result.maxScore) * 100)
+    const scorePercent = result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 100) : 0
 
     return {
       id: result.attemptId,
@@ -581,6 +580,7 @@ async function refreshPracticeProgress() {
 }
 
 async function completeSelectedActivity() {
+  if (submittingActivity.value) return
   const activity = selectedActivity.value
   if (!activity) {
     actionError.value = `${activityLabel(selectedActivityType.value)} is not available to complete.`
@@ -609,6 +609,7 @@ async function completeSelectedActivity() {
 }
 
 async function markFlashcardDone(known: boolean) {
+  if (submittingActivity.value) return
   actionError.value = null
   actionSuccess.value = null
   if (!flashcardAvailable.value) {
@@ -682,23 +683,6 @@ function reloadAll() {
 </script>
 
 <style scoped>
-.student-simple-header h1,
-.student-simple-header p {
-  margin: 0;
-}
-
-.student-simple-header h1 {
-  font-family: 'Fredoka', sans-serif;
-  font-size: clamp(2.2rem, 3vw, 3rem);
-  line-height: 1.05;
-}
-
-.student-simple-header p {
-  margin-top: 10px;
-  color: var(--text-soft);
-  font-size: 1rem;
-}
-
 .student-practice-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.44fr) 376px;

@@ -119,17 +119,17 @@ const roleSummary = computed(() => {
   return 'Keep lessons, practice, classes, achievements, and AI help within easy reach.'
 })
 
-type NavigationGroup = {
-  key: string
-  title: string
-  ariaLabel: string
-  items: Array<NavItem & { label: string }>
+interface NavigationGroup {
+  readonly key: string
+  readonly title: string
+  readonly ariaLabel: string
+  readonly items: Array<NavItem & { label: string }>
 }
 
-function pickItems(indices: number[]) {
+function pickItems(indices: readonly number[]): Array<NavItem & { label: string }> {
   return indices
     .map((index) => localizedItems.value[index])
-    .filter((item): item is NavItem & { label: string } => Boolean(item))
+    .filter((item): item is NavItem & { label: string } => !!item)
 }
 
 const navigationGroups = computed<NavigationGroup[]>(() => {
@@ -273,45 +273,28 @@ const footerDecorationIcon = computed(() => {
   }
 })
 
-const showcasePandaSize = computed(() => {
-  if (isGuestCatalog.value) return 118
+const showcasePandaSize = computed<number>(() =>
+  !isGuestCatalog.value && role.value === 'TEACHER' ? 122 : 118,
+)
 
-  switch (role.value) {
-    case 'TEACHER':
-      return 122
-    case 'ADMIN':
-      return 118
-    default:
-      return 118
-  }
-})
+const showcaseOutfit = computed<string>(() =>
+  !isGuestCatalog.value && role.value === 'TEACHER' ? '#7d56ff' : '#ef6b40',
+)
 
-const showcaseOutfit = computed(() => {
-  if (isGuestCatalog.value) return '#ef6b40'
+const showcaseAccent = computed<string>(() => '#f6d056')
 
-  switch (role.value) {
-    case 'TEACHER':
-      return '#7d56ff'
-    case 'ADMIN':
-      return '#ef6b40'
-    default:
-      return '#ef6b40'
-  }
-})
+const showFooterProgress = computed<boolean>(() => !isGuestCatalog.value && role.value === 'STUDENT')
 
-const showcaseAccent = computed(() => '#f6d056')
+const footerProgressTone = computed<string>(() =>
+  showFooterProgress.value && isPreview.value ? 'warning' : '',
+)
 
-const footerProgressTone = computed(() => {
-  if (isGuestCatalog.value) return ''
-  if (role.value !== 'STUDENT') return ''
-  return isPreview.value ? 'warning' : ''
-})
-
-const showFooterProgress = computed(() => !isGuestCatalog.value && role.value === 'STUDENT')
-
-function isLinkActive(to: string) {
-  const [pathPart, queryPart] = to.split('?')
-  const targetPath = pathPart.split('#')[0] || '/'
+function isLinkActive(to: string): boolean {
+  const hashIdx = to.indexOf('#')
+  const noHash = hashIdx >= 0 ? to.slice(0, hashIdx) : to
+  const qIdx = noHash.indexOf('?')
+  const targetPath = (qIdx >= 0 ? noHash.slice(0, qIdx) : noHash) || '/'
+  const queryPart = qIdx >= 0 ? noHash.slice(qIdx + 1) : ''
 
   if (targetPath === '/') {
     return route.path === '/'
@@ -325,8 +308,7 @@ function isLinkActive(to: string) {
     return Object.keys(route.query).length === 0
   }
 
-  const search = queryPart.split('#')[0]
-  const params = new URLSearchParams(search)
+  const params = new URLSearchParams(queryPart)
   for (const [key, value] of params.entries()) {
     if (String(route.query[key] ?? '') !== value) {
       return false

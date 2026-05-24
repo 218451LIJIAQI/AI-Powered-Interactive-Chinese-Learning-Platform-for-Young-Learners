@@ -12,9 +12,9 @@ import jakarta.validation.constraints.Size;
  * <p>Replayed as part of the parent
  * {@link AdminDragDropActivityRequest} so the whole activity can be
  * edited in a single transaction —
- * {@code AdminActivityService.saveDragDropItems} reconciles the
- * incoming list against the persisted children, deleting absent rows
- * and inserting/updating the remainder atomically.</p>
+ * {@code AdminActivityService.updateDragDropActivity} deletes the full
+ * existing children set and re-inserts the incoming list inside the
+ * same JPA transaction so partial-failure states are impossible.</p>
  *
  * <p>{@link #dragText} is the visible label the learner picks up;
  * {@link #targetZone} is the label of the drop area it must land in.
@@ -22,12 +22,15 @@ import jakarta.validation.constraints.Size;
  * front-end presents a multi-slot drop area (e.g. categorise four
  * fruits into a single "Fruit" zone).</p>
  *
- * <p>{@link #pinyin} scaffolds beginners; {@link #imageUrl} optionally
+ * <p>{@link #pinyin} scaffolds beginners (the 255-char ceiling
+ * accommodates multi-syllable phrases or annotated tone marks rather
+ * than a tight per-character bound). {@link #imageUrl} optionally
  * replaces or supplements the text on the draggable card. The
  * {@code @Pattern} on {@link #imageUrl} mirrors the project-wide
  * convention (see {@code RecordedLessonVideoRequest}) and rejects
  * {@code javascript:}, {@code data:}, {@code file:} and protocol-
- * relative URLs that could otherwise reach learner browsers.</p>
+ * relative URLs that could otherwise reach learner browsers as
+ * cross-site script or local-file disclosure vectors.</p>
  *
  * <p>{@link #sortOrder} sets the canonical authoring order; the
  * student-facing renderer is free to shuffle on each play to prevent
@@ -37,14 +40,17 @@ import jakarta.validation.constraints.Size;
  * bound stops abusive clients before the value reaches the database.</p>
  *
  * @param dragText   visible draggable label; required, max 500 chars,
- *                   matches the underlying {@code drag_drop_items.drag_text}
+ *                   matches the underlying
+ *                   {@code drag_drop_items.drag_text VARCHAR(500)}
  *                   column length
  * @param targetZone label of the drop zone the card must land in;
  *                   required, max 200 chars, matches
- *                   {@code drag_drop_items.target_zone}
+ *                   {@code drag_drop_items.target_zone VARCHAR(200)}
  * @param pinyin     optional pinyin scaffold; max 255 chars
+ *                   ({@code drag_drop_items.pinyin VARCHAR(255)})
  * @param imageUrl   optional image URL; max 255 chars; must be
  *                   {@code http(s)://...} or empty/{@code null}
+ *                   ({@code drag_drop_items.image_url VARCHAR(255)})
  * @param sortOrder  authoring order, {@code 0..10000}; nullable
  *                   (mapper falls back to {@code 0})
  */

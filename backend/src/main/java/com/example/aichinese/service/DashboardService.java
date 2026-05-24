@@ -1,12 +1,16 @@
 package com.example.aichinese.service;
 
 import static java.math.BigDecimal.ZERO;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,11 +49,9 @@ import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherEarningRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.TracingExerciseRepository;
-import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
+import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
-
-import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 /**
  * Aggregated "home page" data per persona: student dashboard
@@ -66,6 +68,8 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
  */
 @Service
 public class DashboardService {
+
+    private static final Logger log = LoggerFactory.getLogger(DashboardService.class);
 
     private final StudentProfileRepository studentProfileRepository;
     private final TeacherProfileRepository teacherProfileRepository;
@@ -117,30 +121,30 @@ public class DashboardService {
             AuditLogRepository auditLogRepository,
             StudentLearningAccessService studentLearningAccessService,
             NotificationService notificationService) {
-        this.studentProfileRepository = studentProfileRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.dailyStreakRepository = dailyStreakRepository;
-        this.studentBadgeRepository = studentBadgeRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.quizAttemptAnswerRepository = quizAttemptAnswerRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.notificationRepository = notificationRepository;
-        this.lessonRepository = lessonRepository;
-        this.teacherEarningRepository = teacherEarningRepository;
-        this.userRepository = userRepository;
-        this.learningModuleRepository = learningModuleRepository;
-        this.quizRepository = quizRepository;
-        this.matchingGameRepository = matchingGameRepository;
-        this.flashcardRepository = flashcardRepository;
-        this.listeningExerciseRepository = listeningExerciseRepository;
-        this.tracingExerciseRepository = tracingExerciseRepository;
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.paymentRecordRepository = paymentRecordRepository;
-        this.refundRequestRepository = refundRequestRepository;
-        this.payoutRequestRepository = payoutRequestRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.notificationService = notificationService;
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.dailyStreakRepository = Objects.requireNonNull(dailyStreakRepository, "dailyStreakRepository");
+        this.studentBadgeRepository = Objects.requireNonNull(studentBadgeRepository, "studentBadgeRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
+        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
+        this.notificationRepository = Objects.requireNonNull(notificationRepository, "notificationRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.teacherEarningRepository = Objects.requireNonNull(teacherEarningRepository, "teacherEarningRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
+        this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
+        this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
+        this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
+        this.listeningExerciseRepository = Objects.requireNonNull(listeningExerciseRepository, "listeningExerciseRepository");
+        this.tracingExerciseRepository = Objects.requireNonNull(tracingExerciseRepository, "tracingExerciseRepository");
+        this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
+        this.paymentRecordRepository = Objects.requireNonNull(paymentRecordRepository, "paymentRecordRepository");
+        this.refundRequestRepository = Objects.requireNonNull(refundRequestRepository, "refundRequestRepository");
+        this.payoutRequestRepository = Objects.requireNonNull(payoutRequestRepository, "payoutRequestRepository");
+        this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
     }
 
     @Transactional(readOnly = true)
@@ -157,7 +161,7 @@ public class DashboardService {
                 ? studentProfile.getCurrentLevel().getName()
                 : "Beginner";
         int progressPercent = overallCompletionPercent(accessibleLessonProgress);
-        int dailyStreak = dailyStreakRepository.findFirstByStudentIdOrderByCreatedAtDesc(studentProfile.getId())
+        int dailyStreak = dailyStreakRepository.findByStudentId(studentProfile.getId())
                 .map(streak -> streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0)
                 .orElse(0);
         long badgeCount = studentBadgeRepository.countByStudentId(studentProfile.getId());

@@ -4,7 +4,10 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,9 +32,10 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
  * <ul>
  *   <li>The item exists.</li>
  *   <li>The item is in {@link ContentStatus#PUBLISHED}.</li>
- *   <li>The item is {@link AccessType#PAID} (free items aren't
- *       purchasable).</li>
- *   <li>The unit price is positive (zero / negative pricing rejected).</li>
+ *   <li>If the item is {@link AccessType#PAID}, the unit price must
+ *       be positive (zero / negative pricing is rejected). Free items
+ *       are allowed and handled by the checkout as a
+ *       {@code FREE_UNLOCK}.</li>
  * </ul>
  *
  * <p>All currency precision and rounding flows through
@@ -40,6 +44,8 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
  */
 @Service
 public class PurchasableItemService {
+
+    private static final Logger log = LoggerFactory.getLogger(PurchasableItemService.class);
 
     private final LessonRepository lessonRepository;
     private final LearningModuleRepository learningModuleRepository;
@@ -53,16 +59,17 @@ public class PurchasableItemService {
             CoursePackageRepository coursePackageRepository,
             CommerceMoneyService commerceMoneyService,
             CommerceSettingsService commerceSettingsService) {
-        this.lessonRepository = lessonRepository;
-        this.learningModuleRepository = learningModuleRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.commerceMoneyService = commerceMoneyService;
-        this.commerceSettingsService = commerceSettingsService;
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
     @Transactional(readOnly = true)
     public ResolvedPurchasableItem resolve(String itemTypeValue, Long itemId, String featureKey) {
         PurchasableItemType itemType = PurchasableItemType.fromValue(itemTypeValue);
+        log.debug("Resolving purchasable item: type={}, itemId={}", itemType, itemId);
         return switch (itemType) {
             case LESSON -> resolveLesson(itemId);
             case MODULE -> resolveModule(itemId);

@@ -2,6 +2,9 @@ package com.example.aichinese.dto.admin;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import com.example.aichinese.dto.teacher.TeacherVerificationDocumentSummaryResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationReviewSummaryResponse;
@@ -36,32 +39,75 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * first sentence of {@link #bio}) emitted by the mapper for use as a
  * one-line label in lists.</p>
  *
- * @param teacherId                 {@code TeacherProfile} identifier
- * @param userId                    {@code User} identifier
- * @param fullName                  display name on the user record
- * @param email                     lower-cased login email
- * @param bio                       full public-profile blurb
+ * <h2>Invariants</h2>
+ * <ul>
+ *   <li>{@link #teacherId}, {@link #userId}, {@link #fullName},
+ *       {@link #email}, {@link #teacherStatus}, {@link #createdAt}
+ *       and {@link #updatedAt} are non-{@code null} — they are the
+ *       review-screen header fields the UI renders unconditionally.</li>
+ *   <li>{@link #teachingCategories}, {@link #verificationDocuments},
+ *       {@link #verificationReviewHistory} and {@link #recentAuditLogs}
+ *       are non-{@code null} (empty lists are used when no rows exist)
+ *       and defensively copied so external mutation cannot leak into
+ *       the already-serialised payload.</li>
+ *   <li>{@link #bio}, {@link #shortIntroduction},
+ *       {@link #rejectionReason} and {@link #verifiedAt} may be
+ *       {@code null} per the contextual rules above.</li>
+ * </ul>
+ *
+ * @param teacherId                 {@code TeacherProfile} identifier;
+ *                                  never {@code null}
+ * @param userId                    {@code User} identifier;
+ *                                  never {@code null}
+ * @param fullName                  display name on the user record;
+ *                                  never {@code null}
+ * @param email                     lower-cased login email;
+ *                                  never {@code null}
+ * @param bio                       full public-profile blurb;
+ *                                  may be {@code null}
  * @param shortIntroduction         truncated single-line preview of
  *                                  {@link #bio}; may be {@code null}
  *                                  when the bio is empty
  * @param teachingCategories        free-form labels chosen by the
  *                                  teacher; never {@code null} (empty
  *                                  list when none configured)
- * @param teacherStatus             current verification state
+ * @param teacherStatus             current verification state;
+ *                                  never {@code null}
  * @param rejectionReason           populated when the latest review
- *                                  was {@code REJECTED}
+ *                                  was {@link TeacherStatus#REJECTED};
+ *                                  may be {@code null}
  * @param verifiedAt                timestamp of the most recent
  *                                  approval, or {@code null} when
  *                                  never approved
- * @param verificationDocuments     latest-round supporting documents
- * @param verificationReviewHistory all admin decisions to date, newest
- *                                  first
+ * @param verificationDocuments     latest-round supporting documents;
+ *                                  never {@code null}
+ * @param verificationReviewHistory all admin decisions to date,
+ *                                  newest first; never {@code null}
  * @param recentAuditLogs           recent cross-cutting audit rows
- *                                  related to the teacher
- * @param createdAt                 when the teacher account was created
+ *                                  related to the teacher;
+ *                                  never {@code null}
+ * @param createdAt                 when the teacher account was created;
+ *                                  never {@code null}
  * @param updatedAt                 when the teacher profile was last
- *                                  modified
+ *                                  modified; never {@code null}
  */
+@JsonPropertyOrder({
+        "teacherId",
+        "userId",
+        "fullName",
+        "email",
+        "bio",
+        "shortIntroduction",
+        "teachingCategories",
+        "teacherStatus",
+        "rejectionReason",
+        "verifiedAt",
+        "verificationDocuments",
+        "verificationReviewHistory",
+        "recentAuditLogs",
+        "createdAt",
+        "updatedAt"
+})
 public record AdminTeacherDetailResponse(
         Long teacherId,
         Long userId,
@@ -78,4 +124,35 @@ public record AdminTeacherDetailResponse(
         List<AdminAuditSummaryResponse> recentAuditLogs,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the review
+     * screen's header fields, defensively copies every embedded list
+     * (with {@code null} → {@link List#of()} normalisation) so external
+     * mutation cannot leak into the already-serialised payload, and
+     * leaves the contextual nullable fields ({@code bio},
+     * {@code shortIntroduction}, {@code rejectionReason},
+     * {@code verifiedAt}) untouched.
+     */
+    public AdminTeacherDetailResponse {
+        Objects.requireNonNull(teacherId, "teacherId must not be null");
+        Objects.requireNonNull(userId, "userId must not be null");
+        Objects.requireNonNull(fullName, "fullName must not be null");
+        Objects.requireNonNull(email, "email must not be null");
+        Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
+        Objects.requireNonNull(createdAt, "createdAt must not be null");
+        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        teachingCategories = teachingCategories == null
+                ? List.of()
+                : List.copyOf(teachingCategories);
+        verificationDocuments = verificationDocuments == null
+                ? List.of()
+                : List.copyOf(verificationDocuments);
+        verificationReviewHistory = verificationReviewHistory == null
+                ? List.of()
+                : List.copyOf(verificationReviewHistory);
+        recentAuditLogs = recentAuditLogs == null
+                ? List.of()
+                : List.copyOf(recentAuditLogs);
+    }
 }

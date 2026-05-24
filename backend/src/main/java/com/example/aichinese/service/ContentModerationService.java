@@ -3,6 +3,10 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.Objects;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +62,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class ContentModerationService {
 
+    private static final Logger log = LoggerFactory.getLogger(ContentModerationService.class);
+
     private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
 
     private final ContentModerationRecordRepository contentModerationRecordRepository;
@@ -74,12 +80,12 @@ public class ContentModerationService {
             CommunicationMapper communicationMapper,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.contentModerationRecordRepository = contentModerationRecordRepository;
-        this.userRepository = userRepository;
-        this.communicationTargetResolver = communicationTargetResolver;
-        this.communicationMapper = communicationMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
+        this.contentModerationRecordRepository = Objects.requireNonNull(contentModerationRecordRepository, "contentModerationRecordRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.communicationTargetResolver = Objects.requireNonNull(communicationTargetResolver, "communicationTargetResolver");
+        this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)
@@ -170,6 +176,8 @@ public class ContentModerationService {
         record.setNote(requireModerationNote(request.reason()));
         record.setRelatedTeacher(target.relatedTeacher());
         ContentModerationRecord saved = contentModerationRecordRepository.save(record);
+        log.info("Moderation action applied: action={}, targetType={}, targetId={}, adminUserId={}",
+                action, target.targetType(), target.targetId(), admin.getId());
 
         if (target.relatedTeacher() != null && target.relatedTeacher().getUser() != null) {
             notificationService.safeCreateNotification(

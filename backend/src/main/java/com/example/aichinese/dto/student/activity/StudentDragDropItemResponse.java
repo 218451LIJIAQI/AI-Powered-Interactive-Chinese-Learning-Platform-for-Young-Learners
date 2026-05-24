@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.student.activity;
 
+import java.util.Objects;
+
 /**
  * One draggable card inside a student-facing drag-and-drop activity,
  * surfaced as part of {@link StudentDragDropActivityResponse#items()}.
@@ -20,6 +22,24 @@ package com.example.aichinese.dto.student.activity;
  * affordance — it cannot be used to game XP because the
  * {@code completePlatformActivity} idempotency rule (see
  * {@link StudentActivityCompletionResponse}) only awards points once.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces non-null on {@link #id},
+ * {@link #dragText} and {@link #targetZone} — they map to NOT NULL
+ * schema columns and are required by the rendering and validation
+ * paths. {@link #pinyin}, {@link #imageUrl} and {@link #sortOrder} may
+ * legitimately be {@code null} when the author left them unset.</p>
+ *
+ * @param id          database-assigned primary key; never
+ *                    {@code null}
+ * @param dragText    visible label on the draggable card; never
+ *                    {@code null}
+ * @param targetZone  label of the drop area this card must land in;
+ *                    never {@code null}
+ * @param pinyin      optional pinyin scaffold; nullable
+ * @param imageUrl    optional image; nullable
+ * @param sortOrder   canonical authoring order; nullable when the
+ *                    author did not pin a sort position
  */
 public record StudentDragDropItemResponse(
         Long id,
@@ -28,4 +48,16 @@ public record StudentDragDropItemResponse(
         String pinyin,
         String imageUrl,
         Integer sortOrder) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the three
+     * required schema columns ({@code id}, {@code dragText},
+     * {@code targetZone}) so a malformed item cannot reach the wire
+     * format and break the front-end drop-validation logic.
+     */
+    public StudentDragDropItemResponse {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(dragText, "dragText must not be null");
+        Objects.requireNonNull(targetZone, "targetZone must not be null");
+    }
 }

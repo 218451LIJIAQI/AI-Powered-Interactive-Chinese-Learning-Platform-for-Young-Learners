@@ -12,14 +12,15 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import com.example.aichinese.dto.commerce.PaymentProviderStatusResult;
+import com.example.aichinese.dto.commerce.StripeWebhookResultResponse;
 import com.example.aichinese.dto.commerce.StudentPaymentRecordResponse;
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.entity.Order;
@@ -214,7 +215,7 @@ class PaymentServiceTests {
                 entitlementService,
                 teacherEarningService);
 
-        Optional<com.example.aichinese.dto.commerce.StripeWebhookResultResponse> response = paymentService.applyProviderPaymentStatus(
+        Optional<StripeWebhookResultResponse> response = paymentService.applyProviderPaymentStatus(
                 "stripe",
                 "cs_test_paid",
                 new PaymentProviderStatusResult(
@@ -253,7 +254,7 @@ class PaymentServiceTests {
                 entitlementService,
                 teacherEarningService);
 
-        Optional<com.example.aichinese.dto.commerce.StripeWebhookResultResponse> response = paymentService.applyProviderPaymentStatus(
+        Optional<StripeWebhookResultResponse> response = paymentService.applyProviderPaymentStatus(
                 "stripe",
                 "cs_missing",
                 new PaymentProviderStatusResult(

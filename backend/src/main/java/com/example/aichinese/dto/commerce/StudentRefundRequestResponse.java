@@ -3,6 +3,8 @@ package com.example.aichinese.dto.commerce;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import com.example.aichinese.entity.enums.RefundStatus;
 
 /**
@@ -41,7 +43,45 @@ import com.example.aichinese.entity.enums.RefundStatus;
  *
  * <p>The admin-facing counterpart {@link AdminRefundRequestResponse}
  * adds buyer identity for moderation.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * @param id             primary key of the underlying
+ *                       {@link com.example.aichinese.entity.RefundRequest}
+ * @param orderId        primary key of the refunded
+ *                       {@link com.example.aichinese.entity.Order}
+ * @param orderNumber    human-readable order reference
+ *                       (e.g. {@code "ORD-XXXXXXXX-XXXXXXXX"})
+ * @param amount         refund amount in the order's currency
+ *                       (always equals the order total), normalised
+ *                       to {@link CommerceDtoConstants#MONEY_FRACTION_DIGITS}
+ *                       decimal places
+ * @param reason         student-supplied rationale (max {@value
+ *                       CommerceDtoConstants#REFUND_REASON_MAX_LENGTH}
+ *                       chars) from {@link RefundRequestCreateRequest}
+ * @param decisionReason mandatory rejection note supplied by the
+ *                       admin via {@link RefundDecisionRequest};
+ *                       populated only for
+ *                       {@link RefundStatus#REJECTED}, otherwise
+ *                       {@code null}
+ * @param refundStatus   current state in the {@link RefundStatus}
+ *                       state machine
+ * @param createdAt      timestamp the student filed the request;
+ *                       always populated
  */
+@JsonPropertyOrder({
+        "id",
+        "orderId",
+        "orderNumber",
+        "amount",
+        "reason",
+        "decisionReason",
+        "refundStatus",
+        "createdAt"
+})
 public record StudentRefundRequestResponse(
         Long id,
         Long orderId,

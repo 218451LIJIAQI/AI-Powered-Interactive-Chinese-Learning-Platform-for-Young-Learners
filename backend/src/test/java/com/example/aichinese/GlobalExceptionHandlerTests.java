@@ -2,10 +2,12 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Objects;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -115,7 +117,7 @@ class GlobalExceptionHandlerTests {
         ResponseEntity<ApiResponse<Void>> response = handler.handleHttpMediaTypeNotSupportedException(
                 new HttpMediaTypeNotSupportedException(
                         MediaType.APPLICATION_FORM_URLENCODED,
-                        java.util.List.of(MediaType.APPLICATION_JSON)));
+                        List.of(MediaType.APPLICATION_JSON)));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         assertThat(response.getHeaders().getAccept()).contains(MediaType.APPLICATION_JSON);
@@ -128,12 +130,12 @@ class GlobalExceptionHandlerTests {
     @Test
     void unsupportedMethodReturnsClientErrorEnvelope() {
         ResponseEntity<ApiResponse<Void>> response = handler.handleHttpRequestMethodNotSupportedException(
-                new HttpRequestMethodNotSupportedException("PATCH", java.util.List.of("GET", "POST")));
+                new HttpRequestMethodNotSupportedException("PATCH", List.of("GET", "POST")));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
         assertThat(response.getHeaders().getAllow()).containsExactlyInAnyOrder(
-                org.springframework.http.HttpMethod.GET,
-                org.springframework.http.HttpMethod.POST);
+                HttpMethod.GET,
+                HttpMethod.POST);
         ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isEqualTo("The request could not be processed. Please check the input and try again.");

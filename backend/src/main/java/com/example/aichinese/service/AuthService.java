@@ -1,5 +1,9 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -10,22 +14,23 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.dto.auth.AuthResponse;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
 import com.example.aichinese.dto.auth.ForgotPasswordRequest;
@@ -34,7 +39,6 @@ import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
 import com.example.aichinese.dto.auth.ResetPasswordRequest;
-import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.entity.PasswordResetToken;
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
@@ -51,10 +55,6 @@ import com.example.aichinese.security.JwtService;
 import com.example.aichinese.security.LoginAttemptLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
-
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
-import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 /**
  * Account lifecycle: registration, login, current-user lookup,
@@ -127,18 +127,18 @@ public class AuthService {
             AuditLogService auditLogService,
             EmailService emailService,
             EmailProperties emailProperties) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.passwordResetTokenRepository = passwordResetTokenRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
-        this.jwtService = jwtService;
-        this.loginAttemptLimiter = loginAttemptLimiter;
-        this.auditLogService = auditLogService;
-        this.emailService = emailService;
-        this.emailProperties = emailProperties;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.passwordResetTokenRepository = Objects.requireNonNull(passwordResetTokenRepository, "passwordResetTokenRepository");
+        this.passwordEncoder = Objects.requireNonNull(passwordEncoder, "passwordEncoder");
+        this.authenticationManager = Objects.requireNonNull(authenticationManager, "authenticationManager");
+        this.jwtService = Objects.requireNonNull(jwtService, "jwtService");
+        this.loginAttemptLimiter = Objects.requireNonNull(loginAttemptLimiter, "loginAttemptLimiter");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.emailService = Objects.requireNonNull(emailService, "emailService");
+        this.emailProperties = Objects.requireNonNull(emailProperties, "emailProperties");
     }
 
     @Transactional

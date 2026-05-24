@@ -62,6 +62,17 @@ async function fetchJson(url) {
   return response.json()
 }
 
+function summarizeValue(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.replace(/\s+/g, ' ').trim().slice(0, 240)
+
+  try {
+    return JSON.stringify(value).slice(0, 240)
+  } catch {
+    return String(value).slice(0, 240)
+  }
+}
+
 async function poll(description, action, predicate, timeoutMs = 15000, intervalMs = 250) {
   const started = Date.now()
   let lastValue
@@ -78,7 +89,8 @@ async function poll(description, action, predicate, timeoutMs = 15000, intervalM
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for ${description}: ${lastError?.message || JSON.stringify(lastValue)?.slice(0, 240) || 'condition not met'}`)
+  const reason = lastError?.message || summarizeValue(lastValue) || 'condition not met'
+  throw new Error(`Timed out waiting for ${description}: ${reason}`)
 }
 
 async function requestApi(pathname, options = {}) {

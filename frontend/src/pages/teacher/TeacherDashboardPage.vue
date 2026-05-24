@@ -311,7 +311,7 @@ const pageLoading = computed(
   () => dashboardResource.loading.value || analyticsResource.loading.value || liveClassesResource.loading.value,
 )
 const pageError = computed(
-  () => dashboardResource.error.value || analyticsResource.error.value || liveClassesResource.error.value || null,
+  () => dashboardResource.error.value || analyticsResource.error.value || liveClassesResource.error.value,
 )
 const usingFallback = computed(
   () =>

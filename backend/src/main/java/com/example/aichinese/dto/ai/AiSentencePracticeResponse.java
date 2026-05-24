@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Structured AI sentence-practice feedback returned by
  * {@code POST /api/v1/ai/sentence-practice}.
@@ -28,7 +30,24 @@ package com.example.aichinese.dto.ai;
  * should aim for. See
  * {@link AiVocabularyHelperResponse} for the same dual-language
  * pattern.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
  */
+@JsonPropertyOrder({
+        "originalSentence",
+        "correctedSentence",
+        "pinyin",
+        "englishMeaning",
+        "bahasaMelayuMeaning",
+        "improvementExplanation",
+        "naturalSentenceVersion",
+        "practiceTask",
+        "encouragement",
+        "status"
+})
 public record AiSentencePracticeResponse(
         String originalSentence,
         String correctedSentence,

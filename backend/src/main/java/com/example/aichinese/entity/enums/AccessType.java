@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Commercial access tier of a learning artefact (lesson, module, package).
@@ -26,10 +22,7 @@ public enum AccessType {
     PAID;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AccessType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AccessType> LOOKUP = EnumLookups.indexByName(AccessType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -39,14 +32,7 @@ public enum AccessType {
      *         is {@code null}, blank, or not a recognised access type
      */
     public static Optional<AccessType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -58,11 +44,11 @@ public enum AccessType {
      *         blank, or not a recognised access type
      */
     public static AccessType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Access type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid access type. Allowed values are FREE or PAID."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Access type is required.",
+                () -> "Invalid access type. Allowed values are FREE or PAID.");
     }
 
     /** @return {@code true} when this access tier requires no payment. */

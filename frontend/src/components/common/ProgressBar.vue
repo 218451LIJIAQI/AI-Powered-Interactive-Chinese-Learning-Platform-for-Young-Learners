@@ -22,19 +22,20 @@
  */
 import { computed } from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    progress: number
-    tone?: 'primary' | 'success' | 'warning' | 'info'
-    label?: string
-  }>(),
-  {
-    tone: 'primary',
-    label: 'Progress',
-  },
-)
+type BarTone = 'primary' | 'success' | 'warning' | 'info'
 
-const safeProgress = computed(() => Math.max(0, Math.min(100, props.progress)))
-const toneClass = computed(() => (props.tone === 'primary' ? '' : props.tone))
-const ariaLabel = computed(() => `${props.label}: ${safeProgress.value}%`)
+interface Props {
+  progress: number
+  tone?: BarTone
+  label?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  tone: 'primary',
+  label: 'Progress',
+})
+
+const safeProgress = computed<number>(() => Math.round(Math.max(0, Math.min(100, props.progress))))
+const toneClass = computed<string>(() => (props.tone === 'primary' ? '' : props.tone))
+const ariaLabel = computed<string>(() => `${props.label}: ${safeProgress.value}%`)
 </script>

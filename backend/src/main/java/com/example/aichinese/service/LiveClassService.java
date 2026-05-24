@@ -7,6 +7,8 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Function;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -84,13 +86,13 @@ public class LiveClassService {
             NotificationService notificationService,
             AuditLogService auditLogService,
             ContentSafetyService contentSafetyService) {
-        this.liveClassRepository = liveClassRepository;
-        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
-        this.liveLearningAccessService = liveLearningAccessService;
-        this.liveLearningMapper = liveLearningMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.contentSafetyService = contentSafetyService;
+        this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
+        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
 
     @Transactional
@@ -469,7 +471,7 @@ public class LiveClassService {
             Page<LiveClass> liveClassPage,
             int page,
             int size,
-            java.util.function.Function<LiveClass, LiveClassResponse> mapper) {
+            Function<LiveClass, LiveClassResponse> mapper) {
         return new PageResponse<>(
                 liveClassPage.getContent().stream()
                         .map(mapper)

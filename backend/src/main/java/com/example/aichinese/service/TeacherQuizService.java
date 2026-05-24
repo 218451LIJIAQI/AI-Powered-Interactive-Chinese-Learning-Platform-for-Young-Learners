@@ -93,16 +93,16 @@ public class TeacherQuizService {
             AuditLogService auditLogService,
             StudentLearningAccessService studentLearningAccessService,
             ContentSafetyService contentSafetyService) {
-        this.teacherContentAccessService = teacherContentAccessService;
-        this.teacherLessonService = teacherLessonService;
-        this.quizRepository = quizRepository;
-        this.quizQuestionRepository = quizQuestionRepository;
-        this.quizOptionRepository = quizOptionRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.quizMapper = quizMapper;
-        this.auditLogService = auditLogService;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.contentSafetyService = contentSafetyService;
+        this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
+        this.teacherLessonService = Objects.requireNonNull(teacherLessonService, "teacherLessonService");
+        this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
+        this.quizQuestionRepository = Objects.requireNonNull(quizQuestionRepository, "quizQuestionRepository");
+        this.quizOptionRepository = Objects.requireNonNull(quizOptionRepository, "quizOptionRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.quizMapper = Objects.requireNonNull(quizMapper, "quizMapper");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
 
     @Transactional(readOnly = true)

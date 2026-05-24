@@ -3,6 +3,8 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,16 +81,16 @@ public class NotificationService {
             StudentProfileRepository studentProfileRepository,
             StudentLearningAccessService studentLearningAccessService,
             LiveLearningAccessService liveLearningAccessService) {
-        this.notificationRepository = notificationRepository;
-        this.communicationMapper = communicationMapper;
-        this.notificationTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.notificationRepository = Objects.requireNonNull(notificationRepository, "notificationRepository");
+        this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
+        this.notificationTransactionTemplate = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.notificationTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.teacherFeedbackRepository = teacherFeedbackRepository;
-        this.recordedLessonVideoRepository = recordedLessonVideoRepository;
-        this.liveClassRepository = liveClassRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.liveLearningAccessService = liveLearningAccessService;
+        this.teacherFeedbackRepository = Objects.requireNonNull(teacherFeedbackRepository, "teacherFeedbackRepository");
+        this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
+        this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
     }
 
     @Transactional
@@ -142,7 +144,7 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser) {
+    public List<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser) {
         return getCurrentUserNotifications(currentUser, 0, 20).items();
     }
 
@@ -150,7 +152,7 @@ public class NotificationService {
     public PageResponse<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser, int page, int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        java.util.List<Notification> accessibleNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
+        List<Notification> accessibleNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
                 .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
                 .toList();
         int startIndex = PaginationUtils.startIndex(safePage, safeSize, accessibleNotifications.size());
@@ -274,7 +276,7 @@ public class NotificationService {
     @Transactional
     public BulkOperationResponse markAllAsRead(SecurityUserDetails currentUser) {
         LocalDateTime readAt = LocalDateTime.now();
-        java.util.List<Notification> accessibleUnreadNotifications = notificationRepository
+        List<Notification> accessibleUnreadNotifications = notificationRepository
                 .findByUserIdAndNotificationStatusOrderByCreatedAtDesc(currentUser.getUserId(), NotificationStatus.UNREAD)
                 .stream()
                 .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))

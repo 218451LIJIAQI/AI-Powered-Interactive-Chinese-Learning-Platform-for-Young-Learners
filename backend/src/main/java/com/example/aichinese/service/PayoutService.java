@@ -5,7 +5,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
 import java.util.EnumSet;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -62,6 +65,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class PayoutService {
 
+    private static final Logger log = LoggerFactory.getLogger(PayoutService.class);
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherEarningRepository teacherEarningRepository;
     private final PayoutRequestRepository payoutRequestRepository;
@@ -76,12 +81,12 @@ public class PayoutService {
             CommerceMoneyService commerceMoneyService,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.teacherEarningRepository = teacherEarningRepository;
-        this.payoutRequestRepository = payoutRequestRepository;
-        this.commerceMoneyService = commerceMoneyService;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.teacherEarningRepository = Objects.requireNonNull(teacherEarningRepository, "teacherEarningRepository");
+        this.payoutRequestRepository = Objects.requireNonNull(payoutRequestRepository, "payoutRequestRepository");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)
@@ -122,6 +127,9 @@ public class PayoutService {
         TeacherProfile teacher = teacherProfileRepository.findLockedByUserId(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
         BigDecimal normalizedAmount = commerceMoneyService.normalize(request.amount());
+        if (normalizedAmount.signum() <= 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Payout amount must be greater than zero.");
+        }
         if (calculateAvailableBalance(teacher.getId()).compareTo(normalizedAmount) < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Requested payout exceeds available balance.");
         }
@@ -138,12 +146,14 @@ public class PayoutService {
                 "Payout request submitted",
                 "Your payout request has been submitted for review.",
                 "/teacher/earnings");
+        log.info("Payout request created: payoutId={}, teacherId={}, amount={}",
+                saved.getId(), teacher.getId(), normalizedAmount);
         auditLogService.record(
                 currentUser.getUser(),
                 "PAYOUT_REQUESTED",
                 "PAYOUT_REQUEST",
                 saved.getId(),
-                "Teacher payout request submitted.");
+                "Teacher payout request submitted for " + normalizedAmount.toPlainString());
         return mapTeacherPayout(saved);
     }
 
@@ -178,7 +188,9 @@ public class PayoutService {
         payoutRequest.setPayoutStatus(PayoutStatus.APPROVED);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout approved", "Your payout request has been approved.");
-        auditLogService.record(currentUser.getUser(), "PAYOUT_APPROVED", "PAYOUT_REQUEST", id, "Payout approved.");
+        log.info("Payout approved: payoutId={}, amount={}", id, saved.getAmount());
+        auditLogService.record(currentUser.getUser(), "PAYOUT_APPROVED", "PAYOUT_REQUEST", id,
+                "Payout approved for " + saved.getAmount().toPlainString());
         return mapAdminPayout(saved);
     }
 
@@ -191,7 +203,10 @@ public class PayoutService {
         payoutRequest.setDecisionReason(request.reason());
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout rejected", "Your payout request was rejected.");
-        auditLogService.record(currentUser.getUser(), "PAYOUT_REJECTED", "PAYOUT_REQUEST", id, "Payout rejected.");
+        log.info("Payout rejected: payoutId={}, amount={}, reason={}", id, saved.getAmount(), request.reason());
+        auditLogService.record(currentUser.getUser(), "PAYOUT_REJECTED", "PAYOUT_REQUEST", id,
+                "Payout rejected for " + saved.getAmount().toPlainString()
+                        + (request.reason() != null ? ". Reason: " + request.reason() : ""));
         return mapAdminPayout(saved);
     }
 
@@ -207,14 +222,16 @@ public class PayoutService {
         payoutRequest.setPayoutStatus(PayoutStatus.PAID);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout paid", "Your payout has been marked as paid.");
-        auditLogService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id, "Payout marked paid.");
+        log.info("Payout marked paid: payoutId={}, amount={}", id, saved.getAmount());
+        auditLogService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id,
+                "Payout marked paid for " + saved.getAmount().toPlainString());
         return mapAdminPayout(saved);
     }
 
     private void requireTransition(PayoutStatus current, PayoutStatus expected, String action) {
         if (current != expected) {
             throw new ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    BAD_REQUEST,
                     "Payout cannot be " + action + " because it is currently " + current + ".");
         }
     }
@@ -285,7 +302,7 @@ public class PayoutService {
                 commerceMoneyService.normalize(earning.getGrossAmount()),
                 commerceMoneyService.normalize(earning.getCommissionAmount()),
                 commerceMoneyService.normalize(earning.getNetAmount()),
-                earning.getEarningStatus().name(),
+                earning.getEarningStatus(),
                 earning.getCreatedAt());
     }
 

@@ -10,7 +10,11 @@ import jakarta.validation.constraints.Size;
  * activity.
  *
  * <p>Replayed as part of the parent {@link AdminStoryActivityRequest}
- * so the whole story (body + prompts) can be edited atomically.</p>
+ * so the whole story (body + prompts) can be edited atomically.
+ * {@code AdminActivityService.updateStoryActivity} deletes the entire
+ * existing children set and re-inserts the incoming list inside the
+ * same JPA transaction, so a partial-failure state where the body
+ * persists while a question is rejected is impossible.</p>
  *
  * <h2>{@link #optionsPayload}</h2>
  * <p>JSON document encoding the multiple-choice options and which one
@@ -39,12 +43,14 @@ import jakarta.validation.constraints.Size;
  * {@code @Max} bound is a defensive cap, not a business rule.</p>
  *
  * @param questionText   prompt text shown to the learner; required,
- *                       max 500 chars, matches
- *                       {@code story_questions.question_text}
+ *                       max 500 chars
+ *                       ({@code story_questions.question_text VARCHAR(500)})
  * @param optionsPayload opaque JSON describing the option list;
  *                       required, max 32&nbsp;000 chars
+ *                       ({@code story_questions.options_payload TEXT})
  * @param explanation    optional rationale shown after submission;
  *                       max 1000 chars
+ *                       ({@code story_questions.explanation VARCHAR(1000)})
  * @param sortOrder      authoring order, {@code 0..10000}; nullable
  *                       (mapper falls back to {@code 0})
  */

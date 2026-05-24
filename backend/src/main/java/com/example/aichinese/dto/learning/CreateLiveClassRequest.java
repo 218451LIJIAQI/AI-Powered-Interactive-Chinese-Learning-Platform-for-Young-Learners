@@ -2,6 +2,8 @@ package com.example.aichinese.dto.learning;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -40,17 +42,78 @@ import jakarta.validation.constraints.Size;
  *   <li>{@link #endTime} is captured but server-side validation in
  *       {@code LiveLearningAccessService.validateLiveClassTiming}
  *       enforces {@code endTime > startTime}.</li>
- *   <li>{@link #meetingLink} must be {@code http(s)://} — see the
- *       regex. The service redacts the link from student responses
- *       until the lobby window opens (see
- *       {@link LiveClassResponse#meetingLinkVisible()}).</li>
+ *   <li>{@link #meetingLink} must be {@code http(s)://} with no
+ *       embedded whitespace — see the regex. The service redacts the
+ *       link from student responses until the lobby window opens
+ *       (see {@link LiveClassResponse#meetingLinkVisible()}).</li>
  *   <li>{@link #meetingPlatform} is parsed via
  *       {@code LiveLearningAccessService.parseMeetingPlatform} into
  *       {@code MeetingPlatform} enum; unknown values produce a 400.</li>
  *   <li>{@link #maxParticipants} is the soft cap used by the
  *       enrolment endpoint — clients exceeding it get a 400.</li>
  * </ul>
+ *
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * every string field so Bean Validation evaluates the canonical
+ * form (a paste with stray leading/trailing whitespace cannot
+ * inflate the length past the cap or sneak past the http(s) regex)
+ * and so every downstream consumer — the persisted entity, the
+ * audit log, and the meeting-platform parser — sees the same
+ * trimmed value rather than relying on each consumer to trim
+ * independently. Optional fields ({@link #description},
+ * {@link #status}) collapse to {@code null} when blank so the
+ * downstream "is this set?" check is a single null-check rather
+ * than {@code null || isEmpty()}.</p>
+ *
+ * @param title           short human-readable session title shown on
+ *                        the calendar (1–200 chars after trim);
+ *                        required
+ * @param description     optional long-form description shown on the
+ *                        live-class detail page (max 1000 chars after
+ *                        trim); {@code null} or blank collapses to
+ *                        {@code null}
+ * @param lessonId        optional id of the
+ *                        {@link com.example.aichinese.entity.Lesson}
+ *                        this session anchors to; mutually exclusive
+ *                        with {@link #packageId}
+ * @param packageId       optional id of the
+ *                        {@link com.example.aichinese.entity.CoursePackage}
+ *                        this session anchors to; mutually exclusive
+ *                        with {@link #lessonId}
+ * @param startTime       wall-clock instant the session begins
+ *                        (Asia/Singapore zone); required and must be
+ *                        in the future
+ * @param endTime         wall-clock instant the session ends
+ *                        (Asia/Singapore zone); required and must be
+ *                        strictly after {@link #startTime}
+ *                        (validated server-side)
+ * @param meetingLink     full {@code http(s)://} URL students follow
+ *                        to join the session (max 500 chars);
+ *                        required
+ * @param meetingPlatform free-text platform name parsed into
+ *                        {@code MeetingPlatform} enum (max 80 chars);
+ *                        required
+ * @param status          optional initial status hint (ignored — the
+ *                        service forces {@code SCHEDULED}); kept for
+ *                        DTO symmetry with
+ *                        {@link UpdateLiveClassRequest}; {@code null}
+ *                        or blank collapses to {@code null}
+ * @param maxParticipants optional soft cap on enrolments; must be
+ *                        positive when present
  */
+@JsonPropertyOrder({
+        "title",
+        "description",
+        "lessonId",
+        "packageId",
+        "startTime",
+        "endTime",
+        "meetingLink",
+        "meetingPlatform",
+        "status",
+        "maxParticipants"
+})
 public record CreateLiveClassRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must be 200 characters or fewer.")
@@ -72,7 +135,7 @@ public record CreateLiveClassRequest(
         LocalDateTime endTime,
 
         @NotBlank(message = "Meeting link is required.")
-        @Pattern(regexp = "^https?://.+$", message = "Meeting link must start with http:// or https://.")
+        @Pattern(regexp = "^https?://\\S+$", message = "Meeting link must start with http:// or https:// and contain no whitespace.")
         @Size(max = 500, message = "Meeting link must be 500 characters or fewer.")
         String meetingLink,
 
@@ -85,4 +148,33 @@ public record CreateLiveClassRequest(
 
         @Min(value = 1, message = "Maximum participants must be positive.")
         Integer maxParticipants) {
+
+    /**
+     * Defensive canonical constructor: trims every string field so
+     * Bean Validation sees the canonical form (preventing length-cap
+     * bypass via leading/trailing whitespace) and collapses optional
+     * blank-only strings to {@code null} so downstream "is this set?"
+     * checks are a single null-check. {@code null} inputs are
+     * preserved so {@link NotBlank @NotBlank} on required fields
+     * still fires correctly.
+     */
+    public CreateLiveClassRequest {
+        title = trimOrNull(title);
+        description = trimToNullIfBlank(description);
+        meetingLink = trimOrNull(meetingLink);
+        meetingPlatform = trimOrNull(meetingPlatform);
+        status = trimToNullIfBlank(status);
+    }
+
+    private static String trimOrNull(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private static String trimToNullIfBlank(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

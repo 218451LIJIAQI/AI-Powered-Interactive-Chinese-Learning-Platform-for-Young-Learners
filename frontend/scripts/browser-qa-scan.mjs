@@ -132,16 +132,17 @@ async function poll(description, action, predicate, timeoutMs = 15000, intervalM
 async function fetchProbe(url) {
   const response = await fetch(url)
   const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
   let body
 
   if (contentType.toLowerCase().includes('json')) {
     try {
-      body = await response.json()
+      body = JSON.parse(text)
     } catch {
-      body = await response.text()
+      body = text
     }
   } else {
-    body = await response.text()
+    body = text
   }
 
   return {
@@ -351,6 +352,16 @@ async function main() {
       }
     })
 
+    const records = []
+    const requestsById = new Map()
+
+    on('Network.requestWillBeSent', (params) => {
+      requestsById.set(params.requestId, {
+        method: params.request?.method || '',
+        url: params.request?.url || '',
+      })
+    })
+
     on('Network.loadingFailed', (params) => {
       if (params.canceled || params.errorText === 'net::ERR_ABORTED') {
         return
@@ -384,9 +395,6 @@ async function main() {
     await send('Runtime.enable')
     await send('Network.enable')
     await send('Log.enable')
-
-    const records = []
-    const requestsById = new Map()
 
     async function evaluatePageUi() {
       const evaluated = await send('Runtime.evaluate', {
@@ -464,13 +472,6 @@ async function main() {
 
       return evaluated.result?.value || null
     }
-
-    on('Network.requestWillBeSent', (params) => {
-      requestsById.set(params.requestId, {
-        method: params.request?.method || '',
-        url: params.request?.url || '',
-      })
-    })
 
     let activePreviewScriptId = null
     async function preparePreviewRole(role) {

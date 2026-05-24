@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Delivery format of a {@code Lesson}.
@@ -31,10 +27,7 @@ public enum LearningType {
     HYBRID;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, LearningType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, LearningType> LOOKUP = EnumLookups.indexByName(LearningType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -44,14 +37,7 @@ public enum LearningType {
      *         is {@code null}, blank, or not a recognised learning type
      */
     public static Optional<LearningType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -61,11 +47,11 @@ public enum LearningType {
      *         blank, or not a recognised learning type
      */
     public static LearningType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Learning type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid learning type. Allowed values are LIVE, RECORDED, or HYBRID."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Learning type is required.",
+                () -> "Invalid learning type. Allowed values are LIVE, RECORDED, or HYBRID.");
     }
 
     /** @return {@code true} when at least one synchronous session is involved. */

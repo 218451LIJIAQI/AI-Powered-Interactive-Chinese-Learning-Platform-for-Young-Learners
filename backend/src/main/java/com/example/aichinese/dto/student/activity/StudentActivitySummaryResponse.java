@@ -2,6 +2,7 @@ package com.example.aichinese.dto.student.activity;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import com.example.aichinese.dto.admin.activity.ActivityType;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -43,20 +44,41 @@ import com.example.aichinese.entity.enums.AgeBand;
  * {@code boolean} (not {@link Boolean}) so the JSON wire format
  * always emits {@code true} or {@code false}.</p>
  *
- * @param id                underlying activity row id
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces the wire-format contract so a
+ * malformed feed row never reaches the client:</p>
+ * <ul>
+ *   <li>{@link #id}, {@link #type}, {@link #title} and
+ *       {@link #updatedAt} are required — they drive click-through
+ *       navigation, freshness ordering and the card heading.
+ *       {@code title} is guaranteed non-{@code null} by the mapper's
+ *       {@code preferredTitle} fallback (frontText for flashcards,
+ *       {@code "(untitled)"} as a final defensive default).</li>
+ *   <li>{@link #tags} is null-coalesced to {@link List#of()} and
+ *       wrapped in {@link List#copyOf(java.util.Collection)} so the
+ *       wire format is always {@code []} (matching the frontend type
+ *       {@code tags: string[]}) and a downstream caller cannot mutate
+ *       a cached response.</li>
+ * </ul>
+ *
+ * @param id                underlying activity row id; never
+ *                          {@code null}
  * @param type              discriminator for click-through
- *                          navigation
- * @param title             human-readable activity title
+ *                          navigation; never {@code null}
+ * @param title             human-readable activity title; never
+ *                          {@code null} (mapper supplies a fallback)
  * @param hskLevel          HSK 1-6 band; nullable
  * @param ageBand           target age cohort; nullable
  * @param difficulty        easy/medium/hard tier; nullable
  * @param topic             free-form short topic label; nullable
  * @param tags              free-form tags; never {@code null}
- *                          (empty list when none)
- * @param xpReward          base XP awarded on completion
+ *                          (empty list when none); the wrapped list
+ *                          is unmodifiable
+ * @param xpReward          base XP awarded on completion; nullable
  * @param estimatedSeconds  UX hint; nullable
  * @param updatedAt         last-modified timestamp; drives feed
- *                          freshness ordering and "updated" labels
+ *                          freshness ordering and "updated" labels;
+ *                          never {@code null}
  * @param completed         {@code true} when this student has already
  *                          completed this activity at least once
  */
@@ -73,4 +95,23 @@ public record StudentActivitySummaryResponse(
         Integer estimatedSeconds,
         LocalDateTime updatedAt,
         boolean completed) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the four
+     * header fields the feed UI renders unconditionally
+     * ({@code id}, {@code type}, {@code title}, {@code updatedAt}) and
+     * normalises {@link #tags} to an unmodifiable defensive copy so
+     * external mutation cannot leak into an already-serialised feed
+     * row. {@code List.copyOf} additionally fails fast with
+     * {@link NullPointerException} on {@code null} elements — an
+     * intentional invariant given that the mapper's
+     * {@code splitTags} already filters them out.
+     */
+    public StudentActivitySummaryResponse {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(type, "type must not be null");
+        Objects.requireNonNull(title, "title must not be null");
+        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        tags = tags == null ? List.of() : List.copyOf(tags);
+    }
 }

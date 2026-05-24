@@ -56,13 +56,32 @@ import com.example.aichinese.entity.enums.TeacherStatus;
 public class ContentManagementMapper {
 
     /**
-     * Placeholder shown on every {@code PAID} public-catalog response
-     * until the platform-wide payment integration is finalised.
-     * Centralised so the wording can be revised in one place once the
-     * payment flow is enabled end-to-end.
+     * Friendly explanation surfaced on every {@code PAID} public-catalog
+     * response. The platform's payment integration is fully wired (Stripe
+     * webhook + mock provider), so the gate is now "sign in &amp; enrol"
+     * rather than "feature not yet built". Centralised so copy edits do
+     * not require a service-layer change.
      */
     private static final String PAID_LOCKED_REASON =
-            "This paid content is locked until payment workflows are implemented.";
+            "Sign in and enrol to unlock this paid content.";
+
+    /**
+     * Stable client-side identifier prefix for {@link Lesson} entries in
+     * the public catalogue. The frontend uses {@code id} (not
+     * {@code resourceId}) as the routing key when the catalogue mixes
+     * lessons and packages, so a stable prefix prevents collisions
+     * between a lesson with id 42 and a package with id 42.
+     */
+    private static final String LESSON_ID_PREFIX = "LESSON-";
+
+    /** Stable client-side identifier prefix for {@link CoursePackage} entries. */
+    private static final String PACKAGE_ID_PREFIX = "PACKAGE-";
+
+    /** Call-to-action shown to anonymous visitors viewing a single lesson. */
+    private static final String LESSON_CTA = "Login to enrol";
+
+    /** Call-to-action shown to anonymous visitors viewing a course package. */
+    private static final String PACKAGE_CTA = "Register to start learning";
 
     public LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
@@ -116,13 +135,14 @@ public class ContentManagementMapper {
         if (lesson == null) {
             return null;
         }
+        LearningModule module = lesson.getModule();
         return new LessonResponse(
                 lesson.getId(),
                 lesson.getTitle(),
                 lesson.getSummary(),
                 lesson.getLessonContent(),
-                lesson.getModule() != null ? lesson.getModule().getId() : null,
-                lesson.getModule() != null ? lesson.getModule().getTitle() : null,
+                module == null ? null : module.getId(),
+                module == null ? null : module.getTitle(),
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
                 lesson.getLearningType(),
@@ -141,9 +161,10 @@ public class ContentManagementMapper {
         if (item == null) {
             return null;
         }
+        CoursePackage parent = item.getCoursePackage();
         return new PackageItemResponse(
                 item.getId(),
-                item.getCoursePackage() != null ? item.getCoursePackage().getId() : null,
+                parent == null ? null : parent.getId(),
                 item.getItemType(),
                 item.getItemId(),
                 item.getSortOrder(),
@@ -174,6 +195,9 @@ public class ContentManagementMapper {
     }
 
     public ContentSubmissionResponse toSubmissionResponse(LearningModule module) {
+        if (module == null) {
+            return null;
+        }
         return new ContentSubmissionResponse(
                 ManagedContentType.MODULE,
                 module.getId(),
@@ -192,6 +216,9 @@ public class ContentManagementMapper {
     }
 
     public ContentSubmissionResponse toSubmissionResponse(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
         return new ContentSubmissionResponse(
                 ManagedContentType.LESSON,
                 lesson.getId(),
@@ -210,6 +237,9 @@ public class ContentManagementMapper {
     }
 
     public ContentSubmissionResponse toSubmissionResponse(CoursePackage coursePackage) {
+        if (coursePackage == null) {
+            return null;
+        }
         return new ContentSubmissionResponse(
                 ManagedContentType.PACKAGE,
                 coursePackage.getId(),
@@ -228,6 +258,9 @@ public class ContentManagementMapper {
     }
 
     public ContentSubmissionDetailResponse toSubmissionDetailResponse(LearningModule module, List<PackageItem> packageItems) {
+        if (module == null) {
+            return null;
+        }
         return new ContentSubmissionDetailResponse(
                 ManagedContentType.MODULE,
                 module.getId(),
@@ -245,20 +278,24 @@ public class ContentManagementMapper {
                 module.getCoverImageUrl(),
                 module.getContentStatus(),
                 module.getRejectionReason(),
-                packageItems.stream().map(this::toPackageItemResponse).toList(),
+                mapPackageItems(packageItems),
                 module.getCreatedAt(),
                 module.getUpdatedAt());
     }
 
     public ContentSubmissionDetailResponse toSubmissionDetailResponse(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
+        LearningModule module = lesson.getModule();
         return new ContentSubmissionDetailResponse(
                 ManagedContentType.LESSON,
                 lesson.getId(),
                 lesson.getTitle(),
                 lesson.getSummary(),
                 lesson.getLessonContent(),
-                lesson.getModule() != null ? lesson.getModule().getId() : null,
-                lesson.getModule() != null ? lesson.getModule().getTitle() : null,
+                module == null ? null : module.getId(),
+                module == null ? null : module.getTitle(),
                 toTeacherSummary(lesson.getTeacher()),
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
@@ -274,6 +311,9 @@ public class ContentManagementMapper {
     }
 
     public ContentSubmissionDetailResponse toSubmissionDetailResponse(CoursePackage coursePackage, List<PackageItem> items) {
+        if (coursePackage == null) {
+            return null;
+        }
         return new ContentSubmissionDetailResponse(
                 ManagedContentType.PACKAGE,
                 coursePackage.getId(),
@@ -291,7 +331,7 @@ public class ContentManagementMapper {
                 coursePackage.getCoverImageUrl(),
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
-                items.stream().map(this::toPackageItemResponse).toList(),
+                mapPackageItems(items),
                 coursePackage.getCreatedAt(),
                 coursePackage.getUpdatedAt());
     }
@@ -311,7 +351,7 @@ public class ContentManagementMapper {
             return null;
         }
         return new PublicCourseSummaryResponse(
-                "LESSON-" + lesson.getId(),
+                LESSON_ID_PREFIX + lesson.getId(),
                 lesson.getId(),
                 ManagedContentType.LESSON,
                 lesson.getTitle(),
@@ -333,7 +373,7 @@ public class ContentManagementMapper {
             return null;
         }
         return new PublicCourseSummaryResponse(
-                "PACKAGE-" + coursePackage.getId(),
+                PACKAGE_ID_PREFIX + coursePackage.getId(),
                 coursePackage.getId(),
                 ManagedContentType.PACKAGE,
                 coursePackage.getTitle(),
@@ -356,7 +396,7 @@ public class ContentManagementMapper {
         }
         boolean locked = lesson.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
-                "LESSON-" + lesson.getId(),
+                LESSON_ID_PREFIX + lesson.getId(),
                 lesson.getId(),
                 ManagedContentType.LESSON,
                 lesson.getTitle(),
@@ -372,7 +412,7 @@ public class ContentManagementMapper {
                 lesson.getContentStatus(),
                 lesson.getLessonContent(),
                 List.of(),
-                "Login to enrol",
+                LESSON_CTA,
                 locked ? PAID_LOCKED_REASON : null);
     }
 
@@ -383,7 +423,7 @@ public class ContentManagementMapper {
         List<PackageItem> safeItems = items == null ? List.of() : items;
         boolean locked = coursePackage.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
-                "PACKAGE-" + coursePackage.getId(),
+                PACKAGE_ID_PREFIX + coursePackage.getId(),
                 coursePackage.getId(),
                 ManagedContentType.PACKAGE,
                 coursePackage.getTitle(),
@@ -398,18 +438,41 @@ public class ContentManagementMapper {
                 locked,
                 coursePackage.getContentStatus(),
                 null,
-                safeItems.stream()
-                        .map(item -> new PublicCourseItemSummaryResponse(
-                                mapPackageItemType(item),
-                                item.getItemId(),
-                                item.getTitleSnapshot(),
-                                item.getSortOrder()))
-                        .toList(),
-                "Register to start learning",
+                safeItems.stream().map(this::toPublicCourseItemSummary).toList(),
+                PACKAGE_CTA,
                 locked ? PAID_LOCKED_REASON : null);
     }
 
-    private ManagedContentType mapPackageItemType(PackageItem item) {
+    /**
+     * Maps a single {@link PackageItem} to the public-catalogue item
+     * summary the discovery UI renders inside a course-package detail
+     * card. Extracted from the inline lambda inside
+     * {@link #toPublicCourseDetail(CoursePackage, List)} so the
+     * mapping rule lives next to its sibling helpers and is unit-test
+     * reachable.
+     */
+    private PublicCourseItemSummaryResponse toPublicCourseItemSummary(PackageItem item) {
+        return new PublicCourseItemSummaryResponse(
+                mapPackageItemType(item),
+                item.getItemId(),
+                item.getTitleSnapshot(),
+                item.getSortOrder());
+    }
+
+    /**
+     * Defensive null-safe stream mapper for {@link PackageItem} lists
+     * passed into the submission-detail helpers. Returns an immutable
+     * empty list when the input is {@code null} so the response record
+     * always carries a non-{@code null} {@code packageItems} field.
+     */
+    private List<PackageItemResponse> mapPackageItems(List<PackageItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream().map(this::toPackageItemResponse).toList();
+    }
+
+    private static ManagedContentType mapPackageItemType(PackageItem item) {
         return switch (item.getItemType()) {
             case MODULE -> ManagedContentType.MODULE;
             case LESSON -> ManagedContentType.LESSON;

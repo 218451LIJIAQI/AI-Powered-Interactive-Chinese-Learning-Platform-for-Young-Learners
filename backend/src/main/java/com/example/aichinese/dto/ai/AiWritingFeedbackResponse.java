@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Structured AI writing feedback returned by the writing-feedback
  * endpoint — a longer-form companion to
@@ -17,7 +19,13 @@ package com.example.aichinese.dto.ai;
  * corrections, since for longer text per-line corrections
  * overwhelm the learner. {@link #status} mirrors the
  * {@link AiChatResponse#status} convention.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
  */
+@JsonPropertyOrder({ "feedback", "clarityComment", "improvementTips", "encouragement", "status" })
 public record AiWritingFeedbackResponse(
         String feedback,
         String clarityComment,

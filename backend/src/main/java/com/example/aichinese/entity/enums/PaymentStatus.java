@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of an {@code Order} or {@code PaymentRecord}.
@@ -51,16 +49,15 @@ public enum PaymentStatus {
      * polling loops to short-circuit redundant provider lookups.
      */
     public static final Set<PaymentStatus> TERMINAL =
-            Set.of(PAID, FAILED, CANCELLED, REFUNDED);
+            Collections.unmodifiableSet(EnumSet.of(PAID, FAILED, CANCELLED, REFUNDED));
 
     /** States that grant access to the purchased entitlement(s). */
-    public static final Set<PaymentStatus> GRANTS_ENTITLEMENT = Set.of(PAID);
+    public static final Set<PaymentStatus> GRANTS_ENTITLEMENT =
+            Collections.unmodifiableSet(EnumSet.of(PAID));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, PaymentStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, PaymentStatus> LOOKUP =
+            EnumLookups.indexByName(PaymentStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -70,14 +67,7 @@ public enum PaymentStatus {
      *         is {@code null}, blank, or not a recognised payment status
      */
     public static Optional<PaymentStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -87,12 +77,12 @@ public enum PaymentStatus {
      *         blank, or not a recognised payment status
      */
     public static PaymentStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Payment status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid payment status. Allowed values are PENDING, PAID, FAILED, "
-                        + "CANCELLED, or REFUNDED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Payment status is required.",
+                () -> "Invalid payment status. Allowed values are PENDING, PAID, FAILED, "
+                        + "CANCELLED, or REFUNDED.");
     }
 
     /** @return {@code true} when the payment is still awaiting provider confirmation. */

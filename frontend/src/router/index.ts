@@ -162,10 +162,14 @@ const router = createRouter({
     { path: '/unauthorized', name: 'unauthorized', component: UnauthorizedPage, meta: { title: 'Unauthorized' } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundPage, meta: { title: 'Page not found' } },
   ],
-  scrollBehavior() {
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash, behavior: 'smooth' }
     return { top: 0 }
   },
 })
+
+const AUTH_ROUTE_NAMES: ReadonlySet<string> = new Set(['auth', 'forgot-password', 'reset-password'])
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
@@ -174,9 +178,8 @@ router.beforeEach(async (to) => {
   document.title = to.meta.title ? `${to.meta.title} | MandarinSpark` : 'MandarinSpark'
 
   const requiredRoles = to.meta.roles ?? []
-  const previewRole = to.meta.previewRole
 
-  if ((to.name === 'auth' || to.name === 'forgot-password' || to.name === 'reset-password') && auth.isAuthenticated) {
+  if (typeof to.name === 'string' && AUTH_ROUTE_NAMES.has(to.name) && auth.isAuthenticated) {
     return defaultRouteForRole(auth.activeRole)
   }
 
@@ -184,20 +187,15 @@ router.beforeEach(async (to) => {
     return true
   }
 
-  if (auth.isPreviewSession && previewRole) {
-    const matchedPreviewRole = requiredRoles.some((role) => auth.previewRole === role)
-    if (matchedPreviewRole) {
-      return true
-    }
+  if (auth.isPreviewSession && to.meta.previewRole && requiredRoles.includes(auth.previewRole as UserRole)) {
+    return true
   }
 
   if (!auth.isAuthenticated) {
     return { name: 'auth', query: { redirect: to.fullPath } }
   }
 
-  const matched = requiredRoles.some((role) => auth.hasRole(role))
-
-  if (!matched) {
+  if (!requiredRoles.some((role) => auth.hasRole(role))) {
     return { name: 'unauthorized' }
   }
 

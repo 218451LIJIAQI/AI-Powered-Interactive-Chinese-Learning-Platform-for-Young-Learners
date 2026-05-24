@@ -2,6 +2,8 @@ package com.example.aichinese.dto.publicview;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Public-facing teacher profile returned by
  * {@code GET /api/v1/public/teachers/{id}} — accessible to
@@ -48,7 +50,33 @@ import java.util.List;
  * {@link com.example.aichinese.entity.enums.ContentStatus#PUBLISHED}
  * lessons + packages owned by this teacher (modules are
  * not counted because they are not directly purchasable).</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Defensive immutability</h2>
+ * <p>The canonical constructor wraps {@link #teachingCategories}
+ * in {@link List#copyOf(java.util.Collection) List.copyOf} so an
+ * upstream mutable list cannot leak through and be mutated after
+ * the response is built. A {@code null} input is normalised to
+ * an empty list so the wire format always emits {@code []}
+ * rather than {@code null} and the front-end never has to branch
+ * on {@code null}. {@link List#copyOf} short-circuits on
+ * already-immutable inputs (the
+ * {@code TeacherManagementMapper.splitCategories} stream-to-list
+ * pipeline returns an immutable list) so the typical hot path
+ * allocates nothing.</p>
  */
+@JsonPropertyOrder({
+        "teacherId",
+        "displayName",
+        "bio",
+        "verified",
+        "teachingCategories",
+        "courseCount"
+})
 public record PublicTeacherProfileResponse(
         Long teacherId,
         String displayName,
@@ -56,4 +84,17 @@ public record PublicTeacherProfileResponse(
         boolean verified,
         List<String> teachingCategories,
         int courseCount) {
+
+    /**
+     * Defensive canonical constructor: wraps
+     * {@link #teachingCategories} in an immutable copy so external
+     * mutation of the originally supplied list cannot leak into
+     * the already-serialised response. A {@code null} input is
+     * normalised to {@link List#of()}.
+     */
+    public PublicTeacherProfileResponse {
+        teachingCategories = teachingCategories == null
+                ? List.of()
+                : List.copyOf(teachingCategories);
+    }
 }

@@ -31,7 +31,7 @@
 --   was before.
 -- =====================================================================
 
-set @v2_invalid_status_count = (
+set @v14_invalid_status_count = (
     select
         (select count(*) from ai_chat_messages where sender_role not in ('USER', 'ASSISTANT'))
       + (select count(*) from teacher_earnings where earning_status not in ('AVAILABLE', 'REFUNDED'))
@@ -46,12 +46,12 @@ set @v2_invalid_status_count = (
       + (select count(*) from lessons where not ((access_type = 'FREE' and (price is null or price = 0)) or (access_type = 'PAID' and price > 0)))
       + (select count(*) from course_packages where not ((access_type = 'FREE' and (price is null or price = 0)) or (access_type = 'PAID' and price > 0)))
 );
-set @v2_sql = if(@v2_invalid_status_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V14 blocked: rows violate tightened status/domain checks''');
-prepare v2_stmt from @v2_sql;
-execute v2_stmt;
-deallocate prepare v2_stmt;
+set @v14_sql = if(@v14_invalid_status_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V14 blocked: rows violate tightened status/domain checks''');
+prepare v14_stmt from @v14_sql;
+execute v14_stmt;
+deallocate prepare v14_stmt;
 
-set @v2_duplicate_current_teacher_document_count = (
+set @v14_duplicate_current_teacher_document_count = (
     select count(*) from (
         select teacher_id, document_type
         from teacher_verification_documents
@@ -60,12 +60,12 @@ set @v2_duplicate_current_teacher_document_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v2_sql = if(@v2_duplicate_current_teacher_document_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V14 blocked: multiple current teacher verification documents exist for the same type''');
-prepare v2_stmt from @v2_sql;
-execute v2_stmt;
-deallocate prepare v2_stmt;
+set @v14_sql = if(@v14_duplicate_current_teacher_document_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V14 blocked: multiple current teacher verification documents exist for the same type''');
+prepare v14_stmt from @v14_sql;
+execute v14_stmt;
+deallocate prepare v14_stmt;
 
-set @v2_invalid_state_count = (
+set @v14_invalid_state_count = (
     select
         (select count(*) from ai_response_reports
          where not (
@@ -78,10 +78,10 @@ set @v2_invalid_state_count = (
              or (notification_status = 'READ' and read_at is not null)
          ))
 );
-set @v2_sql = if(@v2_invalid_state_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V14 blocked: rows violate review/read state consistency checks''');
-prepare v2_stmt from @v2_sql;
-execute v2_stmt;
-deallocate prepare v2_stmt;
+set @v14_sql = if(@v14_invalid_state_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V14 blocked: rows violate review/read state consistency checks''');
+prepare v14_stmt from @v14_sql;
+execute v14_stmt;
+deallocate prepare v14_stmt;
 
 alter table teacher_verification_documents
     add column current_document_key varchar(160) generated always as (

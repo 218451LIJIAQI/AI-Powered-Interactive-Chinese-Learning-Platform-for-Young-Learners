@@ -1,6 +1,6 @@
 <template>
   <section class="public-page legal-page">
-    <button class="btn btn-ghost legal-back-button" type="button" @click="router.back()">Back</button>
+    <button class="btn btn-ghost legal-back-button" type="button" @click="goBack">Back</button>
 
     <article class="hero-card light legal-hero">
       <span class="legal-eyebrow">MandarinSpark</span>
@@ -26,6 +26,14 @@
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+
+function goBack() {
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    void router.push('/')
+  }
+}
 
 const sections = [
   {

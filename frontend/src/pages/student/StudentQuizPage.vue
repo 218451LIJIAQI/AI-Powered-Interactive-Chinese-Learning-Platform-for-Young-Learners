@@ -198,8 +198,8 @@ const hasSubmitted = ref(false)
 const actionError = ref<string | null>(null)
 const answers = reactive<Record<number, string>>({})
 const activeQuestionIndex = ref(0)
-const currentQuizId = computed(() => numericRouteParam(route.params.quizId))
-const requestedLessonId = computed(() => numericQuery(route.query.lessonId))
+const currentQuizId = computed(() => numericParam(route.params.quizId))
+const requestedLessonId = computed(() => numericParam(route.query.lessonId))
 
 const quizResource = useResource(loadQuiz, () => studentQuiz)
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
@@ -245,7 +245,7 @@ const quiz = computed(() => quizResource.data.value ?? (quizResource.usingFallba
 const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
 const result = computed(() => resultData.value ?? emptyResult)
 const pageLoading = computed(() => quizResource.loading.value || progressResource.loading.value)
-const pageError = computed(() => quizResource.error.value || progressResource.error.value || null)
+const pageError = computed(() => quizResource.error.value || progressResource.error.value)
 const usingFallback = computed(() => quizResource.usingFallback.value || progressResource.usingFallback.value)
 const quizReadOnly = computed(() => quizResource.usingFallback.value)
 const hasQuizSelection = computed(() => Boolean(quiz.value.id))
@@ -337,15 +337,7 @@ function firstUnansweredQuestionIndex() {
   return orderedQuestions.value.findIndex((question) => !answers[question.id])
 }
 
-function numericRouteParam(value: unknown) {
-  const rawValue = Array.isArray(value) ? value[0] : value
-  if (rawValue === null || rawValue === undefined || rawValue === '') return null
-
-  const parsed = Number(rawValue)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-function numericQuery(value: unknown) {
+function numericParam(value: unknown) {
   const rawValue = Array.isArray(value) ? value[0] : value
   if (rawValue === null || rawValue === undefined || rawValue === '') return null
 
@@ -377,6 +369,7 @@ function reloadAll() {
 }
 
 async function submitQuiz() {
+  if (submitting.value || hasSubmitted.value) return
   actionError.value = null
   if (!hasQuizSelection.value) {
     actionError.value = 'Choose an available quiz before submitting an attempt.'

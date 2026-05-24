@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Top-level authorisation role assigned to a {@code User}.
@@ -37,10 +33,7 @@ public enum RoleName {
     public static final String AUTHORITY_PREFIX = "ROLE_";
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, RoleName> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, RoleName> LOOKUP = EnumLookups.indexByName(RoleName.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup. Replaces the inline
@@ -52,14 +45,7 @@ public enum RoleName {
      *         is {@code null}, blank, or not a recognised role
      */
     public static Optional<RoleName> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -69,11 +55,11 @@ public enum RoleName {
      *         blank, or not a recognised role
      */
     public static RoleName fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Role is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid role. Allowed values are STUDENT, TEACHER, or ADMIN."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Role is required.",
+                () -> "Invalid role. Allowed values are STUDENT, TEACHER, or ADMIN.");
     }
 
     /**

@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Age bracket targeted by a platform-managed learning activity.
@@ -35,10 +31,7 @@ public enum AgeBand {
     ALL_AGES;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AgeBand> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AgeBand> LOOKUP = EnumLookups.indexByName(AgeBand.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -48,14 +41,7 @@ public enum AgeBand {
      *         is {@code null}, blank, or not a recognised age band
      */
     public static Optional<AgeBand> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -65,12 +51,12 @@ public enum AgeBand {
      *         blank, or not a recognised age band
      */
     public static AgeBand fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Age band is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid age band. Allowed values are KINDERGARTEN, LOWER_PRIMARY, "
-                        + "UPPER_PRIMARY, or ALL_AGES."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Age band is required.",
+                () -> "Invalid age band. Allowed values are KINDERGARTEN, LOWER_PRIMARY, "
+                        + "UPPER_PRIMARY, or ALL_AGES.");
     }
 
     /** @return {@code true} when this is the {@link #ALL_AGES} wildcard. */

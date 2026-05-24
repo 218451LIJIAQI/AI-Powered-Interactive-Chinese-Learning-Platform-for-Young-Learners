@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -271,9 +272,9 @@ class TeacherVerificationIntegrationTests {
         mockMvc.perform(get("/api/v1/teachers/verification-documents/" + documentId)
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                .andExpect(header()
                         .string("Content-Disposition", startsWith("attachment;")))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                .andExpect(header()
                         .string("Cache-Control", "no-store"));
     }
 

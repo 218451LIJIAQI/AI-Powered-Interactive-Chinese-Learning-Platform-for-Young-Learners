@@ -1,11 +1,14 @@
 package com.example.aichinese;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -344,15 +347,15 @@ class LiveRecordedLearningIntegrationTests {
         JsonNode freeClass = findLiveClassByTitle(classes, "Free Listing Live Class");
         JsonNode paidClass = findLiveClassByTitle(classes, "Paid Listing Live Class");
 
-        org.assertj.core.api.Assertions.assertThat(freeClass.isMissingNode()).isFalse();
-        org.assertj.core.api.Assertions.assertThat(freeClass.path("accessAllowed").asBoolean()).isTrue();
-        org.assertj.core.api.Assertions.assertThat(freeClass.path("canEnrol").asBoolean()).isTrue();
-        org.assertj.core.api.Assertions.assertThat(freeClass.path("meetingLink").isNull()).isTrue();
+        assertThat(freeClass.isMissingNode()).isFalse();
+        assertThat(freeClass.path("accessAllowed").asBoolean()).isTrue();
+        assertThat(freeClass.path("canEnrol").asBoolean()).isTrue();
+        assertThat(freeClass.path("meetingLink").isNull()).isTrue();
 
-        org.assertj.core.api.Assertions.assertThat(paidClass.isMissingNode()).isFalse();
-        org.assertj.core.api.Assertions.assertThat(paidClass.path("accessAllowed").asBoolean()).isFalse();
-        org.assertj.core.api.Assertions.assertThat(paidClass.path("canEnrol").asBoolean()).isFalse();
-        org.assertj.core.api.Assertions.assertThat(paidClass.path("meetingLink").isNull()).isTrue();
+        assertThat(paidClass.isMissingNode()).isFalse();
+        assertThat(paidClass.path("accessAllowed").asBoolean()).isFalse();
+        assertThat(paidClass.path("canEnrol").asBoolean()).isFalse();
+        assertThat(paidClass.path("meetingLink").isNull()).isTrue();
     }
 
     @Test
@@ -386,8 +389,8 @@ class LiveRecordedLearningIntegrationTests {
                 .andReturn();
 
         JsonNode classes = objectMapper.readTree(listingResult.getResponse().getContentAsString()).path("data").path("items");
-        org.assertj.core.api.Assertions.assertThat(findLiveClassByTitle(classes, "Completed Hidden Live Class").isMissingNode()).isTrue();
-        org.assertj.core.api.Assertions.assertThat(findLiveClassByTitle(classes, "Cancelled Hidden Live Class").isMissingNode()).isTrue();
+        assertThat(findLiveClassByTitle(classes, "Completed Hidden Live Class").isMissingNode()).isTrue();
+        assertThat(findLiveClassByTitle(classes, "Cancelled Hidden Live Class").isMissingNode()).isTrue();
 
         mockMvc.perform(get("/api/v1/students/live-classes/" + completedClassId)
                 .header("Authorization", "Bearer " + studentToken))
@@ -577,9 +580,9 @@ class LiveRecordedLearningIntegrationTests {
         mockMvc.perform(get("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos/" + videoId + "/stream")
                 .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
-                        .string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline;")))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                .andExpect(header()
+                        .string("Content-Disposition", startsWith("inline;")))
+                .andExpect(header()
                         .string("Cache-Control", "no-store"));
     }
 
@@ -679,7 +682,7 @@ class LiveRecordedLearningIntegrationTests {
                 .andExpect(status().isOk());
 
         TeacherProfile refreshed = teacherProfileRepository.findById(profile.getId()).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(refreshed.getTeacherStatus()).isEqualTo(TeacherStatus.APPROVED);
+        assertThat(refreshed.getTeacherStatus()).isEqualTo(TeacherStatus.APPROVED);
     }
 
     private TeacherProfile registerTeacherWithVerificationDocument(String email) throws Exception {

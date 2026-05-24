@@ -1,9 +1,13 @@
 package com.example.aichinese.exception;
 
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -12,9 +16,11 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -64,15 +70,37 @@ import jakarta.validation.ConstraintViolationException;
  * leak internal field names. The front-end runs its own client-side
  * validation that produces matching field-level highlights, so server
  * messages remain coarse-grained.</p>
+ *
+ * <h2>Advice ordering</h2>
+ * <p>The class is annotated {@link Order @Order(HIGHEST_PRECEDENCE)} so
+ * that any future {@link org.springframework.web.bind.annotation.ControllerAdvice}
+ * added to the platform cannot accidentally pre-empt the centralised
+ * envelope translation — every controller-thrown exception must flow
+ * through here so the wire format never diverges.</p>
  */
 @RestControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** Sentinel returned when the cause chain cannot be inspected. */
+    private static final String UNKNOWN_CAUSE = "unknown";
+
+    /**
+     * Hard cap on cause-chain traversal depth. Realistic JVM exceptions
+     * never nest beyond a handful of levels; this cap exists purely to
+     * defend against pathological or self-referential cause chains that
+     * would otherwise turn an exception handler into an infinite loop.
+     */
+    private static final int MAX_CAUSE_DEPTH = 20;
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
+        log.warn("Bean validation rejected request body with HTTP 400 [requestId={}]: {} field error(s)",
+                requestId(),
+                exception.getBindingResult().getErrorCount());
         return badRequest(FriendlyErrorMessageResolver.validationFailedMessage());
     }
 
@@ -125,19 +153,55 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
             ConstraintViolationException exception) {
+        log.warn("Constraint violation rejected request with HTTP 400 [requestId={}]: {} violation(s)",
+                requestId(),
+                exception.getConstraintViolations() == null ? 0 : exception.getConstraintViolations().size());
         return badRequest(FriendlyErrorMessageResolver.validationFailedMessage());
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ApiResponse<Void>> handleHandlerMethodValidationException(
             HandlerMethodValidationException exception) {
+        log.warn("Handler-method validation rejected request with HTTP 400 [requestId={}]: {} error(s)",
+                requestId(),
+                exception.getAllErrors().size());
         return badRequest(FriendlyErrorMessageResolver.validationFailedMessage());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatchException(
             MethodArgumentTypeMismatchException exception) {
+        log.warn("Argument type mismatch rejected request with HTTP 400 [requestId={}]: parameter '{}'",
+                requestId(),
+                exception.getName());
         return badRequest(FriendlyErrorMessageResolver.invalidRequestMessage());
+    }
+
+    /**
+     * Catches missing-required-parameter / missing-path-variable /
+     * missing-required-header / missing-required-cookie failures from
+     * Spring's request binder. Without this handler those exceptions
+     * would fall through to the catch-all {@code Exception} branch and
+     * be reported as HTTP 500, which would mis-attribute a client error
+     * as a server fault.
+     */
+    @ExceptionHandler(ServletRequestBindingException.class)
+    public ResponseEntity<ApiResponse<Void>> handleServletRequestBindingException(
+            ServletRequestBindingException exception) {
+        log.warn("Request binding failed with HTTP 400 [requestId={}]: {}",
+                requestId(),
+                exception.getClass().getSimpleName());
+        return badRequest(FriendlyErrorMessageResolver.invalidRequestMessage());
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMediaTypeNotAcceptableException(
+            HttpMediaTypeNotAcceptableException exception) {
+        log.warn("Unacceptable media type rejected with HTTP 406 [requestId={}]", requestId());
+        ApiResponse<Void> response = failure(FriendlyErrorMessageResolver.invalidRequestMessage());
+        return ResponseEntity.status(exception.getStatusCode())
+                .headers(exception.getHeaders())
+                .body(response);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -218,10 +282,17 @@ public class GlobalExceptionHandler {
      * {@link MultipartException} wrapper — Tomcat / Jetty sometimes wrap
      * the size violation in a {@code MultipartException} rather than
      * surfacing the typed exception directly.
+     *
+     * <p>The traversal is bounded by both an {@link IdentityHashMap}
+     * cycle guard and {@link #MAX_CAUSE_DEPTH} so a pathological or
+     * self-referential cause chain cannot turn this helper into an
+     * infinite loop.</p>
      */
-    private boolean isUploadTooLarge(Throwable exception) {
+    private static boolean isUploadTooLarge(Throwable exception) {
+        Set<Throwable> visited = newIdentitySet();
         Throwable current = exception;
-        while (current != null) {
+        int depth = 0;
+        while (current != null && depth++ < MAX_CAUSE_DEPTH && visited.add(current)) {
             if (current instanceof MaxUploadSizeExceededException) {
                 return true;
             }
@@ -234,18 +305,37 @@ public class GlobalExceptionHandler {
      * Returns the simple class name of the innermost (root) cause in the
      * exception chain. Used in logs in place of the raw exception message,
      * which can echo user input back into the log file and risk PII leaks.
+     *
+     * <p>The traversal is bounded by both an {@link IdentityHashMap}
+     * cycle guard and {@link #MAX_CAUSE_DEPTH} so a pathological or
+     * self-referential cause chain cannot turn this helper into an
+     * infinite loop.</p>
      */
-    private String rootCauseClassName(Throwable exception) {
+    private static String rootCauseClassName(Throwable exception) {
         if (exception == null) {
-            return "unknown";
+            return UNKNOWN_CAUSE;
         }
+        Set<Throwable> visited = newIdentitySet();
         Throwable current = exception;
         Throwable root = exception;
-        while (current != null) {
+        int depth = 0;
+        while (current != null && depth++ < MAX_CAUSE_DEPTH && visited.add(current)) {
             root = current;
             current = current.getCause();
         }
         return root.getClass().getSimpleName();
+    }
+
+    /**
+     * Allocates a small identity-equality {@link Set} suitable for
+     * tracking already-visited exceptions during cause-chain traversal.
+     * Identity comparison (via {@link IdentityHashMap}) is required
+     * because two distinct exception instances may legitimately share
+     * {@link Object#equals(Object) equals} / {@link Object#hashCode()}
+     * implementations and we only want to detect literal cycles.
+     */
+    private static Set<Throwable> newIdentitySet() {
+        return java.util.Collections.newSetFromMap(new IdentityHashMap<>(8));
     }
 
     /**

@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Reason category a student selected when reporting an AI assistant
@@ -42,13 +40,11 @@ public enum AiResponseReportReason {
      * through the standard moderation queue.
      */
     public static final Set<AiResponseReportReason> CHILD_SAFETY_CRITICAL =
-            Set.of(UNSAFE_CONTENT, AGE_INAPPROPRIATE);
+            Collections.unmodifiableSet(EnumSet.of(UNSAFE_CONTENT, AGE_INAPPROPRIATE));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AiResponseReportReason> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AiResponseReportReason> LOOKUP =
+            EnumLookups.indexByName(AiResponseReportReason.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -58,14 +54,7 @@ public enum AiResponseReportReason {
      *         is {@code null}, blank, or not a recognised reason
      */
     public static Optional<AiResponseReportReason> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -75,12 +64,12 @@ public enum AiResponseReportReason {
      *         blank, or not a recognised reason
      */
     public static AiResponseReportReason fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("AI report reason is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid AI report reason. Allowed values are INCORRECT_CONTENT, "
-                        + "HALLUCINATION, UNSAFE_CONTENT, AGE_INAPPROPRIATE, or OTHER."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "AI report reason is required.",
+                () -> "Invalid AI report reason. Allowed values are INCORRECT_CONTENT, "
+                        + "HALLUCINATION, UNSAFE_CONTENT, AGE_INAPPROPRIATE, or OTHER.");
     }
 
     /**

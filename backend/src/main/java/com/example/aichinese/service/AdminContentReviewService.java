@@ -7,11 +7,16 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.persistence.criteria.Predicate;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.content.ContentSubmissionDetailResponse;
@@ -58,6 +63,8 @@ import com.example.aichinese.util.TextUtils;
 @Service
 public class AdminContentReviewService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminContentReviewService.class);
+
     private static final int ADMIN_PACKAGE_ITEM_LIMIT = 100;
     private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
 
@@ -79,14 +86,14 @@ public class AdminContentReviewService {
             ContentManagementMapper contentManagementMapper,
             AuditLogService auditLogService,
             UserRepository userRepository) {
-        this.learningModuleRepository = learningModuleRepository;
-        this.lessonRepository = lessonRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.packageItemRepository = packageItemRepository;
-        this.contentModerationRecordRepository = contentModerationRecordRepository;
-        this.contentManagementMapper = contentManagementMapper;
-        this.auditLogService = auditLogService;
-        this.userRepository = userRepository;
+        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
+        this.contentModerationRecordRepository = Objects.requireNonNull(contentModerationRecordRepository, "contentModerationRecordRepository");
+        this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
     }
 
     @Transactional(readOnly = true)
@@ -175,7 +182,7 @@ public class AdminContentReviewService {
     private static org.springframework.data.jpa.domain.Specification<LearningModule> buildModuleSpecification(
             ContentStatus status, Long teacherId, String normalizedKeyword) {
         return (root, query, cb) -> {
-            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            List<Predicate> predicates = new ArrayList<>();
             if (status != null) {
                 predicates.add(cb.equal(root.get("contentStatus"), status));
             }
@@ -188,14 +195,14 @@ public class AdminContentReviewService {
                         cb.like(cb.lower(root.get("title")), like),
                         cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
             }
-            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 
     private static org.springframework.data.jpa.domain.Specification<Lesson> buildLessonSpecification(
             ContentStatus status, Long teacherId, String normalizedKeyword) {
         return (root, query, cb) -> {
-            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            List<Predicate> predicates = new ArrayList<>();
             if (status != null) {
                 predicates.add(cb.equal(root.get("contentStatus"), status));
             }
@@ -211,14 +218,14 @@ public class AdminContentReviewService {
                         cb.like(cb.lower(root.get("title")), like),
                         cb.like(cb.lower(cb.coalesce(root.get("summary"), "")), like)));
             }
-            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 
     private static org.springframework.data.jpa.domain.Specification<CoursePackage> buildPackageSpecification(
             ContentStatus status, Long teacherId, String normalizedKeyword) {
         return (root, query, cb) -> {
-            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            List<Predicate> predicates = new ArrayList<>();
             if (status != null) {
                 predicates.add(cb.equal(root.get("contentStatus"), status));
             }
@@ -231,7 +238,7 @@ public class AdminContentReviewService {
                         cb.like(cb.lower(root.get("title")), like),
                         cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
             }
-            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new Predicate[0]));
         };
     }
 
@@ -302,6 +309,7 @@ public class AdminContentReviewService {
         };
 
         recordModeration(adminUser, contentType, id, "ARCHIVE", note);
+        log.info("Content archived: type={}, id={}, adminUserId={}", contentType, id, adminUser.getId());
         auditLogService.record(adminUser, "ADMIN_CONTENT_ARCHIVE", contentType.name(), id,
                 "Admin archived content.");
         return response;

@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +45,7 @@ class SchemaEnumContractTests {
         Set<String> databaseValues = latestNotificationTypeEnumValues();
         Set<String> applicationValues = Arrays.stream(NotificationType.values())
                 .map(Enum::name)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
         assertThat(databaseValues)
                 .containsExactlyInAnyOrderElementsOf(applicationValues);
@@ -111,7 +112,7 @@ class SchemaEnumContractTests {
         Set<String> databaseValues = checkValues(migration, constraintName);
         Set<String> applicationValues = Arrays.stream(applicationEnumValues)
                 .map(Enum::name)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
         assertThat(databaseValues)
                 .as("Database check values for " + constraintName)

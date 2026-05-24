@@ -78,14 +78,10 @@ const dynamicRoutePrefixes = [
 function splitPathAndSuffix(path: string) {
   const queryStart = path.indexOf('?')
   const hashStart = path.indexOf('#')
-  const suffixStart = [queryStart, hashStart].filter((index) => index >= 0).sort((left, right) => left - right)[0]
-
-  if (suffixStart === undefined) {
-    return {
-      basePath: path,
-      suffix: '',
-    }
-  }
+  const suffixStart = Math.min(
+    queryStart >= 0 ? queryStart : path.length,
+    hashStart >= 0 ? hashStart : path.length,
+  )
 
   return {
     basePath: path.slice(0, suffixStart),

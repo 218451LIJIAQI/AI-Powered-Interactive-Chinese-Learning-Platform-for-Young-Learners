@@ -1,5 +1,10 @@
 package com.example.aichinese.service;
 
+import java.math.BigDecimal;
+import java.util.Objects;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +27,8 @@ import com.example.aichinese.security.SecurityUserDetails;
 @Service
 public class CommissionService {
 
+    private static final Logger log = LoggerFactory.getLogger(CommissionService.class);
+
     private static final String DEFAULT_DESCRIPTION = "Editable platform commission rate represented as a decimal.";
 
     private final SystemSettingRepository systemSettingRepository;
@@ -32,9 +39,9 @@ public class CommissionService {
             SystemSettingRepository systemSettingRepository,
             CommerceSettingsService commerceSettingsService,
             AuditLogService auditLogService) {
-        this.systemSettingRepository = systemSettingRepository;
-        this.commerceSettingsService = commerceSettingsService;
-        this.auditLogService = auditLogService;
+        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)
@@ -49,17 +56,22 @@ public class CommissionService {
 
     @Transactional
     public CommissionSettingResponse updateCommissionSetting(SecurityUserDetails currentUser, CommissionSettingRequest request) {
-        java.math.BigDecimal normalizedRate = commerceSettingsService.normalizeCommissionRate(request.commissionRate());
+        BigDecimal normalizedRate = commerceSettingsService.normalizeCommissionRate(request.commissionRate());
         SystemSetting setting = systemSettingRepository.findBySettingKey(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY)
                 .orElseGet(this::defaultCommissionSetting);
+
+        String previousValue = setting.getSettingValue();
         setting.setSettingValue(normalizedRate.toPlainString());
         systemSettingRepository.save(setting);
+
+        log.info("Commission rate changed from {} to {} by userId={}",
+                previousValue, normalizedRate.toPlainString(), currentUser.getUserId());
         auditLogService.record(
                 currentUser.getUser(),
                 "COMMISSION_RATE_CHANGED",
                 "SYSTEM_SETTING",
                 setting.getId(),
-                "Platform commission rate updated to " + normalizedRate.toPlainString());
+                "Platform commission rate updated from " + previousValue + " to " + normalizedRate.toPlainString());
         return new CommissionSettingResponse(normalizedRate, setting.getSettingKey(), setting.getDescription());
     }
 

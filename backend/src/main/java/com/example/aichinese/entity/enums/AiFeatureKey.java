@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Stable identifier for each user-facing AI feature in the platform.
@@ -57,19 +55,33 @@ public enum AiFeatureKey {
      * Features whose primary output is free-form generated text, suitable
      * for downstream toxicity / age-appropriateness screening.
      */
-    public static final Set<AiFeatureKey> TEXT_GENERATIVE = Set.of(
+    public static final Set<AiFeatureKey> TEXT_GENERATIVE = Collections.unmodifiableSet(EnumSet.of(
             CHAT_TUTOR, VOCABULARY_HELPER, SENTENCE_PRACTICE, QUIZ_GENERATOR,
-            STORY_GENERATOR, LEARNING_RECOMMENDATION);
+            STORY_GENERATOR, LEARNING_RECOMMENDATION));
 
     /** Features that consume student-uploaded media (audio or image). */
-    public static final Set<AiFeatureKey> MEDIA_FEEDBACK = Set.of(
-            PRONUNCIATION_FEEDBACK, WRITING_FEEDBACK);
+    public static final Set<AiFeatureKey> MEDIA_FEEDBACK = Collections.unmodifiableSet(EnumSet.of(
+            PRONUNCIATION_FEEDBACK, WRITING_FEEDBACK));
+
+    /*
+     * Startup-time exhaustiveness guard: every constant must belong to
+     * exactly one of the two disjoint category sets.  If a developer
+     * adds a new AiFeatureKey without classifying it, the JVM will
+     * throw an AssertionError the moment this class is loaded.
+     */
+    static {
+        EnumSet<AiFeatureKey> covered = EnumSet.copyOf(TEXT_GENERATIVE);
+        covered.addAll(MEDIA_FEEDBACK);
+        if (!covered.equals(EnumSet.allOf(AiFeatureKey.class))) {
+            EnumSet<AiFeatureKey> missing = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "AiFeatureKey category sets do not cover all constants; uncovered: " + missing);
+        }
+    }
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AiFeatureKey> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AiFeatureKey> LOOKUP =
+            EnumLookups.indexByName(AiFeatureKey.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -79,14 +91,7 @@ public enum AiFeatureKey {
      *         is {@code null}, blank, or not a recognised feature key
      */
     public static Optional<AiFeatureKey> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -96,11 +101,13 @@ public enum AiFeatureKey {
      *         blank, or not a recognised feature key
      */
     public static AiFeatureKey fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("AI feature key is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid AI feature key: " + value + "."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "AI feature key is required.",
+                () -> "Invalid AI feature key. Allowed values are CHAT_TUTOR, VOCABULARY_HELPER, "
+                        + "SENTENCE_PRACTICE, QUIZ_GENERATOR, STORY_GENERATOR, "
+                        + "LEARNING_RECOMMENDATION, PRONUNCIATION_FEEDBACK, or WRITING_FEEDBACK.");
     }
 
     /**

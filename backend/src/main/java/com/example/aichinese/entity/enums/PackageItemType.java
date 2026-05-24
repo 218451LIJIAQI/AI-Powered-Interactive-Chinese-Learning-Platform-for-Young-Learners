@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Kind of artefact bundled inside a {@code CoursePackage}.
@@ -28,10 +24,8 @@ public enum PackageItemType {
     LESSON;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, PackageItemType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, PackageItemType> LOOKUP =
+            EnumLookups.indexByName(PackageItemType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -41,14 +35,7 @@ public enum PackageItemType {
      *         is {@code null}, blank, or not a recognised package item type
      */
     public static Optional<PackageItemType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -63,11 +50,11 @@ public enum PackageItemType {
      *         blank, or not a recognised package item type
      */
     public static PackageItemType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Package item type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid package item type. Allowed values are MODULE or LESSON."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Package item type is required.",
+                () -> "Invalid package item type. Allowed values are MODULE or LESSON.");
     }
 
     /** @return {@code true} when this item denotes a {@link #MODULE}. */

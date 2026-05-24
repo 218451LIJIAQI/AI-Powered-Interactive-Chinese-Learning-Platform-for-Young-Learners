@@ -4,6 +4,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.Locale;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,9 +41,9 @@ public class CommunicationTargetResolver {
             LessonRepository lessonRepository,
             CoursePackageRepository coursePackageRepository,
             TeacherProfileRepository teacherProfileRepository) {
-        this.lessonRepository = lessonRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
     }
 
     @Transactional(readOnly = true)

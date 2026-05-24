@@ -1,5 +1,9 @@
 package com.example.aichinese.service;
 
+import java.util.Objects;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,8 @@ import com.example.aichinese.security.SecurityUserDetails;
 @Service
 public class PlatformSettingsService {
 
+    private static final Logger log = LoggerFactory.getLogger(PlatformSettingsService.class);
+
     public static final String PLATFORM_NAME_KEY = "platform_name";
     public static final String AI_DISCLAIMER_TEXT_KEY = "ai_disclaimer_text";
     public static final String EMAIL_NOTIFICATIONS_KEY = "admin_email_notifications_enabled";
@@ -49,8 +55,8 @@ public class PlatformSettingsService {
     public PlatformSettingsService(
             SystemSettingRepository systemSettingRepository,
             AuditLogService auditLogService) {
-        this.systemSettingRepository = systemSettingRepository;
-        this.auditLogService = auditLogService;
+        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +97,7 @@ public class PlatformSettingsService {
         upsertSetting(SENSITIVE_WORD_FILTER_KEY, Boolean.toString(request.sensitiveWordFilter()));
         upsertSetting(AI_SAFETY_CHECK_KEY, Boolean.toString(request.aiSafetyCheck()));
 
+        log.info("Platform settings updated by adminUserId={}", currentUser.getUserId());
         auditLogService.record(
                 currentUser.getUser(),
                 "ADMIN_PLATFORM_SETTINGS_UPDATED",

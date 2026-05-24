@@ -26,7 +26,7 @@
               <span>courses matched</span>
             </article>
             <article>
-              <strong>{{ categories.length || 0 }}</strong>
+              <strong>{{ categories.length }}</strong>
               <span>learning themes</span>
             </article>
             <article>
@@ -146,7 +146,7 @@
                 </div>
               </div>
               <div class="public-cart-item-actions">
-                <strong>{{ formatCurrency(item.subtotal, item.currencyCode).replace('.00', '') }}</strong>
+                <strong>{{ formatCurrency(item.subtotal, item.currencyCode) }}</strong>
                 <button class="public-clear-button" type="button" @click="removeCartItem(item.cartItemId)">Remove</button>
               </div>
             </div>
@@ -242,6 +242,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { CartItemResponse, CartResponse, LearningCategory, LearningLevel, PublicCourseSummary } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatCurrency } from '@/utils/format'
+import { safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -256,6 +257,7 @@ const filters = reactive({
 })
 const filtersOpen = ref(true)
 const cartSuccess = ref<string | null>(null)
+const cartBusy = ref(false)
 
 const coursesResource = useResource(() => publicApi.listCourses({ size: 20 }), {
   items: publicCourses,
@@ -401,12 +403,15 @@ async function addCourseToCart(course: PublicCourseSummary) {
     return
   }
 
+  if (cartBusy.value) return
+
   if (cartResource.usingFallback.value) {
     cartSuccess.value = null
     cartResource.error.value = 'Cart preview data is read-only. Refresh live cart data before changing it.'
     return
   }
 
+  cartBusy.value = true
   try {
     cartSuccess.value = null
     cartResource.error.value = null
@@ -416,6 +421,8 @@ async function addCourseToCart(course: PublicCourseSummary) {
   } catch (reason) {
     cartSuccess.value = null
     cartResource.error.value = resolveApiError(reason, 'Unable to add this course to the cart.')
+  } finally {
+    cartBusy.value = false
   }
 }
 
@@ -425,12 +432,15 @@ async function removeCartItem(cartItemId: number) {
     return
   }
 
+  if (cartBusy.value) return
+
   if (cartResource.usingFallback.value) {
     cartSuccess.value = null
     cartResource.error.value = 'Cart preview data is read-only. Refresh live cart data before changing it.'
     return
   }
 
+  cartBusy.value = true
   try {
     cartSuccess.value = null
     cartResource.error.value = null
@@ -440,6 +450,8 @@ async function removeCartItem(cartItemId: number) {
   } catch (reason) {
     cartSuccess.value = null
     cartResource.error.value = resolveApiError(reason, 'Unable to remove this item right now.')
+  } finally {
+    cartBusy.value = false
   }
 }
 
@@ -449,12 +461,15 @@ async function clearCart() {
     return
   }
 
+  if (cartBusy.value) return
+
   if (cartResource.usingFallback.value) {
     cartSuccess.value = null
     cartResource.error.value = 'Cart preview data is read-only. Refresh live cart data before changing it.'
     return
   }
 
+  cartBusy.value = true
   try {
     cartSuccess.value = null
     cartResource.error.value = null
@@ -464,6 +479,8 @@ async function clearCart() {
   } catch (reason) {
     cartSuccess.value = null
     cartResource.error.value = resolveApiError(reason, 'Unable to clear your cart right now.')
+  } finally {
+    cartBusy.value = false
   }
 }
 
@@ -472,6 +489,8 @@ async function checkoutCart() {
     goToAuth()
     return
   }
+
+  if (cartBusy.value) return
 
   if (cartResource.usingFallback.value) {
     cartSuccess.value = null
@@ -483,6 +502,7 @@ async function checkoutCart() {
     return
   }
 
+  cartBusy.value = true
   try {
     cartSuccess.value = null
     cartResource.error.value = null
@@ -492,14 +512,22 @@ async function checkoutCart() {
       return
     }
 
-    if (response.checkoutUrl) {
-      window.location.assign(response.checkoutUrl)
+    const validatedUrl = safeHttpUrl(response.checkoutUrl)
+    if (validatedUrl) {
+      window.location.assign(validatedUrl)
       return
     }
 
-    router.push({ name: 'payment-success', query: { paymentId: String(response.paymentId) } })
+    if (response.paymentId != null) {
+      void router.push({ name: 'payment-success', query: { paymentId: String(response.paymentId) } })
+      return
+    }
+
+    cartResource.error.value = 'Checkout completed but no redirect or payment reference was returned. Please contact support.'
   } catch (reason) {
     cartResource.error.value = resolveApiError(reason, 'Unable to start checkout.')
+  } finally {
+    cartBusy.value = false
   }
 }
 

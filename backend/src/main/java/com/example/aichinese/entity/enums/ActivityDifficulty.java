@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Difficulty rating assigned by an admin to a platform-managed learning
@@ -35,10 +31,8 @@ public enum ActivityDifficulty {
     HARD;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, ActivityDifficulty> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, ActivityDifficulty> LOOKUP =
+            EnumLookups.indexByName(ActivityDifficulty.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -48,14 +42,7 @@ public enum ActivityDifficulty {
      *         is {@code null}, blank, or not a recognised difficulty
      */
     public static Optional<ActivityDifficulty> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -65,11 +52,11 @@ public enum ActivityDifficulty {
      *         blank, or not a recognised difficulty
      */
     public static ActivityDifficulty fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Activity difficulty is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid activity difficulty. Allowed values are EASY, MEDIUM, or HARD."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Activity difficulty is required.",
+                () -> "Invalid activity difficulty. Allowed values are EASY, MEDIUM, or HARD.");
     }
 
     /**

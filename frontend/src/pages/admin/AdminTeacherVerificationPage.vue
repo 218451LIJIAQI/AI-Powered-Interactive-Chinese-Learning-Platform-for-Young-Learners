@@ -308,7 +308,7 @@ const pendingResource = useResource(() => adminApi.pendingTeachers(), teacherApp
 const teachersResource = useResource(() => adminApi.teachers(), adminTeachers)
 const detailResource = useResource(() => adminApi.teacherDetail(adminTeacherDetail.teacherId), adminTeacherDetail, false)
 
-const pageError = computed(() => pendingResource.error.value || teachersResource.error.value || detailResource.error.value || null)
+const pageError = computed(() => pendingResource.error.value || teachersResource.error.value || detailResource.error.value)
 const detailUsingFallback = computed(() => detailResource.usingFallback.value)
 const verificationReadOnly = computed(() => pendingResource.usingFallback.value || teachersResource.usingFallback.value || detailResource.usingFallback.value)
 const verificationDecisionReadOnly = computed(() => verificationReadOnly.value || submittingApprove.value || submittingReject.value)
@@ -572,6 +572,7 @@ async function selectTeacher(id: number) {
 }
 
 async function downloadTeacherDocument(documentId: number, fileName: string) {
+  if (downloadingDocumentId.value) return
   if (detailUsingFallback.value) {
     actionSuccess.value = null
     actionError.value = 'Teacher document downloads are unavailable while using preview data.'
@@ -594,6 +595,7 @@ async function downloadTeacherDocument(documentId: number, fileName: string) {
 }
 
 async function approveTeacher() {
+  if (submittingApprove.value) return
   if (!selectedApplicant.value) return
   if (verificationReadOnly.value) {
     actionSuccess.value = null
@@ -621,6 +623,7 @@ async function approveTeacher() {
 }
 
 async function rejectTeacher() {
+  if (submittingReject.value) return
   if (!selectedApplicant.value) return
   if (verificationReadOnly.value) {
     actionSuccess.value = null

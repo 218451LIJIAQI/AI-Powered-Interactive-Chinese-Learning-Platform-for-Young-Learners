@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Origin of the playable asset behind a recorded lesson video.
@@ -30,10 +26,8 @@ public enum RecordedVideoSourceType {
     EXTERNAL_URL;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, RecordedVideoSourceType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, RecordedVideoSourceType> LOOKUP =
+            EnumLookups.indexByName(RecordedVideoSourceType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -43,14 +37,7 @@ public enum RecordedVideoSourceType {
      *         is {@code null}, blank, or not a recognised source type
      */
     public static Optional<RecordedVideoSourceType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -60,11 +47,11 @@ public enum RecordedVideoSourceType {
      *         blank, or not a recognised source type
      */
     public static RecordedVideoSourceType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Recorded video source type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid recorded video source type. Allowed values are UPLOADED_FILE or EXTERNAL_URL."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Recorded video source type is required.",
+                () -> "Invalid recorded video source type. Allowed values are UPLOADED_FILE or EXTERNAL_URL.");
     }
 
     /** @return {@code true} when the playable asset lives in our own storage. */

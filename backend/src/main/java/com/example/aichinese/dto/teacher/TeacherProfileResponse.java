@@ -2,6 +2,9 @@ package com.example.aichinese.dto.teacher;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import com.example.aichinese.entity.enums.TeacherStatus;
 
@@ -43,28 +46,68 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * {@link TeacherVerificationDocumentSummaryResponse#currentVersion()}
  * {@code == true}.</p>
  *
- * @param userId                  underlying {@code users} row id
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions (snapshot
+ * tests, log fingerprints, etc.).</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces non-null on the seven header
+ * fields the profile screen renders unconditionally
+ * ({@link #userId}, {@link #fullName}, {@link #email},
+ * {@link #teacherProfileId}, {@link #teacherStatus},
+ * {@link #createdAt}, {@link #updatedAt}) and defensively copies the
+ * two embedded lists. {@link #bio}, {@link #shortIntroduction} and
+ * {@link #rejectionReason} remain nullable per the contextual rules
+ * documented above.</p>
+ *
+ * @param userId                  underlying {@code users} row id;
+ *                                never {@code null}
  * @param fullName                {@code users.display_name} (despite
  *                                the field name); mirrors
- *                                {@link UpdateTeacherProfileRequest#fullName}
+ *                                {@link UpdateTeacherProfileRequest#fullName};
+ *                                never {@code null}
  * @param email                   primary contact email; not editable
- *                                via {@link UpdateTeacherProfileRequest}
+ *                                via {@link UpdateTeacherProfileRequest};
+ *                                never {@code null}
  * @param teacherProfileId        underlying {@code teacher_profiles}
- *                                row id
+ *                                row id; never {@code null}
  * @param bio                     long-form description; nullable
  * @param shortIntroduction       directory teaser line; nullable
  * @param teachingCategories      free-form tag list; never
- *                                {@code null} (empty when none)
+ *                                {@code null} (empty when none); the
+ *                                wrapped list is unmodifiable
  * @param teacherStatus           verification state machine; see
- *                                {@link TeacherStatus}
+ *                                {@link TeacherStatus}; never
+ *                                {@code null}
  * @param rejectionReason         admin-supplied free text from the
  *                                latest {@link TeacherStatus#REJECTED}
- *                                decision; {@code null} when not rejected
+ *                                decision; {@code null} when not
+ *                                rejected
  * @param verificationDocuments   one row per document type, current
- *                                version only (see class Javadoc)
- * @param createdAt               profile-creation timestamp
- * @param updatedAt               last-modified timestamp
+ *                                version only (see class Javadoc);
+ *                                never {@code null}; the wrapped list
+ *                                is unmodifiable
+ * @param createdAt               profile-creation timestamp; never
+ *                                {@code null}
+ * @param updatedAt               last-modified timestamp; never
+ *                                {@code null}
  */
+@JsonPropertyOrder({
+        "userId",
+        "fullName",
+        "email",
+        "teacherProfileId",
+        "bio",
+        "shortIntroduction",
+        "teachingCategories",
+        "teacherStatus",
+        "rejectionReason",
+        "verificationDocuments",
+        "createdAt",
+        "updatedAt"
+})
 public record TeacherProfileResponse(
         Long userId,
         String fullName,
@@ -78,4 +121,29 @@ public record TeacherProfileResponse(
         List<TeacherVerificationDocumentSummaryResponse> verificationDocuments,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the seven
+     * header fields the profile screen renders unconditionally,
+     * defensively copies the two embedded lists (with {@code null} →
+     * {@link List#of()} normalisation) so external mutation cannot
+     * leak into an already-serialised payload, and leaves the
+     * contextual nullable fields ({@code bio},
+     * {@code shortIntroduction}, {@code rejectionReason}) untouched.
+     */
+    public TeacherProfileResponse {
+        Objects.requireNonNull(userId, "userId must not be null");
+        Objects.requireNonNull(fullName, "fullName must not be null");
+        Objects.requireNonNull(email, "email must not be null");
+        Objects.requireNonNull(teacherProfileId, "teacherProfileId must not be null");
+        Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
+        Objects.requireNonNull(createdAt, "createdAt must not be null");
+        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        teachingCategories = teachingCategories == null
+                ? List.of()
+                : List.copyOf(teachingCategories);
+        verificationDocuments = verificationDocuments == null
+                ? List.of()
+                : List.copyOf(verificationDocuments);
+    }
 }

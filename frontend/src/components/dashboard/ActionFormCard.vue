@@ -29,25 +29,24 @@
  */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-withDefaults(
-  defineProps<{
-    title: string
-    subtitle?: string
-    icon?: string
-    submitLabel?: string
-    submittingLabel?: string
-    submitting?: boolean
-    disabled?: boolean
-  }>(),
-  {
-    subtitle: '',
-    icon: 'dashboard',
-    submitLabel: 'Save',
-    submittingLabel: 'Saving...',
-    submitting: false,
-    disabled: false,
-  },
-)
+interface Props {
+  title: string
+  subtitle?: string
+  icon?: string
+  submitLabel?: string
+  submittingLabel?: string
+  submitting?: boolean
+  disabled?: boolean
+}
+
+withDefaults(defineProps<Props>(), {
+  subtitle: '',
+  icon: 'dashboard',
+  submitLabel: 'Save',
+  submittingLabel: 'Saving...',
+  submitting: false,
+  disabled: false,
+})
 
 defineEmits<{
   submit: []

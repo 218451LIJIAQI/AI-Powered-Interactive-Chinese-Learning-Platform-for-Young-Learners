@@ -235,6 +235,7 @@ const liveResource = useResource(() => studentApi.liveClasses(), studentLiveClas
 const liveClasses = computed(() => liveResource.data.value ?? (liveResource.usingFallback.value ? studentLiveClasses : []))
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
+const classBusy = ref(false)
 const pageLoading = computed(() => liveResource.loading.value)
 const pageError = computed(() => liveResource.error.value)
 const liveReadOnly = computed(() => liveResource.usingFallback.value)
@@ -252,10 +253,11 @@ const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(()
 const teacherInitials = computed(() =>
   primaryTeacherName.value
     .split(' ')
+    .filter(Boolean)
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase(),
+    .toUpperCase() || '?',
 )
 
 const classDate = computed(() => new Date(upcomingClass.value?.startTime ?? new Date().toISOString()))
@@ -464,6 +466,7 @@ async function openLinkedLesson() {
 }
 
 async function enrol(id: number) {
+  if (classBusy.value) return
   actionError.value = null
   actionSuccess.value = null
   if (liveReadOnly.value) {
@@ -471,17 +474,22 @@ async function enrol(id: number) {
     return
   }
 
+  classBusy.value = true
   try {
     await studentApi.enrolLiveClass(id)
     await liveResource.reload()
     actionSuccess.value = 'You are enrolled. The live class schedule has been refreshed.'
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to enrol in this class.')
+  } finally {
+    classBusy.value = false
   }
 }
 
 async function join(id: number) {
+  if (classBusy.value) return
   const target = liveClasses.value.find((item) => item.id === id)
+  actionError.value = null
   actionSuccess.value = null
 
   if (liveReadOnly.value) {

@@ -140,12 +140,9 @@ const displayName = computed(() => {
   return auth.displayName || 'Li Wei'
 })
 
-const userPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() => {
-  if (isGuestCatalog.value) return 'student'
-  if (role.value === 'STUDENT') return 'student'
-  if (role.value === 'ADMIN') return 'female'
-  return 'female'
-})
+const userPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() =>
+  isGuestCatalog.value || role.value === 'STUDENT' ? 'student' : 'female',
+)
 
 const profilePath = computed(() => {
   if (isGuestCatalog.value) return '/auth'
@@ -189,37 +186,34 @@ const showNotifications = computed(() => {
   return !route.path.includes('/student/learn')
 })
 const showStreak = computed(() => role.value === 'STUDENT' && !isGuestCatalog.value && streakCount.value > 0)
-const showDateChip = computed(() => role.value === 'TEACHER' && route.path.includes('/teacher/classes'))
-const dateLabel = computed(() =>
-  new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    weekday: 'short',
-  }).format(new Date()),
-)
+const showDateChip = computed<boolean>(() => role.value === 'TEACHER' && route.path.includes('/teacher/classes'))
 
-const notificationCount = computed(() => (showNotifications.value ? unreadResource.data.value?.unreadCount ?? 0 : 0))
-const showSessionAction = computed(() => auth.isAuthenticated && !isGuestCatalog.value)
-const signingOut = ref(false)
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  weekday: 'short',
+})
+const dateLabel = computed<string>(() => dateFormatter.format(new Date()))
 
-function refreshUnreadCount() {
-  if (!showNotifications.value) {
-    return
-  }
+const notificationCount = computed<number>(() => (showNotifications.value ? unreadResource.data.value?.unreadCount ?? 0 : 0))
+const showSessionAction = computed<boolean>(() => auth.isAuthenticated && !isGuestCatalog.value)
+const signingOut = ref<boolean>(false)
 
+function refreshUnreadCount(): void {
+  if (!showNotifications.value) return
   void unreadResource.reload()
 }
 
-async function handleSignOut() {
-  if (signingOut.value) {
-    return
-  }
+async function handleSignOut(): Promise<void> {
+  if (signingOut.value) return
 
   signingOut.value = true
   try {
     await auth.logout()
     await router.replace('/auth')
+  } catch {
+    /* sign-out failure — UI recovers on next interaction */
   } finally {
     signingOut.value = false
   }

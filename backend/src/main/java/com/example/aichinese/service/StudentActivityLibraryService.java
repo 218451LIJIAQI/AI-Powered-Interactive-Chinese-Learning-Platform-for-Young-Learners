@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.data.domain.PageRequest;
@@ -141,17 +142,17 @@ public class StudentActivityLibraryService {
             StoryQuestionRepository storyQuestionRepository,
             StudentLearningAccessService studentLearningAccessService,
             StudentLearningProgressService studentLearningProgressService) {
-        this.flashcardRepository = flashcardRepository;
-        this.matchingGameRepository = matchingGameRepository;
-        this.matchingGameItemRepository = matchingGameItemRepository;
-        this.listeningExerciseRepository = listeningExerciseRepository;
-        this.tracingExerciseRepository = tracingExerciseRepository;
-        this.dragDropActivityRepository = dragDropActivityRepository;
-        this.dragDropItemRepository = dragDropItemRepository;
-        this.storyActivityRepository = storyActivityRepository;
-        this.storyQuestionRepository = storyQuestionRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.studentLearningProgressService = studentLearningProgressService;
+        this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
+        this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
+        this.matchingGameItemRepository = Objects.requireNonNull(matchingGameItemRepository, "matchingGameItemRepository");
+        this.listeningExerciseRepository = Objects.requireNonNull(listeningExerciseRepository, "listeningExerciseRepository");
+        this.tracingExerciseRepository = Objects.requireNonNull(tracingExerciseRepository, "tracingExerciseRepository");
+        this.dragDropActivityRepository = Objects.requireNonNull(dragDropActivityRepository, "dragDropActivityRepository");
+        this.dragDropItemRepository = Objects.requireNonNull(dragDropItemRepository, "dragDropItemRepository");
+        this.storyActivityRepository = Objects.requireNonNull(storyActivityRepository, "storyActivityRepository");
+        this.storyQuestionRepository = Objects.requireNonNull(storyQuestionRepository, "storyQuestionRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.studentLearningProgressService = Objects.requireNonNull(studentLearningProgressService, "studentLearningProgressService");
     }
 
     // ===================================================================

@@ -22,10 +22,14 @@ import { RouterView, useRoute } from 'vue-router'
 
 import PublicTopNav from '@/components/layout/PublicTopNav.vue'
 
+const AUTH_PATHS: ReadonlySet<string> = new Set(['/auth', '/forgot-password', '/reset-password'])
+
 const route = useRoute()
-const isAuthPage = computed(() => route.path === '/auth' || route.path === '/forgot-password' || route.path === '/reset-password')
-const isCatalogPage = computed(() => route.path.startsWith('/courses'))
-const isPaymentPage = computed(() => route.path.startsWith('/payment'))
+
+const isAuthPage = computed<boolean>(() => AUTH_PATHS.has(route.path))
+const isCatalogPage = computed<boolean>(() => route.path.startsWith('/courses'))
+const isPaymentPage = computed<boolean>(() => route.path.startsWith('/payment'))
+
 const shellClass = computed(() => ({
   'public-shell--auth': isAuthPage.value,
   'public-shell--catalog': isCatalogPage.value,

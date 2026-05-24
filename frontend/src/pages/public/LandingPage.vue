@@ -223,20 +223,20 @@
 
       <div class="public-footer-meta">
         <div class="public-footer-socials">
-            <a
-              v-for="social in socialLinks"
-              :key="social.name"
-              :href="social.href"
-              :aria-label="social.label"
-              class="public-footer-social-link"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <BrandSocialIcon :name="social.name" />
-            </a>
-          </div>
+          <a
+            v-for="social in socialLinks"
+            :key="social.name"
+            :href="social.href"
+            :aria-label="social.label"
+            class="public-footer-social-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <BrandSocialIcon :name="social.name" />
+          </a>
+        </div>
         <div class="public-footer-copy">
-          <span>&copy; 2025 MandarinSpark. All rights reserved.</span>
+          <span>&copy; {{ copyrightYear }} MandarinSpark. All rights reserved.</span>
           <span>Made for young learners.</span>
         </div>
       </div>
@@ -255,7 +255,8 @@
  *
  * <p>Routes new visitors into {@link CatalogPage} for discovery and
  * {@link AuthPage} for sign-up / sign-in. The page is purely
- * presentational — no data loading, no router-guard handshake.</p>
+ * presentational apart from a lightweight featured-course fetch
+ * via {@link useResource} — no router-guard handshake.</p>
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -276,6 +277,7 @@ import type { PublicCourseSummary } from '@/types/api'
 type CourseSceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
 
 const router = useRouter()
+const copyrightYear = new Date().getFullYear()
 
 const previewFeaturedCourses = publicCourses.slice(0, 3)
 const featuredCoursesResource = useResource(() => publicApi.listCourses({ size: 3, sort: 'popular' }), {

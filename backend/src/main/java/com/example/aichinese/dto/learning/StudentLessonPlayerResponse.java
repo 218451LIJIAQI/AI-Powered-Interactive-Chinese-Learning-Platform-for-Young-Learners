@@ -1,6 +1,9 @@
 package com.example.aichinese.dto.learning;
 
 import java.util.List;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  * Aggregate-root payload for the student-facing lesson player —
@@ -19,7 +22,8 @@ import java.util.List;
  *       percentage across all the student's progress signals
  *       ({@link com.example.aichinese.entity.LessonProgress}, video
  *       progress, etc.) computed by
- *       {@code StudentLearningProgressService.lessonCompletionPercent}.</li>
+ *       {@code StudentLearningProgressService.lessonCompletionPercent};
+ *       clamped to {@code [0, 100]} by the canonical constructor.</li>
  *   <li>{@link #completed} — derived as
  *       {@link #completionPercent} {@code >= 100}; primitive
  *       {@code boolean} so the JSON wire format always emits a
@@ -38,9 +42,11 @@ import java.util.List;
  * <ul>
  *   <li>{@link #liveClasses} — live classes whose
  *       {@code lessonId == this.id}. Each carries its own access
- *       and enrolment booleans (see {@link LiveClassResponse}).</li>
+ *       and enrolment booleans (see {@link LiveClassResponse}).
+ *       Defensively copied by the canonical constructor.</li>
  *   <li>{@link #recordedVideos} — published, non-archived recorded
- *       videos for this lesson, in {@code sortOrder} ascending.</li>
+ *       videos for this lesson, in {@code sortOrder} ascending.
+ *       Defensively copied by the canonical constructor.</li>
  * </ul>
  *
  * <h2>{@link #learningType}</h2>
@@ -48,7 +54,57 @@ import java.util.List;
  * {@link com.example.aichinese.entity.enums.LearningType}
  * ("VIDEO", "INTERACTIVE", "TEXT", etc.) so the player UI can pick
  * the right rendering pipeline.</p>
+ *
+ * <h2>Invariants</h2>
+ * <ul>
+ *   <li>{@link #lessonId} and {@link #title} are non-{@code null}
+ *       — they identify the row the front-end deep-links to and
+ *       render unconditionally even when {@link #locked} is
+ *       {@code true}.</li>
+ *   <li>{@link #completionPercent} is clamped into {@code [0, 100]}.</li>
+ *   <li>{@link #liveClasses} and {@link #recordedVideos} are
+ *       non-{@code null} (empty list rather than {@code null}) and
+ *       defensively copied.</li>
+ * </ul>
+ *
+ * @param lessonId                 {@code Lesson} identifier; never
+ *                                 {@code null}
+ * @param title                    lesson title shown atop the
+ *                                 player; never {@code null}
+ * @param description              short lesson summary; may be
+ *                                 {@code null}
+ * @param basicContent             authored lesson body text;
+ *                                 stripped to {@code null} when
+ *                                 {@link #locked} is {@code true}
+ * @param estimatedDurationMinutes optional curator-supplied duration
+ *                                 estimate
+ * @param completionPercent        0–100 rolled-up completion;
+ *                                 defensively clamped
+ * @param completed                {@code true} when
+ *                                 {@link #completionPercent}
+ *                                 reaches 100
+ * @param locked                   {@code true} when the student
+ *                                 has no access to the body
+ * @param learningType             enum-name string from
+ *                                 {@link com.example.aichinese.entity.enums.LearningType}
+ * @param liveClasses              attached live classes; never
+ *                                 {@code null}
+ * @param recordedVideos           attached recorded videos; never
+ *                                 {@code null}
  */
+@JsonPropertyOrder({
+        "lessonId",
+        "title",
+        "description",
+        "basicContent",
+        "estimatedDurationMinutes",
+        "completionPercent",
+        "completed",
+        "locked",
+        "learningType",
+        "liveClasses",
+        "recordedVideos"
+})
 public record StudentLessonPlayerResponse(
         Long lessonId,
         String title,
@@ -61,4 +117,23 @@ public record StudentLessonPlayerResponse(
         String learningType,
         List<LiveClassResponse> liveClasses,
         List<RecordedLessonVideoResponse> recordedVideos) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the
+     * identity / display fields the lesson player renders
+     * unconditionally; clamps {@link #completionPercent} into the
+     * {@code [0, 100]} window (a regression in the roll-up formula
+     * that emitted {@code 101} would break the radial progress
+     * widget); and defensively copies the list fields (with
+     * {@code null} → {@link List#of()} normalisation) so external
+     * mutation cannot leak into the bound payload after
+     * construction.
+     */
+    public StudentLessonPlayerResponse {
+        Objects.requireNonNull(lessonId, "lessonId must not be null");
+        Objects.requireNonNull(title, "title must not be null");
+        completionPercent = Math.max(0, Math.min(100, completionPercent));
+        liveClasses = liveClasses == null ? List.of() : List.copyOf(liveClasses);
+        recordedVideos = recordedVideos == null ? List.of() : List.copyOf(recordedVideos);
+    }
 }

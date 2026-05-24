@@ -1387,7 +1387,7 @@ export const adminUsers: PageResponse<AdminUserListItemResponse> = {
   ],
   page: 0,
   size: 10,
-  totalItems: 8,
+  totalItems: 9,
   totalPages: 1,
 }
 
@@ -1469,7 +1469,7 @@ export const adminTeachers: PageResponse<AdminTeacherListItemResponse> = {
   ],
   page: 0,
   size: 10,
-  totalItems: 3,
+  totalItems: 5,
   totalPages: 1,
 }
 

@@ -454,9 +454,10 @@ const goals = computed(() => {
   ]
 })
 
+const POINTS_PER_GEM = 6.8
 const rewards = computed(() => [
   { label: 'Stars', value: dashboard.value.points, icon: 'star' },
-  { label: 'Gems', value: Math.round(dashboard.value.points / 6.8), icon: 'rewards' },
+  { label: 'Gems', value: Math.round(dashboard.value.points / POINTS_PER_GEM), icon: 'rewards' },
   { label: 'Badges', value: dashboard.value.badgeCount, icon: 'shield' },
 ])
 

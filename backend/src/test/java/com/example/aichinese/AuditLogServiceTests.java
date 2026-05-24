@@ -3,9 +3,11 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
@@ -34,8 +36,8 @@ class AuditLogServiceTests {
 
         service.record(actor, "SECURITY_EVENT", "USER", 10L, longDescription);
 
-        org.mockito.ArgumentCaptor<AuditLog> captor = org.mockito.ArgumentCaptor.forClass(AuditLog.class);
-        org.mockito.Mockito.verify(auditLogRepository).save(captor.capture());
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
         AuditLog saved = captor.getValue();
 
         assertThat(saved.getDescription()).contains("password=[REDACTED]");

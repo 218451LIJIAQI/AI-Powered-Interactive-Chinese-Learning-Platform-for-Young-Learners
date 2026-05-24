@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of a single teacher earning record.
@@ -31,10 +27,8 @@ public enum TeacherEarningStatus {
     REFUNDED;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, TeacherEarningStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, TeacherEarningStatus> LOOKUP =
+            EnumLookups.indexByName(TeacherEarningStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -44,14 +38,7 @@ public enum TeacherEarningStatus {
      *         is {@code null}, blank, or not a recognised status
      */
     public static Optional<TeacherEarningStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -61,11 +48,11 @@ public enum TeacherEarningStatus {
      *         blank, or not a recognised status
      */
     public static TeacherEarningStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Teacher earning status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid teacher earning status. Allowed values are AVAILABLE or REFUNDED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Teacher earning status is required.",
+                () -> "Invalid teacher earning status. Allowed values are AVAILABLE or REFUNDED.");
     }
 
     /** @return {@code true} when the earning may contribute to the payout balance. */

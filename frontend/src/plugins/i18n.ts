@@ -22,15 +22,7 @@
  */
 import { createI18n } from 'vue-i18n'
 
-import type { AppLanguage } from '@/types/api'
-import { safeGetItem, storageKeys } from '@/utils/storage'
-
-const defaultLocale: AppLanguage = 'en'
-
-function readPersistedLocale(): AppLanguage {
-  const locale = safeGetItem(storageKeys.language)
-  return locale === 'en' || locale === 'ms' || locale === 'zh' ? locale : defaultLocale
-}
+import { readPersistedLocale } from '@/utils/storage'
 
 const storedLocale = readPersistedLocale()
 
@@ -124,6 +116,6 @@ const messages = {
 export const i18n = createI18n({
   legacy: false,
   locale: storedLocale,
-  fallbackLocale: defaultLocale,
+  fallbackLocale: 'en',
   messages,
 })

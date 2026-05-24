@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of a student-submitted {@code AiResponseReport}.
@@ -41,17 +39,15 @@ public enum AiResponseReportStatus {
 
     /** Statuses in which the report still requires moderator attention. */
     public static final Set<AiResponseReportStatus> OPEN =
-            Set.of(PENDING_REVIEW, IN_REVIEW);
+            Collections.unmodifiableSet(EnumSet.of(PENDING_REVIEW, IN_REVIEW));
 
     /** Statuses in which the report has reached a terminal state. */
     public static final Set<AiResponseReportStatus> TERMINAL =
-            Set.of(RESOLVED, DISMISSED);
+            Collections.unmodifiableSet(EnumSet.of(RESOLVED, DISMISSED));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AiResponseReportStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AiResponseReportStatus> LOOKUP =
+            EnumLookups.indexByName(AiResponseReportStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -61,14 +57,7 @@ public enum AiResponseReportStatus {
      *         is {@code null}, blank, or not a recognised status
      */
     public static Optional<AiResponseReportStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -78,12 +67,12 @@ public enum AiResponseReportStatus {
      *         blank, or not a recognised status
      */
     public static AiResponseReportStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("AI report status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid AI report status. Allowed values are PENDING_REVIEW, IN_REVIEW, "
-                        + "RESOLVED, or DISMISSED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "AI report status is required.",
+                () -> "Invalid AI report status. Allowed values are PENDING_REVIEW, IN_REVIEW, "
+                        + "RESOLVED, or DISMISSED.");
     }
 
     /** @return {@code true} when the report still requires moderator attention. */

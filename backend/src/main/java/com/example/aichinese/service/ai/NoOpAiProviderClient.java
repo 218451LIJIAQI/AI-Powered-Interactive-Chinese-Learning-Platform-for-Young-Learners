@@ -1,5 +1,7 @@
 package com.example.aichinese.service.ai;
 
+import java.util.Objects;
+
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.AiProperties;
@@ -20,18 +22,15 @@ public class NoOpAiProviderClient implements AiProviderClient {
     private final AiProperties aiProperties;
 
     public NoOpAiProviderClient(AiProperties aiProperties) {
-        this.aiProperties = aiProperties;
+        this.aiProperties = Objects.requireNonNull(aiProperties, "aiProperties");
     }
 
     @Override
     public AiProviderResult generateText(AiProviderPrompt prompt) {
-        return AiProviderResult.failure(providerName(), aiProperties.getModelName(),
+        Objects.requireNonNull(prompt, "prompt");
+        return AiProviderResult.failure(
+                AiProviderSupport.normalizeProvider(aiProperties.getProvider()),
+                aiProperties.getModelName(),
                 "AI provider is currently disabled or unavailable.");
-    }
-
-    private String providerName() {
-        return aiProperties.getProvider() == null || aiProperties.getProvider().isBlank()
-                ? "deepseek"
-                : aiProperties.getProvider().trim();
     }
 }

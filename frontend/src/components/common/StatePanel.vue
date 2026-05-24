@@ -32,18 +32,19 @@
  */
 import IconGlyph from './IconGlyph.vue'
 
-withDefaults(
-  defineProps<{
-    icon?: string
-    title: string
-    message: string
-    eyebrow?: string
-    tone?: 'neutral' | 'loading' | 'error' | 'empty'
-  }>(),
-  {
-    icon: 'help',
-    eyebrow: '',
-    tone: 'empty',
-  },
-)
+type PanelTone = 'neutral' | 'loading' | 'error' | 'empty'
+
+interface Props {
+  icon?: string
+  title: string
+  message: string
+  eyebrow?: string
+  tone?: PanelTone
+}
+
+withDefaults(defineProps<Props>(), {
+  icon: 'help',
+  eyebrow: '',
+  tone: 'empty',
+})
 </script>

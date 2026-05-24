@@ -173,7 +173,10 @@ async function loadDetail(contentType: string, id: number) {
   })
 }
 
+const archivingContentId = ref<number | null>(null)
+
 async function archiveContent(contentType: string, id: number) {
+  if (archivingContentId.value) return
   if (!ensureLiveContent('Content cannot be archived while preview data is active.')) return
   actionError.value = null
   actionSuccess.value = null
@@ -187,6 +190,7 @@ async function archiveContent(contentType: string, id: number) {
 }
 
 async function moderate(action: 'hide' | 'unpublish' | 'archive' | 'request-revision' | 'restore') {
+  if (submittingModeration.value) return
   if (!detail.value) return
   if (!ensureLiveContent('Moderation actions cannot be submitted while preview data is active.')) return
   actionError.value = null

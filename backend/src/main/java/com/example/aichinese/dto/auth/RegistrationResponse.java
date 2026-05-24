@@ -1,6 +1,9 @@
 package com.example.aichinese.dto.auth;
 
 import java.util.List;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import com.example.aichinese.entity.enums.TeacherStatus;
 
@@ -26,16 +29,40 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * the teacher dashboard should immediately surface the verification
  * upload step) and {@code null} for student registrations.</p>
  *
- * @param id                newly assigned user identifier
- * @param fullName          display name as stored on the user record
- * @param email             lower-cased login email
- * @param preferredLanguage UI locale defaulted from the request
+ * <h2>Invariants</h2>
+ * <ul>
+ *   <li>{@link #id}, {@link #fullName}, {@link #email} and
+ *       {@link #preferredLanguage} are non-{@code null} and non-blank.</li>
+ *   <li>{@link #roles} is non-{@code null} and defensively copied; the
+ *       embedded list is unmodifiable so an upstream mutation cannot
+ *       leak into an already-serialised payload.</li>
+ *   <li>{@link #teacherStatus} may be {@code null} per the role rules
+ *       above.</li>
+ * </ul>
+ *
+ * @param id                newly assigned user identifier; never
+ *                          {@code null}
+ * @param fullName          display name as stored on the user record;
+ *                          never {@code null} / blank
+ * @param email             lower-cased login email; never {@code null}
+ *                          / blank
+ * @param preferredLanguage UI locale defaulted from the request;
+ *                          never {@code null} / blank
  * @param roles             Spring Security authority strings prefixed
  *                          with {@code ROLE_} (a single-element list
- *                          in current registration flows)
+ *                          in current registration flows); never
+ *                          {@code null}
  * @param teacherStatus     {@code PENDING} for teacher registrations,
  *                          {@code null} for students
  */
+@JsonPropertyOrder({
+        "id",
+        "fullName",
+        "email",
+        "preferredLanguage",
+        "roles",
+        "teacherStatus"
+})
 public record RegistrationResponse(
         Long id,
         String fullName,
@@ -43,4 +70,27 @@ public record RegistrationResponse(
         String preferredLanguage,
         List<String> roles,
         TeacherStatus teacherStatus) {
+
+    /**
+     * Defensive canonical constructor: enforces the identity-field
+     * invariants the frontend's redirect-to-login flow relies on, and
+     * defensively copies {@link #roles} so external mutation cannot
+     * leak into the already-serialised payload.
+     */
+    public RegistrationResponse {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(fullName, "fullName must not be null");
+        if (fullName.isBlank()) {
+            throw new IllegalArgumentException("fullName must not be blank");
+        }
+        Objects.requireNonNull(email, "email must not be null");
+        if (email.isBlank()) {
+            throw new IllegalArgumentException("email must not be blank");
+        }
+        Objects.requireNonNull(preferredLanguage, "preferredLanguage must not be null");
+        if (preferredLanguage.isBlank()) {
+            throw new IllegalArgumentException("preferredLanguage must not be blank");
+        }
+        roles = roles == null ? List.of() : List.copyOf(roles);
+    }
 }

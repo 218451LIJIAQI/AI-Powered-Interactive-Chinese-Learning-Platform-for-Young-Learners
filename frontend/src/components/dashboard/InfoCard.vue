@@ -25,15 +25,14 @@
  */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-withDefaults(
-  defineProps<{
-    title: string
-    subtitle?: string
-    icon?: string
-  }>(),
-  {
-    subtitle: '',
-    icon: 'dashboard',
-  },
-)
+interface Props {
+  title: string
+  subtitle?: string
+  icon?: string
+}
+
+withDefaults(defineProps<Props>(), {
+  subtitle: '',
+  icon: 'dashboard',
+})
 </script>

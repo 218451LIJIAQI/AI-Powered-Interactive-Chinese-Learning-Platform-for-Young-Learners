@@ -336,14 +336,15 @@
  * <h2>Why one page</h2>
  * <p>Keeping login + register together cuts a navigation step out
  * of the auth flow and lets the user toggle without losing typed
- * input. The active mode is reflected in the URL (`?mode=register`)
- * so direct links from marketing pages can land on the right tab.</p>
+ * input.</p>
  *
  * <h2>Post-auth redirect</h2>
  * <p>After login we honour {@code ?redirect=} when it normalises
  * through {@link normalizeAppRoute} (defence against open-redirect
  * abuse); otherwise we use {@link defaultRouteForRole} so each
- * persona lands on their dashboard.</p>
+ * persona lands on their dashboard.  The active mode is reflected
+ * in the URL ({@code ?tab=register}) so direct links from marketing
+ * pages can land on the right tab.</p>
  *
  * <h2>Teacher onboarding</h2>
  * <p>Teacher registration calls a different endpoint and the
@@ -376,7 +377,7 @@ const loginInfo = ref<string | null>(null)
 const registerError = ref<string | null>(null)
 const registerInfo = ref<string | null>(null)
 const registerSubmitting = ref(false)
-const activeTab = ref<'signin' | 'register'>(route.query.tab === 'register' ? 'register' : 'signin')
+const activeTab = ref<'signin' | 'register'>('signin')
 
 const login = reactive({
   email: '',
@@ -421,7 +422,6 @@ const registerDescriptionId = computed(() =>
   registerError.value ? 'register-error' : registerInfo.value ? 'register-info' : undefined,
 )
 
-const requestedRole = computed(() => (route.query.role === 'teacher' ? 'TEACHER' : 'STUDENT'))
 watch(
   () => route.query.tab,
   (tab) => {
@@ -431,7 +431,7 @@ watch(
 )
 
 watch(
-  requestedRole,
+  () => (route.query.role === 'teacher' ? 'TEACHER' as const : 'STUDENT' as const),
   (nextRole) => {
     register.role = nextRole
   },
@@ -444,6 +444,8 @@ function resolveRedirect() {
 }
 
 async function submitLogin() {
+  if (auth.loading) return
+
   loginError.value = null
   loginInfo.value = null
 
@@ -466,6 +468,8 @@ async function submitLogin() {
 }
 
 async function submitRegister() {
+  if (registerSubmitting.value) return
+
   registerError.value = null
   registerInfo.value = null
   loginInfo.value = null
@@ -505,21 +509,21 @@ async function submitRegister() {
   try {
     const response = register.role === 'STUDENT'
       ? await authApi.registerStudent({
-        fullName: normalizedRegisterFullName.value,
-        email: normalizedRegisterEmail.value,
-        password: register.password,
-        confirmPassword: register.confirmPassword,
-        preferredLanguage: register.preferredLanguage,
-      })
+          fullName: normalizedRegisterFullName.value,
+          email: normalizedRegisterEmail.value,
+          password: register.password,
+          confirmPassword: register.confirmPassword,
+          preferredLanguage: register.preferredLanguage,
+        })
       : await authApi.registerTeacher({
-      fullName: normalizedRegisterFullName.value,
-      email: normalizedRegisterEmail.value,
-      password: register.password,
-      confirmPassword: register.confirmPassword,
-      bio: register.bio.trim(),
-    })
+          fullName: normalizedRegisterFullName.value,
+          email: normalizedRegisterEmail.value,
+          password: register.password,
+          confirmPassword: register.confirmPassword,
+          bio: register.bio.trim(),
+        })
 
-    login.email = response.email
+    login.email = response?.email ?? normalizedRegisterEmail.value
     login.password = ''
     register.password = ''
     register.confirmPassword = ''
@@ -553,12 +557,16 @@ function replaceAuthQuery(tab: 'signin' | 'register', role?: 'STUDENT' | 'TEACHE
 
 function activateSignIn() {
   activeTab.value = 'signin'
+  registerError.value = null
+  registerInfo.value = null
   replaceAuthQuery('signin')
 }
 
 function activateRegister(role: 'STUDENT' | 'TEACHER' = register.role) {
   activeTab.value = 'register'
   register.role = role
+  loginError.value = null
+  loginInfo.value = null
   replaceAuthQuery('register', role)
 }
 

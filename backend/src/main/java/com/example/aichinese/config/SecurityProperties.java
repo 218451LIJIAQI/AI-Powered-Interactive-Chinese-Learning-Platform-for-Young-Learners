@@ -28,4 +28,30 @@ public record SecurityProperties(
         String secret,
         @Positive(message = "JWT expiration must be greater than zero.")
         long expiration) {
+
+    /**
+     * Diagnostic representation that masks the signing secret. The
+     * auto-generated record toString would dump it verbatim; a stray
+     * {@code log.info(securityProperties)} that shipped to prod would
+     * then leak a value with the same authority as the entire user
+     * table (anyone with the secret can mint admin tokens). We report
+     * only presence flag plus the {@code base64:} prefix marker when
+     * present, so ops can still verify the secret is configured without
+     * any information leak.
+     */
+    @Override
+    public String toString() {
+        return "SecurityProperties[secret=" + maskedSecret()
+                + ", expiration=" + expiration + "ms]";
+    }
+
+    private String maskedSecret() {
+        if (secret == null || secret.isBlank()) {
+            return "[unset]";
+        }
+        if (secret.startsWith("base64:")) {
+            return "[set:base64]";
+        }
+        return "[set]";
+    }
 }

@@ -2,6 +2,8 @@ package com.example.aichinese.dto.ai;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * One AI-generated comprehension question inside
  * {@link AiStoryGeneratorResponse#comprehensionQuestions()}.
@@ -26,10 +28,35 @@ import java.util.List;
  * {@code QuizOptionResponse} anti-cheat note); the answer is on
  * the wire because the student already trusted themselves to
  * read the story honestly.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Defensive immutability</h2>
+ * <p>The canonical constructor wraps {@link #options} in
+ * {@link List#copyOf(java.util.Collection) List.copyOf} so the
+ * service-layer {@code ArrayList} that builds the answer pool
+ * cannot leak through and be mutated after the response is built.
+ * A {@code null} input is normalised to an empty list so the wire
+ * format always emits {@code []} rather than {@code null}.</p>
  */
+@JsonPropertyOrder({ "question", "options", "answer", "explanation" })
 public record AiStoryComprehensionQuestionResponse(
         String question,
         List<String> options,
         String answer,
         String explanation) {
+
+    /**
+     * Defensive canonical constructor: wraps {@link #options} in
+     * an immutable copy so external mutation of the originally
+     * supplied list cannot leak into the already-serialised
+     * response. A {@code null} input is normalised to
+     * {@link List#of()}.
+     */
+    public AiStoryComprehensionQuestionResponse {
+        options = options == null ? List.of() : List.copyOf(options);
+    }
 }

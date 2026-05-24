@@ -15,6 +15,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -54,7 +57,36 @@ import lombok.Setter;
         @Index(name = "idx_course_packages_teacher_id", columnList = "teacher_id"),
         @Index(name = "idx_course_packages_status", columnList = "content_status")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used by
+        // every read in CoursePackageRepository: catalogue listings,
+        // teacher dashboards and admin moderation all need the joined
+        // teacher / teacher.user / level / category rows in one round trip.
+        // Centralising the graph avoids the previous eight-fold
+        // duplication of attributePaths arrays across the repository.
+        // The teacher.user path is declared as a sub-graph so the mapper
+        // can render the teacher's display name without an N+1 lazy load.
+        name = CoursePackage.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode(value = "teacher", subgraph = "CoursePackage.teacherWithUser"),
+                @NamedAttributeNode("level"),
+                @NamedAttributeNode("category")
+        },
+        subgraphs = @NamedSubgraph(
+                name = "CoursePackage.teacherWithUser",
+                attributeNodes = @NamedAttributeNode("user")
+        )
+)
 public class CoursePackage extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code CoursePackage}: {@code teacher} (with the nested
+     * {@code teacher.user} sub-graph), {@code level} and
+     * {@code category}.
+     */
+    public static final String GRAPH_DETAIL = "CoursePackage.detail";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teacher_id")

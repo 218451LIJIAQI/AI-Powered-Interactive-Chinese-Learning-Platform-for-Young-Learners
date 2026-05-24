@@ -27,7 +27,10 @@ public record ForwardedHeaderProperties(List<String> trustedProxies) {
                 ? List.of()
                 : trustedProxies.stream()
                         .filter(value -> value != null && !value.isBlank())
-                        .map(String::trim)
+                        // strip() is Unicode-aware so a stray CJK fullwidth space
+                        // pasted accidentally from a CJK editor cannot survive
+                        // canonicalisation and silently de-match the trust list.
+                        .map(String::strip)
                         .toList();
     }
 }

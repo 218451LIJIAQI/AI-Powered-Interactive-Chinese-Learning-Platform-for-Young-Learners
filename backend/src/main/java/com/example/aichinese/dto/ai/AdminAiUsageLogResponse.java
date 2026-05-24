@@ -2,6 +2,8 @@ package com.example.aichinese.dto.ai;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Admin-facing AI usage log row returned by
  * {@code GET /api/v1/admin/ai-usage-logs} (paginated, filterable
@@ -48,8 +50,44 @@ import java.time.LocalDateTime;
  * {@code "Lesson:42"} when the student invoked AI from a lesson
  * context). {@code null} for free-standing AI usage.</p>
  *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers (snapshot tests, log
+ * fingerprints, frontend code that pins on field positions).</p>
+ *
+ * <h2>{@code toString()} redaction</h2>
+ * <p>The auto-generated record {@code toString()} is overridden so
+ * sensitive content — the user's email ({@link #userEmail} PII),
+ * the truncated prompt {@link #inputSummary}, the truncated AI
+ * response {@link #outputSummary}, and any provider error
+ * fragment {@link #errorSummary} — never appear in plain log
+ * files or exception traces. The non-sensitive id, role, feature,
+ * provider, model, status, token-count and timestamp fields are
+ * kept verbatim so the log line still pinpoints the offending
+ * row for forensic follow-up via {@link #id}.</p>
+ *
  * @see AiAvailabilityResponse for the live provider health snapshot
  */
+@JsonPropertyOrder({
+        "id",
+        "userId",
+        "userName",
+        "userEmail",
+        "userRole",
+        "featureKey",
+        "providerName",
+        "modelName",
+        "status",
+        "tokenCount",
+        "languagePreference",
+        "inputSummary",
+        "outputSummary",
+        "errorSummary",
+        "relatedEntityType",
+        "relatedEntityId",
+        "createdAt"
+})
 public record AdminAiUsageLogResponse(
         Long id,
         Long userId,
@@ -68,4 +106,42 @@ public record AdminAiUsageLogResponse(
         String relatedEntityType,
         Long relatedEntityId,
         LocalDateTime createdAt) {
+
+    /**
+     * Redacts every sensitive content field so a log line that
+     * accidentally captures this DTO never leaks PII or sensitive
+     * AI content. The non-sensitive id, role, feature, provider,
+     * model, status and token-count fields are kept verbatim so
+     * the log line still pinpoints the offending row.
+     */
+    @Override
+    public String toString() {
+        return "AdminAiUsageLogResponse["
+                + "id=" + id
+                + ", userId=" + userId
+                + ", userName=" + redactValue(userName)
+                + ", userEmail=" + redactValue(userEmail)
+                + ", userRole=" + userRole
+                + ", featureKey=" + featureKey
+                + ", providerName=" + providerName
+                + ", modelName=" + modelName
+                + ", status=" + status
+                + ", tokenCount=" + tokenCount
+                + ", languagePreference=" + languagePreference
+                + ", inputSummary=" + redactLength(inputSummary)
+                + ", outputSummary=" + redactLength(outputSummary)
+                + ", errorSummary=" + redactLength(errorSummary)
+                + ", relatedEntityType=" + relatedEntityType
+                + ", relatedEntityId=" + relatedEntityId
+                + ", createdAt=" + createdAt
+                + "]";
+    }
+
+    private static String redactValue(String value) {
+        return value == null ? "null" : "<redacted>";
+    }
+
+    private static String redactLength(String value) {
+        return value == null ? "null" : "<redacted:" + value.length() + ">";
+    }
 }

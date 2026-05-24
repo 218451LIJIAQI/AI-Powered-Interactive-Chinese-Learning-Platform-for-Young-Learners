@@ -105,7 +105,13 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     activeRole(state): UserRole | null {
-      return state.currentUser?.roles[0] ?? (canUsePreviewMode() && !state.token ? state.previewRole : null) ?? null
+      if (state.currentUser) {
+        return state.currentUser.roles[0] ?? null
+      }
+      if (canUsePreviewMode() && !state.token) {
+        return state.previewRole
+      }
+      return null
     },
     isPreviewSession(state): boolean {
       return canUsePreviewMode() && !state.token && state.previewRole !== null
@@ -114,7 +120,13 @@ export const useAuthStore = defineStore('auth', {
       return Boolean(state.token)
     },
     displayName(state): string {
-      return state.currentUser?.fullName ?? (state.previewRole && canUsePreviewMode() && !state.token ? demoUsers[state.previewRole].fullName : 'Guest Learner')
+      if (state.currentUser) {
+        return state.currentUser.fullName
+      }
+      if (state.previewRole && canUsePreviewMode() && !state.token) {
+        return demoUsers[state.previewRole].fullName
+      }
+      return 'Guest Learner'
     },
     hasRole: (state) => (role: UserRole) =>
       (state.currentUser?.roles ?? []).includes(role) || (canUsePreviewMode() && !state.token && state.previewRole === role),

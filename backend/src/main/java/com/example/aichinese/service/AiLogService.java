@@ -1,6 +1,7 @@
 package com.example.aichinese.service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,10 +50,10 @@ public class AiLogService {
             AiFeedbackRecordRepository aiFeedbackRecordRepository,
             AiChatSessionRepository aiChatSessionRepository,
             AiChatMessageRepository aiChatMessageRepository) {
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.aiFeedbackRecordRepository = aiFeedbackRecordRepository;
-        this.aiChatSessionRepository = aiChatSessionRepository;
-        this.aiChatMessageRepository = aiChatMessageRepository;
+        this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
+        this.aiFeedbackRecordRepository = Objects.requireNonNull(aiFeedbackRecordRepository, "aiFeedbackRecordRepository");
+        this.aiChatSessionRepository = Objects.requireNonNull(aiChatSessionRepository, "aiChatSessionRepository");
+        this.aiChatMessageRepository = Objects.requireNonNull(aiChatMessageRepository, "aiChatMessageRepository");
     }
 
     @Transactional
@@ -161,19 +162,26 @@ public class AiLogService {
             return trimmed;
         }
 
-        int endIndex = 0;
         int byteCount = 0;
-        while (endIndex < trimmed.length()) {
-            String candidate = trimmed.substring(endIndex, endIndex + 1);
-            int candidateBytes = candidate.getBytes(StandardCharsets.UTF_8).length;
-            if (byteCount + candidateBytes > maxBytes) {
+        int charIndex = 0;
+        while (charIndex < trimmed.length()) {
+            int codePoint = trimmed.codePointAt(charIndex);
+            int cpBytes = utf8ByteLength(codePoint);
+            if (byteCount + cpBytes > maxBytes) {
                 break;
             }
-            byteCount += candidateBytes;
-            endIndex++;
+            byteCount += cpBytes;
+            charIndex += Character.charCount(codePoint);
         }
 
-        return trimmed.substring(0, endIndex);
+        return trimmed.substring(0, charIndex);
+    }
+
+    private static int utf8ByteLength(int codePoint) {
+        if (codePoint <= 0x7F) return 1;
+        if (codePoint <= 0x7FF) return 2;
+        if (codePoint <= 0xFFFF) return 3;
+        return 4;
     }
 
     private String summarize(String value, int limit) {
@@ -186,7 +194,14 @@ public class AiLogService {
             return null;
         }
 
-        return trimmed.length() <= limit ? trimmed : trimmed.substring(0, limit);
+        if (trimmed.length() <= limit) {
+            return trimmed;
+        }
+        int end = limit;
+        if (Character.isHighSurrogate(trimmed.charAt(end - 1))) {
+            end--;
+        }
+        return trimmed.substring(0, end);
     }
 
     private String contentMetadata(String value) {

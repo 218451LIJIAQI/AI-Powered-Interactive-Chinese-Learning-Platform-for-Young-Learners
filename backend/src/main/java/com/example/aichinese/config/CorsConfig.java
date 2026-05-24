@@ -1,7 +1,7 @@
 package com.example.aichinese.config;
 
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -47,18 +48,27 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class CorsConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CorsConfig.class);
-    private static final String DEFAULT_LOCAL_DEV_ORIGINS =
-            "http://localhost:5173,http://127.0.0.1:5173,"
-                    + "http://localhost:5174,http://127.0.0.1:5174,"
-                    + "http://localhost:5175,http://127.0.0.1:5175,"
-                    + "http://localhost:5176,http://127.0.0.1:5176,"
-                    + "http://localhost:5177,http://127.0.0.1:5177,"
-                    + "http://localhost:5178,http://127.0.0.1:5178,"
-                    + "http://localhost:5179,http://127.0.0.1:5179,"
-                    + "http://localhost:5180,http://127.0.0.1:5180,"
-                    + "http://localhost:5181,http://127.0.0.1:5181,"
-                    + "http://localhost:5182,http://127.0.0.1:5182,"
-                    + "http://localhost:5183,http://127.0.0.1:5183";
+    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
+
+    /**
+     * Preflight cache lifetime sent via {@code Access-Control-Max-Age}.
+     * One hour balances "no stale CORS rules after a config push" against
+     * browser preflight chatter. The CORS spec allows up to 86 400 s but
+     * many browsers silently cap it lower; one hour is the safe upper
+     * bound for predictable behaviour across Chromium, Firefox, and WebKit.
+     */
+    private static final Duration PREFLIGHT_CACHE_MAX_AGE = Duration.ofHours(1);
+
+    /**
+     * Single source of truth for the local-dev fallback. Sequenced as
+     * {@code (localhost, 127.0.0.1) x ports} so callers can mentally
+     * pair them. Vite hot-restart sometimes shifts to the next available
+     * port if the default is busy; the wider fallback set keeps local
+     * development working without manual reconfiguration.
+     */
+    private static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
+    private static final String DEFAULT_LOCAL_DEV_ORIGINS_CSV = String.join(",", DEFAULT_LOCAL_DEV_ORIGINS);
+
     private final Environment environment;
 
     public CorsConfig(Environment environment) {
@@ -71,7 +81,7 @@ public class CorsConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${app.cors.allowed-origins:" + DEFAULT_LOCAL_DEV_ORIGINS + "}") String allowedOrigins) {
+            @Value("${app.cors.allowed-origins:#{T(com.example.aichinese.config.CorsConfig).defaultLocalDevOriginsCsv()}}") String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // Build an explicit allow-list of exact origins. We deliberately avoid
@@ -107,51 +117,57 @@ public class CorsConfig {
             // from the usual 5173/5174 ports to the next available port instead
             // of silently breaking the browser with blocked credentialed
             // requests.
-            exactOrigins.addAll(defaultLocalDevOrigins());
+            exactOrigins.addAll(DEFAULT_LOCAL_DEV_ORIGINS);
             log.warn("No explicit CORS origins were configured; falling back to local dev origins {}.",
-                    defaultLocalDevOrigins());
+                    DEFAULT_LOCAL_DEV_ORIGINS);
         }
 
         configuration.setAllowedOrigins(exactOrigins);
         configuration.addAllowedHeader("*");
         configuration.addAllowedMethod("*");
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(PREFLIGHT_CACHE_MAX_AGE);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);
         return source;
     }
 
+    /**
+     * Uses {@link Environment#acceptsProfiles(Profiles)} rather than a
+     * manual scan of {@code getActiveProfiles()} so that
+     * {@code spring.profiles.default=prod} (the common Kubernetes pattern)
+     * still triggers the fail-fast guard.
+     */
     private boolean isProductionProfileActive() {
-        return environment != null && Arrays.stream(environment.getActiveProfiles())
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .anyMatch(profile -> profile.equals("prod") || profile.equals("production"));
+        return environment != null && environment.acceptsProfiles(PROD_PROFILES);
     }
 
+    /**
+     * Returns the curated immutable list of local-dev origins. Tests pin
+     * this exact ordering so the CSV default that ships to local
+     * developers cannot drift away from the helper.
+     */
     static List<String> defaultLocalDevOrigins() {
-        return List.of(
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:5174",
-                "http://127.0.0.1:5174",
-                "http://localhost:5175",
-                "http://127.0.0.1:5175",
-                "http://localhost:5176",
-                "http://127.0.0.1:5176",
-                "http://localhost:5177",
-                "http://127.0.0.1:5177",
-                "http://localhost:5178",
-                "http://127.0.0.1:5178",
-                "http://localhost:5179",
-                "http://127.0.0.1:5179",
-                "http://localhost:5180",
-                "http://127.0.0.1:5180",
-                "http://localhost:5181",
-                "http://127.0.0.1:5181",
-                "http://localhost:5182",
-                "http://127.0.0.1:5182",
-                "http://localhost:5183",
-                "http://127.0.0.1:5183");
+        return DEFAULT_LOCAL_DEV_ORIGINS;
+    }
+
+    /**
+     * Returns the CSV form consumed by the {@code @Value} default expression.
+     * Exposed as a static helper because Spring's SpEL evaluator needs
+     * a static accessor (the {@code @Value} expression cannot reference
+     * instance state at bean-creation time).
+     */
+    public static String defaultLocalDevOriginsCsv() {
+        return DEFAULT_LOCAL_DEV_ORIGINS_CSV;
+    }
+
+    private static List<String> buildDefaultLocalDevOrigins() {
+        List<String> origins = new ArrayList<>();
+        for (int port = 5173; port <= 5183; port++) {
+            origins.add("http://localhost:" + port);
+            origins.add("http://127.0.0.1:" + port);
+        }
+        return List.copyOf(origins);
     }
 }

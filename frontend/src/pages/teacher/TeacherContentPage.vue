@@ -1385,8 +1385,7 @@ const pageError = computed(
     lessonsResource.error.value ||
     modulesResource.error.value ||
     levelsResource.error.value ||
-    categoriesResource.error.value ||
-    null,
+    categoriesResource.error.value,
 )
 
 const showCourseWorkspace = computed(
@@ -2051,6 +2050,7 @@ async function reloadAll() {
 }
 
 async function archiveSelectedPackage() {
+  if (packageBusy.value) return
   if (!selectedCourse.value.source || !ensureLiveWrite('Course management')) return
   if (!confirmTeacherContentMutation(`Archive the course "${selectedCourse.value.title}"? Students may lose access to this course package.`)) return
 
@@ -2068,6 +2068,7 @@ async function archiveSelectedPackage() {
 }
 
 async function archiveModule(item?: LearningModuleResponse | null) {
+  if (moduleBusyId.value) return
   if (!item || !ensureLiveWrite('Module management')) return
   if (!confirmTeacherContentMutation(`Archive the module "${item.title}"? Linked lessons may become harder for learners to find.`)) return
 
@@ -2085,6 +2086,7 @@ async function archiveModule(item?: LearningModuleResponse | null) {
 }
 
 async function archiveLesson(item?: LessonResponse | null) {
+  if (lessonBusyId.value) return
   if (!item || !ensureLiveWrite('Lesson management')) return
   if (!confirmTeacherContentMutation(`Archive the lesson "${item.title}"? Learners may lose access to its materials.`)) return
 
@@ -2102,6 +2104,7 @@ async function archiveLesson(item?: LessonResponse | null) {
 }
 
 async function submitPackageItem() {
+  if (submitting.packageItem) return
   if (!selectedCourse.value.source) {
     actionError.value = 'Select a live course package before attaching items.'
     actionSuccess.value = null
@@ -2134,6 +2137,7 @@ async function submitPackageItem() {
 }
 
 async function removePackageItem(packageItemId: number) {
+  if (packageItemRemovingId.value) return
   if (!selectedCourse.value.source || !ensureLiveWrite('Course packaging')) return
   if (!confirmTeacherContentMutation('Remove this item from the course package?')) return
 
@@ -2151,6 +2155,7 @@ async function removePackageItem(packageItemId: number) {
 }
 
 async function submitPackage() {
+  if (submitting.package) return
   if (!ensureLiveWrite('Course management')) return
   if (!packageForm.title.trim()) {
     actionError.value = 'Course title is required.'
@@ -2196,6 +2201,7 @@ async function submitPackage() {
 }
 
 async function submitModule() {
+  if (submitting.module) return
   if (!ensureLiveWrite('Module management')) return
   if (!moduleForm.title.trim()) {
     actionError.value = 'Module title is required.'
@@ -2236,6 +2242,7 @@ async function submitModule() {
 }
 
 async function submitLesson() {
+  if (submitting.lesson) return
   if (!ensureLiveWrite('Lesson management')) return
   if (!lessonForm.title.trim()) {
     actionError.value = 'Lesson title is required.'
@@ -2284,6 +2291,7 @@ async function submitLesson() {
 }
 
 async function submitRecordedResource() {
+  if (submitting.resource) return
   if (!ensureLiveWrite('Recorded lesson management')) return
   if (!resourceForm.lessonId || resourceForm.lessonId <= 0) {
     actionError.value = 'Select a lesson before saving a recorded lesson resource.'
@@ -2347,6 +2355,7 @@ async function submitRecordedResource() {
 }
 
 async function archiveRecordedResource(videoId: number) {
+  if (archivingResourceId.value) return
   if (!ensureLiveWrite('Recorded lesson management') || resourceLessonId.value <= 0) return
   if (!confirmTeacherContentMutation('Archive this recorded lesson resource? Learners may lose access to the video.')) return
 
@@ -2367,6 +2376,7 @@ async function archiveRecordedResource(videoId: number) {
 }
 
 async function submitQuiz() {
+  if (submitting.quiz) return
   if (!ensureLiveWrite('Quiz management')) return
   if (!quizForm.lessonId || quizForm.lessonId <= 0) {
     actionError.value = 'Select a lesson before saving this quiz.'
@@ -2417,6 +2427,7 @@ function buildQuestionOptions(): TeacherQuizOptionPayload[] | null {
 }
 
 async function submitQuestion() {
+  if (submitting.question) return
   if (!ensureLiveWrite('Quiz question management')) return
   if (!selectedQuiz.value) {
     actionError.value = 'Open or create a quiz before adding questions.'
@@ -2471,6 +2482,7 @@ async function submitQuestion() {
 }
 
 async function deleteQuiz(quizId: number) {
+  if (quizDeleteId.value) return
   if (!ensureLiveWrite('Quiz management')) return
   if (!confirmTeacherContentMutation('Delete this quiz? Existing learner attempts may no longer have a visible quiz source.')) return
 
@@ -2492,6 +2504,7 @@ async function deleteQuiz(quizId: number) {
 }
 
 async function deleteQuestion(questionId: number) {
+  if (questionDeleteId.value) return
   if (!ensureLiveWrite('Quiz question management')) return
   if (!confirmTeacherContentMutation('Delete this quiz question? This cannot be undone.')) return
 

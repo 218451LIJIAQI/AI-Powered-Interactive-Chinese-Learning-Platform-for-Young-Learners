@@ -1,10 +1,12 @@
 package com.example.aichinese.config;
 
 import java.net.URI;
-import java.util.Arrays;
+import java.net.URISyntaxException;
 import java.util.Locale;
+import java.util.Objects;
 
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
@@ -43,13 +45,14 @@ import org.springframework.stereotype.Component;
 public class PaymentProductionGuard {
 
     private static final String STRIPE_API_HOST = "api.stripe.com";
+    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
     private final Environment environment;
     private final PaymentProperties paymentProperties;
 
     public PaymentProductionGuard(Environment environment, PaymentProperties paymentProperties) {
-        this.environment = environment;
-        this.paymentProperties = paymentProperties;
+        this.environment = Objects.requireNonNull(environment, "environment");
+        this.paymentProperties = Objects.requireNonNull(paymentProperties, "paymentProperties");
         validate();
     }
 
@@ -82,30 +85,32 @@ public class PaymentProductionGuard {
         requireOfficialStripeApiBaseUrl(paymentProperties.stripeApiBaseUrl());
     }
 
+    /**
+     * Uses {@link Environment#acceptsProfiles(Profiles)} so
+     * {@code spring.profiles.default=prod} (the common Kubernetes pattern)
+     * also triggers the fail-fast guard.
+     */
     private boolean isProductionProfileActive() {
-        return Arrays.stream(environment.getActiveProfiles())
-                .map(String::trim)
-                .map(value -> value.toLowerCase(Locale.ROOT))
-                .anyMatch(profile -> profile.equals("prod") || profile.equals("production"));
+        return environment.acceptsProfiles(PROD_PROFILES);
     }
 
-    private void requireProductionReadyUrl(String value, String label) {
-        URI uri = URI.create(value);
+    private static void requireProductionReadyUrl(String value, String label) {
+        URI uri = parseStrict(value, label);
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().trim().toLowerCase(Locale.ROOT);
         String host = normalizeHost(uri.getHost());
 
         if (!"https".equals(scheme)) {
             throw new IllegalStateException(label + " must use HTTPS when the prod profile is active.");
         }
-        if (host.isBlank() || isLocalHost(host)) {
+        if (host.isBlank() || isLoopbackOrLinkLocalHost(host)) {
             throw new IllegalStateException(
                     label + " must target a non-loopback public host when the prod profile is active.");
         }
     }
 
-    private void requireOfficialStripeApiBaseUrl(String value) {
-        URI uri = URI.create(value);
+    private static void requireOfficialStripeApiBaseUrl(String value) {
         requireProductionReadyUrl(value, "STRIPE_API_BASE_URL");
+        URI uri = parseStrict(value, "STRIPE_API_BASE_URL");
         String host = normalizeHost(uri.getHost());
         if (!STRIPE_API_HOST.equals(host)) {
             throw new IllegalStateException(
@@ -113,7 +118,7 @@ public class PaymentProductionGuard {
         }
     }
 
-    private void requireLiveStripeApiKey(String value) {
+    private static void requireLiveStripeApiKey(String value) {
         String trimmed = value.trim();
         if (trimmed.startsWith("sk_test_") || trimmed.startsWith("rk_test_")) {
             throw new IllegalStateException(
@@ -125,14 +130,28 @@ public class PaymentProductionGuard {
         }
     }
 
-    private void requireStripeWebhookSecret(String value) {
+    private static void requireStripeWebhookSecret(String value) {
         if (!value.trim().startsWith("whsec_")) {
             throw new IllegalStateException(
                     "STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret when the prod profile is active.");
         }
     }
 
-    private String normalizeHost(String value) {
+    /**
+     * Stricter than {@link URI#create(String)} so a malformed URL (e.g. one
+     * containing a space) fails with a clear label rather than silently
+     * becoming an opaque URI whose scheme is null.
+     */
+    private static URI parseStrict(String value, String label) {
+        try {
+            return new URI(value == null ? "" : value.trim());
+        } catch (URISyntaxException | IllegalArgumentException exception) {
+            throw new IllegalStateException(
+                    label + " must be a valid HTTPS URL when the prod profile is active.", exception);
+        }
+    }
+
+    private static String normalizeHost(String value) {
         if (value == null || value.isBlank()) {
             return "";
         }
@@ -143,10 +162,23 @@ public class PaymentProductionGuard {
         return normalized;
     }
 
-    private boolean isLocalHost(String host) {
+    /**
+     * Mirrors {@link AiProductionGuard} / {@link EmailConfiguration} coverage:
+     * rejects IPv4 loopback ({@code 127/8}, {@code 0.0.0.0}), IPv4 link-local
+     * ({@code 169.254/16}), IPv6 loopback ({@code ::1}, {@code ::}), IPv6
+     * link-local ({@code fe80::/10}), and IPv4-mapped IPv6 loopback. A typo
+     * of any of these in a payment URL would otherwise produce a "thank you"
+     * page that lives at a host the customer can never reach.
+     */
+    private static boolean isLoopbackOrLinkLocalHost(String host) {
         return "localhost".equals(host)
                 || "0.0.0.0".equals(host)
+                || "::".equals(host)
                 || "::1".equals(host)
-                || host.startsWith("127.");
+                || host.startsWith("127.")
+                || host.startsWith("169.254.")
+                || host.startsWith("fe80:")
+                || host.startsWith("::ffff:127.")
+                || host.startsWith("::ffff:0.");
     }
 }

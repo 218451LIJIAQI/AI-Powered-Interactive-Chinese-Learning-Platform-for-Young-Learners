@@ -1,6 +1,7 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -114,7 +115,7 @@ class CommunicationModerationIntegrationTests {
                 .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.size").value(20));
 
@@ -128,14 +129,14 @@ class CommunicationModerationIntegrationTests {
                 .header("Authorization", "Bearer " + studentOneToken))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.data.unreadCount").value(1));
 
         mockMvc.perform(get("/api/v1/notifications")
                 .header("Authorization", "Bearer " + studentOneToken))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].targetPath").value("/student/profile"))
                 .andExpect(jsonPath("$.data.size").value(20));
@@ -380,7 +381,7 @@ class CommunicationModerationIntegrationTests {
                 .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.data.items[0].actionType").exists())
                 .andExpect(jsonPath("$.data.size").value(20));
 
@@ -395,7 +396,7 @@ class CommunicationModerationIntegrationTests {
                 .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.data.id").value(auditLogId));
 
         mockMvc.perform(get("/api/v1/admin/audit-logs")

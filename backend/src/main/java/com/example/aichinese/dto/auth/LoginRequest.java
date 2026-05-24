@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.auth;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -25,15 +27,30 @@ import jakarta.validation.constraints.Size;
  * the {@code local@domain} pair to 320 octets total. Anything longer
  * is non-deliverable in practice.</p>
  *
- * <p>The email is later normalised by {@code AuthService.normalizeEmail}
- * (trim + lowercase) before any database lookup so case variation in
- * the input does not produce duplicate accounts.</p>
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims} the
+ * email so Bean Validation sees the canonical form and downstream
+ * {@code AuthService.normalizeEmail} (trim + lowercase) is idempotent.
+ * The password is intentionally <em>not</em> trimmed: leading or
+ * trailing spaces in a password are significant characters and the
+ * BCrypt hash binds to the exact byte sequence.</p>
  *
- * @param email    user-facing login identifier; case-insensitive at
- *                 the service layer
- * @param password raw password; never stored — hashed with BCrypt by
- *                 the authentication manager
+ * <h2>Security</h2>
+ * <p>The auto-generated record {@code toString()} is overridden to
+ * redact the password — accidentally printing a {@code LoginRequest}
+ * to a log file, exception trace, or debug console must never leak
+ * the user's plaintext credentials. Equality and hashing intentionally
+ * remain unchanged so unit tests can still assert structural
+ * equivalence (e.g. when verifying that a deserialiser reproduces an
+ * expected payload).</p>
+ *
+ * @param email    user-facing login identifier; trimmed by the
+ *                 canonical constructor and case-normalised at the
+ *                 service layer
+ * @param password raw password; never stored, never logged — hashed
+ *                 with BCrypt by the authentication manager
  */
+@JsonPropertyOrder({ "email", "password" })
 public record LoginRequest(
         @NotBlank(message = "Email is required")
         @Email(message = "Email format is invalid")
@@ -42,4 +59,32 @@ public record LoginRequest(
         @NotBlank(message = "Password is required")
         @Size(max = 72, message = "Password must be at most 72 characters")
         String password) {
+
+    /**
+     * Defensive canonical constructor: trims surrounding whitespace
+     * from the email so Bean Validation operates on the canonical
+     * form, and leaves the password byte-identical so BCrypt hashes
+     * the exact value the user typed. {@code null} is preserved for
+     * either field so {@link NotBlank @NotBlank} renders the
+     * user-facing "is required" message rather than a low-level
+     * {@link NullPointerException}.
+     */
+    public LoginRequest {
+        if (email != null) {
+            email = email.trim();
+        }
+    }
+
+    /**
+     * Redacted {@code toString()} so the plaintext password never
+     * escapes through log lines, exception messages or debug dumps.
+     * The email is intentionally preserved so audit / forensic
+     * correlation still works — leaking an email is an accepted PII
+     * trade-off captured by {@code AuditLogService.sanitize}, but
+     * leaking a password is not.
+     */
+    @Override
+    public String toString() {
+        return "LoginRequest[email=" + email + ", password=***REDACTED***]";
+    }
 }

@@ -1,5 +1,7 @@
 package com.example.aichinese.service;
 
+import java.util.Objects;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,8 +40,8 @@ public class SmtpEmailService implements EmailService {
             JavaMailSender mailSender,
             EmailProperties emailProperties,
             @Value("${spring.mail.username:}") String smtpUsername) {
-        this.mailSender = mailSender;
-        this.emailProperties = emailProperties;
+        this.mailSender = Objects.requireNonNull(mailSender, "mailSender");
+        this.emailProperties = Objects.requireNonNull(emailProperties, "emailProperties");
         this.smtpUsername = smtpUsername;
     }
 

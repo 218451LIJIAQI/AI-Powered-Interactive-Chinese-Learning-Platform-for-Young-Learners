@@ -5,7 +5,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -53,6 +56,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class RefundService {
 
+    private static final Logger log = LoggerFactory.getLogger(RefundService.class);
+
     private final StudentLearningAccessService studentLearningAccessService;
     private final OrderRepository orderRepository;
     private final PaymentRecordRepository paymentRecordRepository;
@@ -73,15 +78,15 @@ public class RefundService {
             NotificationService notificationService,
             AuditLogService auditLogService,
             TeacherEarningService teacherEarningService) {
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.orderRepository = orderRepository;
-        this.paymentRecordRepository = paymentRecordRepository;
-        this.refundRequestRepository = refundRequestRepository;
-        this.entitlementService = entitlementService;
-        this.commerceMoneyService = commerceMoneyService;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.teacherEarningService = teacherEarningService;
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository");
+        this.paymentRecordRepository = Objects.requireNonNull(paymentRecordRepository, "paymentRecordRepository");
+        this.refundRequestRepository = Objects.requireNonNull(refundRequestRepository, "refundRequestRepository");
+        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.teacherEarningService = Objects.requireNonNull(teacherEarningService, "teacherEarningService");
     }
 
     @Transactional
@@ -101,7 +106,7 @@ public class RefundService {
         refundRequest.setStudent(student);
         refundRequest.setOrder(order);
         refundRequest.setAmount(commerceMoneyService.normalize(order.getTotalAmount()));
-        refundRequest.setReason(request.reason().trim());
+        refundRequest.setReason(request.reason() != null ? request.reason().trim() : null);
         refundRequest.setRefundStatus(RefundStatus.PENDING);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
 
@@ -110,7 +115,10 @@ public class RefundService {
                 "Refund request submitted",
                 "Your refund request has been submitted for review.",
                 "/student/profile");
-        auditLogService.record(currentUser.getUser(), "REFUND_REQUESTED", "REFUND_REQUEST", saved.getId(), "Refund request submitted.");
+        log.info("Refund request created: refundId={}, orderId={}, amount={}",
+                saved.getId(), order.getId(), saved.getAmount());
+        auditLogService.record(currentUser.getUser(), "REFUND_REQUESTED", "REFUND_REQUEST", saved.getId(),
+                "Refund request submitted for " + saved.getAmount().toPlainString());
         return mapStudentRefund(saved);
     }
 
@@ -145,7 +153,9 @@ public class RefundService {
         refundRequest.setRefundStatus(RefundStatus.APPROVED);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund approved", "Your refund request has been approved.");
-        auditLogService.record(currentUser.getUser(), "REFUND_APPROVED", "REFUND_REQUEST", refundId, "Refund approved.");
+        log.info("Refund approved: refundId={}, amount={}", refundId, saved.getAmount());
+        auditLogService.record(currentUser.getUser(), "REFUND_APPROVED", "REFUND_REQUEST", refundId,
+                "Refund approved for " + saved.getAmount().toPlainString());
         return mapAdminRefund(saved);
     }
 
@@ -159,7 +169,10 @@ public class RefundService {
         refundRequest.setDecisionReason(request.reason());
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund rejected", "Your refund request was rejected.");
-        auditLogService.record(currentUser.getUser(), "REFUND_REJECTED", "REFUND_REQUEST", refundId, "Refund rejected.");
+        log.info("Refund rejected: refundId={}, amount={}, reason={}", refundId, saved.getAmount(), request.reason());
+        auditLogService.record(currentUser.getUser(), "REFUND_REJECTED", "REFUND_REQUEST", refundId,
+                "Refund rejected for " + saved.getAmount().toPlainString()
+                        + (request.reason() != null ? ". Reason: " + request.reason() : ""));
         return mapAdminRefund(saved);
     }
 
@@ -189,7 +202,10 @@ public class RefundService {
         }
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund completed", "Your refund has been marked as completed.");
-        auditLogService.record(currentUser.getUser(), "REFUND_MARKED_REFUNDED", "REFUND_REQUEST", id, "Refund marked refunded.");
+        log.info("Refund completed: refundId={}, orderId={}, amount={}",
+                id, refundRequest.getOrder() != null ? refundRequest.getOrder().getId() : null, saved.getAmount());
+        auditLogService.record(currentUser.getUser(), "REFUND_MARKED_REFUNDED", "REFUND_REQUEST", id,
+                "Refund marked refunded for " + saved.getAmount().toPlainString());
         return mapAdminRefund(saved);
     }
 
@@ -216,7 +232,7 @@ public class RefundService {
             Page<RefundRequest> refundPage,
             int page,
             int size,
-            java.util.function.Function<RefundRequest, T> mapper) {
+            Function<RefundRequest, T> mapper) {
         return new PageResponse<>(
                 refundPage.getContent().stream()
                         .map(mapper)

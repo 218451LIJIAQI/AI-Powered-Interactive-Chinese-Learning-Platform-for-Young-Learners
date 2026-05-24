@@ -28,9 +28,9 @@ import {
   ChartColumnBig,
   ChartNoAxesCombined,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   ChevronUp,
   CircleHelp,
   ClipboardList,
@@ -68,8 +68,8 @@ import {
   Sword,
   TriangleAlert,
   Trophy,
-  UserRound,
   UserCheck,
+  UserRound,
   Users,
   WalletCards,
   X,
@@ -77,17 +77,7 @@ import {
 } from '@lucide/vue'
 import { computed, type Component } from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    name: string
-    size?: number
-  }>(),
-  {
-    size: 20,
-  },
-)
-
-const iconMap: Record<string, Component> = {
+const iconMap: Readonly<Record<string, Component>> = {
   home: House,
   courses: Library,
   about: Sparkles,
@@ -148,9 +138,26 @@ const iconMap: Record<string, Component> = {
   alert: TriangleAlert,
   close: X,
   flash: Zap,
+} as const
+
+export type IconName = keyof typeof iconMap
+
+interface Props {
+  name: string
+  size?: number
 }
 
-const resolved = computed(() => iconMap[props.name] ?? BookOpen)
+const props = withDefaults(defineProps<Props>(), {
+  size: 20,
+})
+
+const resolved = computed<Component>(() => {
+  const icon = iconMap[props.name]
+  if (!icon && import.meta.env.DEV) {
+    console.warn(`[IconGlyph] Unknown icon name: "${props.name}". Falling back to BookOpen.`)
+  }
+  return icon ?? BookOpen
+})
 </script>
 
 <style scoped>

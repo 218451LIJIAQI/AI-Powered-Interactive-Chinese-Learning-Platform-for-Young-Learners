@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.commerce;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import com.example.aichinese.entity.enums.PaymentStatus;
 
 /**
@@ -45,6 +47,14 @@ import com.example.aichinese.entity.enums.PaymentStatus;
  *                        processed event); {@code false} for
  *                        events of unhandled types
  */
+@JsonPropertyOrder({
+        "eventId",
+        "eventType",
+        "paymentId",
+        "paymentStatus",
+        "providerStatus",
+        "processed"
+})
 public record StripeWebhookResultResponse(
         String eventId,
         String eventType,

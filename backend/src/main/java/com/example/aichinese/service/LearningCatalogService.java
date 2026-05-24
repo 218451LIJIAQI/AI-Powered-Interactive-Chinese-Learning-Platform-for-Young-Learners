@@ -1,6 +1,7 @@
 package com.example.aichinese.service;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,8 +33,8 @@ public class LearningCatalogService {
     public LearningCatalogService(
             LearningLevelRepository learningLevelRepository,
             LearningCategoryRepository learningCategoryRepository) {
-        this.learningLevelRepository = learningLevelRepository;
-        this.learningCategoryRepository = learningCategoryRepository;
+        this.learningLevelRepository = Objects.requireNonNull(learningLevelRepository, "learningLevelRepository");
+        this.learningCategoryRepository = Objects.requireNonNull(learningCategoryRepository, "learningCategoryRepository");
     }
 
     @Transactional(readOnly = true)

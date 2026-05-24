@@ -1,8 +1,14 @@
 package com.example.aichinese.service;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +35,8 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
 @Service
 public class OrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CommerceMoneyService commerceMoneyService;
@@ -39,10 +47,10 @@ public class OrderService {
             OrderItemRepository orderItemRepository,
             CommerceMoneyService commerceMoneyService,
             CommerceSettingsService commerceSettingsService) {
-        this.orderRepository = orderRepository;
-        this.orderItemRepository = orderItemRepository;
-        this.commerceMoneyService = commerceMoneyService;
-        this.commerceSettingsService = commerceSettingsService;
+        this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository");
+        this.orderItemRepository = Objects.requireNonNull(orderItemRepository, "orderItemRepository");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
     @Transactional
@@ -57,7 +65,7 @@ public class OrderService {
         // entropy to 64 bits, which stays birthday-safe past 4B orders, while
         // being short enough for a human-readable "ORD-XXXXXXXX-XXXXXXXX"
         // identifier in receipts and admin views.
-        String uuid = UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
+        String uuid = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
         String suffix = uuid.substring(0, 8) + "-" + uuid.substring(8, 16);
         order.setOrderNumber("ORD-" + suffix);
         order.setCurrencyCode(commerceSettingsService.getDefaultCurrency());
@@ -67,13 +75,17 @@ public class OrderService {
         order.setTotalAmount(commerceMoneyService.normalize(
                 items.stream()
                         .map(ResolvedPurchasableItem::unitPrice)
-                        .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)));
-        return orderRepository.save(order);
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)));
+        Order saved = orderRepository.save(order);
+        log.info("Order created: orderId={}, orderNumber={}, userId={}, amount={} {}",
+                saved.getId(), saved.getOrderNumber(),
+                student.getUser().getId(), saved.getTotalAmount(), saved.getCurrencyCode());
+        return saved;
     }
 
     @Transactional
     public List<OrderItem> createOrderItems(Order order, List<ResolvedPurchasableItem> items) {
-        List<OrderItem> saved = new java.util.ArrayList<>();
+        List<OrderItem> pending = new ArrayList<>(items.size());
         for (ResolvedPurchasableItem item : items) {
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
@@ -82,11 +94,13 @@ public class OrderService {
             orderItem.setItemTitleSnapshot(item.title());
             orderItem.setFeatureKey(item.relatedFeatureKey());
             orderItem.setQuantity(1);
-            orderItem.setUnitPrice(commerceMoneyService.normalize(item.unitPrice()));
-            orderItem.setLineTotal(commerceMoneyService.normalize(item.unitPrice()));
+            BigDecimal normalizedPrice = commerceMoneyService.normalize(item.unitPrice());
+            orderItem.setUnitPrice(normalizedPrice);
+            orderItem.setLineTotal(commerceMoneyService.multiply(
+                    normalizedPrice, BigDecimal.valueOf(orderItem.getQuantity())));
             orderItem.setTeacher(item.teacher());
-            saved.add(orderItemRepository.save(orderItem));
+            pending.add(orderItem);
         }
-        return saved;
+        return orderItemRepository.saveAll(pending);
     }
 }

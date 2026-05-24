@@ -5,8 +5,11 @@ import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +35,8 @@ import com.example.aichinese.repository.UploadedFileRepository;
 @Service
 public class FileStorageService {
 
+    private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
+
     private static final Set<UploadStorageSupport.FileSignature> ALLOWED_SIGNATURES = Set.of(
             UploadStorageSupport.FileSignature.PDF,
             UploadStorageSupport.FileSignature.JPEG,
@@ -43,8 +48,8 @@ public class FileStorageService {
     private final UploadProperties uploadProperties;
 
     public FileStorageService(UploadedFileRepository uploadedFileRepository, UploadProperties uploadProperties) {
-        this.uploadedFileRepository = uploadedFileRepository;
-        this.uploadProperties = uploadProperties;
+        this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
+        this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
     }
 
     @Transactional

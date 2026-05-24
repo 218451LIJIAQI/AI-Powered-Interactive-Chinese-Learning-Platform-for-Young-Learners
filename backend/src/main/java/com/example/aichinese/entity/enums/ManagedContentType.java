@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Top-level kind of content the admin moderation tooling can act upon.
@@ -33,10 +29,8 @@ public enum ManagedContentType {
     PACKAGE;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, ManagedContentType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, ManagedContentType> LOOKUP =
+            EnumLookups.indexByName(ManagedContentType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -46,14 +40,7 @@ public enum ManagedContentType {
      *         is {@code null}, blank, or not a recognised content type
      */
     public static Optional<ManagedContentType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -68,11 +55,11 @@ public enum ManagedContentType {
      *         blank, or not a recognised content type
      */
     public static ManagedContentType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Content type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid content type. Allowed values are MODULE, LESSON, or PACKAGE."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Content type is required.",
+                () -> "Invalid content type. Allowed values are MODULE, LESSON, or PACKAGE.");
     }
 
     /** @return {@code true} when this type denotes a {@link #MODULE}. */

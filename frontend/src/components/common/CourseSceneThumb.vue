@@ -55,16 +55,17 @@
  */
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 
-withDefaults(
-  defineProps<{
-    size?: number
-    variant?: 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
-  }>(),
-  {
-    size: 72,
-    variant: 'general',
-  },
-)
+type SceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
+
+interface Props {
+  size?: number
+  variant?: SceneVariant
+}
+
+withDefaults(defineProps<Props>(), {
+  size: 72,
+  variant: 'general',
+})
 </script>
 
 <style scoped>
@@ -74,6 +75,7 @@ withDefaults(
   height: var(--scene-thumb-size);
   border-radius: calc(var(--scene-thumb-size) * 0.26);
   overflow: hidden;
+  contain: layout paint;
   border: 1px solid rgba(221, 226, 245, 0.98);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.86),

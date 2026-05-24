@@ -30,21 +30,33 @@ import jakarta.validation.constraints.Size;
  * {@code @Pattern} on {@link #worksheetUrl} matches the project-wide
  * media-URL convention (see {@code RecordedLessonVideoRequest}) and
  * rejects {@code javascript:}, {@code data:}, {@code file:} and
- * protocol-relative URLs that could otherwise reach learner browsers.</p>
+ * protocol-relative URLs that could otherwise reach learner browsers
+ * as cross-site script or local-file disclosure vectors.</p>
+ *
+ * <p>{@link #targetCharacter} is technically capped at 100 chars to
+ * accommodate authors who occasionally trace short phrases (e.g.
+ * common multi-character compounds like "你好") — the typical use case
+ * of a single character fits comfortably within this bound.</p>
  *
  * <p>See {@link AdminActivitySummaryResponse} for the shared metadata
  * vocabulary and {@link AdminFlashcardRequest} for the rationale
  * behind the tag-list cap and the {@code estimatedSeconds} upper bound.</p>
  *
  * @param title            exercise title; required; max 200 chars
+ *                         ({@code tracing_exercises.title VARCHAR(200)})
  * @param worksheetUrl     optional SVG/PNG stroke-guide URL; max 255
  *                         chars; must be {@code http(s)://} or empty
+ *                         ({@code tracing_exercises.worksheet_url VARCHAR(255)})
  * @param targetCharacter  optional Chinese character being traced;
  *                         max 100 chars
+ *                         ({@code tracing_exercises.target_character VARCHAR(100)})
  * @param pinyin           optional pinyin scaffold; max 255 chars
+ *                         ({@code tracing_exercises.pinyin VARCHAR(255)})
  * @param meaning          optional gloss; max 500 chars
+ *                         ({@code tracing_exercises.meaning VARCHAR(500)})
  * @param instructions     optional learner-facing instructions; max
  *                         1000 chars
+ *                         ({@code tracing_exercises.instructions VARCHAR(1000)})
  * @param hskLevel         optional HSK band, {@code 1..6}
  * @param ageBand          optional target age cohort
  * @param difficulty       optional easy/medium/hard tier
@@ -52,7 +64,8 @@ import jakarta.validation.constraints.Size;
  * @param tags             optional list of free-form tags; up to 8
  *                         non-blank entries, each max 50 chars
  * @param xpReward         optional base XP, {@code 0..1000}
- * @param estimatedSeconds optional time-to-complete hint, {@code 0..86400}
+ * @param estimatedSeconds optional time-to-complete hint,
+ *                         {@code 0..86400} (24 hours)
  */
 public record AdminTracingExerciseRequest(
         @NotBlank(message = "Title is required.")

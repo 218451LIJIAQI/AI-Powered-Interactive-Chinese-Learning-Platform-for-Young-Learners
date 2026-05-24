@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="page-stack public-course-detail-page">
-    <button class="btn btn-ghost public-course-detail-back" type="button" @click="router.back()">Back to catalog</button>
+    <button class="btn btn-ghost public-course-detail-back" type="button" @click="goBackToCatalog">Back to catalog</button>
 
     <DataNotice :using-fallback="resource.usingFallback.value" :error="actionError || resource.error.value" :success="actionSuccess" />
 
@@ -64,7 +64,7 @@
         <div class="list public-course-detail-item-list">
           <div v-for="item in course.packageItems" :key="`${item.type}-${item.contentId}`" class="list-item public-course-detail-item">
             <div class="row">
-              <div class="media-badge small">{{ item.type === 'MODULE' ? '模' : '课' }}</div>
+              <IconGlyph :name="item.type === 'MODULE' ? 'content' : 'learn'" :size="18" />
               <div class="stack">
                 <strong>{{ item.title }}</strong>
                 <span class="muted">Included item {{ item.displayOrder }}</span>
@@ -128,6 +128,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { CheckoutResponse, PublicCourseDetail } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatCurrency } from '@/utils/format'
+import { safeHttpUrl } from '@/utils/url'
 
 const route = useRoute()
 const router = useRouter()
@@ -224,21 +225,37 @@ function goToStudentLearn() {
   router.push({ name: 'student-learn' })
 }
 
+function goBackToCatalog() {
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    void router.push({ name: 'catalog' })
+  }
+}
+
 function handleCheckoutResponse(response: CheckoutResponse) {
   if (!response.paymentAvailable) {
     actionError.value = response.message || 'Payment provider is unavailable. Please try again later.'
     return
   }
 
-  if (response.checkoutUrl) {
-    window.location.assign(response.checkoutUrl)
+  const validatedUrl = safeHttpUrl(response.checkoutUrl)
+  if (validatedUrl) {
+    window.location.assign(validatedUrl)
     return
   }
 
-  router.push({ name: 'payment-success', query: { paymentId: String(response.paymentId) } })
+  if (response.paymentId != null) {
+    void router.push({ name: 'payment-success', query: { paymentId: String(response.paymentId) } })
+    return
+  }
+
+  actionError.value = 'Checkout completed but no redirect or payment reference was returned. Please contact support.'
 }
 
 async function handlePrimaryAction() {
+  if (submittingBuyNow.value || submittingCart.value) return
+
   actionError.value = null
   actionSuccess.value = null
 
@@ -269,6 +286,8 @@ async function handlePrimaryAction() {
 }
 
 async function handleSecondaryAction() {
+  if (submittingBuyNow.value || submittingCart.value) return
+
   actionError.value = null
   actionSuccess.value = null
 

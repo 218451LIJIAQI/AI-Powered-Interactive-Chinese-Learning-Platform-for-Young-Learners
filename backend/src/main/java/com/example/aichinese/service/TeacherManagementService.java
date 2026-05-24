@@ -5,7 +5,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -50,6 +53,8 @@ import com.example.aichinese.util.TextUtils;
 @Service
 public class TeacherManagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(TeacherManagementService.class);
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherVerificationDocumentRepository teacherVerificationDocumentRepository;
     private final TeacherVerificationReviewRepository teacherVerificationReviewRepository;
@@ -68,14 +73,14 @@ public class TeacherManagementService {
             FileStorageService fileStorageService,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.teacherVerificationDocumentRepository = teacherVerificationDocumentRepository;
-        this.teacherVerificationReviewRepository = teacherVerificationReviewRepository;
-        this.userRepository = userRepository;
-        this.teacherManagementMapper = teacherManagementMapper;
-        this.fileStorageService = fileStorageService;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.teacherVerificationDocumentRepository = Objects.requireNonNull(teacherVerificationDocumentRepository, "teacherVerificationDocumentRepository");
+        this.teacherVerificationReviewRepository = Objects.requireNonNull(teacherVerificationReviewRepository, "teacherVerificationReviewRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
+        this.fileStorageService = Objects.requireNonNull(fileStorageService, "fileStorageService");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)
@@ -93,13 +98,14 @@ public class TeacherManagementService {
         User user = getUserById(currentUser.getUserId());
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
 
-        user.setDisplayName(request.fullName().trim());
+        user.setDisplayName(request.fullName() != null ? request.fullName().trim() : user.getDisplayName());
         profile.setBio(TextUtils.trimToNull(request.bio()));
         profile.setQualificationSummary(TextUtils.trimToNull(request.shortIntroduction()));
         profile.setTeachingCategories(teacherManagementMapper.joinCategories(request.teachingCategories()));
 
         userRepository.save(user);
         teacherProfileRepository.save(profile);
+        log.info("Teacher profile updated: teacherId={}, userId={}", profile.getId(), user.getId());
 
         List<TeacherVerificationDocument> documents = teacherVerificationDocumentRepository
                 .findByTeacherIdAndCurrentVersionTrueOrderBySubmittedAtDesc(profile.getId());
@@ -152,6 +158,8 @@ public class TeacherManagementService {
         notificationAdmins("Teacher verification document uploaded",
                 user.getDisplayName() + " uploaded a teacher verification document.",
                 "/admin/teacher-verification");
+        log.info("Verification document uploaded: docId={}, teacherId={}, type={}",
+                document.getId(), profile.getId(), normalizedDocumentType);
         auditLogService.record(user, "TEACHER_VERIFICATION_DOCUMENT_UPLOAD", "TeacherVerificationDocument", document.getId(),
                 "Teacher uploaded a verification document.");
 
@@ -185,6 +193,7 @@ public class TeacherManagementService {
                 "Verification resubmitted",
                 "Your teacher verification has been resubmitted and is now pending admin review.",
                 "/teacher/profile");
+        log.info("Teacher verification resubmitted: teacherId={}, userId={}", profile.getId(), user.getId());
         auditLogService.record(user, "TEACHER_VERIFICATION_RESUBMIT", "TeacherProfile", profile.getId(),
                 "Teacher resubmitted verification.");
 

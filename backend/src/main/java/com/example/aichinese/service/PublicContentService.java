@@ -8,7 +8,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +58,8 @@ import jakarta.persistence.Query;
 @Service
 public class PublicContentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PublicContentService.class);
+
     private static final int PUBLIC_PACKAGE_ITEM_LIMIT = 100;
 
     private final LessonRepository lessonRepository;
@@ -69,11 +74,11 @@ public class PublicContentService {
             PackageItemRepository packageItemRepository,
             ContentManagementMapper contentManagementMapper,
             EntityManager entityManager) {
-        this.lessonRepository = lessonRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.packageItemRepository = packageItemRepository;
-        this.contentManagementMapper = contentManagementMapper;
-        this.entityManager = entityManager;
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
+        this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
+        this.entityManager = Objects.requireNonNull(entityManager, "entityManager");
     }
 
     @Transactional(readOnly = true)

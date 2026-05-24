@@ -219,8 +219,7 @@ const pageError = computed(
     streakResource.error.value ||
     rewardsResource.error.value ||
     progressResource.error.value ||
-    pointsResource.error.value ||
-    null,
+    pointsResource.error.value,
 )
 const usingFallback = computed(
   () =>
@@ -241,7 +240,7 @@ const achievementStats = computed(() => [
   { icon: 'streak', value: String(streak.value.currentStreak), label: 'Day Streak' },
   { icon: 'star', value: formatNumber(rewards.value.totalPoints), label: 'XP' },
   { icon: 'rewards', value: `${progress.value.quizAverage}%`, label: 'Quiz Avg' },
-  { icon: 'shield', value: String(badges.value.length || rewards.value.badges.length), label: 'Badges' },
+  { icon: 'shield', value: String(badges.value.length > 0 ? badges.value.length : rewards.value.badges.length), label: 'Badges' },
 ])
 
 const badgeCards = computed(() =>
@@ -286,7 +285,7 @@ const moduleProgress = computed<Array<{
 }>>(() =>
   progress.value.recentLessons.slice(0, 5).map((lesson, index) => ({
     id: lesson.lessonId ? `L${lesson.lessonId}` : String(index + 1),
-    title: lesson.lessonTitle,
+    title: lesson.lessonTitle || `Lesson ${index + 1}`,
     progress: Math.round(lesson.completionPercent),
     tone: lesson.completionPercent >= 80 ? 'green' : lesson.completionPercent >= 50 ? 'orange' : 'blue',
     barTone: lesson.completionPercent >= 80 ? 'success' : lesson.completionPercent >= 50 ? 'warning' : 'info',

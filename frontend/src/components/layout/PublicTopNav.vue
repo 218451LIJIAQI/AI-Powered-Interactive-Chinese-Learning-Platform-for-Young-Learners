@@ -46,24 +46,31 @@ import { publicNav } from '@/config/navigation'
 
 import AppBrand from './AppBrand.vue'
 
+interface LocalizedNavItem {
+  readonly label: string
+  readonly to: string
+}
+
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 
-const items = computed(() => publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })))
+const items = computed<LocalizedNavItem[]>(() =>
+  publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })),
+)
 
-function openSignIn() {
+function openSignIn(): void {
   void router.push({ path: '/auth', query: { tab: 'signin' } })
 }
 
-function openSignUp() {
+function openSignUp(): void {
   void router.push({ path: '/auth', query: { tab: 'register', role: 'student' } })
 }
 
-function isNavActive(to: string) {
-  const [pathPart, hashPart] = to.split('#')
-  const targetPath = pathPart || '/'
-  const targetHash = hashPart ? `#${hashPart}` : ''
+function isNavActive(to: string): boolean {
+  const hashIdx = to.indexOf('#')
+  const targetPath = (hashIdx >= 0 ? to.slice(0, hashIdx) : to) || '/'
+  const targetHash = hashIdx >= 0 ? to.slice(hashIdx) : ''
 
   if (targetHash) {
     return route.path === targetPath && route.hash === targetHash

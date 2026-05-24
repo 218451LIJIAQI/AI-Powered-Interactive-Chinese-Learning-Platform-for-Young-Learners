@@ -14,6 +14,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.Getter;
@@ -48,7 +51,44 @@ import lombok.Setter;
         @Index(name = "idx_live_classes_status", columnList = "live_class_status"),
         @Index(name = "idx_live_classes_scheduled_start_at", columnList = "scheduled_start_at")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used
+        // by every read in LiveClassRepository: teacher dashboards,
+        // student catalogue and admin schedule view all need teacher /
+        // teacher.user / lesson / lesson.teacher / coursePackage /
+        // coursePackage.teacher hydrated in one round trip. Three
+        // distinct sub-graphs declare the nested ManyToOne fetches so
+        // the response mappers do not regress to the per-row lazy-load
+        // N+1 pattern when rendering parent-artefact metadata.
+        name = LiveClass.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode(value = "teacher", subgraph = "LiveClass.teacherWithUser"),
+                @NamedAttributeNode(value = "lesson", subgraph = "LiveClass.lessonWithTeacher"),
+                @NamedAttributeNode(value = "coursePackage", subgraph = "LiveClass.packageWithTeacher")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "LiveClass.teacherWithUser",
+                        attributeNodes = @NamedAttributeNode("user")),
+                @NamedSubgraph(
+                        name = "LiveClass.lessonWithTeacher",
+                        attributeNodes = @NamedAttributeNode("teacher")),
+                @NamedSubgraph(
+                        name = "LiveClass.packageWithTeacher",
+                        attributeNodes = @NamedAttributeNode("teacher"))
+        }
+)
 public class LiveClass extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code LiveClass}: {@code teacher} (with nested
+     * {@code teacher.user}), {@code lesson} (with nested
+     * {@code lesson.teacher}) and {@code coursePackage} (with nested
+     * {@code coursePackage.teacher}).
+     */
+    public static final String GRAPH_DETAIL = "LiveClass.detail";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teacher_id")

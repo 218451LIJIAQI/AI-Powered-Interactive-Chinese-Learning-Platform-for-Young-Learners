@@ -1,6 +1,7 @@
 package com.example.aichinese.service.ai;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Provider-agnostic shape of a prompt sent to {@link AiProviderClient}.
@@ -11,6 +12,20 @@ import java.util.List;
  * provider plumbing free of feature-specific knowledge — a new AI
  * feature only needs to teach {@code AiPromptBuilder} how to build its
  * system instruction; the transport layer is unchanged.</p>
+ *
+ * <h2>Construction discipline</h2>
+ * <p>The compact constructor enforces every invariant the downstream
+ * provider clients depend on, so a malformed prompt fails fast at
+ * construction time rather than translating to a confusing
+ * {@code 400 Bad Request} from the upstream LLM:</p>
+ * <ul>
+ *   <li>{@code featureKey}, {@code systemInstruction}, {@code userPrompt},
+ *       and {@code languagePreference} must be non-null and non-blank.</li>
+ *   <li>{@code maxOutputTokens} must be strictly positive.</li>
+ *   <li>{@code messageHistory} is non-null and defensively wrapped
+ *       as an unmodifiable {@link List}, so any caller that bypasses
+ *       {@link AiPromptBuilder} cannot mutate the prompt after dispatch.</li>
+ * </ul>
  *
  * @param featureKey         {@code AiFeatureKey.name()} so logs and
  *                           the provider observability dashboard can
@@ -38,12 +53,44 @@ public record AiProviderPrompt(
         boolean expectJson,
         List<AiMessage> messageHistory) {
 
+    public AiProviderPrompt {
+        requireNonBlank(featureKey, "featureKey");
+        requireNonBlank(systemInstruction, "systemInstruction");
+        requireNonBlank(userPrompt, "userPrompt");
+        requireNonBlank(languagePreference, "languagePreference");
+        if (maxOutputTokens <= 0) {
+            throw new IllegalArgumentException("maxOutputTokens must be > 0, got " + maxOutputTokens);
+        }
+        Objects.requireNonNull(messageHistory, "messageHistory");
+        // List.copyOf rejects null entries and produces an unmodifiable view,
+        // so the prompt stays immutable even if the original list mutates later.
+        messageHistory = List.copyOf(messageHistory);
+    }
+
+    private static void requireNonBlank(String value, String fieldName) {
+        Objects.requireNonNull(value, fieldName);
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank.");
+        }
+    }
+
     /**
      * One past conversational turn included in the prompt history.
      * {@code role} is one of {@code "user"} / {@code "assistant"}, the
-     * naming Spring uses to preserve provider-side compatibility with
-     * the OpenAI chat schema.
+     * naming the OpenAI chat schema (and every compatible provider)
+     * recognises; {@code content} carries the prior text. Both fields
+     * are validated as non-null in the compact constructor and the
+     * role is additionally checked for non-blank — the upstream
+     * provider would otherwise return an obscure schema error.
      */
     public record AiMessage(String role, String content) {
+
+        public AiMessage {
+            Objects.requireNonNull(role, "role");
+            if (role.isBlank()) {
+                throw new IllegalArgumentException("role must not be blank.");
+            }
+            Objects.requireNonNull(content, "content");
+        }
     }
 }

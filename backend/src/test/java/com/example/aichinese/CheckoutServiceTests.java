@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import com.example.aichinese.config.PaymentProperties;
 import com.example.aichinese.dto.commerce.CheckoutResponse;
 import com.example.aichinese.dto.commerce.CheckoutSessionItemRequest;
+import com.example.aichinese.dto.commerce.CheckoutSessionRequest;
 import com.example.aichinese.entity.Order;
 import com.example.aichinese.entity.OrderItem;
 import com.example.aichinese.entity.PaymentRecord;
@@ -65,7 +66,7 @@ class CheckoutServiceTests {
         when(fixture.studentLearningAccessService.requireStudent(currentUser)).thenReturn(student);
         when(fixture.purchasableItemService.resolve("LESSON", 10L, null)).thenReturn(freeItem);
         when(fixture.entitlementService.hasAccessToPurchasableItem(student, freeItem)).thenReturn(false);
-        when(fixture.orderService.createOrder(student, com.example.aichinese.dto.commerce.CheckoutSessionRequest.CheckoutSource.BUY_NOW, List.of(freeItem)))
+        when(fixture.orderService.createOrder(student, CheckoutSessionRequest.CheckoutSource.BUY_NOW, List.of(freeItem)))
                 .thenReturn(order);
         when(fixture.orderService.createOrderItems(order, List.of(freeItem))).thenReturn(List.of(orderItem));
         when(fixture.paymentService.createPendingPayment(order, student)).thenReturn(paymentRecord);

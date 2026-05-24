@@ -53,6 +53,14 @@ import jakarta.servlet.http.HttpServletResponse;
 @Component
 public class RequestIdFilter extends OncePerRequestFilter {
 
+    /**
+     * Hard cap on the request-id length. Bounded so a malicious client
+     * cannot inflate every log line with a megabyte payload, and so the
+     * value comfortably fits inside the {@code 8 KiB} default servlet
+     * header budget alongside auth headers and cookies.
+     */
+    private static final int MAX_REQUEST_ID_LENGTH = 120;
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
@@ -72,13 +80,15 @@ public class RequestIdFilter extends OncePerRequestFilter {
         }
     }
 
-    private String normalizeRequestId(String requestId) {
+    private static String normalizeRequestId(String requestId) {
         if (requestId == null) {
             return null;
         }
 
-        String trimmed = requestId.trim();
-        if (trimmed.isEmpty()) {
+        // strip() (vs trim()) is Unicode-aware so a stray CJK fullwidth space
+        // would not survive normalisation differently from ASCII whitespace.
+        String stripped = requestId.strip();
+        if (stripped.isEmpty()) {
             return null;
         }
 
@@ -87,23 +97,23 @@ public class RequestIdFilter extends OncePerRequestFilter {
         // characters could split the HTTP response and inject arbitrary
         // response headers (HTTP response splitting / header injection).
         // Replace every character outside the printable ASCII range
-        // (0x20–0x7E) with an underscore so the reflected value is always
+        // (0x20\u20130x7E) with an underscore so the reflected value is always
         // safe to embed in a response header without further encoding.
-        String sanitized = toPrintableAscii(trimmed);
+        String sanitized = toPrintableAscii(stripped);
 
         // Keep request ids log-friendly and bounded for response headers.
-        if (sanitized.length() > 120) {
-            return sanitized.substring(0, 120);
+        if (sanitized.length() > MAX_REQUEST_ID_LENGTH) {
+            return sanitized.substring(0, MAX_REQUEST_ID_LENGTH);
         }
         return sanitized;
     }
 
     /**
-     * Replaces every character outside the printable ASCII range (U+0020–U+007E)
+     * Replaces every character outside the printable ASCII range (U+0020\u2013U+007E)
      * with an underscore. This ensures the value is safe to embed in an HTTP
      * response header without triggering response-splitting attacks.
      */
-    private String toPrintableAscii(String value) {
+    private static String toPrintableAscii(String value) {
         StringBuilder sb = new StringBuilder(value.length());
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);

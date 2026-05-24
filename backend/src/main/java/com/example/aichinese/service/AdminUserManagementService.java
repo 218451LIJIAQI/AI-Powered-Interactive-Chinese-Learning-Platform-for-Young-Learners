@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,6 +26,7 @@ import com.example.aichinese.dto.admin.AdminUserStatusUpdateRequest;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.mapper.TeacherManagementMapper;
@@ -55,6 +58,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class AdminUserManagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminUserManagementService.class);
+
     private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final TeacherProfileRepository teacherProfileRepository;
@@ -69,12 +74,12 @@ public class AdminUserManagementService {
             TeacherManagementMapper teacherManagementMapper,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.userRepository = userRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.teacherManagementMapper = teacherManagementMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)
@@ -166,9 +171,10 @@ public class AdminUserManagementService {
         }
 
         String actionLabel = nextActive ? "reactivated" : "deactivated";
+        log.info("User {}: userId={}, adminUserId={}", actionLabel, targetUser.getId(), adminUser.getId());
         notificationService.safeCreateNotification(
                 targetUser,
-                com.example.aichinese.entity.enums.NotificationType.SYSTEM,
+                NotificationType.SYSTEM,
                 nextActive ? "Account access restored" : "Account access paused",
                 nextActive
                         ? "An administrator restored your account access. You can sign in again."

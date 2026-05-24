@@ -4,7 +4,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 
 import java.nio.file.Path;
-import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -62,35 +62,43 @@ public class AiFileStorageService {
     private final UploadedFileRepository uploadedFileRepository;
 
     public AiFileStorageService(UploadProperties uploadProperties, UploadedFileRepository uploadedFileRepository) {
-        this.uploadProperties = uploadProperties;
-        this.uploadedFileRepository = uploadedFileRepository;
+        this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
+        this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
     }
 
     @Transactional
     public UploadedFile storePronunciationAudio(MultipartFile multipartFile, User ownerUser) {
-        validateMultipartFile(multipartFile, ALLOWED_AUDIO_CONTENT_TYPES, ALLOWED_AUDIO_EXTENSIONS,
+        String[] validated = validateMultipartFile(multipartFile,
+                ALLOWED_AUDIO_CONTENT_TYPES, ALLOWED_AUDIO_EXTENSIONS,
                 "Unsupported audio file type. Allowed types are WEBM, WAV, MPEG, and MP3.",
                 ALLOWED_AUDIO_SIGNATURES,
                 "Uploaded audio content does not match the declared WEBM/WAV/MP3 type.");
-        return storeFile(multipartFile, ownerUser, "PRIVATE");
+        return storeFile(multipartFile, ownerUser, "PRIVATE", validated[0], validated[1]);
     }
 
     @Transactional
     public UploadedFile storeWritingImage(MultipartFile multipartFile, User ownerUser) {
-        validateMultipartFile(multipartFile, ALLOWED_IMAGE_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS,
+        String[] validated = validateMultipartFile(multipartFile,
+                ALLOWED_IMAGE_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS,
                 "Unsupported image file type. Allowed types are PNG, JPG, and JPEG.",
                 ALLOWED_IMAGE_SIGNATURES,
                 "Uploaded image content does not match the declared PNG/JPG/JPEG type.");
-        return storeFile(multipartFile, ownerUser, "PRIVATE");
+        return storeFile(multipartFile, ownerUser, "PRIVATE", validated[0], validated[1]);
     }
 
-    private UploadedFile storeFile(MultipartFile multipartFile, User ownerUser, String accessLevel) {
-        String originalFileName = UploadStorageSupport.extractSafeOriginalFileName(
-                multipartFile.getOriginalFilename(),
-                "Uploaded file name is invalid.");
-        String extension = UploadStorageSupport.getRequiredExtension(
-                originalFileName,
-                "Uploaded file must include a valid extension.");
+    /**
+     * Persists the validated multipart file to disk and records it in the
+     * database.
+     *
+     * @param originalFileName safe file name already validated
+     * @param extension        lower-cased extension already validated
+     */
+    private UploadedFile storeFile(
+            MultipartFile multipartFile,
+            User ownerUser,
+            String accessLevel,
+            String originalFileName,
+            String extension) {
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
 
         Path targetPath = UploadStorageSupport.storeMultipartFile(
@@ -112,7 +120,13 @@ public class AiFileStorageService {
         return uploadedFileRepository.save(uploadedFile);
     }
 
-    private void validateMultipartFile(
+    /**
+     * Validates size, extension, content-type, and magic-byte signature.
+     *
+     * @return {@code [originalFileName, extension]} — both already
+     *         validated so {@link #storeFile} avoids re-extraction
+     */
+    private String[] validateMultipartFile(
             MultipartFile multipartFile,
             Set<String> allowedContentTypes,
             Set<String> allowedExtensions,
@@ -124,7 +138,8 @@ public class AiFileStorageService {
         }
 
         if (multipartFile.getSize() > uploadProperties.getMaxFileSize().toBytes()) {
-            throw new ResponseStatusException(PAYLOAD_TOO_LARGE, "Uploaded file exceeds the maximum allowed file size.");
+            throw new ResponseStatusException(PAYLOAD_TOO_LARGE,
+                    "Uploaded file exceeds the maximum allowed file size.");
         }
 
         String originalFileName = UploadStorageSupport.extractSafeOriginalFileName(
@@ -133,7 +148,7 @@ public class AiFileStorageService {
         String extension = UploadStorageSupport.getRequiredExtension(
                 originalFileName,
                 "Uploaded file must include a valid extension.");
-        if (!allowedExtensions.contains(extension.toLowerCase(Locale.ROOT))) {
+        if (!allowedExtensions.contains(extension)) {
             throw new ResponseStatusException(BAD_REQUEST, invalidTypeMessage);
         }
 
@@ -144,10 +159,12 @@ public class AiFileStorageService {
 
         UploadStorageSupport.validateFileSignature(
                 multipartFile,
-                extension.toLowerCase(Locale.ROOT),
+                extension,
                 contentType,
                 allowedSignatures,
                 invalidSignatureMessage);
+
+        return new String[]{originalFileName, extension};
     }
 
     private Path resolveAiDirectory() {

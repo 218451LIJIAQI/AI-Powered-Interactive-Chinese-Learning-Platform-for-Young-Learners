@@ -1,5 +1,5 @@
 <template>
-  <article class="public-feature-card" :class="toneClass">
+  <article class="public-feature-card" :class="`is-${tone}`">
     <div class="public-feature-card-icon">
       <IconGlyph :name="icon" :size="26" />
     </div>
@@ -17,21 +17,18 @@
  * features looks varied without per-card colour overrides in the
  * parent page.
  */
-import { computed } from 'vue'
-
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-const props = withDefaults(
-  defineProps<{
-    icon: string
-    title: string
-    description: string
-    tone?: 'purple' | 'green' | 'orange' | 'pink' | 'blue' | 'gold'
-  }>(),
-  {
-    tone: 'purple',
-  },
-)
+type FeatureTone = 'purple' | 'green' | 'orange' | 'pink' | 'blue' | 'gold'
 
-const toneClass = computed(() => `is-${props.tone}`)
+interface Props {
+  icon: string
+  title: string
+  description: string
+  tone?: FeatureTone
+}
+
+withDefaults(defineProps<Props>(), {
+  tone: 'purple',
+})
 </script>

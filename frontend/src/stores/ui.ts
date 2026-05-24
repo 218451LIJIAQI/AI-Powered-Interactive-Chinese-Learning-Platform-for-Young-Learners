@@ -13,12 +13,7 @@ import { defineStore } from 'pinia'
 
 import { i18n } from '@/plugins/i18n'
 import type { AppLanguage } from '@/types/api'
-import { safeGetItem, safeSetItem, storageKeys } from '@/utils/storage'
-
-function readPersistedLocale(): AppLanguage {
-  const locale = safeGetItem(storageKeys.language)
-  return locale === 'en' || locale === 'ms' || locale === 'zh' ? locale : 'en'
-}
+import { readPersistedLocale, safeSetItem, storageKeys } from '@/utils/storage'
 
 export const useUiStore = defineStore('ui', {
   state: () => ({

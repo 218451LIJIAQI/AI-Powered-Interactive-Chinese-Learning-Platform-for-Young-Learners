@@ -1,5 +1,5 @@
 <template>
-  <svg class="mini-chart" viewBox="0 0 320 160" preserveAspectRatio="none">
+  <svg class="mini-chart" viewBox="0 0 320 160" preserveAspectRatio="none" role="img" aria-hidden="true">
     <path
       d="M0 130 Q80 126 160 108 T320 78"
       fill="none"
@@ -44,30 +44,47 @@ import { computed } from 'vue'
 
 import type { AnalyticsTrendPoint } from '@/types/api'
 
-const props = withDefaults(
-  defineProps<{
-    values: AnalyticsTrendPoint[]
-    stroke?: string
-  }>(),
-  {
-    stroke: '#6a49ff',
-  },
-)
+interface ChartPoint {
+  readonly x: number
+  readonly y: number
+}
 
-const points = computed(() => {
-  if (props.values.length === 0) return []
+interface Props {
+  values: AnalyticsTrendPoint[]
+  stroke?: string
+}
 
-  const max = Math.max(...props.values.map((item) => item.value), 1)
-  const min = Math.min(...props.values.map((item) => item.value))
+const props = withDefaults(defineProps<Props>(), {
+  stroke: '#6a49ff',
+})
+
+const SVG_WIDTH = 320
+const SVG_PADDING_TOP = 50
+const SVG_PADDING_BOTTOM = 130
+
+const points = computed<ChartPoint[]>(() => {
+  const vals = props.values
+  if (vals.length === 0) return []
+
+  let max = -Infinity
+  let min = Infinity
+  for (const item of vals) {
+    if (item.value > max) max = item.value
+    if (item.value < min) min = item.value
+  }
+  if (max < 1) max = 1
   const spread = Math.max(max - min, 1)
+  const count = vals.length
 
-  return props.values.map((item, index) => {
-    const x = props.values.length === 1 ? 160 : (320 / (props.values.length - 1)) * index
+  return vals.map((item, index) => {
+    const x = count === 1 ? SVG_WIDTH / 2 : (SVG_WIDTH / (count - 1)) * index
     const normalized = (item.value - min) / spread
-    const y = 130 - normalized * 80
+    const y = SVG_PADDING_BOTTOM - normalized * (SVG_PADDING_BOTTOM - SVG_PADDING_TOP)
     return { x, y }
   })
 })
 
-const polylinePoints = computed(() => points.value.map((point) => `${point.x},${point.y}`).join(' '))
+const polylinePoints = computed<string>(() =>
+  points.value.map((p) => `${p.x},${p.y}`).join(' '),
+)
 </script>

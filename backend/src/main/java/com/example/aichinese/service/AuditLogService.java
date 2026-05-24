@@ -1,8 +1,12 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.NOT_FOUND;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.communication.AuditLogResponse;
@@ -55,9 +60,9 @@ public class AuditLogService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);
     private static final int MAX_AUDIT_DESCRIPTION_LENGTH = 1000;
-    private static final java.util.regex.Pattern SENSITIVE_ASSIGNMENT_PATTERN = java.util.regex.Pattern.compile(
+    private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
             "(?i)((?:(?:access|refresh|id|reset)[-_ ]?)?token|password|secret|api[-_ ]?key|reset[-_ ]?link)\\s*(?:[:=])\\s*\\S+");
-    private static final java.util.regex.Pattern AUTHORIZATION_HEADER_PATTERN = java.util.regex.Pattern.compile(
+    private static final Pattern AUTHORIZATION_HEADER_PATTERN = Pattern.compile(
             "(?i)(authorization\\s*(?:[:=])\\s*)(?:bearer\\s+)?\\S+");
 
     private final AuditLogRepository auditLogRepository;
@@ -66,8 +71,8 @@ public class AuditLogService {
     public AuditLogService(
             AuditLogRepository auditLogRepository,
             CommunicationMapper communicationMapper) {
-        this.auditLogRepository = auditLogRepository;
-        this.communicationMapper = communicationMapper;
+        this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
+        this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
     }
 
     @Transactional
@@ -127,8 +132,8 @@ public class AuditLogService {
     @Transactional(readOnly = true)
     public AuditLogResponse getAuditLog(Long id) {
         AuditLog auditLog = auditLogRepository.findById(id)
-                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new ResponseStatusException(
+                        NOT_FOUND,
                         "Audit log was not found."));
         return communicationMapper.toAuditLogResponse(auditLog);
     }

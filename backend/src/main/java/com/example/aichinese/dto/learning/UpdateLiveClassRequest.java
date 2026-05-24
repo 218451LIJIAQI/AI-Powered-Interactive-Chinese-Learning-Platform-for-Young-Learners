@@ -2,6 +2,8 @@ package com.example.aichinese.dto.learning;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -35,7 +37,54 @@ import jakarta.validation.constraints.Size;
  * {@link RescheduleLiveClassRequest} (auto-flips status to
  * {@code RESCHEDULED}) and {@link UpdateLiveClassStatusRequest}
  * (status-only PATCH).</p>
+ *
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * every string field so Bean Validation sees the canonical form
+ * (a paste with stray leading/trailing whitespace cannot inflate
+ * the length past the cap or sneak past the http(s) regex) and so
+ * every downstream consumer sees the same trimmed value. Optional
+ * fields ({@link #description}, {@link #status}) collapse to
+ * {@code null} when blank so the downstream "is this set?" check
+ * is a single null-check.</p>
+ *
+ * @param title           short human-readable session title (1–200
+ *                        chars after trim); required
+ * @param description     optional long-form description (max 1000
+ *                        chars after trim); blank collapses to
+ *                        {@code null}
+ * @param lessonId        optional lesson id; mutually exclusive
+ *                        with {@link #packageId}
+ * @param packageId       optional package id; mutually exclusive
+ *                        with {@link #lessonId}
+ * @param startTime       new wall-clock instant the session begins
+ *                        (Asia/Singapore zone); required
+ * @param endTime         new wall-clock instant the session ends;
+ *                        required and validated server-side to be
+ *                        strictly after {@link #startTime}
+ * @param meetingLink     full {@code http(s)://} URL (max 500 chars,
+ *                        no embedded whitespace); required
+ * @param meetingPlatform free-text platform name (max 80 chars);
+ *                        required
+ * @param status          optional new
+ *                        {@link com.example.aichinese.entity.enums.LiveClassStatus}
+ *                        enum-name; blank collapses to {@code null}
+ *                        (preserves current status)
+ * @param maxParticipants optional soft cap on enrolments; must be
+ *                        positive when present
  */
+@JsonPropertyOrder({
+        "title",
+        "description",
+        "lessonId",
+        "packageId",
+        "startTime",
+        "endTime",
+        "meetingLink",
+        "meetingPlatform",
+        "status",
+        "maxParticipants"
+})
 public record UpdateLiveClassRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must be 200 characters or fewer.")
@@ -56,7 +105,7 @@ public record UpdateLiveClassRequest(
         LocalDateTime endTime,
 
         @NotBlank(message = "Meeting link is required.")
-        @Pattern(regexp = "^https?://.+$", message = "Meeting link must start with http:// or https://.")
+        @Pattern(regexp = "^https?://\\S+$", message = "Meeting link must start with http:// or https:// and contain no whitespace.")
         @Size(max = 500, message = "Meeting link must be 500 characters or fewer.")
         String meetingLink,
 
@@ -69,4 +118,31 @@ public record UpdateLiveClassRequest(
 
         @Min(value = 1, message = "Maximum participants must be positive.")
         Integer maxParticipants) {
+
+    /**
+     * Defensive canonical constructor: trims every string field so
+     * Bean Validation sees the canonical form (preventing length-cap
+     * bypass via leading/trailing whitespace) and collapses optional
+     * blank-only strings to {@code null} so downstream "is this set?"
+     * checks are a single null-check.
+     */
+    public UpdateLiveClassRequest {
+        title = trimOrNull(title);
+        description = trimToNullIfBlank(description);
+        meetingLink = trimOrNull(meetingLink);
+        meetingPlatform = trimOrNull(meetingPlatform);
+        status = trimToNullIfBlank(status);
+    }
+
+    private static String trimOrNull(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private static String trimToNullIfBlank(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

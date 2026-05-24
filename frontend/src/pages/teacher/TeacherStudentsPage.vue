@@ -340,7 +340,7 @@ const feedback = computed<TeacherFeedbackResponse[]>(() =>
 )
 
 const pageLoading = computed(() => studentsResource.loading.value || feedbackResource.loading.value)
-const pageError = computed(() => studentsResource.error.value || feedbackResource.error.value || null)
+const pageError = computed(() => studentsResource.error.value || feedbackResource.error.value)
 const usingFallback = computed(() => studentsResource.usingFallback.value || feedbackResource.usingFallback.value)
 const feedbackReadOnly = computed(() => usingFallback.value)
 const followUpDisabled = computed(() => feedbackReadOnly.value || submittingFollowUp.value || !selectedStudent.value)
@@ -580,6 +580,7 @@ function resetFollowUpDraft() {
 }
 
 async function submitFollowUpFeedback() {
+  if (submittingFollowUp.value) return
   actionError.value = null
   actionSuccess.value = null
 

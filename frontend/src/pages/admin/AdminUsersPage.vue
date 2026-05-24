@@ -416,8 +416,7 @@ const pageError = computed(
     usersResource.error.value ||
     teachersResource.error.value ||
     studentsResource.error.value ||
-    auditResource.error.value ||
-    null,
+    auditResource.error.value,
 )
 const usingFallback = computed(
   () =>
@@ -791,6 +790,7 @@ function clearSelection() {
 }
 
 async function toggleSelectedUserStatus() {
+  if (submittingUserStatus.value) return
   if (!selectedUser.value) return
 
   if (usingFallback.value) {

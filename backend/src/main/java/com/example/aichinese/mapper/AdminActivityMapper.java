@@ -1,10 +1,11 @@
 package com.example.aichinese.mapper;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
@@ -38,6 +39,8 @@ import com.example.aichinese.entity.StoryActivity;
 import com.example.aichinese.entity.StoryQuestion;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.ActivityDifficulty;
+import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
 
 /**
@@ -62,7 +65,15 @@ public class AdminActivityMapper {
 
     // ---------- Tag helpers ----------
 
-    public String joinTags(List<String> tags) {
+    /**
+     * Trims, deduplicates and joins a tag list into the comma-separated
+     * representation persisted in the {@code tags} column. Returns
+     * {@code null} (rather than the empty string) when the list yields
+     * no usable tags so the underlying column stays {@code NULL} instead
+     * of holding a stray {@code ""} that would falsely advertise the row
+     * as tagged.
+     */
+    private String joinTags(List<String> tags) {
         if (tags == null || tags.isEmpty()) {
             return null;
         }
@@ -71,12 +82,17 @@ public class AdminActivityMapper {
                 .map(String::trim)
                 .filter(value -> !value.isEmpty())
                 .distinct()
-                .reduce((a, b) -> a + "," + b)
-                .orElse(null);
-        return joined == null || joined.isBlank() ? null : joined;
+                .collect(Collectors.joining(","));
+        return joined.isEmpty() ? null : joined;
     }
 
-    public List<String> splitTags(String tags) {
+    /**
+     * Inverse of {@link #joinTags}: parses a stored CSV tag string back
+     * into the per-tag list shape the API exposes. Returns an immutable
+     * empty list when the input is {@code null} / blank so callers can
+     * iterate the result unconditionally.
+     */
+    private List<String> splitTags(String tags) {
         if (tags == null || tags.isBlank()) {
             return List.of();
         }
@@ -86,11 +102,11 @@ public class AdminActivityMapper {
                 .toList();
     }
 
-    private String creatorName(User user) {
+    private static String creatorName(User user) {
         return user == null ? null : user.getDisplayName();
     }
 
-    private Long creatorId(User user) {
+    private static Long creatorId(User user) {
         return user == null ? null : user.getId();
     }
 
@@ -113,7 +129,7 @@ public class AdminActivityMapper {
         entity.setMalayMeaning(request.malayMeaning());
         entity.setImageUrl(request.imageUrl());
         entity.setAudioUrl(request.audioUrl());
-        entity.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);
+        entity.setSortOrder(Objects.requireNonNullElse(request.sortOrder(), 0));
         entity.setExtraPayload(request.extraPayload());
         entity.setHskLevel(request.hskLevel());
         entity.setAgeBand(request.ageBand());
@@ -154,14 +170,14 @@ public class AdminActivityMapper {
     }
 
     public AdminActivitySummaryResponse toSummary(Flashcard entity) {
-        String summaryTitle = entity.getTitle() == null || entity.getTitle().isBlank()
-                ? entity.getFrontText()
-                : entity.getTitle();
-        return summaryOf(
-                entity.getId(),
-                ActivityType.FLASHCARD,
-                summaryTitle,
-                entity);
+        String title = entity.getTitle();
+        String summaryTitle = title == null || title.isBlank() ? entity.getFrontText() : title;
+        return buildSummary(
+                entity.getId(), ActivityType.FLASHCARD, summaryTitle,
+                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
+                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
     // ---------- MatchingGame ----------
@@ -195,7 +211,7 @@ public class AdminActivityMapper {
         item.setLeftImageUrl(request.leftImageUrl());
         item.setRightImageUrl(request.rightImageUrl());
         item.setPinyin(request.pinyin());
-        item.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);
+        item.setSortOrder(Objects.requireNonNullElse(request.sortOrder(), 0));
         return item;
     }
 
@@ -234,7 +250,12 @@ public class AdminActivityMapper {
     }
 
     public AdminActivitySummaryResponse toSummary(MatchingGame entity) {
-        return summaryOf(entity.getId(), ActivityType.MATCHING_GAME, entity.getTitle(), entity);
+        return buildSummary(
+                entity.getId(), ActivityType.MATCHING_GAME, entity.getTitle(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
+                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
     // ---------- ListeningExercise ----------
@@ -283,7 +304,12 @@ public class AdminActivityMapper {
     }
 
     public AdminActivitySummaryResponse toSummary(ListeningExercise entity) {
-        return summaryOf(entity.getId(), ActivityType.LISTENING_EXERCISE, entity.getTitle(), entity);
+        return buildSummary(
+                entity.getId(), ActivityType.LISTENING_EXERCISE, entity.getTitle(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
+                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
     // ---------- TracingExercise ----------
@@ -338,7 +364,12 @@ public class AdminActivityMapper {
     }
 
     public AdminActivitySummaryResponse toSummary(TracingExercise entity) {
-        return summaryOf(entity.getId(), ActivityType.TRACING_EXERCISE, entity.getTitle(), entity);
+        return buildSummary(
+                entity.getId(), ActivityType.TRACING_EXERCISE, entity.getTitle(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
+                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
     // ---------- DragDropActivity ----------
@@ -372,7 +403,7 @@ public class AdminActivityMapper {
         item.setTargetZone(request.targetZone());
         item.setPinyin(request.pinyin());
         item.setImageUrl(request.imageUrl());
-        item.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);
+        item.setSortOrder(Objects.requireNonNullElse(request.sortOrder(), 0));
         return item;
     }
 
@@ -411,7 +442,12 @@ public class AdminActivityMapper {
     }
 
     public AdminActivitySummaryResponse toSummary(DragDropActivity entity) {
-        return summaryOf(entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, entity.getTitle(), entity);
+        return buildSummary(
+                entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, entity.getTitle(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
+                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
     // ---------- StoryActivity ----------
@@ -448,7 +484,7 @@ public class AdminActivityMapper {
         question.setQuestionText(request.questionText());
         question.setOptionsPayload(request.optionsPayload());
         question.setExplanation(request.explanation());
-        question.setSortOrder(request.sortOrder() != null ? request.sortOrder() : 0);
+        question.setSortOrder(Objects.requireNonNullElse(request.sortOrder(), 0));
         return question;
     }
 
@@ -490,142 +526,63 @@ public class AdminActivityMapper {
     }
 
     public AdminActivitySummaryResponse toSummary(StoryActivity entity) {
-        return summaryOf(entity.getId(), ActivityType.STORY_ACTIVITY, entity.getTitle(), entity);
+        return buildSummary(
+                entity.getId(), ActivityType.STORY_ACTIVITY, entity.getTitle(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
+                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
+                entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
-    // ---------- Common summary helpers ----------
+    // ---------- Common summary helper ----------
 
-    private AdminActivitySummaryResponse summaryOf(Long id, ActivityType type, String title, Object entity) {
-        // Pulls the shared metadata via reflection-free duck typing — all six
-        // activity entities expose the same getters.
-        return Stream.of(entity)
-                .map(e -> new AdminActivitySummaryResponse(
-                        id,
-                        type,
-                        title,
-                        getStatus(e),
-                        getHskLevel(e),
-                        getAgeBand(e),
-                        getDifficulty(e),
-                        getTopic(e),
-                        splitTags(getTags(e)),
-                        getXpReward(e),
-                        getEstimatedSeconds(e),
-                        creatorId(getCreatedByUser(e)),
-                        creatorName(getCreatedByUser(e)),
-                        getCreatedAt(e),
-                        getUpdatedAt(e)))
-                .findFirst()
-                .orElseThrow();
-    }
-
-    private ContentStatus getStatus(Object entity) {
-        if (entity instanceof Flashcard e) return e.getContentStatus();
-        if (entity instanceof MatchingGame e) return e.getContentStatus();
-        if (entity instanceof ListeningExercise e) return e.getContentStatus();
-        if (entity instanceof TracingExercise e) return e.getContentStatus();
-        if (entity instanceof DragDropActivity e) return e.getContentStatus();
-        if (entity instanceof StoryActivity e) return e.getContentStatus();
-        return null;
-    }
-
-    private Integer getHskLevel(Object entity) {
-        if (entity instanceof Flashcard e) return e.getHskLevel();
-        if (entity instanceof MatchingGame e) return e.getHskLevel();
-        if (entity instanceof ListeningExercise e) return e.getHskLevel();
-        if (entity instanceof TracingExercise e) return e.getHskLevel();
-        if (entity instanceof DragDropActivity e) return e.getHskLevel();
-        if (entity instanceof StoryActivity e) return e.getHskLevel();
-        return null;
-    }
-
-    private com.example.aichinese.entity.enums.AgeBand getAgeBand(Object entity) {
-        if (entity instanceof Flashcard e) return e.getAgeBand();
-        if (entity instanceof MatchingGame e) return e.getAgeBand();
-        if (entity instanceof ListeningExercise e) return e.getAgeBand();
-        if (entity instanceof TracingExercise e) return e.getAgeBand();
-        if (entity instanceof DragDropActivity e) return e.getAgeBand();
-        if (entity instanceof StoryActivity e) return e.getAgeBand();
-        return null;
-    }
-
-    private com.example.aichinese.entity.enums.ActivityDifficulty getDifficulty(Object entity) {
-        if (entity instanceof Flashcard e) return e.getDifficulty();
-        if (entity instanceof MatchingGame e) return e.getDifficulty();
-        if (entity instanceof ListeningExercise e) return e.getDifficulty();
-        if (entity instanceof TracingExercise e) return e.getDifficulty();
-        if (entity instanceof DragDropActivity e) return e.getDifficulty();
-        if (entity instanceof StoryActivity e) return e.getDifficulty();
-        return null;
-    }
-
-    private String getTopic(Object entity) {
-        if (entity instanceof Flashcard e) return e.getTopic();
-        if (entity instanceof MatchingGame e) return e.getTopic();
-        if (entity instanceof ListeningExercise e) return e.getTopic();
-        if (entity instanceof TracingExercise e) return e.getTopic();
-        if (entity instanceof DragDropActivity e) return e.getTopic();
-        if (entity instanceof StoryActivity e) return e.getTopic();
-        return null;
-    }
-
-    private String getTags(Object entity) {
-        if (entity instanceof Flashcard e) return e.getTags();
-        if (entity instanceof MatchingGame e) return e.getTags();
-        if (entity instanceof ListeningExercise e) return e.getTags();
-        if (entity instanceof TracingExercise e) return e.getTags();
-        if (entity instanceof DragDropActivity e) return e.getTags();
-        if (entity instanceof StoryActivity e) return e.getTags();
-        return null;
-    }
-
-    private Integer getXpReward(Object entity) {
-        if (entity instanceof Flashcard e) return e.getXpReward();
-        if (entity instanceof MatchingGame e) return e.getXpReward();
-        if (entity instanceof ListeningExercise e) return e.getXpReward();
-        if (entity instanceof TracingExercise e) return e.getXpReward();
-        if (entity instanceof DragDropActivity e) return e.getXpReward();
-        if (entity instanceof StoryActivity e) return e.getXpReward();
-        return null;
-    }
-
-    private Integer getEstimatedSeconds(Object entity) {
-        if (entity instanceof Flashcard e) return e.getEstimatedSeconds();
-        if (entity instanceof MatchingGame e) return e.getEstimatedSeconds();
-        if (entity instanceof ListeningExercise e) return e.getEstimatedSeconds();
-        if (entity instanceof TracingExercise e) return e.getEstimatedSeconds();
-        if (entity instanceof DragDropActivity e) return e.getEstimatedSeconds();
-        if (entity instanceof StoryActivity e) return e.getEstimatedSeconds();
-        return null;
-    }
-
-    private User getCreatedByUser(Object entity) {
-        if (entity instanceof Flashcard e) return e.getCreatedByUser();
-        if (entity instanceof MatchingGame e) return e.getCreatedByUser();
-        if (entity instanceof ListeningExercise e) return e.getCreatedByUser();
-        if (entity instanceof TracingExercise e) return e.getCreatedByUser();
-        if (entity instanceof DragDropActivity e) return e.getCreatedByUser();
-        if (entity instanceof StoryActivity e) return e.getCreatedByUser();
-        return null;
-    }
-
-    private java.time.LocalDateTime getCreatedAt(Object entity) {
-        if (entity instanceof Flashcard e) return e.getCreatedAt();
-        if (entity instanceof MatchingGame e) return e.getCreatedAt();
-        if (entity instanceof ListeningExercise e) return e.getCreatedAt();
-        if (entity instanceof TracingExercise e) return e.getCreatedAt();
-        if (entity instanceof DragDropActivity e) return e.getCreatedAt();
-        if (entity instanceof StoryActivity e) return e.getCreatedAt();
-        return null;
-    }
-
-    private java.time.LocalDateTime getUpdatedAt(Object entity) {
-        if (entity instanceof Flashcard e) return e.getUpdatedAt();
-        if (entity instanceof MatchingGame e) return e.getUpdatedAt();
-        if (entity instanceof ListeningExercise e) return e.getUpdatedAt();
-        if (entity instanceof TracingExercise e) return e.getUpdatedAt();
-        if (entity instanceof DragDropActivity e) return e.getUpdatedAt();
-        if (entity instanceof StoryActivity e) return e.getUpdatedAt();
-        return null;
+    /**
+     * Type-safe shared assembler for {@link AdminActivitySummaryResponse}.
+     *
+     * <p>Replaces the previous reflection-style {@code instanceof} cascade
+     * over a generic {@code Object} entity — each {@code toSummary(...)}
+     * overload now passes its typed accessors directly, so the compiler
+     * verifies at compile-time that every supported activity entity
+     * exposes the full shared metadata vocabulary. Adding a new activity
+     * type requires nothing more than a new typed {@code toSummary(...)}
+     * method (and its corresponding {@link ActivityType} enum value);
+     * forgetting any of the metadata fields is now a compile error
+     * rather than a silent {@code null}.</p>
+     *
+     * <p>The {@code createdBy} parameter is read once and split into id
+     * and display-name fields so callers do not pay for two lazy-load
+     * round-trips against the {@code User} association.</p>
+     */
+    private AdminActivitySummaryResponse buildSummary(
+            Long id,
+            ActivityType type,
+            String title,
+            ContentStatus status,
+            Integer hskLevel,
+            AgeBand ageBand,
+            ActivityDifficulty difficulty,
+            String topic,
+            String tagsCsv,
+            Integer xpReward,
+            Integer estimatedSeconds,
+            User createdBy,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt) {
+        return new AdminActivitySummaryResponse(
+                id,
+                type,
+                title,
+                status,
+                hskLevel,
+                ageBand,
+                difficulty,
+                topic,
+                splitTags(tagsCsv),
+                xpReward,
+                estimatedSeconds,
+                creatorId(createdBy),
+                creatorName(createdBy),
+                createdAt,
+                updatedAt);
     }
 }

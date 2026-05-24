@@ -3,6 +3,8 @@ package com.example.aichinese.dto.commerce;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import com.example.aichinese.entity.enums.PayoutStatus;
 
 /**
@@ -37,7 +39,38 @@ import com.example.aichinese.entity.enums.PayoutStatus;
  * required reason on rejection (see {@link PayoutDecisionRequest}).
  * The admin counterpart {@link AdminPayoutRequestResponse} adds the
  * teacher's identity for moderation.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * @param id             primary key of the underlying
+ *                       {@link com.example.aichinese.entity.PayoutRequest}
+ * @param amount         requested withdrawal amount in the
+ *                       platform base currency, normalised to
+ *                       {@link CommerceDtoConstants#MONEY_FRACTION_DIGITS}
+ *                       decimal places
+ * @param requestedNote  optional teacher-supplied note from
+ *                       {@link PayoutRequestCreateRequest};
+ *                       {@code null} when omitted
+ * @param decisionReason mandatory admin justification supplied via
+ *                       {@link PayoutDecisionRequest}; populated
+ *                       only for {@link PayoutStatus#REJECTED},
+ *                       otherwise {@code null}
+ * @param payoutStatus   current state in the {@link PayoutStatus}
+ *                       state machine
+ * @param createdAt      timestamp the teacher filed the request;
+ *                       always populated
  */
+@JsonPropertyOrder({
+        "id",
+        "amount",
+        "requestedNote",
+        "decisionReason",
+        "payoutStatus",
+        "createdAt"
+})
 public record TeacherPayoutRequestResponse(
         Long id,
         BigDecimal amount,

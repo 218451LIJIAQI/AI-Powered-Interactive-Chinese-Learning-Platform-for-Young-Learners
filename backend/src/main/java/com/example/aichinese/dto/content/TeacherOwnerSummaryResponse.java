@@ -1,5 +1,9 @@
 package com.example.aichinese.dto.content;
 
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import com.example.aichinese.entity.enums.TeacherStatus;
 
 /**
@@ -36,10 +40,47 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * counterpart with strictly less information (no
  * {@link #userId}, no full status — only a single
  * {@code verified} boolean).</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces non-null on the three
+ * fields the mapper guarantees from any persisted teacher row
+ * ({@link #teacherId}, {@link #userId}, {@link #teacherStatus}) —
+ * the mapper only emits this DTO once it has verified both the
+ * teacher profile and its user association hydrated (see
+ * {@link com.example.aichinese.mapper.ContentManagementMapper#toTeacherSummary}).
+ * {@link #fullName} may legitimately be {@code null} when the
+ * teacher has not yet set a display name on their user row.</p>
+ *
+ * @param teacherId     {@code teacher_profiles.id}; never
+ *                      {@code null}
+ * @param userId        {@code users.id} of the teacher's user
+ *                      row; never {@code null}
+ * @param fullName      denormalised {@code users.display_name};
+ *                      nullable when unset
+ * @param teacherStatus owner's verification state; never
+ *                      {@code null}
  */
+@JsonPropertyOrder({ "teacherId", "userId", "fullName", "teacherStatus" })
 public record TeacherOwnerSummaryResponse(
         Long teacherId,
         Long userId,
         String fullName,
         TeacherStatus teacherStatus) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the
+     * fields the mapper guarantees so a malformed teacher
+     * reference cannot reach the wire format and break attribution
+     * on the admin / teacher dashboards.
+     */
+    public TeacherOwnerSummaryResponse {
+        Objects.requireNonNull(teacherId, "teacherId must not be null");
+        Objects.requireNonNull(userId, "userId must not be null");
+        Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
+    }
 }

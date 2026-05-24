@@ -22,6 +22,16 @@ import com.example.aichinese.entity.DragDropItem;
  */
 public interface DragDropItemRepository extends JpaRepository<DragDropItem, Long> {
 
+    /**
+     * Returns every item belonging to {@code dragDropActivityId} in the
+     * order the activity author intended. Sorts primarily by
+     * {@code sortOrder} (the explicit reorderable position the admin
+     * picks in the editor) with {@code createdAt} as a deterministic
+     * tie-breaker for items the admin saved without changing the default
+     * sort position \u2014 so two such items with equal {@code sortOrder}
+     * still render in insertion order rather than in arbitrary database
+     * order.
+     */
     List<DragDropItem> findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(Long dragDropActivityId);
 
     /**

@@ -433,7 +433,7 @@ const quizAttemptOptions = computed<TeacherQuizAttemptSummaryResponse[]>(() =>
 )
 
 const pageLoading = computed(() => feedbackResource.loading.value || studentsResource.loading.value || lessonsResource.loading.value)
-const pageError = computed(() => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value || null)
+const pageError = computed(() => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value)
 const usingFallback = computed(
   () => feedbackResource.usingFallback.value || studentsResource.usingFallback.value || lessonsResource.usingFallback.value,
 )
@@ -717,6 +717,7 @@ function toggleTab() {
 }
 
 async function submitFeedback() {
+  if (submittingCreate.value || submittingUpdate.value) return
   actionError.value = null
   actionSuccess.value = null
 

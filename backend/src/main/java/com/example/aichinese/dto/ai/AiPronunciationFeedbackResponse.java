@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Structured AI pronunciation feedback returned by the
  * pronunciation-analysis endpoint (typically a multipart
@@ -20,7 +22,20 @@ package com.example.aichinese.dto.ai;
  * advice; {@link #encouragement} is the motivational close.
  * Every field is plain text in the student's preferred
  * language.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
  */
+@JsonPropertyOrder({
+        "feedback",
+        "pronunciationComment",
+        "toneComment",
+        "improvementTips",
+        "encouragement",
+        "status"
+})
 public record AiPronunciationFeedbackResponse(
         String feedback,
         String pronunciationComment,

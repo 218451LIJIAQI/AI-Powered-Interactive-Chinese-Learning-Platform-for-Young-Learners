@@ -2,6 +2,8 @@ package com.example.aichinese.dto.content;
 
 import java.math.BigDecimal;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.LearningType;
 
@@ -21,19 +23,63 @@ import jakarta.validation.constraints.Size;
  * is managed via the dedicated item endpoints
  * ({@code POST /packages/{id}/items} and
  * {@code DELETE /packages/{id}/items/{itemId}}); changing
- * {@link #title}/{@link #description}/etc. does not affect the item
- * list.</p>
+ * {@link #title} / {@link #description} / etc. does not affect the
+ * item list.</p>
  *
  * <p>Mirrors {@link CreateCoursePackageRequest} field-for-field.
- * The service refuses edits in non-editable states; see
- * {@link CreateModuleRequest} for the full discussion of shared
- * validation rules.</p>
+ * The service refuses edits in non-editable states (see
+ * {@link com.example.aichinese.service.TeacherContentAccessService});
+ * see {@link CreateModuleRequest} for the full discussion of
+ * shared validation rules.</p>
+ *
+ * <p>For archive (soft delete) use the dedicated
+ * {@code PATCH /api/v1/teachers/packages/{id}/archive} endpoint
+ * (no body) instead of this one.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * @param title          editorial title shown on cards; required,
+ *                       1–{@value ContentDtoConstants#TITLE_MAX_LENGTH}
+ *                       chars
+ * @param description    long-form description (max
+ *                       {@value ContentDtoConstants#LONG_DESCRIPTION_MAX_LENGTH}
+ *                       chars); nullable
+ * @param levelId        required FK into
+ *                       {@link LearningLevelResponse}; must be
+ *                       positive
+ * @param categoryId     required FK into
+ *                       {@link LearningCategoryResponse}; must be
+ *                       positive
+ * @param learningType   headline delivery model surfaced on the
+ *                       catalogue card; required
+ * @param accessType     commercial access tier ({@code FREE} /
+ *                       {@code PAID}); required
+ * @param price          listed price; matches {@code DECIMAL(10,2)};
+ *                       must be {@code >= 0}; may be {@code null}
+ *                       for free packages
+ * @param coverImageUrl  optional cover image reference; max
+ *                       {@value ContentDtoConstants#COVER_IMAGE_URL_MAX_LENGTH}
+ *                       chars
  */
+@JsonPropertyOrder({
+        "title",
+        "description",
+        "levelId",
+        "categoryId",
+        "learningType",
+        "accessType",
+        "price",
+        "coverImageUrl"
+})
 public record UpdateCoursePackageRequest(
         @NotBlank(message = "Title is required.")
-        @Size(max = 200, message = "Title must not exceed 200 characters.")
+        @Size(max = ContentDtoConstants.TITLE_MAX_LENGTH, message = "Title must not exceed 200 characters.")
         String title,
-        @Size(max = 2000, message = "Description must not exceed 2000 characters.")
+        @Size(max = ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH,
+                message = "Description must not exceed 2000 characters.")
         String description,
         @NotNull(message = "Level is required.")
         @Positive(message = "Level id must be positive.")
@@ -46,8 +92,11 @@ public record UpdateCoursePackageRequest(
         @NotNull(message = "Access type is required.")
         AccessType accessType,
         @DecimalMin(value = "0.0", inclusive = true, message = "Price must be greater than or equal to 0.")
-        @Digits(integer = 8, fraction = 2, message = "Price must fit within 8 integer digits and 2 decimal places.")
+        @Digits(integer = ContentDtoConstants.PRICE_INTEGER_DIGITS,
+                fraction = ContentDtoConstants.PRICE_FRACTION_DIGITS,
+                message = "Price must fit within 8 integer digits and 2 decimal places.")
         BigDecimal price,
-        @Size(max = 255, message = "Cover image reference must not exceed 255 characters.")
+        @Size(max = ContentDtoConstants.COVER_IMAGE_URL_MAX_LENGTH,
+                message = "Cover image reference must not exceed 255 characters.")
         String coverImageUrl) {
 }

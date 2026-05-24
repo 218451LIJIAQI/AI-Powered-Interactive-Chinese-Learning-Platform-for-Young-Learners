@@ -394,8 +394,7 @@ const pageError = computed(
     auditResource.error.value ||
     aiUsageResource.error.value ||
     liveClassesResource.error.value ||
-    healthResource.error.value ||
-    null,
+    healthResource.error.value,
 )
 const usingFallback = computed(
   () =>

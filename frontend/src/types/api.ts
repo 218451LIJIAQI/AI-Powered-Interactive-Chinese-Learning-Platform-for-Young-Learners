@@ -1423,7 +1423,6 @@ export interface StudentAiResponseReportResponse {
 }
 
 export interface AdminAiResponseReportResponse extends StudentAiResponseReportResponse {
-  id: number
   studentUserId?: number | null
   studentName?: string | null
   studentEmail?: string | null

@@ -5,7 +5,11 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -105,19 +109,19 @@ public class StudentLearningService {
             QuizMapper quizMapper,
             LiveLearningAccessService liveLearningAccessService,
             LiveLearningMapper liveLearningMapper) {
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.studentLearningProgressService = studentLearningProgressService;
-        this.quizQuestionRepository = quizQuestionRepository;
-        this.quizRepository = quizRepository;
-        this.quizOptionRepository = quizOptionRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.quizAttemptAnswerRepository = quizAttemptAnswerRepository;
-        this.liveClassRepository = liveClassRepository;
-        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
-        this.recordedLessonVideoRepository = recordedLessonVideoRepository;
-        this.quizMapper = quizMapper;
-        this.liveLearningAccessService = liveLearningAccessService;
-        this.liveLearningMapper = liveLearningMapper;
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.studentLearningProgressService = Objects.requireNonNull(studentLearningProgressService, "studentLearningProgressService");
+        this.quizQuestionRepository = Objects.requireNonNull(quizQuestionRepository, "quizQuestionRepository");
+        this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
+        this.quizOptionRepository = Objects.requireNonNull(quizOptionRepository, "quizOptionRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
+        this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
+        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
+        this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
+        this.quizMapper = Objects.requireNonNull(quizMapper, "quizMapper");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
     }
 
     // ===================================================================
@@ -204,7 +208,7 @@ public class StudentLearningService {
         Set<Long> quizQuestionIds = questions.stream()
                 .map(QuizQuestion::getId)
                 .collect(Collectors.toSet());
-        Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId = new java.util.LinkedHashMap<>();
+        Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId = new LinkedHashMap<>();
         for (QuizSubmissionAnswerRequest answer : request.answers()) {
             Long questionId = answer.questionId();
             if (!quizQuestionIds.contains(questionId)) {
@@ -229,7 +233,7 @@ public class StudentLearningService {
         int score = 0;
         int maxScore = 0;
         int correctCount = 0;
-        List<QuizAttemptResultQuestionResponse> answerResults = new java.util.ArrayList<>();
+        List<QuizAttemptResultQuestionResponse> answerResults = new ArrayList<>();
 
         QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
 
@@ -433,8 +437,8 @@ public class StudentLearningService {
         // in the system and filtering in-memory. When the related package set
         // is empty we still need to send a sentinel value because Hibernate
         // rejects `IN ()` against an empty collection.
-        java.util.Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
-                ? java.util.Collections.singleton(-1L)
+        Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
+                ? Collections.singleton(-1L)
                 : relatedPackageIds;
 
         return liveClassRepository.findRelatedToLessonOrPackages(lesson.getId(), packageIdsForQuery).stream()
@@ -470,8 +474,8 @@ public class StudentLearningService {
         // Same DB-side filtering pattern as live classes above: ask the
         // database for only the videos that target this lesson or one of its
         // related packages. The sentinel id guards the `IN ()` edge case.
-        java.util.Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
-                ? java.util.Collections.singleton(-1L)
+        Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
+                ? Collections.singleton(-1L)
                 : relatedPackageIds;
 
         return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), packageIdsForQuery).stream()

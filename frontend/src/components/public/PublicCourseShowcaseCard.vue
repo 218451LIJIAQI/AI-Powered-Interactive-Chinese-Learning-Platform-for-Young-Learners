@@ -58,25 +58,24 @@ import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import type { PublicCourseSummary } from '@/types/api'
 import { formatCurrency } from '@/utils/format'
 
-const props = withDefaults(
-  defineProps<{
-    course: PublicCourseSummary
-    actionLabel?: string
-  }>(),
-  {
-    actionLabel: 'Add to Cart',
-  },
-)
+interface Props {
+  course: PublicCourseSummary
+  actionLabel?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  actionLabel: 'Add to Cart',
+})
 
 defineEmits<{
   view: []
   action: []
 }>()
 
-const descriptionText = computed(() => props.course.shortDescription || 'Beginner-friendly Mandarin learning content.')
-const teacherName = computed(() => props.course.teacher.displayName)
-const priceValue = computed(() => formatCurrency(props.course.price).replace('.00', ''))
-const priceSuffix = computed(() => 'USD')
+const descriptionText = computed<string>(() => props.course.shortDescription || 'Beginner-friendly Mandarin learning content.')
+const teacherName = computed<string>(() => props.course.teacher.displayName)
+const priceValue = computed<string>(() => formatCurrency(props.course.price).replace(/\.00$/, ''))
+const priceSuffix = computed<string>(() => 'USD')
 
 const levelLabel = computed(() => {
   if (props.course.level.id <= 2) return 'Beginner'

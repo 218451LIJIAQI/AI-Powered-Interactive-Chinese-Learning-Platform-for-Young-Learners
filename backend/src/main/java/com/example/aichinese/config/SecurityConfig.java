@@ -1,5 +1,7 @@
 package com.example.aichinese.config;
 
+import java.util.Objects;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -94,6 +96,24 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
 })
 public class SecurityConfig {
 
+    /**
+     * BCrypt cost factor (work factor / log2 of rounds). The Spring default
+     * is 10 (\u22481024 rounds); OWASP 2023 guidance recommends \u226512 for
+     * new deployments. The encoder transparently verifies older hashes
+     * recorded at strength 10, so bumping this is backward-compatible
+     * with existing user rows.
+     */
+    private static final int BCRYPT_STRENGTH = 12;
+
+    /**
+     * Permissions-Policy header value. Disables every browser feature the
+     * platform never asks for, so a compromised page hosted under the
+     * platform's origin cannot prompt the learner for sensitive sensors.
+     */
+    private static final String PERMISSIONS_POLICY =
+            "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
+                    + "accelerometer=(), gyroscope=(), magnetometer=(), serial=()";
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
@@ -106,11 +126,11 @@ public class SecurityConfig {
             JwtAccessDeniedHandler jwtAccessDeniedHandler,
             CorsConfigurationSource corsConfigurationSource,
             RequestIdFilter requestIdFilter) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
-        this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
-        this.corsConfigurationSource = corsConfigurationSource;
-        this.requestIdFilter = requestIdFilter;
+        this.jwtAuthenticationFilter = Objects.requireNonNull(jwtAuthenticationFilter, "jwtAuthenticationFilter");
+        this.jwtAuthenticationEntryPoint = Objects.requireNonNull(jwtAuthenticationEntryPoint, "jwtAuthenticationEntryPoint");
+        this.jwtAccessDeniedHandler = Objects.requireNonNull(jwtAccessDeniedHandler, "jwtAccessDeniedHandler");
+        this.corsConfigurationSource = Objects.requireNonNull(corsConfigurationSource, "corsConfigurationSource");
+        this.requestIdFilter = Objects.requireNonNull(requestIdFilter, "requestIdFilter");
     }
 
     @Bean
@@ -124,8 +144,14 @@ public class SecurityConfig {
                         .frameOptions(frame -> frame.deny())
                         .referrerPolicy(ref -> ref.policy(
                                 ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                        .permissionsPolicyHeader(perms -> perms.policy(
-                                "geolocation=(), microphone=(), camera=(), payment=(), usb=()")))
+                        // HSTS: one year, include subdomains, request preload-list inclusion.
+                        // Spring's HstsHeaderWriter only emits this header on HTTPS requests by
+                        // default, so dev/preview HTTP traffic stays unaffected.
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .preload(true)
+                                .maxAgeInSeconds(31_536_000L))
+                        .permissionsPolicyHeader(perms -> perms.policy(PERMISSIONS_POLICY)))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                         .accessDeniedHandler(jwtAccessDeniedHandler))
@@ -182,7 +208,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(BCRYPT_STRENGTH);
     }
 
     @Bean

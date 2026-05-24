@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Kind of item that may be added to a shopping cart and purchased.
@@ -40,16 +38,30 @@ public enum PurchasableItemType {
 
     /** Items that grant access to a piece of learning content. */
     public static final Set<PurchasableItemType> CONTENT_ITEMS =
-            Set.of(PACKAGE, COURSE, MODULE, LESSON);
+            Collections.unmodifiableSet(EnumSet.of(PACKAGE, COURSE, MODULE, LESSON));
 
     /** Items that grant a subscription / quota uplift rather than content. */
-    public static final Set<PurchasableItemType> SUBSCRIPTION_ITEMS = Set.of(PREMIUM_AI);
+    public static final Set<PurchasableItemType> SUBSCRIPTION_ITEMS =
+            Collections.unmodifiableSet(EnumSet.of(PREMIUM_AI));
+
+    /*
+     * Startup-time exhaustiveness guard: every constant must be either
+     * a content item or a subscription item.  Catches forgotten
+     * classification at class-load time rather than at runtime.
+     */
+    static {
+        EnumSet<PurchasableItemType> covered = EnumSet.copyOf(CONTENT_ITEMS);
+        covered.addAll(SUBSCRIPTION_ITEMS);
+        if (!covered.equals(EnumSet.allOf(PurchasableItemType.class))) {
+            EnumSet<PurchasableItemType> missing = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "PurchasableItemType category sets do not cover all constants; uncovered: " + missing);
+        }
+    }
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, PurchasableItemType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, PurchasableItemType> LOOKUP =
+            EnumLookups.indexByName(PurchasableItemType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -59,14 +71,7 @@ public enum PurchasableItemType {
      *         is {@code null}, blank, or not a recognised item type
      */
     public static Optional<PurchasableItemType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -81,12 +86,12 @@ public enum PurchasableItemType {
      *         blank, or not a recognised item type
      */
     public static PurchasableItemType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Purchase item type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid purchase item type. Allowed values are PACKAGE, COURSE, "
-                        + "MODULE, PREMIUM_AI, or LESSON."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Purchase item type is required.",
+                () -> "Invalid purchase item type. Allowed values are PACKAGE, COURSE, "
+                        + "MODULE, PREMIUM_AI, or LESSON.");
     }
 
     /** @return {@code true} when the purchase grants access to learning content. */

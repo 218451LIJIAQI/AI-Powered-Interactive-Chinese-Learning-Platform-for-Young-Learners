@@ -47,22 +47,23 @@
  * collapses the bottom half so the panda fits cleanly inside a
  * small badge.
  */
-withDefaults(
-  defineProps<{
-    size?: number
-    pose?: 'wave' | 'stand'
-    outfit?: string
-    accent?: string
-    compact?: boolean
-  }>(),
-  {
-    size: 140,
-    pose: 'wave',
-    outfit: '#ef6b40',
-    accent: '#f6c24d',
-    compact: false,
-  },
-)
+type PandaPose = 'wave' | 'stand'
+
+interface Props {
+  size?: number
+  pose?: PandaPose
+  outfit?: string
+  accent?: string
+  compact?: boolean
+}
+
+withDefaults(defineProps<Props>(), {
+  size: 140,
+  pose: 'wave',
+  outfit: '#ef6b40',
+  accent: '#f6c24d',
+  compact: false,
+})
 </script>
 
 <style scoped>
@@ -70,6 +71,7 @@ withDefaults(
   position: relative;
   width: calc(var(--panda-size) * 0.86);
   height: var(--panda-size);
+  contain: layout paint;
   filter: drop-shadow(0 18px 28px rgba(78, 74, 129, 0.18));
 }
 

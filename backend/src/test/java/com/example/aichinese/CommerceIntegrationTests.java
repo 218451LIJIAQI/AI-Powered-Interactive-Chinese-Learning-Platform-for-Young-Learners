@@ -1,6 +1,7 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -1077,7 +1078,7 @@ class CommerceIntegrationTests {
                 // metadata) cannot be replayed from disk cache or bfcache
                 // after the user logs out.
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")));
+                        containsString("no-store")));
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId)
                 .header("Authorization", "Bearer " + studentToken))

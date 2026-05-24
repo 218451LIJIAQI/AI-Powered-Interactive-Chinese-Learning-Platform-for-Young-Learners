@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Editorial lifecycle of a teacher- or admin-managed piece of learning
@@ -49,28 +47,37 @@ public enum ContentStatus {
      * Statuses that an approved teacher may edit. Single source of truth
      * mirrored by {@code TeacherContentAccessService.TEACHER_EDITABLE_STATUSES}.
      */
-    public static final Set<ContentStatus> TEACHER_EDITABLE = Set.of(DRAFT, PUBLISHED, REJECTED);
+    public static final Set<ContentStatus> TEACHER_EDITABLE =
+            Collections.unmodifiableSet(EnumSet.of(DRAFT, PUBLISHED, REJECTED));
 
-    /** Statuses that may be archived by the owning teacher. */
-    public static final Set<ContentStatus> TEACHER_ARCHIVABLE = Set.of(DRAFT, PUBLISHED, REJECTED);
+    /**
+     * Statuses that may be archived by the owning teacher. Currently
+     * identical to {@link #TEACHER_EDITABLE} by design — the two sets
+     * are kept separate so each policy can evolve independently (e.g.
+     * an admin might later allow archiving {@code SUBMITTED} content
+     * while forbidding edits to it).
+     */
+    public static final Set<ContentStatus> TEACHER_ARCHIVABLE =
+            Collections.unmodifiableSet(EnumSet.of(DRAFT, PUBLISHED, REJECTED));
 
     /** Statuses that surface to learners through the public catalogue. */
-    public static final Set<ContentStatus> PUBLIC_VISIBLE = Set.of(PUBLISHED);
+    public static final Set<ContentStatus> PUBLIC_VISIBLE =
+            Collections.unmodifiableSet(EnumSet.of(PUBLISHED));
 
     /**
      * Statuses that count as "in review" for admin dashboards (legacy flow,
      * still relevant for AI-generated or migrated content).
      */
-    public static final Set<ContentStatus> IN_REVIEW = Set.of(SUBMITTED, APPROVED);
+    public static final Set<ContentStatus> IN_REVIEW =
+            Collections.unmodifiableSet(EnumSet.of(SUBMITTED, APPROVED));
 
     /** Statuses that have reached the end of the editorial lifecycle. */
-    public static final Set<ContentStatus> TERMINAL = Set.of(ARCHIVED);
+    public static final Set<ContentStatus> TERMINAL =
+            Collections.unmodifiableSet(EnumSet.of(ARCHIVED));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, ContentStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, ContentStatus> LOOKUP =
+            EnumLookups.indexByName(ContentStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -80,14 +87,7 @@ public enum ContentStatus {
      *         is {@code null}, blank, or not a recognised content status
      */
     public static Optional<ContentStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -97,12 +97,12 @@ public enum ContentStatus {
      *         blank, or not a recognised content status
      */
     public static ContentStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Content status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid content status. Allowed values are DRAFT, SUBMITTED, APPROVED, "
-                        + "REJECTED, PUBLISHED, or ARCHIVED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Content status is required.",
+                () -> "Invalid content status. Allowed values are DRAFT, SUBMITTED, APPROVED, "
+                        + "REJECTED, PUBLISHED, or ARCHIVED.");
     }
 
     /** @return {@code true} when the content is visible in the public catalogue. */

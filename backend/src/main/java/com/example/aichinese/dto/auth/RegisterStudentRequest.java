@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.auth;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -35,14 +37,36 @@ import jakarta.validation.constraints.Size;
  * {@code en} at the service layer through
  * {@code AuthService.normalizePreferredLanguage}.</p>
  *
- * @param fullName          display name used across student-facing UI
- * @param email             login identifier; lower-cased server-side
- * @param password          raw password; hashed with BCrypt before storage
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * {@link #fullName}, {@link #email} and {@link #preferredLanguage} so
+ * Bean Validation operates on the canonical form and downstream
+ * {@code AuthService} normalisation steps remain idempotent. Password
+ * fields are intentionally <em>not</em> trimmed: leading or trailing
+ * spaces are significant characters bound directly to the BCrypt
+ * hash.</p>
+ *
+ * <h2>Security</h2>
+ * <p>The auto-generated record {@code toString()} is overridden to
+ * redact both password fields — accidentally printing a
+ * {@code RegisterStudentRequest} to a log file, exception trace, or
+ * debug console must never leak the user's plaintext credentials.
+ * Equality and hashing intentionally remain unchanged so unit tests
+ * can still assert structural equivalence.</p>
+ *
+ * @param fullName          display name used across student-facing UI;
+ *                          trimmed by the canonical constructor
+ * @param email             login identifier; trimmed by the canonical
+ *                          constructor and lower-cased server-side
+ * @param password          raw password; hashed with BCrypt before
+ *                          storage; never logged
  * @param confirmPassword   must equal {@link #password}; checked in
- *                          {@code AuthService}
- * @param preferredLanguage UI locale hint; empty/null defaults to
+ *                          {@code AuthService}; never logged
+ * @param preferredLanguage UI locale hint; trimmed by the canonical
+ *                          constructor; empty/null defaults to
  *                          {@code en}
  */
+@JsonPropertyOrder({ "fullName", "email", "password", "confirmPassword", "preferredLanguage" })
 public record RegisterStudentRequest(
         @NotBlank(message = "Full name is required")
         @Size(max = 120, message = "Full name must be at most 120 characters")
@@ -60,4 +84,42 @@ public record RegisterStudentRequest(
         @Pattern(regexp = "^(en|ms|zh)?$", message = "Preferred language must be one of en, ms, or zh")
         @Size(max = 10, message = "Preferred language must be at most 10 characters")
         String preferredLanguage) {
+
+    /**
+     * Defensive canonical constructor: trims user-typed text fields so
+     * Bean Validation operates on the canonical form, and leaves
+     * password fields byte-identical so BCrypt hashes the exact value
+     * the user typed. {@code null} is preserved for any field so the
+     * {@link NotBlank @NotBlank} / {@link Pattern @Pattern} validators
+     * render their friendly user-facing messages rather than a
+     * low-level {@link NullPointerException}.
+     */
+    public RegisterStudentRequest {
+        if (fullName != null) {
+            fullName = fullName.trim();
+        }
+        if (email != null) {
+            email = email.trim();
+        }
+        if (preferredLanguage != null) {
+            preferredLanguage = preferredLanguage.trim();
+        }
+    }
+
+    /**
+     * Redacted {@code toString()} so the plaintext password and its
+     * confirmation never escape through log lines, exception messages
+     * or debug dumps. Identity fields ({@code fullName}, {@code email},
+     * {@code preferredLanguage}) are preserved so audit / forensic
+     * correlation still works — these are accepted PII surface
+     * captured by {@code AuditLogService.sanitize}.
+     */
+    @Override
+    public String toString() {
+        return "RegisterStudentRequest[fullName=" + fullName
+                + ", email=" + email
+                + ", password=***REDACTED***"
+                + ", confirmPassword=***REDACTED***"
+                + ", preferredLanguage=" + preferredLanguage + "]";
+    }
 }

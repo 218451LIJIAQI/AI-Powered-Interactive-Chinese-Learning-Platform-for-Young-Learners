@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Third-party video conferencing platform that hosts a {@code LiveClass}.
@@ -35,10 +31,8 @@ public enum MeetingPlatform {
     OTHER;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, MeetingPlatform> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, MeetingPlatform> LOOKUP =
+            EnumLookups.indexByName(MeetingPlatform.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -48,14 +42,7 @@ public enum MeetingPlatform {
      *         is {@code null}, blank, or not a recognised platform
      */
     public static Optional<MeetingPlatform> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -65,12 +52,12 @@ public enum MeetingPlatform {
      *         blank, or not a recognised platform
      */
     public static MeetingPlatform fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Meeting platform is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid meeting platform. Allowed values are ZOOM, GOOGLE_MEET, "
-                        + "MICROSOFT_TEAMS, or OTHER."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Meeting platform is required.",
+                () -> "Invalid meeting platform. Allowed values are ZOOM, GOOGLE_MEET, "
+                        + "MICROSOFT_TEAMS, or OTHER.");
     }
 
     /**

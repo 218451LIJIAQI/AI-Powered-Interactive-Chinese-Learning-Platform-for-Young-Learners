@@ -3,6 +3,8 @@ package com.example.aichinese.dto.commerce;
 import java.math.BigDecimal;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import com.example.aichinese.entity.enums.PaymentStatus;
 
 /**
@@ -51,7 +53,74 @@ import com.example.aichinese.entity.enums.PaymentStatus;
  * historical receipt
  * ({@link StudentPaymentRecordResponse}/{@link AdminPaymentRecordResponse})
  * remains stable.</p>
+ *
+ * <h2>Free-checkout fast path</h2>
+ * <p>When the cart total is zero (e.g. only free promotional items)
+ * the service short-circuits the provider call, immediately marks
+ * the payment {@link PaymentStatus#PAID} with {@code "FREE"} as
+ * provider/method, sets {@link #checkoutUrl} to {@code null}, and
+ * sends back {@link #paymentAvailable} {@code = true} with a
+ * "Free item unlocked successfully." message.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Immutability</h2>
+ * <p>The compact constructor defensively wraps {@link #items} with
+ * an unmodifiable copy: an order receipt is an immutable
+ * audit-trail row.</p>
+ *
+ * @param orderId          primary key of the freshly-created
+ *                         {@link com.example.aichinese.entity.Order}
+ * @param orderNumber      human-readable order reference (e.g.
+ *                         {@code "ORD-XXXXXXXX-XXXXXXXX"})
+ * @param paymentId        primary key of the paired
+ *                         {@link com.example.aichinese.entity.PaymentRecord}
+ *                         in {@link PaymentStatus#PENDING}
+ * @param paymentStatus    initial payment status — typically
+ *                         {@link PaymentStatus#PENDING}, or
+ *                         {@link PaymentStatus#PAID} on the
+ *                         free-checkout fast path
+ * @param totalAmount      order total in {@link #currencyCode},
+ *                         normalised to
+ *                         {@link CommerceDtoConstants#MONEY_FRACTION_DIGITS}
+ *                         decimal places
+ * @param currencyCode     ISO 4217 three-letter uppercase currency
+ *                         (matches
+ *                         {@link CommerceDtoConstants#CURRENCY_CODE_PATTERN})
+ * @param checkoutUrl      hosted-checkout URL the front-end must
+ *                         redirect the student to; {@code null}
+ *                         when {@link #paymentAvailable} is
+ *                         {@code false} or on the free-checkout
+ *                         fast path
+ * @param providerName     payment-provider identifier
+ *                         (e.g. {@code "stripe"}, {@code "FREE"})
+ * @param providerStatus   raw provider status string for
+ *                         diagnostics (e.g. {@code "CREATED"})
+ * @param paymentAvailable {@code true} when checkout can proceed;
+ *                         {@code false} when the provider is
+ *                         degraded
+ * @param message          human-readable status / error blurb
+ *                         shown to the student
+ * @param items            immutable line-item snapshot of what was
+ *                         purchased; never {@code null}
  */
+@JsonPropertyOrder({
+        "orderId",
+        "orderNumber",
+        "paymentId",
+        "paymentStatus",
+        "totalAmount",
+        "currencyCode",
+        "checkoutUrl",
+        "providerName",
+        "providerStatus",
+        "paymentAvailable",
+        "message",
+        "items"
+})
 public record CheckoutResponse(
         Long orderId,
         String orderNumber,
@@ -65,4 +134,8 @@ public record CheckoutResponse(
         boolean paymentAvailable,
         String message,
         List<CartItemResponse> items) {
+
+    public CheckoutResponse {
+        items = items == null ? List.of() : List.copyOf(items);
+    }
 }

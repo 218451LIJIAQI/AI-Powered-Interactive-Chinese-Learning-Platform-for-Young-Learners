@@ -236,8 +236,7 @@ const pageError = computed(
     paymentsResource.error.value ||
     refundsResource.error.value ||
     payoutsResource.error.value ||
-    commissionResource.error.value ||
-    null,
+    commissionResource.error.value,
 )
 
 const commissionRate = ref(0)
@@ -361,30 +360,35 @@ function cancelFinanceDecision() {
 }
 
 async function approveRefund(id: number) {
+  if (financeActionBusy.value) return
   if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Approve this refund request?')) return
   await runFinanceAction(() => adminApi.approveRefund(id), refundsResource.reload, 'Unable to approve this refund.')
 }
 
 async function markRefunded(id: number) {
+  if (financeActionBusy.value) return
   if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Mark this refund as refunded? Confirm only after the provider refund has been completed.')) return
   await runFinanceAction(() => adminApi.markRefunded(id), refundsResource.reload, 'Unable to mark this refund as refunded.')
 }
 
 async function approvePayout(id: number) {
+  if (financeActionBusy.value) return
   if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Approve this teacher payout request?')) return
   await runFinanceAction(() => adminApi.approvePayout(id), payoutsResource.reload, 'Unable to approve this payout.')
 }
 
 async function markPaid(id: number) {
+  if (financeActionBusy.value) return
   if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Mark this payout as paid? Confirm only after funds have been sent.')) return
   await runFinanceAction(() => adminApi.markPayoutPaid(id), payoutsResource.reload, 'Unable to mark this payout as paid.')
 }
 
 async function submitFinanceRejection() {
+  if (financeActionBusy.value) return
   const pendingDecision = pendingFinanceDecision.value
   if (!pendingDecision) {
     return
@@ -416,6 +420,7 @@ async function submitFinanceRejection() {
 }
 
 async function saveCommission() {
+  if (submittingCommission.value) return
   if (!ensureFinanceLive(commissionReadOnly.value, 'Commission settings cannot be changed while preview data is active.')) return
   actionError.value = null
   actionSuccess.value = null

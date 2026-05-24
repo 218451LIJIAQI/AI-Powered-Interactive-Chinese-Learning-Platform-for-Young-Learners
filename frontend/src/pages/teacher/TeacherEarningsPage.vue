@@ -172,8 +172,7 @@ const pageError = computed(
     actionError.value ||
     earningsResource.error.value ||
     summaryResource.error.value ||
-    payoutsResource.error.value ||
-    null,
+    payoutsResource.error.value,
 )
 
 const payoutForm = reactive({
@@ -206,6 +205,7 @@ function payoutDescription(payout: TeacherPayoutRequestResponse) {
 }
 
 async function submitPayout() {
+  if (submittingPayout.value) return
   if (payoutUsingFallback.value) {
     actionError.value = 'Payout requests are unavailable while using preview data.'
     actionSuccess.value = null

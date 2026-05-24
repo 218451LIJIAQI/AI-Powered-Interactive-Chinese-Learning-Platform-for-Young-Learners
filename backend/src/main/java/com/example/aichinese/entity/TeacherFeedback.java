@@ -9,6 +9,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,7 +46,46 @@ import lombok.Setter;
         @Index(name = "idx_teacher_feedback_lesson_id", columnList = "lesson_id"),
         @Index(name = "idx_teacher_feedback_quiz_attempt_id", columnList = "quiz_attempt_id")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used
+        // by every read in TeacherFeedbackRepository: teacher dashboards,
+        // student feedback list and admin moderation all need
+        // teacher / teacher.user / student / student.user / lesson and
+        // the quiz-attempt chain hydrated in one round trip.
+        name = TeacherFeedback.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode(value = "teacher", subgraph = "TeacherFeedback.teacherWithUser"),
+                @NamedAttributeNode(value = "student", subgraph = "TeacherFeedback.studentWithUser"),
+                @NamedAttributeNode("lesson"),
+                @NamedAttributeNode(value = "quizAttempt", subgraph = "TeacherFeedback.quizAttemptChain")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "TeacherFeedback.teacherWithUser",
+                        attributeNodes = @NamedAttributeNode("user")),
+                @NamedSubgraph(
+                        name = "TeacherFeedback.studentWithUser",
+                        attributeNodes = @NamedAttributeNode("user")),
+                @NamedSubgraph(
+                        name = "TeacherFeedback.quizAttemptChain",
+                        attributeNodes = {
+                                @NamedAttributeNode(value = "quiz", subgraph = "TeacherFeedback.quizWithLesson")
+                        }),
+                @NamedSubgraph(
+                        name = "TeacherFeedback.quizWithLesson",
+                        attributeNodes = @NamedAttributeNode("lesson"))
+        }
+)
 public class TeacherFeedback extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code TeacherFeedback}: teacher (with user),
+     * student (with user), lesson, and quizAttempt (with quiz +
+     * quiz.lesson).
+     */
+    public static final String GRAPH_DETAIL = "TeacherFeedback.detail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "teacher_id", nullable = false)

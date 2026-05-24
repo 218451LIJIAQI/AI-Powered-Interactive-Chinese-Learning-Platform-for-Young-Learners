@@ -1,6 +1,7 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -473,7 +474,7 @@ class ContentManagementIntegrationTests {
         String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
 
         // Random suffix isolates this test from leftover rows in the shared H2 DB.
-        String suffix = java.util.UUID.randomUUID().toString().substring(0, 8);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
         String publishedTitle = "PublishedCandidate-" + suffix;
         String archivedTitle = "ArchivedCandidate-" + suffix;
 
@@ -535,7 +536,7 @@ class ContentManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.items[?(@.title=='" + publishedTitle + "')]").doesNotExist());
 
         // Sanity check that the published module is still reachable by its id.
-        org.junit.jupiter.api.Assertions.assertNotNull(publishedModuleId);
+        assertNotNull(publishedModuleId);
     }
 
     @Test

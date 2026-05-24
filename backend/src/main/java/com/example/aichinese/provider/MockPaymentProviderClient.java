@@ -2,6 +2,7 @@ package com.example.aichinese.provider;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
@@ -48,51 +49,64 @@ import com.example.aichinese.service.model.CommerceCheckout;
 @Component
 public class MockPaymentProviderClient implements PaymentProviderClient {
 
+    private static final String PROVIDER_NAME = "mock";
+    private static final String REFERENCE_PREFIX = "mock-checkout-";
+    private static final String RESULT_CODE_CREATED = "MOCK_CREATED";
+    private static final String RESULT_CODE_PAID = "MOCK_PAID";
+    private static final String CREATED_MESSAGE = "Mock checkout session created successfully.";
+    private static final String PAID_MESSAGE = "Mock payment verified successfully.";
+
     private final PaymentProperties paymentProperties;
 
     public MockPaymentProviderClient(PaymentProperties paymentProperties) {
-        this.paymentProperties = paymentProperties;
+        this.paymentProperties = Objects.requireNonNull(paymentProperties, "paymentProperties");
     }
 
     @Override
     public String providerName() {
-        return "mock";
+        return PROVIDER_NAME;
     }
 
     @Override
     public PaymentProviderCheckoutResult createCheckoutSession(CommerceCheckout checkout) {
+        Objects.requireNonNull(checkout, "checkout");
         if (!paymentProperties.mockSuccessEnabled()) {
-            return PaymentProviderCheckoutResult.unavailable(providerName(), PAYMENT_UNAVAILABLE_MESSAGE);
+            return PaymentProviderCheckoutResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
 
-        String reference = "mock-checkout-" + UUID.randomUUID();
+        String reference = REFERENCE_PREFIX + UUID.randomUUID();
         String checkoutUrl = buildCheckoutUrl(checkout.successUrl(), reference);
         return new PaymentProviderCheckoutResult(
                 true,
-                providerName(),
+                PROVIDER_NAME,
                 reference,
                 checkoutUrl,
-                "MOCK_CREATED",
-                "Mock checkout session created successfully.");
+                RESULT_CODE_CREATED,
+                CREATED_MESSAGE);
     }
 
     @Override
     public PaymentProviderStatusResult getPaymentStatus(String providerReference) {
         if (!paymentProperties.mockSuccessEnabled()) {
-            return PaymentProviderStatusResult.unavailable(providerName(), PAYMENT_UNAVAILABLE_MESSAGE);
+            return PaymentProviderStatusResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
 
         return new PaymentProviderStatusResult(
                 true,
-                providerName(),
+                PROVIDER_NAME,
                 providerReference,
                 PaymentStatus.PAID,
-                "MOCK_PAID",
-                "Mock payment verified successfully.");
+                RESULT_CODE_PAID,
+                PAID_MESSAGE);
     }
 
-    private String buildCheckoutUrl(String successUrl, String reference) {
-        String baseUrl = successUrl == null || successUrl.isBlank() ? "/" : successUrl.trim();
+    /**
+     * Builds the synthetic redirect URL preserving any existing query
+     * string and fragment on the configured success URL. Static because
+     * it operates entirely on its arguments.
+     */
+    private static String buildCheckoutUrl(String successUrl, String reference) {
+        String baseUrl = successUrl == null || successUrl.isBlank() ? "/" : successUrl.strip();
         int fragmentIndex = baseUrl.indexOf('#');
         String fragment = fragmentIndex >= 0 ? baseUrl.substring(fragmentIndex) : "";
         String urlWithoutFragment = fragmentIndex >= 0 ? baseUrl.substring(0, fragmentIndex) : baseUrl;

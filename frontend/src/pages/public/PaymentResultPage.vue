@@ -31,7 +31,7 @@
           <strong>Verifying checkout status...</strong>
         </div>
 
-        <div v-if="error" class="soft-banner auth-alert auth-alert--error">
+        <div v-if="error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
           <span>{{ error }}</span>
         </div>
 
@@ -111,7 +111,7 @@ const paymentId = computed(() => {
   const value = route.query.paymentId
   const raw = Array.isArray(value) ? value[0] : value
   const parsed = raw ? Number(raw) : NaN
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 })
 const routeCancelled = computed(() => route.path.endsWith('/cancel') || route.query.cancelled === 'true')
 const paymentPaid = computed(() => payment.value?.paymentStatus === 'PAID')

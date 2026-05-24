@@ -1,7 +1,10 @@
 package com.example.aichinese.service;
 
 import java.util.List;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +16,7 @@ import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.PackageItemType;
+import com.example.aichinese.entity.enums.PurchasableItemType;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.PackageItemRepository;
@@ -42,6 +46,8 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
 @Service
 public class EntitlementService {
 
+    private static final Logger log = LoggerFactory.getLogger(EntitlementService.class);
+
     private final PaymentEntitlementRepository paymentEntitlementRepository;
     private final OrderItemRepository orderItemRepository;
     private final PackageItemRepository packageItemRepository;
@@ -52,10 +58,10 @@ public class EntitlementService {
             OrderItemRepository orderItemRepository,
             PackageItemRepository packageItemRepository,
             LessonRepository lessonRepository) {
-        this.paymentEntitlementRepository = paymentEntitlementRepository;
-        this.orderItemRepository = orderItemRepository;
-        this.packageItemRepository = packageItemRepository;
-        this.lessonRepository = lessonRepository;
+        this.paymentEntitlementRepository = Objects.requireNonNull(paymentEntitlementRepository, "paymentEntitlementRepository");
+        this.orderItemRepository = Objects.requireNonNull(orderItemRepository, "orderItemRepository");
+        this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
     }
 
     @Transactional(readOnly = true)
@@ -66,25 +72,18 @@ public class EntitlementService {
     @Transactional(readOnly = true)
     public boolean hasAccessToPurchasableItem(StudentProfile student, ResolvedPurchasableItem item) {
         Long studentId = student.getId();
-        String itemType = item.itemType().name();
-        if (hasAccessToItem(studentId, itemType, item.itemId())) {
+        if (hasAccessToItem(studentId, item.itemType().name(), item.itemId())) {
             return true;
         }
 
-        if ("LESSON".equals(itemType)) {
-            return hasAccessToLessonInheritedFromModule(studentId, item.itemId());
-        }
-
-        if ("MODULE".equals(itemType)) {
-            return hasAccessToAnyPublishedLessonInModule(studentId, item.itemId());
-        }
-
-        if ("PACKAGE".equals(itemType)) {
-            return packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(item.itemId()).stream()
-                    .anyMatch(packageItem -> hasAccessToPackageItem(studentId, packageItem));
-        }
-
-        return false;
+        return switch (item.itemType()) {
+            case LESSON -> hasAccessToLessonInheritedFromModule(studentId, item.itemId());
+            case MODULE -> hasAccessToAnyPublishedLessonInModule(studentId, item.itemId());
+            case PACKAGE -> packageItemRepository
+                    .findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(item.itemId()).stream()
+                    .anyMatch(pi -> hasAccessToPackageItem(studentId, pi));
+            default -> false;
+        };
     }
 
     @Transactional
@@ -95,7 +94,7 @@ public class EntitlementService {
         for (OrderItem orderItem : orderItems) {
             grantItemEntitlement(student, order, paymentRecord, orderItem.getItemType(), orderItem.getItemId(), null);
 
-            if ("PREMIUM_AI".equals(orderItem.getItemType())) {
+            if (PurchasableItemType.PREMIUM_AI.name().equals(orderItem.getItemType())) {
                 grantItemEntitlement(
                         student,
                         order,
@@ -107,7 +106,7 @@ public class EntitlementService {
                                 : orderItem.getFeatureKey());
             }
 
-            if ("PACKAGE".equals(orderItem.getItemType())) {
+            if (PurchasableItemType.PACKAGE.name().equals(orderItem.getItemType())) {
                 for (PackageItem packageItem : packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(orderItem.getItemId())) {
                     if (packageItem.getItemType() == null) {
                         continue;
@@ -131,8 +130,12 @@ public class EntitlementService {
 
     @Transactional
     public void revokeAccessAfterRefund(Order order) {
-        for (PaymentEntitlement entitlement : paymentEntitlementRepository.findByOrderId(order.getId())) {
+        List<PaymentEntitlement> entitlements = paymentEntitlementRepository.findByOrderId(order.getId());
+        for (PaymentEntitlement entitlement : entitlements) {
             entitlement.setActive(false);
+        }
+        if (!entitlements.isEmpty()) {
+            log.info("Revoked {} entitlement(s) for orderId={}", entitlements.size(), order.getId());
         }
     }
 
@@ -155,13 +158,13 @@ public class EntitlementService {
     private boolean hasAccessToLessonInheritedFromModule(Long studentId, Long lessonId) {
         return lessonRepository.findById(lessonId)
                 .map(lesson -> lesson.getModule() != null
-                        && hasAccessToItem(studentId, "MODULE", lesson.getModule().getId()))
+                        && hasAccessToItem(studentId, PurchasableItemType.MODULE.name(), lesson.getModule().getId()))
                 .orElse(false);
     }
 
     private boolean hasAccessToAnyPublishedLessonInModule(Long studentId, Long moduleId) {
         return lessonRepository.findByModuleIdAndContentStatus(moduleId, ContentStatus.PUBLISHED).stream()
-                .anyMatch(lesson -> hasAccessToItem(studentId, "LESSON", lesson.getId()));
+                .anyMatch(lesson -> hasAccessToItem(studentId, PurchasableItemType.LESSON.name(), lesson.getId()));
     }
 
     private void grantItemEntitlement(
@@ -194,5 +197,7 @@ public class EntitlementService {
         entitlement.setSourceType(normalisedFeatureKey != null ? normalisedFeatureKey : itemType);
         entitlement.setActive(true);
         paymentEntitlementRepository.save(entitlement);
+        log.info("Entitlement granted: studentId={}, orderId={}, type={}, itemId={}, featureKey={}",
+                student.getId(), order.getId(), itemType, itemId, normalisedFeatureKey);
     }
 }

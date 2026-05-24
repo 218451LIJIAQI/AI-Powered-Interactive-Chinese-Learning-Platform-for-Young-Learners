@@ -20,9 +20,9 @@ import jakarta.validation.constraints.Size;
  * matching-game header (title, metadata) and its full set of
  * {@link AdminMatchingGameItemRequest} child pairs. The
  * {@link jakarta.validation.Valid} on {@link #items} cascades Bean
- * Validation into each pair so the whole structure is rejected
- * atomically when any child fails its constraints — the admin never
- * sees a "header saved, items rejected" partial-failure state.</p>
+ * Validation into each pair so a single atomic 400 response surfaces
+ * every parent <em>and</em> child violation — the admin never sees a
+ * "header saved, items rejected" partial-failure state.</p>
  *
  * <p>{@link #items} may be {@code null} or empty during initial
  * authoring (admin saves the header first, then adds pairs); the
@@ -40,6 +40,7 @@ import jakarta.validation.constraints.Size;
  * behind the tag-list cap and the {@code estimatedSeconds} upper bound.</p>
  *
  * @param title            game title; required; max 200 chars
+ *                         ({@code matching_games.title VARCHAR(200)})
  * @param hskLevel         optional HSK band, {@code 1..6}
  * @param ageBand          optional target age cohort
  * @param difficulty       optional easy/medium/hard tier
@@ -47,7 +48,8 @@ import jakarta.validation.constraints.Size;
  * @param tags             optional list of free-form tags; up to 8
  *                         non-blank entries, each max 50 chars
  * @param xpReward         optional base XP, {@code 0..1000}
- * @param estimatedSeconds optional time-to-complete hint, {@code 0..86400}
+ * @param estimatedSeconds optional time-to-complete hint,
+ *                         {@code 0..86400} (24 hours)
  * @param items            child left/right pairs; nullable or empty
  *                         during drafting; at most 200 entries; each
  *                         element validated via {@link Valid}

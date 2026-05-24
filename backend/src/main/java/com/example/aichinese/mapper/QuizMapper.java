@@ -2,6 +2,7 @@ package com.example.aichinese.mapper;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import com.example.aichinese.dto.learning.StudentQuizSummaryResponse;
 import com.example.aichinese.dto.learning.TeacherQuizOptionResponse;
 import com.example.aichinese.dto.learning.TeacherQuizQuestionResponse;
 import com.example.aichinese.dto.learning.TeacherQuizResponse;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
@@ -42,7 +44,11 @@ import com.example.aichinese.entity.QuizQuestion;
  * {@code Map<questionId, List<QuizOption>>} (see
  * {@link #groupOptionsByQuestionId(List)}) so a single batched fetch
  * feeds N questions instead of triggering one option SELECT per
- * question.</p>
+ * question. The service layer queries options through repository
+ * methods that already {@code ORDER BY sort_order, created_at}, so
+ * {@link Collectors#groupingBy(java.util.function.Function)} — which
+ * preserves encounter order within each value list — yields
+ * stably-sorted option lists without an extra in-memory sort.</p>
  */
 @Component
 public class QuizMapper {
@@ -51,10 +57,14 @@ public class QuizMapper {
             Quiz quiz,
             List<QuizQuestion> questions,
             Map<Long, List<QuizOption>> optionsByQuestionId) {
+        Objects.requireNonNull(quiz, "quiz");
+        Objects.requireNonNull(questions, "questions");
+        Objects.requireNonNull(optionsByQuestionId, "optionsByQuestionId");
+        Lesson lesson = quiz.getLesson();
         return new TeacherQuizResponse(
                 quiz.getId(),
-                quiz.getLesson() != null ? quiz.getLesson().getId() : null,
-                quiz.getLesson() != null ? quiz.getLesson().getTitle() : null,
+                lesson == null ? null : lesson.getId(),
+                lesson == null ? null : lesson.getTitle(),
                 quiz.getTitle(),
                 quiz.getDescription(),
                 quiz.getContentStatus(),
@@ -70,6 +80,8 @@ public class QuizMapper {
     }
 
     public TeacherQuizQuestionResponse toTeacherQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
+        Objects.requireNonNull(question, "question");
+        Objects.requireNonNull(options, "options");
         return new TeacherQuizQuestionResponse(
                 question.getId(),
                 question.getQuestionType(),
@@ -78,23 +90,21 @@ public class QuizMapper {
                 question.getPoints(),
                 question.getSortOrder(),
                 question.getExplanation(),
-                options.stream()
-                        .map(option -> new TeacherQuizOptionResponse(
-                                option.getId(),
-                                option.getOptionText(),
-                                option.isCorrectOption(),
-                                option.getSortOrder()))
-                        .toList());
+                options.stream().map(QuizMapper::toTeacherQuizOption).toList());
     }
 
     public StudentQuizResponse toStudentQuizResponse(
             Quiz quiz,
             List<QuizQuestion> questions,
             Map<Long, List<QuizOption>> optionsByQuestionId) {
+        Objects.requireNonNull(quiz, "quiz");
+        Objects.requireNonNull(questions, "questions");
+        Objects.requireNonNull(optionsByQuestionId, "optionsByQuestionId");
+        Lesson lesson = quiz.getLesson();
         return new StudentQuizResponse(
                 quiz.getId(),
-                quiz.getLesson() != null ? quiz.getLesson().getId() : null,
-                quiz.getLesson() != null ? quiz.getLesson().getTitle() : null,
+                lesson == null ? null : lesson.getId(),
+                lesson == null ? null : lesson.getTitle(),
                 quiz.getTitle(),
                 quiz.getDescription(),
                 quiz.getTimeLimitMinutes(),
@@ -107,25 +117,24 @@ public class QuizMapper {
     }
 
     public StudentQuizQuestionResponse toStudentQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
+        Objects.requireNonNull(question, "question");
+        Objects.requireNonNull(options, "options");
         return new StudentQuizQuestionResponse(
                 question.getId(),
                 question.getQuestionType(),
                 question.getQuestionText(),
                 question.getPoints(),
                 question.getSortOrder(),
-                options.stream()
-                        .map(option -> new QuizOptionResponse(
-                                option.getId(),
-                                option.getOptionText(),
-                                option.getSortOrder()))
-                        .toList());
+                options.stream().map(QuizMapper::toStudentQuizOption).toList());
     }
 
     public StudentQuizSummaryResponse toStudentQuizSummaryResponse(Quiz quiz, int questionCount) {
+        Objects.requireNonNull(quiz, "quiz");
+        Lesson lesson = quiz.getLesson();
         return new StudentQuizSummaryResponse(
                 quiz.getId(),
-                quiz.getLesson() != null ? quiz.getLesson().getId() : null,
-                quiz.getLesson() != null ? quiz.getLesson().getTitle() : null,
+                lesson == null ? null : lesson.getId(),
+                lesson == null ? null : lesson.getTitle(),
                 quiz.getTitle(),
                 quiz.getDescription(),
                 quiz.getTimeLimitMinutes(),
@@ -133,7 +142,36 @@ public class QuizMapper {
                 questionCount);
     }
 
+    /**
+     * Indexes a flat list of {@link QuizOption} rows by their owning
+     * question id so subsequent question-level mapping calls can fetch
+     * their options in O(1) without re-scanning the list.
+     *
+     * <p>Options whose owning {@link QuizQuestion} is unexpectedly
+     * {@code null} (e.g. partial test fixtures) are skipped rather than
+     * triggering a {@link NullPointerException} from the grouping key
+     * extractor — the caller can detect orphans by comparing input and
+     * grouped sizes if strict validation is required.</p>
+     */
     public Map<Long, List<QuizOption>> groupOptionsByQuestionId(List<QuizOption> options) {
-        return options.stream().collect(Collectors.groupingBy(option -> option.getQuestion().getId()));
+        Objects.requireNonNull(options, "options");
+        return options.stream()
+                .filter(option -> option.getQuestion() != null && option.getQuestion().getId() != null)
+                .collect(Collectors.groupingBy(option -> option.getQuestion().getId()));
+    }
+
+    private static TeacherQuizOptionResponse toTeacherQuizOption(QuizOption option) {
+        return new TeacherQuizOptionResponse(
+                option.getId(),
+                option.getOptionText(),
+                option.isCorrectOption(),
+                option.getSortOrder());
+    }
+
+    private static QuizOptionResponse toStudentQuizOption(QuizOption option) {
+        return new QuizOptionResponse(
+                option.getId(),
+                option.getOptionText(),
+                option.getSortOrder());
     }
 }

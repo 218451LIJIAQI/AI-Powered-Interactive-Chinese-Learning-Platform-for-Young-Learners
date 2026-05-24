@@ -3,10 +3,12 @@ package com.example.aichinese.provider;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -85,6 +87,20 @@ import com.example.aichinese.service.model.CommerceCheckout;
 public class StripePaymentProviderClient implements PaymentProviderClient {
 
     private static final Logger log = LoggerFactory.getLogger(StripePaymentProviderClient.class);
+    private static final String PROVIDER_NAME = "stripe";
+    private static final String DEFAULT_CURRENCY = "myr";
+    private static final String DEFAULT_PRODUCT_NAME = "MandarinSpark course";
+    private static final String DEFAULT_FALLBACK_PRODUCT_NAME = "MandarinSpark order";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(20);
+    private static final BigDecimal MINOR_UNIT_MULTIPLIER = BigDecimal.valueOf(100);
+
+    /**
+     * Stripe currencies whose smallest representable unit equals the
+     * currency itself (no sub-unit). Sourced from
+     * https://stripe.com/docs/currencies#zero-decimal . Updated rarely;
+     * a refresh is part of any Stripe rate-card change.
+     */
     private static final Set<String> ZERO_DECIMAL_CURRENCIES = Set.of(
             "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA", "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF");
 
@@ -92,22 +108,23 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
     private final RestTemplate restTemplate;
 
     public StripePaymentProviderClient(PaymentProperties paymentProperties, RestTemplateBuilder restTemplateBuilder) {
-        this.paymentProperties = paymentProperties;
-        this.restTemplate = restTemplateBuilder
-                .connectTimeout(Duration.ofSeconds(10))
-                .readTimeout(Duration.ofSeconds(20))
+        this.paymentProperties = Objects.requireNonNull(paymentProperties, "paymentProperties");
+        this.restTemplate = Objects.requireNonNull(restTemplateBuilder, "restTemplateBuilder")
+                .connectTimeout(CONNECT_TIMEOUT)
+                .readTimeout(READ_TIMEOUT)
                 .build();
     }
 
     @Override
     public String providerName() {
-        return "stripe";
+        return PROVIDER_NAME;
     }
 
     @Override
     public PaymentProviderCheckoutResult createCheckoutSession(CommerceCheckout checkout) {
+        Objects.requireNonNull(checkout, "checkout");
         if (!configured()) {
-            return PaymentProviderCheckoutResult.unavailable(providerName(), PAYMENT_UNAVAILABLE_MESSAGE);
+            return PaymentProviderCheckoutResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
 
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
@@ -132,23 +149,24 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
             String checkoutUrl = stringValue(responseBody, "url");
             String status = normalizeStatus(stringValue(responseBody, "status"));
             if (sessionId == null || checkoutUrl == null) {
-                return PaymentProviderCheckoutResult.unavailable(providerName(), "Stripe checkout session response was incomplete.");
+                return PaymentProviderCheckoutResult.unavailable(PROVIDER_NAME, "Stripe checkout session response was incomplete.");
             }
-            return new PaymentProviderCheckoutResult(true, providerName(), sessionId, checkoutUrl, status, "Stripe checkout session created successfully.");
+            return new PaymentProviderCheckoutResult(true, PROVIDER_NAME, sessionId, checkoutUrl, status, "Stripe checkout session created successfully.");
         } catch (RestClientException | IllegalArgumentException exception) {
             log.warn("Stripe checkout session creation failed: {}", exception.getMessage());
-            return PaymentProviderCheckoutResult.unavailable(providerName(), PAYMENT_UNAVAILABLE_MESSAGE);
+            return PaymentProviderCheckoutResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
     }
 
     @Override
     public PaymentProviderStatusResult getPaymentStatus(String providerReference) {
         if (!configured() || providerReference == null || providerReference.isBlank()) {
-            return PaymentProviderStatusResult.unavailable(providerName(), PAYMENT_UNAVAILABLE_MESSAGE);
+            return PaymentProviderStatusResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
 
         try {
-            String encodedReference = UriUtils.encodePathSegment(providerReference.trim(), java.nio.charset.StandardCharsets.UTF_8);
+            String encodedReference = UriUtils.encodePathSegment(
+                    providerReference.strip(), java.nio.charset.StandardCharsets.UTF_8);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     endpoint("/v1/checkout/sessions/" + encodedReference),
                     HttpMethod.GET,
@@ -161,14 +179,14 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
             String paymentStatus = normalizeStatus(stringValue(responseBody, "payment_status"));
             return new PaymentProviderStatusResult(
                     true,
-                    providerName(),
+                    PROVIDER_NAME,
                     sessionId == null ? providerReference : sessionId,
                     mapPaymentStatus(sessionStatus, paymentStatus),
                     sessionStatus + ":" + paymentStatus,
                     "Stripe payment status retrieved successfully.");
         } catch (RestClientException | IllegalArgumentException exception) {
             log.warn("Stripe payment status retrieval failed: {}", exception.getMessage());
-            return PaymentProviderStatusResult.unavailable(providerName(), PAYMENT_UNAVAILABLE_MESSAGE);
+            return PaymentProviderStatusResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
     }
 
@@ -186,10 +204,18 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
     }
 
     private String endpoint(String path) {
-        String baseUrl = paymentProperties.stripeApiBaseUrl().endsWith("/")
-                ? paymentProperties.stripeApiBaseUrl().substring(0, paymentProperties.stripeApiBaseUrl().length() - 1)
-                : paymentProperties.stripeApiBaseUrl();
-        URI uri = URI.create(baseUrl + path);
+        String configuredBaseUrl = paymentProperties.stripeApiBaseUrl();
+        String baseUrl = configuredBaseUrl.endsWith("/")
+                ? configuredBaseUrl.substring(0, configuredBaseUrl.length() - 1)
+                : configuredBaseUrl;
+        URI uri;
+        try {
+            // new URI(…) is stricter than URI.create(…) and rejects e.g. spaces
+            // which the latter happily accepts as opaque URIs.
+            uri = new URI(baseUrl + path);
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("Stripe API base URL is malformed.", exception);
+        }
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
         if (!"https".equals(scheme) && !("http".equals(scheme) && isLoopbackHost(uri.getHost()))) {
             throw new IllegalArgumentException("Stripe API base URL must use HTTPS unless it targets localhost.");
@@ -197,12 +223,15 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
         return uri.toString();
     }
 
-    private boolean isLoopbackHost(String host) {
-        String normalized = host == null ? "" : host.trim().toLowerCase(Locale.ROOT);
-        return "localhost".equals(normalized) || "127.0.0.1".equals(normalized) || "::1".equals(normalized) || "[::1]".equals(normalized);
+    private static boolean isLoopbackHost(String host) {
+        String normalized = host == null ? "" : host.strip().toLowerCase(Locale.ROOT);
+        return "localhost".equals(normalized)
+                || "127.0.0.1".equals(normalized)
+                || "::1".equals(normalized)
+                || "[::1]".equals(normalized);
     }
 
-    private void addMetadata(MultiValueMap<String, String> body, CommerceCheckout checkout) {
+    private static void addMetadata(MultiValueMap<String, String> body, CommerceCheckout checkout) {
         if (checkout.order() != null) {
             if (checkout.order().getId() != null) {
                 body.add("metadata[order_id]", String.valueOf(checkout.order().getId()));
@@ -219,12 +248,13 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
         }
     }
 
-    private void addLineItems(MultiValueMap<String, String> body, CommerceCheckout checkout) {
+    private static void addLineItems(MultiValueMap<String, String> body, CommerceCheckout checkout) {
         List<OrderItem> items = checkout.orderItems() == null ? List.of() : checkout.orderItems();
         if (items.isEmpty()) {
             body.add("line_items[0][price_data][currency]", currency(checkout.currencyCode()));
-            body.add("line_items[0][price_data][product_data][name]", "MandarinSpark order");
-            body.add("line_items[0][price_data][unit_amount]", String.valueOf(toMinorUnits(checkout.totalAmount(), checkout.currencyCode())));
+            body.add("line_items[0][price_data][product_data][name]", DEFAULT_FALLBACK_PRODUCT_NAME);
+            body.add("line_items[0][price_data][unit_amount]",
+                    String.valueOf(toMinorUnits(checkout.totalAmount(), checkout.currencyCode())));
             body.add("line_items[0][quantity]", "1");
             return;
         }
@@ -233,31 +263,40 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
             OrderItem item = items.get(index);
             body.add("line_items[" + index + "][price_data][currency]", currency(checkout.currencyCode()));
             body.add("line_items[" + index + "][price_data][product_data][name]", productName(item));
-            body.add("line_items[" + index + "][price_data][unit_amount]", String.valueOf(toMinorUnits(item.getUnitPrice(), checkout.currencyCode())));
-            body.add("line_items[" + index + "][quantity]", String.valueOf(item.getQuantity() == null || item.getQuantity() < 1 ? 1 : item.getQuantity()));
+            body.add("line_items[" + index + "][price_data][unit_amount]",
+                    String.valueOf(toMinorUnits(item.getUnitPrice(), checkout.currencyCode())));
+            body.add("line_items[" + index + "][quantity]", String.valueOf(safeQuantity(item.getQuantity())));
         }
     }
 
-    private String currency(String currencyCode) {
-        return currencyCode == null || currencyCode.isBlank() ? "myr" : currencyCode.trim().toLowerCase(Locale.ROOT);
+    private static int safeQuantity(Integer quantity) {
+        return quantity == null || quantity < 1 ? 1 : quantity;
     }
 
-    private String productName(OrderItem item) {
+    private static String currency(String currencyCode) {
+        return currencyCode == null || currencyCode.isBlank() ? DEFAULT_CURRENCY : currencyCode.strip().toLowerCase(Locale.ROOT);
+    }
+
+    private static String productName(OrderItem item) {
         String title = item.getItemTitleSnapshot();
         if (title == null || title.isBlank()) {
-            return item.getItemType() == null || item.getItemType().isBlank() ? "MandarinSpark course" : item.getItemType() + " " + item.getItemId();
+            return item.getItemType() == null || item.getItemType().isBlank()
+                    ? DEFAULT_PRODUCT_NAME
+                    : item.getItemType() + " " + item.getItemId();
         }
-        return title.trim();
+        return title.strip();
     }
 
-    private long toMinorUnits(BigDecimal amount, String currencyCode) {
+    private static long toMinorUnits(BigDecimal amount, String currencyCode) {
         BigDecimal safeAmount = amount == null ? BigDecimal.ZERO : amount.max(BigDecimal.ZERO);
-        String normalizedCurrency = currencyCode == null ? "" : currencyCode.trim().toUpperCase(Locale.ROOT);
-        BigDecimal multiplier = ZERO_DECIMAL_CURRENCIES.contains(normalizedCurrency) ? BigDecimal.ONE : BigDecimal.valueOf(100);
+        String normalizedCurrency = currencyCode == null ? "" : currencyCode.strip().toUpperCase(Locale.ROOT);
+        BigDecimal multiplier = ZERO_DECIMAL_CURRENCIES.contains(normalizedCurrency)
+                ? BigDecimal.ONE
+                : MINOR_UNIT_MULTIPLIER;
         return safeAmount.multiply(multiplier).setScale(0, RoundingMode.HALF_UP).longValueExact();
     }
 
-    private PaymentStatus mapPaymentStatus(String sessionStatus, String paymentStatus) {
+    private static PaymentStatus mapPaymentStatus(String sessionStatus, String paymentStatus) {
         if ("PAID".equals(paymentStatus) || "NO_PAYMENT_REQUIRED".equals(paymentStatus)) {
             return PaymentStatus.PAID;
         }
@@ -270,15 +309,15 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
         return PaymentStatus.PENDING;
     }
 
-    private String normalizeStatus(String value) {
-        return value == null || value.isBlank() ? "UNKNOWN" : value.trim().toUpperCase(Locale.ROOT);
+    private static String normalizeStatus(String value) {
+        return value == null || value.isBlank() ? "UNKNOWN" : value.strip().toUpperCase(Locale.ROOT);
     }
 
-    private String stringValue(Map<String, Object> body, String key) {
+    private static String stringValue(Map<String, Object> body, String key) {
         if (body == null) {
             return null;
         }
         Object value = body.get(key);
-        return value instanceof String text && !text.isBlank() ? text.trim() : null;
+        return value instanceof String text && !text.isBlank() ? text.strip() : null;
     }
 }

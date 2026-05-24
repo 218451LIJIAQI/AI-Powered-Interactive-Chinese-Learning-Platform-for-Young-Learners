@@ -26,10 +26,12 @@
  */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-defineProps<{
+interface Props {
   title: string
   description: string
   icon: string
   eyebrow?: string
-}>()
+}
+
+defineProps<Props>()
 </script>

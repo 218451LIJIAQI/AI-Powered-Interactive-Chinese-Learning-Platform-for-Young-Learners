@@ -86,13 +86,13 @@ public class AiResponseReportService {
             UserRepository userRepository,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.aiResponseReportRepository = aiResponseReportRepository;
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.aiChatSessionRepository = aiChatSessionRepository;
-        this.aiChatMessageRepository = aiChatMessageRepository;
-        this.userRepository = userRepository;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
+        this.aiResponseReportRepository = Objects.requireNonNull(aiResponseReportRepository, "aiResponseReportRepository");
+        this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
+        this.aiChatSessionRepository = Objects.requireNonNull(aiChatSessionRepository, "aiChatSessionRepository");
+        this.aiChatMessageRepository = Objects.requireNonNull(aiChatMessageRepository, "aiChatMessageRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional
@@ -178,12 +178,12 @@ public class AiResponseReportService {
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<StudentAiResponseReportResponse> getCurrentUserReports(SecurityUserDetails currentUser) {
+    public List<StudentAiResponseReportResponse> getCurrentUserReports(SecurityUserDetails currentUser) {
         return getCurrentUserReports(currentUser, 0, 20).items();
     }
 
     @Transactional(readOnly = true)
-    public java.util.List<AdminAiResponseReportResponse> getAdminReports(String status) {
+    public List<AdminAiResponseReportResponse> getAdminReports(String status) {
         return getAdminReports(status, 0, 20).items();
     }
 
@@ -344,9 +344,12 @@ public class AiResponseReportService {
     }
 
     private <T extends Enum<T>> T parseEnum(Class<T> enumType, String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
+        }
         try {
             return Enum.valueOf(enumType, value.trim().toUpperCase(Locale.ROOT));
-        } catch (RuntimeException exception) {
+        } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, message);
         }
     }

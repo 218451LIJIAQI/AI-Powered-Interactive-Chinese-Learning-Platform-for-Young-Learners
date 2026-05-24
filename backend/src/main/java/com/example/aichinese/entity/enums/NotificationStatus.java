@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Read/unread state of an in-app notification.
@@ -25,10 +21,8 @@ public enum NotificationStatus {
     READ;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, NotificationStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, NotificationStatus> LOOKUP =
+            EnumLookups.indexByName(NotificationStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -38,14 +32,7 @@ public enum NotificationStatus {
      *         is {@code null}, blank, or not a recognised status
      */
     public static Optional<NotificationStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -55,11 +42,11 @@ public enum NotificationStatus {
      *         blank, or not a recognised status
      */
     public static NotificationStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Notification status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid notification status. Allowed values are UNREAD or READ."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Notification status is required.",
+                () -> "Invalid notification status. Allowed values are UNREAD or READ.");
     }
 
     /** @return {@code true} when the recipient has acknowledged the notification. */

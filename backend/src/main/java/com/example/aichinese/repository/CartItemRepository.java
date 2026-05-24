@@ -23,10 +23,34 @@ import com.example.aichinese.entity.CartItem;
  */
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
+    /**
+     * Returns every line of {@code cartId} in insertion order so the
+     * rendered cart preserves the chronological "newest at the bottom"
+     * UX. Backed by the {@code cart_id} foreign-key index.
+     */
     List<CartItem> findByCartIdOrderByCreatedAtAsc(Long cartId);
 
+    /**
+     * IDOR-safe single-row lookup that traverses
+     * {@code CartItem \u2192 Cart \u2192 StudentProfile \u2192 User} so the
+     * remove-item endpoint cannot be tricked into deleting another
+     * learner's cart line by guessing its id. The caller maps an empty
+     * {@link Optional} to a 404 to avoid disclosing the existence of
+     * cross-user cart-item ids.
+     */
     Optional<CartItem> findByIdAndCartStudentUserId(Long id, Long userId);
 
+    /**
+     * Pre-insert duplicate check for the add-to-cart flow. Backed by
+     * the {@code (cart_id, item_type, item_id)} <em>unique</em> index
+     * which is the platform's source of truth for "one line per artefact
+     * per cart"; the in-flight check here gives the user-facing 400
+     * before the constraint violation surfaces, while the constraint
+     * itself remains the race-safe enforcement boundary (a concurrent
+     * add for the same artefact will still surface as a
+     * {@code DataIntegrityViolationException} that the cart service
+     * translates to the same 400).
+     */
     Optional<CartItem> findByCartIdAndItemTypeAndItemId(Long cartId, String itemType, Long itemId);
 
     /**

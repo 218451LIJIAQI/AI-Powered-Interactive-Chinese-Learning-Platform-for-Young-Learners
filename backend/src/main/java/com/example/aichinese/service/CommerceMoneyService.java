@@ -33,31 +33,57 @@ public class CommerceMoneyService {
     public static final int RATE_SCALE = 4;
     public static final RoundingMode MONEY_ROUNDING = RoundingMode.HALF_UP;
 
-    public BigDecimal normalize(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(MONEY_SCALE, MONEY_ROUNDING);
-        }
+    private static final BigDecimal ZERO_MONEY = BigDecimal.ZERO.setScale(MONEY_SCALE, MONEY_ROUNDING);
+    private static final BigDecimal ZERO_RATE = BigDecimal.ZERO.setScale(RATE_SCALE, MONEY_ROUNDING);
 
-        return value.setScale(MONEY_SCALE, MONEY_ROUNDING);
+    /**
+     * Rounds {@code value} to {@link #MONEY_SCALE} decimal places.
+     * {@code null} is treated as zero so callers never need a
+     * null-guard before normalising.
+     */
+    public BigDecimal normalize(BigDecimal value) {
+        return value == null ? ZERO_MONEY : value.setScale(MONEY_SCALE, MONEY_ROUNDING);
     }
 
+    /**
+     * Adds two monetary amounts, normalising each operand and the
+     * result to {@link #MONEY_SCALE} decimal places.
+     */
+    public BigDecimal add(BigDecimal left, BigDecimal right) {
+        return normalize(normalize(left).add(normalize(right)));
+    }
+
+    /**
+     * Multiplies two monetary amounts (e.g.&nbsp;unit price &times;
+     * quantity), normalising each operand and the result to
+     * {@link #MONEY_SCALE} decimal places.
+     */
     public BigDecimal multiply(BigDecimal left, BigDecimal right) {
         return normalize(normalize(left).multiply(normalize(right)));
     }
 
+    /**
+     * Subtracts {@code right} from {@code left}, normalising each
+     * operand and the result to {@link #MONEY_SCALE} decimal places.
+     */
     public BigDecimal subtract(BigDecimal left, BigDecimal right) {
         return normalize(normalize(left).subtract(normalize(right)));
     }
 
+    /**
+     * Returns {@code amount &times; rateDecimal} where the rate is
+     * normalised to {@link #RATE_SCALE} (4 dp) before multiplication
+     * and the result to {@link #MONEY_SCALE} (2 dp).
+     */
     public BigDecimal percentage(BigDecimal amount, BigDecimal rateDecimal) {
         return normalize(normalize(amount).multiply(normalizeRate(rateDecimal)));
     }
 
+    /**
+     * Rounds {@code value} to {@link #RATE_SCALE} decimal places.
+     * {@code null} is treated as zero.
+     */
     public BigDecimal normalizeRate(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(RATE_SCALE, MONEY_ROUNDING);
-        }
-
-        return value.setScale(RATE_SCALE, MONEY_ROUNDING);
+        return value == null ? ZERO_RATE : value.setScale(RATE_SCALE, MONEY_ROUNDING);
     }
 }

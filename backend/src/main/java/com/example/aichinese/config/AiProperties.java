@@ -70,7 +70,8 @@ public class AiProperties {
 
     public void setTimeoutSeconds(int timeoutSeconds) {
         if (timeoutSeconds < MIN_TIMEOUT_SECONDS || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
-            throw new IllegalArgumentException("AI timeout must be between 1 and 60 seconds.");
+            throw new IllegalArgumentException(
+                    "AI timeout must be between " + MIN_TIMEOUT_SECONDS + " and " + MAX_TIMEOUT_SECONDS + " seconds.");
         }
         this.timeoutSeconds = timeoutSeconds;
     }
@@ -81,7 +82,8 @@ public class AiProperties {
 
     public void setMaxOutputTokens(int maxOutputTokens) {
         if (maxOutputTokens < MIN_OUTPUT_TOKENS || maxOutputTokens > MAX_OUTPUT_TOKENS) {
-            throw new IllegalArgumentException("AI max output tokens must be between 1 and 4000.");
+            throw new IllegalArgumentException(
+                    "AI max output tokens must be between " + MIN_OUTPUT_TOKENS + " and " + MAX_OUTPUT_TOKENS + ".");
         }
         this.maxOutputTokens = maxOutputTokens;
     }
@@ -92,5 +94,22 @@ public class AiProperties {
 
     public void setEnableRealProvider(boolean enableRealProvider) {
         this.enableRealProvider = enableRealProvider;
+    }
+
+    /**
+     * Diagnostic representation that masks the API key. A stray
+     * {@code log.info(aiProperties)} that ships to production must never
+     * leak the live credential; only the presence flag is reported.
+     */
+    @Override
+    public String toString() {
+        return "AiProperties[provider=" + provider
+                + ", apiBaseUrl=" + apiBaseUrl
+                + ", apiKey=" + (apiKey == null || apiKey.isBlank() ? "[unset]" : "[set]")
+                + ", modelName=" + modelName
+                + ", timeoutSeconds=" + timeoutSeconds
+                + ", maxOutputTokens=" + maxOutputTokens
+                + ", enableRealProvider=" + enableRealProvider
+                + "]";
     }
 }

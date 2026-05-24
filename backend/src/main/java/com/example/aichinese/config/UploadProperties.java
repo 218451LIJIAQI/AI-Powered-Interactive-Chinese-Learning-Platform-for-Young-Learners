@@ -28,6 +28,15 @@ import org.springframework.util.unit.DataSize;
 @ConfigurationProperties(prefix = "app.upload")
 public class UploadProperties {
 
+    /**
+     * Sanity ceiling on configured file-size caps. A typo of {@code 10000MB}
+     * vs the intended {@code 1000MB} would otherwise silently allow ten-fold
+     * larger uploads than the operator expected. 10 GiB is comfortably above
+     * any legitimate recorded-lesson video while still rejecting obvious
+     * configuration mistakes.
+     */
+    private static final DataSize MAX_CONFIGURED_FILE_SIZE = DataSize.ofGigabytes(10);
+
     private String directory = "./uploads";
     private DataSize maxFileSize = DataSize.ofMegabytes(5);
     private String recordedVideoDirectory = "./uploads/recorded-videos";
@@ -65,16 +74,25 @@ public class UploadProperties {
         this.maxVideoFileSize = requirePositive(maxVideoFileSize, "Maximum recorded video file size must be greater than zero.");
     }
 
-    private String requireText(String value, String message) {
+    /**
+     * strip() over trim() so a stray CJK fullwidth space pasted from a
+     * CJK editor would not survive canonicalisation as a phantom directory
+     * different from the intended one.
+     */
+    private static String requireText(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(message);
         }
-        return value.trim();
+        return value.strip();
     }
 
-    private DataSize requirePositive(DataSize value, String message) {
+    private static DataSize requirePositive(DataSize value, String message) {
         if (value == null || value.toBytes() <= 0) {
             throw new IllegalArgumentException(message);
+        }
+        if (value.toBytes() > MAX_CONFIGURED_FILE_SIZE.toBytes()) {
+            throw new IllegalArgumentException(
+                    message.replace("greater than zero", "at most " + MAX_CONFIGURED_FILE_SIZE.toGigabytes() + " GB"));
         }
         return value;
     }

@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Originator of a single message in an AI chat transcript.
@@ -30,10 +26,8 @@ public enum AiChatSenderRole {
     ASSISTANT;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AiChatSenderRole> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AiChatSenderRole> LOOKUP =
+            EnumLookups.indexByName(AiChatSenderRole.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -43,14 +37,7 @@ public enum AiChatSenderRole {
      *         is {@code null}, blank, or not a recognised sender role
      */
     public static Optional<AiChatSenderRole> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -60,11 +47,11 @@ public enum AiChatSenderRole {
      *         blank, or not a recognised sender role
      */
     public static AiChatSenderRole fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("AI chat sender role is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid AI chat sender role. Allowed values are USER or ASSISTANT."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "AI chat sender role is required.",
+                () -> "Invalid AI chat sender role. Allowed values are USER or ASSISTANT.");
     }
 
     /** @return {@code true} when this message originated from the human student. */

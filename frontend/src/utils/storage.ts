@@ -1,3 +1,5 @@
+import type { AppLanguage } from '@/types/api'
+
 /**
  * Single source of truth for `localStorage` keys used by the frontend,
  * plus `safe*` wrappers that swallow exceptions so a Safari Private
@@ -32,4 +34,11 @@ export function safeRemoveItem(key: string, storage: Storage = window.localStora
     storage.removeItem(key)
   } catch {
   }
+}
+
+const validLocales: ReadonlySet<string> = new Set<AppLanguage>(['en', 'ms', 'zh'])
+
+export function readPersistedLocale(): AppLanguage {
+  const raw = safeGetItem(storageKeys.language)
+  return raw !== null && validLocales.has(raw) ? (raw as AppLanguage) : 'en'
 }

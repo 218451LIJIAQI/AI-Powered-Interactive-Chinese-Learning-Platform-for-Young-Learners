@@ -1,18 +1,18 @@
 package com.example.aichinese.repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.lang.NonNull;
 
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.TeacherStatus;
@@ -54,22 +54,32 @@ public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, 
     @EntityGraph(attributePaths = { "user" })
     Optional<TeacherProfile> findByIdAndTeacherStatusAndPublicVisibleTrue(Long id, TeacherStatus teacherStatus);
 
-    @EntityGraph(attributePaths = { "user" })
-    java.util.List<TeacherProfile> findByTeacherStatusOrderByCreatedAtDesc(TeacherStatus teacherStatus);
-
+    /**
+     * Paged status-filtered teacher list used by the admin verification
+     * queue (e.g. {@code TeacherStatus.PENDING}).
+     */
     @EntityGraph(attributePaths = { "user" })
     Page<TeacherProfile> findByTeacherStatusOrderByCreatedAtDesc(TeacherStatus teacherStatus, Pageable pageable);
 
+    /**
+     * Specification-based admin teacher search; eager-fetches
+     * {@code user} so the response mapper renders the contact details
+     * without per-row lazy loads.
+     */
     @EntityGraph(attributePaths = { "user" })
-    Page<TeacherProfile> findAll(org.springframework.data.jpa.domain.Specification<TeacherProfile> specification, Pageable pageable);
+    Page<TeacherProfile> findAll(Specification<TeacherProfile> specification, Pageable pageable);
 
-    @Override
+    /**
+     * Bulk-hydrate teacher profiles by owning user id, used by the
+     * teacher-aware response mappers when assembling reports across
+     * multiple authors in a single round trip.
+     */
     @EntityGraph(attributePaths = { "user" })
-    @NonNull
-    java.util.List<TeacherProfile> findAll(@NonNull Sort sort);
+    List<TeacherProfile> findByUserIdIn(Collection<Long> userIds);
 
-    @EntityGraph(attributePaths = { "user" })
-    java.util.List<TeacherProfile> findByUserIdIn(Collection<Long> userIds);
-
+    /**
+     * Backs the admin dashboard's verification-status counter tiles
+     * (e.g. "Pending teacher verifications").
+     */
     long countByTeacherStatus(TeacherStatus teacherStatus);
 }

@@ -1,5 +1,6 @@
 package com.example.aichinese;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -50,7 +51,7 @@ class DashboardControllerIntegrationTests {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.fullName").isString())
                 .andExpect(jsonPath("$.data.currentLevel").isString())
@@ -65,7 +66,7 @@ class DashboardControllerIntegrationTests {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.teacherStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.totalLessons").isNumber());
@@ -79,7 +80,7 @@ class DashboardControllerIntegrationTests {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.totalStudents").isNumber())
                 .andExpect(jsonPath("$.data.totalTeachers").isNumber());
@@ -90,7 +91,7 @@ class DashboardControllerIntegrationTests {
         mockMvc.perform(get("/api/v1/admin/dashboard"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(false));
     }
 
@@ -102,7 +103,7 @@ class DashboardControllerIntegrationTests {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(false));
     }
 
@@ -114,7 +115,7 @@ class DashboardControllerIntegrationTests {
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                        containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(false));
     }
 

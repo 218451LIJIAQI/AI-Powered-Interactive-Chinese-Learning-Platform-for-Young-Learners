@@ -2,6 +2,8 @@ package com.example.aichinese.dto.commerce;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -36,12 +38,37 @@ import jakarta.validation.constraints.NotNull;
  *   <li>{@link CheckoutSource#BUY_NOW} — direct checkout that
  *       bypasses the cart entirely.</li>
  * </ul>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Immutability</h2>
+ * <p>The compact constructor defensively wraps {@link #items} with
+ * an unmodifiable copy. The list is assembled by the service from
+ * a freshly-built collection today, but the defensive copy keeps
+ * the request shape immutable in case a future refactor passes a
+ * mutable list.</p>
+ *
+ * @param items  per-line checkout items; {@link NotEmpty}-validated
+ *               and {@link Valid}-cascaded so each child
+ *               {@link CheckoutSessionItemRequest} is also validated;
+ *               wrapped in an unmodifiable copy by the compact
+ *               constructor; never {@code null} (an empty list trips
+ *               {@link NotEmpty} validation)
+ * @param source provenance discriminator; required, server-supplied
  */
+@JsonPropertyOrder({ "items", "source" })
 public record CheckoutSessionRequest(
         @NotEmpty(message = "At least one checkout item is required.")
         List<@Valid CheckoutSessionItemRequest> items,
         @NotNull(message = "Checkout source is required.")
         CheckoutSource source) {
+
+    public CheckoutSessionRequest {
+        items = items == null ? List.of() : List.copyOf(items);
+    }
 
     /**
      * Discriminates the provenance of a checkout for analytics and
@@ -49,6 +76,12 @@ public record CheckoutSessionRequest(
      * from clients) — the cart-checkout endpoint always sets
      * {@link #CART} and the buy-now endpoint always sets
      * {@link #BUY_NOW}.
+     *
+     * <p>Persisted as a string on
+     * {@link com.example.aichinese.entity.Order#setCheckoutSource}
+     * via {@link Enum#name()}, so the constants are part of the
+     * database contract — they MUST NOT be renamed without a paired
+     * Flyway migration.</p>
      */
     public enum CheckoutSource {
         /** Checkout was synthesised from the persisted student cart. */

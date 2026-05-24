@@ -1,6 +1,7 @@
 package com.example.aichinese.security;
 
 import java.io.IOException;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,12 +62,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
+    /**
+     * RFC 6750 \u00a72.1 mandates the bearer scheme name be matched
+     * case-sensitively (i.e. "Bearer" \u2014 not "bearer" or "BEARER"),
+     * and the single space separator is the only allowed whitespace
+     * between the scheme and the credential. We deliberately match this
+     * literal prefix rather than parsing more permissively, so that
+     * clients which send malformed headers fail closed.
+     */
+    private static final String BEARER_PREFIX = "Bearer ";
+
+    /** Length of {@link #BEARER_PREFIX} \u2014 cached to avoid repeated length() calls in the hot path. */
+    private static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
+
+    /** Default session version for legacy / non-platform {@link UserDetails} that lack the field. */
+    private static final long DEFAULT_SESSION_VERSION = 0L;
+
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
 
     public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
-        this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
+        this.jwtService = Objects.requireNonNull(jwtService, "jwtService");
+        this.userDetailsService = Objects.requireNonNull(userDetailsService, "userDetailsService");
     }
 
     @Override
@@ -77,23 +94,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
 
-        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
+        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith(BEARER_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = authHeader.substring(7);
-        String email;
+        String token = authHeader.substring(BEARER_PREFIX_LENGTH);
+        if (!StringUtils.hasText(token)) {
+            // Header was literally "Bearer   " with no actual credential. Skip
+            // the JwtService cost and continue unauthenticated.
+            filterChain.doFilter(request, response);
+            return;
+        }
 
+        String email;
         try {
             email = jwtService.extractUsername(token);
         } catch (Exception exception) {
             // Common cases here are expired tokens, malformed tokens, signature
             // mismatches, and tokens signed with a rotated secret. Log at DEBUG
-            // so legitimate users with expired sessions do not flood WARN logs,
-            // but at WARN if it looks like an actively-malicious token (header
-            // present but parse failed for a non-trivial reason). We only log
-            // the exception class to avoid leaking the token contents.
+            // so legitimate users with expired sessions do not flood WARN logs.
+            // We only log the exception class to avoid leaking the token contents.
             log.debug("Rejecting unparsable bearer token: {}", exception.getClass().getSimpleName());
             filterChain.doFilter(request, response);
             return;
@@ -127,7 +148,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean isTokenValidForCurrentSession(String token, UserDetails userDetails) {
+    /**
+     * Validates the token against the {@link UserDetails} principal, including
+     * a {@code sessionVersion} round-trip when the principal is the platform's
+     * own {@link SecurityUserDetails}. Non-platform principals fall back to a
+     * version-less validation \u2014 they should never appear in production,
+     * but the fallback exists so the filter is reusable in tests that mock
+     * {@link UserDetailsService}.
+     */
+    private boolean isTokenValidForCurrentSession(@NonNull String token, @NonNull UserDetails userDetails) {
         if (userDetails instanceof SecurityUserDetails securityUserDetails) {
             return jwtService.isTokenValid(
                     token,
@@ -135,6 +164,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     securityUserDetails.getUser().getSessionVersion());
         }
 
-        return jwtService.isTokenValid(token, userDetails.getUsername(), 0L);
+        return jwtService.isTokenValid(token, userDetails.getUsername(), DEFAULT_SESSION_VERSION);
     }
 }

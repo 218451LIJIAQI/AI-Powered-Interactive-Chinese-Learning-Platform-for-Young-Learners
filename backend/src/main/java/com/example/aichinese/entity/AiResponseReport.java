@@ -15,6 +15,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -59,7 +61,32 @@ import lombok.Setter;
         @Index(name = "idx_ai_response_reports_chat_session_id", columnList = "chat_session_id"),
         @Index(name = "idx_ai_response_reports_student_created", columnList = "student_user_id,created_at")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used by
+        // every read in AiResponseReportRepository: student moderation
+        // pages render the full row in one round trip and need both
+        // student/reviewer users plus the chat-link metadata. Keeping this
+        // on the entity (instead of repeating the attribute path array
+        // verbatim across seven derived methods) prevents the repository
+        // and the entity from drifting apart whenever a new related field
+        // is added — every consumer simply references the graph by name.
+        name = AiResponseReport.GRAPH_ADMIN_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode("studentUser"),
+                @NamedAttributeNode("reviewerUser"),
+                @NamedAttributeNode("aiUsageLog"),
+                @NamedAttributeNode("chatSession"),
+                @NamedAttributeNode("chatMessage")
+        }
+)
 public class AiResponseReport extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches every
+     * related row required to render the admin moderation list and the
+     * student "my reports" view in a single SQL round trip.
+     */
+    public static final String GRAPH_ADMIN_DETAIL = "AiResponseReport.adminDetail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "student_user_id", nullable = false)

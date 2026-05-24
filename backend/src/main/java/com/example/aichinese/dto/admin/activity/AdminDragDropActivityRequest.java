@@ -20,8 +20,10 @@ import jakarta.validation.constraints.Size;
  * single request encapsulates the activity header (title, instructions,
  * shared metadata) and its full set of {@link AdminDragDropItemRequest}
  * draggable cards. The {@link jakarta.validation.Valid} on
- * {@link #items} cascades Bean Validation into each card so the whole
- * structure is rejected atomically when any child fails.</p>
+ * {@link #items} cascades Bean Validation into each card so a single
+ * atomic 400 response surfaces every parent <em>and</em> child violation
+ * — there is no partial-success path where the header would persist
+ * while one item is rejected.</p>
  *
  * <p>Multiple items may share the same target zone (the front-end then
  * presents a multi-slot drop area). {@link #items} may be {@code null}
@@ -30,7 +32,13 @@ import jakarta.validation.constraints.Size;
  * {@link com.example.aichinese.entity.enums.ContentStatus#PUBLISHED}
  * until at least one item exists. The upper {@code @Size(max=200)}
  * is a defensive bound preventing a single request from creating
- * unbounded child rows.</p>
+ * unbounded child rows: realistic admin-authored activities carry well
+ * under 30 cards, so 200 leaves substantial headroom while still
+ * protecting the server from runaway payloads.</p>
+ *
+ * <p>{@link #instructions} maps onto the entity's
+ * {@code instructions VARCHAR(1000)} column — the 1000-char cap is the
+ * column ceiling, not a soft UX bound.</p>
  *
  * <p>See {@link AdminActivitySummaryResponse} for the shared metadata
  * vocabulary and {@link AdminFlashcardRequest} for the rationale
@@ -38,7 +46,7 @@ import jakarta.validation.constraints.Size;
  *
  * @param title            activity title; required; max 200 chars
  * @param instructions     optional learner-facing instructions; max
- *                         1000 chars
+ *                         1000 chars (DB column ceiling)
  * @param hskLevel         optional HSK band, {@code 1..6}
  * @param ageBand          optional target age cohort
  * @param difficulty       optional easy/medium/hard tier
@@ -46,7 +54,8 @@ import jakarta.validation.constraints.Size;
  * @param tags             optional list of free-form tags; up to 8
  *                         non-blank entries, each max 50 chars
  * @param xpReward         optional base XP, {@code 0..1000}
- * @param estimatedSeconds optional time-to-complete hint, {@code 0..86400}
+ * @param estimatedSeconds optional time-to-complete hint,
+ *                         {@code 0..86400} (24 hours)
  * @param items            child draggable cards; nullable or empty
  *                         during drafting; at most 200 entries; each
  *                         element validated via {@link Valid}

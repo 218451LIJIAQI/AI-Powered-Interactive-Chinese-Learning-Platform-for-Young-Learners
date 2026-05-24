@@ -1,6 +1,9 @@
 package com.example.aichinese.dto.admin;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  * Trimmed audit-log row embedded inside larger admin responses
@@ -20,8 +23,19 @@ import java.time.LocalDateTime;
  * embedding it here cannot leak Authorization headers or reset
  * tokens that may have appeared in the original request body.</p>
  *
+ * <h2>Invariants</h2>
+ * <ul>
+ *   <li>{@link #auditLogId}, {@link #actionType} and {@link #createdAt}
+ *       are non-{@code null} — they are the columns the audit widget
+ *       renders unconditionally and the deep-link uses.</li>
+ *   <li>{@link #targetType} and {@link #description} may be
+ *       {@code null} for target-less actions or when the producer
+ *       opted not to attach a human description.</li>
+ * </ul>
+ *
  * @param auditLogId the underlying audit log row id (for "view full
- *                   audit detail" deep-links from the admin UI)
+ *                   audit detail" deep-links from the admin UI);
+ *                   never {@code null}
  * @param actionType the verb logged by the producer (e.g.
  *                   {@code TEACHER_APPROVAL}); never {@code null}
  * @param targetType the entity type the action targeted (e.g.
@@ -32,12 +46,25 @@ import java.time.LocalDateTime;
  * @param createdAt   when the audit row was written (Asia/Singapore
  *                    wall clock; see
  *                    {@link com.example.aichinese.entity.base.BaseEntity}
- *                    Javadoc)
+ *                    Javadoc); never {@code null}
  */
+@JsonPropertyOrder({ "auditLogId", "actionType", "targetType", "description", "createdAt" })
 public record AdminAuditSummaryResponse(
         Long auditLogId,
         String actionType,
         String targetType,
         String description,
         LocalDateTime createdAt) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the three
+     * fields the admin "recent activity" widget renders unconditionally.
+     * {@link #targetType} and {@link #description} are intentionally
+     * permitted to be {@code null} per the invariants documented above.
+     */
+    public AdminAuditSummaryResponse {
+        Objects.requireNonNull(auditLogId, "auditLogId must not be null");
+        Objects.requireNonNull(actionType, "actionType must not be null");
+        Objects.requireNonNull(createdAt, "createdAt must not be null");
+    }
 }

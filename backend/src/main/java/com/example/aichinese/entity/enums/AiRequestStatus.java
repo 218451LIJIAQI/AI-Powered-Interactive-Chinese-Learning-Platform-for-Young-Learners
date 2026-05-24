@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Outcome of a single upstream AI request, recorded in {@code AiUsageLog}
@@ -34,10 +30,8 @@ public enum AiRequestStatus {
     UNAVAILABLE;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, AiRequestStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, AiRequestStatus> LOOKUP =
+            EnumLookups.indexByName(AiRequestStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -47,14 +41,7 @@ public enum AiRequestStatus {
      *         is {@code null}, blank, or not a recognised status
      */
     public static Optional<AiRequestStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -64,11 +51,11 @@ public enum AiRequestStatus {
      *         blank, or not a recognised status
      */
     public static AiRequestStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("AI request status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid AI request status. Allowed values are SUCCESS, FAILED, or UNAVAILABLE."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "AI request status is required.",
+                () -> "Invalid AI request status. Allowed values are SUCCESS, FAILED, or UNAVAILABLE.");
     }
 
     /** @return {@code true} when the request returned a usable response. */

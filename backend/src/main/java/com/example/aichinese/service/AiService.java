@@ -12,11 +12,18 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
-import org.springframework.data.domain.PageRequest;
+import jakarta.persistence.criteria.Predicate;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -157,20 +164,20 @@ public class AiService {
             AiLogService aiLogService,
             AiFileStorageService aiFileStorageService,
             ObjectMapper objectMapper) {
-        this.userRepository = userRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.quizAttemptAnswerRepository = quizAttemptAnswerRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.aiChatSessionRepository = aiChatSessionRepository;
-        this.aiChatMessageRepository = aiChatMessageRepository;
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.aiPromptBuilder = aiPromptBuilder;
-        this.aiProviderRouter = aiProviderRouter;
-        this.aiAvailabilityService = aiAvailabilityService;
-        this.aiLogService = aiLogService;
-        this.aiFileStorageService = aiFileStorageService;
-        this.objectMapper = objectMapper;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
+        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.aiChatSessionRepository = Objects.requireNonNull(aiChatSessionRepository, "aiChatSessionRepository");
+        this.aiChatMessageRepository = Objects.requireNonNull(aiChatMessageRepository, "aiChatMessageRepository");
+        this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
+        this.aiPromptBuilder = Objects.requireNonNull(aiPromptBuilder, "aiPromptBuilder");
+        this.aiProviderRouter = Objects.requireNonNull(aiProviderRouter, "aiProviderRouter");
+        this.aiAvailabilityService = Objects.requireNonNull(aiAvailabilityService, "aiAvailabilityService");
+        this.aiLogService = Objects.requireNonNull(aiLogService, "aiLogService");
+        this.aiFileStorageService = Objects.requireNonNull(aiFileStorageService, "aiFileStorageService");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
     }
 
     @Transactional
@@ -454,13 +461,13 @@ public class AiService {
             LocalDate dateTo,
             int page,
             int size) {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+        Pageable pageable = PageRequest.of(
                 PaginationUtils.sanitizePage(page),
                 PaginationUtils.sanitizeSize(size),
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+                Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        org.springframework.data.jpa.domain.Specification<AiUsageLog> specification = (root, query, cb) -> {
-            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+        Specification<AiUsageLog> specification = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
 
             if (featureType != null && !featureType.isBlank()) {
                 predicates.add(cb.equal(root.get("featureKey"), featureType.trim().toUpperCase(Locale.ROOT)));
@@ -478,10 +485,10 @@ public class AiService {
                 predicates.add(cb.lessThan(root.get("createdAt"), dateTo.plusDays(1).atStartOfDay()));
             }
 
-            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
         };
 
-        org.springframework.data.domain.Page<AiUsageLog> result = aiUsageLogRepository.findAll(specification, pageable);
+        Page<AiUsageLog> result = aiUsageLogRepository.findAll(specification, pageable);
         List<AdminAiUsageLogResponse> items = result.getContent().stream()
                 .map(this::toAdminUsageLogResponse)
                 .toList();
@@ -588,10 +595,10 @@ public class AiService {
 
     private String normalizeLanguage(String value) {
         String normalized = value.trim().toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("ms")) {
+        if ("ms".equals(normalized) || normalized.startsWith("ms-") || normalized.startsWith("ms_")) {
             return "ms";
         }
-        if (normalized.startsWith("zh")) {
+        if ("zh".equals(normalized) || normalized.startsWith("zh-") || normalized.startsWith("zh_")) {
             return "zh";
         }
         return "en";
@@ -1100,7 +1107,14 @@ public class AiService {
         if (trimmed.isEmpty()) {
             return null;
         }
-        return trimmed.length() <= limit ? trimmed : trimmed.substring(0, limit);
+        if (trimmed.length() <= limit) {
+            return trimmed;
+        }
+        int end = limit;
+        if (Character.isHighSurrogate(trimmed.charAt(end - 1))) {
+            end--;
+        }
+        return trimmed.substring(0, end);
     }
 
     private AdminAiUsageLogResponse toAdminUsageLogResponse(AiUsageLog logRecord) {

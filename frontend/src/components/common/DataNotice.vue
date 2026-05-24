@@ -36,57 +36,56 @@ import { computed } from 'vue'
 
 import IconGlyph from './IconGlyph.vue'
 
-const props = withDefaults(
-  defineProps<{
-    usingFallback?: boolean
-    error?: string | null
-    success?: string | null
-    fallbackTitle?: string
-    fallbackMessage?: string
-    errorTitle?: string
-    successTitle?: string
-    detail?: string | null
-  }>(),
-  {
-    usingFallback: false,
-    error: null,
-    success: null,
-    fallbackTitle: '',
-    fallbackMessage: '',
-    errorTitle: '',
-    successTitle: '',
-    detail: null,
-  },
-)
+interface Props {
+  usingFallback?: boolean
+  error?: string | null
+  success?: string | null
+  fallbackTitle?: string
+  fallbackMessage?: string
+  errorTitle?: string
+  successTitle?: string
+  detail?: string | null
+}
 
-const title = computed(() => {
+const props = withDefaults(defineProps<Props>(), {
+  usingFallback: false,
+  error: null,
+  success: null,
+  fallbackTitle: '',
+  fallbackMessage: '',
+  errorTitle: '',
+  successTitle: '',
+  detail: null,
+})
+
+const title = computed<string>(() => {
   if (props.error) return props.errorTitle || 'Connection notice'
   if (props.success) return props.successTitle || 'Saved successfully'
   if (props.usingFallback) return props.fallbackTitle || 'Preview data mode'
   return ''
 })
-const noticeIcon = computed(() => (props.error ? 'alert' : props.success ? 'status' : 'safe'))
-const noticeRole = computed(() => (props.error ? 'alert' : 'status'))
-const noticeLive = computed(() => (props.error ? 'assertive' : 'polite'))
+
+const noticeIcon = computed<string>(() => {
+  if (props.error) return 'alert'
+  if (props.success) return 'status'
+  return 'safe'
+})
+
+const noticeRole = computed<'alert' | 'status'>(() => (props.error ? 'alert' : 'status'))
+const noticeLive = computed<'assertive' | 'polite'>(() => (props.error ? 'assertive' : 'polite'))
+
 const noticeClass = computed(() => ({
-  'is-fallback': Boolean(props.usingFallback && !props.error && !props.success),
-  'is-error': Boolean(props.error),
-  'is-success': Boolean(props.success && !props.error),
+  'is-fallback': !!(props.usingFallback && !props.error && !props.success),
+  'is-error': !!props.error,
+  'is-success': !!(props.success && !props.error),
 }))
-const message = computed(() => {
-  if (props.error) {
-    return props.error
-  }
 
-  if (props.success) {
-    return props.success
-  }
-
+const message = computed<string>(() => {
+  if (props.error) return props.error
+  if (props.success) return props.success
   if (props.usingFallback) {
-    if (props.fallbackMessage) return props.fallbackMessage
-    return 'Showing safe preview data. Connect the backend to use live platform data.'
+    return props.fallbackMessage || 'Showing safe preview data. Connect the backend to use live platform data.'
   }
-
   return ''
 })
 </script>

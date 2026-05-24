@@ -4,7 +4,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 
 import java.nio.file.Path;
-import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -44,20 +44,15 @@ public class RecordedVideoStorageService {
     private final UploadProperties uploadProperties;
 
     public RecordedVideoStorageService(UploadedFileRepository uploadedFileRepository, UploadProperties uploadProperties) {
-        this.uploadedFileRepository = uploadedFileRepository;
-        this.uploadProperties = uploadProperties;
+        this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
+        this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
     }
 
     @Transactional
     public UploadedFile storeRecordedVideo(MultipartFile multipartFile, User ownerUser) {
-        validateMultipartFile(multipartFile);
-
-        String originalFileName = UploadStorageSupport.extractSafeOriginalFileName(
-                multipartFile.getOriginalFilename(),
-                "Uploaded file name is invalid.");
-        String extension = UploadStorageSupport.getRequiredExtension(
-                originalFileName,
-                "Uploaded video must include a valid extension. Allowed types are MP4, WEBM, and MOV.");
+        String[] validated = validateMultipartFile(multipartFile);
+        String originalFileName = validated[0];
+        String extension = validated[1];
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
 
         Path targetPath = UploadStorageSupport.storeMultipartFile(
@@ -86,7 +81,13 @@ public class RecordedVideoStorageService {
                 "Requested video could not be found.");
     }
 
-    private void validateMultipartFile(MultipartFile multipartFile) {
+    /**
+     * Validates size, extension, content-type, and magic-byte signature.
+     *
+     * @return {@code [originalFileName, extension]} — both already
+     *         validated so {@link #storeRecordedVideo} avoids re-extraction
+     */
+    private String[] validateMultipartFile(MultipartFile multipartFile) {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Recorded video file is required.");
         }
@@ -101,7 +102,7 @@ public class RecordedVideoStorageService {
         String extension = UploadStorageSupport.getRequiredExtension(
                 originalFileName,
                 "Uploaded video must include a valid extension. Allowed types are MP4, WEBM, and MOV.");
-        if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase(Locale.ROOT))) {
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
                     "Unsupported video type. Allowed types are MP4, WEBM, and MOV.");
@@ -116,10 +117,12 @@ public class RecordedVideoStorageService {
 
         UploadStorageSupport.validateFileSignature(
                 multipartFile,
-                extension.toLowerCase(Locale.ROOT),
+                extension,
                 contentType,
                 ALLOWED_SIGNATURES,
                 "Uploaded video content does not match the declared MP4/WEBM/MOV type.");
+
+        return new String[]{originalFileName, extension};
     }
 
     private Path resolveBaseDirectory() {

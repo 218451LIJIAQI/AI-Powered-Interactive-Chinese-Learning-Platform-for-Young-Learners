@@ -22,8 +22,10 @@ import jakarta.validation.constraints.Size;
  * {@link #translation}, optional {@link #imageUrl}) together with the
  * full set of {@link AdminStoryQuestionRequest} comprehension prompts.
  * The {@link jakarta.validation.Valid} on {@link #questions} cascades
- * Bean Validation into each question so the whole structure is rejected
- * atomically.</p>
+ * Bean Validation into each question so a single atomic 400 response
+ * surfaces every parent <em>and</em> child violation — there is no
+ * partial-success state where the story body would persist while a
+ * question is rejected.</p>
  *
  * <h2>Why Pinyin and translation are stored as text</h2>
  * <p>Both are free-text fields rather than per-sentence structured
@@ -54,23 +56,30 @@ import jakarta.validation.constraints.Size;
  * <p>{@link #imageUrl} is constrained to {@code http(s)://} absolute
  * URLs (or empty) to reject {@code javascript:}, {@code data:},
  * {@code file:} and protocol-relative URLs that could otherwise reach
- * learner browsers.</p>
+ * learner browsers as cross-site script or local-file disclosure
+ * vectors.</p>
  *
  * <p>See {@link AdminActivitySummaryResponse} for the shared metadata
  * vocabulary and {@link AdminFlashcardRequest} for the rationale
  * behind the tag-list cap and the {@code estimatedSeconds} upper bound.</p>
  *
  * @param title            story title; required; max 200 chars
+ *                         ({@code story_activities.title VARCHAR(200)})
  * @param instructions     optional learner-facing instructions; max
  *                         1000 chars
+ *                         ({@code story_activities.instructions VARCHAR(1000)})
  * @param storyText        required Mandarin narrative; max
- *                         200&nbsp;000 chars (LONGTEXT)
+ *                         200&nbsp;000 chars
+ *                         ({@code story_activities.story_text LONGTEXT})
  * @param pinyin           optional pinyin transliteration; max
- *                         32&nbsp;000 chars (TEXT)
+ *                         32&nbsp;000 chars
+ *                         ({@code story_activities.pinyin TEXT})
  * @param translation      optional English/Bahasa translation; max
- *                         32&nbsp;000 chars (TEXT)
+ *                         32&nbsp;000 chars
+ *                         ({@code story_activities.translation TEXT})
  * @param imageUrl         optional cover image URL; max 255 chars;
  *                         must be {@code http(s)://} or empty
+ *                         ({@code story_activities.image_url VARCHAR(255)})
  * @param hskLevel         optional HSK band, {@code 1..6}
  * @param ageBand          optional target age cohort
  * @param difficulty       optional easy/medium/hard tier
@@ -78,7 +87,8 @@ import jakarta.validation.constraints.Size;
  * @param tags             optional list of free-form tags; up to 8
  *                         non-blank entries, each max 50 chars
  * @param xpReward         optional base XP, {@code 0..1000}
- * @param estimatedSeconds optional time-to-complete hint, {@code 0..86400}
+ * @param estimatedSeconds optional time-to-complete hint,
+ *                         {@code 0..86400} (24 hours)
  * @param questions        child comprehension prompts; nullable or
  *                         empty during drafting; at most 50 entries;
  *                         each element validated via {@link Valid}

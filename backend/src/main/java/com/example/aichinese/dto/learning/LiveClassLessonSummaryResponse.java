@@ -1,5 +1,9 @@
 package com.example.aichinese.dto.learning;
 
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Compact lesson reference embedded inside
  * {@link LiveClassResponse#lesson()} when the live class is linked
@@ -21,13 +25,49 @@ package com.example.aichinese.dto.learning;
  * happens server-side in
  * {@code StudentLearningAccessService.hasLiveClassAccess}.</p>
  *
- * <p>This DTO is null when the live class is package-linked or
- * stand-alone — see the lesson/package XOR rule on
- * {@link CreateLiveClassRequest}.</p>
+ * <p>{@link LiveClassResponse#lesson()} is {@code null} when the
+ * live class is package-linked or stand-alone — see the
+ * lesson/package XOR rule on {@link CreateLiveClassRequest}.</p>
+ *
+ * <h2>Invariants</h2>
+ * <ul>
+ *   <li>{@link #lessonId} and {@link #lessonTitle} are
+ *       non-{@code null} — when the producer constructs this DTO
+ *       it has just dereferenced a real
+ *       {@link com.example.aichinese.entity.Lesson} that the
+ *       schema guarantees has both columns populated.</li>
+ *   <li>{@link #learningType} and {@link #accessType} may be
+ *       {@code null} for legacy lesson rows authored before the
+ *       enum columns were introduced.</li>
+ * </ul>
+ *
+ * @param lessonId     {@code Lesson} identifier (drives the
+ *                     "Open lesson" deep-link); never {@code null}
+ * @param lessonTitle  human-readable lesson title shown on the
+ *                     live-class card; never {@code null}
+ * @param learningType enum-name string from
+ *                     {@link com.example.aichinese.entity.enums.LearningType};
+ *                     {@code null} on legacy rows
+ * @param accessType   enum-name string from
+ *                     {@link com.example.aichinese.entity.enums.AccessType};
+ *                     {@code null} on legacy rows
  */
+@JsonPropertyOrder({ "lessonId", "lessonTitle", "learningType", "accessType" })
 public record LiveClassLessonSummaryResponse(
         Long lessonId,
         String lessonTitle,
         String learningType,
         String accessType) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the
+     * identity / display fields the live-class card renders
+     * unconditionally. {@link #learningType} and
+     * {@link #accessType} are intentionally permitted to be
+     * {@code null} per the invariants documented above.
+     */
+    public LiveClassLessonSummaryResponse {
+        Objects.requireNonNull(lessonId, "lessonId must not be null");
+        Objects.requireNonNull(lessonTitle, "lessonTitle must not be null");
+    }
 }

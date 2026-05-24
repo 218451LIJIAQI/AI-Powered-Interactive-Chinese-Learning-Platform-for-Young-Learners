@@ -119,13 +119,13 @@ public record AdminFlashcardRequest(
         String malayMeaning,
 
         @Pattern(
-                regexp = "^(https?://.+)?$",
+                regexp = AdminFlashcardRequest.HTTP_URL_PATTERN,
                 message = "Image URL must start with http:// or https://.")
         @Size(max = 255, message = "Image URL must not exceed 255 characters.")
         String imageUrl,
 
         @Pattern(
-                regexp = "^(https?://.+)?$",
+                regexp = AdminFlashcardRequest.HTTP_URL_PATTERN,
                 message = "Audio URL must start with http:// or https://.")
         @Size(max = 255, message = "Audio URL must not exceed 255 characters.")
         String audioUrl,
@@ -161,4 +161,19 @@ public record AdminFlashcardRequest(
         @Min(value = 0, message = "Estimated seconds must be non-negative.")
         @Max(value = 86_400, message = "Estimated seconds must not exceed 86400 (24 hours).")
         Integer estimatedSeconds) {
+
+    /**
+     * Compile-time-constant regex used by the {@link Pattern} guards on
+     * {@link #imageUrl} and {@link #audioUrl}. Accepts only absolute
+     * {@code http(s)://...} URLs (or empty/{@code null}) so that
+     * {@code javascript:}, {@code data:}, {@code file:} and protocol-
+     * relative URLs cannot reach learner browsers.
+     *
+     * <p>Centralising the literal here removes the only in-file
+     * duplication; the regex itself intentionally matches the
+     * project-wide convention used in
+     * {@code RecordedLessonVideoRequest} et al. so a future tightening
+     * (e.g. requiring a TLD) can be coordinated across all DTOs.</p>
+     */
+    static final String HTTP_URL_PATTERN = "^(https?://.+)?$";
 }

@@ -666,7 +666,7 @@ const selectedSummary = computed(
 const hasSelectedRecord = computed(() => selectedId.value !== null)
 const pageBusy = computed(() => feedResource.loading.value || detailLoading.value)
 const formBusy = computed(() => saving.value || deleting.value || detailLoading.value)
-const pageError = computed(() => actionError.value || feedResource.error.value || null)
+const pageError = computed(() => actionError.value || feedResource.error.value)
 const statCards = computed(() => {
   const pageItems = feed.value.items
   const published = pageItems.filter((item) => item.status === 'PUBLISHED').length
@@ -1282,6 +1282,7 @@ function buildStoryPayload(): AdminStoryActivityPayload {
 }
 
 async function saveActivity() {
+  if (saving.value || deleting.value) return
   if (previewReadOnly.value) {
     actionError.value = 'Activity library changes are read-only while preview data is active.'
     actionSuccess.value = null
@@ -1371,6 +1372,7 @@ async function saveActivity() {
 }
 
 async function updateStatus(status: StatusMutation) {
+  if (saving.value || deleting.value) return
   if (!hasSelectedRecord.value || selectedId.value == null) {
     return
   }
@@ -1421,6 +1423,7 @@ async function updateStatus(status: StatusMutation) {
 }
 
 async function deleteActivity() {
+  if (deleting.value || saving.value) return
   if (!hasSelectedRecord.value || selectedId.value == null) {
     return
   }

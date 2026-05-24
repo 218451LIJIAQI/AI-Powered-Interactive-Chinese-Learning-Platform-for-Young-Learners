@@ -23,6 +23,14 @@ import com.example.aichinese.entity.QuizOption;
  */
 public interface QuizOptionRepository extends JpaRepository<QuizOption, Long> {
 
+    /**
+     * Returns every option belonging to {@code questionId} in the order
+     * the author intended. Sorts primarily by {@code sortOrder} (the
+     * explicit position the teacher picks) with {@code createdAt} as a
+     * deterministic tie-breaker so two options sharing the same
+     * sort order still render in insertion order rather than in
+     * arbitrary database order.
+     */
     List<QuizOption> findByQuestionIdOrderBySortOrderAscCreatedAtAsc(Long questionId);
 
     /**

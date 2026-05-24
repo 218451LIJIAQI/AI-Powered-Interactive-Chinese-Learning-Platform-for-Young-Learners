@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of a teacher {@code PayoutRequest}.
@@ -44,20 +42,20 @@ public enum PayoutStatus {
     PAID;
 
     /** States in which the request cannot transition any further. */
-    public static final Set<PayoutStatus> TERMINAL = Set.of(REJECTED, PAID);
+    public static final Set<PayoutStatus> TERMINAL =
+            Collections.unmodifiableSet(EnumSet.of(REJECTED, PAID));
 
     /**
      * States that count as "committed funds" against the teacher's
      * available balance (the amount has been earmarked even if not yet
      * actually disbursed).
      */
-    public static final Set<PayoutStatus> COMMITTED = Set.of(PENDING, APPROVED, PAID);
+    public static final Set<PayoutStatus> COMMITTED =
+            Collections.unmodifiableSet(EnumSet.of(PENDING, APPROVED, PAID));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, PayoutStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, PayoutStatus> LOOKUP =
+            EnumLookups.indexByName(PayoutStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -67,14 +65,7 @@ public enum PayoutStatus {
      *         is {@code null}, blank, or not a recognised payout status
      */
     public static Optional<PayoutStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -84,12 +75,12 @@ public enum PayoutStatus {
      *         blank, or not a recognised payout status
      */
     public static PayoutStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Payout status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid payout status. Allowed values are PENDING, APPROVED, REJECTED, "
-                        + "or PAID."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Payout status is required.",
+                () -> "Invalid payout status. Allowed values are PENDING, APPROVED, REJECTED, "
+                        + "or PAID.");
     }
 
     /** @return {@code true} when the request is still awaiting admin review. */

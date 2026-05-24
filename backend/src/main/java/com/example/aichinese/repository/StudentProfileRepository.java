@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -57,14 +56,23 @@ public interface StudentProfileRepository extends JpaRepository<StudentProfile, 
     @Query("select sp from StudentProfile sp where sp.id = :id")
     Optional<StudentProfile> findLockedById(@Param("id") Long id);
 
+    /**
+     * Admin user-management page using a dynamic
+     * {@link Specification} (role / status / keyword filters). The
+     * eager-fetched {@code user} and {@code currentLevel} keep the
+     * response mapper off the lazy-loading hot path.
+     */
     @EntityGraph(attributePaths = { "user", "currentLevel" })
     @NonNull
     Page<StudentProfile> findAll(@Nullable Specification<StudentProfile> specification, @NonNull Pageable pageable);
 
-    @EntityGraph(attributePaths = { "user", "currentLevel" })
-    @NonNull
-    List<StudentProfile> findAll(@NonNull Sort sort);
-
+    /**
+     * Bulk-hydrate students by id, used by the teacher roster service
+     * after {@link #findLinkedStudentIdsByTeacherId} returns the
+     * paginated id slice. Spring Data handles the empty input case as
+     * {@code 1=0}, so callers can pass an empty list without a
+     * round-trip pre-check.
+     */
     @EntityGraph(attributePaths = { "user", "currentLevel" })
     List<StudentProfile> findByIdIn(List<Long> ids);
 

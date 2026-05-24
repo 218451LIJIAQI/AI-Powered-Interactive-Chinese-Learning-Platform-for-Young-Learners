@@ -32,14 +32,18 @@ package com.example.aichinese.dto.commerce;
  *
  * @param available         {@code true} when the provider returned
  *                          a usable checkout URL
- * @param providerName      e.g. {@code "STRIPE"}
+ * @param providerName      e.g. {@code "stripe"}; lower-case provider
+ *                          identifier echoed verbatim from
+ *                          {@code PaymentProviderClient.providerName()}
  * @param sessionReference  provider session id; {@code null} when
- *                          unavailable
+ *                          {@link #available} is {@code false}
  * @param checkoutUrl       hosted-checkout URL the front-end
- *                          redirects to; {@code null} when unavailable
+ *                          redirects to; {@code null} when
+ *                          {@link #available} is {@code false}
  * @param providerStatus    short status string echoed from the
- *                          provider response, or {@code "UNAVAILABLE"}
- *                          for soft failures
+ *                          provider response, or
+ *                          {@link #UNAVAILABLE_PROVIDER_STATUS} for
+ *                          soft failures
  * @param message           human-readable status / error blurb
  */
 public record PaymentProviderCheckoutResult(
@@ -51,6 +55,15 @@ public record PaymentProviderCheckoutResult(
         String message) {
 
     /**
+     * Canonical {@link #providerStatus} value reported by the
+     * {@link #unavailable(String, String)} soft-failure factory and
+     * mirrored in {@link PaymentProviderStatusResult#UNAVAILABLE_PROVIDER_STATUS}
+     * so {@code PaymentService} can branch on a single shared
+     * sentinel rather than a duplicated string literal.
+     */
+    public static final String UNAVAILABLE_PROVIDER_STATUS = "UNAVAILABLE";
+
+    /**
      * Canonical "the provider is currently unreachable / misconfigured"
      * factory. Produces a non-fatal result that
      * {@code PaymentService} can pass through to the front-end so
@@ -60,9 +73,11 @@ public record PaymentProviderCheckoutResult(
      * @param message      human-readable explanation
      * @return a soft-failure result with
      *         {@link #available()} {@code == false} and
-     *         {@link #providerStatus()} {@code == "UNAVAILABLE"}
+     *         {@link #providerStatus()} {@code ==}
+     *         {@link #UNAVAILABLE_PROVIDER_STATUS}
      */
     public static PaymentProviderCheckoutResult unavailable(String providerName, String message) {
-        return new PaymentProviderCheckoutResult(false, providerName, null, null, "UNAVAILABLE", message);
+        return new PaymentProviderCheckoutResult(
+                false, providerName, null, null, UNAVAILABLE_PROVIDER_STATUS, message);
     }
 }

@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.content;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.Size;
 
 /**
@@ -20,19 +22,44 @@ import jakarta.validation.constraints.Size;
  * <p>The DTO is named "approval request" because it was originally
  * scoped for the broader approve / reject / archive moderation
  * flow; the single-{@link #note} shape covers all three intended
- * uses, even if currently only archive consumes it.</p>
+ * uses, even if currently only archive consumes it. The platform
+ * has since moved to immediate teacher-side publishing (see
+ * {@link com.example.aichinese.service.TeacherModuleService}), so
+ * the approve/reject codepaths are dormant — the wire format is
+ * preserved for forward compatibility with the renewed moderation
+ * surface in {@link com.example.aichinese.service.ContentModerationService}.</p>
  *
  * <p>The note is sanitized via {@code AiInputSanitizer.sanitize}
  * before being persisted on
  * {@link com.example.aichinese.entity.ContentModerationRecord}, so
- * any HTML/JS injection from the admin UI is neutralised. The
- * 1000-char cap matches the underlying schema column.</p>
+ * any HTML/JS injection from the admin UI is neutralised at the
+ * service boundary (the DTO is intentionally a pure carrier — no
+ * compact-constructor trimming — to avoid double normalisation and
+ * to keep {@link Size} validation operating on the raw client
+ * input, matching the other request DTOs in this package). The
+ * {@value ContentDtoConstants#MODERATION_NOTE_MAX_LENGTH}-char cap
+ * mirrors both the {@code content_moderation_records.note} schema
+ * column width and the
+ * {@code AdminContentReviewService.MAX_MODERATION_NOTE_LENGTH}
+ * sanitizer contract — see {@link ContentDtoConstants} for the
+ * shared source of truth.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.
+ * This matches the convention used across the other polished
+ * request DTOs in {@code com.example.aichinese.dto.teacher}.</p>
  *
  * @param note optional admin note attached to this moderation
  *             action; {@code null} or blank produces a
- *             null-stored note
+ *             null-stored note; capped at
+ *             {@value ContentDtoConstants#MODERATION_NOTE_MAX_LENGTH}
+ *             characters to match the underlying schema column
  */
+@JsonPropertyOrder({ "note" })
 public record ContentApprovalRequest(
-        @Size(max = 1000, message = "Approval note must not exceed 1000 characters.")
+        @Size(max = ContentDtoConstants.MODERATION_NOTE_MAX_LENGTH,
+                message = "Approval note must not exceed 1000 characters.")
         String note) {
 }

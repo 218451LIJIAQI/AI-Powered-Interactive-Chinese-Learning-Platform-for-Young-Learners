@@ -3,10 +3,14 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.util.List;
+import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.example.aichinese.config.PaymentProperties;
 import com.example.aichinese.dto.commerce.CartItemResponse;
@@ -49,6 +53,8 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
 @Service
 public class CheckoutService {
 
+    private static final Logger log = LoggerFactory.getLogger(CheckoutService.class);
+
     private final StudentLearningAccessService studentLearningAccessService;
     private final CartService cartService;
     private final PurchasableItemService purchasableItemService;
@@ -65,13 +71,13 @@ public class CheckoutService {
             OrderService orderService,
             PaymentService paymentService,
             PaymentProperties paymentProperties) {
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.cartService = cartService;
-        this.purchasableItemService = purchasableItemService;
-        this.entitlementService = entitlementService;
-        this.orderService = orderService;
-        this.paymentService = paymentService;
-        this.paymentProperties = paymentProperties;
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.cartService = Objects.requireNonNull(cartService, "cartService");
+        this.purchasableItemService = Objects.requireNonNull(purchasableItemService, "purchasableItemService");
+        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
+        this.orderService = Objects.requireNonNull(orderService, "orderService");
+        this.paymentService = Objects.requireNonNull(paymentService, "paymentService");
+        this.paymentProperties = Objects.requireNonNull(paymentProperties, "paymentProperties");
     }
 
     @Transactional
@@ -108,7 +114,8 @@ public class CheckoutService {
         }
         for (ResolvedPurchasableItem item : items) {
             if (entitlementService.hasAccessToPurchasableItem(student, item)) {
-                throw new ResponseStatusException(BAD_REQUEST, "You already have access to this item.");
+                throw new ResponseStatusException(BAD_REQUEST,
+                        "You already have access to: " + item.title());
             }
         }
 
@@ -118,6 +125,8 @@ public class CheckoutService {
 
         if (order.getTotalAmount().signum() <= 0) {
             paymentService.markPaymentPaid(paymentRecord, "FREE", "FREE_UNLOCK");
+            log.info("Free checkout completed: orderId={}, userId={}, items={}",
+                    order.getId(), student.getUser().getId(), items.size());
             return new CheckoutResponse(
                     order.getId(),
                     order.getOrderNumber(),
@@ -144,13 +153,22 @@ public class CheckoutService {
                             .toList());
         }
 
+        String successUrl = UriComponentsBuilder
+                .fromUriString(paymentProperties.successUrl())
+                .queryParam("paymentId", paymentRecord.getId())
+                .build().toUriString();
+        String cancelUrl = UriComponentsBuilder
+                .fromUriString(paymentProperties.cancelUrl())
+                .queryParam("paymentId", paymentRecord.getId())
+                .queryParam("cancelled", true)
+                .build().toUriString();
+
+        log.info("Starting paid checkout: orderId={}, paymentId={}, userId={}, amount={}",
+                order.getId(), paymentRecord.getId(),
+                student.getUser().getId(), order.getTotalAmount());
+
         return paymentService.startCheckout(
-                currentUser,
-                student,
-                order,
-                paymentRecord,
-                orderItems,
-                paymentProperties.successUrl() + "?paymentId=" + paymentRecord.getId(),
-                paymentProperties.cancelUrl() + "?paymentId=" + paymentRecord.getId() + "&cancelled=true");
+                currentUser, student, order, paymentRecord, orderItems,
+                successUrl, cancelUrl);
     }
 }

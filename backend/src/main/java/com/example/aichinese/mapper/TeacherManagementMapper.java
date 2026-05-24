@@ -1,9 +1,10 @@
 package com.example.aichinese.mapper;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
@@ -17,12 +18,14 @@ import com.example.aichinese.dto.teacher.TeacherProfileResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationDocumentSummaryResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationReviewSummaryResponse;
 import com.example.aichinese.entity.AuditLog;
+import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.TeacherVerificationDocument;
 import com.example.aichinese.entity.TeacherVerificationReview;
+import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.RoleName;
+import com.example.aichinese.entity.enums.TeacherStatus;
 
 /**
  * Entity-to-DTO translation for the teacher and admin management
@@ -46,13 +49,31 @@ import com.example.aichinese.entity.enums.RoleName;
 @Component
 public class TeacherManagementMapper {
 
+    /**
+     * Maximum number of teaching-category entries persisted in the
+     * comma-separated {@code teaching_categories} column. The frontend
+     * enforces a matching cap on the input side; this server-side cap
+     * is the storage-layer safety net.
+     */
+    private static final int MAX_CATEGORIES = 12;
+
+    /** Maximum length of the bio summary surfaced in admin teacher list rows. */
+    private static final int BIO_SUMMARY_MAX_LENGTH = 140;
+
+    /** Length of the trailing "{@code ...}" ellipsis appended by {@link #summarize}. */
+    private static final int ELLIPSIS_LENGTH = 3;
+
+    /** Delimiter used in the persisted comma-separated category column. */
+    private static final String CATEGORY_DELIMITER = ", ";
+
     public TeacherProfileResponse toTeacherProfileResponse(
             TeacherProfile profile,
             List<TeacherVerificationDocument> documents) {
+        User user = profile.getUser();
         return new TeacherProfileResponse(
-                profile.getUser().getId(),
-                profile.getUser().getDisplayName(),
-                profile.getUser().getEmail(),
+                user.getId(),
+                user.getDisplayName(),
+                user.getEmail(),
                 profile.getId(),
                 profile.getBio(),
                 profile.getQualificationSummary(),
@@ -65,23 +86,25 @@ public class TeacherManagementMapper {
     }
 
     public TeacherVerificationDocumentSummaryResponse toDocumentSummary(TeacherVerificationDocument document) {
+        UploadedFile file = document.getUploadedFile();
         return new TeacherVerificationDocumentSummaryResponse(
                 document.getId(),
                 document.getDocumentType().name(),
                 document.getDocumentNote(),
-                document.getUploadedFile().getFileName(),
-                document.getUploadedFile().getContentType(),
-                document.getUploadedFile().getFileSize(),
+                file == null ? null : file.getFileName(),
+                file == null ? null : file.getContentType(),
+                file == null ? null : file.getFileSize(),
                 document.getSubmittedAt(),
                 document.isCurrentVersion());
     }
 
     public TeacherVerificationReviewSummaryResponse toReviewSummary(TeacherVerificationReview review) {
+        User reviewer = review.getReviewerUser();
         return new TeacherVerificationReviewSummaryResponse(
                 review.getId(),
                 review.getDecisionStatus(),
                 review.getReviewNote(),
-                review.getReviewerUser() != null ? review.getReviewerUser().getDisplayName() : null,
+                reviewer == null ? null : reviewer.getDisplayName(),
                 review.getReviewedAt());
     }
 
@@ -90,16 +113,17 @@ public class TeacherManagementMapper {
             long documentCount,
             TeacherVerificationReview latestReview,
             TeacherVerificationDocument latestDocument) {
+        User user = profile.getUser();
         return new AdminTeacherListItemResponse(
                 profile.getId(),
-                profile.getUser().getId(),
-                profile.getUser().getDisplayName(),
-                profile.getUser().getEmail(),
+                user.getId(),
+                user.getDisplayName(),
+                user.getEmail(),
                 profile.getTeacherStatus(),
-                summarize(profile.getBio(), 140),
+                summarize(profile.getBio(), BIO_SUMMARY_MAX_LENGTH),
                 documentCount,
-                latestReview != null ? latestReview.getReviewedAt() : null,
-                latestDocument != null ? latestDocument.getSubmittedAt() : null,
+                latestReview == null ? null : latestReview.getReviewedAt(),
+                latestDocument == null ? null : latestDocument.getSubmittedAt(),
                 profile.getCreatedAt());
     }
 
@@ -108,11 +132,12 @@ public class TeacherManagementMapper {
             List<TeacherVerificationDocument> documents,
             List<TeacherVerificationReview> reviews,
             List<AuditLog> auditLogs) {
+        User user = profile.getUser();
         return new AdminTeacherDetailResponse(
                 profile.getId(),
-                profile.getUser().getId(),
-                profile.getUser().getDisplayName(),
-                profile.getUser().getEmail(),
+                user.getId(),
+                user.getDisplayName(),
+                user.getEmail(),
                 profile.getBio(),
                 profile.getQualificationSummary(),
                 splitCategories(profile.getTeachingCategories()),
@@ -127,27 +152,32 @@ public class TeacherManagementMapper {
     }
 
     public AdminUserListItemResponse toAdminUserListItem(User user, TeacherProfile teacherProfile) {
+        Set<Role> roles = user.getRoles();
+        List<String> roleNames = roles == null
+                ? List.of()
+                : roles.stream()
+                        .map(role -> role.getName().name())
+                        .sorted(Comparator.naturalOrder())
+                        .toList();
         return new AdminUserListItemResponse(
                 user.getId(),
                 user.getDisplayName(),
                 user.getEmail(),
-                user.getRoles().stream()
-                        .map(role -> role.getName().name())
-                        .sorted(Comparator.naturalOrder())
-                        .toList(),
+                roleNames,
                 user.isActive(),
-                teacherProfile != null ? teacherProfile.getTeacherStatus() : null,
+                teacherProfile == null ? null : teacherProfile.getTeacherStatus(),
                 user.getCreatedAt(),
                 user.getUpdatedAt());
     }
 
     public AdminStudentListItemResponse toAdminStudentListItem(StudentProfile studentProfile) {
+        User user = studentProfile.getUser();
         return new AdminStudentListItemResponse(
                 studentProfile.getId(),
-                studentProfile.getUser().getId(),
-                studentProfile.getUser().getDisplayName(),
-                studentProfile.getUser().getEmail(),
-                studentProfile.getUser().getPreferredLanguage(),
+                user.getId(),
+                user.getDisplayName(),
+                user.getEmail(),
+                user.getPreferredLanguage(),
                 studentProfile.getCreatedAt());
     }
 
@@ -160,7 +190,7 @@ public class TeacherManagementMapper {
                 teacherProfile.getId(),
                 teacherProfile.getUser().getDisplayName(),
                 teacherProfile.getBio(),
-                teacherProfile.getTeacherStatus() == com.example.aichinese.entity.enums.TeacherStatus.APPROVED,
+                teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED,
                 splitCategories(teacherProfile.getTeachingCategories()),
                 courseCount);
     }
@@ -174,47 +204,61 @@ public class TeacherManagementMapper {
                 auditLog.getCreatedAt());
     }
 
+    /**
+     * Trims, deduplicates, strips embedded commas (the column delimiter)
+     * and joins a category list into the comma-separated representation
+     * persisted in the {@code teaching_categories} column. Capped at
+     * {@link #MAX_CATEGORIES} entries; returns {@code null} when the
+     * filtered list is empty so the column stores {@code NULL} instead
+     * of an empty string.
+     */
     public String joinCategories(List<String> categories) {
         if (categories == null || categories.isEmpty()) {
             return null;
         }
-
-        return categories.stream()
+        String joined = categories.stream()
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::trim)
                 .map(value -> value.replace(",", ""))
+                .filter(value -> !value.isEmpty())
                 .distinct()
-                .limit(12)
-                .reduce((left, right) -> left + ", " + right)
-                .orElse(null);
+                .limit(MAX_CATEGORIES)
+                .collect(Collectors.joining(CATEGORY_DELIMITER));
+        return joined.isEmpty() ? null : joined;
     }
 
-    public List<String> splitCategories(String categories) {
+    /**
+     * Inverse of {@link #joinCategories}: parses the persisted CSV column
+     * back into the per-entry list shape consumed by the API. Returns an
+     * immutable empty list when the input is {@code null} or blank so
+     * callers can iterate the result unconditionally.
+     */
+    private List<String> splitCategories(String categories) {
         if (categories == null || categories.isBlank()) {
-            return Collections.emptyList();
+            return List.of();
         }
-
         return Arrays.stream(categories.split(","))
                 .map(String::trim)
-                .filter(value -> !value.isBlank())
+                .filter(value -> !value.isEmpty())
                 .toList();
     }
 
-    public boolean hasRole(User user, RoleName roleName) {
-        return user.getRoles().stream()
-                .anyMatch(role -> role.getName() == roleName);
-    }
-
+    /**
+     * Truncates a multi-line free-text field to {@code maxLength}
+     * characters total (including the trailing ellipsis) for display in
+     * dense admin list rows. Returns {@code null} for {@code null} or
+     * blank input so the response field renders as a missing value
+     * rather than an empty string.
+     */
     private String summarize(String value, int maxLength) {
         if (value == null || value.isBlank()) {
             return null;
         }
-
         String trimmed = value.trim();
         if (trimmed.length() <= maxLength) {
             return trimmed;
         }
-
-        return trimmed.substring(0, Math.max(0, maxLength - 3)).trim() + "...";
+        int contentLength = Math.max(0, maxLength - ELLIPSIS_LENGTH);
+        return trimmed.substring(0, contentLength).trim() + "...";
     }
 }

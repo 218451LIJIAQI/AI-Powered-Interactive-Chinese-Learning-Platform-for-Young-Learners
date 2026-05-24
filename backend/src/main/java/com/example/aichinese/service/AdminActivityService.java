@@ -7,8 +7,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -92,6 +95,8 @@ import jakarta.persistence.criteria.Predicate;
 @Service
 public class AdminActivityService {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminActivityService.class);
+
     private static final List<ContentStatus> ALLOWED_TARGET_STATUSES = List.of(
             ContentStatus.DRAFT,
             ContentStatus.PUBLISHED,
@@ -123,18 +128,18 @@ public class AdminActivityService {
             UserRepository userRepository,
             AdminActivityMapper mapper,
             AuditLogService auditLogService) {
-        this.flashcardRepository = flashcardRepository;
-        this.matchingGameRepository = matchingGameRepository;
-        this.matchingGameItemRepository = matchingGameItemRepository;
-        this.listeningExerciseRepository = listeningExerciseRepository;
-        this.tracingExerciseRepository = tracingExerciseRepository;
-        this.dragDropActivityRepository = dragDropActivityRepository;
-        this.dragDropItemRepository = dragDropItemRepository;
-        this.storyActivityRepository = storyActivityRepository;
-        this.storyQuestionRepository = storyQuestionRepository;
-        this.userRepository = userRepository;
-        this.mapper = mapper;
-        this.auditLogService = auditLogService;
+        this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
+        this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
+        this.matchingGameItemRepository = Objects.requireNonNull(matchingGameItemRepository, "matchingGameItemRepository");
+        this.listeningExerciseRepository = Objects.requireNonNull(listeningExerciseRepository, "listeningExerciseRepository");
+        this.tracingExerciseRepository = Objects.requireNonNull(tracingExerciseRepository, "tracingExerciseRepository");
+        this.dragDropActivityRepository = Objects.requireNonNull(dragDropActivityRepository, "dragDropActivityRepository");
+        this.dragDropItemRepository = Objects.requireNonNull(dragDropItemRepository, "dragDropItemRepository");
+        this.storyActivityRepository = Objects.requireNonNull(storyActivityRepository, "storyActivityRepository");
+        this.storyQuestionRepository = Objects.requireNonNull(storyQuestionRepository, "storyQuestionRepository");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.mapper = Objects.requireNonNull(mapper, "mapper");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     // ===================================================================

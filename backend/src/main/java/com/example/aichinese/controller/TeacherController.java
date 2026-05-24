@@ -44,6 +44,8 @@ import com.example.aichinese.dto.learning.TeacherQuizAttemptSummaryResponse;
 import com.example.aichinese.dto.learning.TeacherQuizResponse;
 import com.example.aichinese.dto.learning.UpdateLiveClassRequest;
 import com.example.aichinese.dto.learning.UpdateLiveClassStatusRequest;
+import com.example.aichinese.dto.learning.UpdateQuizQuestionRequest;
+import com.example.aichinese.dto.learning.UpdateQuizRequest;
 import com.example.aichinese.dto.teacher.TeacherProfileResponse;
 import com.example.aichinese.dto.teacher.TeacherStudentSummaryResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationStatusResponse;
@@ -292,7 +294,6 @@ public class TeacherController {
                 "Teacher lesson retrieved successfully.",
                 teacherLessonService.getTeacherLesson(currentUser, id));
     }
-
 
     @GetMapping("/live-classes")
     public ApiResponse<PageResponse<LiveClassResponse>> getTeacherLiveClasses(
@@ -596,7 +597,7 @@ public class TeacherController {
     public ApiResponse<TeacherQuizResponse> updateQuiz(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long quizId,
-            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateQuizRequest request) {
+            @Valid @RequestBody UpdateQuizRequest request) {
         return ApiResponse.success(
                 "Quiz updated successfully.",
                 teacherQuizService.updateQuiz(currentUser, quizId, request));
@@ -607,7 +608,7 @@ public class TeacherController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long quizId) {
         teacherQuizService.deleteQuiz(currentUser, quizId);
-        return ApiResponse.success("Quiz archived successfully.", null);
+        return ApiResponse.success("Quiz deleted successfully.", null);
     }
 
     @PostMapping("/quizzes/{quizId}/questions")
@@ -624,7 +625,7 @@ public class TeacherController {
     public ApiResponse<TeacherQuizResponse> updateQuizQuestion(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long questionId,
-            @Valid @RequestBody com.example.aichinese.dto.learning.UpdateQuizQuestionRequest request) {
+            @Valid @RequestBody UpdateQuizQuestionRequest request) {
         return ApiResponse.success(
                 "Quiz question updated successfully.",
                 teacherQuizService.updateQuizQuestion(currentUser, questionId, request));

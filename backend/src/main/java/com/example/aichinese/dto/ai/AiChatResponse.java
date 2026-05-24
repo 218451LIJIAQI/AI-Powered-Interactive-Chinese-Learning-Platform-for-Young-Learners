@@ -2,6 +2,8 @@ package com.example.aichinese.dto.ai;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * Result of one AI chat turn returned by
  * {@code POST /api/v1/ai/chat}.
@@ -31,7 +33,18 @@ import java.time.LocalDateTime;
  * <p>{@link #language} is the language the AI replied in (echoes
  * the request's preference); {@link #createdAt} is the
  * server-side persist time of the AI message row.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions
+ * (snapshot tests, log fingerprints, frontend that maps
+ * conversation history). Content is intentionally <em>not</em>
+ * redacted in {@code toString()} because both {@link #userMessage}
+ * and {@link #aiResponse} are returned to the same student that
+ * produced them — the data is by definition known to the caller.</p>
  */
+@JsonPropertyOrder({ "sessionId", "userMessage", "aiResponse", "language", "createdAt", "status" })
 public record AiChatResponse(
         Long sessionId,
         String userMessage,

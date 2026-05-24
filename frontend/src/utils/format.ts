@@ -51,5 +51,7 @@ export function formatDateTime(value: string | null | undefined) {
 }
 
 export function formatPercent(value: number | null | undefined) {
-  return `${Math.round(value ?? 0)}%`
+  const raw = value ?? 0
+  const safe = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 0
+  return `${Math.round(safe)}%`
 }

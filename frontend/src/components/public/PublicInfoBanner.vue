@@ -1,5 +1,5 @@
 <template>
-  <article class="public-info-banner" :class="toneClass">
+  <article class="public-info-banner" :class="`is-${tone}`">
     <div class="public-info-banner-main">
       <div class="public-info-banner-icon">
         <IconGlyph :name="icon" :size="26" />
@@ -20,23 +20,20 @@
  * slot in the corner advertises an associated status ("Verified",
  * "Coming soon", etc.).
  */
-import { computed } from 'vue'
-
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-const props = withDefaults(
-  defineProps<{
-    icon: string
-    title: string
-    description: string
-    badge?: string
-    tone?: 'green' | 'purple' | 'blue' | 'pearl'
-  }>(),
-  {
-    badge: '',
-    tone: 'green',
-  },
-)
+type BannerTone = 'green' | 'purple' | 'blue' | 'pearl'
 
-const toneClass = computed(() => `is-${props.tone}`)
+interface Props {
+  icon: string
+  title: string
+  description: string
+  badge?: string
+  tone?: BannerTone
+}
+
+withDefaults(defineProps<Props>(), {
+  badge: '',
+  tone: 'green',
+})
 </script>

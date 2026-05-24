@@ -15,9 +15,10 @@
  * bundle stays small — `fill: currentColor` means the parent
  * controls the colour via plain CSS.
  */
-defineProps<{
+interface Props {
   name: 'linkedin' | 'facebook' | 'youtube' | 'instagram'
-}>()
+}
+defineProps<Props>()
 </script>
 
 <style scoped>

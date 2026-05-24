@@ -40,21 +40,32 @@ public record PaymentProperties(
         String stripeWebhookSecret) {
 
     private static final Set<String> ALLOWED_PROVIDERS = Set.of("mock", "no-op", "stripe");
+    private static final int MAX_URL_LENGTH = 2048;
+    private static final String DEFAULT_SUCCESS_URL = "http://localhost:5173/payment/success";
+    private static final String DEFAULT_CANCEL_URL = "http://localhost:5173/payment/cancel";
+    private static final String DEFAULT_STRIPE_API_BASE_URL = "https://api.stripe.com";
+    private static final String DEFAULT_PROVIDER = "no-op";
 
     public PaymentProperties {
-        successUrl = validateUrl(normalize(successUrl, "http://localhost:5173/payment/success"), "Payment success URL");
-        cancelUrl = validateUrl(normalize(cancelUrl, "http://localhost:5173/payment/cancel"), "Payment cancel URL");
+        successUrl = validateUrl(normalize(successUrl, DEFAULT_SUCCESS_URL), "Payment success URL");
+        cancelUrl = validateUrl(normalize(cancelUrl, DEFAULT_CANCEL_URL), "Payment cancel URL");
         provider = normalizeProvider(provider);
-        stripeApiBaseUrl = validateUrl(normalize(stripeApiBaseUrl, "https://api.stripe.com"), "Stripe API base URL");
-        stripeApiKey = stripeApiKey == null ? "" : stripeApiKey.trim();
-        stripeWebhookSecret = stripeWebhookSecret == null ? "" : stripeWebhookSecret.trim();
+        stripeApiBaseUrl = validateUrl(normalize(stripeApiBaseUrl, DEFAULT_STRIPE_API_BASE_URL), "Stripe API base URL");
+        stripeApiKey = stripeApiKey == null ? "" : stripeApiKey.strip();
+        stripeWebhookSecret = stripeWebhookSecret == null ? "" : stripeWebhookSecret.strip();
     }
 
     private static String normalize(String value, String defaultValue) {
-        return value == null || value.isBlank() ? defaultValue : value.trim();
+        // strip() over trim() so a CJK fullwidth space pasted from an editor
+        // does not silently mask a configured URL.
+        return value == null || value.isBlank() ? defaultValue : value.strip();
     }
 
     private static String validateUrl(String value, String label) {
+        if (value.length() > MAX_URL_LENGTH) {
+            throw new IllegalArgumentException(
+                    label + " must be at most " + MAX_URL_LENGTH + " characters.");
+        }
         try {
             URI uri = new URI(value);
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
@@ -68,7 +79,7 @@ public record PaymentProperties(
     }
 
     private static String normalizeProvider(String value) {
-        String normalized = normalize(value, "no-op").toLowerCase(Locale.ROOT);
+        String normalized = normalize(value, DEFAULT_PROVIDER).toLowerCase(Locale.ROOT);
         if ("noop".equals(normalized)) {
             normalized = "no-op";
         }
@@ -76,5 +87,45 @@ public record PaymentProperties(
             throw new IllegalArgumentException("Payment provider must be one of: mock, no-op, stripe.");
         }
         return normalized;
+    }
+
+    /**
+     * Diagnostic representation that masks both Stripe secrets. The
+     * auto-generated record toString would emit them verbatim, so a stray
+     * {@code log.info(paymentProperties)} shipping to production would
+     * leak the live API key and webhook signing secret. We report only
+     * the presence flag and \u2014 for the API key only \u2014 the
+     * {@code sk_live_} / {@code sk_test_} prefix because the live/test
+     * distinction is operationally useful at a glance.
+     */
+    @Override
+    public String toString() {
+        return "PaymentProperties[successUrl=" + successUrl
+                + ", cancelUrl=" + cancelUrl
+                + ", mockSuccessEnabled=" + mockSuccessEnabled
+                + ", provider=" + provider
+                + ", stripeApiBaseUrl=" + stripeApiBaseUrl
+                + ", stripeApiKey=" + maskedStripeApiKey()
+                + ", stripeWebhookSecret=" + (stripeWebhookSecret == null || stripeWebhookSecret.isBlank() ? "[unset]" : "[set]")
+                + "]";
+    }
+
+    private String maskedStripeApiKey() {
+        if (stripeApiKey == null || stripeApiKey.isBlank()) {
+            return "[unset]";
+        }
+        if (stripeApiKey.startsWith("sk_live_")) {
+            return "[set:sk_live_***]";
+        }
+        if (stripeApiKey.startsWith("rk_live_")) {
+            return "[set:rk_live_***]";
+        }
+        if (stripeApiKey.startsWith("sk_test_")) {
+            return "[set:sk_test_***]";
+        }
+        if (stripeApiKey.startsWith("rk_test_")) {
+            return "[set:rk_test_***]";
+        }
+        return "[set]";
     }
 }

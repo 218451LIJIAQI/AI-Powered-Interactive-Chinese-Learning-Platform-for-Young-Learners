@@ -485,8 +485,7 @@ const pageError = computed(
     commissionResource.error.value ||
     notificationsResource.error.value ||
     platformSettingsResource.error.value ||
-    healthResource.error.value ||
-    null,
+    healthResource.error.value,
 )
 const usingFallback = computed(
   () =>
@@ -725,6 +724,7 @@ async function saveLocalPreferences() {
 }
 
 async function markAllAdminNotificationsRead() {
+  if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionError.value = 'Notifications cannot be changed while using preview data.'
     actionSuccess.value = null
@@ -751,6 +751,7 @@ async function markAllAdminNotificationsRead() {
 }
 
 async function savePlatformSettings() {
+  if (savingPlatformSettings.value) return
   if (platformSettingsResource.usingFallback.value) {
     actionError.value = 'Platform settings cannot be changed while using preview data.'
     actionSuccess.value = null
@@ -796,6 +797,7 @@ function reviewAuditLogs() {
 }
 
 async function saveCommission() {
+  if (savingCommission.value) return
   if (commissionReadOnly.value) {
     actionError.value = 'Commission settings cannot be changed while preview data is active.'
     actionSuccess.value = null

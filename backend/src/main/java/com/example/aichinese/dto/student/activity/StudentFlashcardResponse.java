@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.student.activity;
 
 import java.util.List;
+import java.util.Objects;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
 import com.example.aichinese.entity.enums.AgeBand;
@@ -36,6 +37,23 @@ import com.example.aichinese.entity.enums.AgeBand;
  * round trip; primitive {@code boolean} so the JSON always emits a
  * value. See {@link StudentActivitySummaryResponse} for the shared
  * student-side metadata vocabulary contract.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces the wire-format contract:</p>
+ * <ul>
+ *   <li>{@link #id}, {@link #frontText} and {@link #backText} are
+ *       required — the flashcard schema marks them NOT NULL because
+ *       the prompt/reveal pair is the entire reason a flashcard
+ *       exists.</li>
+ *   <li>{@link #title} is intentionally <em>not</em> required — it is
+ *       optional on the flashcard schema and the front-end falls back
+ *       to {@link #frontText} for the card heading.</li>
+ *   <li>{@link #tags} is null-coalesced to {@link List#of()} and
+ *       wrapped in {@link List#copyOf(java.util.Collection)} so the
+ *       wire format is always {@code []} (matching the frontend type
+ *       {@code tags: string[]}) and a downstream caller cannot mutate
+ *       a cached response.</li>
+ * </ul>
  */
 public record StudentFlashcardResponse(
         Long id,
@@ -57,4 +75,21 @@ public record StudentFlashcardResponse(
         Integer xpReward,
         Integer estimatedSeconds,
         boolean completed) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the three
+     * required schema columns ({@code id}, {@code frontText},
+     * {@code backText}) and normalises {@link #tags} to an unmodifiable
+     * defensive copy so external mutation cannot leak into an
+     * already-serialised response. {@code List.copyOf} additionally
+     * fails fast with {@link NullPointerException} on {@code null}
+     * elements — an intentional invariant given that the mapper's
+     * {@code splitTags} already filters them out.
+     */
+    public StudentFlashcardResponse {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(frontText, "frontText must not be null");
+        Objects.requireNonNull(backText, "backText must not be null");
+        tags = tags == null ? List.of() : List.copyOf(tags);
+    }
 }

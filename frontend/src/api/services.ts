@@ -162,7 +162,7 @@ async function unwrap<T>(request: Promise<{ data: ApiResponse<T> }>): Promise<T>
 
 async function unwrapPageItems<T>(request: Promise<{ data: ApiResponse<PageResponse<T>> }>): Promise<T[]> {
   const page = await unwrap<PageResponse<T>>(request)
-  return page.items
+  return page?.items ?? []
 }
 
 function parseContentDispositionFileName(contentDisposition: string | undefined): string | null {
@@ -170,7 +170,7 @@ function parseContentDispositionFileName(contentDisposition: string | undefined)
     return null
   }
 
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/i)
   if (utf8Match?.[1]) {
     try {
       return decodeURIComponent(utf8Match[1])
@@ -179,7 +179,7 @@ function parseContentDispositionFileName(contentDisposition: string | undefined)
     }
   }
 
-  const asciiMatch = contentDisposition.match(/filename="?([^"]+)"?/i)
+  const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
   return asciiMatch?.[1] ?? null
 }
 

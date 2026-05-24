@@ -14,6 +14,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,7 +48,35 @@ import lombok.Setter;
         @Index(name = "idx_learning_modules_category_id", columnList = "category_id"),
         @Index(name = "idx_learning_modules_status", columnList = "content_status")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used
+        // by every read on LearningModuleRepository: teacher dashboards,
+        // public catalogue and admin moderation all need the joined
+        // teacher / teacher.user / level / category rows hydrated in one
+        // round trip. The teacher.user nested fetch is declared as a
+        // sub-graph so the response mapper can render the teacher's
+        // display name without an N+1 lazy load.
+        name = LearningModule.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode(value = "teacher", subgraph = "LearningModule.teacherWithUser"),
+                @NamedAttributeNode("level"),
+                @NamedAttributeNode("category")
+        },
+        subgraphs = @NamedSubgraph(
+                name = "LearningModule.teacherWithUser",
+                attributeNodes = @NamedAttributeNode("user")
+        )
+)
 public class LearningModule extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code LearningModule}: {@code teacher} (with the
+     * nested {@code teacher.user} sub-graph), {@code level} and
+     * {@code category}.
+     */
+    public static final String GRAPH_DETAIL = "LearningModule.detail";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teacher_id")

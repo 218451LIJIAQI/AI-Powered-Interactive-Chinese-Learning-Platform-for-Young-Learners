@@ -282,6 +282,7 @@ watch(
 )
 
 async function reviewAiReport() {
+  if (submittingReview.value) return
   if (reviewReadOnly.value) {
     actionError.value = 'AI response reports cannot be reviewed while preview data is active.'
     actionSuccess.value = null

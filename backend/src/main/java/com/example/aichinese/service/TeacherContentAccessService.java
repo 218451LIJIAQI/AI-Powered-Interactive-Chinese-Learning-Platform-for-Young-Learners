@@ -5,6 +5,7 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.LearningCategoryRepository;
 import com.example.aichinese.repository.LearningLevelRepository;
@@ -80,10 +82,10 @@ public class TeacherContentAccessService {
             LearningLevelRepository learningLevelRepository,
             LearningCategoryRepository learningCategoryRepository,
             ContentSafetyService contentSafetyService) {
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.learningLevelRepository = learningLevelRepository;
-        this.learningCategoryRepository = learningCategoryRepository;
-        this.contentSafetyService = contentSafetyService;
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.learningLevelRepository = Objects.requireNonNull(learningLevelRepository, "learningLevelRepository");
+        this.learningCategoryRepository = Objects.requireNonNull(learningCategoryRepository, "learningCategoryRepository");
+        this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
 
     @Transactional(readOnly = true)
@@ -178,8 +180,8 @@ public class TeacherContentAccessService {
             String description,
             String lessonContent,
             AccessType accessType,
-            java.math.BigDecimal price,
-            com.example.aichinese.entity.enums.LearningType learningType,
+            BigDecimal price,
+            LearningType learningType,
             Integer estimatedDurationMinutes,
             String coverImageUrl) {
         lesson.setTeacher(teacherProfile);
@@ -204,8 +206,8 @@ public class TeacherContentAccessService {
             String title,
             String description,
             AccessType accessType,
-            java.math.BigDecimal price,
-            com.example.aichinese.entity.enums.LearningType learningType,
+            BigDecimal price,
+            LearningType learningType,
             String coverImageUrl) {
         coursePackage.setTeacher(teacherProfile);
         coursePackage.setLevel(level);

@@ -2,6 +2,8 @@ package com.example.aichinese.dto.ai;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -39,7 +41,36 @@ import jakarta.validation.constraints.Size;
  * the recommendation is based on the supplied signals, not by
  * the AI looking up the student id directly.
  * {@link #languagePreference} controls the response language.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * the two short string fields ({@link #currentLevel} and
+ * {@link #languagePreference}) so Bean Validation operates on
+ * the canonical form and the service layer's sanitisation calls
+ * are idempotent. The four list fields are intentionally
+ * <em>not</em> normalised here — the
+ * {@code AiService.joinPromptList} pipeline is the canonical
+ * owner of trim, dedup, and per-prompt-fragment sanitisation for
+ * those fields, mirroring the
+ * {@code UpdateTeacherProfileRequest → TeacherManagementMapper.joinCategories}
+ * convention. {@code null} is preserved on every field so
+ * downstream code can distinguish "absent" from "explicitly
+ * empty".</p>
  */
+@JsonPropertyOrder({
+        "studentId",
+        "currentLevel",
+        "recentQuizResults",
+        "wrongAnswers",
+        "weakAreas",
+        "completedLessons",
+        "languagePreference"
+})
 public record AiLearningRecommendationRequest(
         @Positive(message = "Student id must be positive.")
         Long studentId,
@@ -55,4 +86,21 @@ public record AiLearningRecommendationRequest(
         List<@Size(max = 200, message = "Completed lesson must not exceed 200 characters.") String> completedLessons,
         @Size(max = 20, message = "Language preference must not exceed 20 characters.")
         String languagePreference) {
+
+    /**
+     * Defensive canonical constructor: trims the two short text
+     * fields so Bean Validation operates on the canonical form
+     * and downstream sanitisation is idempotent. {@code null} is
+     * preserved so downstream code can distinguish "absent" from
+     * "explicitly empty". The four list fields are deliberately
+     * left untouched — see class Javadoc.
+     */
+    public AiLearningRecommendationRequest {
+        if (currentLevel != null) {
+            currentLevel = currentLevel.trim();
+        }
+        if (languagePreference != null) {
+            languagePreference = languagePreference.trim();
+        }
+    }
 }

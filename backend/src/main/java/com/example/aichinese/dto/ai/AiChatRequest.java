@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -39,7 +41,25 @@ import jakarta.validation.constraints.Size;
  * <p>{@link #message} is sanitised server-side via
  * {@code AiInputSanitizer} before being passed to the upstream
  * provider; rate-limited per user via the AI usage quota.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * {@link #message}, {@link #languagePreference} and
+ * {@link #context} so Bean Validation operates on the canonical
+ * form (a whitespace-only {@code message} correctly fails
+ * {@link NotBlank @NotBlank} after trimming, the way the user
+ * expects) and the service layer's
+ * {@code AiInputSanitizer.sanitizeLong} pass is idempotent.
+ * {@code null} is preserved so the {@link NotBlank @NotBlank}
+ * validator renders the friendly "Message is required." message
+ * rather than a low-level {@link NullPointerException}.</p>
  */
+@JsonPropertyOrder({ "message", "languagePreference", "sessionId", "context", "relatedLessonId" })
 public record AiChatRequest(
         @NotBlank(message = "Message is required.")
         @Size(max = 2000, message = "Message must not exceed 2000 characters.")
@@ -52,4 +72,25 @@ public record AiChatRequest(
         String context,
         @Positive(message = "Related lesson id must be positive.")
         Long relatedLessonId) {
+
+    /**
+     * Defensive canonical constructor: trims the three free-text
+     * fields so Bean Validation operates on the canonical form and
+     * the service layer's sanitisation calls are idempotent.
+     * {@code null} is preserved so {@link NotBlank @NotBlank} can
+     * render its friendly user-facing message rather than a
+     * low-level {@link NullPointerException}. Numeric ids are not
+     * normalised here — {@link Positive @Positive} handles them.
+     */
+    public AiChatRequest {
+        if (message != null) {
+            message = message.trim();
+        }
+        if (languagePreference != null) {
+            languagePreference = languagePreference.trim();
+        }
+        if (context != null) {
+            context = context.trim();
+        }
+    }
 }

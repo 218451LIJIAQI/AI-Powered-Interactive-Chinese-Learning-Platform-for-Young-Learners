@@ -10,7 +10,6 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.lang.NonNull;
 
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.enums.AccessType;
@@ -21,43 +20,64 @@ import com.example.aichinese.entity.enums.ContentStatus;
  * video resources attached to a {@code Lesson} (and optionally a
  * {@code CoursePackage}).
  *
- * <p>Every read uses the same {@link EntityGraph} of
- * lesson / lesson.teacher / lesson.teacher.user / coursePackage /
- * uploadedFile so the downstream response mapper never regresses into
- * the per-row lazy-load N+1 pattern. {@code active} acts as a soft-delete
- * flag — teacher-removed videos remain in the table for the lesson
- * progress audit trail but are excluded from every student-visible
- * read here.</p>
+ * <p>Every read references the
+ * {@link RecordedLessonVideo#GRAPH_DETAIL named entity graph} so the
+ * downstream response mapper hydrates lesson / lesson.teacher /
+ * lesson.teacher.user / coursePackage / uploadedFile in a single round
+ * trip without the per-row lazy-load N+1 pattern. Centralising the
+ * graph on the entity eliminated the previous eight-fold duplication
+ * of an identical {@code attributePaths} array.</p>
+ *
+ * <p>{@code active} acts as a soft-delete flag — teacher-removed
+ * videos remain in the table for the {@code VideoProgress} audit
+ * trail but are excluded from every student-visible read here.</p>
  */
 public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLessonVideo, Long> {
 
-    @Override
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
-    @NonNull
-    List<RecordedLessonVideo> findAll();
-
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
-    List<RecordedLessonVideo> findByLessonIdAndActiveTrueOrderBySortOrderAscCreatedAtAsc(Long lessonId);
-
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
+    /**
+     * Paged teacher video list for a lesson, excluding soft-deleted
+     * rows. Used by the teacher recorded-content editor; the named
+     * eager-fetch keeps the response mapper from triggering one lazy
+     * SELECT per row.
+     */
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     Page<RecordedLessonVideo> findByLessonIdAndActiveTrueOrderBySortOrderAscCreatedAtAsc(Long lessonId, Pageable pageable);
 
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
+    /**
+     * Lesson-scoped IDOR-safe single-row lookup: returns the video only
+     * when it belongs to {@code lessonId} and has not been soft-deleted.
+     * Used by the student playback flow after the surrounding lesson
+     * access check has already passed.
+     */
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     Optional<RecordedLessonVideo> findByIdAndLessonIdAndActiveTrue(Long id, Long lessonId);
 
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
+    /**
+     * Teacher IDOR-safe single-row lookup that traverses
+     * {@code RecordedLessonVideo → Lesson → TeacherProfile → User}
+     * so a teacher cannot mutate another teacher's video by guessing
+     * its id. Returns soft-deleted rows too so the teacher edit panel
+     * can restore them.
+     */
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     Optional<RecordedLessonVideo> findByIdAndLessonTeacherUserId(Long id, Long teacherUserId);
 
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
+    /**
+     * Active-only single-row lookup used by the notification access
+     * check ({@code NotificationService}) and the live-learning access
+     * service when verifying that a referenced video has not since
+     * been soft-deleted.
+     */
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     Optional<RecordedLessonVideo> findByIdAndActiveTrue(Long id);
 
     /**
-     * Returns every active recorded video that targets the given lesson directly,
-     * or targets one of the supplied related package ids. Used by the student
-     * lesson detail view to surface recorded sessions without scanning the
-     * entire recorded video table.
+     * Returns every active recorded video that targets the given lesson
+     * directly, or targets one of the supplied related package ids.
+     * Used by the student lesson detail view to surface recorded
+     * sessions without scanning the entire recorded video table.
      */
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     @Query("""
             select v from RecordedLessonVideo v
             where v.active = true and (
@@ -70,12 +90,13 @@ public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLes
             @Param("packageIds") Collection<Long> packageIds);
 
     /**
-     * Student-visible, paywall-aware fetch of recorded videos for a lesson.
-     * Excludes locked videos in PAID packages that the supplied student
-     * has not purchased, eliminating an in-memory entitlement check that
-     * previously ran per-row inside the lesson-detail mapper.
+     * Student-visible, paywall-aware fetch of recorded videos for a
+     * lesson. Excludes locked videos in PAID packages that the supplied
+     * student has not purchased, eliminating an in-memory entitlement
+     * check that previously ran per-row inside the lesson-detail
+     * mapper.
      */
-    @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "coursePackage", "uploadedFile" })
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     @Query(value = """
             select distinct v from RecordedLessonVideo v
             left join v.coursePackage p

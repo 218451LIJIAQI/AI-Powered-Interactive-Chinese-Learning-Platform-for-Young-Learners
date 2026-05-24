@@ -2,8 +2,11 @@ package com.example.aichinese.service;
 
 import java.math.BigDecimal;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +29,8 @@ import com.example.aichinese.repository.SystemSettingRepository;
 @Service
 public class CommerceSettingsService {
 
+    private static final Logger log = LoggerFactory.getLogger(CommerceSettingsService.class);
+
     public static final String DEFAULT_CURRENCY_KEY = "default_currency";
     public static final String PLATFORM_COMMISSION_RATE_KEY = "platform_commission_rate";
 
@@ -40,8 +45,8 @@ public class CommerceSettingsService {
     public CommerceSettingsService(
             SystemSettingRepository systemSettingRepository,
             CommerceMoneyService commerceMoneyService) {
-        this.systemSettingRepository = systemSettingRepository;
-        this.commerceMoneyService = commerceMoneyService;
+        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
+        this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +55,10 @@ public class CommerceSettingsService {
                 .map(SystemSetting::getSettingValue)
                 .filter(value -> !value.isBlank())
                 .map(this::requireIsoCurrencyCode)
-                .orElse("MYR");
+                .orElseGet(() -> {
+                    log.debug("No '{}' setting found; defaulting to MYR", DEFAULT_CURRENCY_KEY);
+                    return "MYR";
+                });
     }
 
     @Transactional(readOnly = true)
@@ -59,9 +67,19 @@ public class CommerceSettingsService {
                 .map(SystemSetting::getSettingValue)
                 .filter(value -> !value.isBlank())
                 .map(this::requireCommissionRate)
-                .orElseGet(() -> commerceMoneyService.normalizeRate(DEFAULT_COMMISSION_RATE));
+                .orElseGet(() -> {
+                    log.debug("No '{}' setting found; defaulting to {}",
+                            PLATFORM_COMMISSION_RATE_KEY, DEFAULT_COMMISSION_RATE);
+                    return commerceMoneyService.normalizeRate(DEFAULT_COMMISSION_RATE);
+                });
     }
 
+    /**
+     * Validates and normalises a commission rate to
+     * {@link CommerceMoneyService#RATE_SCALE} decimal places.
+     *
+     * @throws IllegalArgumentException if the rate is outside [0, 1]
+     */
     public BigDecimal normalizeCommissionRate(BigDecimal value) {
         BigDecimal rate = commerceMoneyService.normalizeRate(value);
         if (rate.compareTo(MIN_COMMISSION_RATE) < 0 || rate.compareTo(MAX_COMMISSION_RATE) > 0) {

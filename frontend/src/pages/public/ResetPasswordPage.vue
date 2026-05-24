@@ -36,11 +36,11 @@
           </div>
         </div>
 
-        <div v-if="error" class="soft-banner auth-alert auth-alert--error">
+        <div v-if="error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
           <span>{{ error }}</span>
         </div>
 
-        <div v-if="success" class="soft-banner auth-alert auth-alert--success">
+        <div v-if="success" class="soft-banner auth-alert auth-alert--success" role="status" aria-live="polite">
           <span>{{ success }}</span>
         </div>
 
@@ -124,7 +124,7 @@ import { resolveApiError } from '@/utils/apiError'
 
 const route = useRoute()
 
-const token = ref(typeof route.query.token === 'string' ? route.query.token : '')
+const token = ref(typeof route.query.token === 'string' ? route.query.token.trim() : '')
 const password = ref('')
 const confirmPassword = ref('')
 const error = ref<string | null>(null)
@@ -132,7 +132,11 @@ const success = ref<string | null>(null)
 const submitting = ref(false)
 
 const canSubmit = computed(
-  () => Boolean(token.value.trim() && password.value && confirmPassword.value) && !submitting.value,
+  () =>
+    !submitting.value &&
+    token.value.trim().length > 0 &&
+    password.value.length >= 8 &&
+    password.value === confirmPassword.value,
 )
 const passwordChecks = computed(() => [
   { label: 'At least 8 characters', met: password.value.length >= 8 },
@@ -145,8 +149,15 @@ const passwordStrengthClass = computed(() => `is-${passwordStrengthScore.value}`
 const passwordStrengthWidth = computed(() => `${(passwordStrengthScore.value / passwordChecks.value.length) * 100}%`)
 
 async function submitReset() {
+  if (submitting.value) return
+
   error.value = null
   success.value = null
+
+  if (password.value.length < 8) {
+    error.value = 'Password must be at least 8 characters.'
+    return
+  }
 
   if (password.value !== confirmPassword.value) {
     error.value = 'Confirm password does not match.'
@@ -160,6 +171,7 @@ async function submitReset() {
       password: password.value,
       confirmPassword: confirmPassword.value,
     })
+    token.value = ''
     password.value = ''
     confirmPassword.value = ''
     success.value = 'Password reset successfully. You can sign in with your new password now.'

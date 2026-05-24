@@ -22,6 +22,13 @@ import com.example.aichinese.entity.StoryQuestion;
  */
 public interface StoryQuestionRepository extends JpaRepository<StoryQuestion, Long> {
 
+    /**
+     * Returns every prompt belonging to {@code storyActivityId} in the
+     * order the author intended. Sorts primarily by {@code sortOrder}
+     * with {@code createdAt} as a deterministic tie-breaker so two
+     * prompts sharing the same sort order still render in insertion
+     * order rather than in arbitrary database order.
+     */
     List<StoryQuestion> findByStoryActivityIdOrderBySortOrderAscCreatedAtAsc(Long storyActivityId);
 
     /**

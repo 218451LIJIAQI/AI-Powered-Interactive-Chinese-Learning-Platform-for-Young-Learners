@@ -22,10 +22,12 @@
  */
 import IconGlyph from './IconGlyph.vue'
 
-defineProps<{
+interface Props {
   label: string
-  value: string
+  value: string | number
   subtitle: string
   icon: string
-}>()
+}
+
+defineProps<Props>()
 </script>

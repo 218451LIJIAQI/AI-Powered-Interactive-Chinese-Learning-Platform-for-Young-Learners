@@ -1,11 +1,13 @@
 package com.example.aichinese.config;
 
 import java.net.URI;
-import java.util.Arrays;
+import java.net.URISyntaxException;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,12 +47,14 @@ public class AiProductionGuard {
 
     private static final Set<String> SUPPORTED_REAL_PROVIDERS = Set.of("deepseek", "openai-compatible");
 
+    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
+
     private final Environment environment;
     private final AiProperties aiProperties;
 
     public AiProductionGuard(Environment environment, AiProperties aiProperties) {
-        this.environment = environment;
-        this.aiProperties = aiProperties;
+        this.environment = Objects.requireNonNull(environment, "environment");
+        this.aiProperties = Objects.requireNonNull(aiProperties, "aiProperties");
         validate();
     }
 
@@ -79,11 +83,15 @@ public class AiProductionGuard {
         requireProductionReadyProviderBaseUrl(aiProperties.getApiBaseUrl());
     }
 
+    /**
+     * Returns {@code true} when the {@code prod} or {@code production}
+     * profile is active. Uses {@link Environment#acceptsProfiles(Profiles)}
+     * so that {@code spring.profiles.default=prod} (a common Kubernetes
+     * pattern where no profile is explicitly listed) also triggers the
+     * guard \u2014 unlike a manual scan of {@code getActiveProfiles()}.
+     */
     private boolean isProductionProfileActive() {
-        return Arrays.stream(environment.getActiveProfiles())
-                .map(String::trim)
-                .map(value -> value.toLowerCase(Locale.ROOT))
-                .anyMatch(profile -> profile.equals("prod") || profile.equals("production"));
+        return environment.acceptsProfiles(PROD_PROFILES);
     }
 
     private String normalizedProvider() {
@@ -93,7 +101,7 @@ public class AiProductionGuard {
         return "openai_compatible".equals(provider) ? "openai-compatible" : provider;
     }
 
-    private void requireProductionReadyProviderBaseUrl(String value) {
+    private static void requireProductionReadyProviderBaseUrl(String value) {
         if (isBlank(value)) {
             throw new IllegalStateException(
                     "AI_API_BASE_URL must be configured when AI_ENABLE_REAL_PROVIDER=true and the prod profile is active.");
@@ -101,8 +109,10 @@ public class AiProductionGuard {
 
         URI uri;
         try {
-            uri = URI.create(value.trim());
-        } catch (IllegalArgumentException exception) {
+            // new URI(\u2026) is stricter than URI.create(\u2026) and rejects e.g. spaces
+            // and bare hosts which the latter happily accepts as opaque URIs.
+            uri = new URI(value.trim());
+        } catch (URISyntaxException | IllegalArgumentException exception) {
             throw new IllegalStateException(
                     "AI_API_BASE_URL must be a valid HTTPS URL when AI_ENABLE_REAL_PROVIDER=true and the prod profile is active.",
                     exception);
@@ -120,7 +130,7 @@ public class AiProductionGuard {
         }
     }
 
-    private String normalizeHost(String value) {
+    private static String normalizeHost(String value) {
         if (value == null || value.isBlank()) {
             return "";
         }
@@ -131,18 +141,32 @@ public class AiProductionGuard {
         return normalized;
     }
 
-    private boolean isLoopbackHost(String host) {
+    /**
+     * Returns {@code true} if the supplied (already-normalized) host is a
+     * loopback, link-local, or unspecified address. Covers IPv4 ({@code 127/8},
+     * {@code 0.0.0.0}, link-local {@code 169.254/16}), IPv6 ({@code ::1},
+     * link-local {@code fe80::/10}), and the IPv4-mapped IPv6 form of loopback
+     * ({@code ::ffff:127.0.0.1}). A typo of any of these in a production
+     * config would otherwise short-circuit the AI provider request to an
+     * unreachable internal endpoint without alarm.
+     */
+    private static boolean isLoopbackHost(String host) {
         return "localhost".equals(host)
                 || "0.0.0.0".equals(host)
+                || "::".equals(host)
                 || "::1".equals(host)
-                || host.startsWith("127.");
+                || host.startsWith("127.")
+                || host.startsWith("169.254.")
+                || host.startsWith("fe80:")
+                || host.startsWith("::ffff:127.")
+                || host.startsWith("::ffff:0.");
     }
 
-    private boolean isBlank(String value) {
+    private static boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
-    private boolean isPlaceholder(String value) {
+    private static boolean isPlaceholder(String value) {
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         return normalized.startsWith("replace-with-")
                 || normalized.equals("changeme")

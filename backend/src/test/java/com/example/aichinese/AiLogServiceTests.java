@@ -8,7 +8,11 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.entity.AiChatMessage;
+import com.example.aichinese.entity.AiChatSession;
+import com.example.aichinese.entity.AiFeedbackRecord;
 import com.example.aichinese.entity.AiUsageLog;
+import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
@@ -18,10 +22,6 @@ import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiFeedbackRecordRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.service.AiLogService;
-import com.example.aichinese.entity.AiChatMessage;
-import com.example.aichinese.entity.AiChatSession;
-import com.example.aichinese.entity.AiFeedbackRecord;
-import com.example.aichinese.entity.UploadedFile;
 
 /**
  * Unit coverage for {@code AiLogService} — pins the typed sender-role

@@ -259,40 +259,29 @@ const videoActionLoading = ref(false)
 const pageLoading = computed(() => resource.loading.value || progressResource.loading.value)
 const pageError = computed(() => resource.error.value || progressResource.error.value)
 const usingFallback = computed(() => resource.usingFallback.value || progressResource.usingFallback.value)
-const studentName = computed(() => auth.currentUser?.studentProfile?.displayName ?? auth.displayName.split(' ')[0] ?? 'Learner')
+const studentName = computed(() => auth.currentUser?.studentProfile?.displayName || auth.displayName.split(' ')[0] || 'Learner')
+function emptyVideo(lessonId: number): RecordedLessonVideoResponse {
+  return {
+    id: 0,
+    lessonId,
+    title: 'Video unavailable',
+    description: 'Recorded video is unavailable right now.',
+    sourceType: 'UPLOAD',
+    externalVideoUrl: null,
+    streamUrl: null,
+    durationSeconds: 0,
+    sortOrder: 0,
+    active: false,
+    createdAt: '',
+    updatedAt: '',
+  }
+}
 const primaryVideo = computed(
   () =>
     lesson.value.recordedVideos.find((video) => video.id === requestedVideoId.value) ??
     lesson.value.recordedVideos[0] ??
-    (resource.usingFallback.value
-      ? (studentLessonPlayer.recordedVideos[0] ?? {
-          id: 0,
-          lessonId: lesson.value.lessonId,
-          title: 'Video unavailable',
-          description: 'Recorded video is unavailable right now.',
-          sourceType: 'UPLOAD',
-          externalVideoUrl: null,
-          streamUrl: null,
-          durationSeconds: 0,
-          sortOrder: 0,
-          active: false,
-          createdAt: '',
-          updatedAt: '',
-        })
-      : {
-          id: 0,
-          lessonId: lesson.value.lessonId,
-          title: 'Video unavailable',
-          description: 'Recorded video is unavailable right now.',
-          sourceType: 'UPLOAD',
-          externalVideoUrl: null,
-          streamUrl: null,
-          durationSeconds: 0,
-          sortOrder: 0,
-          active: false,
-          createdAt: '',
-          updatedAt: '',
-        }),
+    (resource.usingFallback.value ? studentLessonPlayer.recordedVideos[0] : undefined) ??
+    emptyVideo(lesson.value.lessonId),
 )
 
 const videoDurationLabel = computed(() => {
@@ -472,6 +461,7 @@ async function loadVideoProgress() {
 }
 
 async function openRecordedLesson() {
+  if (videoActionLoading.value) return
   actionError.value = null
   actionSuccess.value = null
   const url = playableVideoUrl.value
@@ -498,6 +488,7 @@ async function openRecordedLesson() {
 }
 
 async function markRecordedLessonComplete() {
+  if (videoActionLoading.value) return
   actionError.value = null
   actionSuccess.value = null
   if (!hasPlayableVideo.value) {

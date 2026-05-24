@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of a {@code LiveClass} session.
@@ -52,23 +50,23 @@ public enum LiveClassStatus {
      * existing {@code LiveLearningAccessService.JOINABLE_STATUSES}
      * constant — a single source of truth here keeps both in sync.
      */
-    public static final Set<LiveClassStatus> JOINABLE = Set.of(SCHEDULED, ONGOING);
+    public static final Set<LiveClassStatus> JOINABLE =
+            Collections.unmodifiableSet(EnumSet.of(SCHEDULED, ONGOING));
 
     /**
      * Statuses surfaced in the student-visible listing. Mirrors
      * {@code LiveClassService.STUDENT_VISIBLE_STATUSES}.
      */
     public static final Set<LiveClassStatus> STUDENT_VISIBLE =
-            Set.of(SCHEDULED, ONGOING, RESCHEDULED);
+            Collections.unmodifiableSet(EnumSet.of(SCHEDULED, ONGOING, RESCHEDULED));
 
     /** Statuses in which the session can no longer transition. */
-    public static final Set<LiveClassStatus> TERMINAL = Set.of(COMPLETED, CANCELLED);
+    public static final Set<LiveClassStatus> TERMINAL =
+            Collections.unmodifiableSet(EnumSet.of(COMPLETED, CANCELLED));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, LiveClassStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, LiveClassStatus> LOOKUP =
+            EnumLookups.indexByName(LiveClassStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -78,14 +76,7 @@ public enum LiveClassStatus {
      *         is {@code null}, blank, or not a recognised status
      */
     public static Optional<LiveClassStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -95,12 +86,12 @@ public enum LiveClassStatus {
      *         blank, or not a recognised status
      */
     public static LiveClassStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Live class status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid live class status. Allowed values are SCHEDULED, ONGOING, "
-                        + "COMPLETED, CANCELLED, or RESCHEDULED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Live class status is required.",
+                () -> "Invalid live class status. Allowed values are SCHEDULED, ONGOING, "
+                        + "COMPLETED, CANCELLED, or RESCHEDULED.");
     }
 
     /** @return {@code true} when the session is currently in progress. */

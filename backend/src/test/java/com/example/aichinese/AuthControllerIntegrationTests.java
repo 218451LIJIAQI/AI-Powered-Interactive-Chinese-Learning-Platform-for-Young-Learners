@@ -1,6 +1,7 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -18,6 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,8 +30,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.entity.PasswordResetToken;
 import com.example.aichinese.entity.AuditLog;
+import com.example.aichinese.entity.PasswordResetToken;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
@@ -40,7 +43,6 @@ import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.service.NoOpEmailService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.mockito.ArgumentCaptor;
 
 /**
  * End-to-end MockMvc coverage of {@code /api/v1/auth/**}: registration
@@ -93,6 +95,9 @@ class AuthControllerIntegrationTests {
 
     @Autowired
     private AuditLogRepository auditLogRepository;
+
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
 
     @MockitoSpyBean
     private NoOpEmailService noOpEmailService;
@@ -183,8 +188,7 @@ class AuthControllerIntegrationTests {
                         "email", email,
                         "password", "Password123!"))))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
                 .andExpect(header().string("X-Request-Id", requestId))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.token").isString())
@@ -315,8 +319,7 @@ class AuthControllerIntegrationTests {
                 // Wave-6 regression: /auth/me returns Cache-Control: no-store
                 // so the JSON profile cannot be replayed from browser cache or
                 // bfcache after the user logs out.
-                .andExpect(header().string("Cache-Control",
-                        org.hamcrest.Matchers.containsString("no-store")));
+                .andExpect(header().string("Cache-Control", containsString("no-store")));
     }
 
     @Test
@@ -499,9 +502,6 @@ class AuthControllerIntegrationTests {
         assertThat(responseBody).doesNotContain("at org.springframework");
     }
 
-    @Autowired
-    private PasswordResetTokenRepository passwordResetTokenRepository;
-
     @Test
     void shouldRejectResetPasswordWithUnknownToken() throws Exception {
         // Tokens that were never issued must be rejected with 400. This is the public
@@ -516,7 +516,7 @@ class AuthControllerIntegrationTests {
                         "confirmPassword", "NewPassword123!"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("invalid")));
+                .andExpect(jsonPath("$.message", containsString("invalid")));
     }
 
     @Test
@@ -552,7 +552,7 @@ class AuthControllerIntegrationTests {
                         && record.getUsedAt() == null)
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Reset token was not persisted for the registered email."));
-        assertThat(token.getExpiresAt()).isAfter(java.time.LocalDateTime.now());
+        assertThat(token.getExpiresAt()).isAfter(LocalDateTime.now());
         assertThat(token.getTokenHash()).isNotBlank().isNotEqualTo(rawResetToken);
 
         // First use of the token: must succeed and update the stored hash.
@@ -658,10 +658,10 @@ class AuthControllerIntegrationTests {
 
         int firstConsume = passwordResetTokenRepository.consumeActiveToken(
                 tokenId,
-                java.time.LocalDateTime.now());
+                LocalDateTime.now());
         int replayConsume = passwordResetTokenRepository.consumeActiveToken(
                 tokenId,
-                java.time.LocalDateTime.now());
+                LocalDateTime.now());
 
         assertThat(firstConsume).isEqualTo(1);
         assertThat(replayConsume).isZero();

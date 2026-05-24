@@ -10,13 +10,17 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -42,8 +46,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *       {@link #SIGNATURE_TOLERANCE_SECONDS} (5 minutes) to defeat
  *       replay attacks.</li>
  *   <li>Recomputes the HMAC with the configured signing secret and
- *       compares using a constant-time check via {@link MessageDigest}
- *       to defeat timing-side-channel attacks.</li>
+ *       compares using a constant-time XOR loop to defeat
+ *       timing-side-channel attacks.</li>
  * </ol>
  *
  * <h2>Event filtering</h2>
@@ -64,6 +68,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class StripeWebhookService {
 
+    private static final Logger log = LoggerFactory.getLogger(StripeWebhookService.class);
+
     private static final long SIGNATURE_TOLERANCE_SECONDS = 300;
     private static final Set<String> SUPPORTED_CHECKOUT_SESSION_EVENTS = Set.of(
             "CHECKOUT.SESSION.COMPLETED",
@@ -79,9 +85,9 @@ public class StripeWebhookService {
             PaymentProperties paymentProperties,
             PaymentService paymentService,
             ObjectMapper objectMapper) {
-        this.paymentProperties = paymentProperties;
-        this.paymentService = paymentService;
-        this.objectMapper = objectMapper;
+        this.paymentProperties = Objects.requireNonNull(paymentProperties, "paymentProperties");
+        this.paymentService = Objects.requireNonNull(paymentService, "paymentService");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
     }
 
     public StripeWebhookResultResponse handleWebhook(String payload, String signatureHeader) {
@@ -92,6 +98,7 @@ public class StripeWebhookService {
         String eventType = text(root, "type");
         JsonNode objectNode = root.path("data").path("object");
         if (!isSupportedCheckoutSessionEvent(eventType)) {
+            log.debug("Ignoring unsupported Stripe event: type={}, id={}", eventType, eventId);
             return new StripeWebhookResultResponse(
                     eventId,
                     eventType,
@@ -128,13 +135,16 @@ public class StripeWebhookService {
                 paymentStatus,
                 providerStatus,
                 false));
-        return new StripeWebhookResultResponse(
+        StripeWebhookResultResponse finalResult = new StripeWebhookResultResponse(
                 eventId,
                 eventType,
                 result.paymentId(),
                 result.paymentStatus(),
                 result.providerStatus(),
                 result.processed());
+        log.info("Stripe webhook processed: eventId={}, type={}, paymentId={}, status={}, applied={}",
+                eventId, eventType, finalResult.paymentId(), finalResult.paymentStatus(), finalResult.processed());
+        return finalResult;
     }
 
     private void requireValidSignature(String payload, String signatureHeader) {
@@ -156,6 +166,7 @@ public class StripeWebhookService {
             throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook signature is invalid.");
         }
         if (Math.abs(Instant.now().getEpochSecond() - timestamp) > SIGNATURE_TOLERANCE_SECONDS) {
+            log.warn("Stripe webhook rejected: signature timestamp outside tolerance (timestamp={})", timestamp);
             throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook signature timestamp is outside the allowed tolerance.");
         }
 
@@ -164,6 +175,7 @@ public class StripeWebhookService {
         boolean signatureMatches = actualSignatures.stream()
                 .anyMatch(actualSignature -> constantTimeEquals(expectedSignature, actualSignature));
         if (!signatureMatches) {
+            log.warn("Stripe webhook rejected: HMAC signature mismatch");
             throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook signature is invalid.");
         }
     }
@@ -251,7 +263,7 @@ public class StripeWebhookService {
     }
 
     private String normalize(String value) {
-        return value == null || value.isBlank() ? "UNKNOWN" : value.trim().toUpperCase().replace('-', '_');
+        return value == null || value.isBlank() ? "UNKNOWN" : value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
     }
 
     private String text(JsonNode node, String key) {

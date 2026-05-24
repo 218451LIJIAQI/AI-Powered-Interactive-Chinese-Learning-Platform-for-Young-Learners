@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Lifecycle state of a student's reservation for a {@code LiveClass}.
@@ -44,13 +42,11 @@ public enum LiveClassEnrolmentStatus {
 
     /** States in which the reservation can no longer transition. */
     public static final Set<LiveClassEnrolmentStatus> TERMINAL =
-            Set.of(CANCELLED, ATTENDED, MISSED);
+            Collections.unmodifiableSet(EnumSet.of(CANCELLED, ATTENDED, MISSED));
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, LiveClassEnrolmentStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, LiveClassEnrolmentStatus> LOOKUP =
+            EnumLookups.indexByName(LiveClassEnrolmentStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -60,14 +56,7 @@ public enum LiveClassEnrolmentStatus {
      *         is {@code null}, blank, or not a recognised enrolment status
      */
     public static Optional<LiveClassEnrolmentStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -77,12 +66,12 @@ public enum LiveClassEnrolmentStatus {
      *         blank, or not a recognised enrolment status
      */
     public static LiveClassEnrolmentStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Live class enrolment status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid live class enrolment status. Allowed values are ENROLLED, "
-                        + "CANCELLED, ATTENDED, or MISSED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Live class enrolment status is required.",
+                () -> "Invalid live class enrolment status. Allowed values are ENROLLED, "
+                        + "CANCELLED, ATTENDED, or MISSED.");
     }
 
     /** @return {@code true} when the student is still expected to attend. */

@@ -4,8 +4,12 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.function.Function;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -65,6 +69,8 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class TeacherFeedbackService {
 
+    private static final Logger log = LoggerFactory.getLogger(TeacherFeedbackService.class);
+
     private static final int MAX_FEEDBACK_MESSAGE_LENGTH = 2000;
 
     private final TeacherFeedbackRepository teacherFeedbackRepository;
@@ -95,19 +101,19 @@ public class TeacherFeedbackService {
             StudentLearningAccessService studentLearningAccessService,
             LiveLearningAccessService liveLearningAccessService,
             ContentSafetyService contentSafetyService) {
-        this.teacherFeedbackRepository = teacherFeedbackRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
-        this.lessonRepository = lessonRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
-        this.communicationMapper = communicationMapper;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.studentLearningAccessService = studentLearningAccessService;
-        this.liveLearningAccessService = liveLearningAccessService;
-        this.contentSafetyService = contentSafetyService;
+        this.teacherFeedbackRepository = Objects.requireNonNull(teacherFeedbackRepository, "teacherFeedbackRepository");
+        this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
+        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
+        this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
 
     @Transactional
@@ -131,6 +137,8 @@ public class TeacherFeedbackService {
                 MAX_FEEDBACK_MESSAGE_LENGTH,
                 "Feedback message is required."));
         TeacherFeedback saved = teacherFeedbackRepository.save(feedback);
+        log.info("Teacher feedback created: feedbackId={}, teacherId={}, studentId={}, type={}",
+                saved.getId(), teacher.getId(), student.getId(), saved.getFeedbackType());
 
         notificationService.safeCreateNotification(
                 student.getUser(),
@@ -362,7 +370,7 @@ public class TeacherFeedbackService {
             return TeacherFeedbackType.GENERAL;
         }
         try {
-            return TeacherFeedbackType.valueOf(rawType.trim().toUpperCase());
+            return TeacherFeedbackType.valueOf(rawType.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid feedback type.");
         }

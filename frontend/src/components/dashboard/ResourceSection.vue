@@ -37,10 +37,12 @@
  */
 import StatePanel from '@/components/common/StatePanel.vue'
 
-defineProps<{
+interface Props {
   loading?: boolean
   error?: string | null
-}>()
+}
+
+defineProps<Props>()
 
 defineEmits<{
   retry: []

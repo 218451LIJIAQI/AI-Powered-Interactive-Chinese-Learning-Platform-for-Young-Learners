@@ -1,12 +1,10 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Concrete moderation action recorded against a piece of platform content.
@@ -38,17 +36,31 @@ public enum ContentModerationAction {
      * filtering audit logs and rendering badge severity in the moderation
      * dashboard.
      */
-    public static final Set<ContentModerationAction> RESTRICTIVE =
-            Set.of(HIDE, UNPUBLISH, ARCHIVE, REQUEST_REVISION);
+    public static final Set<ContentModerationAction> RESTRICTIVE = Collections.unmodifiableSet(
+            EnumSet.of(HIDE, UNPUBLISH, ARCHIVE, REQUEST_REVISION));
 
     /** Restorative actions that re-expose previously restricted content. */
-    public static final Set<ContentModerationAction> RESTORATIVE = Set.of(RESTORE);
+    public static final Set<ContentModerationAction> RESTORATIVE =
+            Collections.unmodifiableSet(EnumSet.of(RESTORE));
+
+    /*
+     * Startup-time exhaustiveness guard: every constant must be either
+     * restrictive or restorative.  Catches forgotten classification at
+     * class-load time rather than at runtime.
+     */
+    static {
+        EnumSet<ContentModerationAction> covered = EnumSet.copyOf(RESTRICTIVE);
+        covered.addAll(RESTORATIVE);
+        if (!covered.equals(EnumSet.allOf(ContentModerationAction.class))) {
+            EnumSet<ContentModerationAction> missing = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "ContentModerationAction category sets do not cover all constants; uncovered: " + missing);
+        }
+    }
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, ContentModerationAction> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, ContentModerationAction> LOOKUP =
+            EnumLookups.indexByName(ContentModerationAction.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -58,14 +70,7 @@ public enum ContentModerationAction {
      *         is {@code null}, blank, or not a recognised action
      */
     public static Optional<ContentModerationAction> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -75,12 +80,12 @@ public enum ContentModerationAction {
      *         blank, or not a recognised action
      */
     public static ContentModerationAction fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Moderation action is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid moderation action. Allowed values are HIDE, UNPUBLISH, ARCHIVE, "
-                        + "REQUEST_REVISION, or RESTORE."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Moderation action is required.",
+                () -> "Invalid moderation action. Allowed values are HIDE, UNPUBLISH, ARCHIVE, "
+                        + "REQUEST_REVISION, or RESTORE.");
     }
 
     /** @return {@code true} when the action takes content away from learners. */

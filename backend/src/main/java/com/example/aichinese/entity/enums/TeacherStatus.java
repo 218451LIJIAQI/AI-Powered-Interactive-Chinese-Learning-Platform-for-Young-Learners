@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Verification state of a {@code TeacherProfile}.
@@ -39,10 +35,8 @@ public enum TeacherStatus {
     REJECTED;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, TeacherStatus> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, TeacherStatus> LOOKUP =
+            EnumLookups.indexByName(TeacherStatus.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -52,14 +46,7 @@ public enum TeacherStatus {
      *         is {@code null}, blank, or not a recognised teacher status
      */
     public static Optional<TeacherStatus> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -69,11 +56,11 @@ public enum TeacherStatus {
      *         blank, or not a recognised teacher status
      */
     public static TeacherStatus fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Teacher status is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid teacher status. Allowed values are PENDING, APPROVED, or REJECTED."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Teacher status is required.",
+                () -> "Invalid teacher status. Allowed values are PENDING, APPROVED, or REJECTED.");
     }
 
     /** @return {@code true} when the teacher is still awaiting admin review. */

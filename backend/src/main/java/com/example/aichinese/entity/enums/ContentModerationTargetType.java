@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Kind of artefact a {@code ContentModerationRecord} is acting upon.
@@ -32,10 +28,8 @@ public enum ContentModerationTargetType {
     OTHER;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, ContentModerationTargetType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, ContentModerationTargetType> LOOKUP =
+            EnumLookups.indexByName(ContentModerationTargetType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -45,14 +39,7 @@ public enum ContentModerationTargetType {
      *         is {@code null}, blank, or not a recognised target type
      */
     public static Optional<ContentModerationTargetType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -62,12 +49,12 @@ public enum ContentModerationTargetType {
      *         blank, or not a recognised target type
      */
     public static ContentModerationTargetType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Moderation target type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid moderation target type. Allowed values are LESSON, PACKAGE, "
-                        + "TEACHER_PROFILE, or OTHER."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Moderation target type is required.",
+                () -> "Invalid moderation target type. Allowed values are LESSON, PACKAGE, "
+                        + "TEACHER_PROFILE, or OTHER.");
     }
 
     /**

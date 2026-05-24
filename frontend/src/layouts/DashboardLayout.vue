@@ -37,8 +37,8 @@ const auth = useAuthStore()
 const activeRole = computed<UserRole>(
   () => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT',
 )
-const roleSlug = computed(() => activeRole.value.toLowerCase())
+const roleSlug = computed<string>(() => activeRole.value.toLowerCase())
 
-const shellClass = computed(() => [`dashboard-shell--${roleSlug.value}`])
-const mainClass = computed(() => [`dashboard-main--${roleSlug.value}`])
+const shellClass = computed<string>(() => `dashboard-shell--${roleSlug.value}`)
+const mainClass = computed<string>(() => `dashboard-main--${roleSlug.value}`)
 </script>

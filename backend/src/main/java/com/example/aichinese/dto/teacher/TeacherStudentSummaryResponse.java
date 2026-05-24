@@ -2,6 +2,9 @@ package com.example.aichinese.dto.teacher;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  * One row of the teacher's "my students" roster returned by
@@ -65,16 +68,36 @@ import java.util.List;
  *       classroom name even when it differs from the parent's login.</li>
  * </ul>
  *
- * @param studentId             {@code student_profiles.id}
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder} so
+ * upstream Jackson upgrades cannot accidentally reshuffle the wire
+ * format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Invariants</h2>
+ * <p>The canonical constructor enforces non-null on the five fields
+ * the service's {@code StudentAggregate.toResponse} guarantees
+ * ({@link #studentId}, {@link #fullName}, {@link #displayName},
+ * {@link #progressPercent}, {@link #joinedAt}) and defensively copies
+ * {@link #weakAreas}. {@link #userId}, {@link #email},
+ * {@link #currentLevel}, {@link #quizAveragePercent},
+ * {@link #latestFeedbackType}, {@link #latestFeedbackAt} and
+ * {@link #latestActivityAt} remain nullable per the documented
+ * contextual rules above.</p>
+ *
+ * @param studentId             {@code student_profiles.id}; never
+ *                              {@code null}
  * @param userId                {@code users.id}; nullable when the
  *                              student row exists without a user
  *                              account (legacy data)
  * @param fullName              {@code users.display_name} when linked,
  *                              otherwise the student's own display
- *                              name (see class-level Javadoc)
- * @param email                 contact email from {@code users.email}
+ *                              name (see class-level Javadoc); never
+ *                              {@code null}
+ * @param email                 contact email from {@code users.email};
+ *                              nullable when no user account is linked
  * @param displayName           classroom nickname from
- *                              {@code student_profiles.display_name}
+ *                              {@code student_profiles.display_name};
+ *                              never {@code null}
  * @param currentLevel          name of the student's current learning
  *                              level; nullable when unset
  * @param progressPercent       average lesson completion 0-100; never
@@ -82,15 +105,35 @@ import java.util.List;
  * @param quizAveragePercent    average quiz score 0-100; {@code null}
  *                              when no quizzes submitted yet
  * @param atRisk                derived risk flag (see class Javadoc)
- * @param weakAreas             distinct feedback types, capped at 4
+ * @param weakAreas             distinct feedback types, capped at 4;
+ *                              never {@code null}; the wrapped list
+ *                              is unmodifiable
  * @param latestFeedbackType    feedback type of the most recent
  *                              feedback entry; nullable
  * @param latestFeedbackAt      timestamp of the most recent feedback;
  *                              nullable
  * @param latestActivityAt      timestamp of the most recent activity
- *                              of any kind; drives roster sorting
- * @param joinedAt              {@code student_profiles.created_at}
+ *                              of any kind; drives roster sorting;
+ *                              nullable for never-active students
+ * @param joinedAt              {@code student_profiles.created_at};
+ *                              never {@code null}
  */
+@JsonPropertyOrder({
+        "studentId",
+        "userId",
+        "fullName",
+        "email",
+        "displayName",
+        "currentLevel",
+        "progressPercent",
+        "quizAveragePercent",
+        "atRisk",
+        "weakAreas",
+        "latestFeedbackType",
+        "latestFeedbackAt",
+        "latestActivityAt",
+        "joinedAt"
+})
 public record TeacherStudentSummaryResponse(
         Long studentId,
         Long userId,
@@ -106,4 +149,21 @@ public record TeacherStudentSummaryResponse(
         LocalDateTime latestFeedbackAt,
         LocalDateTime latestActivityAt,
         LocalDateTime joinedAt) {
+
+    /**
+     * Defensive canonical constructor: enforces non-null on the five
+     * fields the service's {@code StudentAggregate.toResponse}
+     * guarantees, defensively copies {@link #weakAreas}
+     * (with {@code null} → {@link List#of()} normalisation) so
+     * external mutation cannot leak into an already-serialised payload,
+     * and leaves the contextual nullable fields untouched.
+     */
+    public TeacherStudentSummaryResponse {
+        Objects.requireNonNull(studentId, "studentId must not be null");
+        Objects.requireNonNull(fullName, "fullName must not be null");
+        Objects.requireNonNull(displayName, "displayName must not be null");
+        Objects.requireNonNull(progressPercent, "progressPercent must not be null");
+        Objects.requireNonNull(joinedAt, "joinedAt must not be null");
+        weakAreas = weakAreas == null ? List.of() : List.copyOf(weakAreas);
+    }
 }

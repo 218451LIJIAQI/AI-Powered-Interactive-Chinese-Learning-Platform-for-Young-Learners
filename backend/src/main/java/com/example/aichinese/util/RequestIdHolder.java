@@ -42,16 +42,21 @@ public final class RequestIdHolder {
     private static final ThreadLocal<String> CURRENT_REQUEST_ID = new ThreadLocal<>();
 
     private RequestIdHolder() {
-        // Utility class — not instantiable.
+        throw new AssertionError("RequestIdHolder is a utility class and must not be instantiated.");
     }
 
     /**
-     * Stores the supplied id on the current thread. The value may be
-     * {@code null} to mean "no id"; callers that want to remove the
-     * binding entirely should prefer {@link #clear()} so the underlying
-     * {@link ThreadLocal} entry is fully detached from the worker thread.
+     * Stores the supplied id on the current thread. A {@code null} value
+     * is treated as a request to clear the binding (see {@link #clear()})
+     * so the underlying {@link ThreadLocal} entry is fully detached from
+     * the worker thread rather than retaining a phantom {@code null}
+     * mapping that would survive until the worker dies.
      */
     public static void set(String requestId) {
+        if (requestId == null) {
+            CURRENT_REQUEST_ID.remove();
+            return;
+        }
         CURRENT_REQUEST_ID.set(requestId);
     }
 
@@ -72,5 +77,35 @@ public final class RequestIdHolder {
      */
     public static void clear() {
         CURRENT_REQUEST_ID.remove();
+    }
+
+    /**
+     * Runs {@code task} with the current thread bound to {@code requestId}
+     * and unconditionally restores the previous binding (or removes the
+     * binding when none was present) afterwards.
+     *
+     * <p>Background workers, scheduled jobs and {@code @Async} executors
+     * should prefer this helper over a hand-rolled {@code try/finally}
+     * pair so the lifecycle contract documented on the class Javadoc
+     * cannot be silently violated by a forgotten {@code finally} block
+     * \u2014 a leaked id is the most common bug we have encountered with
+     * the previous direct-{@code set} idiom.</p>
+     *
+     * @param requestId id to bind for the duration of {@code task}; may
+     *                  be {@code null} to mean "explicitly run with no
+     *                  id" (the previous binding is still restored)
+     * @param task      action to execute; must not be {@code null}
+     */
+    public static void runWith(String requestId, Runnable task) {
+        if (task == null) {
+            throw new IllegalArgumentException("task must not be null.");
+        }
+        String previous = CURRENT_REQUEST_ID.get();
+        set(requestId);
+        try {
+            task.run();
+        } finally {
+            set(previous);
+        }
     }
 }

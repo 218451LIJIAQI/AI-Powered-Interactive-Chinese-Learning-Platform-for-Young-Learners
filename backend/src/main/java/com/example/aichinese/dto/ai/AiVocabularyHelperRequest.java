@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -33,7 +35,29 @@ import jakarta.validation.constraints.Size;
  * adjust the explanation depth and the language of the
  * encouragement / practice prompt. See
  * {@link AiVocabularyHelperResponse} for the structured response.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * all five short text fields so Bean Validation operates on the
+ * canonical form (a whitespace-only {@code word} correctly fails
+ * {@link NotBlank @NotBlank} after trimming) and the service
+ * layer's {@code AiInputSanitizer} pass is idempotent.
+ * {@code null} is preserved so {@link NotBlank @NotBlank} renders
+ * its friendly user-facing message rather than a low-level
+ * {@link NullPointerException}.</p>
  */
+@JsonPropertyOrder({
+        "word",
+        "inputLanguage",
+        "outputLanguage",
+        "learnerLevel",
+        "languagePreference"
+})
 public record AiVocabularyHelperRequest(
         @NotBlank(message = "Word is required.")
         @Size(max = 200, message = "Word must not exceed 200 characters.")
@@ -46,4 +70,30 @@ public record AiVocabularyHelperRequest(
         String learnerLevel,
         @Size(max = 20, message = "Language preference must not exceed 20 characters.")
         String languagePreference) {
+
+    /**
+     * Defensive canonical constructor: trims the five short text
+     * fields so Bean Validation operates on the canonical form
+     * and downstream sanitisation is idempotent. {@code null} is
+     * preserved on every field so {@link NotBlank @NotBlank} can
+     * render its friendly user-facing message rather than a
+     * low-level {@link NullPointerException}.
+     */
+    public AiVocabularyHelperRequest {
+        if (word != null) {
+            word = word.trim();
+        }
+        if (inputLanguage != null) {
+            inputLanguage = inputLanguage.trim();
+        }
+        if (outputLanguage != null) {
+            outputLanguage = outputLanguage.trim();
+        }
+        if (learnerLevel != null) {
+            learnerLevel = learnerLevel.trim();
+        }
+        if (languagePreference != null) {
+            languagePreference = languagePreference.trim();
+        }
+    }
 }

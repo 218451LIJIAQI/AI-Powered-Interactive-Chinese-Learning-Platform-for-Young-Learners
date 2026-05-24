@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -70,7 +71,7 @@ public class PublicAuthRequestLimiter {
         if (maxRegisterRequests < 1 || maxForgotPasswordRequests < 1 || maxTrackedRequestRecords < 1) {
             throw new IllegalArgumentException("Rate limit thresholds must be positive");
         }
-        this.clock = clock;
+        this.clock = Objects.requireNonNull(clock, "clock");
         this.maxRegisterRequests = maxRegisterRequests;
         this.maxForgotPasswordRequests = maxForgotPasswordRequests;
         this.maxTrackedRequestRecords = maxTrackedRequestRecords;
@@ -145,13 +146,30 @@ public class PublicAuthRequestLimiter {
     }
 
     private String key(String action, String subject, String clientIp) {
-        String normalizedSubject = truncate(subject == null ? "" : subject.trim().toLowerCase(Locale.ROOT), MAX_SUBJECT_KEY_LENGTH);
-        String normalizedIp = truncate(clientIp == null ? "" : clientIp.trim(), MAX_IP_KEY_LENGTH);
+        // strip() (vs trim()) is Unicode-aware so a stray CJK fullwidth space
+        // before the email cannot produce a different bucket than the
+        // normalised form the auth pipeline submits.
+        String normalizedSubject = truncate(
+                subject == null ? "" : subject.strip().toLowerCase(Locale.ROOT), MAX_SUBJECT_KEY_LENGTH);
+        String normalizedIp = truncate(
+                clientIp == null ? "" : clientIp.strip(), MAX_IP_KEY_LENGTH);
         return action + "|" + normalizedSubject + "|" + normalizedIp;
     }
 
-    private String truncate(String value, int maxLength) {
-        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    /**
+     * Truncates {@code value} to {@code maxLength} UTF-16 code units, taking
+     * care not to split a surrogate pair in half. Email / IP keys should
+     * never contain non-BMP characters, but we still guard against it so a
+     * malformed input cannot produce an invalid Java String.
+     */
+    private static String truncate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        if (maxLength > 0 && Character.isHighSurrogate(value.charAt(maxLength - 1))) {
+            return value.substring(0, maxLength - 1);
+        }
+        return value.substring(0, maxLength);
     }
 
     private record RequestRecord(Instant windowStartedAt, int requestCount, Instant lastUpdatedAt) {

@@ -1,11 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Pedagogical category of a teacher's free-text feedback to a student.
@@ -40,10 +36,8 @@ public enum TeacherFeedbackType {
     WEAK_AREA;
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
-    private static final Map<String, TeacherFeedbackType> LOOKUP = Arrays.stream(values())
-            .collect(Collectors.toUnmodifiableMap(
-                    value -> value.name().toUpperCase(Locale.ROOT),
-                    Function.identity()));
+    private static final Map<String, TeacherFeedbackType> LOOKUP =
+            EnumLookups.indexByName(TeacherFeedbackType.class);
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -53,14 +47,7 @@ public enum TeacherFeedbackType {
      *         is {@code null}, blank, or not a recognised feedback type
      */
     public static Optional<TeacherFeedbackType> tryFrom(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+        return EnumLookups.tryFrom(LOOKUP, value);
     }
 
     /**
@@ -70,12 +57,12 @@ public enum TeacherFeedbackType {
      *         blank, or not a recognised feedback type
      */
     public static TeacherFeedbackType fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Teacher feedback type is required.");
-        }
-        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
-                "Invalid teacher feedback type. Allowed values are GENERAL, QUIZ, LESSON, "
-                        + "ENCOURAGING, CORRECTIVE, PROGRESS, or WEAK_AREA."));
+        return EnumLookups.fromValue(
+                LOOKUP,
+                value,
+                "Teacher feedback type is required.",
+                () -> "Invalid teacher feedback type. Allowed values are GENERAL, QUIZ, LESSON, "
+                        + "ENCOURAGING, CORRECTIVE, PROGRESS, or WEAK_AREA.");
     }
 
     /**

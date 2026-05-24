@@ -29,20 +29,21 @@
  */
 import { computed } from 'vue'
 
-const props = withDefaults(
-  defineProps<{
-    progress: number
-    title: string
-    subtitle?: string
-    tone?: 'primary' | 'success'
-  }>(),
-  {
-    subtitle: '',
-    tone: 'primary',
-  },
-)
+type RingTone = 'primary' | 'success'
 
-const progressValue = computed(() => Math.max(0, Math.min(100, props.progress)))
-const label = computed(() => `${Math.round(progressValue.value)}%`)
-const toneClass = computed(() => (props.tone === 'success' ? 'success' : ''))
+interface Props {
+  progress: number
+  title: string
+  subtitle?: string
+  tone?: RingTone
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  subtitle: '',
+  tone: 'primary',
+})
+
+const progressValue = computed<number>(() => Math.round(Math.max(0, Math.min(100, props.progress))))
+const label = computed<string>(() => `${progressValue.value}%`)
+const toneClass = computed<string>(() => (props.tone === 'success' ? 'success' : ''))
 </script>

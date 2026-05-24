@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -46,7 +48,43 @@ import jakarta.validation.constraints.Size;
  * ({@code "INACCURATE"}, {@code "INAPPROPRIATE"},
  * {@code "OFF_TOPIC"}, {@code "OTHER"}). {@link #description} is
  * the optional free-text elaboration.</p>
+ *
+ * <h2>Wire format</h2>
+ * <p>The component order is locked via {@link JsonPropertyOrder}
+ * so upstream Jackson upgrades cannot accidentally reshuffle the
+ * wire format and break consumers that pin on field positions.</p>
+ *
+ * <h2>Normalisation</h2>
+ * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * the five free-text fields so Bean Validation operates on the
+ * canonical form (a whitespace-only {@code featureKey} correctly
+ * fails {@link NotBlank @NotBlank} after trimming) and the
+ * service layer's {@code AiInputSanitizer} pass is idempotent.
+ * {@code null} is preserved on every field so
+ * {@link NotBlank @NotBlank} renders its friendly user-facing
+ * message rather than a low-level
+ * {@link NullPointerException}.</p>
+ *
+ * <h2>{@code toString()} redaction</h2>
+ * <p>The auto-generated record {@code toString()} is overridden so
+ * the three free-text content fields ({@link #description},
+ * {@link #promptSnapshot}, {@link #aiResponseSnapshot}) — which
+ * may carry the harmful AI output that triggered the report —
+ * never appear in plain log files or exception traces. The
+ * non-sensitive id, feature-key and reason-category fields are
+ * kept verbatim so the log line still pinpoints which row the
+ * request would create.</p>
  */
+@JsonPropertyOrder({
+        "aiUsageLogId",
+        "chatSessionId",
+        "chatMessageId",
+        "featureKey",
+        "reasonCategory",
+        "description",
+        "promptSnapshot",
+        "aiResponseSnapshot"
+})
 public record CreateAiResponseReportRequest(
         @Positive(message = "AI usage log id must be positive.")
         Long aiUsageLogId,
@@ -71,4 +109,55 @@ public record CreateAiResponseReportRequest(
 
         @Size(max = 4000, message = "AI response snapshot must be 4000 characters or fewer.")
         String aiResponseSnapshot) {
+
+    /**
+     * Defensive canonical constructor: trims the five free-text
+     * fields so Bean Validation operates on the canonical form
+     * and downstream sanitisation is idempotent. {@code null} is
+     * preserved on every field so {@link NotBlank @NotBlank} can
+     * render its friendly user-facing message rather than a
+     * low-level {@link NullPointerException}.
+     */
+    public CreateAiResponseReportRequest {
+        if (featureKey != null) {
+            featureKey = featureKey.trim();
+        }
+        if (reasonCategory != null) {
+            reasonCategory = reasonCategory.trim();
+        }
+        if (description != null) {
+            description = description.trim();
+        }
+        if (promptSnapshot != null) {
+            promptSnapshot = promptSnapshot.trim();
+        }
+        if (aiResponseSnapshot != null) {
+            aiResponseSnapshot = aiResponseSnapshot.trim();
+        }
+    }
+
+    /**
+     * Redacts the three free-text content fields so a log line
+     * that accidentally captures this DTO never leaks the harmful
+     * AI content that triggered the report. The non-sensitive id,
+     * feature-key and reason-category fields are kept verbatim so
+     * the log line still pinpoints the originating request.
+     */
+    @Override
+    public String toString() {
+        return "CreateAiResponseReportRequest["
+                + "aiUsageLogId=" + aiUsageLogId
+                + ", chatSessionId=" + chatSessionId
+                + ", chatMessageId=" + chatMessageId
+                + ", featureKey=" + featureKey
+                + ", reasonCategory=" + reasonCategory
+                + ", description=" + redactLength(description)
+                + ", promptSnapshot=" + redactLength(promptSnapshot)
+                + ", aiResponseSnapshot=" + redactLength(aiResponseSnapshot)
+                + "]";
+    }
+
+    private static String redactLength(String value) {
+        return value == null ? "null" : "<redacted:" + value.length() + ">";
+    }
 }

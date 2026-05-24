@@ -1,5 +1,7 @@
 package com.example.aichinese.entity;
 
+import java.time.LocalDateTime;
+
 import com.example.aichinese.entity.base.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -74,5 +76,5 @@ public class VideoProgress extends BaseEntity {
     private boolean completed;
 
     @Column(name = "last_watched_at")
-    private java.time.LocalDateTime lastWatchedAt;
+    private LocalDateTime lastWatchedAt;
 }

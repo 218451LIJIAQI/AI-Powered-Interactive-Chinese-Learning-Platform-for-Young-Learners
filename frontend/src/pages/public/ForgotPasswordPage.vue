@@ -139,7 +139,7 @@ import AppBrand from '@/components/layout/AppBrand.vue'
 import { resolveApiError } from '@/utils/apiError'
 
 const route = useRoute()
-const initialEmail = typeof route.query.email === 'string' ? route.query.email : ''
+const initialEmail = typeof route.query.email === 'string' ? route.query.email.trim() : ''
 
 const email = ref(initialEmail)
 const error = ref<string | null>(null)
@@ -152,6 +152,8 @@ const emailValid = computed(() => emailPattern.test(normalizedEmail.value))
 const canSubmit = computed(() => emailValid.value && !submitting.value)
 
 async function submitForgotPassword() {
+  if (submitting.value) return
+
   error.value = null
   success.value = null
 

@@ -4,6 +4,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -62,13 +63,13 @@ public class TeacherPackageService {
             TeacherContentAccessService teacherContentAccessService,
             ContentManagementMapper contentManagementMapper,
             AuditLogService auditLogService) {
-        this.coursePackageRepository = coursePackageRepository;
-        this.packageItemRepository = packageItemRepository;
-        this.teacherModuleService = teacherModuleService;
-        this.teacherLessonService = teacherLessonService;
-        this.teacherContentAccessService = teacherContentAccessService;
-        this.contentManagementMapper = contentManagementMapper;
-        this.auditLogService = auditLogService;
+        this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
+        this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
+        this.teacherModuleService = Objects.requireNonNull(teacherModuleService, "teacherModuleService");
+        this.teacherLessonService = Objects.requireNonNull(teacherLessonService, "teacherLessonService");
+        this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
+        this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
 
     @Transactional(readOnly = true)

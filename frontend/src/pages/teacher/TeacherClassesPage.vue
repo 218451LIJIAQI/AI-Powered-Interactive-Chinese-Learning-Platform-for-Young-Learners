@@ -496,8 +496,7 @@ const pageError = computed(
     packagesResource.error.value ||
     enrolmentsResource.error.value ||
     recordedResource.error.value ||
-    progressResource.error.value ||
-    null,
+    progressResource.error.value,
 )
 const usingFallback = computed(
   () =>
@@ -810,6 +809,7 @@ async function selectClass(classId: number) {
 }
 
 async function submitClass() {
+  if (submittingCreate.value || submittingUpdate.value || submittingCancel.value) return
   actionError.value = null
   actionSuccess.value = null
   if (classesReadOnly.value) {
@@ -858,6 +858,7 @@ async function submitClass() {
 }
 
 async function cancelSelectedClass() {
+  if (submittingCancel.value || submittingCreate.value || submittingUpdate.value) return
   if (!selectedLiveClass.value) return
   if (classesReadOnly.value) {
     actionSuccess.value = null

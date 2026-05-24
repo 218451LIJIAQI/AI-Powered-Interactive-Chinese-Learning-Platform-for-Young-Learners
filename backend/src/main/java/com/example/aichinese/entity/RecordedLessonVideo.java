@@ -11,6 +11,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.NamedAttributeNode;
+import jakarta.persistence.NamedEntityGraph;
+import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -49,7 +52,41 @@ import lombok.Setter;
         @Index(name = "idx_recorded_videos_uploaded_file_id", columnList = "uploaded_file_id"),
         @Index(name = "idx_recorded_videos_active", columnList = "active")
 })
+@NamedEntityGraph(
+        // Single source of truth for the eager-fetch attribute set used
+        // by every read in RecordedLessonVideoRepository: teacher and
+        // student video lists, the IDOR-safe single-row reads, and the
+        // student-visible paywall-aware query all need lesson +
+        // lesson.teacher + lesson.teacher.user + coursePackage +
+        // uploadedFile hydrated in one round trip. The
+        // lesson.teacher.user nested fetch is declared as a sub-graph
+        // so the response mapper can render the teacher's display name
+        // without an N+1 lazy load.
+        name = RecordedLessonVideo.GRAPH_DETAIL,
+        attributeNodes = {
+                @NamedAttributeNode(value = "lesson", subgraph = "RecordedLessonVideo.lessonWithTeacher"),
+                @NamedAttributeNode("coursePackage"),
+                @NamedAttributeNode("uploadedFile")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "RecordedLessonVideo.lessonWithTeacher",
+                        attributeNodes = @NamedAttributeNode(value = "teacher", subgraph = "RecordedLessonVideo.teacherWithUser")),
+                @NamedSubgraph(
+                        name = "RecordedLessonVideo.teacherWithUser",
+                        attributeNodes = @NamedAttributeNode("user"))
+        }
+)
 public class RecordedLessonVideo extends BaseEntity {
+
+    /**
+     * Name of the {@link NamedEntityGraph} that eagerly fetches the
+     * standard attribute set required by every read endpoint that
+     * surfaces a {@code RecordedLessonVideo}: {@code lesson} (with
+     * nested {@code lesson.teacher} and {@code lesson.teacher.user}),
+     * {@code coursePackage} and {@code uploadedFile}.
+     */
+    public static final String GRAPH_DETAIL = "RecordedLessonVideo.detail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "lesson_id", nullable = false)

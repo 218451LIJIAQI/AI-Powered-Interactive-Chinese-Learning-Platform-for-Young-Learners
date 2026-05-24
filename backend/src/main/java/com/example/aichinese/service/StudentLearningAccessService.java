@@ -3,6 +3,8 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.Objects;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -41,10 +43,10 @@ public class StudentLearningAccessService {
             LessonRepository lessonRepository,
             QuizRepository quizRepository,
             EntitlementService entitlementService) {
-        this.studentProfileRepository = studentProfileRepository;
-        this.lessonRepository = lessonRepository;
-        this.quizRepository = quizRepository;
-        this.entitlementService = entitlementService;
+        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
+        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
     }
 
     @Transactional(readOnly = true)

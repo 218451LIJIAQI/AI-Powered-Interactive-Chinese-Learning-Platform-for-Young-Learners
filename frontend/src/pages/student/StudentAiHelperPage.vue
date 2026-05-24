@@ -49,7 +49,7 @@
               :disabled="submitting.chat"
               :aria-label="submitting.chat ? 'SparkBot is answering' : 'Send question to SparkBot'"
             >
-              <span v-if="submitting.chat">...</span>
+              <span v-if="submitting.chat">Thinking</span>
               <IconGlyph v-else name="chevronRight" :size="18" />
             </button>
           </form>
@@ -244,11 +244,11 @@
           <button class="btn btn-primary" type="button" @click="runStory" :disabled="submitting.story">
             {{ submitting.story ? 'Generating...' : 'Create Story' }}
           </button>
-        <div v-if="storyReply" class="student-ai-helper-story-result">
-          <strong>{{ storyReply.title }}</strong>
-          <p>{{ storyReply.chineseStory }}</p>
-          <span>{{ storyReply.englishTranslation }}</span>
-        </div>
+          <div v-if="storyReply" class="student-ai-helper-story-result">
+            <strong>{{ storyReply.title }}</strong>
+            <p>{{ storyReply.chineseStory }}</p>
+            <span>{{ storyReply.englishTranslation }}</span>
+          </div>
         </article>
 
         <article class="student-ai-helper-story-card">
@@ -532,6 +532,7 @@ function selectWritingFile(event: Event) {
 }
 
 async function runChat() {
+  if (submitting.chat) return
   actionError.value = null
   actionSuccess.value = null
   if (!chatForm.message.trim()) {
@@ -549,13 +550,14 @@ async function runChat() {
     applyAiResponseStatus(chatReply.value, 'SparkBot answered your question.', 'SparkBot returned safe fallback guidance instead of a live AI answer.')
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to get an AI chat response.')
-    chatReply.value = previewFallbackEnabled.value ? aiChatReply : null
+    chatReply.value = null
   } finally {
     submitting.chat = false
   }
 }
 
 async function runVocabulary() {
+  if (submitting.vocab) return
   actionError.value = null
   actionSuccess.value = null
   if (!wordForm.word.trim()) {
@@ -573,13 +575,14 @@ async function runVocabulary() {
     applyAiResponseStatus(vocabularyReply.value, 'Vocabulary help is ready.', 'Vocabulary helper returned safe fallback guidance instead of a live AI answer.')
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to get vocabulary help.')
-    vocabularyReply.value = previewFallbackEnabled.value ? aiVocabularyReply : null
+    vocabularyReply.value = null
   } finally {
     submitting.vocab = false
   }
 }
 
 async function runSentence() {
+  if (submitting.sentence) return
   actionError.value = null
   actionSuccess.value = null
   if (!sentenceForm.sentence.trim()) {
@@ -597,13 +600,14 @@ async function runSentence() {
     applyAiResponseStatus(sentenceReply.value, 'Sentence feedback is ready.', 'Sentence practice returned safe fallback guidance instead of a live AI answer.')
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to review this sentence.')
-    sentenceReply.value = previewFallbackEnabled.value ? aiSentenceReply : null
+    sentenceReply.value = null
   } finally {
     submitting.sentence = false
   }
 }
 
 async function runStory() {
+  if (submitting.story) return
   actionError.value = null
   actionSuccess.value = null
   if (!storyForm.topic.trim()) {
@@ -621,13 +625,14 @@ async function runStory() {
     applyAiResponseStatus(storyReply.value, 'Your Mandarin story is ready.', 'Story generator returned safe fallback guidance instead of a live AI answer.')
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to generate this story.')
-    storyReply.value = previewFallbackEnabled.value ? aiStoryReply : null
+    storyReply.value = null
   } finally {
     submitting.story = false
   }
 }
 
 async function runRecommendation() {
+  if (submitting.recommendation) return
   actionError.value = null
   actionSuccess.value = null
   if (previewFallbackEnabled.value) {
@@ -645,13 +650,14 @@ async function runRecommendation() {
     applyAiResponseStatus(recommendationReply.value, 'A learning recommendation is ready.', 'Recommendation helper returned safe fallback guidance instead of a live AI answer.')
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to generate this recommendation.')
-    recommendationReply.value = previewFallbackEnabled.value ? aiRecommendationReply : null
+    recommendationReply.value = null
   } finally {
     submitting.recommendation = false
   }
 }
 
 async function runQuiz() {
+  if (submitting.quiz) return
   actionError.value = null
   actionSuccess.value = null
   if (!quizForm.topic.trim()) {
@@ -676,13 +682,14 @@ async function runQuiz() {
     applyAiResponseStatus(quizReply.value, 'Practice quiz is ready.', 'Quiz maker returned safe fallback guidance instead of a live AI quiz.')
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to create this practice quiz.')
-    quizReply.value = previewFallbackEnabled.value ? aiQuizReply : null
+    quizReply.value = null
   } finally {
     submitting.quiz = false
   }
 }
 
 async function submitAiReport() {
+  if (submitting.report) return
   actionError.value = null
   actionSuccess.value = null
   if (!chatReply.value) {
@@ -713,6 +720,7 @@ async function submitAiReport() {
 }
 
 async function runPronunciation() {
+  if (submitting.pronunciation) return
   actionError.value = null
   actionSuccess.value = null
   if (audioUploadDisabled.value) {
@@ -755,6 +763,7 @@ async function runPronunciation() {
 }
 
 async function runWriting() {
+  if (submitting.writing) return
   actionError.value = null
   actionSuccess.value = null
   if (imageUploadDisabled.value) {
@@ -790,17 +799,13 @@ async function runWriting() {
   }
 }
 
-function formatReportReason(reason: AiResponseReportReason) {
-  return reason
+function formatEnumLabel(value: string) {
+  return value
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function formatStatus(status: string) {
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
-}
+const formatReportReason = formatEnumLabel
+const formatStatus = formatEnumLabel
 </script>

@@ -5,7 +5,9 @@
       <button
         v-for="option in options"
         :key="option.value"
-        :class="{ 'is-active': option.value === locale }"
+        :class="{ 'is-active': option.value === ui.locale }"
+        :aria-label="option.ariaLabel"
+        :aria-pressed="option.value === ui.locale"
         type="button"
         @click="ui.setLocale(option.value)"
       >
@@ -27,30 +29,34 @@
  * component re-renders with the new translation without a page
  * reload.
  */
-import { computed } from 'vue'
-
 import { useUiStore } from '@/stores/ui'
 
-withDefaults(
-  defineProps<{
-    showLabel?: boolean
-    label?: string
-    size?: 'default' | 'compact'
-  }>(),
-  {
-    showLabel: false,
-    label: 'Language / 语言',
-    size: 'default',
-  },
-)
+type SupportedLocale = 'en' | 'ms' | 'zh'
+
+interface LocaleOption {
+  readonly label: string
+  readonly value: SupportedLocale
+  readonly ariaLabel: string
+}
+
+interface Props {
+  showLabel?: boolean
+  label?: string
+  size?: 'default' | 'compact'
+}
+
+withDefaults(defineProps<Props>(), {
+  showLabel: false,
+  label: 'Language / 语言',
+  size: 'default',
+})
 
 const ui = useUiStore()
-const locale = computed(() => ui.locale)
 
-const options = [
-  { label: 'EN', value: 'en' as const },
-  { label: 'BM', value: 'ms' as const },
-  { label: '简体中文', value: 'zh' as const },
+const options: readonly LocaleOption[] = [
+  { label: 'EN', value: 'en', ariaLabel: 'Switch to English' },
+  { label: 'BM', value: 'ms', ariaLabel: 'Switch to Bahasa Melayu' },
+  { label: '简体中文', value: 'zh', ariaLabel: 'Switch to Simplified Chinese' },
 ]
 </script>
 

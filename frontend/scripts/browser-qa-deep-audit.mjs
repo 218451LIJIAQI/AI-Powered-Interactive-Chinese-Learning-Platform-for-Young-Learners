@@ -142,16 +142,17 @@ async function poll(description, action, predicate, timeoutMs = 15000, intervalM
 async function fetchProbe(url) {
   const response = await fetch(url)
   const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
   let body
 
   if (contentType.toLowerCase().includes('json')) {
     try {
-      body = await response.json()
+      body = JSON.parse(text)
     } catch {
-      body = await response.text()
+      body = text
     }
   } else {
-    body = await response.text()
+    body = text
   }
 
   return {
