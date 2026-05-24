@@ -22,6 +22,12 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of the three persona dashboards
+ * (student / teacher / admin) — pins each dashboard's authorization
+ * scope and the fixed-shape single-fetch response contract the
+ * front-end home page depends on.
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

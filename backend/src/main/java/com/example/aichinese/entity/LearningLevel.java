@@ -10,6 +10,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Learner proficiency level (e.g. "Beginner", "HSK 1", "HSK 2",
+ * "Intermediate") referenced by both content artefacts and student
+ * profiles.
+ *
+ * <p>{@link StudentProfile#getCurrentLevel()} tracks the learner's own
+ * progression, while {@link Lesson#getLevel()},
+ * {@link LearningModule#getLevel()}, and
+ * {@link CoursePackage#getLevel()} declare the prerequisite level for a
+ * piece of content. {@link #sortOrder} (ascending) is the canonical
+ * progression order; the dashboard "next level" suggestion picks the
+ * level immediately after the student's current one.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

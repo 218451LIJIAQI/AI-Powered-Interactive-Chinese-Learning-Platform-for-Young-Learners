@@ -14,6 +14,35 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+/**
+ * CORS configuration for {@code /api/**}.
+ *
+ * <p>Builds an explicit allow-list of exact origin URLs from the
+ * {@code app.cors.allowed-origins} property, deliberately rejecting
+ * the {@code *} wildcard. This is critical because the platform sends
+ * {@code Access-Control-Allow-Credentials: true} (so the browser
+ * forwards the JWT cookie / Authorization header on cross-origin
+ * fetches), and the browser refuses that combination with a wildcard
+ * origin. Worse, {@code addAllowedOriginPattern("*") + setAllowCredentials(true)}
+ * would make Spring echo the caller's {@code Origin} back as
+ * {@code Access-Control-Allow-Origin: <caller>} for every request,
+ * which is a CSRF / credential-leak vulnerability.</p>
+ *
+ * <h2>Production gate</h2>
+ * <p>When the {@code prod} profile is active and the operator has not
+ * configured any explicit origins, the bean fails fast with
+ * {@link IllegalStateException} rather than silently falling back to
+ * loopback origins — there is no legitimate scenario in which a
+ * production deploy should have permissive defaults.</p>
+ *
+ * <h2>Local-dev fallback</h2>
+ * <p>Outside production, an empty allow-list falls back to a curated
+ * set of Vite dev/preview ports ({@code http://localhost:5173..5183}
+ * and the {@code 127.0.0.1} variants). Vite hot-restart sometimes
+ * shifts to the next available port if the default is busy; the wider
+ * fallback set keeps local development working without manual
+ * reconfiguration.</p>
+ */
 @Configuration
 public class CorsConfig {
 

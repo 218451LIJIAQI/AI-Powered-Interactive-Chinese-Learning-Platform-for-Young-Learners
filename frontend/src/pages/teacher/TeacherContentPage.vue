@@ -1066,6 +1066,28 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Teacher content authoring hub — courses, modules, lessons,
+ * quizzes, materials, video uploads, AI-assisted draft generation.
+ *
+ * <h2>Why one page</h2>
+ * <p>The author workflow benefits from in-place context (the lesson
+ * you're editing sits next to its parent module and the course's
+ * existing materials). Sub-views are tabs inside this page rather
+ * than separate routes so authors can switch without losing draft
+ * state.</p>
+ *
+ * <h2>Publish gating</h2>
+ * <p>Publish actions are denied when verification != APPROVED, when
+ * any required lesson field is missing, and when the course
+ * already has a pending admin review.</p>
+ *
+ * <h2>AI assistance</h2>
+ * <p>Quiz / story / vocabulary generators feed into the AI helper
+ * service; the page falls back to deterministic stubs when the AI
+ * provider is disabled or returns an error so the author UX never
+ * hard-fails.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 
 import { publicApi, teacherApi } from '@/api/services'

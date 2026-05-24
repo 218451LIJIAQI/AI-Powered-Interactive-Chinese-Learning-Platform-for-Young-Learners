@@ -20,6 +20,30 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Student reservation for a {@link LiveClass} session.
+ *
+ * <p>Two unique constraints govern this entity:</p>
+ * <ul>
+ *   <li>{@code (live_class_id, student_id)} prevents enrolling the same
+ *       student twice in the same class — the second insert idempotently
+ *       maps to a friendly "already enrolled" response.</li>
+ *   <li>{@code active_enrolment_key} (a generated column populated by
+ *       the database to a deterministic key only when the enrolment is
+ *       still active) prevents the student from holding multiple active
+ *       enrolments that overlap in time. The column is read-only from
+ *       Hibernate's perspective.</li>
+ * </ul>
+ *
+ * <p>Lifecycle is governed by
+ * {@link com.example.aichinese.entity.enums.LiveClassEnrolmentStatus}:
+ * {@code ENROLLED → ATTENDED|MISSED|CANCELLED}. {@link #attendedAt} and
+ * {@link #cancelledAt} are stamped by the corresponding transitions and
+ * never cleared, providing a complete audit trail.</p>
+ *
+ * <p>{@link #version} guards against the rare race between an automatic
+ * "missed" job and a late "attended" check-in.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

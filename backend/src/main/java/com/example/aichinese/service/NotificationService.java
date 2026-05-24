@@ -34,6 +34,26 @@ import com.example.aichinese.repository.TeacherFeedbackRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Writes and queries {@link Notification} rows — the in-app inbox
+ * surface used by every persona.
+ *
+ * <h2>Producer surface</h2>
+ * <p>Other services call this layer (instead of touching the
+ * repository directly) so the notification dispatch is uniformly
+ * audited and side-effects (e.g. real-time push, email fallback) can
+ * be added without rewiring every producer. Producers cover all the
+ * usual events: teacher approval, refund decisions, payout updates,
+ * content moderation actions, teacher feedback, recorded video drops,
+ * etc.</p>
+ *
+ * <h2>Consumer surface</h2>
+ * <p>Paginated listing + mark-read / mark-all-read / unread-count
+ * endpoints for the receiving persona. The mark-read flow uses a
+ * separate transaction (via {@link TransactionTemplate}) so the
+ * unread badge updates promptly without blocking on the surrounding
+ * page-load transaction.</p>
+ */
 @Service
 public class NotificationService {
 
@@ -151,8 +171,9 @@ public class NotificationService {
     }
 
     public long countAccessibleUnreadNotifications(SecurityUserDetails currentUser) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
-                .filter(notification -> notification.getNotificationStatus() == NotificationStatus.UNREAD)
+        return notificationRepository
+                .findByUserIdAndNotificationStatusOrderByCreatedAtDesc(currentUser.getUserId(), NotificationStatus.UNREAD)
+                .stream()
                 .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
                 .count();
     }
@@ -254,8 +275,8 @@ public class NotificationService {
     public BulkOperationResponse markAllAsRead(SecurityUserDetails currentUser) {
         LocalDateTime readAt = LocalDateTime.now();
         java.util.List<Notification> accessibleUnreadNotifications = notificationRepository
-                .findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
-                .filter(notification -> notification.getNotificationStatus() == NotificationStatus.UNREAD)
+                .findByUserIdAndNotificationStatusOrderByCreatedAtDesc(currentUser.getUserId(), NotificationStatus.UNREAD)
+                .stream()
                 .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
                 .toList();
         accessibleUnreadNotifications.forEach(notification -> {

@@ -67,6 +67,35 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Teacher persona REST surface — dashboard, content authoring
+ * (modules, lessons, quizzes, course packages), live-class
+ * scheduling, recorded video upload, profile + verification document
+ * management, and the teacher view onto students and analytics.
+ *
+ * <h2>Authorization</h2>
+ * <p>Class-level {@code hasRole("TEACHER")} is enforced in
+ * {@link com.example.aichinese.config.SecurityConfig}. Per-call
+ * checks in
+ * {@link com.example.aichinese.service.TeacherContentAccessService}
+ * additionally verify the teacher is APPROVED and owns the row being
+ * mutated — preventing a pending or rejected teacher from sneaking
+ * into the authoring path.</p>
+ *
+ * <h2>Multipart endpoints</h2>
+ * <p>Document and recorded-video upload endpoints delegate to the
+ * storage services
+ * ({@link com.example.aichinese.service.FileStorageService},
+ * {@link com.example.aichinese.service.RecordedVideoStorageService})
+ * which apply the platform's three-layer defence-in-depth upload
+ * pipeline (extension / content-type / magic-byte).</p>
+ *
+ * <h2>Input validation</h2>
+ * <p>Free-text query parameters are {@code @Size}-capped at the
+ * controller boundary; JSON bodies use {@code @Valid} so per-field
+ * constraints declared on the request DTOs fire before the service
+ * is reached.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/teachers")
@@ -186,7 +215,7 @@ public class TeacherController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
         StoredFileDownload download = teacherManagementService.getTeacherOwnedDocument(currentUser, id);
-        return buildAttachmentDownloadResponse(download);
+        return FileDownloadResponseBuilder.buildAttachmentDownloadResponse(download);
     }
 
     @GetMapping("/modules")
@@ -442,7 +471,7 @@ public class TeacherController {
             @PathVariable Long lessonId,
             @PathVariable Long videoId) {
         StoredFileDownload download = recordedLessonService.loadTeacherRecordedVideoDownload(currentUser, lessonId, videoId);
-        return buildInlineDownloadResponse(download);
+        return FileDownloadResponseBuilder.buildInlineDownloadResponse(download);
     }
 
     @GetMapping("/lessons/{lessonId}/video-progress")
@@ -454,14 +483,6 @@ public class TeacherController {
         return ApiResponse.success(
                 "Lesson video progress retrieved successfully.",
                 videoProgressService.getTeacherLessonProgress(currentUser, lessonId, page, size));
-    }
-
-    private ResponseEntity<Resource> buildInlineDownloadResponse(StoredFileDownload download) {
-        return FileDownloadResponseBuilder.buildInlineDownloadResponse(download);
-    }
-
-    private ResponseEntity<Resource> buildAttachmentDownloadResponse(StoredFileDownload download) {
-        return FileDownloadResponseBuilder.buildAttachmentDownloadResponse(download);
     }
 
     @PutMapping("/lessons/{id}")

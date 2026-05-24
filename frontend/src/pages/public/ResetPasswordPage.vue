@@ -96,6 +96,23 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Step 2 of the password-recovery flow: redeem the email-link token
+ * and set a new password.
+ *
+ * <h2>Token handling</h2>
+ * <p>The token arrives as a URL query parameter and is sent back as
+ * an opaque string — the frontend never inspects or persists it.
+ * Backend validates the SHA-256 hash, checks the 60-minute TTL,
+ * and consumes the token atomically with the password change so
+ * a single token cannot be redeemed twice.</p>
+ *
+ * <h2>Post-success behaviour</h2>
+ * <p>On success the user is informed to sign in again — the auth
+ * store is intentionally NOT auto-logged-in here so the existing
+ * password is properly invalidated everywhere before the new one
+ * goes live.</p>
+ */
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 

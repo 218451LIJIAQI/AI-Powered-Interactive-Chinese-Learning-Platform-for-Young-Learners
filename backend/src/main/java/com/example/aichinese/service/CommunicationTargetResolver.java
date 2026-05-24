@@ -17,6 +17,18 @@ import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 
+/**
+ * Resolves a {@code (targetType, targetId)} pair into the concrete
+ * entity, used by moderation / notification flows that need to refer
+ * to arbitrary domain rows.
+ *
+ * <p>Supported target types are enumerated by
+ * {@link ContentModerationTargetType}. The resolver throws a
+ * {@code 400} when the type string is invalid or a {@code 404} when
+ * the row does not exist, so callers do not have to repeat the same
+ * defensive lookups. Read-only and cheap — every method is a single
+ * indexed primary-key lookup.</p>
+ */
 @Service
 public class CommunicationTargetResolver {
 

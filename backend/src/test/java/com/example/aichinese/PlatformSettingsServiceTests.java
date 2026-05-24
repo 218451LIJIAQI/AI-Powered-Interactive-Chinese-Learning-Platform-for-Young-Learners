@@ -21,6 +21,12 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.PlatformSettingsService;
 
+/**
+ * Unit coverage for {@code PlatformSettingsService} — pins the
+ * default values applied when system-setting rows are missing
+ * (platform name, AI disclaimer, notification toggles, content
+ * filtering switches) and the admin / public response shape split.
+ */
 class PlatformSettingsServiceTests {
 
     @Test

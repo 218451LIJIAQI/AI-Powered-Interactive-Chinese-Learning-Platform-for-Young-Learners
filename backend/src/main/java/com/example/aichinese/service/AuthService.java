@@ -56,6 +56,42 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
+/**
+ * Account lifecycle: registration, login, current-user lookup,
+ * password reset, and logout.
+ *
+ * <h2>Security model</h2>
+ * <ul>
+ *   <li><b>Login:</b> delegates to Spring's {@link AuthenticationManager}
+ *       so the configured {@code PasswordEncoder} and account-status
+ *       checks are honoured. Rate limited via {@link LoginAttemptLimiter}
+ *       (per-IP + per-email keys) — after the lockout threshold the
+ *       caller is rejected with 429 before the credentials are even
+ *       checked, preventing online password guessing.</li>
+ *   <li><b>JWT issuance:</b> {@link JwtService#generateToken} bakes
+ *       in a per-user {@code sessionVersion}. Logout / password change
+ *       bumps the version, atomically invalidating every previously
+ *       issued token for that user.</li>
+ *   <li><b>Registration:</b> teacher accounts start in
+ *       {@link TeacherStatus#PENDING_APPROVAL} and cannot log in until
+ *       an admin approves them; student accounts go straight to
+ *       active. Email is stored case-insensitively (lower-cased) so
+ *       duplicate detection cannot be bypassed by changing letter
+ *       case.</li>
+ *   <li><b>Password reset:</b> tokens are 256-bit random values; only
+ *       the SHA-256 hash is stored ({@link MessageDigest}), so a DB
+ *       read cannot redeem a reset link. Tokens live for
+ *       {@link #RESET_TOKEN_TTL} (60 minutes) and are single-use —
+ *       redemption consumes them atomically inside the password
+ *       update transaction.</li>
+ *   <li><b>Enumeration protection:</b> {@code forgot-password} always
+ *       returns the same response whether or not the email exists, so
+ *       an attacker cannot probe for valid accounts.</li>
+ * </ul>
+ *
+ * <p>All sensitive state changes write to {@code AuditLog} so security
+ * incidents can be reconstructed.</p>
+ */
 @Service
 public class AuthService {
 

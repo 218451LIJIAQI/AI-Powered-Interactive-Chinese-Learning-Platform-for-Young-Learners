@@ -20,6 +20,24 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Scheduled synchronous teaching session conducted on an external
+ * meeting platform.
+ *
+ * <p>Either {@link #lesson} or {@link #coursePackage} (or neither, for
+ * standalone sessions) anchors the live class to learning content.
+ * {@link #scheduledStartAt} / {@link #scheduledEndAt} drive the
+ * student-facing calendar; {@link #meetingLink} carries the join URL.</p>
+ *
+ * <p>Lifecycle is governed by
+ * {@link com.example.aichinese.entity.enums.LiveClassStatus}:
+ * {@code SCHEDULED → ONGOING → COMPLETED|CANCELLED|RESCHEDULED}. The
+ * {@code LiveLearningAccessService} only allows joins when the status
+ * is {@code SCHEDULED} or {@code ONGOING}.</p>
+ *
+ * <p>{@link #version} prevents two admins from simultaneously
+ * cancelling and rescheduling the same session.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

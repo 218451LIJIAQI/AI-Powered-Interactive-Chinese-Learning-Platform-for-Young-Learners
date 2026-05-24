@@ -10,6 +10,11 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Wordmark + tagline used in the public top nav and the dashboard
+ * sidebar header. The `compact` variant drops the tagline so the
+ * brand fits inside a collapsed sidebar.
+ */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 withDefaults(

@@ -41,6 +41,18 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Pure-CSS illustrated thumbnail used as the placeholder course
+ * cover when a teacher has not uploaded a real image. Five
+ * variants render different scenes (panda, family, pagoda,
+ * travel, classic-book) so a row of course cards looks
+ * visually varied without any image assets in the bundle.
+ *
+ * Sizing flows through the `--scene-thumb-size` custom property
+ * so a single component can serve catalogue cards (large),
+ * dashboard summaries (medium) and dense list rows (small)
+ * without separate variants.
+ */
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 
 withDefaults(

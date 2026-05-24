@@ -38,6 +38,13 @@ import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of the teacher self-service profile +
+ * verification document upload surface. Pins the document upload
+ * pipeline (extension + content-type + magic-byte verification) and
+ * the immutable document storage contract — uploaded blobs are
+ * referenced rather than duplicated when admin reviews them.
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

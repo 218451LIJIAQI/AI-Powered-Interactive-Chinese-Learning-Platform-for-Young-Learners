@@ -42,6 +42,29 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mockito.ArgumentCaptor;
 
+/**
+ * End-to-end MockMvc coverage of {@code /api/v1/auth/**}: registration
+ * (student + teacher), login, current-user lookup, logout,
+ * forgot-password, reset-password, plus rate-limiter + cache-header
+ * + user-enumeration behaviours.
+ *
+ * <p>Pins the security-critical invariants:</p>
+ * <ul>
+ *   <li>Login lockout after threshold via
+ *       {@code LoginAttemptLimiter}.</li>
+ *   <li>Register / forgot-password 429 via
+ *       {@code PublicAuthRequestLimiter}.</li>
+ *   <li>Forgot-password response is identical whether or not the
+ *       email exists.</li>
+ *   <li>Reset tokens are single-use, 60-minute TTL, only the hash is
+ *       stored.</li>
+ *   <li>{@code /me} carries {@code Cache-Control: no-store}.</li>
+ *   <li>Teacher accounts start PENDING and cannot log in until
+ *       approved.</li>
+ *   <li>Logout bumps the {@code sessionVersion} so existing JWTs are
+ *       revoked instantly.</li>
+ * </ul>
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!",

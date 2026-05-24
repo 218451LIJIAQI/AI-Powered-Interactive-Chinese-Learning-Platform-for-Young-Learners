@@ -12,6 +12,40 @@ import com.example.aichinese.config.ForwardedHeaderProperties;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+/**
+ * Resolves the real client IP behind a chain of trusted reverse proxies.
+ *
+ * <p>The platform's audit, rate-limit and lockout layers all need to
+ * record / key on the originating client IP so a single user can be
+ * throttled or traced across requests. When the deployment runs behind
+ * one or more reverse proxies (NGINX, CloudFront, Cloudflare, etc.) the
+ * direct {@link HttpServletRequest#getRemoteAddr()} only reports the
+ * <em>last hop</em> — every request would look like it came from the
+ * proxy. The {@code X-Forwarded-For} header is the standard escape
+ * hatch, but it is also trivially spoofable when blindly trusted:
+ * a malicious client can send {@code X-Forwarded-For: 1.2.3.4} and
+ * masquerade as any IP it likes.</p>
+ *
+ * <h2>Trust model</h2>
+ * <p>The {@code app.forwarded.trusted-proxies} configuration property
+ * lists the IPs / CIDR ranges of proxies the application explicitly
+ * trusts. {@link #resolve(HttpServletRequest)} only honours the
+ * {@code X-Forwarded-For} header when {@code remoteAddr} is one of
+ * those trusted addresses (plus the loopback address which is always
+ * trusted, so local development through a port-forwarder still works).
+ * Untrusted callers get their literal {@code remoteAddr} returned,
+ * making header spoofing impossible.</p>
+ *
+ * <h2>Header parsing</h2>
+ * <p>Only the <em>first</em> comma-separated value in
+ * {@code X-Forwarded-For} is honoured — that is the client's IP as
+ * reported by the first proxy in the chain. Subsequent values record
+ * each downstream proxy and are intentionally ignored. IPv6 addresses
+ * enclosed in {@code [brackets]} are unwrapped via
+ * {@link #normalizeHostLiteral(String)} so comparison against the
+ * trust list is consistent regardless of which notation the proxy
+ * uses.</p>
+ */
 @Component
 public class ClientIpResolver {
 

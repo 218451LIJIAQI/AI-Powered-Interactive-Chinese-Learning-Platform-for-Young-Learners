@@ -18,6 +18,31 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Teacher-specific extension of {@link User}.
+ *
+ * <p>Verification status ({@link #teacherStatus}) is the
+ * authorisation gate enforced by
+ * {@code TeacherContentAccessService.requireApprovedTeacher}: only
+ * {@link com.example.aichinese.entity.enums.TeacherStatus#APPROVED}
+ * teachers may publish content, schedule live classes, or be
+ * surfaced in the public teacher catalogue.</p>
+ *
+ * <p>The verification trail flows through:</p>
+ * <ul>
+ *   <li>{@link TeacherVerificationDocument} — uploaded credentials</li>
+ *   <li>{@link TeacherVerificationReview} — admin review decisions</li>
+ * </ul>
+ *
+ * <p>{@link #publicVisible} is a teacher-controlled visibility toggle
+ * applied <em>after</em> verification: an approved teacher can still
+ * temporarily hide their public profile (e.g. while on leave) without
+ * losing their approved status.</p>
+ *
+ * <p>{@link #rejectionReason} is populated when the most recent
+ * verification review is {@code REJECTED} and is surfaced back to the
+ * teacher so they know what to correct on resubmission.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

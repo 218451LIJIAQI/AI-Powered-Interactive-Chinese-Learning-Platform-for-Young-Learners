@@ -27,6 +27,30 @@ import com.example.aichinese.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
+/**
+ * REST entry points for the authentication surface:
+ * registration (student / teacher), login, current-user lookup,
+ * logout, forgot-password, and reset-password.
+ *
+ * <h2>Rate limiting</h2>
+ * <p>Public-write endpoints (register, forgot-password) go through
+ * {@link PublicAuthRequestLimiter} keyed on the resolved client IP
+ * (via {@link ClientIpResolver}) so credential-stuffing and
+ * enumeration probes hit the 429 before they reach the persistence
+ * layer. Login attempts are limited inside
+ * {@link AuthService#login}.</p>
+ *
+ * <h2>Cache hygiene</h2>
+ * <p>{@code GET /me} returns {@code Cache-Control: no-store} so the
+ * authenticated JSON profile (email, role list, teacher-status flag)
+ * never lands in browser disk or back-forward cache — defence in
+ * depth against post-logout replay.</p>
+ *
+ * <h2>Forgot-password user enumeration</h2>
+ * <p>The {@code forgot-password} response is identical whether or
+ * not the supplied email exists (rate-limit + uniform message), so an
+ * attacker cannot probe for valid accounts via the endpoint.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/auth")

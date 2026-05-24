@@ -13,6 +13,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single draggable card belonging to a {@link DragDropActivity}.
+ *
+ * <p>Each row pairs a draggable label ({@link #dragText}) with the
+ * target zone label it should land in ({@link #targetZone}); multiple
+ * items may share the same target zone when the front-end UX presents
+ * a multi-slot drop area.</p>
+ *
+ * <p>{@link #sortOrder} controls the initial render order so authors
+ * can stage the activity (e.g. show the easier targets first); the
+ * front-end is free to randomise the deck on each play, but the
+ * authoritative order is preserved here for the catalogue preview.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

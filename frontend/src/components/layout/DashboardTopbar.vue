@@ -31,12 +31,24 @@
         </div>
       </div>
 
-      <RouterLink v-if="showNotifications" :to="notificationPath" class="topbar-icon-button hidden-mobile" aria-label="Open notification settings">
+      <RouterLink
+        v-if="showNotifications"
+        :to="notificationPath"
+        class="topbar-icon-button hidden-mobile"
+        :aria-label="notificationCount > 0 ? `Notifications — ${notificationCount} unread` : 'Notifications'"
+      >
         <IconGlyph name="bell" :size="18" class="topbar-icon-glyph" />
-        <span v-if="notificationCount" class="topbar-notification-badge">{{ notificationCount }}</span>
+        <span v-if="notificationCount" class="topbar-notification-badge" aria-hidden="true">{{ notificationCount }}</span>
       </RouterLink>
 
-      <button v-if="showSessionAction" class="topbar-signout" type="button" :disabled="signingOut" @click="handleSignOut">
+      <button
+        v-if="showSessionAction"
+        class="topbar-signout"
+        type="button"
+        :disabled="signingOut"
+        :aria-busy="signingOut"
+        @click="handleSignOut"
+      >
         {{ signingOut ? 'Signing out...' : 'Sign out' }}
       </button>
 
@@ -53,6 +65,19 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Authenticated topbar — page title, breadcrumb, notification
+ * bell, mobile-nav toggle, language switcher, and the user menu.
+ *
+ * Polls the unread-notification count and listens for the
+ * `mandarin-spark:notification-read` custom event so the badge
+ * decrements in real time when the user opens an item, without
+ * a full refresh.
+ *
+ * Click-outside is handled by a document listener wired in
+ * onMounted / detached in onBeforeUnmount so the dropdown closes
+ * cleanly without leaking handlers across navigations.
+ */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 

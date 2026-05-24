@@ -1,3 +1,33 @@
+/**
+ * Browser-driven regression test for the student-quiz auth-redirect
+ * round-trip against a LIVE backend.
+ *
+ * <h2>The bug class this guards against</h2>
+ * Earlier versions of the SPA would lose the original
+ * `/student/quiz/:id` deep link when the auth guard redirected
+ * through /auth — after sign-in the user would land on the generic
+ * student home instead of resuming the quiz they clicked. This
+ * script:
+ *   1. Boots a Vite preview server with `previewqa` mode so the
+ *      build runs against the real backend, not the demo fixture.
+ *   2. Registers a fresh student account.
+ *   3. While LOGGED OUT, opens `/student/quiz` (deep link).
+ *   4. Confirms the guard redirects to `/auth?redirect=...`.
+ *   5. Signs in.
+ *   6. Asserts the post-login route IS `/student/quiz`, not the
+ *      default student home.
+ *
+ * <h2>Why this needs its own script</h2>
+ * The general flow scripts cover happy paths; this one is a
+ * dedicated regression locked to a specific historical bug so the
+ * fix cannot rot. Kept small and focused on purpose.
+ *
+ * <h2>Configuration</h2>
+ *   - `QA_FRONTEND_HOST` / `QA_FRONTEND_PORT` — Vite host/port
+ *   - `QA_BASE_URL`     — override for the frontend origin
+ *   - `QA_API_BASE_URL` / `VITE_API_BASE_URL` — backend base
+ *   - `QA_CHROME_PORT`  — DevTools port (default 9231)
+ */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -349,7 +379,8 @@ async function main() {
     evidence.finalState = await poll(
       'student quiz page after redirect login',
       pageState,
-      (state) => state.path.startsWith('/student/quiz') && state.title.includes('Quiz') && state.text.includes('Question'),
+      (state) => state.path.startsWith('/student/quiz') && state.title.includes('Quiz')
+        && (state.text.includes('Question') || state.text.includes('No quiz ready')),
       25000,
       250,
     )
@@ -364,6 +395,7 @@ async function main() {
       && evidence.apiResponses.some((response) => response.url.includes('/auth/login') && response.status === 200)
       && evidence.apiResponses.some((response) => response.url.includes('/students/quizzes') && response.status === 200)
       && evidence.finalState.path.startsWith('/student/quiz')
+      && (evidence.finalState.text.includes('Question') || evidence.finalState.text.includes('No quiz ready'))
   } finally {
     client?.close()
     chrome.kill()

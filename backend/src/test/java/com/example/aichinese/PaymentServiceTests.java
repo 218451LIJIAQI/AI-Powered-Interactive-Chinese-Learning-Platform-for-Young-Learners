@@ -41,6 +41,12 @@ import com.example.aichinese.service.PaymentProviderService;
 import com.example.aichinese.service.PaymentService;
 import com.example.aichinese.service.TeacherEarningService;
 
+/**
+ * Unit coverage for {@code PaymentService} — pins the lifecycle
+ * state machine (PENDING → SUCCESS / FAILED), webhook idempotency
+ * under retry, cancellation synchronisation with provider terminal
+ * states, and the entitlement-creation side-effect on success.
+ */
 class PaymentServiceTests {
 
     @Test

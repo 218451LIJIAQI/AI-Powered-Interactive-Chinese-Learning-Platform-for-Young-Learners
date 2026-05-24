@@ -372,6 +372,22 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Teacher classes hub — create / edit / publish / list classes,
+ * schedule live sessions, and manage class enrolments.
+ *
+ * <h2>Gating</h2>
+ * <p>All write actions are blocked by {@code useTeacherAccess()}
+ * banner when the teacher's verification status is not APPROVED —
+ * the page stays read-only with a friendly "verification pending"
+ * panel so the teacher still sees their existing classes.</p>
+ *
+ * <h2>Live session times</h2>
+ * <p>Live sessions are stored as UTC instants on the backend; the
+ * page lets the teacher pick a local datetime and converts to UTC
+ * before sending. The display always shows the teacher's local
+ * timezone so the round-trip is invisible.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -399,6 +415,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { CoursePackageResponse, LessonResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDate } from '@/utils/format'
+import { openSafeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -918,9 +935,13 @@ async function loadDependentResources(classId: number, lessonId: number | null) 
 
 function openMeeting(link?: string | null) {
   if (link) {
-    actionError.value = null
-    actionSuccess.value = 'Opening the external meeting link in a new tab.'
-    window.open(link, '_blank', 'noopener,noreferrer')
+    if (openSafeHttpUrl(link)) {
+      actionError.value = null
+      actionSuccess.value = 'Opening the external meeting link in a new tab.'
+    } else {
+      actionSuccess.value = null
+      actionError.value = 'The meeting link is not a safe web URL.'
+    }
     return
   }
   actionSuccess.value = null

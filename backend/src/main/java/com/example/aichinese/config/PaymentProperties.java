@@ -7,6 +7,28 @@ import java.util.Set;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Strongly-typed binding for the {@code app.payment.*} configuration block.
+ *
+ * <p>Captures the success / cancel redirect URLs, the provider
+ * selector, and the Stripe-specific credentials. The compact
+ * constructor performs eager validation:</p>
+ * <ul>
+ *   <li>Success / cancel / Stripe-API URLs are validated as absolute
+ *       HTTP(S) URLs (with sane local-development defaults).</li>
+ *   <li>Provider is normalised to one of {@code mock} / {@code no-op} /
+ *       {@code stripe}; an unrecognised value fails fast at startup.</li>
+ *   <li>Stripe credentials are trimmed; non-empty / live-key checks
+ *       happen later in {@link PaymentProductionGuard} so the
+ *       defaults stay valid for dev profiles.</li>
+ * </ul>
+ *
+ * <p>Production gates ({@code sk_live_} prefix on the API key,
+ * exact {@code api.stripe.com} hostname, etc.) live in
+ * {@link PaymentProductionGuard} rather than here so dev profiles can
+ * still bind {@code sk_test_...} values without failing the property
+ * record's compact constructor.</p>
+ */
 @ConfigurationProperties(prefix = "app.payment")
 public record PaymentProperties(
         String successUrl,

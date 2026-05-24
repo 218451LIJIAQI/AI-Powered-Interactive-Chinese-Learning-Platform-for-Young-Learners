@@ -1,10 +1,5 @@
 <template>
   <div class="page-stack student-classes-page">
-    <section class="student-greeting-header student-greeting-header--classes">
-      <h1>Hello, {{ studentName }}!</h1>
-      <p>Review your live class schedule, teacher, and recorded lesson access from the connected learning workspace.</p>
-    </section>
-
     <DataNotice :using-fallback="liveResource.usingFallback.value" :error="actionError || liveResource.error.value" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
@@ -209,6 +204,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student live-class + recorded-video hub.
+ *
+ * <p>Lists enrolments, upcoming live sessions, and recorded
+ * playback. The join button only appears within the join window —
+ * the gate is enforced server-side by
+ * {@code LiveLearningAccessService} so a leaked meeting URL cannot
+ * be reused outside the window.</p>
+ */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -220,12 +224,11 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { publicCourseDetails, studentLiveClasses, teacherCoursePackages } from '@/demo/data'
-import { useAuthStore } from '@/stores/auth'
 import type { CoursePackageResponse, LiveClassResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
+import { openSafeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
-const auth = useAuthStore()
 
 const liveResource = useResource(() => studentApi.liveClasses(), studentLiveClasses)
 
@@ -236,7 +239,6 @@ const pageLoading = computed(() => liveResource.loading.value)
 const pageError = computed(() => liveResource.error.value)
 const liveReadOnly = computed(() => liveResource.usingFallback.value)
 
-const studentName = computed(() => auth.currentUser?.studentProfile?.displayName ?? auth.displayName.split(' ')[0] ?? 'Learner')
 const upcomingClass = computed(() => liveClasses.value.find((item) => item.canJoin) ?? liveClasses.value[0] ?? null)
 const primaryTeacherName = computed(() => upcomingClass.value?.teacher?.displayName || 'Teacher unavailable')
 const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() => {
@@ -328,7 +330,7 @@ const watchAgainSubtitle = computed(() => {
 
 const watchAgainMeta = computed(() => {
   if (upcomingClass.value) {
-    return `${formatStatus(upcomingClass.value.liveClassStatus)} • ${upcomingClass.value.meetingPlatform}`
+    return `${formatStatus(upcomingClass.value.liveClassStatus)} - ${upcomingClass.value.meetingPlatform}`
   }
 
   return 'Waiting for class scheduling data'
@@ -360,7 +362,7 @@ function recordedRowsFromClass(item: LiveClassResponse) {
         packageId: null,
         title: item.lesson.lessonTitle,
         context: 'Lesson linked to this live class',
-        meta: `${item.lesson.learningType} • ${item.lesson.accessType}`,
+        meta: `${item.lesson.learningType} - ${item.lesson.accessType}`,
       },
     ]
   }
@@ -373,7 +375,7 @@ function recordedRowsFromClass(item: LiveClassResponse) {
         packageId: item.coursePackage.packageId,
         title: item.coursePackage.packageTitle,
         context: 'Package linked to this live class',
-        meta: `${item.coursePackage.learningType} • ${item.coursePackage.accessType}`,
+        meta: `${item.coursePackage.learningType} - ${item.coursePackage.accessType}`,
       },
     ]
   }
@@ -491,8 +493,11 @@ async function join(id: number) {
     actionError.value = null
     try {
       const response = await studentApi.joinLiveClass(id)
-      actionSuccess.value = 'Opening the live class in a new tab.'
-      window.open(response.joinUrl, '_blank', 'noopener,noreferrer')
+      if (openSafeHttpUrl(response.joinUrl)) {
+        actionSuccess.value = 'Opening the live class in a new tab.'
+      } else {
+        actionError.value = 'The live class meeting link is not a safe web URL.'
+      }
     } catch (reason) {
       actionError.value = resolveApiError(reason, 'Unable to join this class right now.')
     }

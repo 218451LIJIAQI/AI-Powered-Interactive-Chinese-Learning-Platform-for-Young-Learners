@@ -22,6 +22,31 @@ import org.springframework.web.client.RestTemplate;
 
 import com.example.aichinese.config.AiProperties;
 
+/**
+ * {@link AiProviderClient} that talks to any OpenAI-compatible
+ * {@code /chat/completions} endpoint (DeepSeek, OpenAI, Together,
+ * etc.).
+ *
+ * <p>Picked at runtime by {@link AiProviderRouter} when
+ * {@code app.ai.enable-real-provider=true} and the configured
+ * provider is one of {@code deepseek} / {@code openai-compatible}.
+ * Configuration that is missing or invalid (no model, no API key,
+ * non-HTTPS base URL, etc.) is detected before any network call so
+ * the caller gets an immediate {@link AiProviderResult#failure}
+ * rather than a delayed timeout.</p>
+ *
+ * <h2>Endpoint integrity</h2>
+ * <p>{@link #resolveEndpoint(String)} accepts only HTTPS URLs in
+ * production; HTTP is allowed only when the host is loopback (used
+ * by integration tests). This is defence-in-depth on top of
+ * {@link com.example.aichinese.config.AiProductionGuard}.</p>
+ *
+ * <h2>Failure handling</h2>
+ * <p>Every {@link RestClientException} is caught and translated into a
+ * generic failure result; the underlying message is logged at
+ * {@code WARN} but never propagated to the response — so a provider
+ * 5xx body cannot leak prompt fragments back to the front-end.</p>
+ */
 @Component
 public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
 
@@ -112,7 +137,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             Integer tokenCount = extractTokenCount(responseBody.get("usage"));
             return AiProviderResult.success(providerName, modelName, text.trim(), tokenCount);
         } catch (RestClientException exception) {
-            log.warn("AI provider request failed for feature {}: {}", prompt.featureKey(), exception.getMessage());
+            log.warn("AI provider request failed for feature {} with exception type {}.", prompt.featureKey(), exception.getClass().getSimpleName());
             return AiProviderResult.failure(providerName, modelName, "Provider request failed or timed out.");
         }
     }

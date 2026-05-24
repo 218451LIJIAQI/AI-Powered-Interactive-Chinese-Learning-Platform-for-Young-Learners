@@ -330,6 +330,27 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Combined sign-in / register surface (one route, two tab modes).
+ *
+ * <h2>Why one page</h2>
+ * <p>Keeping login + register together cuts a navigation step out
+ * of the auth flow and lets the user toggle without losing typed
+ * input. The active mode is reflected in the URL (`?mode=register`)
+ * so direct links from marketing pages can land on the right tab.</p>
+ *
+ * <h2>Post-auth redirect</h2>
+ * <p>After login we honour {@code ?redirect=} when it normalises
+ * through {@link normalizeAppRoute} (defence against open-redirect
+ * abuse); otherwise we use {@link defaultRouteForRole} so each
+ * persona lands on their dashboard.</p>
+ *
+ * <h2>Teacher onboarding</h2>
+ * <p>Teacher registration calls a different endpoint and the
+ * resulting account starts in {@code PENDING_APPROVAL} — the
+ * post-register message tells the teacher to wait for admin
+ * verification before logging in.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

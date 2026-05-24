@@ -17,6 +17,24 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+/**
+ * Renders the canonical {@code 401 Unauthorized} JSON envelope when a
+ * caller is missing credentials, presents an invalid / expired token,
+ * or otherwise fails authentication.
+ *
+ * <p>Returns the {@link FriendlyErrorMessageResolver#sessionExpiredMessage()}
+ * sentinel because almost every 401 from this platform is either
+ * "session timed out" or "never signed in"; the front-end uses this
+ * uniform message to drive its "redirect to login" behaviour. The
+ * deliberate vagueness also prevents user-enumeration attacks (we
+ * never disclose whether the email exists or whether the token was
+ * malformed vs expired vs signed with a rotated secret).</p>
+ *
+ * <p>The {@code Cache-Control: no-store} / {@code Pragma: no-cache}
+ * pair is required so an intermediate proxy or browser cannot cache
+ * the 401 response and replay it for a later legitimate request after
+ * the user signs in.</p>
+ */
 @Component
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 

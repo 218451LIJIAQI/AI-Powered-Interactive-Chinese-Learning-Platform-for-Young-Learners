@@ -35,6 +35,13 @@ import com.example.aichinese.service.LiveLearningAccessService;
 import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.StudentLearningAccessService;
 
+/**
+ * Unit coverage for {@code NotificationService} — pins row-level
+ * access (a caller only sees their own notifications), the
+ * unread-count badge contract, the bulk mark-all-read transaction
+ * isolation (separate transaction so the badge updates promptly),
+ * and the cross-user notification dispatch path.
+ */
 class NotificationServiceTests {
 
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
@@ -100,7 +107,8 @@ class NotificationServiceTests {
         Notification hidden = notification(studentUser, "TEACHER_FEEDBACK", 20L, NotificationStatus.UNREAD);
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
-        when(notificationRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(hidden, visible));
+        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(1L, NotificationStatus.UNREAD))
+                .thenReturn(List.of(hidden, visible));
         when(teacherFeedbackRepository.findByIdAndStudentUserId(20L, 1L)).thenReturn(Optional.empty());
 
         assertThat(service.countAccessibleUnreadNotifications(new SecurityUserDetails(studentUser))).isEqualTo(1);
@@ -113,7 +121,8 @@ class NotificationServiceTests {
         Notification hidden = notification(studentUser, "TEACHER_FEEDBACK", 20L, NotificationStatus.UNREAD);
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
-        when(notificationRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(hidden, visible));
+        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(1L, NotificationStatus.UNREAD))
+                .thenReturn(List.of(hidden, visible));
         when(teacherFeedbackRepository.findByIdAndStudentUserId(20L, 1L)).thenReturn(Optional.empty());
 
         BulkOperationResponse response = service.markAllAsRead(new SecurityUserDetails(studentUser));

@@ -25,11 +25,44 @@ import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.TeacherProfile;
+import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.ManagedContentType;
+import com.example.aichinese.entity.enums.TeacherStatus;
 
+/**
+ * Translates the published content domain ({@link Lesson} /
+ * {@link LearningModule} / {@link CoursePackage} / {@link PackageItem})
+ * into the response DTOs consumed by the teacher dashboard, the admin
+ * moderation queue and the public discovery catalog.
+ *
+ * <p>Every method is null-defensive at the boundary — a {@code null}
+ * entity simply returns {@code null} rather than throwing — so that
+ * partial domain graphs (e.g. a lesson with no module, or a teacher
+ * profile whose {@code user} association failed to hydrate) degrade
+ * gracefully to a missing field on the wire instead of a 500.</p>
+ *
+ * <p>The public-view mappers
+ * ({@link #toPublicCourseSummary(Lesson)} /
+ * {@link #toPublicCourseDetail(CoursePackage, List)}) deliberately keep
+ * the locked / unlocked decision inside this class so the controller
+ * layer never has to repeat the
+ * {@code accessType == PAID} check at every callsite — paid items get a
+ * stable, user-friendly placeholder message in the
+ * {@code accessLockedReason} field which the front-end displays in the
+ * locked-content card.</p>
+ */
 @Component
 public class ContentManagementMapper {
+
+    /**
+     * Placeholder shown on every {@code PAID} public-catalog response
+     * until the platform-wide payment integration is finalised.
+     * Centralised so the wording can be revised in one place once the
+     * payment flow is enabled end-to-end.
+     */
+    private static final String PAID_LOCKED_REASON =
+            "This paid content is locked until payment workflows are implemented.";
 
     public LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
@@ -60,6 +93,9 @@ public class ContentManagementMapper {
     }
 
     public LearningModuleResponse toLearningModuleResponse(LearningModule module) {
+        if (module == null) {
+            return null;
+        }
         return new LearningModuleResponse(
                 module.getId(),
                 module.getTitle(),
@@ -77,6 +113,9 @@ public class ContentManagementMapper {
     }
 
     public LessonResponse toLessonResponse(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
         return new LessonResponse(
                 lesson.getId(),
                 lesson.getTitle(),
@@ -99,9 +138,12 @@ public class ContentManagementMapper {
     }
 
     public PackageItemResponse toPackageItemResponse(PackageItem item) {
+        if (item == null) {
+            return null;
+        }
         return new PackageItemResponse(
                 item.getId(),
-                item.getCoursePackage().getId(),
+                item.getCoursePackage() != null ? item.getCoursePackage().getId() : null,
                 item.getItemType(),
                 item.getItemId(),
                 item.getSortOrder(),
@@ -109,6 +151,10 @@ public class ContentManagementMapper {
     }
 
     public CoursePackageResponse toCoursePackageResponse(CoursePackage coursePackage, List<PackageItem> items) {
+        if (coursePackage == null) {
+            return null;
+        }
+        List<PackageItem> safeItems = items == null ? List.of() : items;
         return new CoursePackageResponse(
                 coursePackage.getId(),
                 coursePackage.getTitle(),
@@ -122,7 +168,7 @@ public class ContentManagementMapper {
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
                 toTeacherSummary(coursePackage.getTeacher()),
-                items.stream().map(this::toPackageItemResponse).toList(),
+                safeItems.stream().map(this::toPackageItemResponse).toList(),
                 coursePackage.getCreatedAt(),
                 coursePackage.getUpdatedAt());
     }
@@ -251,13 +297,19 @@ public class ContentManagementMapper {
     }
 
     public PublicTeacherSummaryResponse toPublicTeacherSummary(TeacherProfile teacherProfile) {
+        if (teacherProfile == null || teacherProfile.getUser() == null) {
+            return null;
+        }
         return new PublicTeacherSummaryResponse(
                 teacherProfile.getId(),
                 teacherProfile.getUser().getDisplayName(),
-                teacherProfile.getTeacherStatus() == com.example.aichinese.entity.enums.TeacherStatus.APPROVED);
+                teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED);
     }
 
     public PublicCourseSummaryResponse toPublicCourseSummary(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
         return new PublicCourseSummaryResponse(
                 "LESSON-" + lesson.getId(),
                 lesson.getId(),
@@ -272,11 +324,14 @@ public class ContentManagementMapper {
                 lesson.getPrice(),
                 BigDecimal.ZERO,
                 lesson.getCoverImageUrl(),
-                lesson.getAccessType() == com.example.aichinese.entity.enums.AccessType.PAID,
+                lesson.getAccessType() == AccessType.PAID,
                 lesson.getContentStatus());
     }
 
     public PublicCourseSummaryResponse toPublicCourseSummary(CoursePackage coursePackage) {
+        if (coursePackage == null) {
+            return null;
+        }
         return new PublicCourseSummaryResponse(
                 "PACKAGE-" + coursePackage.getId(),
                 coursePackage.getId(),
@@ -291,11 +346,15 @@ public class ContentManagementMapper {
                 coursePackage.getPrice(),
                 BigDecimal.ZERO,
                 coursePackage.getCoverImageUrl(),
-                coursePackage.getAccessType() == com.example.aichinese.entity.enums.AccessType.PAID,
+                coursePackage.getAccessType() == AccessType.PAID,
                 ContentStatus.PUBLISHED);
     }
 
     public PublicCourseDetailResponse toPublicCourseDetail(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
+        boolean locked = lesson.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
                 "LESSON-" + lesson.getId(),
                 lesson.getId(),
@@ -309,17 +368,20 @@ public class ContentManagementMapper {
                 lesson.getAccessType(),
                 lesson.getPrice(),
                 lesson.getCoverImageUrl(),
-                lesson.getAccessType() == com.example.aichinese.entity.enums.AccessType.PAID,
+                locked,
                 lesson.getContentStatus(),
                 lesson.getLessonContent(),
                 List.of(),
                 "Login to enrol",
-                lesson.getAccessType() == com.example.aichinese.entity.enums.AccessType.PAID
-                        ? "This paid content is locked until payment workflows are implemented."
-                        : null);
+                locked ? PAID_LOCKED_REASON : null);
     }
 
     public PublicCourseDetailResponse toPublicCourseDetail(CoursePackage coursePackage, List<PackageItem> items) {
+        if (coursePackage == null) {
+            return null;
+        }
+        List<PackageItem> safeItems = items == null ? List.of() : items;
+        boolean locked = coursePackage.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
                 "PACKAGE-" + coursePackage.getId(),
                 coursePackage.getId(),
@@ -333,10 +395,10 @@ public class ContentManagementMapper {
                 coursePackage.getAccessType(),
                 coursePackage.getPrice(),
                 coursePackage.getCoverImageUrl(),
-                coursePackage.getAccessType() == com.example.aichinese.entity.enums.AccessType.PAID,
+                locked,
                 coursePackage.getContentStatus(),
                 null,
-                items.stream()
+                safeItems.stream()
                         .map(item -> new PublicCourseItemSummaryResponse(
                                 mapPackageItemType(item),
                                 item.getItemId(),
@@ -344,9 +406,7 @@ public class ContentManagementMapper {
                                 item.getSortOrder()))
                         .toList(),
                 "Register to start learning",
-                coursePackage.getAccessType() == com.example.aichinese.entity.enums.AccessType.PAID
-                        ? "This paid content is locked until payment workflows are implemented."
-                        : null);
+                locked ? PAID_LOCKED_REASON : null);
     }
 
     private ManagedContentType mapPackageItemType(PackageItem item) {

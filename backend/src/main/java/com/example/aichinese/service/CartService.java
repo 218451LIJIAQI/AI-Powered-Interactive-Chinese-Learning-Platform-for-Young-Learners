@@ -23,6 +23,25 @@ import com.example.aichinese.repository.CartRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
+/**
+ * Manages a student's shopping cart: add / remove items, recompute
+ * prices, and persist line-items.
+ *
+ * <h2>Item identity</h2>
+ * <p>Each cart line is identified by an
+ * {@code (itemType, itemId)} pair resolved through
+ * {@link PurchasableItemService}, which is the single source of truth
+ * for what is sellable. Already-owned items are rejected at add time
+ * via {@link EntitlementService} so a student cannot accidentally
+ * pay twice for the same content.</p>
+ *
+ * <h2>Pricing</h2>
+ * <p>Per-line and cart totals are computed via
+ * {@link CommerceMoneyService} so currency precision and rounding
+ * are uniform with the order / payment paths. The unit price is
+ * captured at add-time, not look-up time, so a price change between
+ * "add to cart" and "checkout" does not silently re-bill the student.</p>
+ */
 @Service
 public class CartService {
 

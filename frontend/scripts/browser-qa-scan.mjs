@@ -1,3 +1,29 @@
+/**
+ * Browser-driven smoke scan across every documented route.
+ *
+ * <h2>Purpose</h2>
+ * Fastest QA pass in the tree — for every route in the canonical
+ * list it just confirms the page loads, captures a screenshot, and
+ * records any console / network errors. No deep interaction, no
+ * viewport matrix.
+ *
+ * <h2>When to use this over deep-audit</h2>
+ *   - Pre-commit / local smoke check.
+ *   - PR-time CI step (catch outright broken routes in &lt; 1 minute).
+ *   - First triage before running the heavier
+ *     {@link browser-qa-deep-audit.mjs} which is 3x as slow because
+ *     it tests three viewports per route.
+ *
+ * <h2>Evidence layout</h2>
+ * `browser-qa-evidence/<timestamp>/` — note the timestamp is the
+ * folder name directly (unlike deep-audit which suffixes with
+ * `-deep-audit`) so the latest run is easy to spot in `ls`.
+ *
+ * <h2>Configuration</h2>
+ *   - `QA_BASE_URL`           — frontend origin
+ *   - `QA_FRONTEND_PROBE_URL` — separate probe origin if needed
+ *   - `QA_CHROME_PORT`        — DevTools port (default 9223)
+ */
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -446,9 +472,14 @@ async function main() {
       })
     })
 
-    async function setPreviewRole(role) {
-      await send('Runtime.evaluate', {
-        expression: `(() => {
+    let activePreviewScriptId = null
+    async function preparePreviewRole(role) {
+      if (activePreviewScriptId) {
+        await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: activePreviewScriptId })
+      }
+
+      const result = await send('Page.addScriptToEvaluateOnNewDocument', {
+        source: `(() => {
           const previewKey = 'mandarin-spark.preview-role';
           const tokenKey = 'mandarin-spark.token';
           window.localStorage.removeItem(previewKey);
@@ -459,8 +490,9 @@ async function main() {
           if (role) {
             window.sessionStorage.setItem(previewKey, role);
           }
-        })()`,
+        })();`,
       })
+      activePreviewScriptId = result.identifier
     }
 
     for (const viewport of viewports) {
@@ -493,9 +525,7 @@ async function main() {
         }
 
         activeRecord = record
-        await send('Page.navigate', { url: baseUrl })
-        await sleep(150)
-        await setPreviewRole(previewRoleForRoute(route))
+        await preparePreviewRole(previewRoleForRoute(route))
         const loadPromise = waitFor('Page.loadEventFired', 10000)
         const navigation = await send('Page.navigate', { url })
         if (navigation.errorText) {

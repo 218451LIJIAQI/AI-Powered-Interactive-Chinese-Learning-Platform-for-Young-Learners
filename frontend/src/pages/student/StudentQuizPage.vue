@@ -87,7 +87,7 @@
 
           <article v-if="hasSubmitted" class="student-quiz-review">
             <div class="row u-mb-12">
-              <span class="student-review-alert">!</span>
+              <span class="student-review-alert"><IconGlyph name="alert" :size="14" /></span>
               <strong>Review · Let's learn from mistakes!</strong>
             </div>
             <div class="student-quiz-review-grid">
@@ -105,7 +105,7 @@
 
           <article v-else-if="activeQuestion" class="student-quiz-review student-quiz-review--pending">
             <div class="row u-mb-12">
-              <span class="student-review-alert">?</span>
+              <span class="student-review-alert"><IconGlyph name="help" :size="14" /></span>
               <strong>Feedback unlocks after you submit</strong>
             </div>
             <p>Choose an answer first. SparkBot will show review notes after your attempt so the quiz stays fair and encouraging.</p>
@@ -165,6 +165,17 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Quiz player surface — start, submit, score, and wrong-answer
+ * review for a single quiz attached to a published lesson.
+ *
+ * <h2>Answer-key boundary</h2>
+ * <p>The student-side response strips correct-option / correct-answer
+ * fields at the {@code QuizMapper} backend layer, so a malicious
+ * learner cannot inspect the network payload to cheat. The page
+ * also never persists answers to localStorage so a refresh restarts
+ * the attempt rather than enabling repeated submission.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -248,7 +259,7 @@ const quizMetaLabel = computed(() => {
     `${totalQuestionCount.value} question${totalQuestionCount.value === 1 ? '' : 's'}`,
     `${quiz.value.totalPoints} point${quiz.value.totalPoints === 1 ? '' : 's'}`,
   ]
-  return parts.filter(Boolean).join(' • ')
+  return parts.filter(Boolean).join(' - ')
 })
 const quizTimeLabel = computed(() => (quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : 'No time limit'))
 const currentQuestionNumber = computed(() => Math.min(activeQuestionIndex.value + 1, Math.max(totalQuestionCount.value, 1)))

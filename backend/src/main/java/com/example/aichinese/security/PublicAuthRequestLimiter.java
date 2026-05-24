@@ -13,6 +13,35 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * In-memory rate limiter for the anonymous-accessible authentication
+ * endpoints ({@code /api/auth/register},
+ * {@code /api/auth/forgot-password}).
+ *
+ * <h2>Why two separate caps</h2>
+ * <p>Registration and forgot-password both expose user-enumeration
+ * surfaces (they reveal whether an email is already in use, or trigger
+ * an external email send) but they have different abuse models:</p>
+ * <ul>
+ *   <li><b>Register</b> is bot-farmed for free signups → keyed only by
+ *       IP, with a generous {@value #MAX_REGISTER_REQUESTS}-per-window
+ *       cap so a school computer lab doesn't accidentally lock itself
+ *       out.</li>
+ *   <li><b>Forgot-password</b> is used both for credential-stuffing
+ *       (probe one email per request) and for email bombing (force the
+ *       SMTP service to spam one victim) → keyed by both IP <em>and</em>
+ *       email so neither vector accumulates without limit, with a
+ *       tighter {@value #MAX_FORGOT_PASSWORD_REQUESTS}-per-window cap.</li>
+ * </ul>
+ *
+ * <h2>State management</h2>
+ * <p>State is held in a process-local {@link ConcurrentHashMap},
+ * matching the single-replica deployment assumption documented on
+ * {@link LoginAttemptLimiter}. Expired records are evicted during
+ * normal access; a hard cap on tracked entries
+ * ({@value #MAX_TRACKED_REQUEST_RECORDS}) is enforced via LRU eviction
+ * to bound memory under sustained abuse.</p>
+ */
 @Component
 public class PublicAuthRequestLimiter {
 

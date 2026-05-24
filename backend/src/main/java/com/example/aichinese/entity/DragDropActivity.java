@@ -18,6 +18,24 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Admin-curated drag-and-drop activity in the platform-managed
+ * student practice library.
+ *
+ * <p>One of six sibling activity types — together with
+ * {@link Flashcard}, {@link ListeningExercise}, {@link MatchingGame},
+ * {@link StoryActivity} and {@link TracingExercise} — that share the
+ * same metadata vocabulary ({@link #ageBand}, {@link #difficulty},
+ * {@link #hskLevel}, {@link #topic}, {@link #tags}, {@link #xpReward})
+ * so the student-facing library can filter and surface them
+ * uniformly.</p>
+ *
+ * <p>Children {@link DragDropItem} rows carry the actual draggables
+ * and target zones. {@link #xpReward} defaults to 15 and is the base
+ * XP a learner earns on first successful completion; the actual
+ * awarded amount is multiplied by
+ * {@link com.example.aichinese.entity.enums.ActivityDifficulty#xpMultiplier()}.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

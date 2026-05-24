@@ -15,12 +15,35 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single line of an {@link Order}, polymorphically referencing the
+ * purchased artefact via {@link #itemType} and {@link #itemId}.
+ *
+ * <p>{@link #itemTitleSnapshot} captures the artefact's title at the
+ * time of checkout so that historical receipts and refund forms keep
+ * working even after the underlying lesson / package is renamed or
+ * archived. The same pattern applies to {@link #unitPrice} and
+ * {@link #lineTotal}: financial fields are immutable once written so
+ * that audit trails and accounting reports remain stable.</p>
+ *
+ * <p>{@link #teacher} is the teacher who is entitled to commission for
+ * this line, captured here (rather than chasing the FK on the lesson)
+ * so that re-assigning a lesson to a new teacher does not retroactively
+ * change historical earnings. The companion {@link TeacherEarning} row
+ * is created from this attribution when the order moves to
+ * {@link com.example.aichinese.entity.enums.PaymentStatus#PAID}.</p>
+ *
+ * <p>{@link #featureKey} is populated when {@link #itemType} is
+ * {@code PREMIUM_AI} so the entitlement flow knows which AI feature
+ * the subscription unlocks.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "order_items", indexes = {
-        @Index(name = "idx_order_items_order_id", columnList = "order_id")
+        @Index(name = "idx_order_items_order_id", columnList = "order_id"),
+        @Index(name = "idx_order_items_order_created", columnList = "order_id,created_at")
 })
 public class OrderItem extends BaseEntity {
 

@@ -43,6 +43,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * (flashcard for the simple single-row case, matching-game for the
  * composite parent+children case) plus the status lifecycle and the
  * role-based access guards.
+ *
+ * <p>Also pins the per-type validation invariants (matching games need
+ * pairs, drag-drop needs targets, stories need comprehension
+ * questions) so a future refactor of {@code AdminActivityService}
+ * cannot quietly weaken them.</p>
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",

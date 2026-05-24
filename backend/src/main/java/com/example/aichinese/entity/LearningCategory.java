@@ -10,6 +10,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Curated topical category (e.g. "Pinyin", "HSK 1 Vocabulary",
+ * "Chinese Festivals") used to facet the public catalogue.
+ *
+ * <p>Categories are purely metadata; they do <em>not</em> grant access
+ * or define a content hierarchy. The student-facing catalogue groups
+ * lessons, modules, and packages by their assigned category and orders
+ * the categories themselves by {@link #sortOrder} (ascending).</p>
+ *
+ * <p>{@link #name} is unique to keep the public catalogue free of
+ * confusing duplicates.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

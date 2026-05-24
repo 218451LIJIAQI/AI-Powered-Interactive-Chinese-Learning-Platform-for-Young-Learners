@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.entity.AiUsageLog;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiRequestStatus;
 import com.example.aichinese.repository.AiChatMessageRepository;
@@ -17,10 +18,42 @@ import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiFeedbackRecordRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.service.AiLogService;
+import com.example.aichinese.entity.AiChatMessage;
+import com.example.aichinese.entity.AiChatSession;
 import com.example.aichinese.entity.AiFeedbackRecord;
 import com.example.aichinese.entity.UploadedFile;
 
+/**
+ * Unit coverage for {@code AiLogService} — pins the typed sender-role
+ * contract for chat messages, the privacy-preserving
+ * {@code content_length=N} metadata stored on feedback rows (instead
+ * of raw child-facing uploads), and the UTF-8-safe truncation
+ * boundary on {@code TINYTEXT} columns.
+ */
 class AiLogServiceTests {
+
+    @Test
+    void appendChatMessageUsesTypedSenderRoleContract() {
+        AiChatMessageRepository aiChatMessageRepository = mock(AiChatMessageRepository.class);
+        when(aiChatMessageRepository.save(any(AiChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        AiLogService aiLogService = new AiLogService(
+                mock(AiUsageLogRepository.class),
+                mock(AiFeedbackRecordRepository.class),
+                mock(AiChatSessionRepository.class),
+                aiChatMessageRepository);
+        AiChatSession session = new AiChatSession();
+        session.setId(123L);
+
+        AiChatMessage saved = aiLogService.appendChatMessage(
+                session,
+                AiChatSenderRole.ASSISTANT,
+                "Safe retained assistant response");
+
+        assertThat(saved.getSession()).isSameAs(session);
+        assertThat(saved.getSenderRole()).isEqualTo(AiChatSenderRole.ASSISTANT);
+        assertThat(saved.getMessageText()).isEqualTo("Safe retained assistant response");
+        verify(aiChatMessageRepository).save(any(AiChatMessage.class));
+    }
 
     @Test
     void usageLogStoresContentLengthMetadataInsteadOfPromptOrResponseText() {

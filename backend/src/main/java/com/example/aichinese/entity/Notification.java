@@ -18,6 +18,35 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * In-app notification delivered to a single recipient {@link User}.
+ *
+ * <p>Notifications are produced by every cross-cutting flow in the
+ * platform — quiz grading, payment status changes, teacher feedback,
+ * AI safety reports, admin escalations — and rendered in the bell
+ * dropdown of the recipient's role-specific dashboard.</p>
+ *
+ * <p>{@link #notificationType} categorises the notification (drives
+ * icon, colour and routing); see
+ * {@link com.example.aichinese.entity.enums.NotificationType}.
+ * {@link #notificationStatus} tracks read/unread; {@link #readAt} is
+ * stamped the first time the recipient acknowledges it.</p>
+ *
+ * <p>{@link #targetType}, {@link #targetId} and {@link #targetPath}
+ * point at the artefact the notification refers to — the front-end
+ * uses {@code targetPath} to deep-link the click action without needing
+ * to know per-type routing rules. Both target columns are denormalised
+ * (no FK) so deleting the target does not cascade-purge historic
+ * notifications.</p>
+ *
+ * <p>{@link #createdByUser} attributes the source actor (teacher posting
+ * feedback, admin acting on a moderation case); nullable for system
+ * notifications.</p>
+ *
+ * <p>The composite index
+ * {@code (user_id, notification_status, created_at, id)} backs the
+ * "unread bell" query that paginates by recency.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,7 +54,8 @@ import lombok.Setter;
 @Table(name = "notifications", indexes = {
         @Index(name = "idx_notifications_user_id", columnList = "user_id"),
         @Index(name = "idx_notifications_status", columnList = "notification_status"),
-        @Index(name = "idx_notifications_type", columnList = "notification_type")
+        @Index(name = "idx_notifications_type", columnList = "notification_type"),
+        @Index(name = "idx_notifications_user_status_created_id", columnList = "user_id,notification_status,created_at,id")
 })
 public class Notification extends BaseEntity {
 

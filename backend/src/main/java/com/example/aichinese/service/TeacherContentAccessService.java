@@ -26,6 +26,35 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
 
+/**
+ * Centralises the access-control checks every teacher-facing content
+ * service shares: approved-teacher gating, ownership verification,
+ * status / archival state enforcement, level / category lookup, and
+ * the standard title / description / price validation.
+ *
+ * <h2>Why one service</h2>
+ * <p>Modules, lessons, course packages, and quizzes all need the same
+ * "is this caller an approved teacher who owns this row?" guard.
+ * Concentrating that logic here keeps the per-resource services
+ * ({@link TeacherModuleService}, {@link TeacherLessonService},
+ * {@link TeacherPackageService}, {@link TeacherQuizService}) tightly
+ * focused and ensures a single source of truth for ownership rules.</p>
+ *
+ * <h2>Status policy</h2>
+ * <p>The platform now publishes teacher-authored content immediately
+ * (no admin review queue), so the editable status set is
+ * {@code DRAFT}, {@code PUBLISHED}, and the legacy {@code REJECTED}
+ * state. Historic {@code REJECTED} rows remain editable so teachers
+ * can keep their archives accessible while we migrate older content
+ * forward.</p>
+ *
+ * <h2>Content safety</h2>
+ * <p>All free-text fields (title, description, lesson body) are
+ * validated for safety / length via {@link ContentSafetyService} and
+ * the per-field caps below; price values flow through
+ * {@code BigDecimal} so currency rounding errors cannot cross
+ * boundaries.</p>
+ */
 @Service
 public class TeacherContentAccessService {
 
@@ -37,18 +66,24 @@ public class TeacherContentAccessService {
             Set.of(ContentStatus.DRAFT, ContentStatus.PUBLISHED, ContentStatus.REJECTED);
     private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES =
             Set.of(ContentStatus.DRAFT, ContentStatus.PUBLISHED, ContentStatus.REJECTED);
+    private static final int MAX_TITLE_LENGTH = 200;
+    private static final int MAX_DESCRIPTION_LENGTH = 2000;
+    private static final int MAX_LESSON_CONTENT_LENGTH = 10000;
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LearningLevelRepository learningLevelRepository;
     private final LearningCategoryRepository learningCategoryRepository;
+    private final ContentSafetyService contentSafetyService;
 
     public TeacherContentAccessService(
             TeacherProfileRepository teacherProfileRepository,
             LearningLevelRepository learningLevelRepository,
-            LearningCategoryRepository learningCategoryRepository) {
+            LearningCategoryRepository learningCategoryRepository,
+            ContentSafetyService contentSafetyService) {
         this.teacherProfileRepository = teacherProfileRepository;
         this.learningLevelRepository = learningLevelRepository;
         this.learningCategoryRepository = learningCategoryRepository;
+        this.contentSafetyService = contentSafetyService;
     }
 
     @Transactional(readOnly = true)
@@ -94,8 +129,8 @@ public class TeacherContentAccessService {
             if (price == null) {
                 throw new ResponseStatusException(BAD_REQUEST, "Price is required for paid content.");
             }
-            if (price.compareTo(BigDecimal.ZERO) < 0) {
-                throw new ResponseStatusException(BAD_REQUEST, "Price must be greater than or equal to 0.");
+            if (price.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(BAD_REQUEST, "Price must be greater than 0 for paid content.");
             }
             return;
         }
@@ -126,8 +161,8 @@ public class TeacherContentAccessService {
         module.setTeacher(teacherProfile);
         module.setLevel(level);
         module.setCategory(category);
-        module.setTitle(title.trim());
-        module.setDescription(TextUtils.trimToNull(description));
+        module.setTitle(contentSafetyService.requireSafeText(title, MAX_TITLE_LENGTH, "Title is required."));
+        module.setDescription(contentSafetyService.optionalSafeText(description, MAX_DESCRIPTION_LENGTH));
         module.setAccessType(accessType);
         module.setPrice(normalizePrice(accessType, price));
         module.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
@@ -151,9 +186,9 @@ public class TeacherContentAccessService {
         lesson.setModule(module);
         lesson.setLevel(level);
         lesson.setCategory(category);
-        lesson.setTitle(title.trim());
-        lesson.setSummary(TextUtils.trimToNull(description));
-        lesson.setLessonContent(TextUtils.trimToNull(lessonContent));
+        lesson.setTitle(contentSafetyService.requireSafeText(title, MAX_TITLE_LENGTH, "Title is required."));
+        lesson.setSummary(contentSafetyService.optionalSafeText(description, MAX_DESCRIPTION_LENGTH));
+        lesson.setLessonContent(contentSafetyService.optionalSafeText(lessonContent, MAX_LESSON_CONTENT_LENGTH));
         lesson.setAccessType(accessType);
         lesson.setPrice(normalizePrice(accessType, price));
         lesson.setLearningType(learningType);
@@ -175,8 +210,8 @@ public class TeacherContentAccessService {
         coursePackage.setTeacher(teacherProfile);
         coursePackage.setLevel(level);
         coursePackage.setCategory(category);
-        coursePackage.setTitle(title.trim());
-        coursePackage.setDescription(TextUtils.trimToNull(description));
+        coursePackage.setTitle(contentSafetyService.requireSafeText(title, MAX_TITLE_LENGTH, "Title is required."));
+        coursePackage.setDescription(contentSafetyService.optionalSafeText(description, MAX_DESCRIPTION_LENGTH));
         coursePackage.setAccessType(accessType);
         coursePackage.setPrice(normalizePrice(accessType, price));
         coursePackage.setLearningType(learningType);

@@ -1,3 +1,30 @@
+/**
+ * Frontend mirror of the backend REST API contracts.
+ *
+ * <h2>What lives here</h2>
+ * <p>Every request payload, response shape, and enum the frontend
+ * sends or receives. The names match the Java DTO and enum types in
+ * {@code com.example.aichinese.dto.*} and
+ * {@code com.example.aichinese.entity.enums.*} so a backend rename
+ * is caught at compile time.</p>
+ *
+ * <h2>Why hand-maintained</h2>
+ * <p>We deliberately avoid OpenAPI-generated types because:</p>
+ * <ul>
+ *   <li>The frontend often needs intersection / utility types
+ *       (e.g. {@code AiResponseReportReviewStatus =
+ *       Exclude<AiResponseReportStatus, 'PENDING_REVIEW'>}) that
+ *       generators struggle with.</li>
+ *   <li>Hand-curated naming is more idiomatic Vue / TS than the
+ *       generator output.</li>
+ *   <li>Backend-frontend contract changes get a code-review
+ *       diff in this file, which doubles as a changelog of the
+ *       wire format.</li>
+ * </ul>
+ *
+ * <p>When adding a new endpoint: define request + response types
+ * here first, then add the wrapper in {@code api/services.ts}.</p>
+ */
 export type AppLanguage = 'en' | 'ms' | 'zh'
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
 export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'

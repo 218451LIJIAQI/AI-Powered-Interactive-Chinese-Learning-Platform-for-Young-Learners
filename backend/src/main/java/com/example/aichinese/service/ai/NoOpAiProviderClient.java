@@ -4,6 +4,16 @@ import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.AiProperties;
 
+/**
+ * Default {@link AiProviderClient} active when
+ * {@code app.ai.enable-real-provider=false}.
+ *
+ * <p>Always returns {@link AiProviderResult#failure} so {@link AiService}
+ * cleanly delegates to its per-feature deterministic fallback. Picked
+ * by {@link AiProviderRouter} whenever the real-provider toggle is
+ * off — meaning a fresh deploy without configured AI credentials does
+ * not silently leak placeholder responses to learners.</p>
+ */
 @Component
 public class NoOpAiProviderClient implements AiProviderClient {
 

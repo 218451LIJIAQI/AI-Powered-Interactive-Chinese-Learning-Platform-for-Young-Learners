@@ -18,13 +18,34 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single admin decision taken against a teacher's verification
+ * submission.
+ *
+ * <p>One review may apply to a whole round of submitted
+ * {@link TeacherVerificationDocument}s (typical case) or be scoped to
+ * a specific document via {@link #document}. The
+ * {@link #decisionStatus} mirrors the canonical
+ * {@link com.example.aichinese.entity.enums.TeacherStatus} so the
+ * admin's verdict directly drives the
+ * {@link TeacherProfile#getTeacherStatus()} field.</p>
+ *
+ * <p>The full audit trail of all reviews per teacher is preserved (no
+ * soft-delete), with the latest decision indexed for efficient
+ * retrieval via the {@code idx_teacher_verification_reviews_latest}
+ * index.</p>
+ *
+ * <p>{@link #reviewerUser} is nullable to support legacy data; the
+ * application layer requires it for new reviews.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "teacher_verification_reviews", indexes = {
         @Index(name = "idx_teacher_verification_reviews_teacher_id", columnList = "teacher_id"),
-        @Index(name = "idx_teacher_verification_reviews_reviewer_user_id", columnList = "reviewer_user_id")
+        @Index(name = "idx_teacher_verification_reviews_reviewer_user_id", columnList = "reviewer_user_id"),
+        @Index(name = "idx_teacher_verification_reviews_latest", columnList = "teacher_id,reviewed_at,id")
 })
 public class TeacherVerificationReview extends BaseEntity {
 
@@ -47,6 +68,6 @@ public class TeacherVerificationReview extends BaseEntity {
     @Column(name = "review_note", length = 1000)
     private String reviewNote;
 
-    @Column(name = "reviewed_at")
+    @Column(name = "reviewed_at", nullable = false)
     private LocalDateTime reviewedAt;
 }

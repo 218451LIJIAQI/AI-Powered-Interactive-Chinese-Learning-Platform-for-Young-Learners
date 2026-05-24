@@ -1,3 +1,49 @@
+<#
+.SYNOPSIS
+    Boot the backend locally with a real SMTP outbound mail
+    provider configured.
+
+.DESCRIPTION
+    Used during local QA of password-reset emails, teacher
+    verification notifications, and any other transactional email
+    that should hit a real inbox during development.
+
+    Reads `.env.smtp.local` (creates it from
+    `.env.smtp.local.example` on first run), then INFERS sane
+    defaults for SMTP_HOST / SMTP_PORT / STARTTLS / SSL settings
+    by looking at the domain portion of SMTP_USERNAME.
+
+.PROVIDER AUTO-DETECTION
+    Known domains are mapped directly:
+        gmail.com         -> smtp.gmail.com:587 STARTTLS
+        outlook.com /
+        hotmail.com /
+        live.com          -> smtp-mail.outlook.com:587 STARTTLS
+        qq.com            -> smtp.qq.com:587 STARTTLS
+        163.com / 126.com -> smtp.163.com|smtp.126.com:465 SSL
+        icloud.com        -> smtp.mail.me.com:587 STARTTLS
+        yahoo.com         -> smtp.mail.yahoo.com:587 STARTTLS
+        sina.com          -> smtp.sina.com:465 SSL
+
+    Unknown domains fall back to MX-record lookup via
+    `Resolve-DnsName`; if the MX points at Google Workspace or
+    Microsoft 365, the corresponding SMTP host is configured.
+    Otherwise the script asks the user to fill SMTP_HOST manually
+    rather than guessing.
+
+.VALIDATIONS ENFORCED
+    - SMTP_USERNAME, SMTP_PASSWORD, SMTP_HOST, SMTP_PORT must all
+      be filled with non-placeholder values (same placeholder
+      heuristics as `start-local-with-ai.ps1`).
+    - SMTP_FROM defaults to SMTP_USERNAME if not explicitly set.
+
+.PARAMETER EnvFile
+    Path to the SMTP env file. Defaults to
+    `backend/.env.smtp.local`.
+
+.PARAMETER ValidateOnly
+    Switch — only validate; do not start Spring Boot.
+#>
 [CmdletBinding()]
 param(
     [string]$EnvFile = "",

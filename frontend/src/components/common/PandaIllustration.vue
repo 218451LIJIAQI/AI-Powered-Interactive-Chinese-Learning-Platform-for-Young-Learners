@@ -34,6 +34,19 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Pure-CSS panda mascot, the platform's friendly face. Lives on
+ * the public landing hero, auth chrome, achievement empty states,
+ * and various dashboard celebration cards. Built from CSS shapes
+ * + custom properties rather than an SVG so it stays crisp at
+ * any size and can be themed (outfit + accent colours) per
+ * surface without re-exporting graphics.
+ *
+ * Poses change subtle pose details so multiple pandas on the
+ * same page don't look like clones. The `compact` flag
+ * collapses the bottom half so the panda fits cleanly inside a
+ * small badge.
+ */
 withDefaults(
   defineProps<{
     size?: number

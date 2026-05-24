@@ -275,6 +275,14 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin executive dashboard — the landing surface for administrators.
+ *
+ * <p>Aggregates platform-wide KPIs (users, courses, content review
+ * queue depth, finance health, moderation backlog) into a single
+ * read-only overview. Heavy drill-downs live in their own sibling
+ * pages so this dashboard stays a single-fetch summary.</p>
+ */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 

@@ -22,10 +22,28 @@ import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
-import com.example.aichinese.util.TextUtils;
 
+/**
+ * Teacher-facing CRUD for recorded lesson videos plus student-facing
+ * playback access to the same.
+ *
+ * <p>Teachers can attach either an uploaded MP4 / WEBM / MOV via
+ * {@link RecordedVideoStorageService} or an external URL
+ * ({@link RecordedVideoSourceType#EXTERNAL_URL}). Drafts are private
+ * to the owning teacher; once {@link ContentStatus#PUBLISHED} the
+ * video is gated by {@link LiveLearningAccessService} so only students
+ * with the right paid / free access can watch.</p>
+ *
+ * <p>Every state transition (create / publish / delete) is audited
+ * via {@link AuditLogService} and notifications are dispatched to the
+ * enrolled students when a new video drops on a lesson they have
+ * access to.</p>
+ */
 @Service
 public class RecordedLessonService {
+
+    private static final int MAX_VIDEO_TITLE_LENGTH = 200;
+    private static final int MAX_VIDEO_DESCRIPTION_LENGTH = 1000;
 
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LiveLearningAccessService liveLearningAccessService;
@@ -33,6 +51,7 @@ public class RecordedLessonService {
     private final LiveLearningMapper liveLearningMapper;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final ContentSafetyService contentSafetyService;
 
     public RecordedLessonService(
             RecordedLessonVideoRepository recordedLessonVideoRepository,
@@ -40,13 +59,15 @@ public class RecordedLessonService {
             RecordedVideoStorageService recordedVideoStorageService,
             LiveLearningMapper liveLearningMapper,
             NotificationService notificationService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentSafetyService contentSafetyService) {
         this.recordedLessonVideoRepository = recordedLessonVideoRepository;
         this.liveLearningAccessService = liveLearningAccessService;
         this.recordedVideoStorageService = recordedVideoStorageService;
         this.liveLearningMapper = liveLearningMapper;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.contentSafetyService = contentSafetyService;
     }
 
     @Transactional
@@ -132,9 +153,8 @@ public class RecordedLessonService {
     @Transactional
     public RecordedLessonVideoResponse archiveRecordedVideo(SecurityUserDetails currentUser, Long lessonId, Long videoId) {
         RecordedLessonVideo video = liveLearningAccessService.requireTeacherOwnedRecordedVideo(currentUser, lessonId, videoId);
-        // Idempotency guard mirroring AdminContentReviewService.archiveContent
-        // (Wave 7.1): a teacher double-clicking the archive button on an
-        // already-inactive video must not produce a duplicate audit-log row.
+        // Idempotency guard: a teacher double-clicking the archive button on
+        // an already-inactive video must not produce a duplicate audit-log row.
         if (!video.isActive()) {
             return toTeacherResponse(video);
         }
@@ -207,8 +227,8 @@ public class RecordedLessonService {
 
         video.setLesson(lesson);
         video.setCoursePackage(coursePackage);
-        video.setTitle(request.title().trim());
-        video.setDescription(TextUtils.trimToNull(request.description()));
+        video.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_VIDEO_TITLE_LENGTH, "Title is required."));
+        video.setDescription(contentSafetyService.optionalSafeText(request.description(), MAX_VIDEO_DESCRIPTION_LENGTH));
         video.setSourceType(sourceType);
         video.setExternalVideoUrl(sourceType == RecordedVideoSourceType.EXTERNAL_URL && request.externalVideoUrl() != null
                 ? request.externalVideoUrl().trim()

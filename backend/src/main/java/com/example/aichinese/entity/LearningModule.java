@@ -19,6 +19,22 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Teacher-owned grouping of related {@link Lesson}s that share a
+ * theme, level, or course week.
+ *
+ * <p>Modules sit between {@link CoursePackage}s and {@link Lesson}s in
+ * the content hierarchy: a package may bundle modules <em>or</em>
+ * directly bundle lessons (see {@link PackageItemType}), and each
+ * lesson may belong to at most one module via {@link Lesson#getModule()}.</p>
+ *
+ * <p>The {@link #teacher} owner is responsible for the module's
+ * editorial state. {@link #accessType} and {@link #price} apply when
+ * the module is sold standalone (not as part of a package); a learner
+ * with a parent-package entitlement automatically sees every
+ * {@code FREE} or contained module without needing a separate
+ * entitlement on the module itself.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -35,6 +35,26 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Teacher-side view onto "my students" — students who have engaged
+ * with content owned by the calling teacher (lesson progress, quiz
+ * attempts, live-class enrolments).
+ *
+ * <h2>Roster derivation</h2>
+ * <p>There is no explicit teacher↔student relationship table; the
+ * roster is derived from observed engagement signals and deduplicated
+ * by student id. This means newly purchased content for a student
+ * immediately appears in the teacher's roster as soon as the student
+ * starts the lesson / attempts the quiz / enrolls in the live class
+ * — no extra plumbing required when entitlements change.</p>
+ *
+ * <h2>PII boundary</h2>
+ * <p>Teacher-facing student responses
+ * ({@link TeacherStudentSummaryResponse}) include the student's
+ * display name and engagement aggregates only — the underlying email
+ * / age / parent contact never leak through this surface, even to
+ * an approved teacher.</p>
+ */
 @Service
 public class TeacherStudentService {
 

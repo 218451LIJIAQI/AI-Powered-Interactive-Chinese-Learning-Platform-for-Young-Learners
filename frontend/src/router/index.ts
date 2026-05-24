@@ -1,3 +1,29 @@
+/**
+ * Vue Router configuration — owns every navigable URL in the app.
+ *
+ * <h2>Lazy code-splitting</h2>
+ * <p>Every page is imported via a dynamic `() => import(...)` so each
+ * persona's bundle stays out of the initial download until the
+ * route is actually visited. The student-only chunks never load
+ * for a teacher session, and vice-versa.</p>
+ *
+ * <h2>Route meta contract</h2>
+ * <p>{@link RouteMeta} declares the three flags pages use:</p>
+ * <ul>
+ *   <li>`title` — readable page title for the breadcrumb / topbar.</li>
+ *   <li>`roles` — required user roles; the router guard redirects
+ *       to `/auth` when the role doesn't match and `/unauthorized`
+ *       when the role IS authenticated but for the wrong persona.</li>
+ *   <li>`previewRole` — synthetic role used by the QA preview
+ *       deployment to render a persona without a real session.</li>
+ * </ul>
+ *
+ * <h2>Auth flow</h2>
+ * <p>The before-each guard reads the Pinia store (hydrating it via
+ * `bootstrap()` on first navigation), checks role + redirect query
+ * preservation, and normalises legacy paths through `routeCompat`
+ * so old email-notification deep-links don't 404.</p>
+ */
 import { createRouter, createWebHistory } from 'vue-router'
 
 import type { UserRole } from '@/types/api'

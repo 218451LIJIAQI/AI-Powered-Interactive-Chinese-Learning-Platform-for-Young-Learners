@@ -5,6 +5,23 @@ import org.slf4j.LoggerFactory;
 
 import com.example.aichinese.entity.User;
 
+/**
+ * Strategy interface for transactional emails: teacher
+ * approval / rejection notices and password reset links.
+ *
+ * <p>Two implementations exist:</p>
+ * <ul>
+ *   <li>{@link SmtpEmailService} — talks to a real SMTP server when
+ *       {@code app.email.enabled=true}.</li>
+ *   <li>{@link NoOpEmailService} — default; logs and no-ops, so a
+ *       deployment without SMTP credentials still functions (the user
+ *       relies on in-app notifications).</li>
+ * </ul>
+ *
+ * <p>The {@code safe*} default helpers swallow exceptions and log at
+ * {@code WARN} so a transient SMTP failure does not abort the
+ * triggering business transaction — email is best-effort.</p>
+ */
 public interface EmailService {
 
     Logger log = LoggerFactory.getLogger(EmailService.class);

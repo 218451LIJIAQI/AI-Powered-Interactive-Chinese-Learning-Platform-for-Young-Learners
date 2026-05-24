@@ -1,3 +1,40 @@
+/**
+ * Live API + database integration probe — verifies that the REST
+ * surface and the underlying MySQL rows agree.
+ *
+ * <h2>Purpose</h2>
+ * Catches the bug class where the API returns data that does not
+ * actually exist in (or contradicts) the database — for example a
+ * cached endpoint serving stale rows, a soft-deleted user that
+ * still appears in admin listings, or a payment record whose
+ * webhook write was lost.
+ *
+ * <h2>Flow</h2>
+ *   1. Authenticate against the live API as admin.
+ *   2. Hit a curated set of endpoints (`/admin/users`,
+ *      `/admin/finance`, teacher / student dashboards, etc.).
+ *   3. For each response, `docker exec` into the MySQL container
+ *      and run an authoritative SELECT against the relevant table.
+ *   4. Compare the API rows with the DB rows; flag anything that
+ *      differs in count, primary key set, or critical fields like
+ *      {@code role}, {@code status}, {@code amount}, deletion flags.
+ *   5. Also exercises a few write paths (password reset, refund
+ *      request) and re-checks the DB to confirm the write landed.
+ *
+ * <h2>Why docker exec (vs. JDBC)</h2>
+ * Using `docker exec mysql ...` keeps this script dependency-free
+ * — no Node MySQL driver, no schema-version drift between probe
+ * and production. The trade-off is that it only works against the
+ * docker-compose local stack; for remote environments, the
+ * `QA_DB_CONTAINER` env var must point at a network-reachable
+ * container or the probe is skipped gracefully.
+ *
+ * <h2>Evidence</h2>
+ * Writes a comprehensive JSON report to
+ * `frontend/browser-qa-evidence/<timestamp>-live-api-db-probe/` with
+ * per-endpoint pass / mismatch details so a failure is debuggable
+ * without re-running the probe.
+ */
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

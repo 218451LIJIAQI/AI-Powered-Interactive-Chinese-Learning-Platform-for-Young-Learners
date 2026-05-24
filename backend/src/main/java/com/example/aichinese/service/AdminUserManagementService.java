@@ -33,6 +33,25 @@ import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Admin-side user search / detail / activation toggles for both
+ * student and teacher accounts.
+ *
+ * <h2>Soft activation</h2>
+ * <p>{@link AdminUserStatusUpdateRequest} flips a user's
+ * {@code active} flag rather than deleting the record — preserving
+ * referential integrity for past orders, AI usage logs, content
+ * ownership, etc. Deactivated users cannot log in (their
+ * {@code SessionVersion} is bumped so existing JWTs are revoked
+ * instantly) but their data history remains intact for audit.</p>
+ *
+ * <h2>Listing performance</h2>
+ * <p>Filtering / sorting uses JPA {@link Specification} so admins
+ * can combine arbitrary criteria (role, status, registration date,
+ * search term) without the service ballooning into per-filter
+ * methods. Pagination is mandatory; the listing endpoints reject
+ * page sizes outside the safe range via {@link PaginationUtils}.</p>
+ */
 @Service
 public class AdminUserManagementService {
 

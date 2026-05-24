@@ -16,6 +16,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Award row recording that a {@link StudentProfile} has earned a
+ * particular {@link Badge}.
+ *
+ * <p>The unique constraint on {@code (student_id, badge_id)} enforces
+ * the "earn each badge at most once" rule at the database layer — a
+ * duplicate insert from a retried gamification rule simply triggers a
+ * {@code DuplicateKeyException} that the service silently swallows.</p>
+ *
+ * <p>{@link #awardedAt} captures the wall-clock instant of the award.
+ * The default field initializer {@code LocalDateTime.now()} is
+ * intentional: badge awards are typically created in a single
+ * transaction with no test fixture overriding the timestamp, and
+ * keeping the initializer here (rather than a {@code @PrePersist}
+ * hook) simplifies the gamification rule code that reads
+ * {@link #getAwardedAt()} immediately after construction.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

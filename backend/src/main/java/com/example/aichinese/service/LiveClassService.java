@@ -35,13 +35,38 @@ import com.example.aichinese.repository.LiveClassEnrolmentRepository;
 import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
-import com.example.aichinese.util.TextUtils;
 
+/**
+ * Teacher-side scheduling and student-side enrolment for synchronous
+ * {@link LiveClass} sessions (Zoom / Meet / Teams).
+ *
+ * <h2>Lifecycle</h2>
+ * <p>Scheduled → Ongoing → Completed (or Cancelled / Rescheduled).
+ * Only {@link #STUDENT_VISIBLE_STATUSES} are surfaced to students;
+ * other states are restricted to the owning teacher and admins.
+ * Reschedule writes a new audit record and re-notifies enrolled
+ * students so calendar reminders stay in sync.</p>
+ *
+ * <h2>Enrolment</h2>
+ * <p>Students enrol via {@link LiveClassEnrolment}; capacity is
+ * enforced against {@code maxParticipants} with optimistic locking
+ * on the live-class row so two simultaneous enrolments cannot push
+ * the count over the limit. Cancellation re-opens the slot.</p>
+ *
+ * <h2>Join URL gating</h2>
+ * <p>The actual meeting URL is only exposed via
+ * {@link LiveLearningAccessService} when the class is within the
+ * join window and the student has both an active enrolment and a
+ * valid entitlement — guarding against URL-leak attacks where a
+ * link is shared outside the enrolled cohort.</p>
+ */
 @Service
 public class LiveClassService {
 
     private static final EnumSet<LiveClassStatus> STUDENT_VISIBLE_STATUSES =
             EnumSet.of(LiveClassStatus.SCHEDULED, LiveClassStatus.ONGOING, LiveClassStatus.RESCHEDULED);
+    private static final int MAX_LIVE_CLASS_TITLE_LENGTH = 200;
+    private static final int MAX_LIVE_CLASS_DESCRIPTION_LENGTH = 1000;
 
     private final LiveClassRepository liveClassRepository;
     private final LiveClassEnrolmentRepository liveClassEnrolmentRepository;
@@ -49,6 +74,7 @@ public class LiveClassService {
     private final LiveLearningMapper liveLearningMapper;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final ContentSafetyService contentSafetyService;
 
     public LiveClassService(
             LiveClassRepository liveClassRepository,
@@ -56,13 +82,15 @@ public class LiveClassService {
             LiveLearningAccessService liveLearningAccessService,
             LiveLearningMapper liveLearningMapper,
             NotificationService notificationService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentSafetyService contentSafetyService) {
         this.liveClassRepository = liveClassRepository;
         this.liveClassEnrolmentRepository = liveClassEnrolmentRepository;
         this.liveLearningAccessService = liveLearningAccessService;
         this.liveLearningMapper = liveLearningMapper;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
+        this.contentSafetyService = contentSafetyService;
     }
 
     @Transactional
@@ -356,8 +384,8 @@ public class LiveClassService {
 
         liveClass.setLesson(lesson);
         liveClass.setCoursePackage(coursePackage);
-        liveClass.setTitle(title.trim());
-        liveClass.setDescription(TextUtils.trimToNull(description));
+        liveClass.setTitle(contentSafetyService.requireSafeText(title, MAX_LIVE_CLASS_TITLE_LENGTH, "Title is required."));
+        liveClass.setDescription(contentSafetyService.optionalSafeText(description, MAX_LIVE_CLASS_DESCRIPTION_LENGTH));
         liveClass.setScheduledStartAt(startTime);
         liveClass.setScheduledEndAt(endTime);
         liveClass.setMeetingLink(meetingLink.trim());

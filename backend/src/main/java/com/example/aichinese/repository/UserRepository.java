@@ -1,22 +1,49 @@
 package com.example.aichinese.repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 
 import jakarta.persistence.LockModeType;
 
+/**
+ * Persistence operations for the authentication root {@link User}.
+ *
+ * <p>The {@code email} column is case-insensitively unique by
+ * convention — every lookup, existence-check, and locking variant here
+ * applies {@code lower(...)} to both sides so the same canonical
+ * lower-cased value is compared regardless of how the caller cased the
+ * input. This intentionally mirrors the way the authentication flow
+ * stores email at registration (always lower-cased before persist), so
+ * the only place case sensitivity matters is at the UI / API surface.</p>
+ *
+ * <p>The pessimistic-write {@link #findLockedByEmail(String)} variant
+ * exists for the password-update and force-logout flows where the same
+ * row must be re-read inside a transaction without a concurrent session
+ * silently overwriting the {@code sessionVersion} counter.</p>
+ *
+ * <p>{@link #findAdminUserIds(String, String, String, Pageable)} returns
+ * primary keys only (not entities) because the admin user-list flow
+ * runs a second batched load on {@link #findByIdIn(Collection)} to
+ * resolve a filtered, sorted page without paying the join-fan-out cost
+ * inside the search query itself.</p>
+ */
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
     boolean existsByEmailIgnoreCase(String email);
@@ -31,13 +58,15 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("select count(distinct u) from User u join u.roles r where r.name = :roleName")
     long countByRoleName(@Param("roleName") RoleName roleName);
 
-    java.util.List<User> findTop5ByOrderByCreatedAtDesc();
+    List<User> findTop5ByOrderByCreatedAtDesc();
+
+    @Override
+    @EntityGraph(attributePaths = { "roles" })
+    @NonNull
+    Page<User> findAll(@Nullable Specification<User> specification, @NonNull Pageable pageable);
 
     @EntityGraph(attributePaths = { "roles" })
-    Page<User> findAll(org.springframework.data.jpa.domain.Specification<User> specification, Pageable pageable);
-
-    @EntityGraph(attributePaths = { "roles" })
-    java.util.List<User> findByIdIn(Collection<Long> ids);
+    List<User> findByIdIn(Collection<Long> ids);
 
     @Query(value = """
             select u.id
@@ -81,7 +110,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     @EntityGraph(attributePaths = { "roles" })
     @Query("select distinct u from User u join u.roles r where r.name = :roleName")
-    java.util.List<User> findAllByRoleName(@Param("roleName") RoleName roleName);
+    List<User> findAllByRoleName(@Param("roleName") RoleName roleName);
 
     /**
      * Returns users created on or after the supplied threshold, ordered by
@@ -91,5 +120,5 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
      * instead of paying an O(users_total) JVM-side filter on every admin
      * analytics request.
      */
-    java.util.List<User> findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(java.time.LocalDateTime threshold);
+    List<User> findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(LocalDateTime threshold);
 }

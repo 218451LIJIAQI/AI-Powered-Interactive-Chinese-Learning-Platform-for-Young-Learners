@@ -204,6 +204,27 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Unauthenticated course catalogue — the main discovery surface.
+ *
+ * <h2>Filters</h2>
+ * <p>Search keyword, learning level, category, access type
+ * (free / paid), learning type (live / recorded / hybrid) and sort
+ * order are all mirrored into the URL via Vue Router so a filtered
+ * view can be shared / bookmarked. Reactive {@code watch} on the
+ * filter object debounces requests so each keystroke does not
+ * spam the backend.</p>
+ *
+ * <h2>Pagination</h2>
+ * <p>Hard-clamped page size so a malicious caller cannot ask for
+ * 10 000 rows at once — the actual cap is enforced server-side by
+ * {@code PaginationUtils}.</p>
+ *
+ * <h2>CTA behaviour</h2>
+ * <p>"View details" routes to {@link CourseDetailPage}; paid
+ * "Enroll" routes through the auth flow first if the visitor is
+ * unauthenticated, then through checkout once signed in.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 

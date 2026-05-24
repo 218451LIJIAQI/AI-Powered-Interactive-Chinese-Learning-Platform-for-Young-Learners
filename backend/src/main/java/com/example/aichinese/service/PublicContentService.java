@@ -34,6 +34,24 @@ import com.example.aichinese.util.TextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 
+/**
+ * Unauthenticated catalogue surface: the public course browser, course
+ * detail page, and search-by-category / level views.
+ *
+ * <h2>Visibility filter</h2>
+ * <p>Only content in {@link ContentStatus#PUBLISHED} authored by a
+ * teacher in {@link TeacherStatus#APPROVED} is returned. Paid content
+ * is included in the listing but with locked detail (price + teaser
+ * only) so visitors can decide to register and purchase. Filtering
+ * uses indexed columns so the browser stays cheap under load.</p>
+ *
+ * <h2>Package detail</h2>
+ * <p>Package items are paginated server-side (cap
+ * {@link #PUBLIC_PACKAGE_ITEM_LIMIT}) so a maliciously huge package
+ * cannot DoS the public detail endpoint. {@link EntityManager}-backed
+ * native queries are used for the cross-table search to keep the
+ * response shape lean.</p>
+ */
 @Service
 public class PublicContentService {
 

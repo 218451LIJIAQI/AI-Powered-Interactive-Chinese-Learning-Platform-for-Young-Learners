@@ -39,8 +39,33 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Teacher-authored feedback (qualitative + numeric score) targeting a
+ * specific student touch-point: lesson progress, quiz attempt,
+ * live-class enrolment.
+ *
+ * <h2>Authoring boundary</h2>
+ * <p>A teacher can only give feedback on a touch-point that belongs
+ * to a student they actually taught — the create / update paths
+ * resolve the touch-point and verify ownership (e.g. the
+ * {@link LessonProgress}'s {@code lesson} must be owned by the
+ * teacher; the {@link LiveClassEnrolment}'s {@code liveClass} must
+ * be taught by them). This blocks an approved teacher from giving
+ * unsolicited "feedback" to students they have no relationship with.</p>
+ *
+ * <h2>Student visibility</h2>
+ * <p>{@link StudentTeacherFeedbackResponse} is the student-facing
+ * shape — strictly read-only; students cannot edit or delete the
+ * feedback. When a teacher submits new feedback the student receives
+ * an in-app {@link NotificationType} alert so the message is
+ * surfaced even if the student is not actively in the touch-point's
+ * page.</p>
+ */
+
 @Service
 public class TeacherFeedbackService {
+
+    private static final int MAX_FEEDBACK_MESSAGE_LENGTH = 2000;
 
     private final TeacherFeedbackRepository teacherFeedbackRepository;
     private final TeacherProfileRepository teacherProfileRepository;
@@ -54,6 +79,7 @@ public class TeacherFeedbackService {
     private final AuditLogService auditLogService;
     private final StudentLearningAccessService studentLearningAccessService;
     private final LiveLearningAccessService liveLearningAccessService;
+    private final ContentSafetyService contentSafetyService;
 
     public TeacherFeedbackService(
             TeacherFeedbackRepository teacherFeedbackRepository,
@@ -67,7 +93,8 @@ public class TeacherFeedbackService {
             NotificationService notificationService,
             AuditLogService auditLogService,
             StudentLearningAccessService studentLearningAccessService,
-            LiveLearningAccessService liveLearningAccessService) {
+            LiveLearningAccessService liveLearningAccessService,
+            ContentSafetyService contentSafetyService) {
         this.teacherFeedbackRepository = teacherFeedbackRepository;
         this.teacherProfileRepository = teacherProfileRepository;
         this.studentProfileRepository = studentProfileRepository;
@@ -80,6 +107,7 @@ public class TeacherFeedbackService {
         this.auditLogService = auditLogService;
         this.studentLearningAccessService = studentLearningAccessService;
         this.liveLearningAccessService = liveLearningAccessService;
+        this.contentSafetyService = contentSafetyService;
     }
 
     @Transactional
@@ -98,7 +126,10 @@ public class TeacherFeedbackService {
         feedback.setLesson(lesson != null ? lesson : quizAttempt != null && quizAttempt.getQuiz() != null ? quizAttempt.getQuiz().getLesson() : null);
         feedback.setQuizAttempt(quizAttempt);
         feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
-        feedback.setFeedbackMessage(request.message().trim());
+        feedback.setFeedbackMessage(contentSafetyService.requireSafeText(
+                request.message(),
+                MAX_FEEDBACK_MESSAGE_LENGTH,
+                "Feedback message is required."));
         TeacherFeedback saved = teacherFeedbackRepository.save(feedback);
 
         notificationService.safeCreateNotification(
@@ -170,7 +201,10 @@ public class TeacherFeedbackService {
         TeacherFeedback feedback = teacherFeedbackRepository.findByIdAndTeacherUserId(feedbackId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Feedback was not found."));
         feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
-        feedback.setFeedbackMessage(request.message().trim());
+        feedback.setFeedbackMessage(contentSafetyService.requireSafeText(
+                request.message(),
+                MAX_FEEDBACK_MESSAGE_LENGTH,
+                "Feedback message is required."));
         // Audit-log the edit so that admins reviewing feedback have a record
         // of changes (the create path already audit-logs; this path was a
         // gap that broke the "every teacher mutation is auditable"

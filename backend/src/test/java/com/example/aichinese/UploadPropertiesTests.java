@@ -8,6 +8,12 @@ import org.springframework.util.unit.DataSize;
 
 import com.example.aichinese.config.UploadProperties;
 
+/**
+ * Unit coverage for {@code UploadProperties} — pins the configured
+ * directory trimming and the positive-size guard on file-size limits
+ * so a malformed configuration cannot accept zero / negative byte
+ * caps that would defeat the upload defence-in-depth pipeline.
+ */
 class UploadPropertiesTests {
 
     @Test

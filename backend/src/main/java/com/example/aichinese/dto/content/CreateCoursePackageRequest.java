@@ -12,6 +12,35 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Body for {@code POST /api/v1/teachers/packages} — an approved
+ * teacher creates a new
+ * {@link com.example.aichinese.entity.CoursePackage} (a curated
+ * bundle of modules and/or lessons sold as a single unit, e.g.
+ * "HSK 1 Foundation Pack").
+ *
+ * <p>Packages are created empty: items
+ * ({@link com.example.aichinese.entity.PackageItem}) are added in
+ * follow-up calls to {@code POST /packages/{id}/items} via
+ * {@link PackageItemRequest}. This two-step authoring keeps the
+ * create payload simple and lets the teacher save the package
+ * shell, browse their library, and add items one-by-one without
+ * losing partial work.</p>
+ *
+ * <h2>{@link #learningType}</h2>
+ * <p>Unlike modules, packages <em>do</em> carry a
+ * {@link LearningType}. This is the package-level "headline"
+ * learning type shown on the catalogue card; individual lessons
+ * inside the package may have their own type but the package's
+ * top-level type tells the student "this bundle is primarily X".
+ * The two-axis taxonomy
+ * (level + category) plus the {@link #learningType} headline gives
+ * the front-end three independent filters for the catalogue.</p>
+ *
+ * <p>See {@link CreateModuleRequest} for the shared metadata
+ * vocabulary contract this DTO conforms to (title, description,
+ * level, category, accessType, price, coverImageUrl).</p>
+ */
 public record CreateCoursePackageRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must not exceed 200 characters.")

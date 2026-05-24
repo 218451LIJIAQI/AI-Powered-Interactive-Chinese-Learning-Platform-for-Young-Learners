@@ -1,5 +1,11 @@
 <template>
-  <div class="panel state-panel" :class="`is-${tone}`">
+  <div
+    class="panel state-panel"
+    :class="`is-${tone}`"
+    :role="tone === 'error' ? 'alert' : 'status'"
+    :aria-live="tone === 'error' ? 'assertive' : 'polite'"
+    aria-atomic="true"
+  >
     <span class="state-panel-orb" />
     <div class="state-icon">
       <IconGlyph :name="icon" :size="24" />
@@ -16,6 +22,14 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Standardised empty / loading / error / neutral panel rendered
+ * across the app whenever a data list has nothing to show or is
+ * still loading. Centralising the layout + ARIA semantics (`role`
+ * and `aria-live`) per tone keeps screen-reader announcements
+ * consistent — error panels announce assertively, empty / loading
+ * panels announce politely.
+ */
 import IconGlyph from './IconGlyph.vue'
 
 withDefaults(

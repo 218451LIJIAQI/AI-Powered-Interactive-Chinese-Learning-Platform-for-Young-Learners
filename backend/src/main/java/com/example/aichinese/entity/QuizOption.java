@@ -14,6 +14,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single answer alternative for an option-based {@link QuizQuestion}.
+ *
+ * <p>Multiple options may have {@link #correctOption} set to {@code true}
+ * (multi-select questions); the auto-grader requires the student's
+ * selected set to exactly match the {@code correctOption} set for a
+ * fully-correct mark, with partial-credit policy controlled at the
+ * service layer.</p>
+ *
+ * <p>{@link #optionText} is {@code LONGTEXT} so authors can include
+ * code snippets, formatted Chinese passages, or rich explanations as
+ * options when needed.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

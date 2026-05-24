@@ -1,3 +1,46 @@
+<#
+.SYNOPSIS
+    Spin up a throwaway MySQL container and validate that the
+    Flyway migrations apply cleanly against it.
+
+.DESCRIPTION
+    Validates the migration pipeline end-to-end before pushing a
+    schema change. Catches the kind of bugs that a unit test of
+    Flyway would NOT — checksum drift, dialect-specific syntax,
+    accidental destructive ALTERs, ordering issues.
+
+    Workflow:
+      1. Wait for Docker Desktop / Docker Engine to be reachable
+         (auto-launches Docker Desktop on Windows if installed).
+      2. Run an ephemeral MySQL container (random container name,
+         random root + app passwords, random fresh + legacy schema
+         names — guarantees parallel runs do not stomp each other).
+      3. Apply the consolidated V1 schema directly to a "legacy"
+         schema to simulate what a pre-existing production database
+         looks like.
+      4. Apply ALL Flyway migrations (V1, V2, ..., V14, etc.) to
+         the "fresh" schema.
+      5. Apply migrations FROM V2 onward to the "legacy" schema
+         (since V1 is already there) — this simulates an upgrade.
+      6. Diff the resulting schemas: fresh-from-scratch and
+         legacy-then-upgrade must be byte-identical, OR the
+         migration set has drifted.
+      7. Tear the container down (unless -KeepContainer is set
+         for post-mortem inspection).
+
+.PARAMETER Image
+    Docker image tag for the throwaway MySQL. Defaults to
+    `mysql:8.4` — pin matches the production version.
+
+.PARAMETER StartupTimeoutSeconds
+    How long to wait for MySQL to become reachable inside the
+    container before giving up. Defaults to 180 seconds, generous
+    enough for cold image pulls on slow CI workers.
+
+.PARAMETER KeepContainer
+    Switch — do not remove the container at the end. Useful for
+    drilling into a failure with `docker exec -it`.
+#>
 [CmdletBinding()]
 param(
     [string]$Image = "mysql:8.4",
@@ -17,6 +60,8 @@ $RootPassword = "Pw$([Guid]::NewGuid().ToString("N"))"
 $AppUsername = "aichinese_app"
 $AppPassword = "PwApp$([Guid]::NewGuid().ToString("N"))"
 $JwtSecret = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N")))
+$ConsolidatedMigrationPath = Join-Path $BackendDir "src\main\resources\db\migration\V1__consolidated_schema.sql"
+$ConsolidatedMigrationContent = Get-Content -LiteralPath $ConsolidatedMigrationPath -Raw
 
 function Write-Section([string]$Title) {
     Write-Host ""
@@ -142,6 +187,23 @@ function Invoke-MySqlFile([string]$Database, [string]$Path) {
     }
 }
 
+function Invoke-MySqlSql([string]$Database, [string]$Sql) {
+    $Output = $Sql | & docker exec -i -e "MYSQL_PWD=$RootPassword" $ContainerName mysql -uroot $Database 2>&1
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) {
+        throw "mysql SQL execution failed with exit code $ExitCode.`n$($Output -join "`n")"
+    }
+}
+
+function Get-ConsolidatedMigrationSection([string]$SourceName) {
+    $Pattern = "(?ms)^-- ===== Source: " + [regex]::Escape($SourceName) + " =====\r?\n(.*?)(?=\r?\n-- ===== Source: |\z)"
+    $Match = [regex]::Match($ConsolidatedMigrationContent, $Pattern)
+    if (-not $Match.Success) {
+        throw "Could not find migration section '$SourceName' in $ConsolidatedMigrationPath."
+    }
+    return $Match.Groups[1].Value.Trim()
+}
+
 function Get-MySqlScalar([string]$Database, [string]$Sql) {
     $Output = Invoke-MySql $Database $Sql
     return (($Output | Select-Object -First 1) -as [string]).Trim()
@@ -255,8 +317,8 @@ function Invoke-FreshSpringBootValidation([string]$HostPort) {
 
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.tables where table_schema = database() and table_name = 'student_quiz_progress';") "fresh student_quiz_progress table"
     Assert-Equal "0" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.tables where table_schema = database() and table_name = 'student_activity_progress';") "fresh student_activity_progress table"
-    Assert-Equal "2" (Get-MySqlScalar $FreshDb "select count(*) from flyway_schema_history where version in ('4', '5') and success = 1;") "fresh V4/V5 migration history"
-    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from flyway_schema_history where version = '12' and success = 1;") "fresh V12 migration history"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from flyway_schema_history where version = '1' and success = 1;") "fresh consolidated V1 migration history"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from flyway_schema_history where version = '14' and success = 1;") "fresh final V14 migration history"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'cart_items' and constraint_name = 'uk_cart_items_cart_item';") "fresh cart item uniqueness"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'lesson_progress' and constraint_name = 'uk_lesson_progress_student_lesson';") "fresh lesson progress uniqueness"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'uk_points_transactions_student_source';") "fresh point-award source uniqueness"
@@ -264,6 +326,16 @@ function Invoke-FreshSpringBootValidation([string]$HostPort) {
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'password_reset_tokens' and constraint_name = 'uk_password_reset_tokens_active_user';") "fresh active reset token uniqueness"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'video_progress' and constraint_name = 'chk_video_progress_watched_within_total';") "fresh video progress consistency check"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'audit_logs' and index_name = 'idx_audit_logs_target_created';") "fresh audit target hot-path index"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'ai_chat_messages' and constraint_name = 'chk_ai_chat_messages_sender_role';") "fresh AI chat sender role check"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'teacher_earnings' and constraint_name = 'chk_teacher_earnings_status';") "fresh teacher earning status check"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'learning_modules' and constraint_name = 'chk_learning_modules_access_price';") "fresh module access price check"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'lessons' and constraint_name = 'chk_lessons_access_price';") "fresh lesson access price check"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'course_packages' and constraint_name = 'chk_course_packages_access_price';") "fresh package access price check"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'teacher_verification_documents' and constraint_name = 'uk_teacher_verification_documents_current_type';") "fresh current teacher verification document uniqueness"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.columns where table_schema = database() and table_name = 'teacher_verification_documents' and column_name = 'current_document_key' and extra like '%STORED GENERATED%';") "fresh current teacher verification generated column"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'ai_chat_messages' and index_name = 'idx_ai_chat_messages_session_role_id';") "fresh AI chat role lookup index"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'teacher_verification_reviews' and index_name = 'idx_teacher_verification_reviews_latest';") "fresh teacher verification review latest index"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'notifications' and index_name = 'idx_notifications_user_status_created_id';") "fresh notification unread hot-path index"
 }
 
 function Invoke-RepairScript([string]$HostPort, [switch]$Execute) {
@@ -294,20 +366,20 @@ function Show-RepairOutput($Result) {
 function Invoke-ChecksumRepairValidation([string]$HostPort) {
     Write-Section "Flyway checksum repair validation"
 
-    $BeforeChecksum = Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '4';"
-    Invoke-MySql $FreshDb "update flyway_schema_history set checksum = coalesce(checksum, 0) + 1 where version = '4';" | Out-Null
-    $BrokenChecksum = Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '4';"
+    $BeforeChecksum = Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '1';"
+    Invoke-MySql $FreshDb "update flyway_schema_history set checksum = coalesce(checksum, 0) + 1 where version = '1';" | Out-Null
+    $BrokenChecksum = Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '1';"
     if ($BrokenChecksum -eq $BeforeChecksum) {
-        throw "Failed to simulate Flyway checksum mismatch for V4."
+        throw "Failed to simulate Flyway checksum mismatch for consolidated V1."
     }
-    Write-Host "Simulated V4 checksum mismatch."
+    Write-Host "Simulated consolidated V1 checksum mismatch."
 
     $DryRun = Invoke-RepairScript $HostPort
     Show-RepairOutput $DryRun
     if ($DryRun.ExitCode -eq 0 -or (($DryRun.Output -join "`n") -notmatch "No changes were made")) {
         throw "Repair dry-run did not stop safely before modifying the database. Exit code: $($DryRun.ExitCode)."
     }
-    Assert-Equal $BrokenChecksum (Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '4';") "dry-run preserved broken checksum"
+    Assert-Equal $BrokenChecksum (Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '1';") "dry-run preserved broken checksum"
 
     $Repair = Invoke-RepairScript $HostPort -Execute
     Show-RepairOutput $Repair
@@ -315,11 +387,11 @@ function Invoke-ChecksumRepairValidation([string]$HostPort) {
         throw "Repair execute failed with exit code $($Repair.ExitCode)."
     }
 
-    $AfterChecksum = Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '4';"
+    $AfterChecksum = Get-MySqlScalar $FreshDb "select checksum from flyway_schema_history where version = '1';"
     if ($AfterChecksum -eq $BrokenChecksum) {
         throw "Flyway repair did not update the simulated broken checksum."
     }
-    Write-Host "OK: Flyway repair updated V4 checksum from $BrokenChecksum to $AfterChecksum"
+    Write-Host "OK: Flyway repair updated consolidated V1 checksum from $BrokenChecksum to $AfterChecksum"
 }
 
 function Invoke-LegacyV4V5Validation {
@@ -382,8 +454,8 @@ insert into student_activity_progress (
 "@
     Invoke-MySql $LegacyDb $LegacySetup | Out-Null
 
-    Invoke-MySqlFile $LegacyDb (Join-Path $BackendDir "src\main\resources\db\migration\V4__remove_legacy_activity_package_items.sql")
-    Invoke-MySqlFile $LegacyDb (Join-Path $BackendDir "src\main\resources\db\migration\V5__rename_student_activity_progress_to_quiz_progress.sql")
+    Invoke-MySqlSql $LegacyDb (Get-ConsolidatedMigrationSection "V4__remove_legacy_activity_package_items.sql")
+    Invoke-MySqlSql $LegacyDb (Get-ConsolidatedMigrationSection "V5__rename_student_activity_progress_to_quiz_progress.sql")
 
     $PackageItemType = Get-MySqlScalar $LegacyDb "select column_type from information_schema.columns where table_schema = database() and table_name = 'package_items' and column_name = 'item_type';"
     if ($PackageItemType -like "*'ACTIVITY'*") {

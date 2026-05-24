@@ -14,6 +14,20 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Per-question detail row for a {@link QuizAttempt}.
+ *
+ * <p>{@link #answerText} stores the student's raw submission as
+ * {@code LONGTEXT}: for option-based questions this is a JSON-encoded
+ * array of selected option ids; for free-text it is the verbatim
+ * student answer. {@link #correct} is set by the grader and is the
+ * single source of truth that the wrong-answer review flow filters on.</p>
+ *
+ * <p>The attempt → answer relationship is one-to-many: each question
+ * shows up at most once per attempt, but the constraint is enforced
+ * at the service layer (not via a unique index) so the grader can
+ * append a corrective answer when a learner re-enters the same quiz.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

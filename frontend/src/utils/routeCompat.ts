@@ -1,3 +1,22 @@
+/**
+ * Backwards-compatibility shim for deep-links and stored
+ * `?redirect=` paths that point at routes the app no longer ships.
+ *
+ * <h2>What it does</h2>
+ * <ul>
+ *   <li>Rewrites legacy paths to the current canonical equivalent
+ *       (e.g. {@code /student/payments → /student/profile}).</li>
+ *   <li>Dynamic-path variants are normalised through
+ *       prefix-matching for routes like {@code /student/live-classes/123}.</li>
+ *   <li>Validates that the resulting path is a known route so
+ *       attacker-controlled redirect query params cannot be used to
+ *       break out into unintended app surfaces.</li>
+ * </ul>
+ *
+ * <p>Used by the auth flow when restoring the post-login redirect
+ * target and by router guards that need to sanitise deep-links from
+ * older email notifications.</p>
+ */
 const legacyRouteMap: Record<string, string> = {
   '/student/payments': '/student/profile',
   '/student/refunds': '/student/profile',
@@ -16,7 +35,10 @@ const legacyRouteMap: Record<string, string> = {
 const exactAppRoutes = new Set([
   '/',
   '/auth',
+  '/forgot-password',
   '/reset-password',
+  '/terms',
+  '/privacy',
   '/payment/success',
   '/payment/cancel',
   '/courses',

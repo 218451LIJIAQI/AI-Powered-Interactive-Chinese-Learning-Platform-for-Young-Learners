@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Objects;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -136,5 +138,28 @@ class GlobalExceptionHandlerTests {
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isEqualTo("The request could not be processed. Please check the input and try again.");
         assertThat(body.errors()).containsExactly(body.message());
+    }
+
+    @Test
+    void databaseIntegrityViolationReturnsConflictWithoutLeakingSqlDetails() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleDataIntegrityViolationException(
+                new DataIntegrityViolationException("Duplicate entry 'student@example.com' for key 'users.email'"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        assertThat(body.success()).isFalse();
+        assertThat(body.message()).isEqualTo("The request conflicts with the current state. Please refresh and try again.");
+        assertThat(body.message()).doesNotContain("student@example.com", "users.email", "Duplicate entry");
+    }
+
+    @Test
+    void optimisticLockingFailureReturnsConflict() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleOptimisticLockingFailureException(
+                new ObjectOptimisticLockingFailureException("PaymentRecord", 10L));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        assertThat(body.success()).isFalse();
+        assertThat(body.message()).isEqualTo("The request conflicts with the current state. Please refresh and try again.");
     }
 }

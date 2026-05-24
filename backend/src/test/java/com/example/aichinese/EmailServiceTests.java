@@ -15,6 +15,12 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.service.EmailService;
 import com.example.aichinese.service.SmtpEmailService;
 
+/**
+ * Unit coverage for the {@code EmailService} default helpers —
+ * proves the {@code safe*} wrappers swallow delivery failures and
+ * log at {@code WARN} so a transient SMTP outage cannot abort the
+ * triggering business transaction (teacher approval, etc.).
+ */
 class EmailServiceTests {
 
     @Test

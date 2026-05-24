@@ -106,7 +106,8 @@
                       <IconGlyph :name="node.icon" :size="28" />
                     </div>
                     <strong>{{ node.id }}. {{ node.title }}</strong>
-                    <div class="student-path-stars">{{ node.stars }}</div>
+                    <div class="student-path-progress"><span :style="{ width: node.progressPercent + '%' }" /></div>
+                    <div class="student-path-status">{{ node.statusLabel }}</div>
                   </article>
                 </div>
               </div>
@@ -251,6 +252,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student dashboard hero — the first page a learner sees after sign-in.
+ *
+ * <p>Aggregates the learner's "what's next" picture: today's mission,
+ * smart review queue, quiz snapshot, study rhythm. Single-fetch
+ * design through {@code studentApi.dashboard()} so the page renders
+ * in one round-trip; the bottom-grid cards derive their content
+ * from that one response rather than firing parallel queries.</p>
+ */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -263,13 +273,41 @@ import ProgressRing from '@/components/common/ProgressRing.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { studentDashboard, studentProgress } from '@/demo/data'
+import type { StudentDashboardResponse, StudentProgressSummaryResponse } from '@/types/api'
 
 const router = useRouter()
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboard)
 const progressResource = useResource(() => studentApi.progress(), studentProgress)
 
-const dashboard = computed(() => dashboardResource.data.value ?? studentDashboard)
-const progress = computed(() => progressResource.data.value ?? studentProgress)
+const emptyDashboard: StudentDashboardResponse = {
+  fullName: '',
+  currentLevel: '',
+  learningProgressPercent: 0,
+  dailyStreak: 0,
+  points: 0,
+  badgeCount: 0,
+  recentQuizResults: [],
+  weakAreas: [],
+  unfinishedLessons: [],
+  recentNotifications: [],
+  recommendedNextStep: null,
+}
+const emptyProgress: StudentProgressSummaryResponse = {
+  totalLessonsStarted: 0,
+  completedLessons: 0,
+  quizAverage: 0,
+  overallCompletionPercent: 0,
+  weakAreas: [],
+  lastActivitySummary: null,
+  recentLessons: [],
+}
+
+const dashboard = computed(() =>
+  dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboard : emptyDashboard),
+)
+const progress = computed(() =>
+  progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgress : emptyProgress),
+)
 const pageLoading = computed(() => dashboardResource.loading.value || progressResource.loading.value)
 const pageError = computed(() => dashboardResource.error.value || progressResource.error.value)
 const usingFallback = computed(() => dashboardResource.usingFallback.value || progressResource.usingFallback.value)
@@ -356,16 +394,22 @@ const pathNodes = computed(() => {
     source.push(step)
   }
 
-  return source.slice(0, 4).map((lesson, index) => ({
-    id: index + 1,
-    title: normalizeLessonTitle(lesson.lessonTitle) || 'Learning step',
-    icon: iconForLesson(lesson.lessonTitle),
-    stars: starRating(lesson.completionPercent),
-    complete: lesson.completed || lesson.completionPercent >= 100,
-    current: lesson.lessonId === nextLesson.value.id && lesson.completionPercent < 100,
-    variant: variantForLesson(lesson.lessonTitle),
-    lessonId: lesson.lessonId,
-  }))
+  return source.slice(0, 4).map((lesson, index) => {
+    const completionPercent = safePercent(lesson.completionPercent)
+    const completed = lesson.completed || completionPercent >= 100
+    const current = lesson.lessonId === nextLesson.value.id && completionPercent < 100
+    return {
+      id: index + 1,
+      title: normalizeLessonTitle(lesson.lessonTitle) || 'Learning step',
+      icon: iconForLesson(lesson.lessonTitle),
+      progressPercent: completionPercent,
+      statusLabel: completed ? 'Complete' : current ? `${completionPercent}% in progress` : completionPercent > 0 ? `${completionPercent}% started` : 'Up next',
+      complete: completed,
+      current,
+      variant: variantForLesson(lesson.lessonTitle),
+      lessonId: lesson.lessonId,
+    }
+  })
 })
 
 const practiceTools = [
@@ -442,13 +486,6 @@ function iconForLesson(title: string) {
   if (variant === 'numbers') return 'quiz'
   if (variant === 'listening') return 'live'
   return 'practice'
-}
-
-function starRating(completionPercent: number) {
-  if (completionPercent >= 100) return '***'
-  if (completionPercent >= 50) return '**-'
-  if (completionPercent > 0) return '*--'
-  return '---'
 }
 
 function normalizeLessonTitle(title: string) {

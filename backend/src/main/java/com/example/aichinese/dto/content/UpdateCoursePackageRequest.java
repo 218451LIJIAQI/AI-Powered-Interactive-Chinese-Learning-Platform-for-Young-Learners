@@ -12,6 +12,23 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Body for {@code PUT /api/v1/teachers/packages/{id}} — the
+ * teacher edits an existing course-package's <em>header</em>
+ * (title, description, taxonomy, price, cover image).
+ *
+ * <p>Item membership ({@link com.example.aichinese.entity.PackageItem})
+ * is managed via the dedicated item endpoints
+ * ({@code POST /packages/{id}/items} and
+ * {@code DELETE /packages/{id}/items/{itemId}}); changing
+ * {@link #title}/{@link #description}/etc. does not affect the item
+ * list.</p>
+ *
+ * <p>Mirrors {@link CreateCoursePackageRequest} field-for-field.
+ * The service refuses edits in non-editable states; see
+ * {@link CreateModuleRequest} for the full discussion of shared
+ * validation rules.</p>
+ */
 public record UpdateCoursePackageRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must not exceed 200 characters.")

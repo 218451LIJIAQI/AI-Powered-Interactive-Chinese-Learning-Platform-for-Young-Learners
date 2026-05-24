@@ -6,6 +6,22 @@ import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Strongly-typed binding for the {@code app.email.*} configuration block.
+ *
+ * <p>Captures the enable flag, the {@code From:} header, and the
+ * frontend password-reset base URL. Both string fields go through
+ * defensive sanitisers / validators when accessed:</p>
+ * <ul>
+ *   <li>{@link #resolveFrom(String)} strips CR/LF from the address to
+ *       prevent SMTP header injection (an attacker who can write the
+ *       {@code from} property could otherwise inject a forged
+ *       {@code Bcc:} or {@code To:} line).</li>
+ *   <li>{@link #resolvePasswordResetBaseUrl()} requires a valid
+ *       absolute HTTP(S) URL so the reset link generated for an email
+ *       cannot accidentally be {@code javascript:} or relative.</li>
+ * </ul>
+ */
 @ConfigurationProperties(prefix = "app.email")
 public record EmailProperties(
         boolean enabled,

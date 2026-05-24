@@ -15,6 +15,17 @@ import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.OrderRepository;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
+/**
+ * Persists {@link Order} and {@link OrderItem} rows representing a
+ * committed checkout, computing line totals and currency through
+ * {@link CommerceMoneyService}/{@link CommerceSettingsService}.
+ *
+ * <p>Orders are created in {@link PaymentStatus#PENDING}; the
+ * transition to {@code SUCCESS}/{@code FAILED} happens later in
+ * {@link PaymentService} once the provider confirms the result.
+ * Each order is keyed by a server-generated {@link UUID} so the
+ * external order number is never guessable.</p>
+ */
 @Service
 public class OrderService {
 

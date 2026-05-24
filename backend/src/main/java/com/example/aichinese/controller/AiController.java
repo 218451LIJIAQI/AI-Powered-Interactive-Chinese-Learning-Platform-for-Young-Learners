@@ -41,6 +41,42 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/**
+ * REST surface for every learner-facing AI feature: chat tutor, quiz
+ * generator, story generator, vocabulary helper, sentence practice,
+ * pronunciation feedback (audio upload), writing feedback (image
+ * upload), and the AI-driven learning-recommendation / progress
+ * insight endpoints.
+ *
+ * <h2>Authorization</h2>
+ * <p>Most endpoints require {@code hasRole("STUDENT")}; the AI
+ * usage-log and report-management endpoints additionally require
+ * {@code hasRole("ADMIN")}. Per-call ownership is re-checked in
+ * {@link com.example.aichinese.service.AiService} so chat-session
+ * lookups via {@code findByIdAndUserId} fail with 404 if a learner
+ * forges another user's session id.</p>
+ *
+ * <h2>Token cost & input sanitization</h2>
+ * <p>{@link com.example.aichinese.util.AiInputSanitizer} strips
+ * prompt-injection / control-token spoofing before any request
+ * reaches the LLM; per-feature length caps bound worst-case provider
+ * cost. Output token caps come from
+ * {@link com.example.aichinese.config.AiProperties#getMaxOutputTokens()}.</p>
+ *
+ * <h2>Availability gate</h2>
+ * <p>{@code GET /availability} reflects
+ * {@link com.example.aichinese.service.ai.AiAvailabilityService};
+ * when the provider is disabled or mis-configured, individual feature
+ * endpoints still return a friendly deterministic fallback so
+ * learners never see a 500.</p>
+ *
+ * <h2>Uploads</h2>
+ * <p>Pronunciation audio and writing image uploads go through
+ * {@link com.example.aichinese.service.AiFileStorageService} which
+ * runs the same defence-in-depth pipeline (extension + content-type
+ * + magic byte) as the other multipart endpoints; stored blobs are
+ * marked PRIVATE.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/ai")
@@ -74,7 +110,7 @@ public class AiController {
     public ApiResponse<AiChatResponse> chat(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiChatRequest request) {
-        return ApiResponse.success("AI chat response generated successfully.", aiService.chat(currentUser, request));
+        return ApiResponse.success("AI chat request processed.", aiService.chat(currentUser, request));
     }
 
     @PostMapping("/reports")
@@ -101,7 +137,7 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiVocabularyHelperRequest request) {
         return ApiResponse.success(
-                "AI vocabulary helper response generated successfully.",
+                "AI vocabulary helper request processed.",
                 aiService.vocabularyHelper(currentUser, request));
     }
 
@@ -110,7 +146,7 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiSentencePracticeRequest request) {
         return ApiResponse.success(
-                "AI sentence practice response generated successfully.",
+                "AI sentence practice request processed.",
                 aiService.sentencePractice(currentUser, request));
     }
 
@@ -119,7 +155,7 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiQuizGeneratorRequest request) {
         return ApiResponse.success(
-                "AI quiz draft generated successfully.",
+                "AI quiz draft request processed.",
                 aiService.quizGenerator(currentUser, request));
     }
 
@@ -128,7 +164,7 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiStoryGeneratorRequest request) {
         return ApiResponse.success(
-                "AI story draft generated successfully.",
+                "AI story draft request processed.",
                 aiService.storyGenerator(currentUser, request));
     }
 
@@ -137,7 +173,7 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiLearningRecommendationRequest request) {
         return ApiResponse.success(
-                "AI learning recommendation generated successfully.",
+                "AI learning recommendation request processed.",
                 aiService.learningRecommendation(currentUser, request));
     }
 
@@ -155,7 +191,7 @@ public class AiController {
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             @RequestParam(value = "languagePreference", required = false) String languagePreference) {
         return ApiResponse.success(
-                "AI pronunciation feedback processed successfully.",
+                "AI pronunciation feedback request processed.",
                 aiService.pronunciationFeedback(currentUser, file, targetText, pinyin, tone, languagePreference));
     }
 
@@ -169,7 +205,7 @@ public class AiController {
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             @RequestParam(value = "languagePreference", required = false) String languagePreference) {
         return ApiResponse.success(
-                "AI writing feedback processed successfully.",
+                "AI writing feedback request processed.",
                 aiService.writingFeedback(currentUser, file, targetCharacter, languagePreference));
     }
 }

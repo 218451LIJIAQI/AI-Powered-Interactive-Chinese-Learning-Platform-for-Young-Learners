@@ -347,6 +347,20 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin users index — search, filter, manage all users across roles.
+ *
+ * <h2>Destructive-action safety</h2>
+ * <p>Soft-delete (deactivate), force password reset, and role
+ * promotion all show a confirmation dialog with the target user's
+ * email so admins cannot mis-click. The backend keeps a hard
+ * boundary on self-modifying or self-demoting actions.</p>
+ *
+ * <h2>Audit trail</h2>
+ * <p>Every write here is logged via
+ * {@code AdminAuditLogService} so a future investigation can trace
+ * who deactivated which account when.</p>
+ */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 

@@ -8,6 +8,12 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * Pins the migration contract: runtime profiles use Flyway-managed
+ * schema with Hibernate set to {@code validate} (never
+ * {@code update} / {@code create-drop}), preventing accidental schema
+ * drift between dev / test / prod.
+ */
 class DatabaseMigrationConfigurationTests {
 
     @Test
@@ -50,6 +56,10 @@ class DatabaseMigrationConfigurationTests {
         assertThat(local).contains("password: ${DB_PASSWORD:replace-with-a-strong-application-db-password}");
         assertThat(local).contains("address: 127.0.0.1");
         assertThat(local).contains("secret: ${JWT_SECRET:LocalComposeOnlyJwtSecret1234567890AB}");
+        assertThat(local).contains("provider: ${PAYMENT_PROVIDER:no-op}");
+        assertThat(local).contains("stripe-api-key: ${STRIPE_API_KEY:}");
+        assertThat(local).doesNotContain("sk_test_");
+        assertThat(local).doesNotContain("sk_live_");
         assertThat(local).doesNotContain("provider: ${PAYMENT_PROVIDER:stripe}");
         assertThat(prod).contains("mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}");
         assertThat(prod).contains("provider: ${PAYMENT_PROVIDER:stripe}");
@@ -85,14 +95,14 @@ class DatabaseMigrationConfigurationTests {
         assertThat(validationScript).contains("\"MYSQL_USER=$AppUsername\"");
         assertThat(validationScript).contains("\"MYSQL_PASSWORD=$AppPassword\"");
         assertThat(validationScript).contains("-DbUsername $AppUsername");
-        assertThat(validationScript).contains("fresh V12 migration history");
+        assertThat(validationScript).contains("fresh consolidated V1 migration history");
         assertThat(validationScript).contains("fresh point-award source uniqueness");
         assertThat(validationScript).contains("fresh active reset token uniqueness");
     }
 
     @Test
     void v8FinancialIntegrityMigrationFailsFastBeforeAddingConstraints() throws IOException {
-        String migration = readResource("src/main/resources/db/migration/V8__strengthen_financial_data_integrity.sql");
+        String migration = readResource("src/main/resources/db/migration/V1__consolidated_schema.sql");
 
         assertThat(migration).contains("V8 blocked: orders contain negative totals or invalid currency codes");
         assertThat(migration).contains("V8 blocked: duplicate payment provider references exist");
@@ -116,7 +126,7 @@ class DatabaseMigrationConfigurationTests {
 
     @Test
     void v12EnforcesOperationalUniquenessPrivacyAndHotPathIndexes() throws IOException {
-        String migration = readResource("src/main/resources/db/migration/V12__enforce_database_contracts_and_privacy_bounds.sql");
+        String migration = readResource("src/main/resources/db/migration/V1__consolidated_schema.sql");
 
         assertThat(migration).contains("V12 blocked: duplicate cart item tuples exist");
         assertThat(migration).contains("V12 blocked: duplicate lesson progress tuples exist");
@@ -131,6 +141,35 @@ class DatabaseMigrationConfigurationTests {
         assertThat(migration).contains("add constraint uk_password_reset_tokens_active_user");
         assertThat(migration).contains("add constraint chk_video_progress_watched_within_total");
         assertThat(migration).contains("create index idx_audit_logs_target_created");
+    }
+
+    @Test
+    void v14EnforcesFinalDomainChecksVerificationUniquenessAndHotPathIndexes() throws IOException {
+        String migration = readResource("src/main/resources/db/migration/V14__final_database_contract_hardening.sql");
+        String validationScript = readResource("scripts/validate-flyway-mysql.ps1");
+
+        assertThat(migration).contains("V14 blocked: rows violate tightened status/domain checks");
+        assertThat(migration).contains("V14 blocked: rows violate review/read state consistency checks");
+        assertThat(migration).contains("add constraint chk_ai_chat_messages_sender_role");
+        assertThat(migration).contains("add constraint chk_teacher_earnings_status");
+        assertThat(migration).contains("add constraint chk_ai_usage_logs_status");
+        assertThat(migration).contains("add constraint chk_ai_response_reports_review_consistency");
+        assertThat(migration).contains("add constraint chk_learning_modules_access_price");
+        assertThat(migration).contains("add constraint chk_lessons_access_price");
+        assertThat(migration).contains("add constraint chk_course_packages_access_price");
+        assertThat(migration).contains("current_document_key varchar(160) generated always as");
+        assertThat(migration).contains("add constraint uk_teacher_verification_documents_current_type");
+        assertThat(migration).contains("create index idx_ai_chat_messages_session_role_id");
+        assertThat(migration).contains("create index idx_ai_response_reports_student_created");
+        assertThat(migration).contains("create index idx_teacher_verification_reviews_latest");
+        assertThat(migration).contains("create index idx_notifications_user_status_created_id");
+        assertThat(migration).doesNotContain("create index idx_payment_records_provider_reference");
+        assertThat(migration).doesNotContain("create index idx_refund_requests_student_created");
+
+        assertThat(validationScript).contains("fresh final V14 migration history");
+        assertThat(validationScript).contains("fresh AI chat sender role check");
+        assertThat(validationScript).contains("fresh lesson access price check");
+        assertThat(validationScript).contains("fresh current teacher verification document uniqueness");
     }
 
     @Test

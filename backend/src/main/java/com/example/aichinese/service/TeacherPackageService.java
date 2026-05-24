@@ -29,6 +29,20 @@ import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Teacher-side CRUD for {@link CoursePackage}s — the bundling unit
+ * that students purchase to unlock multiple modules / lessons in one
+ * transaction.
+ *
+ * <p>A package is composed of {@link PackageItem}s referencing either
+ * {@link LearningModule}s or individual {@link Lesson}s. Both kinds
+ * of items must be owned by the same teacher; the ownership and
+ * status checks delegate to {@link TeacherModuleService} /
+ * {@link TeacherLessonService} so the rules live in one place. Pricing
+ * inputs flow through {@link TeacherContentAccessService}'s
+ * {@code BigDecimal} validation so currency arithmetic never crosses
+ * boundaries.</p>
+ */
 @Service
 public class TeacherPackageService {
 

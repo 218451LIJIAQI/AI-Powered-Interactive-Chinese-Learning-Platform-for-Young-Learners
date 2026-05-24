@@ -25,10 +25,40 @@ import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.repository.ContentModerationRecordRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Admin-only moderation actions against teacher-authored content
+ * (warn / hide / restore / archive) and the moderation audit history.
+ *
+ * <h2>Targets</h2>
+ * <p>Moderation can target any of {@link Lesson}, {@link CoursePackage},
+ * or a {@link TeacherProfile} (for cross-content-wide warnings).
+ * {@link CommunicationTargetResolver} resolves the target type +
+ * id pair into the actual entity so the moderation logic does not
+ * need to switch on type for every read.</p>
+ *
+ * <h2>State change semantics</h2>
+ * <ul>
+ *   <li>{@link ContentModerationAction#WARN}: writes a moderation
+ *       record + notification, but does not alter content state.</li>
+ *   <li>{@link ContentModerationAction#HIDE}: flips the content to
+ *       {@link ContentStatus#ARCHIVED} so it disappears from public
+ *       listings (preserving the row for evidence / restoration).</li>
+ *   <li>{@link ContentModerationAction#RESTORE}: returns previously
+ *       hidden content to its prior status.</li>
+ * </ul>
+ *
+ * <p>Every action is recorded as a {@link ContentModerationRecord}
+ * with the admin's note (capped at {@link #MAX_MODERATION_NOTE_LENGTH}
+ * via {@link AiInputSanitizer}) so a teacher contesting a decision
+ * can be shown the exact stated reason.</p>
+ */
 @Service
 public class ContentModerationService {
+
+    private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
 
     private final ContentModerationRecordRepository contentModerationRecordRepository;
     private final UserRepository userRepository;
@@ -110,9 +140,9 @@ public class ContentModerationService {
                 request.targetType(),
                 request.targetId());
 
-        // Wave-11 state-machine validation. The previous {@link #mapContentStatus}
-        // implementation silently mapped the action to a target status
-        // regardless of the source state, which let an admin click HIDE on
+        // Validate the source state before applying a moderation action.
+        // Mapping the action without checking the current status would let an
+        // admin click HIDE on
         // an already-ARCHIVED lesson and quietly send it back to APPROVED
         // (a state regression), or click HIDE on an APPROVED-but-not-yet-
         // published lesson and silently re-set it to APPROVED (a no-op
@@ -137,7 +167,7 @@ public class ContentModerationService {
         record.setTargetId(target.targetId());
         record.setTargetTitleSnapshot(target.targetTitle());
         record.setActionTaken(action.name());
-        record.setNote(request.reason().trim());
+        record.setNote(requireModerationNote(request.reason()));
         record.setRelatedTeacher(target.relatedTeacher());
         ContentModerationRecord saved = contentModerationRecordRepository.save(record);
 
@@ -275,6 +305,14 @@ public class ContentModerationService {
     private User requireUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
+    }
+
+    private String requireModerationNote(String value) {
+        String sanitized = AiInputSanitizer.sanitize(value, MAX_MODERATION_NOTE_LENGTH);
+        if (sanitized == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Reason is required.");
+        }
+        return sanitized;
     }
 
     private Pageable newestPageable(int page, int size) {

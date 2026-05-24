@@ -12,6 +12,12 @@ import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.security.JwtService;
 
+/**
+ * Unit coverage for {@code JwtService} — proves both secret formats
+ * (plain-text and {@code base64:}-prefixed), the 32-byte minimum length
+ * guard, and the {@code sessionVersion} claim that powers JWT
+ * revocation on logout / password change.
+ */
 class JwtServiceTests {
 
     @Test

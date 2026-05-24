@@ -15,6 +15,21 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single student attempt at a {@link Quiz}.
+ *
+ * <p>An attempt starts as {@link #submitted} = {@code false} when the
+ * student opens the quiz and is flipped to {@code true} when they
+ * submit (manually or via a timer expiry). {@link #completedAt} is
+ * stamped at the same moment and becomes the canonical timestamp the
+ * dashboard sorts on.</p>
+ *
+ * <p>{@link #score} and {@link #maxScore} are computed by the grader
+ * after submission. Until then both remain {@code null}, which the
+ * UI distinguishes from {@code 0} to display "in progress" rather
+ * than "scored zero". Per-question detail lives in
+ * {@link QuizAttemptAnswer}.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

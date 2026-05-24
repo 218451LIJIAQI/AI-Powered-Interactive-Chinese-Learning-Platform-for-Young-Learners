@@ -38,6 +38,17 @@ import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of the admin teacher management
+ * workflow: application review, verification document review with
+ * decision notes, status transitions (PENDING / APPROVED /
+ * SUSPENDED), and the resulting audit trail.
+ *
+ * <p>Verifies "all green or stays pending" — a teacher cannot be
+ * approved while any required document is still under review — and
+ * that suspending a teacher hides their published content from the
+ * public surface without deleting the rows.</p>
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

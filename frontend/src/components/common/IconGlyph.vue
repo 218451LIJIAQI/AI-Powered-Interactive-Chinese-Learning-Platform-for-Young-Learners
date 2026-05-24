@@ -3,6 +3,18 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * App-wide icon component that resolves a semantic name
+ * (e.g. `"learn"`, `"trophy"`, `"moderation"`) into a Lucide Vue
+ * icon. Centralising the lookup table means swapping the icon set
+ * (or adjusting a single icon) happens in one place — every
+ * component just references `<IconGlyph name="..." />`.
+ *
+ * Names are kebab-or-camelCase semantic terms rather than the
+ * Lucide internal name, so a Lucide rename doesn't require touching
+ * every call site. Unknown names fall back to `BookOpen` to avoid
+ * a runtime crash on a typo.
+ */
 import {
   BadgeHelp,
   Banknote,

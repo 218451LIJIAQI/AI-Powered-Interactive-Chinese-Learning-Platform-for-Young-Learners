@@ -21,6 +21,41 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+/**
+ * Per-request filter that establishes a Spring Security
+ * {@link SecurityContextHolder} authentication from a bearer JWT.
+ *
+ * <h2>Failure-handling philosophy</h2>
+ * <p>This filter never aborts the request chain on a bad token — it
+ * simply continues without setting an authentication, leaving the
+ * downstream security configuration to decide whether the missing
+ * authentication is fatal (it usually is, via the
+ * {@link JwtAuthenticationEntryPoint}, but some endpoints are
+ * intentionally anonymous-accessible). The reasoning:</p>
+ * <ul>
+ *   <li>Throwing here would short-circuit Spring's well-tested
+ *       challenge-response machinery and produce inconsistent error
+ *       shapes.</li>
+ *   <li>Expired tokens are the overwhelmingly common case and are not
+ *       interesting enough to log at WARN — see the {@code DEBUG} log
+ *       calls inside the filter for the rationale.</li>
+ * </ul>
+ *
+ * <h2>Session invalidation</h2>
+ * <p>{@link #isTokenValidForCurrentSession(String, UserDetails)}
+ * compares the {@code sessionVersion} encoded in the token against the
+ * value currently stored on the user row. Bumping
+ * {@code User.sessionVersion} (on password change, admin-driven
+ * deactivation, or explicit "log out everywhere") invalidates every
+ * outstanding token for that user in a single step — without
+ * maintaining a server-side token revocation list.</p>
+ *
+ * <h2>Log hygiene</h2>
+ * <p>Token contents are never logged; only the exception class name
+ * for a parse failure. This prevents an attacker who can read logs
+ * from harvesting valid tokens, and keeps PII (the user's email
+ * encoded in the JWT subject) out of disk-resident log files.</p>
+ */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 

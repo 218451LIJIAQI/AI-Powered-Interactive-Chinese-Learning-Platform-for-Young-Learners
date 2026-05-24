@@ -20,6 +20,68 @@ import com.example.aichinese.security.JwtAccessDeniedHandler;
 import com.example.aichinese.security.JwtAuthenticationEntryPoint;
 import com.example.aichinese.security.JwtAuthenticationFilter;
 
+/**
+ * Central Spring Security configuration.
+ *
+ * <h2>Filter chain order</h2>
+ * <p>Filters are intentionally chained in this order:</p>
+ * <ol>
+ *   <li>{@link RequestIdFilter} (before
+ *       {@link UsernamePasswordAuthenticationFilter}) — establishes the
+ *       request-id correlation id so every later log line can reference
+ *       it, even ones produced inside the JWT filter on a 401.</li>
+ *   <li>{@link JwtAuthenticationFilter} (immediately after) — resolves
+ *       the bearer token into an authenticated principal.</li>
+ * </ol>
+ *
+ * <h2>Authorisation policy</h2>
+ * <p>Routes are matched in declaration order; the first match wins. The
+ * policy is intentionally <em>default-deny</em>: every endpoint that is
+ * not explicitly listed in {@code authorizeHttpRequests} requires
+ * authentication, so a developer adding a new controller cannot
+ * accidentally publish it as public.</p>
+ *
+ * <p>Public surfaces are kept tightly scoped:</p>
+ * <ul>
+ *   <li>{@code /api/v1/health} and {@code /actuator/health(/**)} —
+ *       container / load-balancer health probes.</li>
+ *   <li>{@code /v3/api-docs(/**)} and {@code /swagger-ui(/**)} — OpenAPI
+ *       discovery; production has these turned off via
+ *       {@code springdoc.api-docs.enabled=false} so the permit-all rule
+ *       only kicks in for dev / preview-QA.</li>
+ *   <li>Auth bootstrap routes ({@code register}, {@code login},
+ *       {@code forgot-password}, {@code reset-password}) and the public
+ *       Stripe webhook endpoint.</li>
+ *   <li>{@code GET /api/v1/public/**} for the discovery catalog.</li>
+ * </ul>
+ *
+ * <p>Role-scoped routes ({@code /api/v1/students/**},
+ * {@code /api/v1/teachers/**}, {@code /api/v1/admin/**}) use the
+ * {@code "ROLE_"} prefix that {@link com.example.aichinese.security.SecurityUserDetails}
+ * applies; {@code @PreAuthorize} on individual controllers can layer
+ * finer-grained checks on top.</p>
+ *
+ * <h2>Security headers</h2>
+ * <ul>
+ *   <li>CSRF: disabled — the platform is a stateless JWT API with no
+ *       cookie-based session, so the CSRF threat model does not apply.</li>
+ *   <li>Sessions: stateless — every request is authenticated via JWT.</li>
+ *   <li>{@code X-Content-Type-Options: nosniff} — prevents MIME sniffing.</li>
+ *   <li>{@code X-Frame-Options: DENY} — clickjacking defence.</li>
+ *   <li>{@code Referrer-Policy: strict-origin-when-cross-origin} —
+ *       trims referrer leakage.</li>
+ *   <li>{@code Permissions-Policy} — disables geolocation / camera /
+ *       microphone / payment / USB; the platform never asks for any of
+ *       these.</li>
+ * </ul>
+ *
+ * <h2>Property bindings</h2>
+ * <p>{@code @EnableConfigurationProperties} is co-located here (rather
+ * than on individual property classes) so a single annotation lists
+ * every {@code @ConfigurationProperties} record / class consumed by the
+ * security and platform layer — making it trivial to audit which
+ * settings are environment-driven.</p>
+ */
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties({
@@ -77,8 +139,13 @@ public class SecurityConfig {
                         // SpringDoc surfaces: machine-readable OpenAPI JSON and the Swagger UI
                         // bundle. Both are read-only and intentionally accessible without auth so
                         // that the frontend (and any partner integration) can discover the API
-                        // contract during development. Disable in prod via a profile if exposing
-                        // the full schema externally is undesirable.
+                        // contract during development.
+                        // PRODUCTION GATE: springdoc.api-docs.enabled and
+                        // springdoc.swagger-ui.enabled are both set to false in
+                        // application-prod.yml, so these routes return 404 on a prod
+                        // deployment and this permit-all rule never applies in practice.
+                        // Override via SPRINGDOC_API_DOCS_ENABLED=true if a trusted internal
+                        // portal needs schema access in prod.
                         .requestMatchers(
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",

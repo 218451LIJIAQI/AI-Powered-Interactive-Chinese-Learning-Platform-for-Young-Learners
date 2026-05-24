@@ -13,6 +13,12 @@ import com.example.aichinese.provider.PaymentProviderClient;
 import com.example.aichinese.provider.StripePaymentProviderClient;
 import com.example.aichinese.service.PaymentProviderService;
 
+/**
+ * Unit coverage for {@code PaymentProviderService} — pins the
+ * runtime selection: {@code stripe} → Stripe client, {@code mock}
+ * with the success toggle on → mock client, otherwise the
+ * {@code NoOpPaymentProviderClient} fail-safe.
+ */
 class PaymentProviderServiceTests {
 
     @Test

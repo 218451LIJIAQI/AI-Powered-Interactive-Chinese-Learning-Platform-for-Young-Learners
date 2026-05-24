@@ -16,6 +16,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single inclusion of a {@link Lesson} or {@link LearningModule}
+ * inside a parent {@link CoursePackage}.
+ *
+ * <p>The {@code (item_type, item_id)} pair points polymorphically at
+ * either a module or a lesson — packages cannot recursively contain
+ * other packages, which is enforced at the
+ * {@link com.example.aichinese.entity.enums.PackageItemType} level
+ * (it has only {@code MODULE} and {@code LESSON} constants).</p>
+ *
+ * <p>{@link #titleSnapshot} freezes the included artefact's title at
+ * the time of bundling so a renamed lesson does not silently rebrand
+ * historic packages on customer receipts.</p>
+ *
+ * <p>{@link #sortOrder} is the package author's preferred ordering and
+ * is honoured when the catalogue lists package contents.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -24,13 +24,41 @@ import com.example.aichinese.util.PaginationUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
+/**
+ * Centralised audit-trail writer used by every state-changing service
+ * across the platform (auth, payment, refund, payout, teacher
+ * approval, content moderation, system settings).
+ *
+ * <h2>What gets written</h2>
+ * <p>Each call captures the actor, action, target type / id, and a
+ * human-readable description. The description is run through
+ * {@link #SENSITIVE_ASSIGNMENT_PATTERN} and
+ * {@link #AUTHORIZATION_HEADER_PATTERN} to redact tokens, passwords,
+ * reset links, API keys, and {@code Authorization: Bearer …} headers
+ * — so an admin browsing the audit history cannot lift secrets from
+ * the description even if a developer accidentally passed one in.
+ * Descriptions are capped at {@link #MAX_AUDIT_DESCRIPTION_LENGTH}
+ * to keep rows bounded.</p>
+ *
+ * <h2>Correlation</h2>
+ * <p>The current {@link RequestIdHolder} value is recorded so every
+ * audit row joins back to its triggering HTTP request, simplifying
+ * incident reconstruction.</p>
+ *
+ * <h2>Read side</h2>
+ * <p>Listing supports JPA {@link Specification}-driven filtering
+ * (actor, action, target, date range) so admins can pivot the audit
+ * log along any dimension without hand-written query branches.</p>
+ */
 @Service
 public class AuditLogService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);
     private static final int MAX_AUDIT_DESCRIPTION_LENGTH = 1000;
     private static final java.util.regex.Pattern SENSITIVE_ASSIGNMENT_PATTERN = java.util.regex.Pattern.compile(
-            "(?i)(token|password|secret|authorization|api[-_ ]?key|reset[-_ ]?link)\\s*[:=]\\s*\\S+");
+            "(?i)((?:(?:access|refresh|id|reset)[-_ ]?)?token|password|secret|api[-_ ]?key|reset[-_ ]?link)\\s*(?:[:=])\\s*\\S+");
+    private static final java.util.regex.Pattern AUTHORIZATION_HEADER_PATTERN = java.util.regex.Pattern.compile(
+            "(?i)(authorization\\s*(?:[:=])\\s*)(?:bearer\\s+)?\\S+");
 
     private final AuditLogRepository auditLogRepository;
     private final CommunicationMapper communicationMapper;
@@ -113,7 +141,9 @@ public class AuditLogService {
         if (description == null) {
             return null;
         }
-        String normalized = SENSITIVE_ASSIGNMENT_PATTERN.matcher(description)
+        String normalized = AUTHORIZATION_HEADER_PATTERN.matcher(description)
+                .replaceAll(match -> match.group(1) + "[REDACTED]");
+        normalized = SENSITIVE_ASSIGNMENT_PATTERN.matcher(normalized)
                 .replaceAll(match -> match.group(1) + "=[REDACTED]");
         return normalized.length() <= MAX_AUDIT_DESCRIPTION_LENGTH
                 ? normalized

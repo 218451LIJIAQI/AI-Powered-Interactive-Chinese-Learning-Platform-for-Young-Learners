@@ -41,6 +41,16 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Public-facing course card used on the landing page and the
+ * catalogue grid. Shows the {@link CourseSceneThumb} cover, title,
+ * teacher / age band, pricing, and a CTA chip. Routes to the
+ * course detail page on click.
+ *
+ * Free vs. paid courses share the same layout — the price chip is
+ * the only visual hint of the access type so the rest of the
+ * card feels consistent across the catalogue.
+ */
 import { computed } from 'vue'
 
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'

@@ -7,6 +7,12 @@ import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Unit coverage for {@code PaginationUtils} — pins the floor/ceiling
+ * clamps ({@code page} ≥ 0, {@code size} bounded by min/max) and the
+ * overflow protection that keeps pagination math stable even for
+ * pathological inputs (Integer.MAX_VALUE etc.).
+ */
 class PaginationUtilsTests {
 
     @Test

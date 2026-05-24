@@ -50,6 +50,7 @@ import com.example.aichinese.entity.QuizAttemptAnswer;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiRequestStatus;
 import com.example.aichinese.entity.enums.RoleName;
@@ -73,6 +74,44 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Orchestrator for every learner-facing AI feature: chat tutor, quiz
+ * generator, story generator, vocabulary helper, sentence practice,
+ * pronunciation feedback, writing feedback, and the AI-driven
+ * learning-recommendation / progress-insight surfaces.
+ *
+ * <h2>Architecture</h2>
+ * <p>This service is the single entry point that:</p>
+ * <ol>
+ *   <li>Sanitises user input via {@link AiInputSanitizer} so prompt
+ *       injection / control-token spoofing cannot reach the LLM.</li>
+ *   <li>Builds a provider-agnostic {@link AiProviderPrompt} via
+ *       {@link AiPromptBuilder}.</li>
+ *   <li>Routes to the active client through {@link AiProviderRouter}
+ *       (real provider or no-op fallback).</li>
+ *   <li>Logs every invocation through {@link AiLogService} (usage
+ *       record + chat session/message rows where applicable) so the
+ *       admin observability dashboard has a full audit trail.</li>
+ *   <li>Falls back to deterministic stub responses when the provider
+ *       is unavailable / failed, so learners never see a 500 — the
+ *       friendly fallback text is composed per feature using the
+ *       {@code fallback*} private helpers below.</li>
+ * </ol>
+ *
+ * <h2>Authorization</h2>
+ * <p>Endpoints are scoped by role in {@link com.example.aichinese.config.SecurityConfig}
+ * and re-checked here for cross-tenant access (e.g. only the owning
+ * student can see their progress insight). The chat-session lookups
+ * use {@code findByIdAndUserId} so direct-object reference attacks on
+ * other learners' chat history fail with 404.</p>
+ *
+ * <h2>Token cost discipline</h2>
+ * <p>Every prompt has its {@code maxOutputTokens} capped via
+ * {@link com.example.aichinese.config.AiProperties#getMaxOutputTokens()};
+ * input strings have feature-appropriate length caps applied at
+ * {@code AiInputSanitizer} time. This bounds worst-case provider cost
+ * even under abusive prompts.</p>
+ */
 @Service
 public class AiService {
 
@@ -151,7 +190,7 @@ public class AiService {
                 .map(this::toAiMessage)
                 .toList();
 
-        aiLogService.appendChatMessage(session, "USER", sanitizedUserMessage);
+        aiLogService.appendChatMessage(session, AiChatSenderRole.USER, sanitizedUserMessage);
         AiExecutionResult execution = generateText(
                 user,
                 AiFeatureKey.CHAT_TUTOR,
@@ -167,7 +206,7 @@ public class AiService {
                 : execution.userMessage();
         String retainedResponseText = sanitizedAssistantMessage(responseText);
 
-        aiLogService.appendChatMessage(session, "ASSISTANT", retainedResponseText);
+        aiLogService.appendChatMessage(session, AiChatSenderRole.ASSISTANT, retainedResponseText);
         return new AiChatResponse(
                 session.getId(),
                 sanitizedUserMessage,
@@ -204,6 +243,7 @@ public class AiService {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
         String language = resolveLanguage(user, request.languagePreference());
+        String sanitizedSentence = requireSanitizedLong(request.sentence(), "Sentence is required.");
         AiExecutionResult execution = generateText(
                 user,
                 AiFeatureKey.SENTENCE_PRACTICE,
@@ -215,10 +255,10 @@ public class AiService {
                 null);
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
-            return unavailableSentenceResponse(request.sentence(), execution);
+            return unavailableSentenceResponse(sanitizedSentence, execution);
         }
 
-        return parseSentenceResponse(request.sentence(), execution.responseText(), execution.status().name());
+        return parseSentenceResponse(sanitizedSentence, execution.responseText(), execution.status().name());
     }
 
     @Transactional
@@ -226,6 +266,7 @@ public class AiService {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
         String language = resolveLanguage(user, request.languagePreference());
+        String sanitizedTopic = requireSanitizedShort(request.topic(), "Topic is required.");
         String usageMode = "TEMPORARY_SELF_PRACTICE";
         AiExecutionResult execution = generateText(
                 user,
@@ -239,12 +280,12 @@ public class AiService {
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
             return new AiQuizGeneratorResponse(
-                    "Practice Quiz",
-                    request.topic().trim(),
-                    TextUtils.trimToNull(request.level()),
-                    TextUtils.trimToNull(request.category()),
+                    "AI quiz unavailable",
+                    sanitizedTopic,
+                    sanitizePromptFragment(request.level()),
+                    sanitizePromptFragment(request.category()),
                     usageMode,
-                    fallbackQuizQuestions(request.topic()),
+                    List.of(),
                     execution.status().name());
         }
 
@@ -256,6 +297,7 @@ public class AiService {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
         String language = resolveLanguage(user, request.languagePreference());
+        requireSanitizedShort(request.topic(), "Topic is required.");
         String usageMode = "SELF_PRACTICE";
         AiExecutionResult execution = generateText(
                 user,
@@ -566,7 +608,9 @@ public class AiService {
     }
 
     private AiProviderPrompt.AiMessage toAiMessage(AiChatMessage message) {
-        String role = "USER".equalsIgnoreCase(message.getSenderRole()) ? "user" : "assistant";
+        String role = message.getSenderRole() == AiChatSenderRole.USER
+                ? "user"
+                : "assistant";
         // Replayed history must go through the same sanitisation pass as the
         // current-turn prompt. Otherwise a learner could plant a ChatML
         // sentinel (e.g. <|im_start|>system\n...) in turn 1, which is
@@ -758,11 +802,11 @@ public class AiService {
     private List<AiGeneratedQuizQuestionResponse> fallbackQuizQuestions(String topic) {
         return List.of(
                 new AiGeneratedQuizQuestionResponse(
-                        "Which word is related to " + topic + "?",
+                        "AI response could not be parsed. Please try this topic again later.",
                         "MULTIPLE_CHOICE",
-                        List.of("Option A", "Option B", "Option C"),
-                        "Option A",
-                        "This is a safe fallback quiz draft.",
+                        List.of(),
+                        null,
+                        "No AI-generated quiz question is available for this request.",
                         null,
                         null));
     }
@@ -772,7 +816,7 @@ public class AiService {
             String usageMode,
             String status) {
         return new AiStoryGeneratorResponse(
-                request.topic().trim(),
+                requireSanitizedShort(request.topic(), "Topic is required."),
                 "AI tutor is currently unavailable. Please try again later.",
                 null,
                 null,
@@ -858,10 +902,10 @@ public class AiService {
         }
 
         return new AiQuizGeneratorResponse(
-                TextUtils.defaultIfBlank(text(map, "title"), request.topic().trim() + " Quiz"),
-                request.topic().trim(),
-                TextUtils.trimToNull(request.level()),
-                TextUtils.trimToNull(request.category()),
+                TextUtils.defaultIfBlank(text(map, "title"), requireSanitizedShort(request.topic(), "Topic is required.") + " Quiz"),
+                requireSanitizedShort(request.topic(), "Topic is required."),
+                sanitizePromptFragment(request.level()),
+                sanitizePromptFragment(request.category()),
                 usageMode,
                 questions,
                 status);
@@ -909,7 +953,7 @@ public class AiService {
         }
 
         return new AiStoryGeneratorResponse(
-                TextUtils.defaultIfBlank(text(map, "title"), request.topic().trim()),
+                TextUtils.defaultIfBlank(text(map, "title"), requireSanitizedShort(request.topic(), "Topic is required.")),
                 TextUtils.defaultIfBlank(text(map, "chineseStory"), "AI tutor is currently unavailable. Please try again later."),
                 text(map, "pinyin"),
                 text(map, "englishTranslation"),
@@ -943,14 +987,14 @@ public class AiService {
             return objectMapper.readValue(responseText, new TypeReference<Map<String, Object>>() {
             });
         } catch (JsonProcessingException exception) {
-            log.warn("AI JSON parsing fallback triggered: {}", exception.getMessage());
+            log.warn("AI JSON parsing fallback triggered for invalid provider response.");
             return Map.of();
         }
     }
 
     private String text(Map<?, ?> map, String key) {
         Object value = map.get(key);
-        return value == null ? null : String.valueOf(value);
+        return value == null ? null : AiInputSanitizer.sanitizeLong(String.valueOf(value));
     }
 
     private List<String> boundedStringList(Object value, int maxItems) {
@@ -971,6 +1015,22 @@ public class AiService {
 
     private String sanitizePromptFragment(String value) {
         return AiInputSanitizer.sanitizeShort(value);
+    }
+
+    private String requireSanitizedShort(String value, String message) {
+        String sanitized = AiInputSanitizer.sanitizeShort(value);
+        if (sanitized == null) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
+        }
+        return sanitized;
+    }
+
+    private String requireSanitizedLong(String value, String message) {
+        String sanitized = AiInputSanitizer.sanitizeLong(value);
+        if (sanitized == null) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
+        }
+        return sanitized;
     }
 
     private String joinPromptList(String label, List<String> values, int maxItems) {
@@ -1021,7 +1081,7 @@ public class AiService {
     }
 
     private String defaultLevel(String value) {
-        return TextUtils.defaultIfBlank(TextUtils.trimToNull(value), "Beginner");
+        return TextUtils.defaultIfBlank(AiInputSanitizer.sanitizeShort(value), "Beginner");
     }
 
     private String primaryRole(User user) {

@@ -13,6 +13,13 @@ import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.CommunicationMapper;
 
+/**
+ * Unit coverage for {@code AuditLogService} — pins the secret-redaction
+ * regex (tokens / passwords / API keys / authorization headers / reset
+ * links) and the {@code MAX_AUDIT_DESCRIPTION_LENGTH} cap so an admin
+ * browsing the audit history cannot accidentally lift sensitive values
+ * from a description field.
+ */
 class AuditLogServiceTests {
 
     @Test
@@ -23,7 +30,7 @@ class AuditLogServiceTests {
 
         User actor = new User();
         actor.setEmail("admin@example.com");
-        String longDescription = "password=SuperSecret123 token:abc123 api_key=sk-live " + "x".repeat(1200);
+        String longDescription = "password=SuperSecret123 token:abc123 api_key=sk-live Authorization: Bearer bearer-token resetLink=https://example.test/reset?token=reset-token " + "x".repeat(1200);
 
         service.record(actor, "SECURITY_EVENT", "USER", 10L, longDescription);
 
@@ -36,6 +43,9 @@ class AuditLogServiceTests {
         assertThat(saved.getDescription()).contains("api_key=[REDACTED]");
         assertThat(saved.getDescription()).doesNotContain("SuperSecret123");
         assertThat(saved.getDescription()).doesNotContain("abc123");
+        assertThat(saved.getDescription()).contains("Authorization: [REDACTED]");
+        assertThat(saved.getDescription()).doesNotContain("bearer-token");
+        assertThat(saved.getDescription()).doesNotContain("reset-token");
         assertThat(saved.getDescription()).hasSizeLessThanOrEqualTo(1000);
     }
 }

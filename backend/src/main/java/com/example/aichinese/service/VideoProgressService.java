@@ -21,6 +21,22 @@ import com.example.aichinese.repository.VideoProgressRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Persists per-student playback position for recorded lesson videos
+ * and surfaces aggregate lesson-video progress to the front-end
+ * progress UI.
+ *
+ * <p>Progress is upserted on every heartbeat — students with multiple
+ * tabs / devices will overwrite each other rather than diverge, which
+ * matches the platform's "resume from last-known position" UX.
+ * Access is re-checked on every read and write via
+ * {@link LiveLearningAccessService} so a student who lost access (e.g.
+ * subscription lapse) cannot keep updating their progress.</p>
+ *
+ * <p>A {@code COMPLETED} notification is dispatched the first time the
+ * student crosses the completion threshold, ensuring teachers see
+ * engagement signals without double-firing on subsequent rewatch.</p>
+ */
 @Service
 public class VideoProgressService {
 
@@ -72,8 +88,7 @@ public class VideoProgressService {
         // a student who refreshes the player page after finishing a video
         // would emit a fresh "completed" notification + audit row every
         // time the player POSTs another progress heartbeat, polluting the
-        // teacher's notification feed and the audit log. Same bug family
-        // as PaymentService.markPaymentPaid (Wave 5.1).
+        // teacher's notification feed and the audit log.
         boolean wasAlreadyCompleted = progress.isCompleted();
         applyProgress(progress, request, video);
         VideoProgress saved = videoProgressRepository.save(progress);

@@ -1,3 +1,23 @@
+/*
+ * MandarinSpark global stylesheet.
+ *
+ * Design tokens: CSS custom properties on :root define the palette,
+ * surfaces, borders, shadows, primary / accent colours that every
+ * component references rather than hard-coding values. Changing a
+ * token here cascades across every persona dashboard, the public
+ * catalogue, and the auth surfaces — single source of truth.
+ *
+ * Font stack: Fredoka for display headings (kid-friendly tone),
+ * Nunito for body copy (legibility at small sizes). Both loaded via
+ * Google Fonts with display=swap so the rest of the page paints
+ * before web fonts arrive.
+ *
+ * Scope: this file holds design tokens, base reset + typography,
+ * layout primitives (page chrome, cards, buttons, forms), and the
+ * persona-page denser-layout overrides bolted on during the 2026-05
+ * UI polish pass. Component-specific rules belong in each Vue SFC's
+ * <style scoped> block.
+ */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap');
 
 :root {
@@ -70,6 +90,38 @@ button {
 img {
   max-width: 100%;
   display: block;
+}
+
+.skip-to-main {
+  position: absolute;
+  top: -9999px;
+  left: 16px;
+  z-index: 9999;
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 8px 24px rgba(106, 73, 255, 0.3);
+  text-decoration: none;
+  transition: top 0.12s ease;
+}
+
+.skip-to-main:focus {
+  top: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 #app {
@@ -193,7 +245,7 @@ img {
   border: 0;
   background: transparent;
   min-width: 40px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 10px 22px;
   border-radius: 999px;
   color: var(--text);
@@ -6104,7 +6156,7 @@ img {
 
 .pill-switch {
   min-width: 210px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 4px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.94),
@@ -6112,16 +6164,18 @@ img {
 }
 
 .pill-switch button {
-  padding: 8px 18px;
+  min-height: 44px;
+  padding: 9px 18px;
 }
 
 .pill-switch--compact {
   min-width: 198px;
-  min-height: 38px;
+  min-height: 44px;
 }
 
 .pill-switch--compact button {
-  padding: 7px 16px;
+  min-height: 44px;
+  padding: 9px 16px;
   font-size: 0.92rem;
 }
 
@@ -6587,7 +6641,6 @@ img {
   border: 1px solid rgba(229, 233, 246, 0.96);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 12px 26px rgba(147, 154, 203, 0.08);
-  cursor: pointer;
   outline: none;
   transition:
     transform 0.16s ease,
@@ -6595,17 +6648,29 @@ img {
     border-color 0.16s ease;
 }
 
+.public-featured-card-button {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+
 .public-featured-card:hover,
-.public-featured-card:focus-visible {
+.public-featured-card:focus-within {
   transform: translateY(-2px);
   border-color: rgba(196, 205, 237, 0.98);
   box-shadow: var(--shadow-lift);
 }
 
-.public-featured-card:focus-visible {
-  box-shadow:
-    0 0 0 3px rgba(111, 76, 255, 0.18),
-    var(--shadow-lift);
+.public-featured-card-button:focus-visible {
+  outline: 3px solid rgba(111, 76, 255, 0.28);
+  outline-offset: 3px;
+  border-radius: 18px;
 }
 
 .public-featured-thumb {
@@ -6842,7 +6907,7 @@ img {
 .public-footer-column a {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .public-footer-meta {
@@ -7559,8 +7624,8 @@ img {
 }
 
 .auth-reset-link {
-  min-height: 0;
-  padding: 0;
+  min-height: 44px;
+  padding-block: 8px;
 }
 
 .payment-result-page {
@@ -9386,7 +9451,7 @@ img {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 36px;
+    min-height: 44px;
     border: 0;
     background: transparent;
     color: rgba(255, 255, 255, 0.92);
@@ -9654,7 +9719,9 @@ img {
 
   .student-quiz-audio {
     width: 46px;
+    min-width: 46px;
     height: 46px;
+    min-height: 46px;
     border: 0;
     border-radius: 50%;
     background: rgba(126, 96, 255, 0.12);
@@ -10350,7 +10417,7 @@ img {
 
   .student-ai-helper-tool-card input {
     width: 100%;
-    min-height: 38px;
+    min-height: 44px;
     padding: 6px 8px;
     border-radius: 12px;
     background: rgba(249, 250, 255, 0.96);
@@ -10360,7 +10427,7 @@ img {
 
   .student-ai-helper-tool-card button,
   .student-ai-helper-footer button {
-    min-height: 38px;
+    min-height: 44px;
     padding: 7px 16px;
     border: 1px solid currentColor;
     border-radius: 999px;
@@ -12263,8 +12330,8 @@ body {
   .public-shell--auth .auth-reset-link {
     display: inline-flex;
     align-items: center;
-    min-height: 38px;
-    padding-block: 6px;
+    min-height: 44px;
+    padding-block: 8px;
   }
 
   .student-quiz-option,
@@ -12508,8 +12575,8 @@ body {
   .public-nav-link {
     flex: 0 0 auto;
     min-width: 84px;
-    min-height: 38px;
-    padding: 9px 12px;
+    min-height: 44px;
+    padding: 12px 12px;
     border-radius: 999px;
     background: rgba(246, 243, 255, 0.75);
     text-align: center;
@@ -13179,7 +13246,7 @@ body {
     display: inline-flex;
     align-items: center;
     min-height: 38px;
-    padding-block: 6px;
+    padding-block: 8px;
   }
 
   .student-quiz-option,
@@ -13188,7 +13255,7 @@ body {
   .admin-users-tab,
   .admin-users-more,
   .admin-verification-page .admin-review-tabs .tab-button {
-    min-height: 38px;
+    min-height: 44px;
   }
 
   .student-ai-helper-suggestions button,
@@ -13197,7 +13264,7 @@ body {
   .student-ai-helper-tool-card button,
   .student-ai-helper-story-card input,
   .student-ai-helper-footer button {
-    min-height: 38px;
+    min-height: 44px;
   }
 
   .page-shell {
@@ -14772,12 +14839,13 @@ body {
 .public-shell:not(.public-shell--auth) .public-nav .pill-switch {
   flex: 0 0 auto;
   min-width: 184px;
-  min-height: 38px;
+  min-height: 44px;
 }
 
 .public-shell:not(.public-shell--auth) .public-nav .pill-switch button {
   min-width: 54px;
-  padding: 7px 12px;
+  min-height: 44px;
+  padding: 9px 12px;
   font-size: 0.82rem;
 }
 
@@ -15438,11 +15506,11 @@ body {
 }
 
 .public-landing-page .public-footer-column a {
-  min-height: 28px;
+  min-height: 44px;
   color: #65708b;
 }
 
-.public-landing-page .public-footer-socials span {
+.public-landing-page .public-footer-social-link {
   display: grid;
   place-items: center;
   width: 36px;
@@ -15452,6 +15520,17 @@ body {
   color: #6848ff;
   font-size: 0.86rem;
   font-weight: 900;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.public-landing-page .public-footer-social-link:hover {
+  background: rgba(111, 76, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.public-landing-page .public-footer-social-link:focus-visible {
+  outline: 3px solid rgba(111, 76, 255, 0.3);
+  outline-offset: 2px;
 }
 
 @media (max-width: 1320px) {
@@ -15707,7 +15786,7 @@ body {
 .student-home-page .student-hero-chip {
   width: fit-content;
   gap: 8px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 8px 14px;
   border: 1px solid rgba(255, 255, 255, 0.58);
   background: rgba(255, 255, 255, 0.94);
@@ -16659,8 +16738,8 @@ body {
 }
 
 .public-shell--auth .auth-showcase-topbar .pill-switch button {
-  min-height: 30px;
-  padding: 6px 16px;
+  min-height: 44px;
+  padding: 9px 16px;
   font-size: 0.86rem;
 }
 
@@ -16777,8 +16856,8 @@ body {
 }
 
 .public-shell--auth .auth-text-button {
-  min-height: auto;
-  padding: 0;
+  min-height: 44px;
+  padding-block: 8px;
   color: #7557ff;
   font-size: 0.9rem;
   font-weight: 900;
@@ -17039,6 +17118,7 @@ body {
 
   .public-shell--auth .auth-showcase-topbar .pill-switch button {
     min-width: 0;
+    min-height: 44px;
     padding-inline: 8px;
   }
 
@@ -17718,18 +17798,18 @@ body {
 
 .dashboard-shell--student .language-switcher.is-compact .pill-switch {
   display: grid;
-  grid-template-columns: 54px 54px 82px;
+  grid-template-columns: 60px 60px 88px;
   gap: 4px;
-  width: 202px;
-  min-width: 202px;
-  min-height: 36px;
+  width: 220px;
+  min-width: 220px;
+  min-height: 44px;
   padding: 3px;
 }
 
 .dashboard-shell--student .language-switcher.is-compact .pill-switch button {
   min-width: 0;
-  min-height: 30px;
-  padding: 6px 7px;
+  min-height: 44px;
+  padding: 9px 7px;
   font-size: 0.76rem;
   line-height: 1;
   white-space: nowrap;
@@ -18622,4 +18702,156 @@ body {
 }
 
 
+/* Final a11y guardrail: keep frequent touch targets comfortably tappable
+   after legacy role/page-specific responsive overrides. */
+:where(.pill-switch button, .public-footer-column a, .auth-reset-link, .public-shell--auth .auth-text-button) {
+  min-height: 44px;
+}
 
+:where(.auth-reset-link, .public-shell--auth .auth-text-button) {
+  display: inline-flex;
+  align-items: center;
+  padding-block: 8px;
+}
+
+.public-shell--auth .auth-showcase-topbar .pill-switch,
+.public-shell:not(.public-shell--auth) .public-nav .pill-switch,
+.dashboard-shell--student .language-switcher.is-compact .pill-switch {
+  min-height: 44px;
+}
+
+.student-ai-helper-chatbar input,
+.student-ai-helper-tool-card input,
+.student-ai-helper-story-card input,
+.student-ai-helper-tool-card button,
+.student-ai-helper-footer button {
+  min-height: 44px;
+}
+
+.student-ai-helper-chatbar button {
+  min-width: 46px;
+  min-height: 46px;
+}
+
+
+
+/* === Student pages: dense empty states, compact status chips, AI Helper polish === */
+.student-classes-page .state-panel,
+.student-achievements-page .state-panel,
+.student-profile-page .state-panel {
+  min-height: 0;
+  padding: 16px;
+  gap: 10px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96));
+  box-shadow: 0 12px 26px rgba(122, 132, 184, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.student-classes-page .state-panel .state-panel-orb,
+.student-achievements-page .state-panel .state-panel-orb,
+.student-profile-page .state-panel .state-panel-orb {
+  display: none;
+}
+
+.student-classes-page .state-panel .state-icon,
+.student-achievements-page .state-panel .state-icon,
+.student-profile-page .state-panel .state-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.student-classes-page .state-panel h3,
+.student-achievements-page .state-panel h3,
+.student-profile-page .state-panel h3 {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.student-classes-page .state-panel p,
+.student-achievements-page .state-panel p,
+.student-profile-page .state-panel p {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+/* Home learning path - status chip replacing star asterisks */
+.student-home-page .student-path-progress {
+  position: relative;
+  width: min(100%, 110px);
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: rgba(216, 222, 240, 0.78);
+  overflow: hidden;
+}
+
+.student-home-page .student-path-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #70c94f, #92dd59);
+}
+
+.student-home-page .student-path-node.is-current .student-path-progress span {
+  background: linear-gradient(90deg, #ffba2f, #ffd66a);
+}
+
+.student-home-page .student-path-status {
+  margin-top: 4px;
+  color: #7a849e;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.student-home-page .student-path-node.is-complete .student-path-status {
+  color: #2f9f45;
+}
+
+.student-home-page .student-path-node.is-current .student-path-status {
+  color: #d98e13;
+}
+
+/* Learn module status pill replacing module-stars asterisks */
+.student-learn-page .student-module-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(111, 76, 255, 0.08);
+  color: #6d4cff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.student-learn-page .student-module-card.is-complete .student-module-status {
+  background: rgba(95, 202, 108, 0.16);
+  color: #2f9f45;
+}
+
+.student-learn-page .student-module-card.is-locked .student-module-status {
+  background: rgba(204, 210, 226, 0.32);
+  color: #7a849e;
+}
+
+/* AI Helper: hide remnant chinese pseudo-icon container if any */
+.student-ai-helper-tool-card > span > .icon-glyph {
+  display: block;
+}
+
+/* Practice page: info chip with IconGlyph */
+.student-practice-page .student-practice-info {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(111, 76, 255, 0.12);
+  color: #6d4cff;
+}

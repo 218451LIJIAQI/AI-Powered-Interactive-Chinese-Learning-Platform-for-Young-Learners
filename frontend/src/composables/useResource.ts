@@ -1,3 +1,29 @@
+/**
+ * Reactive {@code data / loading / error / reload} helper for any
+ * "load a single API resource into the page" pattern.
+ *
+ * <h2>Why a composable</h2>
+ * <p>Every dashboard page has the same shape: declare a loader,
+ * show a spinner while it runs, render data on success, surface a
+ * user-friendly error on failure. Inlining that everywhere drifts
+ * over time — this composable bakes in:</p>
+ * <ul>
+ *   <li>The {@code resolveApiError} translation so error messaging
+ *       is consistent across the app.</li>
+ *   <li>Preview-mode fallbacks: when the QA preview deployment is
+ *       active and the API is unreachable or returns 404, the
+ *       supplied {@code fallback} fixture is shown instead of an
+ *       error so the demo flow stays usable.</li>
+ *   <li>{@code immediate} toggle so pages with deferred fetches
+ *       (e.g. fetch-on-tab-open) can opt out of the on-mount call.</li>
+ * </ul>
+ *
+ * <h2>Why guarded fallbacks</h2>
+ * <p>{@code canUseFallback} requires both a configured fallback AND
+ * an active preview session. This prevents a real backend outage
+ * during a normal anonymous session from silently rendering the
+ * demo data and masking a real production incident.</p>
+ */
 import { computed, onMounted, ref } from 'vue'
 
 import { appEnv } from '@/config/env'

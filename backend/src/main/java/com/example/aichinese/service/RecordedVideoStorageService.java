@@ -17,6 +17,19 @@ import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
 
+/**
+ * Persists teacher-uploaded lesson videos with the same defence-in-depth
+ * upload pipeline as {@link AiFileStorageService}: extension whitelist,
+ * Content-Type whitelist, and magic-byte verification.
+ *
+ * <p>Allowed types are MP4, WEBM, and QuickTime (MOV). Stored under
+ * the configured {@code app.upload.recorded-video-directory} with a
+ * randomly generated stored-file-name so the on-disk path is not
+ * guessable from the user-supplied original name. Marked
+ * {@code accessLevel=PRIVATE} — playback goes through
+ * {@link LiveLearningAccessService} which enforces enrolment + paid
+ * access before issuing the streaming response.</p>
+ */
 @Service
 public class RecordedVideoStorageService {
 

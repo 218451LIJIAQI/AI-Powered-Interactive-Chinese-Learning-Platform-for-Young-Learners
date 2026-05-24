@@ -2,6 +2,20 @@ package com.example.aichinese.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Strongly-typed binding for the {@code app.ai.*} configuration block.
+ *
+ * <p>Carries the AI provider settings consumed by both the runtime AI
+ * service and the {@link AiProductionGuard} startup validator. Setters
+ * for {@link #timeoutSeconds} and {@link #maxOutputTokens} validate
+ * their range eagerly so a typo in {@code application.yml} fails at
+ * binding time rather than at first request.</p>
+ *
+ * <p>The class is intentionally a mutable JavaBean (rather than a
+ * {@code record}) because Spring Boot relaxed-binding requires setter
+ * methods to support both kebab-case and SCREAMING_SNAKE_CASE
+ * environment-variable overrides for the same property name.</p>
+ */
 @ConfigurationProperties(prefix = "app.ai")
 public class AiProperties {
 

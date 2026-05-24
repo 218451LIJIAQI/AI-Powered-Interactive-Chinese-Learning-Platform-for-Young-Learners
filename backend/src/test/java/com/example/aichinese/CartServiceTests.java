@@ -20,6 +20,12 @@ import com.example.aichinese.service.EntitlementService;
 import com.example.aichinese.service.PurchasableItemService;
 import com.example.aichinese.service.StudentLearningAccessService;
 
+/**
+ * Unit coverage for {@code CartService}'s idempotency edges —
+ * notably that {@code clearCartIfExists} is a no-op when no cart
+ * row exists, so an early-pay flow can call it unconditionally
+ * without 404-ing.
+ */
 class CartServiceTests {
 
     @Test

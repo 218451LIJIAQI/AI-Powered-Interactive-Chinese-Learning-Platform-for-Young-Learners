@@ -16,6 +16,18 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Stylised stand-in avatar used everywhere the platform shows a
+ * user (student / teacher / parent / admin) without an uploaded
+ * profile picture. Built entirely from CSS shapes for the same
+ * reasons as {@link PandaIllustration} — no asset weight and
+ * fully themable through the `accent` prop.
+ *
+ * `kind` chooses the face / hair style. The `hijab` kind exists
+ * because Malaysia is a target market and showing inclusive
+ * default avatars matters for first-time learners' sense of
+ * belonging.
+ */
 import { computed } from 'vue'
 
 const props = withDefaults(

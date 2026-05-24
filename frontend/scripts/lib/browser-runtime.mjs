@@ -1,3 +1,31 @@
+/**
+ * Shared runtime helpers for the `browser-qa-*` scripts.
+ *
+ * <p>Centralises two concerns that every QA script needs:
+ *   1. Locating an installed Chromium-compatible browser without
+ *      asking the developer to install Puppeteer / Playwright.
+ *   2. Polling an HTTP endpoint until it returns 200 so the
+ *      scripts can synchronise with backend / Vite startup.</p>
+ *
+ * <h2>Why no `puppeteer-core` dependency</h2>
+ * The browser-QA tree is intentionally dependency-free so a clean
+ * `npm install` of the frontend does not pull in a ~300 MB Chromium
+ * download on every developer machine. Each QA script speaks the
+ * Chrome DevTools Protocol over WebSocket directly against a
+ * locally-installed browser.
+ *
+ * <h2>Search order for the browser binary</h2>
+ * Explicit env vars beat OS defaults so CI / Docker can override:
+ *   1. {@code CHROME_PATH} (de-facto convention, used by many tools)
+ *   2. {@code QA_CHROME_PATH} (our own override, matches `QA_*` env
+ *      prefix used by the rest of the QA scripts)
+ *   3. Per-platform default install locations for Chrome, Chrome
+ *      Beta, Chromium, Microsoft Edge, Brave.
+ *
+ * The function throws a clear, actionable error listing the
+ * candidate paths it tried when no browser is found, rather than
+ * letting `spawn` fail with a cryptic ENOENT.
+ */
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

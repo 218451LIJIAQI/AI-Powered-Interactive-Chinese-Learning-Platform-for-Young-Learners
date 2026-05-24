@@ -30,6 +30,16 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Inline sparkline chart used on every persona's dashboard hero and
+ * the admin analytics surface. Drawn as a simple SVG polyline so
+ * there is no external charting library dependency (which would
+ * dwarf the rest of the component bundle).
+ *
+ * The chart normalises the value range itself so callers don't
+ * have to pre-process the analytics response — pass the trend
+ * points and the chart figures out the y-axis scaling.
+ */
 import { computed } from 'vue'
 
 import type { AnalyticsTrendPoint } from '@/types/api'

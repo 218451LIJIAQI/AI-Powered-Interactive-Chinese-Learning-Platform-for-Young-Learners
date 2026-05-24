@@ -21,6 +21,7 @@ import com.example.aichinese.entity.PayoutRequest;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.PayoutStatus;
+import com.example.aichinese.entity.enums.TeacherEarningStatus;
 import com.example.aichinese.repository.PayoutRequestRepository;
 import com.example.aichinese.repository.TeacherEarningRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
@@ -30,6 +31,13 @@ import com.example.aichinese.service.CommerceMoneyService;
 import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.PayoutService;
 
+/**
+ * Unit coverage for {@code PayoutService} — pins the
+ * lock-then-check-balance ordering so two concurrent payout requests
+ * cannot overdraw the teacher's AVAILABLE earnings, and the one-way
+ * state machine (PENDING → APPROVED → PAID / REJECTED) with earnings
+ * status moving in lock-step.
+ */
 class PayoutServiceTests {
 
     @Test
@@ -83,7 +91,7 @@ class PayoutServiceTests {
     }
 
     private void mockCommittedBalance(Fixture fixture, BigDecimal currentNetAmount, BigDecimal committedPayoutAmount) {
-        when(fixture.teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(200L, "REFUNDED"))
+        when(fixture.teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(200L, TeacherEarningStatus.REFUNDED))
                 .thenReturn(currentNetAmount);
         when(fixture.payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                 eq(200L),

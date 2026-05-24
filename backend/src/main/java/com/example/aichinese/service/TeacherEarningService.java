@@ -8,9 +8,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.entity.OrderItem;
 import com.example.aichinese.entity.TeacherEarning;
+import com.example.aichinese.entity.enums.TeacherEarningStatus;
 import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.TeacherEarningRepository;
 
+/**
+ * Creates {@link TeacherEarning} ledger rows when an order is paid
+ * and marks them refunded when a refund is processed.
+ *
+ * <p>Earnings are computed line-by-line: gross = line total, commission
+ * = gross × {@code platform_commission_rate}, net = gross − commission.
+ * Currency arithmetic flows through {@link CommerceMoneyService} so
+ * the math matches the rest of the commerce stack. Idempotent: an
+ * earning row is only created once per {@link OrderItem}; subsequent
+ * webhook retries see the existing row and skip.</p>
+ */
 @Service
 public class TeacherEarningService {
 
@@ -46,7 +58,7 @@ public class TeacherEarningService {
             earning.setGrossAmount(commerceMoneyService.normalize(orderItem.getLineTotal()));
             earning.setCommissionAmount(commerceMoneyService.percentage(orderItem.getLineTotal(), commissionRate));
             earning.setNetAmount(commerceMoneyService.subtract(earning.getGrossAmount(), earning.getCommissionAmount()));
-            earning.setEarningStatus("AVAILABLE");
+            earning.setEarningStatus(TeacherEarningStatus.AVAILABLE);
             teacherEarningRepository.save(earning);
         }
     }
@@ -56,7 +68,7 @@ public class TeacherEarningService {
         List<OrderItem> orderItems = orderItemRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
         for (OrderItem orderItem : orderItems) {
             teacherEarningRepository.findByOrderItemId(orderItem.getId())
-                    .ifPresent(earning -> earning.setEarningStatus("REFUNDED"));
+                    .ifPresent(earning -> earning.setEarningStatus(TeacherEarningStatus.REFUNDED));
         }
     }
 }

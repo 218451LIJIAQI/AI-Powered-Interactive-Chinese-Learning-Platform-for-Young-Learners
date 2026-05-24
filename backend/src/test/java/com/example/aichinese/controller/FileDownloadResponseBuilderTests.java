@@ -10,6 +10,14 @@ import org.springframework.http.ResponseEntity;
 
 import com.example.aichinese.service.StoredFileDownload;
 
+/**
+ * Unit coverage for {@code FileDownloadResponseBuilder} — pins the
+ * MIME fallback chain (stored content-type → media-type sniff →
+ * {@code application/octet-stream}), invalid-content-type tolerance,
+ * UTF-8 filename encoding for non-ASCII names, and the
+ * {@code Cache-Control: no-store} hygiene applied to every private
+ * download.
+ */
 class FileDownloadResponseBuilderTests {
 
     @Test

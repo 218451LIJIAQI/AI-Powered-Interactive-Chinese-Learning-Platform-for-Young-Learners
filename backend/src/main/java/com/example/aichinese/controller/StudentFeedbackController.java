@@ -14,6 +14,17 @@ import com.example.aichinese.dto.communication.StudentTeacherFeedbackResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.TeacherFeedbackService;
 
+/**
+ * Student-side read endpoints for teacher-authored feedback targeting
+ * the calling student (lesson progress / quiz attempt / live-class
+ * enrolment feedback).
+ *
+ * <p>Strictly read-only — students cannot mutate or delete feedback;
+ * the write path is owned by {@link TeacherFeedbackController}.
+ * Row-level access is enforced at the service layer
+ * ({@code TeacherFeedbackService}) so a forged path-id pointing at
+ * another student's row fails with 404 instead of leaking content.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/students/feedback")

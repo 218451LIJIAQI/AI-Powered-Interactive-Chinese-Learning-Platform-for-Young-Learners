@@ -94,12 +94,4 @@ public interface QuizAttemptAnswerRepository extends JpaRepository<QuizAttemptAn
             @Param("freeAccessType") AccessType freeAccessType,
             Pageable pageable);
 
-    @Query("""
-            select distinct answer.question.questionType
-            from QuizAttemptAnswer answer
-            where answer.quizAttempt.student.id = :studentId
-              and answer.correct = false
-              and answer.question.questionType is not null
-            """)
-    List<String> findDistinctWrongAnswerQuestionTypes(@Param("studentId") Long studentId);
 }

@@ -359,6 +359,23 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin platform settings — feature flags, AI provider, reward
+ * policy, leaderboard window, content moderation rules, SMTP
+ * status, and other system-wide toggles.
+ *
+ * <h2>Why one page</h2>
+ * <p>Most settings flow through the same {@code adminApi.settings}
+ * pattern (load → edit → save). Grouping them into tabs on a
+ * single page reduces navigation churn for admins who routinely
+ * adjust multiple settings during incident response.</p>
+ *
+ * <h2>Side effects</h2>
+ * <p>Some settings have immediate runtime impact — e.g. flipping
+ * the AI provider to disabled stops new chat requests within the
+ * next polling tick. The page surfaces a warning for such fields
+ * so the admin knows the change is not just stored but live.</p>
+ */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 

@@ -16,8 +16,6 @@ import jakarta.persistence.LockModeType;
 
 public interface LessonProgressRepository extends JpaRepository<LessonProgress, Long> {
 
-    List<LessonProgress> findTop5ByStudentIdAndCompletedFalseOrderByUpdatedAtDesc(Long studentId);
-
     java.util.Optional<LessonProgress> findByStudentIdAndLessonId(Long studentId, Long lessonId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -29,8 +27,6 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
 
     long countByStudentId(Long studentId);
 
-    long countByStudentIdAndCompletedTrue(Long studentId);
-
     List<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId);
 
     Page<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId, Pageable pageable);
@@ -41,7 +37,4 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
     boolean existsByStudentIdAndLessonTeacherUserId(Long studentId, Long teacherUserId);
 
     boolean existsByStudentIdAndLessonIdAndLessonTeacherUserId(Long studentId, Long lessonId, Long teacherUserId);
-
-    @Query("select count(distinct lp.student.id) from LessonProgress lp where lp.lesson.teacher.id = :teacherId")
-    long countDistinctStudentsByTeacherId(@Param("teacherId") Long teacherId);
 }

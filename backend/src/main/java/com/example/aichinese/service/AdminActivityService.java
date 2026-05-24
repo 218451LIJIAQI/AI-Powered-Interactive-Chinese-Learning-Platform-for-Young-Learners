@@ -64,15 +64,30 @@ import com.example.aichinese.util.PaginationUtils;
 import jakarta.persistence.criteria.Predicate;
 
 /**
- * Full-CRUD admin façade for the six platform-managed learning activity
- * types (Flashcard, MatchingGame, ListeningExercise, TracingExercise,
- * DragDropActivity, StoryActivity). Admins use this service to curate the
- * global activity library; teachers are no longer involved in activity
- * authoring.
+ * Admin-side authoring of the six interactive activity types in the
+ * platform library: flashcards, matching games, listening exercises,
+ * drag-drop activities, tracing exercises, and story activities.
  *
- * Status lifecycle: an admin can move an activity between
- * {@link ContentStatus#DRAFT}, {@link ContentStatus#PUBLISHED} and
- * {@link ContentStatus#ARCHIVED}. New rows start as {@code DRAFT}.
+ * <h2>Why "platform library"</h2>
+ * <p>These activities used to be lesson-attached. They have been
+ * decoupled and now live in an admin-curated library so the same
+ * flashcard / story / matching game can be reused across many lessons
+ * and surfaced to students by age band, difficulty, and content
+ * status. {@link StudentActivityLibraryService} is the read-side
+ * companion; this class owns the write side.</p>
+ *
+ * <h2>Lifecycle</h2>
+ * <p>Each activity has its own {@link ContentStatus} (DRAFT /
+ * PUBLISHED / ARCHIVED). Only PUBLISHED rows are visible to students;
+ * status transitions are gated through {@link AdminActivityStatusUpdateRequest}
+ * to keep allowed transitions explicit and auditable.</p>
+ *
+ * <h2>Authoring invariants</h2>
+ * <p>Per-type validation lives in private helpers below — e.g.
+ * matching games must have at least one pair, drag-drop activities
+ * must define drop targets, story activities require at least one
+ * comprehension question. These checks run before commit so a
+ * malformed activity never reaches the student library.</p>
  */
 @Service
 public class AdminActivityService {

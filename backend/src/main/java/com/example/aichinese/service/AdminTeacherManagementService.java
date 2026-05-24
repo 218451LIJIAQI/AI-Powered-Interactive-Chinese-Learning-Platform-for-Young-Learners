@@ -5,6 +5,8 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -34,6 +36,25 @@ import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
+/**
+ * Admin-side workflow for teacher onboarding and oversight:
+ * application review, document verification, status changes
+ * (PENDING / APPROVED / SUSPENDED), and profile inspection.
+ *
+ * <h2>Verification flow</h2>
+ * <p>{@link TeacherVerificationDocument}s submitted by the teacher
+ * are reviewed and recorded as {@link TeacherVerificationReview}
+ * rows; the admin's note + decision is the audit trail. Approving a
+ * teacher requires every required document to have been reviewed,
+ * so the policy is "all green or stays pending".</p>
+ *
+ * <h2>Status changes</h2>
+ * <p>{@link TeacherStatus} transitions affect both the teacher's
+ * ability to author content and the visibility of their existing
+ * published content; suspension hides existing live content from
+ * the public surface while preserving the rows for audit / reactivation.
+ * All changes go through {@link AuditLogService}.</p>
+ */
 @Service
 public class AdminTeacherManagementService {
 
@@ -111,10 +132,8 @@ public class AdminTeacherManagementService {
                     ? cb.conjunction()
                     : cb.and(predicates.toArray(Predicate[]::new));
         }, pageable);
-        List<AdminTeacherListItemResponse> items = teachers.getContent().stream()
-                .map(this::toTeacherListItem)
-                .toList();
 
+        List<AdminTeacherListItemResponse> items = toTeacherListItemsFromPage(teachers.getContent());
         return new PageResponse<>(items, teachers.getNumber(), teachers.getSize(), teachers.getTotalElements(), teachers.getTotalPages());
     }
 
@@ -136,9 +155,7 @@ public class AdminTeacherManagementService {
         Page<TeacherProfile> teachers = teacherProfileRepository.findByTeacherStatusOrderByCreatedAtDesc(
                 TeacherStatus.PENDING,
                 PageRequest.of(safePage, safeSize));
-        List<AdminTeacherListItemResponse> items = teachers.getContent().stream()
-                .map(this::toTeacherListItem)
-                .toList();
+        List<AdminTeacherListItemResponse> items = toTeacherListItemsFromPage(teachers.getContent());
         return new PageResponse<>(items, safePage, safeSize, teachers.getTotalElements(), teachers.getTotalPages());
     }
 
@@ -152,8 +169,7 @@ public class AdminTeacherManagementService {
         // TeacherVerificationReview row, send a duplicate in-app
         // notification, AND fire a duplicate approval email — the email
         // duplicate is the worst of these because it is the only side
-        // effect that escapes the application boundary. Same bug family
-        // as PaymentService.markPaymentPaid (Wave 5.1).
+        // effect that escapes the application boundary.
         if (teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED) {
             return buildTeacherDetail(teacherProfile);
         }
@@ -258,15 +274,51 @@ public class AdminTeacherManagementService {
                 auditLogRepository.findTop10ByTargetTypeAndTargetIdOrderByCreatedAtDesc("TeacherProfile", teacherProfile.getId()));
     }
 
-    private AdminTeacherListItemResponse toTeacherListItem(TeacherProfile profile) {
-        TeacherVerificationReview latestReview = teacherVerificationReviewRepository
-                .findTopByTeacherIdOrderByReviewedAtDesc(profile.getId())
-                .orElse(null);
-        TeacherVerificationDocument latestDocument = teacherVerificationDocumentRepository
-                .findTopByTeacherIdOrderBySubmittedAtDesc(profile.getId())
-                .orElse(null);
-        long documentCount = teacherVerificationDocumentRepository.countByTeacherId(profile.getId());
-        return teacherManagementMapper.toAdminTeacherListItem(profile, documentCount, latestReview, latestDocument);
+    /**
+     * Converts a list of {@link TeacherProfile} entities to list-item DTOs
+     * using exactly 3 batch queries for the entire list (latest document,
+     * latest review, and document count per teacher), regardless of list size.
+     *
+     * <p>The previous per-row approach fired 3 queries per profile, producing
+     * 1 + 3N database round-trips for an N-item page. This method reduces that
+     * to a constant 1 + 3 queries per page request.
+     */
+    private List<AdminTeacherListItemResponse> toTeacherListItemsFromPage(List<TeacherProfile> profiles) {
+        if (profiles.isEmpty()) {
+            return List.of();
+        }
+        List<Long> teacherIds = profiles.stream().map(TeacherProfile::getId).toList();
+
+        Map<Long, TeacherVerificationDocument> latestDocumentByTeacherId =
+                teacherVerificationDocumentRepository.findLatestByTeacherIdIn(teacherIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                doc -> doc.getTeacher().getId(),
+                                doc -> doc,
+                                (existing, replacement) -> existing));
+
+        Map<Long, TeacherVerificationReview> latestReviewByTeacherId =
+                teacherVerificationReviewRepository.findLatestByTeacherIdIn(teacherIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                rev -> rev.getTeacher().getId(),
+                                rev -> rev,
+                                (existing, replacement) -> existing));
+
+        Map<Long, Long> documentCountByTeacherId =
+                teacherVerificationDocumentRepository.countByTeacherIdIn(teacherIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0],
+                                row -> (Long) row[1]));
+
+        return profiles.stream()
+                .map(profile -> teacherManagementMapper.toAdminTeacherListItem(
+                        profile,
+                        documentCountByTeacherId.getOrDefault(profile.getId(), 0L),
+                        latestReviewByTeacherId.get(profile.getId()),
+                        latestDocumentByTeacherId.get(profile.getId())))
+                .toList();
     }
 
     private TeacherProfile findTeacherProfile(Long teacherId) {

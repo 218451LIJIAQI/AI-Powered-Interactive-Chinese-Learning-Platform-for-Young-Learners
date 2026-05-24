@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -26,10 +27,49 @@ import com.example.aichinese.entity.enums.PaymentStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Verifies and parses {@code POST /api/v1/payments/webhook/stripe}
+ * callbacks from Stripe, then hands the parsed event off to
+ * {@link PaymentService} for settlement.
+ *
+ * <h2>Signature verification</h2>
+ * <p>Stripe signs every webhook with HMAC-SHA-256 over
+ * {@code "{timestamp}.{payload}"}. This service:</p>
+ * <ol>
+ *   <li>Parses the {@code Stripe-Signature} header into its
+ *       {@code t} (timestamp) and {@code v1} (signature) components.</li>
+ *   <li>Rejects payloads older than
+ *       {@link #SIGNATURE_TOLERANCE_SECONDS} (5 minutes) to defeat
+ *       replay attacks.</li>
+ *   <li>Recomputes the HMAC with the configured signing secret and
+ *       compares using a constant-time check via {@link MessageDigest}
+ *       to defeat timing-side-channel attacks.</li>
+ * </ol>
+ *
+ * <h2>Event filtering</h2>
+ * <p>Only {@link #SUPPORTED_CHECKOUT_SESSION_EVENTS} are processed;
+ * other event types (e.g. subscription, dispute) are acknowledged
+ * with HTTP 200 so Stripe does not retry, but ignored business-wise.
+ * The session metadata is parsed via Jackson into a
+ * {@link PaymentProviderStatusResult} that {@link PaymentService}
+ * can settle idempotently.</p>
+ *
+ * <h2>Failure mode</h2>
+ * <p>Configuration problems (missing secret, wrong provider) raise
+ * {@link HttpStatus#SERVICE_UNAVAILABLE} so Stripe retries instead of
+ * dead-lettering the event; signature / payload problems raise
+ * {@link HttpStatus#BAD_REQUEST} so Stripe stops retrying obviously
+ * forged or corrupted callbacks.</p>
+ */
 @Service
 public class StripeWebhookService {
 
     private static final long SIGNATURE_TOLERANCE_SECONDS = 300;
+    private static final Set<String> SUPPORTED_CHECKOUT_SESSION_EVENTS = Set.of(
+            "CHECKOUT.SESSION.COMPLETED",
+            "CHECKOUT.SESSION.ASYNC_PAYMENT_SUCCEEDED",
+            "CHECKOUT.SESSION.ASYNC_PAYMENT_FAILED",
+            "CHECKOUT.SESSION.EXPIRED");
 
     private final PaymentProperties paymentProperties;
     private final PaymentService paymentService;
@@ -51,6 +91,18 @@ public class StripeWebhookService {
         String eventId = text(root, "id");
         String eventType = text(root, "type");
         JsonNode objectNode = root.path("data").path("object");
+        if (!isSupportedCheckoutSessionEvent(eventType)) {
+            return new StripeWebhookResultResponse(
+                    eventId,
+                    eventType,
+                    null,
+                    PaymentStatus.PENDING,
+                    statusSummary(eventType, text(objectNode, "status"), text(objectNode, "payment_status")),
+                    false);
+        }
+        if (!"checkout.session".equals(text(objectNode, "object"))) {
+            throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook payload object is not a checkout session.");
+        }
         String sessionId = text(objectNode, "id");
         if (sessionId == null || sessionId.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook payload is missing a checkout session id.");
@@ -173,18 +225,25 @@ public class StripeWebhookService {
         String normalizedEvent = normalize(eventType);
         String normalizedSession = normalize(sessionStatus);
         String normalizedPayment = normalize(paymentStatus);
-        if ("CHECKOUT.SESSION.COMPLETED".equals(normalizedEvent)
-                || "PAID".equals(normalizedPayment)
-                || "NO_PAYMENT_REQUIRED".equals(normalizedPayment)) {
+        if ("PAID".equals(normalizedPayment)
+                || "NO_PAYMENT_REQUIRED".equals(normalizedPayment)
+                || "CHECKOUT.SESSION.ASYNC_PAYMENT_SUCCEEDED".equals(normalizedEvent)) {
             return PaymentStatus.PAID;
+        }
+        if ("CHECKOUT.SESSION.ASYNC_PAYMENT_FAILED".equals(normalizedEvent)) {
+            return PaymentStatus.FAILED;
         }
         if ("CHECKOUT.SESSION.EXPIRED".equals(normalizedEvent) || "EXPIRED".equals(normalizedSession)) {
             return PaymentStatus.CANCELLED;
         }
         if ("COMPLETE".equals(normalizedSession) && "UNPAID".equals(normalizedPayment)) {
-            return PaymentStatus.FAILED;
+            return PaymentStatus.PENDING;
         }
         return PaymentStatus.PENDING;
+    }
+
+    private boolean isSupportedCheckoutSessionEvent(String eventType) {
+        return SUPPORTED_CHECKOUT_SESSION_EVENTS.contains(normalize(eventType));
     }
 
     private String statusSummary(String eventType, String sessionStatus, String paymentStatus) {

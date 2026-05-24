@@ -12,6 +12,13 @@ import com.example.aichinese.dto.commerce.PaymentProviderCheckoutResult;
 import com.example.aichinese.provider.MockPaymentProviderClient;
 import com.example.aichinese.service.model.CommerceCheckout;
 
+/**
+ * Unit coverage for the development-only {@code MockPaymentProviderClient}
+ * — pins the query-string assembly correctness (ampersand when
+ * {@code successUrl} already has parameters, question mark otherwise)
+ * and the deterministic-success contract so dev tests don't have to
+ * spin up a real provider.
+ */
 class MockPaymentProviderClientTests {
 
     @Test

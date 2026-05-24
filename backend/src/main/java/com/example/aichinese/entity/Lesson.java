@@ -21,6 +21,31 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Atomic teaching unit — the smallest piece of content a learner
+ * actually consumes.
+ *
+ * <p>A lesson can stand alone or live inside a {@link LearningModule},
+ * be sold individually, or be bundled into a {@link CoursePackage}.
+ * Companion entities attach the actual delivery payload:</p>
+ * <ul>
+ *   <li>{@link RecordedLessonVideo} — for {@link com.example.aichinese.entity.enums.LearningType#RECORDED}
+ *       and {@link com.example.aichinese.entity.enums.LearningType#HYBRID} lessons.</li>
+ *   <li>{@link LiveClass} — for {@link com.example.aichinese.entity.enums.LearningType#LIVE}
+ *       and {@code HYBRID} lessons.</li>
+ *   <li>{@link Quiz} — assessment attached to the lesson.</li>
+ *   <li>Activity entities (drag-drop, flashcards, etc.) — referenced via
+ *       intermediate join tables, not direct FKs.</li>
+ * </ul>
+ *
+ * <p>{@link #lessonContent} is the rich-text body shown above the
+ * media; persisted as {@code LONGTEXT} to accommodate teacher-authored
+ * long-form material.</p>
+ *
+ * <p>{@link #estimatedDurationMinutes} drives the catalogue badge and
+ * the student dashboard "study plan" estimator; it is a hint, not an
+ * enforced timer.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

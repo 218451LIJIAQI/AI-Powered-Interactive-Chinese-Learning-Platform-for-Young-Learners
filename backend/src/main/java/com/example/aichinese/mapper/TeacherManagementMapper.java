@@ -24,6 +24,25 @@ import com.example.aichinese.entity.TeacherVerificationReview;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 
+/**
+ * Entity-to-DTO translation for the teacher and admin management
+ * surfaces (teacher profile, verification documents/reviews, admin user
+ * listings, public teacher cards).
+ *
+ * <p>The {@code teaching_categories} column stores a comma-separated
+ * string for storage simplicity (vs a normalised join table) — see
+ * {@link #joinCategories(List)} / {@link #splitCategories(String)} for
+ * the contract. {@code joinCategories} silently de-duplicates,
+ * trims commas out of individual category names (since commas are the
+ * delimiter), and caps the stored list at 12 entries; the front-end
+ * enforces a matching cap on the input side so a well-behaved client
+ * never sees this truncation kick in.</p>
+ *
+ * <p>{@link #summarize(String, int)} produces ellipsis-suffixed
+ * one-line summaries for admin list views, preserving up to
+ * {@code maxLength - 3} content characters so the trailing
+ * "{@code ...}" fits without exceeding the cap.</p>
+ */
 @Component
 public class TeacherManagementMapper {
 
@@ -48,7 +67,7 @@ public class TeacherManagementMapper {
     public TeacherVerificationDocumentSummaryResponse toDocumentSummary(TeacherVerificationDocument document) {
         return new TeacherVerificationDocumentSummaryResponse(
                 document.getId(),
-                document.getDocumentType(),
+                document.getDocumentType().name(),
                 document.getDocumentNote(),
                 document.getUploadedFile().getFileName(),
                 document.getUploadedFile().getContentType(),

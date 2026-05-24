@@ -16,8 +16,21 @@ import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.entity.enums.AiChatSenderRole;
+import com.example.aichinese.entity.enums.AiRequestStatus;
+import com.example.aichinese.entity.enums.AiResponseReportReason;
+import com.example.aichinese.entity.enums.AiResponseReportStatus;
 import com.example.aichinese.entity.enums.NotificationType;
+import com.example.aichinese.entity.enums.TeacherEarningStatus;
+import com.example.aichinese.entity.enums.TeacherVerificationDocumentType;
 
+/**
+ * Pins the contract between Java enum values and the Flyway migration
+ * SQL definitions. Scans every {@code V*__*.sql} for the canonical
+ * enum strings and fails if a Java-side enum constant has no matching
+ * column / check-constraint clause — catching the classic
+ * "add enum value but forget the migration" bug at compile time.
+ */
 class SchemaEnumContractTests {
 
     private static final Pattern MIGRATION_VERSION = Pattern.compile("^V(\\d+)__.*\\.sql$");
@@ -35,6 +48,24 @@ class SchemaEnumContractTests {
 
         assertThat(databaseValues)
                 .containsExactlyInAnyOrderElementsOf(applicationValues);
+    }
+
+    @Test
+    void finalDomainCheckConstraintsContainEveryApplicationEnumValue() throws IOException {
+        String migration = Files.readString(Path.of(
+                "src",
+                "main",
+                "resources",
+                "db",
+                "migration",
+                "V14__final_database_contract_hardening.sql"));
+
+        assertCheckValues(migration, "chk_ai_chat_messages_sender_role", AiChatSenderRole.values());
+        assertCheckValues(migration, "chk_teacher_earnings_status", TeacherEarningStatus.values());
+        assertCheckValues(migration, "chk_ai_usage_logs_status", AiRequestStatus.values());
+        assertCheckValues(migration, "chk_ai_response_reports_status", AiResponseReportStatus.values());
+        assertCheckValues(migration, "chk_ai_response_reports_reason_category", AiResponseReportReason.values());
+        assertCheckValues(migration, "chk_teacher_verification_documents_type", TeacherVerificationDocumentType.values());
     }
 
     private Set<String> latestNotificationTypeEnumValues() throws IOException {
@@ -74,5 +105,33 @@ class SchemaEnumContractTests {
             values.add(valueMatcher.group(1).trim().toUpperCase(Locale.ROOT));
         }
         return values;
+    }
+
+    private static void assertCheckValues(String migration, String constraintName, Enum<?>[] applicationEnumValues) {
+        Set<String> databaseValues = checkValues(migration, constraintName);
+        Set<String> applicationValues = Arrays.stream(applicationEnumValues)
+                .map(Enum::name)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
+        assertThat(databaseValues)
+                .as("Database check values for " + constraintName)
+                .containsExactlyInAnyOrderElementsOf(applicationValues);
+    }
+
+    private static Set<String> checkValues(String migration, String constraintName) {
+        int constraintStart = migration.toLowerCase(Locale.ROOT)
+                .indexOf(constraintName.toLowerCase(Locale.ROOT));
+        if (constraintStart < 0) {
+            throw new AssertionError("Could not find check constraint " + constraintName);
+        }
+        int nextConstraintStart = migration.toLowerCase(Locale.ROOT).indexOf("add constraint", constraintStart + 1);
+        int statementEnd = migration.indexOf(';', constraintStart);
+        int constraintEnd = nextConstraintStart >= 0 && nextConstraintStart < statementEnd
+                ? nextConstraintStart
+                : statementEnd;
+        if (constraintEnd < 0) {
+            throw new AssertionError("Could not find statement terminator for check constraint " + constraintName);
+        }
+        return extractEnumValues(migration.substring(constraintStart, constraintEnd));
     }
 }

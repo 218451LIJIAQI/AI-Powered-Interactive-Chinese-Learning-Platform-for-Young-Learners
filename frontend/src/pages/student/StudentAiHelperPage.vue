@@ -1,10 +1,5 @@
 <template>
   <div class="page-stack student-ai-helper-page">
-    <section class="student-simple-header">
-      <h1>Nǐ hǎo, {{ displayName }}! <span><IconGlyph name="fun" :size="26" /></span></h1>
-      <p>I'm SparkBot, your AI learning buddy. How can I help you with Mandarin today?</p>
-    </section>
-
     <DataNotice
       :using-fallback="usingFallback"
       :error="actionError || availabilityResource.error.value || progressResource.error.value || reportsResource.error.value || platformSettingsResource.error.value"
@@ -49,7 +44,11 @@
               autocomplete="off"
               placeholder="Type your question in English or Mandarin..."
             />
-            <button type="submit" :disabled="submitting.chat">
+            <button
+              type="submit"
+              :disabled="submitting.chat"
+              :aria-label="submitting.chat ? 'SparkBot is answering' : 'Send question to SparkBot'"
+            >
               <span v-if="submitting.chat">...</span>
               <IconGlyph v-else name="chevronRight" :size="18" />
             </button>
@@ -97,7 +96,7 @@
           </article>
 
           <article class="student-ai-helper-tool-card is-green">
-            <span>词</span>
+            <span><IconGlyph name="language" :size="24" /></span>
             <strong>Vocabulary Helper</strong>
             <p>Learn new words with meanings and examples.</p>
             <input v-model="wordForm.word" aria-label="Chinese word for vocabulary help" autocomplete="off" placeholder="苹果" />
@@ -137,7 +136,7 @@
           </article>
 
           <article class="student-ai-helper-tool-card is-red">
-            <span>字</span>
+            <span><IconGlyph name="file" :size="24" /></span>
             <strong>Character Help</strong>
             <p>{{ imageCapabilityMessage }}</p>
             <input v-model="writingForm.targetCharacter" aria-label="Target Chinese character for writing feedback" autocomplete="off" placeholder="好" :disabled="imageUploadDisabled" />
@@ -154,7 +153,7 @@
           </article>
 
           <article class="student-ai-helper-tool-card is-teal">
-            <span>测</span>
+            <span><IconGlyph name="quiz" :size="24" /></span>
             <strong>Quiz Maker</strong>
             <p>Create a quick self-practice quiz from a topic.</p>
             <input v-model="quizForm.topic" aria-label="Quiz topic" autocomplete="off" placeholder="Greetings" />
@@ -177,7 +176,7 @@
 
         <section class="student-ai-helper-result-grid">
           <div v-if="vocabularyReply" class="student-ai-helper-result">
-            <strong>{{ vocabularyReply.chineseWord }} • {{ vocabularyReply.pinyin }}</strong>
+            <strong>{{ vocabularyReply.chineseWord }} - {{ vocabularyReply.pinyin }}</strong>
             <p>{{ vocabularyReply.englishMeaning }} / {{ vocabularyReply.bahasaMelayuMeaning }}</p>
             <small>{{ vocabularyReply.exampleSentence }}</small>
           </div>
@@ -190,17 +189,17 @@
             <p>{{ recommendationReply.weakAreaSummary }}</p>
           </div>
           <div v-if="quizReply" class="student-ai-helper-result">
-            <strong>{{ quizReply.title }} • {{ quizReply.status }}</strong>
+            <strong>{{ quizReply.title }} - {{ quizReply.status }}</strong>
             <p>{{ quizReply.questions[0]?.questionText || 'Quiz draft is ready.' }}</p>
-            <small>{{ quizReply.questions.length }} question{{ quizReply.questions.length === 1 ? '' : 's' }} • {{ quizReply.usageMode }}</small>
+            <small>{{ quizReply.questions.length }} question{{ quizReply.questions.length === 1 ? '' : 's' }} - {{ quizReply.usageMode }}</small>
           </div>
           <div v-if="pronunciationReply" class="student-ai-helper-result">
-            <strong>Pronunciation Feedback • {{ pronunciationReply.status }}</strong>
+            <strong>Pronunciation Feedback - {{ pronunciationReply.status }}</strong>
             <p>{{ pronunciationReply.feedback || pronunciationReply.pronunciationComment }}</p>
             <small>{{ pronunciationReply.toneComment || pronunciationReply.improvementTips }}</small>
           </div>
           <div v-if="writingReply" class="student-ai-helper-result">
-            <strong>Writing Feedback • {{ writingReply.status }}</strong>
+            <strong>Writing Feedback - {{ writingReply.status }}</strong>
             <p>{{ writingReply.feedback || writingReply.clarityComment }}</p>
             <small>{{ writingReply.improvementTips || writingReply.encouragement }}</small>
           </div>
@@ -218,7 +217,7 @@
 
       <aside class="student-ai-helper-side">
         <article class="student-ai-helper-status-card">
-          <strong><IconGlyph name="shield" :size="18" /> Safe • Friendly • Supportive</strong>
+          <strong><IconGlyph name="shield" :size="18" /> Safe, friendly, supportive AI</strong>
           <span>{{ availability.status }}</span>
           <p>{{ platformSettings.aiDisclaimerText }}</p>
           <small>{{ availability.message }}</small>
@@ -268,6 +267,28 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student-facing AI helper — chat tutor, quiz generator, story
+ * generator, vocabulary helper, sentence practice, pronunciation
+ * and writing feedback.
+ *
+ * <h2>Availability gate</h2>
+ * <p>The page calls {@code aiApi.availability()} on mount; when the
+ * provider is disabled or mis-configured the UI swaps the chat
+ * input for the friendly "AI tutor unavailable" copy and disables
+ * generator buttons. Per-feature endpoints still degrade gracefully
+ * to deterministic stubs so a learner never sees a 500.</p>
+ *
+ * <h2>Audio / image uploads</h2>
+ * <p>Pronunciation + writing feedback include client-side mime +
+ * size validation before submission; the backend re-validates with
+ * magic-byte sniffing so the client check is purely a UX nicety.</p>
+ *
+ * <h2>Reporting</h2>
+ * <p>"Report this response" submits through
+ * {@code aiApi.reportResponse()} — the report goes into the admin
+ * AI moderation queue.</p>
+ */
 import { computed, reactive, ref } from 'vue'
 
 import { aiApi, publicApi, studentApi } from '@/api/services'
@@ -364,7 +385,6 @@ const platformSettings = computed(
       aiSafetyCheck: true,
     },
 )
-const displayName = computed(() => auth.currentUser?.studentProfile?.displayName ?? auth.displayName.split(' ')[0] ?? 'Learner')
 const learnerLevelLabel = computed(() => {
   if (progress.value.lastActivitySummary) return progress.value.lastActivitySummary
   if (progress.value.overallCompletionPercent >= 80) return 'Advanced learner'

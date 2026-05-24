@@ -15,9 +15,23 @@ import org.springframework.lang.NonNull;
 
 import com.example.aichinese.entity.PaymentRecord;
 import com.example.aichinese.entity.enums.PaymentStatus;
+import com.example.aichinese.repository.projection.StatusCountProjection;
 
 import jakarta.persistence.LockModeType;
 
+/**
+ * Persistence operations for {@link PaymentRecord} — the immutable
+ * audit trail of every payment-provider interaction attached to an
+ * {@link com.example.aichinese.entity.Order}.
+ *
+ * <p>Read-paths consistently eager-fetch {@code order} +
+ * {@code student.user} so the response mapper never regresses into
+ * lazy lookups for the (frequent) admin / student payment-history
+ * views. Write-paths use {@link Lock pessimistic locks} on the
+ * {@code (providerName, providerReference)} natural key to keep the
+ * webhook-vs-poll race that triggers payment finalisation from
+ * double-applying the {@code PAID} transition.</p>
+ */
 public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, Long> {
 
     long countByPaymentStatus(PaymentStatus paymentStatus);
@@ -77,5 +91,5 @@ public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, Lo
      * directly and only returns at most one row per enum value.
      */
     @Query("select pr.paymentStatus as status, count(pr) as count from PaymentRecord pr group by pr.paymentStatus")
-    List<com.example.aichinese.repository.projection.StatusCountProjection> groupByPaymentStatus();
+    List<StatusCountProjection> groupByPaymentStatus();
 }

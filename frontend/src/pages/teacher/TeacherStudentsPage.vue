@@ -269,6 +269,21 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Teacher students roster + progress drill-down.
+ *
+ * <h2>Scope</h2>
+ * <p>The roster endpoint returns only students enrolled in the
+ * teacher's classes (server-side filter). The teacher can drill
+ * into a student card to see attempt history and assign feedback,
+ * which jumps to {@link TeacherFeedbackPage}.</p>
+ *
+ * <h2>PII boundary</h2>
+ * <p>The teacher sees display name and class membership only —
+ * email and other contact details remain hidden, by mapper, so
+ * the teacher can never accidentally leak a learner's contact info
+ * through a screenshot or shared CSV.</p>
+ */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 

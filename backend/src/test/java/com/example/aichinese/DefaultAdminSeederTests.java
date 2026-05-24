@@ -11,6 +11,11 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.UserRepository;
 
+/**
+ * Pins the {@code DataSeeder} contract when bootstrap-admin env vars
+ * are configured: a default admin user is provisioned with the ADMIN
+ * role and the supplied credentials, ready for first-run login.
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

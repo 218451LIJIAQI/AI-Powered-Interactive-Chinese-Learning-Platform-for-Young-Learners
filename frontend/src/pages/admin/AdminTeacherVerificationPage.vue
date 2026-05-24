@@ -277,6 +277,17 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin teacher-verification queue — approve / reject / request
+ * resubmission for teachers in PENDING_APPROVAL or REVIEWING state.
+ *
+ * <p>Shows the teacher's submitted credentials, the document URLs
+ * (rendered through {@link safeHttpUrl} for XSS defence), and an
+ * admin-only note field that is preserved on the teacher's profile
+ * so they know what to fix. Decisions are append-only — once an
+ * approval / rejection is recorded, the page no longer lets the
+ * admin toggle it without going through {@link AdminUsersPage}.</p>
+ */
 import { computed, ref, watch } from 'vue'
 
 import { adminApi } from '@/api/services'

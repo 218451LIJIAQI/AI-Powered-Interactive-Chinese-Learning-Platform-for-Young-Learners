@@ -20,6 +20,13 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Themed card wrapping a form inside a dashboard page. Standardises
+ * the header (icon badge + title + optional subtitle), the body
+ * slot, and the primary submit button with its `submitting` /
+ * `disabled` states — keeping the look of every "add lesson",
+ * "edit profile", "send notification" form consistent.
+ */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 withDefaults(

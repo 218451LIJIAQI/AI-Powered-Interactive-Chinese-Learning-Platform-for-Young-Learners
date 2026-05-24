@@ -4,6 +4,16 @@ springdoc:
   swagger-ui:
     enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
 
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    # Explicit production guard: schema erasure must never be possible in prod.
+    clean-disabled: true
+
 app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
@@ -16,3 +26,14 @@ app:
     # this resolves to no-op/mock, the Stripe key is missing, or the payment
     # return URLs still point at localhost/non-HTTPS targets.
     provider: ${PAYMENT_PROVIDER:stripe}
+
+# Production log level overrides: suppress framework DEBUG/TRACE noise
+# that bloats log aggregators and may expose internal stack traces.
+logging:
+  level:
+    root: WARN
+    com.example.aichinese: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN

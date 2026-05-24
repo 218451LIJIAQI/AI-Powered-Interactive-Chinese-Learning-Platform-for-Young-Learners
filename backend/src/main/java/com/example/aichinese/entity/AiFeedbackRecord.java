@@ -14,6 +14,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Persistent record of a non-conversational AI response, primarily the
+ * {@code PRONUNCIATION_FEEDBACK} and {@code WRITING_FEEDBACK} flows
+ * where the student uploads media (audio clip, handwritten character)
+ * and the AI returns a textual critique.
+ *
+ * <p>Unlike {@link AiChatSession} which stores a multi-turn transcript,
+ * each {@code AiFeedbackRecord} captures a one-shot exchange and links
+ * back to the underlying {@link UploadedFile} so the original media is
+ * retained for parental review and AI-safety auditing.</p>
+ *
+ * <p>{@link #status} is a free-form short string (e.g. {@code "success"},
+ * {@code "model_unavailable"}) recorded primarily for diagnostics and
+ * historical telemetry; the canonical AI request outcome lives in the
+ * companion {@link AiUsageLog} row keyed by the same {@code featureKey}
+ * and {@code userId}.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -18,6 +18,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Pair-matching game in the platform practice library.
+ *
+ * <p>The learner is presented with two columns and must connect each
+ * left-side prompt to its right-side counterpart. The actual pairs
+ * live in {@link MatchingGameItem} rows.</p>
+ *
+ * <p>Shares the activity metadata vocabulary with the other practice
+ * library entities for uniform filtering.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

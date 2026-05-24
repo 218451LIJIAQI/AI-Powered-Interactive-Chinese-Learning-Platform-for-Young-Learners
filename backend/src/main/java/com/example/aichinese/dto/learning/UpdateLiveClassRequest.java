@@ -9,6 +9,33 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Body for {@code PUT /api/v1/teachers/live-classes/{id}} — the
+ * teacher edits an existing live class.
+ *
+ * <p>Mirrors {@link CreateLiveClassRequest} field-for-field with two
+ * subtle differences:</p>
+ * <ul>
+ *   <li>{@link #startTime} is <em>not</em> annotated {@code @Future}.
+ *       Update can re-confirm a class that has already started (e.g.
+ *       changing only the meeting link mid-session) without
+ *       artificially failing validation.</li>
+ *   <li>{@link #status} accepts any
+ *       {@link com.example.aichinese.entity.enums.LiveClassStatus}
+ *       transition that
+ *       {@code LiveLearningAccessService.validateLiveClassStatusTransition}
+ *       allows (e.g. {@code SCHEDULED → ONGOING},
+ *       {@code SCHEDULED → CANCELLED}); illegal transitions raise
+ *       400. Terminal states ({@code COMPLETED}, {@code CANCELLED})
+ *       reject any further edits via
+ *       {@code LiveClassService.ensureLiveClassEditable}.</li>
+ * </ul>
+ *
+ * <p>For the dedicated reschedule and status-only flows see
+ * {@link RescheduleLiveClassRequest} (auto-flips status to
+ * {@code RESCHEDULED}) and {@link UpdateLiveClassStatusRequest}
+ * (status-only PATCH).</p>
+ */
 public record UpdateLiveClassRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must be 200 characters or fewer.")

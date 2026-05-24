@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.TeacherEarning;
+import com.example.aichinese.entity.enums.TeacherEarningStatus;
 
 public interface TeacherEarningRepository extends JpaRepository<TeacherEarning, Long> {
 
@@ -30,11 +31,11 @@ public interface TeacherEarningRepository extends JpaRepository<TeacherEarning, 
     BigDecimal sumNetAmountByTeacherId(@Param("teacherId") Long teacherId);
 
     @Query("select coalesce(sum(te.grossAmount), 0) from TeacherEarning te where te.teacher.id = :teacherId and te.earningStatus <> :earningStatus")
-    BigDecimal sumGrossAmountByTeacherIdAndEarningStatusNot(@Param("teacherId") Long teacherId, @Param("earningStatus") String earningStatus);
+    BigDecimal sumGrossAmountByTeacherIdAndEarningStatusNot(@Param("teacherId") Long teacherId, @Param("earningStatus") TeacherEarningStatus earningStatus);
 
     @Query("select coalesce(sum(te.netAmount), 0) from TeacherEarning te where te.teacher.id = :teacherId and te.earningStatus <> :earningStatus")
-    BigDecimal sumNetAmountByTeacherIdAndEarningStatusNot(@Param("teacherId") Long teacherId, @Param("earningStatus") String earningStatus);
+    BigDecimal sumNetAmountByTeacherIdAndEarningStatusNot(@Param("teacherId") Long teacherId, @Param("earningStatus") TeacherEarningStatus earningStatus);
 
-    @Query("select coalesce(sum(te.netAmount), 0) from TeacherEarning te where te.teacher.id = :teacherId and te.earningStatus = 'AVAILABLE'")
+    @Query("select coalesce(sum(te.netAmount), 0) from TeacherEarning te where te.teacher.id = :teacherId and te.earningStatus = com.example.aichinese.entity.enums.TeacherEarningStatus.AVAILABLE")
     BigDecimal sumAvailableNetAmountByTeacherId(@Param("teacherId") Long teacherId);
 }

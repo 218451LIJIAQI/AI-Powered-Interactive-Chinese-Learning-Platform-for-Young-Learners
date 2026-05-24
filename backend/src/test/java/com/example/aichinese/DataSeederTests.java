@@ -14,6 +14,13 @@ import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
 
+/**
+ * Pins the {@code DataSeeder} contract when the bootstrap-admin
+ * env vars are blank: roles + reference data are still seeded, but
+ * no default admin account is created. Prevents a future refactor
+ * from silently provisioning a privileged account without explicit
+ * configuration.
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=",
         "DEFAULT_ADMIN_PASSWORD="

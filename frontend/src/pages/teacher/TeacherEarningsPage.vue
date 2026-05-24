@@ -113,6 +113,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Teacher earnings and payout request surface.
+ *
+ * <p>Shows earnings ledger, current balance, completed payouts, and
+ * the in-page form for requesting a new payout. The page never
+ * computes balances client-side — all amounts come from
+ * {@code teacherApi.earnings()} which derives them from approved
+ * payments minus paid-out payouts (single source of truth).</p>
+ */
 import { computed, reactive, ref } from 'vue'
 
 import { teacherApi } from '@/api/services'

@@ -19,6 +19,23 @@ import com.example.aichinese.entity.enums.TeacherStatus;
 
 import jakarta.persistence.LockModeType;
 
+/**
+ * Persistence operations for {@link TeacherProfile} — the teacher-side
+ * profile one-to-one with a {@link com.example.aichinese.entity.User},
+ * carrying verification status, bio, public-listing flag and
+ * teaching credentials.
+ *
+ * <p>The pessimistic-write {@link #findLockedByUserId(Long)} variant
+ * underpins teacher verification status transitions
+ * ({@code PENDING → APPROVED / REJECTED}): two admins approving the
+ * same teacher concurrently would otherwise race the
+ * {@code teacher_status} flip plus the downstream entitlement updates.</p>
+ *
+ * <p>{@link #findByIdAndTeacherStatusAndPublicVisibleTrue(Long, TeacherStatus)}
+ * pushes the discovery filter (must be APPROVED + opted-in to the
+ * public directory) down to SQL so the public profile page never leaks
+ * unapproved or hidden teachers.</p>
+ */
 public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, Long>, JpaSpecificationExecutor<TeacherProfile> {
 
     Optional<TeacherProfile> findByUserId(Long userId);

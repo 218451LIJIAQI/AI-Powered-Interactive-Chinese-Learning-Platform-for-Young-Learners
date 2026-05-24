@@ -35,6 +35,13 @@ import com.example.aichinese.service.PurchasableItemService;
 import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
+/**
+ * Unit coverage for {@code CheckoutService} — pins the free-item
+ * short-circuit (no provider call), the entitlement re-check at
+ * checkout time (defence against concurrent payment in another tab),
+ * and the price snapshotting from {@code ResolvedPurchasableItem} so
+ * mid-checkout price changes cannot re-bill the learner.
+ */
 class CheckoutServiceTests {
 
     @Test

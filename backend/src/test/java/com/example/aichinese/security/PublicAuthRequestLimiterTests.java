@@ -12,6 +12,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Unit coverage for {@code PublicAuthRequestLimiter} — pins the
+ * separate quotas for register (IP-keyed) and forgot-password
+ * (IP+email-keyed) flows so the limiter applies the right window
+ * per surface, and the 429 rejection after exhaustion.
+ */
 class PublicAuthRequestLimiterTests {
 
     private static final String IP = "203.0.113.7";

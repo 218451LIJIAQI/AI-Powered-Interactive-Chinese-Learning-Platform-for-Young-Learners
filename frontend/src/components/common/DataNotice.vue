@@ -19,6 +19,19 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Inline banner used by every page that hydrates data through
+ * `useResource`. Renders one of three tones:
+ *   - **fallback**: preview-mode demo data is being shown
+ *   - **error**: API call failed, surface the friendly message
+ *   - **success**: optimistic confirmation after a save action
+ *
+ * Renders nothing when none of the three states apply, so pages
+ * can drop it in unconditionally without a `v-if` wrapper.
+ * Carries `aria-live` semantics so screen-readers announce the
+ * notice with the right urgency (assertive for errors, polite
+ * for everything else).
+ */
 import { computed } from 'vue'
 
 import IconGlyph from './IconGlyph.vue'

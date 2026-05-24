@@ -19,6 +19,30 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Student-initiated request to refund a previously settled {@link Order}.
+ *
+ * <p>The lifecycle follows
+ * {@link com.example.aichinese.entity.enums.RefundStatus}:
+ * {@code PENDING → APPROVED → REFUNDED}, or
+ * {@code PENDING → REJECTED}. Approved-but-not-yet-settled requests
+ * sit in {@code APPROVED} until the provider returns the funds, at
+ * which point {@code RefundService} flips the row to {@code REFUNDED}
+ * and cascades the change into:</p>
+ * <ul>
+ *   <li>{@link Order#paymentStatus} → {@code REFUNDED}</li>
+ *   <li>Each affected {@link PaymentEntitlement} → {@code active = false}</li>
+ *   <li>Each affected {@link TeacherEarning} → {@code REFUNDED}
+ *       (clawback so the amount no longer counts toward payout)</li>
+ * </ul>
+ *
+ * <p>{@link #amount} is captured at request time so the eventual
+ * settlement amount is fixed even if the order total is later
+ * partially refunded through other channels.</p>
+ *
+ * <p>{@link #version} guards against concurrent admin decisions on the
+ * same request.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,7 +50,8 @@ import lombok.Setter;
 @Table(name = "refund_requests", indexes = {
         @Index(name = "idx_refund_requests_student_id", columnList = "student_id"),
         @Index(name = "idx_refund_requests_order_id", columnList = "order_id"),
-        @Index(name = "idx_refund_requests_status", columnList = "refund_status")
+        @Index(name = "idx_refund_requests_status", columnList = "refund_status"),
+        @Index(name = "idx_refund_requests_student_created_at", columnList = "student_id,created_at")
 })
 public class RefundRequest extends BaseEntity {
 

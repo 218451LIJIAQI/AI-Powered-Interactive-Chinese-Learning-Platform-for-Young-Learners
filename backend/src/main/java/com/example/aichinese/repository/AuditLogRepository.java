@@ -13,6 +13,18 @@ import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.AuditLog;
 
+/**
+ * Persistence operations for {@link AuditLog} — the append-only ledger
+ * of every privileged platform action (auth events, content moderation,
+ * payment lifecycle changes, role updates, etc.).
+ *
+ * <p>Every method eager-fetches {@code actorUser} so the admin audit
+ * view renders the responsible user without an extra round-trip per
+ * row. The audit table grows on every protected action, so the
+ * {@link JpaSpecificationExecutor} {@link Page}/{@link Sort} variants
+ * push filtering and ordering down to the database — never load the
+ * full table just to slice / sort.</p>
+ */
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSpecificationExecutor<AuditLog> {
 
     @EntityGraph(attributePaths = { "actorUser" })

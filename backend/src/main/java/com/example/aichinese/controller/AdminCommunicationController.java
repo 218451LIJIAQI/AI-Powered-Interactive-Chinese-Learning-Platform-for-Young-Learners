@@ -27,6 +27,26 @@ import com.example.aichinese.service.NotificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Admin-side communication surface: cross-user notification
+ * dispatch, content moderation actions (warn / hide / restore), and
+ * the moderation audit history view.
+ *
+ * <h2>Moderation</h2>
+ * <p>Actions are recorded as {@link com.example.aichinese.entity.ContentModerationRecord}
+ * rows via {@link com.example.aichinese.service.ContentModerationService};
+ * each carries the admin note that the affected teacher will see, so
+ * a teacher contesting a decision can be shown the exact stated
+ * reason. Notes are sanitized + length-capped through
+ * {@link com.example.aichinese.util.AiInputSanitizer}.</p>
+ *
+ * <h2>Notifications</h2>
+ * <p>Admin-pushed notifications go through
+ * {@link com.example.aichinese.service.NotificationService}'s
+ * producer surface so dispatch, audit, and downstream side-effects
+ * (in-app + optional email fallback) stay uniform with system-
+ * generated notifications.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/admin")

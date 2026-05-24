@@ -38,6 +38,31 @@ import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UploadedFileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
+/**
+ * Centralised access-control for everything in the live-learning
+ * surface area: live classes, recorded lesson videos, and the
+ * student-side join / playback flows.
+ *
+ * <h2>Why one service</h2>
+ * <p>{@link LiveClassService}, {@link RecordedLessonService},
+ * {@link VideoProgressService}, and {@link StudentLearningService}
+ * all need to ask the same questions: "is this student allowed to
+ * see this live class / video?", "is the join window open?", "is the
+ * meeting URL safe to expose?". Concentrating those checks here keeps
+ * the policy auditable in one file.</p>
+ *
+ * <h2>Join-window policy</h2>
+ * <p>{@link #JOINABLE_STATUSES} ({@code SCHEDULED}, {@code ONGOING})
+ * combined with the per-class lead-time window determine when the
+ * meeting URL is released. {@code COMPLETED} / {@code CANCELLED}
+ * sessions never expose the URL again, even to the teacher, so
+ * post-class links cannot leak.</p>
+ *
+ * <h2>Meeting-platform allowlist</h2>
+ * <p>Meeting URLs are validated against the allowed schemes / hosts
+ * of {@link MeetingPlatform} so a teacher cannot trick a student into
+ * launching an arbitrary URL via the join button.</p>
+ */
 @Service
 public class LiveLearningAccessService {
 

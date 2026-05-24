@@ -52,6 +52,25 @@ import com.example.aichinese.service.PaymentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Comprehensive end-to-end MockMvc coverage of the commerce stack:
+ * cart, checkout, payment provider redirect, webhook settlement,
+ * entitlement creation, refund workflow, payout workflow, teacher
+ * earnings ledger, and platform commission rate.
+ *
+ * <p>The longest integration test in the project; pins the financial
+ * invariants the platform reconciles against:</p>
+ * <ul>
+ *   <li>Repurchase rejection via {@code EntitlementService}.</li>
+ *   <li>Currency precision through {@code CommerceMoneyService}
+ *       ({@code HALF_UP} / scale 2).</li>
+ *   <li>Webhook idempotency under retry storms.</li>
+ *   <li>Stripe webhook HMAC verification with constant-time compare.</li>
+ *   <li>Refund approval revokes the underlying entitlement.</li>
+ *   <li>Teacher earnings move PENDING → AVAILABLE → RESERVED → PAID
+ *       in lock-step with the order / payout state machine.</li>
+ * </ul>
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!",
@@ -595,7 +614,7 @@ class CommerceIntegrationTests {
         paymentRecord = paymentRecordRepository.save(paymentRecord);
 
         String payload = """
-                {"id":"evt_webhook_paid","type":"checkout.session.completed","data":{"object":{"id":"%s","status":"complete","payment_status":"paid"}}}
+                {"id":"evt_webhook_paid","type":"checkout.session.completed","data":{"object":{"id":"%s","object":"checkout.session","status":"complete","payment_status":"paid"}}}
                 """.formatted(sessionId).trim();
 
         mockMvc.perform(post("/api/v1/payments/webhooks/stripe")

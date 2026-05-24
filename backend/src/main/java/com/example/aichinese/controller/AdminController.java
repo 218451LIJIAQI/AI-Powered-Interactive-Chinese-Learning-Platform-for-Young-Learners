@@ -46,6 +46,31 @@ import com.example.aichinese.service.StoredFileDownload;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Admin persona REST surface — dashboard, content review queue,
+ * teacher management, user management, audit log, platform settings,
+ * commission rate, AI usage / report review, and analytics.
+ *
+ * <h2>Authorization</h2>
+ * <p>Class-level {@code hasRole("ADMIN")} is enforced in
+ * {@link com.example.aichinese.config.SecurityConfig}; this surface
+ * has no row-level filter because admins legitimately see everything.
+ * Every state-changing call writes an audit row via
+ * {@link com.example.aichinese.service.AuditLogService} so post-hoc
+ * forensics can reconstruct who did what.</p>
+ *
+ * <h2>Input validation</h2>
+ * <p>Free-text query parameters (search, status, sort) are
+ * {@code @Size}-capped at the controller boundary; JSON bodies use
+ * {@code @Valid}.</p>
+ *
+ * <h2>Sibling surfaces</h2>
+ * <p>Commerce-tier admin actions (refunds, payouts) live on
+ * {@link AdminCommerceController}; communication-tier (notifications,
+ * moderation) on {@link AdminCommunicationController}; activity
+ * library curation on {@link AdminActivityController}. This split
+ * keeps each file under the soft 500-line authoring cap.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -167,7 +192,7 @@ public class AdminController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
         StoredFileDownload download = adminTeacherManagementService.getTeacherDocument(currentUser, id);
-        return buildAttachmentDownloadResponse(download);
+        return FileDownloadResponseBuilder.buildAttachmentDownloadResponse(download);
     }
 
     @GetMapping("/users")
@@ -263,9 +288,5 @@ public class AdminController {
                         ManagedContentType.fromValue(contentType),
                         id,
                         request != null ? request.note() : null));
-    }
-
-    private ResponseEntity<Resource> buildAttachmentDownloadResponse(StoredFileDownload download) {
-        return FileDownloadResponseBuilder.buildAttachmentDownloadResponse(download);
     }
 }

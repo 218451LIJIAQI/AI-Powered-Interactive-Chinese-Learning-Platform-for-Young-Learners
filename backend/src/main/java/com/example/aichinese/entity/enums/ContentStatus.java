@@ -1,10 +1,142 @@
 package com.example.aichinese.entity.enums;
 
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * Editorial lifecycle of a teacher- or admin-managed piece of learning
+ * content (lesson, module, package, quiz, activity).
+ *
+ * <p>Originally designed around an admin-review workflow
+ * ({@link #SUBMITTED} → {@link #APPROVED}/{@link #REJECTED} →
+ * {@link #PUBLISHED}). Teacher-owned content now goes live immediately
+ * (no review), but the older states are retained so historic rows
+ * remain valid and admins can still moderate (see
+ * {@code TeacherContentAccessService} and {@code AdminContentReviewService}).</p>
+ *
+ * <p>Persisted with {@code @Enumerated(EnumType.STRING)} on numerous
+ * content entities. The constant names are part of the database
+ * contract and appear in the {@code content_status} ENUM column on
+ * eight tables — they MUST NOT be renamed or removed without a paired
+ * Flyway migration that updates every affected table.</p>
+ */
 public enum ContentStatus {
+
+    /** Author is still composing; not visible to anyone but the author. */
     DRAFT,
+
+    /** Author submitted to admin review; pending approval (legacy flow). */
     SUBMITTED,
+
+    /** Admin approved but not yet published (legacy flow). */
     APPROVED,
+
+    /** Admin declined; author may revise and resubmit. */
     REJECTED,
+
+    /** Visible to learners according to the content's access tier. */
     PUBLISHED,
-    ARCHIVED
+
+    /** No longer offered to learners; preserved for historical reference. */
+    ARCHIVED;
+
+    /**
+     * Statuses that an approved teacher may edit. Single source of truth
+     * mirrored by {@code TeacherContentAccessService.TEACHER_EDITABLE_STATUSES}.
+     */
+    public static final Set<ContentStatus> TEACHER_EDITABLE = Set.of(DRAFT, PUBLISHED, REJECTED);
+
+    /** Statuses that may be archived by the owning teacher. */
+    public static final Set<ContentStatus> TEACHER_ARCHIVABLE = Set.of(DRAFT, PUBLISHED, REJECTED);
+
+    /** Statuses that surface to learners through the public catalogue. */
+    public static final Set<ContentStatus> PUBLIC_VISIBLE = Set.of(PUBLISHED);
+
+    /**
+     * Statuses that count as "in review" for admin dashboards (legacy flow,
+     * still relevant for AI-generated or migrated content).
+     */
+    public static final Set<ContentStatus> IN_REVIEW = Set.of(SUBMITTED, APPROVED);
+
+    /** Statuses that have reached the end of the editorial lifecycle. */
+    public static final Set<ContentStatus> TERMINAL = Set.of(ARCHIVED);
+
+    /** O(1) case-insensitive lookup table built once at class-load time. */
+    private static final Map<String, ContentStatus> LOOKUP = Arrays.stream(values())
+            .collect(Collectors.toUnmodifiableMap(
+                    value -> value.name().toUpperCase(Locale.ROOT),
+                    Function.identity()));
+
+    /**
+     * Tolerant case- and whitespace-insensitive lookup.
+     *
+     * @param value raw textual representation; may be {@code null} or blank
+     * @return matching constant, or {@link Optional#empty()} when the input
+     *         is {@code null}, blank, or not a recognised content status
+     */
+    public static Optional<ContentStatus> tryFrom(String value) {
+        if (value == null) {
+            return Optional.empty();
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(LOOKUP.get(trimmed.toUpperCase(Locale.ROOT)));
+    }
+
+    /**
+     * Strict counterpart of {@link #tryFrom(String)}.
+     *
+     * @throws IllegalArgumentException when {@code value} is {@code null},
+     *         blank, or not a recognised content status
+     */
+    public static ContentStatus fromValue(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Content status is required.");
+        }
+        return tryFrom(value).orElseThrow(() -> new IllegalArgumentException(
+                "Invalid content status. Allowed values are DRAFT, SUBMITTED, APPROVED, "
+                        + "REJECTED, PUBLISHED, or ARCHIVED."));
+    }
+
+    /** @return {@code true} when the content is visible in the public catalogue. */
+    public boolean isPublished() {
+        return this == PUBLISHED;
+    }
+
+    /** @return {@code true} when the content is still being authored. */
+    public boolean isDraft() {
+        return this == DRAFT;
+    }
+
+    /** @return {@code true} when the content has been retired from the catalogue. */
+    public boolean isArchived() {
+        return this == ARCHIVED;
+    }
+
+    /** @return {@code true} when admin review declined the content. */
+    public boolean isRejected() {
+        return this == REJECTED;
+    }
+
+    /** @return {@code true} when the owning teacher may currently edit the content. */
+    public boolean isTeacherEditable() {
+        return TEACHER_EDITABLE.contains(this);
+    }
+
+    /** @return {@code true} when the owning teacher may currently archive the content. */
+    public boolean isTeacherArchivable() {
+        return TEACHER_ARCHIVABLE.contains(this);
+    }
+
+    /** @return {@code true} when learners may discover the content via public listings. */
+    public boolean isPublicVisible() {
+        return PUBLIC_VISIBLE.contains(this);
+    }
 }

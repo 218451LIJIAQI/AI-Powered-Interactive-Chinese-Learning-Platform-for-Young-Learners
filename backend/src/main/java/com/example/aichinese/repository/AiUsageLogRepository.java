@@ -3,23 +3,46 @@ package com.example.aichinese.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.AiUsageLog;
+import com.example.aichinese.repository.projection.StatusCountProjection;
 
+/**
+ * Persistence operations for {@link AiUsageLog} — the immutable audit
+ * trail of every AI invocation made by a learner, teacher or system
+ * worker.
+ *
+ * <p>The {@code ai_usage_log} table is the single largest write-heavy
+ * table in the platform (one row per AI request, including failures
+ * and rate-limit rejections). Every read here is therefore engineered
+ * to push filtering and aggregation down to the database — see
+ * {@link #groupByAiStatus()} and {@link #countAll()} for the
+ * admin-analytics path, and the {@code @EntityGraph} on the user
+ * relation for the lookup paths.</p>
+ *
+ * <p>The status column is stored as a free-form {@code String} (not an
+ * enum) because the underlying AI provider's failure-reason vocabulary
+ * is open-set; {@link #countByStatusIgnoreCase(String)} accordingly
+ * matches case-insensitively to absorb upstream casing drift.</p>
+ */
 public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long>, JpaSpecificationExecutor<AiUsageLog> {
 
     long countByStatusIgnoreCase(String status);
 
     @Override
     @EntityGraph(attributePaths = "user")
-    org.springframework.data.domain.Page<AiUsageLog> findAll(
-            org.springframework.data.jpa.domain.Specification<AiUsageLog> specification,
-            org.springframework.data.domain.Pageable pageable);
+    @NonNull
+    Page<AiUsageLog> findAll(@Nullable Specification<AiUsageLog> specification, @NonNull Pageable pageable);
 
     @EntityGraph(attributePaths = "user")
     @Query("select log from AiUsageLog log where log.id = :id and log.user.id = :userId")
@@ -32,15 +55,14 @@ public interface AiUsageLogRepository extends JpaRepository<AiUsageLog, Long>, J
      * count statuses was the highest-volume hotspot in admin analytics
      * before this query existed.
      */
-    @org.springframework.data.jpa.repository.Query(
-            "select log.status as status, count(log) as count from AiUsageLog log group by log.status")
-    List<com.example.aichinese.repository.projection.StatusCountProjection> groupByAiStatus();
+    @Query("select log.status as status, count(log) as count from AiUsageLog log group by log.status")
+    List<StatusCountProjection> groupByAiStatus();
 
     /**
      * Total AI invocations across the platform — replaces
      * {@code findAll().size()} which previously paid a full table load just
      * to count rows.
      */
-    @org.springframework.data.jpa.repository.Query("select count(log) from AiUsageLog log")
+    @Query("select count(log) from AiUsageLog log")
     long countAll();
 }

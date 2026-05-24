@@ -1,3 +1,33 @@
+/**
+ * Browser-driven role-based access-control scan.
+ *
+ * <h2>What it asserts</h2>
+ * For each persona scenario (guest / student / teacher / admin)
+ * the script:
+ *   1. Loads every route in that persona's scope, including a
+ *      handful of cross-persona routes the scenario should NOT be
+ *      able to view.
+ *   2. Confirms the response — gated routes redirect to /auth or
+ *      /unauthorized, while owned routes render normally.
+ *   3. Verifies the final URL after Vue Router guards run.
+ *   4. Captures console / network errors per route.
+ *
+ * <h2>Token wiring</h2>
+ * Per-persona JWTs come from `QA_STUDENT_TOKEN` / `QA_TEACHER_TOKEN`
+ * / `QA_ADMIN_TOKEN` and are injected via Chrome's DevTools
+ * `Network.setExtraHTTPHeaders` so the SPA's axios layer attaches
+ * them automatically. The guest scenario uses no token.
+ *
+ * <h2>Evidence layout</h2>
+ * `browser-qa-evidence/<timestamp>-roles/` with one screenshot per
+ * `<role>__<route>` pair plus a structured JSON summary.
+ *
+ * <h2>When to run</h2>
+ * Run this after touching the Vue Router auth guard, route
+ * normalisation utilities, or any backend `@PreAuthorize` rule —
+ * regressions in those layers are otherwise easy to miss in
+ * single-persona QA.
+ */
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -529,9 +559,14 @@ async function main() {
       )
     }
 
-    async function setSessionToken(token) {
-      await send('Runtime.evaluate', {
-        expression: `(() => {
+    let activeSessionScriptId = null
+    async function prepareSessionToken(token) {
+      if (activeSessionScriptId) {
+        await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: activeSessionScriptId })
+      }
+
+      const result = await send('Page.addScriptToEvaluateOnNewDocument', {
+        source: `(() => {
           const token = ${JSON.stringify(token)};
           const key = 'mandarin-spark.token';
           const previewKey = 'mandarin-spark.preview-role';
@@ -542,8 +577,9 @@ async function main() {
           if (token) {
             window.sessionStorage.setItem(key, token);
           }
-        })()`,
+        })();`,
       })
+      activeSessionScriptId = result.identifier
     }
 
     const allCases = [
@@ -587,8 +623,7 @@ async function main() {
 
         activeRecord = record
 
-        await navigate(`${baseUrl}/`)
-        await setSessionToken(testCase.token || null)
+        await prepareSessionToken(testCase.token || null)
 
         const navigation = await navigate(url)
         if (navigation.errorText) {

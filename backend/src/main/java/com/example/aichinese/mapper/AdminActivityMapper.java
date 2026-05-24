@@ -497,7 +497,7 @@ public class AdminActivityMapper {
 
     private AdminActivitySummaryResponse summaryOf(Long id, ActivityType type, String title, Object entity) {
         // Pulls the shared metadata via reflection-free duck typing — all six
-        // activity entities expose the same getters thanks to Phase 3.
+        // activity entities expose the same getters.
         return Stream.of(entity)
                 .map(e -> new AdminActivitySummaryResponse(
                         id,

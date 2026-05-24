@@ -9,6 +9,26 @@ import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.dto.ai.AiAvailabilityResponse;
 import com.example.aichinese.util.TextUtils;
 
+/**
+ * Computes the AI subsystem availability flags exposed by
+ * {@code GET /api/v1/ai/availability} for the front-end's
+ * "AI features ready / unready" banner.
+ *
+ * <p>Returns {@code unavailable} when any of the following hold:
+ * the real-provider toggle is off; the configured provider is
+ * unsupported; the API key / model name is missing; or the configured
+ * base URL is not a valid HTTPS URL (loopback HTTP allowed for
+ * integration tests). The detailed reason is included in the response
+ * so admins can diagnose mis-configuration without server-side log
+ * access.</p>
+ *
+ * <p>The pronunciation / writing-feedback flags are statically wired
+ * to {@code false} because no current provider supports those
+ * modalities; the {@link #PRONUNCIATION_UNAVAILABLE_MESSAGE} /
+ * {@link #WRITING_UNAVAILABLE_MESSAGE} constants are surfaced to the
+ * front-end so the same canonical wording appears wherever the
+ * features are accessed.</p>
+ */
 @Service
 public class AiAvailabilityService {
 

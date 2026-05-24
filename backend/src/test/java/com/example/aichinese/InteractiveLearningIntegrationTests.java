@@ -38,6 +38,16 @@ import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of the lesson + quiz player flow:
+ * lesson read, quiz start / submit / score, wrong-answer surface,
+ * progress + XP + streak side-effects, and badge awards.
+ *
+ * <p>Pins the locked-content gate (paid lessons hidden from students
+ * without entitlement), the quiz answer-key boundary (student
+ * responses never include the correct answer flag), and the streak
+ * deduplication so a single completion can't double-count.</p>
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

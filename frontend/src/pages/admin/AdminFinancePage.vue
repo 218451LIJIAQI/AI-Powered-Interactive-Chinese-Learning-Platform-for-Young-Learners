@@ -169,6 +169,17 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin finance hub — payments ledger, refunds queue, payouts
+ * approval, revenue summary.
+ *
+ * <h2>Money-handling safety</h2>
+ * <p>Refund and payout approval show the target amount + recipient
+ * name in the confirmation dialog and require an admin note. The
+ * backend logs each decision through {@code AdminAuditLogService}
+ * with the approving admin id, so a paper trail exists for every
+ * money-moving action.</p>
+ */
 import { computed, ref, watch } from 'vue'
 
 import { adminApi } from '@/api/services'

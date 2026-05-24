@@ -14,6 +14,12 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Larger informational banner used on the landing page for
+ * trust / safety / parent-controls callouts. Optional `badge`
+ * slot in the corner advertises an associated status ("Verified",
+ * "Coming soon", etc.).
+ */
 import { computed } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'

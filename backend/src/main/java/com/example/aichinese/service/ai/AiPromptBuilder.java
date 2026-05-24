@@ -9,6 +9,23 @@ import org.springframework.stereotype.Component;
 import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 
+/**
+ * Builds {@link AiProviderPrompt} objects with the platform's standard
+ * child-safety + Mandarin-learning system instructions.
+ *
+ * <p>Centralising the system instruction here ensures every AI feature
+ * inherits the same age-appropriate tone, language preference rules
+ * ({@code en} / {@code ms} / {@code zh}), refusal of professional
+ * pronunciation/handwriting claims, and human-review requirement for
+ * any official content the LLM generates. Adding a new feature does
+ * not require duplicating these guardrails — only a fresh
+ * {@code userPrompt} body.</p>
+ *
+ * <p>The {@code expectJson} flag toggles a single instruction
+ * ("Return valid JSON only ...") plus the OpenAI-compatible
+ * {@code response_format} hint downstream, so generators that need a
+ * structured shape get strict JSON without per-call repetition.</p>
+ */
 @Component
 public class AiPromptBuilder {
 

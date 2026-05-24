@@ -1,7 +1,16 @@
 <template>
   <div class="row">
-    <div class="ring" :class="toneClass" :style="{ '--progress': progressValue }">
-      {{ label }}
+    <div
+      class="ring"
+      :class="toneClass"
+      :style="{ '--progress': progressValue }"
+      role="progressbar"
+      :aria-valuenow="progressValue"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      :aria-label="`${title}: ${label}`"
+    >
+      <span aria-hidden="true">{{ label }}</span>
     </div>
     <div class="stack">
       <strong>{{ title }}</strong>
@@ -11,6 +20,13 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Circular progress indicator used on student progress cards and
+ * the home dashboard hero. The `--progress` CSS custom property
+ * drives the SVG fill so the visual stays in sync with the
+ * displayed percentage. Pairs with a title + optional subtitle to
+ * form a self-contained KPI tile.
+ */
 import { computed } from 'vue'
 
 const props = withDefaults(

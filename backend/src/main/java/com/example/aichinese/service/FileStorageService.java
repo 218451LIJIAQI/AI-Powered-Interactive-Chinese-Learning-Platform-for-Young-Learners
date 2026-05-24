@@ -17,6 +17,18 @@ import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
 
+/**
+ * Generic upload pipeline for the teacher verification document
+ * surface: PDF / JPEG / PNG with the same defence-in-depth checks
+ * (extension whitelist, content-type whitelist, magic-byte sniff)
+ * used by every multipart endpoint.
+ *
+ * <p>Distinct from {@link AiFileStorageService} (audio / image for AI
+ * feedback) and {@link RecordedVideoStorageService} (lesson video)
+ * by accepted file types and destination directory; sharing the same
+ * {@link UploadStorageSupport} ensures all three surfaces apply
+ * identical security checks.</p>
+ */
 @Service
 public class FileStorageService {
 

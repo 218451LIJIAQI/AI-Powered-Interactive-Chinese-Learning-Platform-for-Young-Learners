@@ -16,6 +16,29 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Playable video asset attached to a {@link Lesson}.
+ *
+ * <p>A lesson may carry several videos (intro, main lecture, summary,
+ * supplementary) ordered by {@link #sortOrder}. The asset itself comes
+ * from one of two sources, captured by {@link #sourceType}:</p>
+ * <ul>
+ *   <li>{@link com.example.aichinese.entity.enums.RecordedVideoSourceType#UPLOADED_FILE}
+ *       — points at a platform-managed {@link UploadedFile}; playback
+ *       is served via signed URLs.</li>
+ *   <li>{@link com.example.aichinese.entity.enums.RecordedVideoSourceType#EXTERNAL_URL}
+ *       — points at a third-party hosted video via {@link #externalVideoUrl};
+ *       treated as untrusted external content for safety filtering.</li>
+ * </ul>
+ *
+ * <p>{@link #coursePackage} is an optional denormalized back-reference
+ * useful for "package-only" supplementary clips that aren't anchored to
+ * a single lesson.</p>
+ *
+ * <p>{@link #active} provides soft-deletion semantics: setting to
+ * {@code false} removes the video from public listings without
+ * destroying the {@code VideoProgress} rows that reference it.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

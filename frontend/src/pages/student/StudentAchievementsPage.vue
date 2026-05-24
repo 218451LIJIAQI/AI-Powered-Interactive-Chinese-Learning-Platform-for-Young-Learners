@@ -1,10 +1,5 @@
 <template>
   <div class="page-stack student-achievements-page">
-    <section class="student-simple-header">
-      <h1>Hello, {{ displayName }}! <span><IconGlyph name="star" :size="26" /></span></h1>
-      <p>Your hard work is paying off! Keep shining!</p>
-    </section>
-
     <DataNotice :using-fallback="usingFallback" :error="pageError" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
@@ -17,7 +12,7 @@
               <strong>Level {{ rewards.currentLevelNumber }}</strong>
               <small>{{ levelTitle }}</small>
               <ProgressBar :progress="rewards.progressToNextLevelPercent" />
-              <em>{{ formatNumber(rewards.totalPoints) }} XP • {{ rewards.progressToNextLevelPercent }}% to next level</em>
+              <em>{{ formatNumber(rewards.totalPoints) }} XP - {{ rewards.progressToNextLevelPercent }}% to next level</em>
             </div>
             <div class="student-achievements-stats">
               <div v-for="stat in achievementStats" :key="stat.label" class="student-achievements-stat">
@@ -144,6 +139,16 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student achievement / badge / streak surface.
+ *
+ * <p>Aggregates badge progress, milestones, lesson completion
+ * markers, and the streak builder into a single dense layout.
+ * Readiness lists are computed from the same dashboard payload so
+ * the page stays single-fetch, and empty states use custom
+ * achievement-tone cards rather than the generic StatePanel for
+ * morale-positive copy.</p>
+ */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -156,7 +161,6 @@ import ProgressRing from '@/components/common/ProgressRing.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
-import { useAuthStore } from '@/stores/auth'
 import {
   studentBadges,
   studentPointsHistory,
@@ -167,7 +171,6 @@ import {
 import { formatDate, formatNumber } from '@/utils/format'
 
 const router = useRouter()
-const auth = useAuthStore()
 const badgesResource = useResource(() => studentApi.badges(), studentBadges)
 const streakResource = useResource(() => studentApi.streak(), studentStreak)
 const rewardsResource = useResource(() => studentApi.rewards(), studentRewards)
@@ -202,7 +205,6 @@ const streak = computed(() => streakResource.data.value ?? (streakResource.using
 const rewards = computed(() => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards))
 const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
 const pointsHistory = computed(() => pointsResource.data.value ?? (pointsResource.usingFallback.value ? studentPointsHistory : rewards.value.recentPoints))
-const displayName = computed(() => auth.currentUser?.studentProfile?.displayName ?? auth.displayName.split(' ')[0] ?? 'Learner')
 const pageLoading = computed(
   () =>
     badgesResource.loading.value ||
@@ -267,7 +269,7 @@ const milestoneCards = computed(() =>
   pointsHistory.value.slice(0, 4).map((item) => ({
     icon: iconForSource(item.sourceType),
     title: item.reason,
-    subtitle: `${formatDate(item.createdAt)} • ${formatSource(item.sourceType)}`,
+    subtitle: `${formatDate(item.createdAt)} - ${formatSource(item.sourceType)}`,
     reward: `${item.pointsDelta >= 0 ? '+' : ''}${item.pointsDelta} XP`,
     tone: toneForSource(item.sourceType),
   })),

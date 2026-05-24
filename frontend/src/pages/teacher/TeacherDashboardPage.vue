@@ -234,6 +234,14 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Teacher dashboard — verification + classroom + earnings hero.
+ *
+ * <p>Combines verification status, today's class lineup, and the
+ * earnings snapshot into a single read-only landing. Single-fetch
+ * design via {@code teacherApi.dashboard()} keeps the page fast
+ * even when the underlying teacher has dozens of classes.</p>
+ */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 

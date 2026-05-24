@@ -1,3 +1,38 @@
+/**
+ * Browser-driven QA for the live authentication flow.
+ *
+ * <h2>What it exercises</h2>
+ *   1. Pre-flight: hits `actuator/health` and the public courses
+ *      endpoint so the script bails out with a clear error if the
+ *      backend is not up (rather than producing confusing Chrome
+ *      failures later).
+ *   2. Registers a fresh student account using a timestamped email
+ *      so concurrent runs never collide.
+ *   3. Registers a fresh teacher account.
+ *   4. Signs in / signs out / signs in again to verify the full
+ *      session lifecycle — token issue, JWT validation, and the
+ *      auth-store sessionStorage hand-off.
+ *   5. Captures deep-link auth redirects to confirm
+ *      `?redirect=` honours the open-redirect allowlist.
+ *
+ * <h2>Why this is "live"</h2>
+ * Unlike `browser-qa-flows.mjs` which can run against the demo
+ * fixture, this script REQUIRES a running backend with a writable
+ * database. Catches regressions in the JPA save layer, password
+ * hashing, JWT issuance, and the auth-store hydration paths that
+ * the mocked flows cannot.
+ *
+ * <h2>Configuration</h2>
+ *   - `QA_BASE_URL`        — frontend origin (default 127.0.0.1:5173)
+ *   - `QA_API_BASE_URL`    — backend `/api/v1` base
+ *   - `QA_API_HEALTH_URL`  — actuator override
+ *   - `QA_PUBLIC_COURSES_URL` — public catalogue smoke-test URL
+ *   - `QA_CHROME_PORT`     — DevTools port (default 9227)
+ *
+ * <h2>Evidence layout</h2>
+ * Outputs per-step screenshots and a structured run report into
+ * `browser-qa-evidence/<timestamp>-auth-live/`.
+ */
 import { spawn } from 'node:child_process'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -460,12 +495,19 @@ async function main() {
       await setValue('#login-email', studentEmail)
       await clickButtonByText('Forgot password?')
       await waitForPage(
+        'forgot password page',
+        (state) => state.path.startsWith('/forgot-password'),
+        25000,
+      )
+      await setValue('#forgot-email', studentEmail)
+      await clickSelector('.auth-submit-button:not([disabled])')
+      await waitForPage(
         'forgot password success message',
-        (state) => state.text.includes('If the email is registered, reset instructions will be sent shortly.'),
+        (state) => state.text.includes(`If ${studentEmail.toLowerCase()} is registered, reset instructions will be sent shortly.`),
         25000,
       )
       record.snapshots.push(await snapshot('forgot-password'))
-      if (!record.snapshots.at(-1).text.includes('If the email is registered, reset instructions will be sent shortly.')) {
+      if (!record.snapshots.at(-1).text.includes(`If ${studentEmail.toLowerCase()} is registered, reset instructions will be sent shortly.`)) {
         throw new Error('Forgot password success message was not shown')
       }
     })

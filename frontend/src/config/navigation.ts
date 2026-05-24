@@ -1,5 +1,22 @@
 import type { UserRole } from '@/types/api'
 
+/**
+ * Per-persona navigation maps for the dashboard sidebar and public
+ * top nav.
+ *
+ * <h2>Why a single config file</h2>
+ * <p>The sidebar, mobile drawer, and breadcrumb generator all need the
+ * same source of truth. Co-locating the three persona lists prevents
+ * the classic bug where one nav surface drifts (a new admin page
+ * added to the sidebar but not the breadcrumb).</p>
+ *
+ * <h2>Labels via i18n</h2>
+ * <p>Items carry {@code labelKey} (an i18n message id) rather than a
+ * literal string so MS / EN / ZH translations stay isolated to the
+ * i18n bundle. The same applies to icons — {@code icon} is an
+ * IconGlyph name, not raw SVG, so swapping the design system later
+ * does not require touching this file.</p>
+ */
 export interface NavItem {
   labelKey: string
   to: string

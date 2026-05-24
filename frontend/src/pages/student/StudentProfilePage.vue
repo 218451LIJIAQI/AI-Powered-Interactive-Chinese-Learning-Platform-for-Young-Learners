@@ -144,7 +144,7 @@
                   <div class="student-profile-feedback-copy">
                     <strong>{{ item.lessonTitle || item.quizTitle || 'Teacher feedback' }}</strong>
                     <p>{{ item.message }}</p>
-                    <span>{{ item.teacherName }} • {{ item.feedbackType || 'General' }}</span>
+                    <span>{{ item.teacherName }} - {{ item.feedbackType || 'General' }}</span>
                   </div>
                   <small>{{ formatDateTime(item.createdAt) }}</small>
                 </article>
@@ -278,7 +278,7 @@
               <article v-for="payment in payments.slice(0, 4)" :key="payment.paymentId" class="student-profile-payment-item">
                 <div>
                   <strong>{{ payment.orderNumber }}</strong>
-                  <span>{{ payment.providerName }} • {{ payment.paymentStatus }}</span>
+                  <span>{{ payment.providerName }} - {{ payment.paymentStatus }}</span>
                 </div>
                 <strong>{{ formatCurrency(payment.amount, payment.currencyCode) }}</strong>
               </article>
@@ -339,6 +339,16 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student profile + commerce hub.
+ *
+ * <p>Combines self-service profile editing, payment history (read-only
+ * from {@code paymentApi.history()}), refund requests, and saved AI
+ * report status. The page used to be split into multiple routes
+ * (payments / refunds / feedback) — those redirect here via
+ * {@link normalizeAppRoute} so legacy notification deep-links still
+ * land somewhere useful.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 

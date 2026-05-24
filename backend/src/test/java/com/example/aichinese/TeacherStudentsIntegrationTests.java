@@ -32,6 +32,14 @@ import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of the teacher "my students" surface
+ * — proves the roster is derived from engagement signals (lesson
+ * progress, quiz attempts, live-class enrolments) rather than an
+ * explicit relationship table, and that the PII boundary holds
+ * (student email / age / parent contact never leak through to the
+ * teacher view).
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!",

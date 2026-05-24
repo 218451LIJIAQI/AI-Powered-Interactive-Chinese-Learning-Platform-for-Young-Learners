@@ -1,3 +1,15 @@
+/**
+ * Locale-aware display formatters used across every persona surface
+ * for numbers, currency, dates and percentages. Centralising avoids
+ * the classic "TypeError: Cannot read properties of null (reading
+ * 'toFixed')" by null-coalescing every input to a sensible default
+ * and returning the `'--'` placeholder for invalid date strings so
+ * the UI never shows raw `Invalid Date` to a learner.
+ *
+ * The locale is fixed to `en-US` because the platform's authored
+ * content is English-first; persona-specific labels are translated
+ * separately via i18n.
+ */
 export function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat('en-US').format(value ?? 0)
 }

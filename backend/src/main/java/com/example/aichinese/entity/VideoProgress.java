@@ -15,6 +15,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Resume-position bookmark for a single student watching a single
+ * {@link RecordedLessonVideo}.
+ *
+ * <p>The unique constraint on {@code (student_id, recorded_video_id)}
+ * means each student keeps exactly one bookmark per video — re-opening
+ * the same video resumes from {@link #watchedSeconds} rather than the
+ * start.</p>
+ *
+ * <p>{@link #completed} is set {@code true} the first time the watched
+ * percentage crosses a threshold (typically 95% to tolerate trailing
+ * credits), and stays {@code true} on subsequent rewatches so the
+ * lesson's overall completion roll-up does not regress.</p>
+ *
+ * <p>{@link #version} prevents the lossy interleaving of frequent
+ * progress pings during active playback.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

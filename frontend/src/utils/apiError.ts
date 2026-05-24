@@ -1,3 +1,20 @@
+/**
+ * Centralised translation of `axios`-style error payloads into
+ * learner-friendly text. Every API caller funnels through
+ * {@link resolveApiError} so the same error shape always produces the
+ * same on-screen message — preventing inconsistent tone across pages.
+ *
+ * The resolution order is:
+ * 1. Backend-supplied {@code response.data.message} (sanitised by the
+ *    {@code GlobalExceptionHandler}'s {@code FriendlyErrorMessageResolver}).
+ * 2. First entry in {@code response.data.errors[]} (validation case).
+ * 3. HTTP-status-based fallbacks (401, 403, 404, 5xx).
+ * 4. Timeout / network detection from axios codes.
+ * 5. Caller-supplied {@code fallback} string.
+ *
+ * Strings like {@code "Request failed"} and {@code "Network Error"}
+ * are dropped because they leak axios internals to learners.
+ */
 type ApiErrorPayload = {
   response?: {
     status?: number

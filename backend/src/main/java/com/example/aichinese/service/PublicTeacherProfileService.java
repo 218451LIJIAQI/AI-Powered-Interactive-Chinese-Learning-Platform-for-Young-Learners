@@ -15,6 +15,17 @@ import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 
+/**
+ * Unauthenticated read endpoint for an APPROVED teacher's public
+ * profile page (bio, teaching categories, published course count).
+ *
+ * <p>Strictly filtered: the teacher must be both
+ * {@link TeacherStatus#APPROVED} and have the {@code publicVisible}
+ * flag set — so a teacher who opts out (or who is suspended) does
+ * not appear in the public surface. Course count is computed as the
+ * sum of {@link ContentStatus#PUBLISHED} lessons + course packages,
+ * matching what the public catalogue actually surfaces.</p>
+ */
 @Service
 public class PublicTeacherProfileService {
 

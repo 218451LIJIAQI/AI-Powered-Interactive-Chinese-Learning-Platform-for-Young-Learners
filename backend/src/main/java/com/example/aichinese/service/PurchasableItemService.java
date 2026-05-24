@@ -20,6 +20,24 @@ import com.example.aichinese.repository.LearningModuleRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
+/**
+ * Single source of truth for "is this content actually sellable?".
+ *
+ * <p>Resolves a ({@link PurchasableItemType}, {@code itemId}) pair
+ * to a {@link ResolvedPurchasableItem} snapshot the cart / checkout /
+ * payment layers can rely on. Validates four invariants:</p>
+ * <ul>
+ *   <li>The item exists.</li>
+ *   <li>The item is in {@link ContentStatus#PUBLISHED}.</li>
+ *   <li>The item is {@link AccessType#PAID} (free items aren't
+ *       purchasable).</li>
+ *   <li>The unit price is positive (zero / negative pricing rejected).</li>
+ * </ul>
+ *
+ * <p>All currency precision and rounding flows through
+ * {@link CommerceMoneyService} so the resolved snapshot matches the
+ * eventual order / payment numbers exactly.</p>
+ */
 @Service
 public class PurchasableItemService {
 
@@ -110,7 +128,7 @@ public class PurchasableItemService {
             return;
         }
 
-        if (price == null || price.signum() < 0) {
+        if (price == null || price.signum() <= 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Purchasable content has an invalid price.");
         }
     }

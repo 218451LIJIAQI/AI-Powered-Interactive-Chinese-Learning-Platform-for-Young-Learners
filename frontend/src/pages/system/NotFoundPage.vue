@@ -1,5 +1,5 @@
 <template>
-  <section class="system-page system-page--not-found">
+  <main class="system-page system-page--not-found" aria-label="Page not found">
     <span class="system-bg-orb system-bg-orb--one" />
     <span class="system-bg-orb system-bg-orb--two" />
     <div class="surface-card system-card">
@@ -39,10 +39,15 @@
         <PandaIllustration class="system-panda" :size="220" outfit="#6f4cff" accent="#ffcc2f" />
       </div>
     </div>
-  </section>
+  </main>
 </template>
 
 <script setup lang="ts">
+/**
+ * 404 — final catch-all route. Friendly copy + cross-links into the
+ * three persona dashboards so a deep-linked URL that fails route
+ * normalisation does not strand the user.
+ */
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'

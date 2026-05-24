@@ -114,6 +114,21 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Step 1 of the password-recovery flow: collect the user's email
+ * and ask the backend to send a reset link.
+ *
+ * <h2>Uniform response</h2>
+ * <p>The success message is identical whether or not the email
+ * is registered — this is paired with the backend's user-enumeration
+ * defence so an attacker cannot use this page to probe for valid
+ * accounts.</p>
+ *
+ * <h2>Rate limit</h2>
+ * <p>The backend's {@code PublicAuthRequestLimiter} caps requests
+ * per IP+email pair. A 429 is surfaced as a friendly "please wait
+ * before trying again" message via {@link resolveApiError}.</p>
+ */
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 

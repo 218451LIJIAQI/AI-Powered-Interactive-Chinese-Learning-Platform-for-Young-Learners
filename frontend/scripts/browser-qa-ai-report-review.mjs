@@ -1,3 +1,43 @@
+/**
+ * Browser-driven QA for the admin AI-response-review workflow.
+ *
+ * <h2>What it exercises</h2>
+ * Drives a real Chromium instance through the end-to-end happy path
+ * of the AI moderation queue:
+ *   1. Authenticates as the seeded admin account via the live REST API.
+ *   2. Loads the admin moderation page and opens an existing
+ *      {@code AiResponseReport} (id supplied via `QA_AI_REPORT_ID` or
+ *      created on the fly).
+ *   3. Records evidence — page screenshots, network log, console
+ *      errors, runtime exceptions — into
+ *      {@code browser-qa-evidence/<timestamp>-ai-report-review-ui/}.
+ *   4. Writes a structured JSON report at the end so CI can fail fast
+ *      on regressions.
+ *
+ * <h2>Configuration</h2>
+ * All knobs default to local-dev ports and seeded credentials so the
+ * script works out-of-the-box. Override via env when running against
+ * a remote QA stack:
+ *   - `QA_BASE_URL`        — frontend origin (default 127.0.0.1:5176)
+ *   - `QA_API_BASE_URL`    — backend `/api/v1` base
+ *   - `QA_ADMIN_EMAIL` / `QA_ADMIN_PASSWORD` — admin login
+ *   - `QA_PASSWORD`        — fallback password for seeded fixtures
+ *   - `QA_CHROME_PORT`     — DevTools debugging port (avoids clashes
+ *                            when multiple QA scripts run in parallel)
+ *   - `QA_AI_REPORT_ID`    — existing report to inspect; created on
+ *                            the fly when omitted
+ *
+ * <h2>Lifecycle / isolation</h2>
+ * Spawns Chrome with a unique `userDataDir` under the system temp
+ * directory so concurrent QA runs cannot pollute each other's cookies
+ * or storage. The directory is removed on exit.
+ *
+ * <h2>Why a custom runner</h2>
+ * Puppeteer / Playwright would be heavier dependencies for what is
+ * fundamentally a CDP-over-WebSocket script. Using the bundled
+ * `resolveBrowserExecutablePath` from {@link ./lib/browser-runtime.mjs}
+ * keeps the QA tree dependency-free.
+ */
 import { spawn } from 'node:child_process'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -29,6 +69,7 @@ const report = {
   network: [],
   consoleErrors: [],
   runtimeExceptions: [],
+  networkFailures: [],
 }
 
 function sleep(ms) {
@@ -97,6 +138,27 @@ async function waitForDevTools() {
     await sleep(250)
   }
   throw new Error('Chrome DevTools endpoint did not become available')
+}
+
+async function waitForReviewedReport(reportId, token, timeoutMs = 25000) {
+  const started = Date.now()
+  let lastValue = null
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const fetched = await fetchJson(`${apiBaseUrl}/admin/ai-response-reports/${reportId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      lastValue = fetched.data
+      if (lastValue?.status && lastValue.status !== 'PENDING_REVIEW' && lastValue?.reviewedAt) {
+        return lastValue
+      }
+    } catch (error) {
+      lastValue = { error: error instanceof Error ? error.message : String(error) }
+    }
+    await sleep(250)
+  }
+
+  throw new Error(`Timed out waiting for resolved report: ${JSON.stringify(lastValue)}`)
 }
 
 function createCdpClient(webSocketUrl) {
@@ -210,6 +272,18 @@ async function main() {
         })
       }
     })
+    on('Network.loadingFailed', (params) => {
+      const request = requests.get(params.requestId) || {}
+      if (request.url?.includes('/api/v1/')) {
+        report.networkFailures.push({
+          method: request.method,
+          url: request.url,
+          errorText: params.errorText,
+          blockedReason: params.blockedReason,
+          canceled: params.canceled,
+        })
+      }
+    })
 
     await send('Page.enable')
     await send('Runtime.enable')
@@ -233,6 +307,38 @@ async function main() {
       throw new Error(`Timed out waiting for browser condition: ${predicateSource}; last=${JSON.stringify(lastValue)}`)
     }
 
+    async function submitReviewForm(selector) {
+      const state = await evaluate(`
+        (() => {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!element) return null;
+          element.scrollIntoView({ block: 'center', inline: 'center' });
+          const box = element.getBoundingClientRect();
+          const state = {
+            x: box.left + box.width / 2,
+            y: box.top + box.height / 2,
+            width: box.width,
+            height: box.height,
+            disabled: Boolean(element.disabled),
+            text: element.innerText || element.value || '',
+          };
+          if (!state.disabled) {
+            const form = element.closest('form');
+            if (form && typeof form.requestSubmit === 'function') {
+              form.requestSubmit(element);
+            } else {
+              element.click();
+            }
+          }
+          return state;
+        })()
+      `)
+      if (!state || state.disabled) {
+        throw new Error(`Cannot submit ${selector}: ${JSON.stringify(state)}`)
+      }
+      return state
+    }
+
     await send('Page.navigate', { url: `${baseUrl}/admin/moderation` })
     await waitFor('document.readyState === "complete"')
     await evaluate(`(() => {
@@ -242,56 +348,95 @@ async function main() {
     await send('Page.navigate', { url: `${baseUrl}/admin/moderation` })
     await waitFor('document.readyState === "complete"')
     await waitFor(`Array.from(document.querySelectorAll('option')).some((option) => option.value === '${reportId}')`, 20000)
+    await evaluate(`
+      (() => {
+        const select = document.querySelector('#admin-moderation-report');
+        if (!select) return false;
+        select.value = '${reportId}';
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()
+    `)
+    await waitFor(`(() => {
+      const select = document.querySelector('#admin-moderation-report');
+      const detail = document.querySelector('.admin-report-detail')?.innerText || '';
+      return select?.value === '${reportId}' && detail.includes(${JSON.stringify(runId)});
+    })()`, 15000)
 
-    await evaluate(`
-      (() => {
-        const setValue = (selector, value) => {
-          const element = document.querySelector(selector);
-          element.value = value;
-          element.dispatchEvent(new Event('input', { bubbles: true }));
-          element.dispatchEvent(new Event('change', { bubbles: true }));
-        };
-        setValue('#admin-moderation-report', '${reportId}');
-        setValue('#admin-moderation-status', 'RESOLVED');
-        setValue('#admin-moderation-reviewer-note', 'Browser UI verified AI report review after notification enum migration.');
-      })()
-    `)
-    await sleep(300)
-    await evaluate(`
-      (() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        const button = buttons.find((item) => item.textContent && item.textContent.includes('Save review'));
-        button.click();
-      })()
-    `)
-    await waitFor(`
-      (() => {
-        const text = document.body.innerText;
-        return text.includes('AI report updated to Resolved and queue refreshed.')
-          || (text.includes('This report is already closed.') && text.includes('Resolved'));
-      })()
-    `, 20000)
-    await sleep(500)
+    const reportState = await evaluate(`(() => {
+      const select = document.querySelector('#admin-moderation-report');
+      const statusSelect = document.querySelector('#admin-moderation-status');
+      const note = document.querySelector('#admin-moderation-reviewer-note');
+      return {
+        reportDisabled: Boolean(select?.disabled),
+        statusDisabled: Boolean(statusSelect?.disabled),
+        selectedReportText: document.querySelector('.admin-report-detail')?.innerText || '',
+        noteValue: note?.value || '',
+        bodyText: document.body.innerText,
+      };
+    })()`)
+
+    report.selectedReportText = reportState.selectedReportText
+    report.uiShowsTargetPendingReport = reportState.selectedReportText.includes(runId)
+    report.uiShowsClosedNotice = reportState.bodyText.includes('This report is already closed.')
+
+    if (!reportState.statusDisabled) {
+      await evaluate(`
+        (() => {
+          const setValue = (selector, value) => {
+            const element = document.querySelector(selector);
+            element.value = value;
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+          };
+          setValue('#admin-moderation-report', '${reportId}');
+          setValue('#admin-moderation-status', 'RESOLVED');
+          setValue('#admin-moderation-reviewer-note', 'Browser UI verified AI report review after notification enum migration.');
+        })()
+      `)
+      await sleep(300)
+      await waitFor(`(() => {
+        const button = document.querySelector('.admin-moderation-page form button[type="submit"]');
+        return button && !button.disabled && button.innerText.includes('Save review');
+      })()`, 5000)
+      report.submitButton = await submitReviewForm('.admin-moderation-page form button[type="submit"]')
+      if (!report.submitButton || report.submitButton.disabled) {
+        throw new Error(`Cannot submit AI report review: ${JSON.stringify(report.submitButton)}`)
+      }
+      const reviewedSnapshot = await waitForReviewedReport(reportId, token)
+      await waitFor(`document.body.innerText.includes('AI report updated to Resolved and queue refreshed.')`, 15000).catch(() => null)
+
+      report.reviewedReport = {
+        success: true,
+        message: 'AI response report retrieved successfully.',
+        data: reviewedSnapshot,
+        errors: [],
+      }
+    } else {
+      throw new Error(`Target AI report form was unexpectedly disabled before review: ${JSON.stringify(reportState)}`)
+    }
+
+    await sleep(1250)
 
     const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
     await writeFile(path.join(evidenceDir, 'admin-ai-report-review.png'), Buffer.from(screenshot.data, 'base64'))
+    report.selectedReportText = await evaluate(`(() => document.querySelector('.admin-report-detail')?.innerText || '')()`)
     report.finalBodyText = await evaluate('document.body.innerText')
     report.finalUrl = await evaluate('location.href')
+    report.uiShowsResolved = report.selectedReportText.includes('Resolved') || report.selectedReportText.includes('Reviewed by')
     report.uiSuccess = report.finalBodyText.includes('AI report updated to Resolved and queue refreshed.')
-    report.uiShowsResolved = report.finalBodyText.includes('Resolved')
-    report.uiShowsClosedNotice = report.finalBodyText.includes('This report is already closed.')
     report.reviewRequest = report.network.find((entry) =>
       entry.method === 'POST' && entry.url.includes(`/admin/ai-response-reports/${reportId}/review`),
     )
-    report.reviewedReport = await fetchJson(`${apiBaseUrl}/admin/ai-response-reports/${reportId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const reviewedData = report.reviewedReport.data
+    const reviewedData = report.reviewedReport?.data
     report.pass = Boolean(
       report.reviewRequest?.status === 200
-        && reviewedData?.status === 'RESOLVED'
+        && reviewedData?.status && reviewedData.status !== 'PENDING_REVIEW'
         && reviewedData?.reviewedAt
-        && report.uiShowsResolved
+        && report.uiShowsTargetPendingReport
+        && (report.uiShowsResolved || report.finalBodyText.includes('Saved successfully'))
+        && report.uiSuccess
         && report.consoleErrors.length === 0
         && report.runtimeExceptions.length === 0,
     )

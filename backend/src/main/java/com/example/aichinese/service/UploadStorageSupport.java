@@ -21,6 +21,36 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.UploadedFile;
 
+/**
+ * Package-private upload pipeline helpers shared by every storage
+ * service ({@link AiFileStorageService}, {@link RecordedVideoStorageService},
+ * {@link FileStorageService}).
+ *
+ * <h2>Defence in depth</h2>
+ * <p>Provides the three independent checks every upload runs:</p>
+ * <ol>
+ *   <li>Safe original file-name extraction — strips path components,
+ *       CR/LF, and other shell-tricky characters; rejects empty or
+ *       traversal-attempt names.</li>
+ *   <li>Extension + Content-Type whitelist matching.</li>
+ *   <li>Magic-byte / file-signature verification reading the first
+ *       {@link #SIGNATURE_PREFIX_BYTES} bytes — defeats the classic
+ *       "rename .php to .png" upload bypass.</li>
+ * </ol>
+ *
+ * <h2>Storage</h2>
+ * <p>Stored file names are {@link UUID}-derived so the on-disk path
+ * is not guessable from the user-supplied name. The target directory
+ * is canonicalised before write to defeat symlink-based escape
+ * attempts. Reads stream through {@link FileSystemResource} so the
+ * controller does not buffer entire blobs in memory.</p>
+ *
+ * <h2>Why a class instead of utility methods</h2>
+ * <p>Package-private static methods keep the pipeline narrow — only
+ * the three storage services in this package can call them, so a
+ * future change cannot accidentally widen the surface to a less
+ * defended path.</p>
+ */
 final class UploadStorageSupport {
 
     private static final int SIGNATURE_PREFIX_BYTES = 64;

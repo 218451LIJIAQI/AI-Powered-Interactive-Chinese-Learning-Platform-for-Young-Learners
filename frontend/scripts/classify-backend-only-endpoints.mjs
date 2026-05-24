@@ -1,3 +1,40 @@
+/**
+ * Audit tool — reconcile backend OpenAPI surface vs frontend
+ * consumption.
+ *
+ * <h2>What it computes</h2>
+ * Diffs three sources of truth:
+ *   1. `backend/target/fresh-openapi-paths.txt` — paths produced
+ *      by the springdoc OpenAPI dump (the actual REST contract).
+ *   2. `frontend/src/api/services.ts` — every `http.<verb>(...)`
+ *      call the SPA makes.
+ *   3. `frontend/src/router/index.ts` — every Vue Router path
+ *      (used for noise-suppression when a frontend route happens
+ *      to match a backend route).
+ *
+ * Produces `backend/target/backend-only-endpoint-classification.json`
+ * with each backend endpoint marked as:
+ *   - {@code used-by-frontend}     — SPA calls it directly
+ *   - {@code backend-only}         — exists but never called from
+ *                                    the SPA (e.g. server-side
+ *                                    integration, webhook, future
+ *                                    surface)
+ *   - {@code dynamic-templated}    — frontend uses string templates
+ *                                    that match this path family
+ *
+ * <h2>Why it exists</h2>
+ * Without this audit it is easy to ship a new backend endpoint and
+ * forget to wire it in the SPA, or to leave dead endpoints around
+ * after deleting a frontend feature. The CI quality gate consumes
+ * the JSON output and warns when the {@code backend-only} list
+ * grows unexpectedly.
+ *
+ * <h2>Special-case handling</h2>
+ * The {@code /admin/moderation/${action}} template explicitly
+ * expands to the known {hide, unpublish, archive, request-revision,
+ * restore} variants so the classifier does not flag them as
+ * dynamic-only.
+ */
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'

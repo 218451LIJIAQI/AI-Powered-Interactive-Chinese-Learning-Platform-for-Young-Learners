@@ -23,6 +23,13 @@ import com.example.aichinese.service.model.CommerceCheckout;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+/**
+ * Unit coverage for {@code StripePaymentProviderClient} — uses an
+ * embedded {@link com.sun.net.httpserver.HttpServer} to stand in for
+ * Stripe so the test exercises the real HTTP request shape, signed
+ * webhook handling, minor-unit currency translation, and the
+ * never-throw contract end-to-end without hitting the real API.
+ */
 class StripePaymentProviderClientTests {
 
     @Test

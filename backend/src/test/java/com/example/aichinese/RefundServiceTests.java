@@ -36,6 +36,12 @@ import com.example.aichinese.service.RefundService;
 import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.TeacherEarningService;
 
+/**
+ * Unit coverage for {@code RefundService} — pins the
+ * lock-order-before-active-check ordering, the one-way state machine
+ * (PENDING → APPROVED → COMPLETED / REJECTED), and the entitlement
+ * revocation + teacher earning refund side-effects on approval.
+ */
 class RefundServiceTests {
 
     @Test

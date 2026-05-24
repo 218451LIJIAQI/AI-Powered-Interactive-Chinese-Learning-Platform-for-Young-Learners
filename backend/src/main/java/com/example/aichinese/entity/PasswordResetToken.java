@@ -17,18 +17,30 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Persistent record of a password-reset token issued to a user.
+ * Persistent record of a password-reset token issued to a {@link User}.
  *
  * <p>The presence of this row is what makes the
  * {@code POST /api/v1/auth/reset-password} endpoint succeed. A row is
  * created when a user requests {@code POST /api/v1/auth/forgot-password},
- * and is marked used (and thereby invalidated) the first time it is
- * successfully redeemed.</p>
+ * and is marked used (by setting {@link #usedAt}) the first time it is
+ * successfully redeemed — single-use semantics are enforced by the
+ * service layer checking that {@code usedAt IS NULL} before consuming.</p>
  *
- * <p>The database stores only a deterministic hash of the reset token, not
- * the raw token itself. The unhashed token only exists in memory long
- * enough to build the email link, which limits the blast radius of a
- * database leak.</p>
+ * <p><b>Defence-in-depth.</b> The database stores only a deterministic
+ * hash of the reset token, never the raw token. The unhashed token only
+ * exists in memory long enough to build the email link, which limits
+ * the blast radius of a database leak.</p>
+ *
+ * <p><b>One active token per user.</b> The unique constraint on
+ * {@code active_token_user_id} (a generated column populated by the
+ * database to {@code user_id} when {@link #usedAt} is {@code NULL} and
+ * to {@code NULL} otherwise) guarantees that requesting a new token
+ * automatically invalidates any unused predecessor — eliminating the
+ * "two pending reset emails" race that otherwise lets an attacker
+ * abuse a stale token.</p>
+ *
+ * <p>{@link #expiresAt} is checked at redemption time so a token
+ * leaked from email after its window closes is still useless.</p>
  */
 @Getter
 @Setter

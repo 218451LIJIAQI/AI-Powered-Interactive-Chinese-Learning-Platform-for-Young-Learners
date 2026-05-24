@@ -2,6 +2,16 @@ import { computed } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 
+/**
+ * Composable that exposes "is this teacher gated by their verification
+ * status?" plus copy-paste-ready banner title / message.
+ *
+ * <p>Used by every teacher dashboard surface to show the same banner
+ * for PENDING / REJECTED accounts. Centralising the copy here means
+ * a wording change ripples through the app without per-page edits,
+ * and keeps the banner consistent between content authoring,
+ * earnings, classes, and feedback pages.</p>
+ */
 export function useTeacherAccess() {
   const auth = useAuthStore()
 

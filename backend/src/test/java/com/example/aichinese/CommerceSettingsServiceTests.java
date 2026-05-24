@@ -15,6 +15,12 @@ import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.service.CommerceMoneyService;
 import com.example.aichinese.service.CommerceSettingsService;
 
+/**
+ * Unit coverage for {@code CommerceSettingsService} — pins the
+ * three-letter ISO-4217 currency validation, the {@code [0, 1]}
+ * commission-rate range guard, and the {@code DECIMAL(N, 4)}
+ * normalisation rules used by every commerce surface.
+ */
 class CommerceSettingsServiceTests {
 
     @Test

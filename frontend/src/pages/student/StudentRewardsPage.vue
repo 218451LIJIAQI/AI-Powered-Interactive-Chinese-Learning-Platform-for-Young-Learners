@@ -58,76 +58,70 @@
             </div>
           </article>
 
-          <div class="student-rewards-middle">
-            <article class="panel student-rewards-badges-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <span><IconGlyph name="trophy" :size="20" /></span>
-                  <strong>Earned Badges</strong>
+          <article class="panel student-rewards-badges-card">
+            <div class="row-between">
+              <div class="student-section-heading">
+                <span><IconGlyph name="trophy" :size="20" /></span>
+                <strong>Earned Badges</strong>
+              </div>
+              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">Open Achievements</button>
+            </div>
+
+            <div v-if="earnedBadgeCards.length" class="student-badge-grid">
+              <article v-for="badge in earnedBadgeCards" :key="badge.id" class="student-badge-card" :class="{ 'is-locked': badge.locked }">
+                <div class="student-badge-emblem" :class="`is-${badge.tone}`">
+                  <span><IconGlyph :name="badge.icon" :size="26" /></span>
+                  <small v-if="badge.locked"><IconGlyph name="safe" :size="14" /></small>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/achievements')">Open Achievements</button>
-              </div>
-
-              <div class="student-badge-grid">
-                <article v-for="badge in earnedBadgeCards" :key="badge.id" class="student-badge-card" :class="{ 'is-locked': badge.locked }">
-                  <div class="student-badge-emblem" :class="`is-${badge.tone}`">
-                    <span><IconGlyph :name="badge.icon" :size="26" /></span>
-                    <small v-if="badge.locked"><IconGlyph name="safe" :size="14" /></small>
-                  </div>
-                  <strong>{{ badge.title }}</strong>
-                  <span>{{ badge.subtitle }}</span>
-                  <div class="student-badge-stars">{{ badge.stars }}</div>
-                </article>
-              </div>
-
-              <div class="student-badges-divider" />
-
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <span><IconGlyph name="safe" :size="20" /></span>
-                  <strong>Locked Badges</strong>
+                <strong>{{ badge.title }}</strong>
+                <span>{{ badge.subtitle }}</span>
+                <div class="student-badge-status is-earned"><IconGlyph name="status" :size="12" /> {{ badge.statusLabel }}</div>
+              </article>
+            </div>
+            <div v-else class="student-badges-empty">
+              <div class="student-badges-empty-head">
+                <span><IconGlyph name="trophy" :size="22" /></span>
+                <div>
+                  <strong>No earned badges yet</strong>
+                  <small>Finish your first lesson, quiz, or streak to claim your first badge.</small>
                 </div>
               </div>
+              <ul class="student-badges-empty-list">
+                <li><IconGlyph name="learn" :size="14" /> Complete one lesson to unlock the Pinyin Explorer badge</li>
+                <li><IconGlyph name="quiz" :size="14" /> Score 80%+ in a quiz to unlock Quiz Starter</li>
+                <li><IconGlyph name="streak" :size="14" /> Learn 7 days in a row to unlock 7-Day Streak</li>
+              </ul>
+              <button type="button" class="student-badges-empty-cta" @click="router.push('/student/practice')">
+                <IconGlyph name="practice" :size="16" />
+                Start practising
+                <IconGlyph name="chevronRight" :size="14" />
+              </button>
+            </div>
 
-              <div class="student-badge-grid student-badge-grid--locked">
-                <article v-for="badge in lockedBadgeCards" :key="badge.id" class="student-badge-card is-locked">
-                  <div class="student-badge-emblem is-gray">
-                    <span><IconGlyph :name="badge.icon" :size="26" /></span>
-                    <small><IconGlyph name="safe" :size="14" /></small>
-                  </div>
-                  <strong>{{ badge.title }}</strong>
-                  <span>{{ badge.subtitle }}</span>
-                  <div class="student-badge-stars">{{ badge.stars }}</div>
-                </article>
+            <div class="student-badges-divider" />
+
+            <div class="row-between">
+              <div class="student-section-heading">
+                <span><IconGlyph name="safe" :size="20" /></span>
+                <strong>Locked Badges</strong>
               </div>
+              <span class="student-badges-meta">{{ lockedBadgeCards.length }} to unlock</span>
+            </div>
 
-              <p class="student-badges-note">Keep going! Reward progress stays aligned with your real learning activity and streak data.</p>
-            </article>
-
-            <article class="panel student-rewards-achievements-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <span><IconGlyph name="star" :size="20" /></span>
-                  <strong>Recent Achievements</strong>
+            <div class="student-badge-grid student-badge-grid--locked">
+              <article v-for="badge in lockedBadgeCards" :key="badge.id" class="student-badge-card is-locked">
+                <div class="student-badge-emblem is-gray">
+                  <span><IconGlyph :name="badge.icon" :size="26" /></span>
+                  <small><IconGlyph name="safe" :size="14" /></small>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/achievements')">Open Achievements</button>
-              </div>
+                <strong>{{ badge.title }}</strong>
+                <span>{{ badge.subtitle }}</span>
+                <div class="student-badge-status is-locked"><IconGlyph name="safe" :size="12" /> {{ badge.statusLabel }}</div>
+              </article>
+            </div>
 
-              <div class="student-achievement-list">
-                <article v-for="item in achievementFeed" :key="item.id" class="student-achievement-item">
-                  <span class="student-achievement-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
-                  <div class="student-achievement-copy">
-                    <strong>{{ item.title }}</strong>
-                    <span>{{ item.subtitle }}</span>
-                  </div>
-                  <div class="student-achievement-side">
-                    <strong>{{ item.reward }}</strong>
-                    <small>{{ item.date }}</small>
-                  </div>
-                </article>
-              </div>
-            </article>
-          </div>
+            <p class="student-badges-note">Keep going! Reward progress stays aligned with your real learning activity and streak data.</p>
+          </article>
 
           <article class="panel student-rewards-journey-card">
             <div class="student-section-heading">
@@ -207,7 +201,7 @@
               <button type="button" class="student-link-button" @click="router.push('/student/profile')">Points Activity</button>
             </div>
 
-            <div class="student-reward-history-list">
+            <div v-if="rewardHistoryCards.length" class="student-reward-history-list">
               <article v-for="item in rewardHistoryCards" :key="item.id" class="student-reward-history-item">
                 <span class="student-reward-history-icon"><IconGlyph :name="item.icon" :size="18" /></span>
                 <div class="student-reward-history-copy">
@@ -215,6 +209,35 @@
                   <span>{{ item.date }}</span>
                 </div>
                 <strong class="student-reward-history-points">+{{ item.points }} XP</strong>
+              </article>
+            </div>
+            <div v-else class="student-reward-history-empty">
+              <span><IconGlyph name="streak" :size="18" /></span>
+              <div>
+                <strong>No reward history yet</strong>
+                <small>Complete a lesson, quiz, or daily streak to log your first XP entry.</small>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel student-rewards-achievements-card">
+            <div class="row-between">
+              <div class="student-section-heading">
+                <span><IconGlyph name="star" :size="20" /></span>
+                <strong>Recent Achievements</strong>
+              </div>
+              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">Open</button>
+            </div>
+
+            <div class="student-achievement-list">
+              <article v-for="item in achievementFeed" :key="item.id" class="student-achievement-item">
+                <span class="student-achievement-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
+                <div class="student-achievement-copy">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.subtitle }}</span>
+                  <small>{{ item.date }}</small>
+                </div>
+                <strong class="student-achievement-reward">{{ item.reward }}</strong>
               </article>
             </div>
           </article>
@@ -225,6 +248,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student rewards / XP / point shop surface.
+ *
+ * <p>Visualises points balance, recent reward transactions, the
+ * monthly leaderboard placement, and themed reward targets. Like
+ * the other student dashboards, single-fetch through the
+ * studentApi reward summary so the bottom cards derive from one
+ * response.</p>
+ */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -359,7 +391,7 @@ const earnedBadgeCards = computed(() => {
     id: `earned-${badge.badgeId}`,
     title: badge.name,
     subtitle: badge.description,
-    stars: index === 0 ? '***' : index === 1 ? '***' : '**-',
+    statusLabel: index === 0 ? 'Mastered' : index === 1 ? 'Mastered' : 'In progress',
     icon:
       badge.iconKey === 'star'
         ? 'star'
@@ -377,7 +409,7 @@ const earnedBadgeCards = computed(() => {
       id: 'earned-streak',
       title: '7-Day Streak',
       subtitle: 'Learnt for 7 days in a row',
-      stars: '***',
+      statusLabel: 'Mastered',
       icon: 'streak',
       tone: 'purple',
       locked: false,
@@ -386,7 +418,7 @@ const earnedBadgeCards = computed(() => {
       id: 'earned-quiz',
       title: 'Quiz Starter',
       subtitle: 'Scored above 80% in a quiz',
-      stars: '**-',
+      statusLabel: 'In progress',
       icon: 'quiz',
       tone: 'orange',
       locked: false,
@@ -403,11 +435,11 @@ const earnedBadgeCards = computed(() => {
 })
 
 const lockedBadgeCards = [
-  { id: 'lock-1', title: 'Sentence Builder', subtitle: 'Unlock with more rearrange practice', stars: '**-', icon: 'clip' },
-  { id: 'lock-2', title: 'Story Starter', subtitle: 'Unlock after story activity streaks', stars: '**-', icon: 'learn' },
-  { id: 'lock-3', title: 'Character Master', subtitle: 'Unlock after tracing drills', stars: '***', icon: 'language' },
-  { id: 'lock-4', title: 'Quiz Whiz', subtitle: 'Unlock with stronger quiz consistency', stars: '**-', icon: 'quiz' },
-  { id: 'lock-5', title: 'Culture Explorer', subtitle: 'Unlock from culture lesson progress', stars: '**-', icon: 'globe' },
+  { id: 'lock-1', title: 'Sentence Builder', subtitle: 'Unlock with more rearrange practice', statusLabel: 'Locked', icon: 'clip' },
+  { id: 'lock-2', title: 'Story Starter', subtitle: 'Unlock after story activity streaks', statusLabel: 'Locked', icon: 'learn' },
+  { id: 'lock-3', title: 'Character Master', subtitle: 'Unlock after tracing drills', statusLabel: 'Locked', icon: 'language' },
+  { id: 'lock-4', title: 'Quiz Whiz', subtitle: 'Unlock with stronger quiz consistency', statusLabel: 'Locked', icon: 'quiz' },
+  { id: 'lock-5', title: 'Culture Explorer', subtitle: 'Unlock from culture lesson progress', statusLabel: 'Locked', icon: 'globe' },
 ]
 
 const achievementFeed = computed(() => [
@@ -807,10 +839,26 @@ function reloadAll() {
   background: linear-gradient(180deg, #efeff2, #d8d9df);
 }
 
-.student-badge-stars {
-  color: #f6b21f;
-  letter-spacing: 2px;
-  font-size: 0.9rem;
+.student-badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.student-badge-status.is-earned {
+  color: #2f9f45;
+  background: rgba(95, 202, 108, 0.16);
+}
+
+.student-badge-status.is-locked {
+  color: #7a849e;
+  background: rgba(204, 210, 226, 0.32);
 }
 
 .student-badges-divider {
@@ -1327,6 +1375,463 @@ function reloadAll() {
 
   .student-rewards-promo-chest {
     font-size: 4rem;
+  }
+}
+
+/* ====================================================================
+   Deep polish v2 — header, hero overflow fix, dense badges, sidebar
+   achievements list, history & badge empty states, journey clarity
+   ==================================================================== */
+
+.student-rewards-page .student-simple-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+  padding: 4px 4px 0;
+}
+
+.student-rewards-page .student-simple-header h1 {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: #1f2647;
+  font-family: 'Fredoka', sans-serif;
+  font-size: clamp(2rem, 3.4vw, 2.85rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.student-rewards-page .student-simple-header h1 > span {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  color: #cf7c0e;
+  background: linear-gradient(135deg, rgba(255, 226, 145, 0.92), rgba(255, 197, 96, 0.92));
+  box-shadow: 0 12px 22px rgba(255, 175, 71, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.student-rewards-page .student-simple-header p {
+  grid-column: 1 / -1;
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: #5a6485;
+  font-size: 0.96rem;
+  line-height: 1.5;
+}
+
+/* Hero stat readability fixes - "Achievements" no longer wraps, "0 days" stays on one line */
+.student-rewards-top-stat {
+  min-width: 0;
+}
+
+.student-rewards-top-stat > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.student-rewards-top-stat small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.74rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.student-rewards-top-stat strong {
+  margin-top: 0;
+  font-size: 1.55rem;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+}
+
+/* Hero left column "Little Starter" text shouldn't wrap awkwardly */
+.student-rewards-level-copy {
+  min-width: 0;
+}
+
+.student-rewards-level-copy span {
+  display: block;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Badges card now spans full main column - taller, denser, cleaner */
+.student-rewards-badges-card {
+  padding: 20px;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 219, 137, 0.18), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96));
+  box-shadow:
+    0 18px 38px rgba(112, 121, 176, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.student-badges-meta {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(204, 210, 226, 0.32);
+  color: #7a849e;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Wide grid: 5 columns now have generous space each */
+.student-badge-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.student-badge-card {
+  position: relative;
+  padding: 14px 10px 12px;
+  border: 1px solid rgba(231, 235, 248, 0.92);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 22px rgba(124, 132, 184, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.student-badge-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(126, 96, 255, 0.28);
+  box-shadow: 0 18px 32px rgba(124, 132, 184, 0.14);
+}
+
+.student-badge-card.is-locked {
+  background: rgba(248, 249, 252, 0.96);
+  box-shadow: 0 6px 14px rgba(124, 132, 184, 0.05);
+}
+
+.student-badge-card.is-locked:hover {
+  transform: none;
+  border-color: rgba(231, 235, 248, 0.92);
+  box-shadow: 0 10px 20px rgba(124, 132, 184, 0.08);
+}
+
+.student-badge-card strong {
+  margin-top: 2px;
+  color: #232b4a;
+  font-size: 0.92rem;
+  line-height: 1.18;
+}
+
+.student-badge-card span {
+  flex: 1 1 auto;
+  min-height: 32px;
+  color: #66718d;
+  font-size: 0.74rem;
+  line-height: 1.3;
+}
+
+.student-badge-card.is-locked strong {
+  color: #4f5a7a;
+}
+
+.student-badge-emblem {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08), 0 14px 22px rgba(120, 96, 220, 0.16);
+}
+
+.student-badge-emblem.is-gold {
+  background: linear-gradient(180deg, #ffd75a, #f3a020);
+  color: white;
+}
+
+.student-badge-emblem.is-green {
+  background: linear-gradient(180deg, #8ad55a, #4ea93d);
+}
+
+.student-badge-emblem.is-gray {
+  background: linear-gradient(180deg, #f3f4f8, #dee0ea);
+  color: #8a93ad;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.04), 0 8px 14px rgba(150, 156, 180, 0.12);
+}
+
+.student-badge-emblem small {
+  right: -4px;
+  top: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  color: #7a849e;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 10px rgba(120, 130, 160, 0.18);
+}
+
+.student-badge-status {
+  margin-top: 4px;
+}
+
+/* Earned badges empty state - dense and actionable */
+.student-badges-empty {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px dashed rgba(126, 96, 255, 0.28);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 96% 4%, rgba(255, 226, 144, 0.18), transparent 32%),
+    rgba(247, 245, 255, 0.7);
+}
+
+.student-badges-empty-head {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.student-badges-empty-head > span {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  color: #d9881a;
+  background: linear-gradient(135deg, rgba(255, 224, 141, 0.96), rgba(255, 196, 105, 0.96));
+  box-shadow: 0 10px 20px rgba(245, 175, 71, 0.18);
+}
+
+.student-badges-empty-head strong {
+  display: block;
+  color: #232b4a;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.student-badges-empty-head small {
+  display: block;
+  margin-top: 4px;
+  color: #66718d;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.student-badges-empty-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.student-badges-empty-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(231, 235, 248, 0.96);
+  color: #2f3a5c;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.student-badges-empty-list li > :first-child {
+  color: #6d4cff;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(111, 76, 255, 0.1);
+  display: grid;
+  place-items: center;
+}
+
+.student-badges-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #7657ff, #9d7bff);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 12px 22px rgba(122, 96, 230, 0.28);
+}
+
+.student-badges-empty-cta:hover {
+  filter: brightness(1.05);
+}
+
+/* Journey track - cleaner captions, no clipping */
+.student-journey-step strong {
+  color: #232b4a;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.student-journey-step span {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.student-journey-step small {
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+/* Reward History empty state */
+.student-reward-history-empty {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px dashed rgba(228, 232, 244, 0.96);
+  border-radius: 16px;
+  background: rgba(250, 251, 255, 0.92);
+}
+
+.student-reward-history-empty > span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  color: #d9881a;
+  background: rgba(255, 196, 105, 0.22);
+}
+
+.student-reward-history-empty strong {
+  display: block;
+  color: #232b4a;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.student-reward-history-empty small {
+  display: block;
+  margin-top: 4px;
+  color: #66718d;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* Sidebar Recent Achievements card - now lives below Reward History */
+.student-rewards-achievements-card {
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 197, 122, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 252, 255, 0.96));
+  box-shadow:
+    0 18px 32px rgba(120, 130, 180, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.student-rewards-achievements-card .student-achievement-list {
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.student-rewards-achievements-card .student-achievement-item {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(231, 235, 248, 0.94);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.student-rewards-achievements-card .student-achievement-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  font-size: 1rem;
+}
+
+.student-rewards-achievements-card .student-achievement-copy strong {
+  color: #232b4a;
+  font-size: 0.86rem;
+  line-height: 1.18;
+}
+
+.student-rewards-achievements-card .student-achievement-copy span {
+  display: block;
+  color: #66718d;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.student-rewards-achievements-card .student-achievement-copy small {
+  display: block;
+  margin-top: 2px;
+  color: #94a0b9;
+  font-size: 0.68rem;
+  letter-spacing: 0.01em;
+}
+
+.student-achievement-reward {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #6d4cff;
+  background: rgba(111, 76, 255, 0.1);
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  align-self: start;
+}
+
+/* Locked badges chip placement refinement */
+.student-badge-grid--locked .student-badge-card {
+  background: rgba(248, 249, 252, 0.7);
+}
+
+/* Make the badges grid responsive: 4 cols on medium, 3 on small, 2 on phones */
+@media (max-width: 1280px) {
+  .student-badge-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .student-rewards-page .student-simple-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .student-badge-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .student-badge-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .student-rewards-achievements-card .student-achievement-item {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .student-achievement-reward {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 </style>

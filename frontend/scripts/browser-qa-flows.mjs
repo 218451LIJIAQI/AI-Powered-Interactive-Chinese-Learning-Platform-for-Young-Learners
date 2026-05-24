@@ -1,3 +1,35 @@
+/**
+ * Browser-driven user-flow QA — the highest-fidelity automated
+ * coverage we ship. Walks complete persona journeys end-to-end and
+ * records evidence at each step.
+ *
+ * <h2>Flows covered</h2>
+ *   - Public visitor browsing course catalogue, viewing course
+ *     detail, attempting paid checkout.
+ *   - Student onboarding → home → lesson → quiz → AI helper.
+ *   - Teacher dashboard → content authoring → publishing pipeline →
+ *     class scheduling → student feedback.
+ *   - Admin user management → teacher verification → content review
+ *     → moderation → finance.
+ *
+ * <h2>Driving harness</h2>
+ * Designed to be invoked by `run-browser-qa-flows.mjs`, which spins
+ * up a Vite preview server first and then launches this script with
+ * the right `QA_BASE_URL`. Can also be invoked directly when a
+ * preview server is already running.
+ *
+ * <h2>Failure semantics</h2>
+ * Uses a custom {@code BlockedError} to distinguish "this step
+ * cannot continue because a prerequisite failed" from a transient
+ * "let's retry" error. The poll helper escalates `BlockedError` so
+ * the operator sees a clear root-cause line instead of a long
+ * stack trace of follow-on failures.
+ *
+ * <h2>Evidence layout</h2>
+ * `browser-qa-evidence/<timestamp>-flows/` with one screenshot per
+ * step plus a structured JSON report containing
+ * `{cases, pass, needsReview, needsFix, fail}` totals at the end.
+ */
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'

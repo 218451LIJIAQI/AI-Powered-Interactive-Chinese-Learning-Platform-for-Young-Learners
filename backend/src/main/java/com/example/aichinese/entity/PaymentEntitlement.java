@@ -15,6 +15,35 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Granted right of a {@link StudentProfile} to access a paid artefact.
+ *
+ * <p>This is the single source of truth that the access-control layer
+ * consults whenever a student opens a paid {@code Lesson},
+ * {@code LearningModule}, {@code CoursePackage}, or premium AI feature:
+ * {@code EntitlementService.hasAccess} resolves to {@code true} when an
+ * <em>active</em> row exists matching the current student and the
+ * artefact identifier pair {@code (item_type, item_id)}.</p>
+ *
+ * <p>Rows are created by {@code PaymentService} when a {@link PaymentRecord}
+ * transitions to {@link com.example.aichinese.entity.enums.PaymentStatus#PAID}
+ * and are flipped to {@code active = false} when the order is refunded.
+ * They are <em>not</em> deleted, so a refund-then-repurchase scenario
+ * preserves a complete audit trail.</p>
+ *
+ * <p>The unique constraint on
+ * {@code (order_id, item_type, item_id, feature_key_normalized)} prevents
+ * Stripe webhook retries from inserting duplicate entitlements when a
+ * single payment is delivered twice.
+ * {@link #featureKeyNormalized} is a generated column populated by the
+ * database (lower-cased {@code feature_key}, defaulting to {@code ""})
+ * so {@code NULL}/empty feature keys still participate in the unique
+ * index — Hibernate sees it as read-only via
+ * {@code insertable = false, updatable = false}.</p>
+ *
+ * <p>{@link #version} guards against concurrent flips of {@link #active}
+ * when a refund and a subsequent re-purchase race.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

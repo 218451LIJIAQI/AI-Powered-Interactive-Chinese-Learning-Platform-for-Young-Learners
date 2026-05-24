@@ -20,6 +20,33 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Student-submitted complaint about a specific AI response.
+ *
+ * <p>This entity is the cornerstone of the platform's child-safety story:
+ * any learner can flag a chat reply or generated artefact through
+ * {@code POST /api/v1/student/ai-reports}, and an admin moderator works
+ * the queue from the dashboard. The lifecycle follows
+ * {@link com.example.aichinese.entity.enums.AiResponseReportStatus}:
+ * {@code PENDING_REVIEW → IN_REVIEW → RESOLVED|DISMISSED}.</p>
+ *
+ * <h3>Immutable evidence snapshots</h3>
+ * <p>{@link #promptSnapshot} and {@link #aiResponseSnapshot} are
+ * deliberately stored as text rather than fetched live from the
+ * underlying {@link AiChatMessage} / {@link AiUsageLog} so that:</p>
+ * <ul>
+ *   <li>Moderators see exactly what the student saw, even if the model
+ *       output is regenerated or the chat session is later archived.</li>
+ *   <li>Analytics on what triggers reports remain stable across upstream
+ *       AI provider changes.</li>
+ * </ul>
+ *
+ * <p>The optional {@link #aiUsageLog}, {@link #chatSession} and
+ * {@link #chatMessage} relationships are kept nullable so a legacy log
+ * without a session reference still produces a parseable report row;
+ * deleting the underlying chat artefacts does not require cascading the
+ * report.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,7 +56,8 @@ import lombok.Setter;
         @Index(name = "idx_ai_response_reports_status", columnList = "status"),
         @Index(name = "idx_ai_response_reports_feature_key", columnList = "feature_key"),
         @Index(name = "idx_ai_response_reports_usage_log_id", columnList = "ai_usage_log_id"),
-        @Index(name = "idx_ai_response_reports_chat_session_id", columnList = "chat_session_id")
+        @Index(name = "idx_ai_response_reports_chat_session_id", columnList = "chat_session_id"),
+        @Index(name = "idx_ai_response_reports_student_created", columnList = "student_user_id,created_at")
 })
 public class AiResponseReport extends BaseEntity {
 

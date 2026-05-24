@@ -16,6 +16,49 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 
+/**
+ * Issues and validates the HS256-signed JWTs used as the platform's
+ * stateless session token.
+ *
+ * <h2>Token contents</h2>
+ * <p>Each token carries three claims beyond the standard
+ * {@code iat} / {@code exp} pair:</p>
+ * <ul>
+ *   <li>{@code sub} — the user's email address (used by Spring Security
+ *       as the principal name).</li>
+ *   <li>{@code userId} — the numeric user id, used by service layers to
+ *       avoid an extra email-to-id lookup on every authenticated
+ *       request.</li>
+ *   <li>{@code sessionVersion} — snapshot of
+ *       {@link User#getSessionVersion()} at issue time. The token is
+ *       only accepted while this value matches the row's current
+ *       version, so bumping the version invalidates every outstanding
+ *       token without a server-side revocation list.</li>
+ * </ul>
+ *
+ * <h2>Secret resolution</h2>
+ * <p>The configured secret string supports two formats:</p>
+ * <ol>
+ *   <li><b>Plain text</b> ({@code app.security.secret=mySecret...}) —
+ *       UTF-8 bytes are used directly. Must be at least 32 bytes long
+ *       so HS256's 256-bit key requirement is met without
+ *       silent truncation.</li>
+ *   <li><b>Base64</b> ({@code app.security.secret=base64:...}) — the
+ *       value after the {@code base64:} prefix is Base64-decoded, again
+ *       requiring at least 32 decoded bytes. Use this when the secret
+ *       is supplied as a binary key rather than a memorable phrase.</li>
+ * </ol>
+ *
+ * <p>Both formats fail-fast at startup with a clear
+ * {@link IllegalStateException} rather than at first request, so a
+ * mis-configured secret never reaches production unnoticed.</p>
+ *
+ * <h2>Thread safety</h2>
+ * <p>This bean is a singleton; {@link io.jsonwebtoken.JwtBuilder} and
+ * {@link io.jsonwebtoken.JwtParser} from the JJWT library are
+ * thread-safe so the precomputed {@link #signingKey} can be reused
+ * across concurrent requests without synchronisation.</p>
+ */
 @Service
 public class JwtService {
 

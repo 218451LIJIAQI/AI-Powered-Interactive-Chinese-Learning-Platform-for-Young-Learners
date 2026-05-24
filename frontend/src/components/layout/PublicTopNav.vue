@@ -1,5 +1,6 @@
 <template>
   <header class="public-nav">
+    <a href="#main-content" class="skip-to-main">Skip to main content</a>
     <AppBrand compact />
 
     <nav class="nav-links public-nav-links" aria-label="Primary">
@@ -27,6 +28,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Sticky top navigation for unauthenticated routes (landing,
+ * catalogue, course detail, terms / privacy). Shows the brand,
+ * the four public nav items, a language switcher, and a
+ * "Sign in" CTA.
+ *
+ * Hidden by the parent {@link PublicLayout} for the auth pages
+ * themselves so the auth chrome has the full viewport.
+ */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'

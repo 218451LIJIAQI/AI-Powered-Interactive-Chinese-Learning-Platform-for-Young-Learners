@@ -21,6 +21,31 @@ import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
+/**
+ * Drives the cart-to-order conversion: validates the cart contents,
+ * creates the {@link Order} + {@link OrderItem} rows, and asks
+ * {@link PaymentService} to produce a provider redirect URL.
+ *
+ * <h2>Two checkout sources</h2>
+ * <p>The student can check out from their persisted cart
+ * ({@link com.example.aichinese.dto.commerce.CheckoutSessionRequest.CheckoutSource#CART})
+ * or directly with an ad-hoc item list (the
+ * {@code DIRECT} buy-now path). Both flows funnel through the same
+ * validation + order creation logic to keep the financial path
+ * uniform.</p>
+ *
+ * <h2>Ownership re-check</h2>
+ * <p>Even though {@link CartService} rejects already-owned items at
+ * add-time, the entitlement check is repeated here at checkout in case
+ * a concurrent payment completed in another tab — preventing
+ * double-purchase of the same content.</p>
+ *
+ * <h2>Currency mode</h2>
+ * <p>The configured payment-provider mode (live / test / mock) is
+ * surfaced through {@link PaymentProperties} so the front-end can
+ * show the appropriate banner; the actual provider redirect URL is
+ * built by {@link PaymentService}.</p>
+ */
 @Service
 public class CheckoutService {
 

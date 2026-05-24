@@ -10,6 +10,23 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Achievement badge that students can earn (e.g. "First Quiz",
+ * "Seven-Day Streak", "Pinyin Master").
+ *
+ * <p>Awarding is recorded in {@link StudentBadge}; this entity is just
+ * the catalogue of badge definitions. {@link #iconKey} is a stable
+ * short string (e.g. {@code "streak-7"}) that the frontend maps to a
+ * concrete icon asset, decoupling badge metadata from front-end visual
+ * design.</p>
+ *
+ * <p>{@link #active} provides soft-deactivation: a retired badge is
+ * hidden from new awards but historic {@link StudentBadge} rows
+ * continue to reference it without breaking.</p>
+ *
+ * <p>{@link #name} is unique to keep the gamification dashboard free
+ * of duplicate displayed achievements.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

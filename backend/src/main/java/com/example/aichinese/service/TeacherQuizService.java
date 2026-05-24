@@ -35,13 +35,41 @@ import com.example.aichinese.repository.QuizQuestionRepository;
 import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
-import com.example.aichinese.util.TextUtils;
 
 /**
- * Teacher-side authoring of quizzes attached to a lesson the teacher owns.
+ * Teacher-side authoring of quizzes attached to a lesson the teacher
+ * owns: quiz CRUD plus question / option / answer authoring and the
+ * read-side view onto past student attempts.
+ *
+ * <h2>Authoring invariants</h2>
+ * <ul>
+ *   <li>Every {@link QuizQuestion} of type
+ *       {@link QuizQuestionType#MULTIPLE_CHOICE} must have at least
+ *       one option flagged {@code isCorrect=true}; the create / update
+ *       paths validate this before commit so the student player never
+ *       sees an unanswerable question.</li>
+ *   <li>Length caps ({@code MAX_QUIZ_*} / {@code MAX_QUESTION_*} /
+ *       {@code MAX_OPTION_*} constants below) match the underlying
+ *       column widths so a successful service-layer validation
+ *       guarantees a successful DB write.</li>
+ * </ul>
+ *
+ * <h2>Security boundary</h2>
+ * <p>The teacher-facing response maps include {@code correctOption} /
+ * {@code correctAnswerText} for review purposes; the student-facing
+ * path uses {@link QuizMapper}'s student variants which strip those
+ * fields, so a student cannot read the answer key by hitting the
+ * teacher endpoint via a forged token.</p>
  */
 @Service
 public class TeacherQuizService {
+
+    private static final int MAX_QUIZ_TITLE_LENGTH = 200;
+    private static final int MAX_QUIZ_DESCRIPTION_LENGTH = 1000;
+    private static final int MAX_QUESTION_TEXT_LENGTH = 2000;
+    private static final int MAX_ANSWER_TEXT_LENGTH = 1000;
+    private static final int MAX_OPTION_TEXT_LENGTH = 1000;
+    private static final int MAX_EXPLANATION_LENGTH = 2000;
 
     private final TeacherContentAccessService teacherContentAccessService;
     private final TeacherLessonService teacherLessonService;
@@ -52,6 +80,7 @@ public class TeacherQuizService {
     private final QuizMapper quizMapper;
     private final AuditLogService auditLogService;
     private final StudentLearningAccessService studentLearningAccessService;
+    private final ContentSafetyService contentSafetyService;
 
     public TeacherQuizService(
             TeacherContentAccessService teacherContentAccessService,
@@ -62,7 +91,8 @@ public class TeacherQuizService {
             QuizAttemptRepository quizAttemptRepository,
             QuizMapper quizMapper,
             AuditLogService auditLogService,
-            StudentLearningAccessService studentLearningAccessService) {
+            StudentLearningAccessService studentLearningAccessService,
+            ContentSafetyService contentSafetyService) {
         this.teacherContentAccessService = teacherContentAccessService;
         this.teacherLessonService = teacherLessonService;
         this.quizRepository = quizRepository;
@@ -72,6 +102,7 @@ public class TeacherQuizService {
         this.quizMapper = quizMapper;
         this.auditLogService = auditLogService;
         this.studentLearningAccessService = studentLearningAccessService;
+        this.contentSafetyService = contentSafetyService;
     }
 
     @Transactional(readOnly = true)
@@ -98,8 +129,8 @@ public class TeacherQuizService {
         Quiz quiz = new Quiz();
         quiz.setLesson(lesson);
         quiz.setTeacher(teacherProfile);
-        quiz.setTitle(request.title().trim());
-        quiz.setDescription(TextUtils.trimToNull(request.description()));
+        quiz.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_QUIZ_TITLE_LENGTH, "Quiz title is required."));
+        quiz.setDescription(contentSafetyService.optionalSafeText(request.description(), MAX_QUIZ_DESCRIPTION_LENGTH));
         quiz.setTimeLimitMinutes(request.timeLimitMinutes());
         quiz.setContentStatus(lesson.getContentStatus());
         quiz.setTotalPoints(0);
@@ -116,8 +147,8 @@ public class TeacherQuizService {
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
 
-        quiz.setTitle(request.title().trim());
-        quiz.setDescription(TextUtils.trimToNull(request.description()));
+        quiz.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_QUIZ_TITLE_LENGTH, "Quiz title is required."));
+        quiz.setDescription(contentSafetyService.optionalSafeText(request.description(), MAX_QUIZ_DESCRIPTION_LENGTH));
         quiz.setTimeLimitMinutes(request.timeLimitMinutes());
         Quiz saved = quizRepository.save(quiz);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_UPDATE", "Quiz", saved.getId(),
@@ -261,10 +292,10 @@ public class TeacherQuizService {
             String explanation) {
         QuizQuestionType questionType = QuizQuestionType.fromValue(questionTypeRaw);
         question.setQuestionType(questionType.name());
-        question.setQuestionText(questionText.trim());
+        question.setQuestionText(contentSafetyService.requireSafeText(questionText, MAX_QUESTION_TEXT_LENGTH, "Question text is required."));
         question.setPoints(points);
         question.setSortOrder(displayOrder == null ? 0 : displayOrder);
-        question.setExplanation(TextUtils.trimToNull(explanation));
+        question.setExplanation(contentSafetyService.optionalSafeText(explanation, MAX_EXPLANATION_LENGTH));
 
         List<QuizOptionRequest> safeOptions = options == null ? List.of() : options;
         if (questionType.isOptionBased()) {
@@ -279,12 +310,18 @@ public class TeacherQuizService {
                     .filter(QuizOptionRequest::correctOption)
                     .findFirst()
                     .map(QuizOptionRequest::optionText)
-                    .map(String::trim)
+                    .map(optionText -> contentSafetyService.requireSafeText(
+                            optionText,
+                            MAX_OPTION_TEXT_LENGTH,
+                            "Correct answer option text is required."))
                     .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Correct answer option text is required.")));
         } else if (correctAnswerText == null || correctAnswerText.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, "Correct answer text is required for this question type.");
         } else {
-            question.setCorrectAnswerText(correctAnswerText.trim());
+            question.setCorrectAnswerText(contentSafetyService.requireSafeText(
+                    correctAnswerText,
+                    MAX_ANSWER_TEXT_LENGTH,
+                    "Correct answer text is required for this question type."));
         }
 
         QuizQuestion savedQuestion = quizQuestionRepository.save(question);
@@ -293,7 +330,10 @@ public class TeacherQuizService {
             safeOptions.forEach(option -> {
                 QuizOption quizOption = new QuizOption();
                 quizOption.setQuestion(savedQuestion);
-                quizOption.setOptionText(option.optionText().trim());
+                quizOption.setOptionText(contentSafetyService.requireSafeText(
+                        option.optionText(),
+                        MAX_OPTION_TEXT_LENGTH,
+                        "Option text is required."));
                 quizOption.setCorrectOption(option.correctOption());
                 quizOption.setSortOrder(option.displayOrder() == null ? 0 : option.displayOrder());
                 quizOptionRepository.save(quizOption);

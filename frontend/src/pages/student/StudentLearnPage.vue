@@ -1,10 +1,5 @@
 ﻿<template>
   <div class="page-stack student-learn-page">
-    <section class="student-greeting-header student-greeting-header--learn">
-      <h1>Learn Mandarin</h1>
-      <p>Step by step, speak with confidence!</p>
-    </section>
-
     <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
@@ -94,7 +89,7 @@
                 <div class="student-module-icon" :class="`is-${module.variant}`"><IconGlyph :name="module.icon" :size="24" /></div>
 
                 <strong>{{ module.title }}</strong>
-                <div class="student-module-stars">{{ module.stars }}</div>
+                <div class="student-module-status">{{ module.statusLabel }}</div>
                 <div class="student-module-progress">
                   <ProgressBar :progress="module.progress" :tone="module.tone" />
                 </div>
@@ -199,6 +194,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Student curriculum / lesson player surface.
+ *
+ * <p>Renders module / lesson navigation, the lesson body, and the
+ * "next best step" recommendations. Paid content stays gated by the
+ * backend entitlement check — the page never tries to render
+ * locked lesson body text, so a malicious user cannot inspect the
+ * DOM to bypass the paywall.</p>
+ */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -214,6 +218,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { RecordedLessonVideoResponse, StudentLessonPlayerResponse, VideoProgressResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatPercent } from '@/utils/format'
+import { safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
 const route = useRoute()
@@ -295,7 +300,8 @@ const videoDurationLabel = computed(() => {
   if (durationSeconds > 0) return formatDuration(durationSeconds)
   return 'Duration unavailable'
 })
-const hasPlayableVideo = computed(() => Boolean(primaryVideo.value.id && (primaryVideo.value.streamUrl || primaryVideo.value.externalVideoUrl)))
+const playableVideoUrl = computed(() => safeHttpUrl(primaryVideo.value.streamUrl || primaryVideo.value.externalVideoUrl))
+const hasPlayableVideo = computed(() => Boolean(primaryVideo.value.id && playableVideoUrl.value))
 const videoProgressLabel = computed(() => {
   if (videoProgressLoading.value) return 'Loading progress'
   if (!primaryVideo.value.id) return 'No video'
@@ -362,7 +368,7 @@ const learningModules = computed(() =>
       displayIndex: index + 1,
       title: recentLesson.lessonTitle,
       icon: iconForProgress(recentLesson.completionPercent, recentLesson.completed),
-      stars: starRating(recentLesson.completionPercent),
+      statusLabel: progressLabel(recentLesson.completionPercent, recentLesson.completed),
       progress: recentLesson.completionPercent,
       count: progressLabel(recentLesson.completionPercent, recentLesson.completed),
       complete,
@@ -432,13 +438,6 @@ async function loadLessonPlayer() {
   return emptyLesson
 }
 
-function starRating(completionPercent: number) {
-  if (completionPercent >= 100) return '***'
-  if (completionPercent >= 50) return '**-'
-  if (completionPercent > 0) return '*--'
-  return '---'
-}
-
 function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
@@ -475,7 +474,7 @@ async function loadVideoProgress() {
 async function openRecordedLesson() {
   actionError.value = null
   actionSuccess.value = null
-  const url = primaryVideo.value.streamUrl || primaryVideo.value.externalVideoUrl
+  const url = playableVideoUrl.value
   if (url) {
     window.open(url, '_blank', 'noopener,noreferrer')
     if (resource.usingFallback.value || !primaryVideo.value.id) {

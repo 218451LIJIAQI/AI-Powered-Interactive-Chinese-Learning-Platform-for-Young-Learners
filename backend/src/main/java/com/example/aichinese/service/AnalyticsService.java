@@ -68,6 +68,33 @@ import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.repository.VideoProgressRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
+/**
+ * Time-series + breakdown analytics for the three personas: student
+ * (personal progress trends), teacher (sales / engagement / earnings),
+ * and admin (platform-wide KPIs).
+ *
+ * <h2>Data shape</h2>
+ * <p>All responses follow the same
+ * {@link AnalyticsTrendPointResponse} (time-bucketed) +
+ * {@link AnalyticsBreakdownItemResponse} (categorical) pair so the
+ * front-end charting code is uniform across personas. Time buckets
+ * are capped at {@link #MAX_TREND_POINTS} so an admin can't request a
+ * five-year daily trend that would melt the DB.</p>
+ *
+ * <h2>Authorization</h2>
+ * <p>Per-persona entry points filter the underlying queries by the
+ * caller's identity — a teacher only sees their own classes, a
+ * student only their own progress. Admin endpoints have no row-level
+ * filter but are gated by {@link RoleName#ADMIN} at the security
+ * layer.</p>
+ *
+ * <h2>Performance</h2>
+ * <p>Numeric aggregates are computed in the database via repository
+ * count / sum projections; the service only post-processes into the
+ * shape required by the response DTO. Currency aggregates use
+ * {@link RoundingMode#HALF_UP} so they match the {@link CommerceMoneyService}
+ * convention.</p>
+ */
 @Service
 public class AnalyticsService {
 
@@ -664,13 +691,6 @@ public class AnalyticsService {
         List<Map.Entry<K, V>> entries = new ArrayList<>(values.entrySet());
         int fromIndex = Math.max(entries.size() - limit, 0);
         return entries.subList(fromIndex, entries.size());
-    }
-
-    private BigDecimal scaleDecimal(Double value) {
-        if (value == null) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal defaultMoney(BigDecimal amount) {

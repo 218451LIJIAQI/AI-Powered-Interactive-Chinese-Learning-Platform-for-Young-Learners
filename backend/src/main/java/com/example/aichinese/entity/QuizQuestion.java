@@ -14,6 +14,21 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single question inside a {@link Quiz}.
+ *
+ * <p>{@link #questionType} is a free-form short string that maps to
+ * {@link com.example.aichinese.entity.enums.QuizQuestionType}; option-based
+ * types ({@code MULTIPLE_CHOICE}, {@code TRUE_FALSE}, etc.) require
+ * one or more {@link QuizOption} children, while free-text and
+ * structured types are graded against {@link #correctAnswerText}.</p>
+ *
+ * <p>{@link #points} is the maximum score the question contributes;
+ * the per-quiz total is denormalized into {@link Quiz#getTotalPoints()}.
+ * {@link #sortOrder} drives the canonical question order during a
+ * student attempt; the {@link QuizAttempt} flow may optionally
+ * shuffle.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

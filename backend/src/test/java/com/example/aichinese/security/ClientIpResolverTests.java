@@ -7,6 +7,13 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import com.example.aichinese.config.ForwardedHeaderProperties;
 
+/**
+ * Unit coverage for {@code ClientIpResolver} — pins the trusted-proxy
+ * model: loopback / configured CIDR proxies are honoured (X-Forwarded-For
+ * is parsed), untrusted proxies are ignored (remote-addr wins), and the
+ * left-most non-trusted hop is selected so attackers cannot spoof the
+ * client IP by injecting their own forwarded header.
+ */
 class ClientIpResolverTests {
 
     @Test

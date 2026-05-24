@@ -300,6 +300,14 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin analytics surface — platform-wide metrics, trend charts,
+ * conversion / retention funnels.
+ *
+ * <p>Aggregates {@code adminApi.analytics()} into stacked trend
+ * cards using {@link TrendChart} — pure SVG sparklines, no external
+ * chart library, so the page stays light and accessible.</p>
+ */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 

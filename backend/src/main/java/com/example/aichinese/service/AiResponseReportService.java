@@ -29,6 +29,7 @@ import com.example.aichinese.entity.AiChatSession;
 import com.example.aichinese.entity.AiResponseReport;
 import com.example.aichinese.entity.AiUsageLog;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiResponseReportReason;
 import com.example.aichinese.entity.enums.AiResponseReportStatus;
@@ -40,13 +41,33 @@ import com.example.aichinese.repository.AiResponseReportRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
-import com.example.aichinese.util.TextUtils;
 
+/**
+ * Manages the learner-filed "report this AI response" workflow:
+ * student submission, admin review queue, and resolution.
+ *
+ * <p>Reports are linked to either an {@code AiUsageLog} entry or a
+ * specific chat-session message so the admin reviewer can see the
+ * exact provider response that triggered the complaint without
+ * re-running the prompt. The {@code MAX_REPORT_SNAPSHOT_LENGTH}
+ * cap on captured snippets prevents the report row from balooning
+ * when a report references a very long generated story or quiz.</p>
+ *
+ * <p>Status transitions ({@code OPEN → IN_REVIEW → RESOLVED}) are
+ * one-way; reviewers cannot reopen a resolved report — instead the
+ * student files a new one. Audit trail is written to {@code AuditLog}
+ * on every state change, and a notification is dispatched to the
+ * student when a reviewer resolves their report so they know the
+ * complaint was acted on.</p>
+ */
 @Service
 public class AiResponseReportService {
 
     private static final String TARGET_TYPE = "AI_RESPONSE_REPORT";
+    private static final int MAX_REPORT_DESCRIPTION_LENGTH = 1000;
+    private static final int MAX_REVIEWER_NOTE_LENGTH = 1000;
     private static final int MAX_REPORT_SNAPSHOT_LENGTH = 4000;
 
     private final AiResponseReportRepository aiResponseReportRepository;
@@ -105,7 +126,7 @@ public class AiResponseReportService {
             chatSession = chatMessage.getSession();
         } else if (chatSession != null) {
             chatMessage = aiChatMessageRepository
-                    .findFirstBySessionIdAndSenderRoleIgnoreCaseOrderByIdDesc(chatSession.getId(), "ASSISTANT")
+                    .findFirstBySessionIdAndSenderRoleOrderByIdDesc(chatSession.getId(), AiChatSenderRole.ASSISTANT)
                     .orElse(null);
         }
 
@@ -128,7 +149,7 @@ public class AiResponseReportService {
         report.setChatMessage(chatMessage);
         report.setFeatureKey(featureKey.name());
         report.setReasonCategory(reason);
-        report.setDescription(TextUtils.trimToNull(request.description()));
+        report.setDescription(normalizeReportText(request.description(), MAX_REPORT_DESCRIPTION_LENGTH));
         report.setPromptSnapshot(promptSnapshot);
         report.setAiResponseSnapshot(aiResponseSnapshot);
         report.setStatus(AiResponseReportStatus.PENDING_REVIEW);
@@ -188,7 +209,7 @@ public class AiResponseReportService {
             Long id,
             ReviewAiResponseReportRequest request) {
         User reviewer = requireUser(currentUser.getUserId());
-        AiResponseReport report = requireReport(id);
+        AiResponseReport report = requireLockedReport(id);
         AiResponseReportStatus newStatus = parseEnum(
                 AiResponseReportStatus.class,
                 request.status(),
@@ -204,7 +225,10 @@ public class AiResponseReportService {
 
         report.setStatus(newStatus);
         report.setReviewerUser(reviewer);
-        report.setReviewerNote(request.reviewerNote().trim());
+        report.setReviewerNote(requireReportText(
+                request.reviewerNote(),
+                MAX_REVIEWER_NOTE_LENGTH,
+                "Reviewer note is required."));
         report.setReviewedAt(LocalDateTime.now());
 
         auditLogService.safeRecord(
@@ -256,20 +280,26 @@ public class AiResponseReportService {
         }
         AiChatMessage chatMessage = aiChatMessageRepository.findByIdAndSessionUserId(chatMessageId, student.getId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI chat message was not found for this student."));
-        if (!"ASSISTANT".equalsIgnoreCase(chatMessage.getSenderRole())) {
+        if (chatMessage.getSenderRole() != AiChatSenderRole.ASSISTANT) {
             throw new ResponseStatusException(BAD_REQUEST, "Only AI assistant messages can be reported.");
         }
         return chatMessage;
     }
 
     private String normalizeSnapshot(String value) {
-        String trimmed = TextUtils.trimToNull(value);
-        if (trimmed == null) {
-            return null;
+        return normalizeReportText(value, MAX_REPORT_SNAPSHOT_LENGTH);
+    }
+
+    private String normalizeReportText(String value, int maxLength) {
+        return AiInputSanitizer.sanitize(value, maxLength);
+    }
+
+    private String requireReportText(String value, int maxLength, String message) {
+        String sanitized = normalizeReportText(value, maxLength);
+        if (sanitized == null) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
         }
-        return trimmed.length() <= MAX_REPORT_SNAPSHOT_LENGTH
-                ? trimmed
-                : trimmed.substring(0, MAX_REPORT_SNAPSHOT_LENGTH);
+        return sanitized;
     }
 
     private void notifyAdmins(AiResponseReport report, User student) {
@@ -287,6 +317,11 @@ public class AiResponseReportService {
 
     private AiResponseReport requireReport(Long id) {
         return aiResponseReportRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI response report was not found."));
+    }
+
+    private AiResponseReport requireLockedReport(Long id) {
+        return aiResponseReportRepository.findLockedById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI response report was not found."));
     }
 

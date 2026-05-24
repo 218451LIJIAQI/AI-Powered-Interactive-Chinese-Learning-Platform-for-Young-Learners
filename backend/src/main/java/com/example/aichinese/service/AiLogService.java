@@ -11,6 +11,7 @@ import com.example.aichinese.entity.AiFeedbackRecord;
 import com.example.aichinese.entity.AiUsageLog;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiRequestStatus;
 import com.example.aichinese.repository.AiChatMessageRepository;
@@ -18,6 +19,21 @@ import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiFeedbackRecordRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
 
+/**
+ * Persists the audit / observability tail of every AI invocation:
+ * usage logs, chat sessions, chat messages, and feedback records.
+ *
+ * <p>Centralising the writes here keeps {@link AiService} focused on
+ * the prompt-and-respond pipeline and ensures consistent privacy
+ * handling — child-facing AI uploads and feedback can contain
+ * sensitive personal content, so {@link AiFeedbackRecord#getInputText()}
+ * and {@link AiFeedbackRecord#getFeedbackText()} are stored as
+ * length-only metadata ({@code "content_length=N"}), not the raw
+ * text. Operational signals (status, provider, model, token count,
+ * input/output summaries) live in {@link AiUsageLog}, with
+ * {@link #summarizeForTinyText} guarding against multi-byte UTF-8
+ * truncation that would otherwise corrupt the column.</p>
+ */
 @Service
 public class AiLogService {
 
@@ -52,7 +68,7 @@ public class AiLogService {
     }
 
     @Transactional
-    public AiChatMessage appendChatMessage(AiChatSession session, String senderRole, String messageText) {
+    public AiChatMessage appendChatMessage(AiChatSession session, AiChatSenderRole senderRole, String messageText) {
         AiChatMessage message = new AiChatMessage();
         message.setSession(session);
         message.setSenderRole(senderRole);

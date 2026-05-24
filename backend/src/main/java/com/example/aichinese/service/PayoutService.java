@@ -24,6 +24,7 @@ import com.example.aichinese.dto.commerce.TeacherPayoutRequestResponse;
 import com.example.aichinese.entity.PayoutRequest;
 import com.example.aichinese.entity.TeacherEarning;
 import com.example.aichinese.entity.TeacherProfile;
+import com.example.aichinese.entity.enums.TeacherEarningStatus;
 import com.example.aichinese.entity.enums.PayoutStatus;
 import com.example.aichinese.repository.PayoutRequestRepository;
 import com.example.aichinese.repository.TeacherEarningRepository;
@@ -31,6 +32,33 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Teacher earnings ledger and payout request workflow.
+ *
+ * <h2>Earnings</h2>
+ * <p>A {@link TeacherEarning} row is created when a learner completes
+ * a purchase that contains a teacher-owned item; the amount is the
+ * sale price minus the {@code platform_commission_rate} from
+ * {@link CommerceSettingsService}. Earnings start in
+ * {@link TeacherEarningStatus#PENDING} and become {@code AVAILABLE}
+ * once the underlying payment clears the refund window, so a
+ * payout request can never draw against earnings that could still
+ * be refunded.</p>
+ *
+ * <h2>Payout requests</h2>
+ * <p>Teachers file a {@link PayoutRequest} for some / all of their
+ * available balance. The request goes {@code PENDING → APPROVED →
+ * PAID} (or {@code REJECTED}) via admin decisions made through
+ * {@link PayoutDecisionRequest}. Approval freezes the earmarked
+ * earnings (status {@code RESERVED}); payment marks them
+ * {@code PAID}; rejection rolls them back to {@code AVAILABLE}.</p>
+ *
+ * <h2>Reconciliation</h2>
+ * <p>All money math goes through {@link CommerceMoneyService} so
+ * teacher payouts are reconciled to the same scale and rounding
+ * rules as the rest of the commerce stack — preventing one-cent
+ * drift across the ledger.</p>
+ */
 @Service
 public class PayoutService {
 
@@ -71,9 +99,9 @@ public class PayoutService {
         TeacherProfile teacher = teacherProfileRepository.findByUserId(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
         BigDecimal grossAmount = commerceMoneyService.normalize(
-                teacherEarningRepository.sumGrossAmountByTeacherIdAndEarningStatusNot(teacher.getId(), "REFUNDED"));
+                teacherEarningRepository.sumGrossAmountByTeacherIdAndEarningStatusNot(teacher.getId(), TeacherEarningStatus.REFUNDED));
         BigDecimal totalNetAmount = commerceMoneyService.normalize(
-                teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(teacher.getId(), "REFUNDED"));
+                teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(teacher.getId(), TeacherEarningStatus.REFUNDED));
         BigDecimal pendingPayoutAmount = commerceMoneyService.normalize(
                 payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                         teacher.getId(),
@@ -204,7 +232,7 @@ public class PayoutService {
 
     private BigDecimal calculateAvailableBalance(Long teacherId) {
         BigDecimal totalNetAmount = commerceMoneyService.normalize(
-                teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(teacherId, "REFUNDED"));
+                teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(teacherId, TeacherEarningStatus.REFUNDED));
         BigDecimal committedPayoutAmount = commerceMoneyService.normalize(
                 payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                         teacherId,
@@ -257,7 +285,7 @@ public class PayoutService {
                 commerceMoneyService.normalize(earning.getGrossAmount()),
                 commerceMoneyService.normalize(earning.getCommissionAmount()),
                 commerceMoneyService.normalize(earning.getNetAmount()),
-                earning.getEarningStatus(),
+                earning.getEarningStatus().name(),
                 earning.getCreatedAt());
     }
 

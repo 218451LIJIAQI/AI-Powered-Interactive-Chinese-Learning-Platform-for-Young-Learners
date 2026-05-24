@@ -24,6 +24,25 @@ import com.example.aichinese.service.PublicTeacherProfileService;
 
 import jakarta.validation.constraints.Size;
 
+/**
+ * Unauthenticated catalogue + reference-data endpoints used by the
+ * public-facing marketing surface: course browser, course detail,
+ * teacher profile pages, learning levels / categories dropdowns, and
+ * platform settings used for branding / disclaimer text.
+ *
+ * <h2>Input validation</h2>
+ * <p>Every free-text query parameter ({@code keyword}, {@code accessType},
+ * {@code learningType}, {@code sort}, course {@code id}) has a
+ * {@code @Size} cap so a malicious caller cannot blow up the
+ * underlying {@code LIKE} or filter operation with a multi-megabyte
+ * string. The service layer applies further whitelisting.</p>
+ *
+ * <h2>Visibility</h2>
+ * <p>Read endpoints always filter on the published / approved status
+ * of the underlying entities at the service layer; this controller
+ * itself owns no authorisation logic because the surface is
+ * intentionally public.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/public")

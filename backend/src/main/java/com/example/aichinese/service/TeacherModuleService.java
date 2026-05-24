@@ -22,6 +22,16 @@ import com.example.aichinese.repository.LearningModuleRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Teacher-side CRUD for {@link LearningModule}s the teacher owns.
+ *
+ * <p>Modules group lessons; this service handles create / update /
+ * archive plus the ownership lookups consumed by
+ * {@link TeacherLessonService} and {@link TeacherPackageService}.
+ * Approved-teacher gating runs through
+ * {@link TeacherContentAccessService} so a pending or rejected
+ * teacher cannot author or mutate modules.</p>
+ */
 @Service
 public class TeacherModuleService {
 

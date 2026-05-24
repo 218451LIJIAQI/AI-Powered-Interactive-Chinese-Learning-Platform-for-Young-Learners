@@ -22,6 +22,12 @@ import com.example.aichinese.service.CommerceMoneyService;
 import com.example.aichinese.service.CommerceSettingsService;
 import com.example.aichinese.service.CommissionService;
 
+/**
+ * Unit coverage for {@code CommissionService} — pins the
+ * fallback-to-default behaviour when the {@code platform_commission_rate}
+ * system setting row is missing, plus the audit trail emitted on every
+ * write.
+ */
 class CommissionServiceTests {
 
     @Test

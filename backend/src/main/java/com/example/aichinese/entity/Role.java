@@ -13,6 +13,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Authorisation role reference table seeded with one row per
+ * {@link com.example.aichinese.entity.enums.RoleName} constant.
+ *
+ * <p>The {@link User#getRoles()} {@code ManyToMany} association joins
+ * through {@code user_roles}; in production every user references a
+ * single role from this table. Keeping the role as its own table (as
+ * opposed to denormalising the enum onto {@code users}) lets future
+ * iterations attach per-role metadata (description, permissions list,
+ * UI styling) without a schema change.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

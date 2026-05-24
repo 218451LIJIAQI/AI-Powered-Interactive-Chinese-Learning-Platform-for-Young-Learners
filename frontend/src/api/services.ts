@@ -1,3 +1,23 @@
+/**
+ * Typed thin-wrappers around every backend REST endpoint, grouped by
+ * domain (auth, AI, commerce, content, dashboard, etc.).
+ *
+ * <h2>Why typed wrappers</h2>
+ * <p>Pages call e.g. {@code authApi.login(payload)} instead of
+ * {@code http.post('/auth/login', payload)} so:</p>
+ * <ul>
+ *   <li>URLs are typed and refactor-safe.</li>
+ *   <li>Request / response shapes line up with the generated
+ *       {@code types/api.ts} types.</li>
+ *   <li>Cross-cutting behaviour (e.g. unwrapping {@code ApiResponse<T>})
+ *       happens in one place.</li>
+ * </ul>
+ *
+ * <h2>Response unwrapping</h2>
+ * <p>The backend wraps payloads in {@code { success, message, data }}.
+ * Each wrapper reads {@code response.data.data} so call sites work
+ * directly with the domain type.</p>
+ */
 import type { AxiosResponse } from 'axios'
 
 import { http } from './http'
@@ -172,7 +192,7 @@ async function unwrapDownload(request: Promise<AxiosResponse<Blob>>) {
   }
 }
 
-export interface PublicCourseFilters {
+interface PublicCourseFilters {
   keyword?: string
   levelId?: number
   categoryId?: number
@@ -253,12 +273,12 @@ export interface TeacherQuizQuestionPayload {
   explanation?: string | null
 }
 
-export interface ReviewAiReportPayload {
+interface ReviewAiReportPayload {
   status: AiResponseReportReviewStatus
   reviewerNote: string
 }
 
-export interface AdminActivityFilters {
+interface AdminActivityFilters {
   type?: AdminActivityType | ''
   status?: ContentStatus | ''
   keyword?: string

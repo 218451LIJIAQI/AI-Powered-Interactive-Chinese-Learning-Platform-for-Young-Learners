@@ -1,3 +1,33 @@
+/**
+ * Browser-driven deep audit — exhaustive route walk + accessibility
+ * + network/console correctness check.
+ *
+ * <h2>Scope vs. browser-qa-scan</h2>
+ * `browser-qa-scan` is a fast smoke pass; this script is the deeper
+ * audit that should run before a release. For EVERY route in the
+ * canonical list (~30 routes covering public / student / teacher /
+ * admin / system) it:
+ *   - Loads the route in three viewport sizes (desktop / tablet /
+ *     mobile) to catch responsive layout regressions.
+ *   - Captures console errors, runtime exceptions, network 4xx/5xx,
+ *     and CSP violations.
+ *   - Runs a `document.body.scrollWidth > window.innerWidth` check
+ *     to flag horizontal overflow.
+ *   - Screenshots each viewport for visual diff review.
+ *   - Records final URL after redirects so legacy-path normalisation
+ *     can be verified.
+ *
+ * <h2>Evidence</h2>
+ * Outputs into `browser-qa-evidence/<timestamp>-deep-audit/` with
+ * a per-viewport screenshot and a structured JSON summary that the
+ * CI quality gate can grep for `fail` / `needsFix` counts.
+ *
+ * <h2>Configuration</h2>
+ *   - `QA_BASE_URL`           — frontend origin
+ *   - `QA_FRONTEND_PROBE_URL` — separate probe URL when behind a
+ *                               reverse proxy
+ *   - `QA_CHROME_PORT`        — DevTools port (default 9228)
+ */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
@@ -508,9 +538,14 @@ async function main() {
       return navigation
     }
 
-    async function setPreviewRole(role) {
-      await send('Runtime.evaluate', {
-        expression: `(() => {
+    let activePreviewScriptId = null
+    async function preparePreviewRole(role) {
+      if (activePreviewScriptId) {
+        await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: activePreviewScriptId })
+      }
+
+      const result = await send('Page.addScriptToEvaluateOnNewDocument', {
+        source: `(() => {
           const previewKey = 'mandarin-spark.preview-role';
           const tokenKey = 'mandarin-spark.token';
           window.localStorage.removeItem(previewKey);
@@ -519,8 +554,9 @@ async function main() {
           window.sessionStorage.removeItem(tokenKey);
           const role = ${JSON.stringify(role)};
           if (role) window.sessionStorage.setItem(previewKey, role);
-        })()`,
+        })();`,
       })
+      activePreviewScriptId = result.identifier
     }
 
     const cases = [
@@ -560,8 +596,7 @@ async function main() {
         }
 
         activeRecord = record
-        await navigate(baseUrl)
-        await setPreviewRole(item.role)
+        await preparePreviewRole(item.role)
 
         const navigation = await navigate(record.url)
         if (navigation.errorText) record.navigationError = navigation.errorText

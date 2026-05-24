@@ -20,6 +20,28 @@ import com.example.aichinese.entity.StudentProfile;
 
 import jakarta.persistence.LockModeType;
 
+/**
+ * Persistence operations for {@link StudentProfile} — the learner-side
+ * profile carrying XP, level progression and gamification counters
+ * one-to-one with a {@link com.example.aichinese.entity.User}.
+ *
+ * <p>Read methods consistently eager-fetch {@code currentLevel} (and
+ * {@code user} where downstream mappers need display name / email) so
+ * the dashboard / classroom mappers never lazy-load these per-row.</p>
+ *
+ * <p>Pessimistic-write variants ({@link #findLockedById(Long)} /
+ * {@link #findLockedByUserId(Long)}) underpin XP-grant transactions:
+ * because two events can race to award XP for the same lesson (e.g. a
+ * webhook plus a periodic catch-up sweep), the row must be locked
+ * before the gamification service applies the delta.</p>
+ *
+ * <p>{@link #findLinkedStudentIdsByTeacherId(Long, Pageable)} returns
+ * primary keys only (not entities) so the teacher "linked students"
+ * page can paginate the de-duplicated union of "students with progress
+ * on this teacher's lessons / quizzes / live classes" without paying a
+ * join-fan-out cost; the service layer then runs a second batched
+ * fetch on the returned id slice.</p>
+ */
 public interface StudentProfileRepository extends JpaRepository<StudentProfile, Long>, JpaSpecificationExecutor<StudentProfile> {
 
     @EntityGraph(attributePaths = { "currentLevel" })

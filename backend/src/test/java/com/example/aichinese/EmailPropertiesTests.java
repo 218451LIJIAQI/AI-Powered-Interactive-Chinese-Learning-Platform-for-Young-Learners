@@ -7,6 +7,11 @@ import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.config.EmailProperties;
 
+/**
+ * Unit coverage for {@code EmailProperties} — pins the
+ * {@code resolveFrom} fallback chain (configured From → SMTP username),
+ * trimming behaviour, and the password-reset URL contract.
+ */
 class EmailPropertiesTests {
 
     @Test

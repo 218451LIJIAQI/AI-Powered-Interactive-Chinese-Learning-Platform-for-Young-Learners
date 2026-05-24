@@ -17,6 +17,27 @@ import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
 
+/**
+ * Persists learner-uploaded audio (pronunciation feedback) and image
+ * (writing feedback) artefacts under the AI feedback subdirectory.
+ *
+ * <h2>Defence in depth</h2>
+ * <p>Every upload goes through three independent checks before the
+ * file ever lands on disk:</p>
+ * <ol>
+ *   <li>File-extension whitelist (lower-cased) — rejects obvious
+ *       impostors.</li>
+ *   <li>Content-Type header whitelist — rejects re-labelled types.</li>
+ *   <li>Magic-byte / file-signature check via {@link UploadStorageSupport} —
+ *       rejects payloads that disagree with their declared type, the
+ *       classic upload-bypass vector.</li>
+ * </ol>
+ *
+ * <p>All AI-uploaded blobs are tagged {@code accessLevel=PRIVATE} so
+ * the file-download surface only serves them back to the originating
+ * learner; cross-user reads are blocked at the access-control layer
+ * regardless of file-name guessing.</p>
+ */
 @Service
 public class AiFileStorageService {
 

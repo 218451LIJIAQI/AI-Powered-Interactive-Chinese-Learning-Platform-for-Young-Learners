@@ -20,6 +20,13 @@ import com.example.aichinese.entity.enums.LearningType;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 
+/**
+ * Pins the Jakarta Validation annotations declared on every public
+ * request DTO. Acts as a contract guard so a future refactor that
+ * loosens a {@code @NotBlank} / {@code @Size} / {@code @Email} /
+ * {@code @Min} constraint trips an explicit unit failure rather than
+ * silently widening the API attack surface.
+ */
 class RequestDtoValidationTests {
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();

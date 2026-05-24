@@ -1,10 +1,5 @@
-﻿<template>
+<template>
   <div class="page-stack student-practice-page">
-    <section class="student-simple-header">
-      <h1>Practice</h1>
-      <p>Choose an activity and level up your Mandarin skills through guided review.</p>
-    </section>
-
     <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
@@ -35,7 +30,7 @@
               <div class="student-practice-stage-copy">
                 <div class="row">
                   <h2>{{ selectedStageTitle }}</h2>
-                  <span class="student-practice-info">i</span>
+                  <span class="student-practice-info"><IconGlyph name="help" :size="14" /></span>
                 </div>
                 <button type="button" class="student-practice-level" @click="selectedActivityType === 'FLASHCARD' ? router.push('/student/learn') : selectActivityType('FLASHCARD')">
                   {{ selectedStageLevelLabel }}
@@ -91,13 +86,13 @@
 
                 <div v-else-if="listeningDetail" class="student-practice-activity-list">
                   <small>{{ listeningDetail.questionPayload || 'Listen to the audio prompt, then complete the exercise.' }}</small>
-                  <a v-if="listeningDetail.audioUrl" :href="listeningDetail.audioUrl" target="_blank" rel="noreferrer">Open audio</a>
+                  <a v-if="safeListeningAudioUrl" :href="safeListeningAudioUrl" target="_blank" rel="noopener noreferrer">Open audio</a>
                 </div>
 
                 <div v-else-if="tracingDetail" class="student-practice-activity-list">
                   <small>{{ tracingDetail.targetCharacter }} - {{ tracingDetail.pinyin || 'Pinyin unavailable' }}</small>
                   <small>{{ tracingDetail.meaning || tracingDetail.instructions || 'Trace the character carefully.' }}</small>
-                  <a v-if="tracingDetail.worksheetUrl" :href="tracingDetail.worksheetUrl" target="_blank" rel="noreferrer">Open worksheet</a>
+                  <a v-if="safeTracingWorksheetUrl" :href="safeTracingWorksheetUrl" target="_blank" rel="noopener noreferrer">Open worksheet</a>
                 </div>
 
                 <div v-else-if="dragDropDetail" class="student-practice-activity-list">
@@ -113,8 +108,22 @@
               </div>
 
               <div v-if="selectedActivityType === 'FLASHCARD'" class="student-practice-side-actions">
-                <button type="button" class="student-practice-circle" :disabled="!flashcardAvailable" @click="playCardPronunciation"><IconGlyph name="live" :size="20" /></button>
-                <button type="button" class="student-practice-circle" :disabled="!flashcardAvailable" @click="toggleTranslation">
+                <button
+                  type="button"
+                  class="student-practice-circle"
+                  :disabled="!flashcardAvailable"
+                  aria-label="Play flashcard pronunciation"
+                  @click="playCardPronunciation"
+                >
+                  <IconGlyph name="live" :size="20" />
+                </button>
+                <button
+                  type="button"
+                  class="student-practice-circle"
+                  :disabled="!flashcardAvailable"
+                  :aria-label="showMalayMeaning ? 'Show English meaning' : 'Show Malay meaning'"
+                  @click="toggleTranslation"
+                >
                   {{ showMalayMeaning ? 'EN' : 'BM' }}
                 </button>
               </div>
@@ -150,7 +159,7 @@
           <article class="panel student-review-panel">
             <div class="row-between student-review-head">
               <div class="student-section-heading">
-                <span class="student-review-alert">!</span>
+                <span class="student-review-alert"><IconGlyph name="alert" :size="14" /></span>
                 <div>
                   <strong>Review Wrong Answers</strong>
                   <p>We highlight real mistakes first, then fill the strip with weak-area review when needed.</p>
@@ -252,6 +261,18 @@
   </div>
 </template>
 <script setup lang="ts">
+/**
+ * Practice studio surface — six interactive activity types
+ * (flashcards, matching, listening, tracing, drag-drop, story)
+ * curated by admins, surfaced to the right age band based on the
+ * student's profile. Completion writes through to the streak / XP
+ * pipeline without advancing lesson progress (platform-library
+ * decoupling).
+ *
+ * <p>The page intentionally re-uses the {@link StatePanel} empty
+ * / loading components so the UI stays consistent with other
+ * student dashboards.</p>
+ */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -285,6 +306,7 @@ import type {
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDate, formatNumber } from '@/utils/format'
+import { safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
 type PracticeActivityType = 'FLASHCARD' | 'MATCHING_GAME' | 'LISTENING_EXERCISE' | 'TRACING_EXERCISE' | 'DRAG_DROP_ACTIVITY' | 'STORY_ACTIVITY'
@@ -305,6 +327,8 @@ const listeningDetail = ref<StudentListeningExerciseResponse | null>(null)
 const tracingDetail = ref<StudentTracingExerciseResponse | null>(null)
 const dragDropDetail = ref<StudentDragDropActivityResponse | null>(null)
 const storyDetail = ref<StudentStoryActivityResponse | null>(null)
+const safeListeningAudioUrl = computed(() => safeHttpUrl(listeningDetail.value?.audioUrl))
+const safeTracingWorksheetUrl = computed(() => safeHttpUrl(tracingDetail.value?.worksheetUrl))
 
 const activities = computed(() => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : { items: [], page: 0, size: 0, totalItems: 0, totalPages: 0 }))
 const wrongAnswers = computed(() => wrongAnswersResource.data.value ?? (wrongAnswersResource.usingFallback.value ? studentWrongAnswers : []))

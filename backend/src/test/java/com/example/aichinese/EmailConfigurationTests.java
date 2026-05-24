@@ -16,6 +16,14 @@ import com.example.aichinese.service.EmailService;
 import com.example.aichinese.service.NoOpEmailService;
 import com.example.aichinese.service.SmtpEmailService;
 
+/**
+ * Unit coverage for {@code EmailConfiguration} — proves that
+ * {@code app.email.enabled=false} (default) wires the
+ * {@link com.example.aichinese.service.NoOpEmailService}, while
+ * {@code enabled=true} wires the SMTP-backed
+ * {@link com.example.aichinese.service.SmtpEmailService} and fails
+ * fast if the SMTP credentials are missing / malformed.
+ */
 class EmailConfigurationTests {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
@@ -84,6 +92,39 @@ class EmailConfigurationTests {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasRootCauseMessage("spring.mail.username must be configured when app.email.enabled=true.");
+                });
+    }
+
+    @Test
+    void prodProfileRequiresPublicHttpsPasswordResetBaseUrlWhenEmailIsEnabled() {
+        contextRunner.withPropertyValues(
+                "spring.profiles.active=prod",
+                "app.email.enabled=true",
+                "app.email.password-reset-base-url=http://localhost:5173/reset-password",
+                "spring.mail.host=smtp.example.com",
+                "spring.mail.username=mailer@example.com",
+                "spring.mail.password=secret",
+                "spring.mail.properties.mail.smtp.auth=true")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasRootCauseMessage("app.email.password-reset-base-url must use HTTPS when app.email.enabled=true and the prod profile is active.");
+                });
+    }
+
+    @Test
+    void prodProfileAllowsPublicHttpsPasswordResetBaseUrlWhenEmailIsEnabled() {
+        contextRunner.withPropertyValues(
+                "spring.profiles.active=prod",
+                "app.email.enabled=true",
+                "app.email.password-reset-base-url=https://app.example.com/reset-password",
+                "spring.mail.host=smtp.example.com",
+                "spring.mail.username=mailer@example.com",
+                "spring.mail.password=secret",
+                "spring.mail.properties.mail.smtp.auth=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(EmailService.class);
+                    assertThat(context).hasSingleBean(SmtpEmailService.class);
                 });
     }
 

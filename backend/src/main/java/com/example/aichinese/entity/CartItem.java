@@ -16,6 +16,21 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single line in a {@link Cart}, polymorphically referencing a
+ * purchasable artefact via {@link #itemType} ({@link com.example.aichinese.entity.enums.PurchasableItemType})
+ * and {@link #itemId}.
+ *
+ * <p>The pair {@code (cart_id, item_type, item_id)} is uniquely
+ * constrained so adding the same {@code Lesson} or {@code Package}
+ * twice is a no-op rather than producing duplicate rows; the cart
+ * service quietly increments {@link #quantity} instead.</p>
+ *
+ * <p>{@link #unitPrice} is captured at add-to-cart time, not resolved
+ * live from the underlying artefact, so a price change between adding
+ * to cart and checkout never silently overcharges the buyer; any drift
+ * is reconciled explicitly in {@code CheckoutService}.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

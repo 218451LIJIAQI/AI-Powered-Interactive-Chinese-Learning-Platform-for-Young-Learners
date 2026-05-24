@@ -1,3 +1,14 @@
+/**
+ * Pinia store for cross-cutting UI state that doesn't belong to a
+ * specific persona or page: the user's chosen UI language and the
+ * mobile-nav drawer open/closed flag.
+ *
+ * <p>Locale changes flow through {@code i18n.global.locale.value}
+ * so every component re-renders with the new translations without
+ * a page reload. Persistence is to {@code localStorage} (intentional
+ * — language preference should survive browser restarts unlike auth
+ * tokens).</p>
+ */
 import { defineStore } from 'pinia'
 
 import { i18n } from '@/plugins/i18n'

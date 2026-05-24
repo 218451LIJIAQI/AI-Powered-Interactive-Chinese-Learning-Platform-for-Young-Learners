@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="public-page public-landing-page">
     <section class="public-hero-card">
       <div class="public-hero-skyline public-hero-skyline--left" />
@@ -79,6 +79,14 @@
 
     <section class="public-home-content">
       <div class="public-home-main">
+        <DataNotice
+          :using-fallback="featuredCoursesResource.usingFallback.value"
+          :error="featuredCoursesResource.error.value"
+          fallback-title="Preview featured courses"
+          fallback-message="These featured courses are sample catalog records for the current preview session."
+          error-title="Featured courses unavailable"
+        />
+
         <section class="panel public-home-panel">
           <div class="public-section-head">
             <h2>Featured Courses</h2>
@@ -90,27 +98,28 @@
               v-for="(course, index) in featuredCourses"
               :key="course.id"
               class="public-featured-card"
-              tabindex="0"
-              role="link"
-              :aria-label="`Open featured course ${course.title}`"
-              @click="viewCourse(course.id)"
-              @keydown.enter.prevent="viewCourse(course.id)"
-              @keydown.space.prevent="viewCourse(course.id)"
             >
-              <div class="public-featured-thumb">
-                <CourseSceneThumb :size="158" :variant="featuredThumb(index)" />
-                <span class="public-featured-level">{{ course.level.name }}</span>
-              </div>
+              <button
+                class="public-featured-card-button"
+                type="button"
+                :aria-label="`Open featured course: ${course.title}`"
+                @click="viewCourse(course.id)"
+              >
+                <div class="public-featured-thumb">
+                  <CourseSceneThumb :size="158" :variant="featuredThumb(index)" />
+                  <span class="public-featured-level">{{ course.level.name }}</span>
+                </div>
 
-              <div class="public-featured-copy">
-                <h3>{{ course.title }}</h3>
-                <p>{{ featuredCopy(course) }}</p>
-              </div>
+                <div class="public-featured-copy">
+                  <h3>{{ course.title }}</h3>
+                  <p>{{ featuredCopy(course) }}</p>
+                </div>
 
-              <div class="public-featured-meta">
-                <span>{{ course.category.name }}</span>
-                <span>{{ course.teacher.displayName }}</span>
-              </div>
+                <div class="public-featured-meta">
+                  <span>{{ course.category.name }}</span>
+                  <span>{{ course.teacher.displayName }}</span>
+                </div>
+              </button>
             </article>
           </div>
           <div v-else class="public-featured-empty">
@@ -214,10 +223,18 @@
 
       <div class="public-footer-meta">
         <div class="public-footer-socials">
-          <span v-for="social in socialLinks" :key="social.name" :aria-label="social.label" role="img">
-            <BrandSocialIcon :name="social.name" />
-          </span>
-        </div>
+            <a
+              v-for="social in socialLinks"
+              :key="social.name"
+              :href="social.href"
+              :aria-label="social.label"
+              class="public-footer-social-link"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <BrandSocialIcon :name="social.name" />
+            </a>
+          </div>
         <div class="public-footer-copy">
           <span>&copy; 2025 MandarinSpark. All rights reserved.</span>
           <span>Made for young learners.</span>
@@ -228,12 +245,25 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Marketing landing page — the unauthenticated home route.
+ *
+ * <p>Composed entirely of {@link PublicFeatureCard},
+ * {@link PublicInfoBanner}, {@link PandaIllustration} and other
+ * pure-CSS visuals so the initial paint stays light and there are
+ * no remote image dependencies for the first impression.</p>
+ *
+ * <p>Routes new visitors into {@link CatalogPage} for discovery and
+ * {@link AuthPage} for sign-up / sign-in. The page is purely
+ * presentational — no data loading, no router-guard handshake.</p>
+ */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { publicApi } from '@/api/services'
 import BrandSocialIcon from '@/components/common/BrandSocialIcon.vue'
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
+import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
@@ -257,7 +287,11 @@ const featuredCoursesResource = useResource(() => publicApi.listCourses({ size: 
 })
 const liveFeaturedCourses = computed(() => featuredCoursesResource.data.value?.items ?? [])
 const featuredCourses = computed<PublicCourseSummary[]>(() =>
-  liveFeaturedCourses.value.length ? liveFeaturedCourses.value : previewFeaturedCourses,
+  liveFeaturedCourses.value.length
+    ? liveFeaturedCourses.value
+    : featuredCoursesResource.usingFallback.value
+      ? previewFeaturedCourses
+      : [],
 )
 
 const featureStrip = [
@@ -270,10 +304,10 @@ const featureStrip = [
 ]
 
 const socialLinks = [
-  { name: 'linkedin' as const, label: 'LinkedIn' },
-  { name: 'facebook' as const, label: 'Facebook' },
-  { name: 'youtube' as const, label: 'YouTube' },
-  { name: 'instagram' as const, label: 'Instagram' },
+  { name: 'linkedin' as const, label: 'MandarinSpark on LinkedIn', href: 'https://linkedin.com' },
+  { name: 'facebook' as const, label: 'MandarinSpark on Facebook', href: 'https://facebook.com' },
+  { name: 'youtube' as const, label: 'MandarinSpark on YouTube', href: 'https://youtube.com' },
+  { name: 'instagram' as const, label: 'MandarinSpark on Instagram', href: 'https://instagram.com' },
 ]
 
 const heroProof = [

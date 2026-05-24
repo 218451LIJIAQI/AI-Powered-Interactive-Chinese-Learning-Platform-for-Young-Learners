@@ -51,6 +51,19 @@ import com.example.aichinese.security.SecurityUserDetails;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+/**
+ * Aggregated "home page" data per persona: student dashboard
+ * (progress, streaks, recommended lessons, unread notifications),
+ * teacher dashboard (recent earnings, pending payouts, fresh student
+ * activity), and admin dashboard (platform vitals — DAU, recent
+ * orders / refunds, AI usage today).
+ *
+ * <p>Each dashboard returns a fixed shape in a single read so the
+ * front-end can render the home page in one round trip. Time-windowed
+ * counts use bounded recent-window queries (e.g. last 7 days) so the
+ * dashboards stay cheap even at scale. Aggregates round through
+ * {@link CommerceMoneyService} conventions for currency consistency.</p>
+ */
 @Service
 public class DashboardService {
 

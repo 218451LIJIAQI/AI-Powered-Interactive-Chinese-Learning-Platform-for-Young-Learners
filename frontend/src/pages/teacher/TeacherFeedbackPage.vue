@@ -317,6 +317,17 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Teacher feedback surface — review student attempts, leave
+ * narrative comments, attach rubric scores, and broadcast
+ * announcements to a class.
+ *
+ * <p>Scopes student lookups to the teacher's own classroom — the
+ * backend further enforces this in
+ * {@code TeacherFeedbackService.assertTeachesStudent()} so a
+ * malicious teacher cannot leave feedback for a student outside
+ * their roster.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 

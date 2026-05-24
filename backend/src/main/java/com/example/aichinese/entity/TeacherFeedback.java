@@ -14,6 +14,25 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Free-text feedback message authored by a {@link TeacherProfile} for a
+ * single {@link StudentProfile}.
+ *
+ * <p>The optional {@link #lesson} and {@link #quizAttempt} references
+ * scope the comment to a particular learning artefact (so the student
+ * UI can surface "feedback on Quiz 3" rather than a generic note).
+ * Both being null is valid — that captures a freestanding comment from
+ * a teacher dashboard.</p>
+ *
+ * <p>{@link #feedbackType} is a free-form short string that maps to
+ * {@link com.example.aichinese.entity.enums.TeacherFeedbackType}; the
+ * column is loose to accommodate legacy data without a Flyway
+ * migration. The application layer parses it through
+ * {@code TeacherFeedbackType#tryFrom}.</p>
+ *
+ * <p>Creation triggers a {@link Notification} of type
+ * {@code TEACHER_FEEDBACK} so the student is alerted in real time.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

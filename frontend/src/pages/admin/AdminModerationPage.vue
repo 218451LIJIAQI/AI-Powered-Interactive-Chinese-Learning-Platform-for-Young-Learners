@@ -176,6 +176,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin moderation queue — handle reported AI responses, reported
+ * teacher feedback, and reported public content.
+ *
+ * <p>Decision actions (dismiss / take-down / warn) all require an
+ * admin note. Take-down hides the reported entity from public view
+ * and notifies the original author; dismiss closes the report with
+ * no action. Both decisions are append-only and audited.</p>
+ */
 import { computed, reactive, ref, watch } from 'vue'
 
 import { adminApi } from '@/api/services'

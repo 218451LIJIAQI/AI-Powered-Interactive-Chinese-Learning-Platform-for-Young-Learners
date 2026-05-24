@@ -12,9 +12,31 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.AiChatMessage;
+import com.example.aichinese.entity.enums.AiChatSenderRole;
 
+/**
+ * Persistence operations for {@link AiChatMessage} — individual user
+ * and assistant turns belonging to an {@code AiChatSession}.
+ *
+ * <p>Includes a native-SQL window helper
+ * ({@link #findPromptSnapshotsForAssistantMessageIds(Collection)}) that
+ * batch-resolves "the most recent USER prompt preceding each assistant
+ * reply" for the SparkBot review workflow. This replaces the prior
+ * pattern of N follow-up SELECTs (one per assistant message to find its
+ * provoking prompt) with a single grouped query.</p>
+ *
+ * <p>{@link #findByIdAndSessionUserId(Long, Long)} couples message-id
+ * with session-owner user-id so cross-user direct-object reference
+ * attempts on chat messages cannot succeed (mirrors the IDOR-prevention
+ * convention used by {@code AiChatSessionRepository}).</p>
+ */
 public interface AiChatMessageRepository extends JpaRepository<AiChatMessage, Long> {
 
+    /**
+     * Native projection pairing an assistant message id with the
+     * {@code message_text} of the most recent USER turn that preceded
+     * it in the same session.
+     */
     interface AssistantPromptSnapshotProjection {
         Long getAssistantMessageId();
 
@@ -25,12 +47,7 @@ public interface AiChatMessageRepository extends JpaRepository<AiChatMessage, Lo
 
     Page<AiChatMessage> findBySessionIdOrderByCreatedAtDesc(Long sessionId, Pageable pageable);
 
-    Optional<AiChatMessage> findFirstBySessionIdAndSenderRoleIgnoreCaseOrderByIdDesc(Long sessionId, String senderRole);
-
-    Optional<AiChatMessage> findFirstBySessionIdAndSenderRoleIgnoreCaseAndIdLessThanOrderByIdDesc(
-            Long sessionId,
-            String senderRole,
-            Long id);
+    Optional<AiChatMessage> findFirstBySessionIdAndSenderRoleOrderByIdDesc(Long sessionId, AiChatSenderRole senderRole);
 
     @Query(value = """
             select assistant.id as assistantMessageId,
@@ -40,7 +57,7 @@ public interface AiChatMessageRepository extends JpaRepository<AiChatMessage, Lo
                 select prior.id
                 from ai_chat_messages prior
                 where prior.session_id = assistant.session_id
-                  and lower(prior.sender_role) = 'user'
+                  and prior.sender_role = 'USER'
                   and prior.id < assistant.id
                 order by prior.id desc
                 limit 1

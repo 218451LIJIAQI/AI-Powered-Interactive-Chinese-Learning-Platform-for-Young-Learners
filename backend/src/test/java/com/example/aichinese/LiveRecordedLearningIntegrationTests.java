@@ -31,6 +31,16 @@ import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of synchronous live classes and
+ * recorded lesson videos: teacher scheduling, student enrolment,
+ * meeting URL release window, and resume-where-you-left-off video
+ * progress.
+ *
+ * <p>Pins the URL-leak defence (meeting URL only released within the
+ * join window for enrolled students with valid entitlement) and the
+ * heartbeat-based video progress upsert contract.</p>
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

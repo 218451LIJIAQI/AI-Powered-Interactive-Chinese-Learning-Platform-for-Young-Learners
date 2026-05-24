@@ -21,6 +21,20 @@ import com.example.aichinese.service.TeacherFeedbackService;
 
 import jakarta.validation.Valid;
 
+/**
+ * Teacher-side authoring endpoints for student-targeted feedback.
+ *
+ * <p>Each create / update call verifies that the touch-point
+ * (lesson progress, quiz attempt, live-class enrolment) actually
+ * belongs to a student the calling teacher taught — see
+ * {@code TeacherFeedbackService}. An approved teacher cannot file
+ * unsolicited "feedback" on arbitrary students.</p>
+ *
+ * <p>The companion read surface for the receiving student is
+ * {@link StudentFeedbackController}. There is no delete endpoint by
+ * design — once submitted, feedback is immutable apart from
+ * edits, so it becomes a stable record the student can rely on.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/teachers/feedback")

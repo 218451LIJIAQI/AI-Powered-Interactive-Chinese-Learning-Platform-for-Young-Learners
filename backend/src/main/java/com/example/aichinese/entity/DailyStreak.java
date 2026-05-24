@@ -17,6 +17,22 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Per-student tracker of consecutive-day learning streaks.
+ *
+ * <p>Exactly one row per student (enforced by the unique constraint on
+ * {@code student_id}) so the gamification engine can read and update
+ * a learner's streak in O(1).</p>
+ *
+ * <p>The streak rule is implemented in {@code GamificationService}:
+ * if {@link #lastLearningDate} equals today, no-op; if it equals
+ * yesterday, increment {@link #currentStreak} and bump
+ * {@link #bestStreak} when overtaken; otherwise the streak resets to 1.</p>
+ *
+ * <p>{@link #version} prevents two concurrent learning events from
+ * the same student (e.g. quiz submission and lesson completion in
+ * parallel browser tabs) from double-incrementing the streak.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

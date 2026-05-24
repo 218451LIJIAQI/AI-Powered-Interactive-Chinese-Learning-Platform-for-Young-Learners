@@ -1,3 +1,48 @@
+<#
+.SYNOPSIS
+    Boot the backend locally with a real AI provider configured
+    (e.g. DeepSeek or any OpenAI-compatible API).
+
+.DESCRIPTION
+    Reads `.env.ai.local` (creates it from
+    `.env.ai.local.example` on first run), exports the AI_* env
+    vars into the current process, runs strict validation, then
+    launches `mvnw.cmd spring-boot:run`.
+
+    Defaults to also loading `.env.smtp.local` so password reset
+    emails go through a real SMTP server during local QA — pass
+    `-SkipSmtp` to skip that load.
+
+.VALIDATIONS ENFORCED
+    - AI_API_KEY, AI_API_BASE_URL, AI_MODEL_NAME, AI_PROVIDER must
+      all be filled (not blank, not "replace-me", not "your-...",
+      not "<placeholder>"). This catches the common
+      "I committed the example file without filling it in" mistake.
+    - AI_PROVIDER restricted to `deepseek` or `openai-compatible`
+      (the only two providers the backend's AIClient knows how to
+      speak).
+    - AI_API_BASE_URL must parse as an absolute URL AND must use
+      HTTPS UNLESS the host is localhost / 127.0.0.1 / ::1 (so a
+      developer can point at a local mock provider without
+      certificate ceremony).
+    - AI_ENABLE_REAL_PROVIDER must be `true` — guards against
+      accidentally starting in stub mode when this script promised
+      a real provider.
+
+.PARAMETER EnvFile
+    Path to the AI env file. Defaults to `backend/.env.ai.local`.
+
+.PARAMETER SmtpEnvFile
+    Path to the SMTP env file. Defaults to
+    `backend/.env.smtp.local`. Ignored when `-SkipSmtp` is set.
+
+.PARAMETER SkipSmtp
+    Switch — do not attempt to also load SMTP env vars.
+
+.PARAMETER ValidateOnly
+    Switch — only run the validation checks and exit with code 0
+    without starting Spring Boot. Useful from CI.
+#>
 [CmdletBinding()]
 param(
     [string]$EnvFile = "",

@@ -31,13 +31,35 @@ import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.TextUtils;
 
+/**
+ * Admin-side content moderation surface for the legacy review queue
+ * across the three teacher-managed content types
+ * ({@link ManagedContentType#LESSON} / {@code LEARNING_MODULE} /
+ * {@code COURSE_PACKAGE}).
+ *
+ * <h2>Status note</h2>
+ * <p>The platform now publishes teacher-authored content immediately
+ * (see {@link TeacherContentAccessService}), so this surface is
+ * read-mostly: admins use it to inspect a teacher's recent
+ * submissions and, if needed, take corrective moderation action via
+ * {@link ContentModerationService} (warn / archive / hide).</p>
+ *
+ * <h2>Listing</h2>
+ * <p>Pagination + filtering by status / type is paginated at the DB
+ * level through Spring Data; full text search is intentionally limited
+ * to title prefix matches to keep listing cheap. Every fetch eagerly
+ * joins the moderation history so the detail panel renders in one
+ * round-trip.</p>
+ */
 @Service
 public class AdminContentReviewService {
 
     private static final int ADMIN_PACKAGE_ITEM_LIMIT = 100;
+    private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
 
     private final LearningModuleRepository learningModuleRepository;
     private final LessonRepository lessonRepository;
@@ -331,7 +353,7 @@ public class AdminContentReviewService {
         record.setTargetType(contentType.name());
         record.setTargetId(id);
         record.setActionTaken(action);
-        record.setNote(TextUtils.trimToNull(note));
+        record.setNote(AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH));
         contentModerationRecordRepository.save(record);
     }
 }

@@ -13,6 +13,33 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Cost / reliability telemetry row for one upstream AI request.
+ *
+ * <p>Written by {@code AiService} after every call to the AI provider,
+ * regardless of outcome. The admin dashboard aggregates these rows to
+ * surface daily token spend, error rates, and per-feature popularity
+ * histograms.</p>
+ *
+ * <p>{@link #user} is nullable on purpose: occasional system-initiated
+ * calls (warm-up probes, scheduled summarisation jobs) are not bound to
+ * a logged-in user but still need to be costed. {@link #userRole} is
+ * persisted alongside as a denormalised string so that historical
+ * analytics survive role re-assignments and account deletions.</p>
+ *
+ * <p>{@link #status} is a free-form short string mirrored from
+ * {@link com.example.aichinese.entity.enums.AiRequestStatus} (kept loose
+ * because the audit log must accept any future status value without a
+ * Flyway migration). The constraint
+ * {@code chk_ai_usage_logs_status} pins the allowed set; see
+ * {@code SchemaEnumContractTests}.</p>
+ *
+ * <p>{@link #relatedEntityType} and {@link #relatedEntityId} provide a
+ * polymorphic back-reference (e.g. to a {@code Lesson}, {@code Quiz}, or
+ * {@code AiChatSession}) without forcing a JPA association — useful for
+ * post-hoc log slicing and intentionally insulated from cascade deletes
+ * of the referenced entity.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,7 +47,8 @@ import lombok.Setter;
 @Table(name = "ai_usage_logs", indexes = {
         @Index(name = "idx_ai_usage_logs_user_id", columnList = "user_id"),
         @Index(name = "idx_ai_usage_logs_feature_key", columnList = "feature_key"),
-        @Index(name = "idx_ai_usage_logs_created_at", columnList = "created_at")
+        @Index(name = "idx_ai_usage_logs_created_at", columnList = "created_at"),
+        @Index(name = "idx_ai_usage_logs_user_feature_created", columnList = "user_id,feature_key,created_at")
 })
 public class AiUsageLog extends BaseEntity {
 

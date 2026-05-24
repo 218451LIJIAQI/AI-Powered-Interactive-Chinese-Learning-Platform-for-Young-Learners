@@ -1,3 +1,26 @@
+/**
+ * Static fixture data the preview deployment uses when
+ * {@code VITE_USE_DEMO_DATA=true} and {@code VITE_ENABLE_PREVIEW_MODE=true}.
+ *
+ * <h2>What it covers</h2>
+ * <p>One fixture per response shape used by every page on every
+ * persona — enough for the QA / sales demo to navigate the full
+ * product without a backend.</p>
+ *
+ * <h2>Strict typing</h2>
+ * <p>Each export is typed against the corresponding
+ * {@code types/api.ts} interface so a backend contract change
+ * trips a compile error in this file. Without that, demo data
+ * silently drifts and the preview deployment renders broken UI
+ * months before anyone notices.</p>
+ *
+ * <h2>Never bundled in production</h2>
+ * <p>The composables that read this file
+ * ({@code useResource}, {@code stores/auth}) gate the fallback on
+ * {@code appEnv.useDemoData}. Vite tree-shaking still includes the
+ * data in the bundle, but the runtime never references it for a
+ * production build, so there is no leaked-fixture risk.</p>
+ */
 import type {
   AdminAnalyticsResponse,
   AdminPaymentRecordResponse,
@@ -242,7 +265,7 @@ export const demoUsers: Record<UserRole, CurrentUserResponse> = {
   },
 }
 
-export const demoNotifications: NotificationResponse[] = [
+const demoNotifications: NotificationResponse[] = [
   {
     id: 1,
     title: 'Live class starts soon',

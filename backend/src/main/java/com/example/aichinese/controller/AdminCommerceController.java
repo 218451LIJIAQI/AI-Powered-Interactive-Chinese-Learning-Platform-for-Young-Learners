@@ -31,6 +31,24 @@ import com.example.aichinese.service.RefundService;
 
 import jakarta.validation.Valid;
 
+/**
+ * Admin-side commerce surface: refund-request review,
+ * payout-request review, and platform commission-rate editing.
+ *
+ * <h2>Approval workflow</h2>
+ * <p>{@link com.example.aichinese.service.RefundService} and
+ * {@link com.example.aichinese.service.PayoutService} drive the
+ * one-way state transitions (PENDING → APPROVED / REJECTED →
+ * COMPLETED / PAID). Decisions are audited via
+ * {@link com.example.aichinese.service.AuditLogService} and trigger
+ * notifications to the affected student / teacher.</p>
+ *
+ * <h2>Commission rate</h2>
+ * <p>{@link com.example.aichinese.service.CommissionService} is the
+ * single write path for the {@code platform_commission_rate} system
+ * setting; the service rejects values outside [0, 1] and writes an
+ * audit entry so changes are reconstructable from logs alone.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/admin")

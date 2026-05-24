@@ -1,5 +1,5 @@
 <template>
-  <section class="system-page system-page--unauthorized">
+  <main class="system-page system-page--unauthorized" aria-label="Access denied">
     <span class="system-bg-orb system-bg-orb--one" />
     <span class="system-bg-orb system-bg-orb--two" />
     <div class="surface-card system-card">
@@ -39,10 +39,20 @@
         <PandaIllustration class="system-panda" :size="220" outfit="#ff9f2f" accent="#6f4cff" />
       </div>
     </div>
-  </section>
+  </main>
 </template>
 
 <script setup lang="ts">
+/**
+ * 401 / 403 landing — shown when the router auth guard blocks a
+ * deep link the user does not have permission to view.
+ *
+ * <p>The page offers role-appropriate next actions: sign in (if
+ * the visitor is anonymous) or return to the right dashboard (if
+ * the visitor is signed in but in the wrong role). It deliberately
+ * avoids leaking what the gated page contained — the copy stays
+ * generic to avoid information leakage.</p>
+ */
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'

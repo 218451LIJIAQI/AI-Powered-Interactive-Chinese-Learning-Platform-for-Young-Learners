@@ -21,6 +21,16 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * End-to-end MockMvc coverage of the three persona analytics
+ * surfaces (student / teacher / admin): time-series trends, breakdown
+ * aggregates, and per-persona authorization scope.
+ *
+ * <p>Pins the row-level filter — a teacher only sees their own
+ * classes / earnings, a student only their own progress, an admin
+ * sees platform-wide aggregates — so a refactor of
+ * {@code AnalyticsService} cannot quietly leak cross-tenant data.</p>
+ */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"

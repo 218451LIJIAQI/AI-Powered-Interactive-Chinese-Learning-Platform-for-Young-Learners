@@ -19,6 +19,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Audio-driven listening exercise in the platform practice library.
+ *
+ * <p>{@link #audioUrl} points at a hosted audio clip (currently a
+ * platform CDN URL). {@link #questionPayload} is a JSON document
+ * encoding the comprehension prompts and acceptable answers — held
+ * in a single LONGTEXT column rather than a child table because the
+ * payload is small and treated as an opaque blob by Hibernate; the
+ * front-end is the canonical schema owner.</p>
+ *
+ * <p>Shares the activity metadata vocabulary with the other practice
+ * library entities for uniform filtering.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

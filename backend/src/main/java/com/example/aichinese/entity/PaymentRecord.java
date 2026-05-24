@@ -21,13 +21,35 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Single attempt by a payment provider (Stripe, manual, no-op mock) to
+ * settle an {@link Order}.
+ *
+ * <p>An order may have several payment records over its lifetime — for
+ * example a {@link com.example.aichinese.entity.enums.PaymentStatus#FAILED}
+ * card decline followed by a successful {@link com.example.aichinese.entity.enums.PaymentStatus#PAID}
+ * retry. The {@link Order#paymentStatus} mirrors only the most recent
+ * <em>terminal</em> outcome and is updated by {@code PaymentService} as
+ * webhook events flow in.</p>
+ *
+ * <p>The uniqueness pair {@code (provider_name, provider_reference)}
+ * makes Stripe webhook delivery idempotent: re-receiving the same
+ * {@code checkout.session.id} (or equivalent) is a no-op rather than
+ * duplicating the row, and the cross-provider product-of-references
+ * collision is avoided.</p>
+ *
+ * <p>{@link #version} is incremented on every state transition so that
+ * the webhook handler and the synchronous polling fallback never both
+ * succeed in writing inconsistent statuses.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "payment_records", indexes = {
         @Index(name = "idx_payment_records_order_id", columnList = "order_id"),
-        @Index(name = "idx_payment_records_status", columnList = "payment_status")
+        @Index(name = "idx_payment_records_status", columnList = "payment_status"),
+        @Index(name = "idx_payment_records_status_created", columnList = "payment_status,created_at")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_payment_records_provider_reference", columnNames = { "provider_name", "provider_reference" })
 })

@@ -16,6 +16,17 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Three-button pill that toggles the UI locale between EN, BM
+ * (Bahasa Melayu) and 简体中文. Lives in the public top nav,
+ * the dashboard topbar, and the auth chrome so the user can
+ * change language anywhere.
+ *
+ * Writes through the `ui` store, which persists the selection to
+ * localStorage and re-binds `i18n.global.locale` so every
+ * component re-renders with the new translation without a page
+ * reload.
+ */
 import { computed } from 'vue'
 
 import { useUiStore } from '@/stores/ui'

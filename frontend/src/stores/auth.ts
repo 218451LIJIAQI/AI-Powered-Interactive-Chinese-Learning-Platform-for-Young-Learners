@@ -1,3 +1,36 @@
+/**
+ * Pinia store for authentication state — token, current user profile,
+ * and the optional read-only "preview role" used by the QA preview
+ * deployment.
+ *
+ * <h2>Three session modes</h2>
+ * <ul>
+ *   <li><b>Authenticated:</b> {@code token} present, {@code currentUser}
+ *       hydrated from {@code /api/v1/auth/me}, {@code previewRole}
+ *       always null.</li>
+ *   <li><b>Preview:</b> only available when both
+ *       {@code VITE_USE_DEMO_DATA=true} and
+ *       {@code VITE_ENABLE_PREVIEW_MODE=true}. A synthetic role
+ *       (STUDENT / TEACHER / ADMIN) is selected from the role picker
+ *       and the dashboards render against {@code demoUsers} fixtures.
+ *       Preview cannot coexist with a real token.</li>
+ *   <li><b>Anonymous:</b> neither token nor preview role; the public
+ *       catalogue is the only accessible surface.</li>
+ * </ul>
+ *
+ * <h2>Storage hardening</h2>
+ * <p>Tokens are stored in {@code sessionStorage} (not
+ * {@code localStorage}) so they don't survive browser restart — see
+ * {@code readPersistedToken} for the one-time legacy migration.
+ * Preview role is also session-scoped because it's an explicit
+ * synthetic state that should not silently persist.</p>
+ *
+ * <h2>Failure-tolerant logout</h2>
+ * <p>{@code logout} falls back to local session clearing when the
+ * backend is unreachable so sign-out stays responsive — the backend
+ * still enforces true revocation via session-version when it can
+ * be reached.</p>
+ */
 import { defineStore } from 'pinia'
 
 import { authApi } from '@/api/services'
@@ -72,7 +105,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     activeRole(state): UserRole | null {
-      return state.currentUser?.roles[0] ?? (canUsePreviewMode() ? state.previewRole : null) ?? null
+      return state.currentUser?.roles[0] ?? (canUsePreviewMode() && !state.token ? state.previewRole : null) ?? null
     },
     isPreviewSession(state): boolean {
       return canUsePreviewMode() && !state.token && state.previewRole !== null
@@ -81,9 +114,10 @@ export const useAuthStore = defineStore('auth', {
       return Boolean(state.token)
     },
     displayName(state): string {
-      return state.currentUser?.fullName ?? (state.previewRole && canUsePreviewMode() ? demoUsers[state.previewRole].fullName : 'Guest Learner')
+      return state.currentUser?.fullName ?? (state.previewRole && canUsePreviewMode() && !state.token ? demoUsers[state.previewRole].fullName : 'Guest Learner')
     },
-    hasRole: (state) => (role: UserRole) => (state.currentUser?.roles ?? []).includes(role) || (canUsePreviewMode() && state.previewRole === role),
+    hasRole: (state) => (role: UserRole) =>
+      (state.currentUser?.roles ?? []).includes(role) || (canUsePreviewMode() && !state.token && state.previewRole === role),
   },
   actions: {
     async bootstrap() {
@@ -97,6 +131,11 @@ export const useAuthStore = defineStore('auth', {
       }
 
       if (this.token) {
+        if (this.previewRole) {
+          this.previewRole = null
+          persistPreviewRole(null)
+        }
+
         persistToken(this.token)
         try {
           this.currentUser = await authApi.me()

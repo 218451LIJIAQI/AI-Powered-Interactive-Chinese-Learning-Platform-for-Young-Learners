@@ -74,6 +74,30 @@ import jakarta.persistence.criteria.Predicate;
  *   <li>Audit fields (admin creator id, timestamps) are intentionally NOT
  *       exposed to students.</li>
  * </ul>
+ *
+ * <h2>Read-side of the admin-managed platform activity library</h2>
+ * <p>The six
+ * interactive activity types ({@link ActivityType}) filtered down to
+ * what the current student is allowed to see.
+ *
+ * <h2>Visibility</h2>
+ * <p>Only PUBLISHED activities are returned. Each activity exposes an
+ * {@link AgeBand} and {@link ActivityDifficulty} so the catalogue can
+ * pre-filter to age-appropriate content; admins control this via
+ * {@link AdminActivityService}.</p>
+ *
+ * <h2>Completion semantics</h2>
+ * <p>Activity completion is decoupled from lesson progress —
+ * completing a platform activity awards XP / streak credit via
+ * {@link StudentLearningProgressService#completePlatformActivity}
+ * but does not advance lesson progress, since these are
+ * platform-library rather than lesson-attached items.</p>
+ *
+ * <h2>Security boundary</h2>
+ * <p>Student-facing DTOs intentionally omit any answer-key fields
+ * (e.g. correct match-pair identifiers, story question correct
+ * answers) so the response cannot be inspected to cheat; those fields
+ * only exist in {@link AdminActivityService}'s admin DTOs.</p>
  */
 @Service
 public class StudentActivityLibraryService {

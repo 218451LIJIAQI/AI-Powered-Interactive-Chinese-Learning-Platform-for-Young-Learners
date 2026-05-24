@@ -1,5 +1,6 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
 
 import com.example.aichinese.entity.LiveClass;
@@ -16,6 +19,23 @@ import com.example.aichinese.entity.enums.LiveClassStatus;
 
 import jakarta.persistence.LockModeType;
 
+/**
+ * Persistence operations for {@link LiveClass} — scheduled real-time
+ * teacher-led sessions that can either back a specific {@code Lesson} or
+ * a {@code CoursePackage}.
+ *
+ * <p>Every read on this repository uses the same {@link EntityGraph} of
+ * teacher / lesson / course-package + their respective teachers so the
+ * downstream response mapper never regresses into the per-row lazy-load
+ * N+1 pattern. The graph is duplicated on each method (rather than
+ * declared once on a base class) because Spring Data resolves
+ * {@code @EntityGraph} per-method, not per-interface.</p>
+ *
+ * <p>Inbound queries that need to discriminate by visibility / status
+ * are expressed as JPQL with explicit LEFT JOINs (see
+ * {@link #findStudentVisibleClasses(ContentStatus, Collection)} for the
+ * rationale behind the explicit-join style).</p>
+ */
 public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
 
     @Override
@@ -33,8 +53,8 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = { "teacher", "teacher.user", "lesson", "lesson.teacher", "coursePackage", "coursePackage.teacher" })
-    @org.springframework.data.jpa.repository.Query("select lc from LiveClass lc where lc.id = :id")
-    Optional<LiveClass> findLockedById(@org.springframework.data.repository.query.Param("id") Long id);
+    @Query("select lc from LiveClass lc where lc.id = :id")
+    Optional<LiveClass> findLockedById(@Param("id") Long id);
 
     @EntityGraph(attributePaths = { "teacher", "teacher.user", "lesson", "lesson.teacher", "coursePackage", "coursePackage.teacher" })
     List<LiveClass> findByTeacherUserIdOrderByScheduledStartAtAsc(Long teacherUserId);
@@ -60,14 +80,14 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
      * scanning the entire live class table.
      */
     @EntityGraph(attributePaths = { "teacher", "teacher.user", "lesson", "lesson.teacher", "coursePackage", "coursePackage.teacher" })
-    @org.springframework.data.jpa.repository.Query("""
+    @Query("""
             select lc from LiveClass lc
             where lc.lesson.id = :lessonId
                or lc.coursePackage.id in :packageIds
             """)
     List<LiveClass> findRelatedToLessonOrPackages(
-            @org.springframework.data.repository.query.Param("lessonId") Long lessonId,
-            @org.springframework.data.repository.query.Param("packageIds") java.util.Collection<Long> packageIds);
+            @Param("lessonId") Long lessonId,
+            @Param("packageIds") Collection<Long> packageIds);
 
     /**
      * Student-visible catalog of live classes ordered by start time. A class
@@ -84,7 +104,7 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
      * had a non-null lesson FK when we first tried the simpler form.</p>
      */
     @EntityGraph(attributePaths = { "teacher", "teacher.user", "lesson", "lesson.teacher", "coursePackage", "coursePackage.teacher" })
-    @org.springframework.data.jpa.repository.Query("""
+    @Query("""
             select lc from LiveClass lc
             left join lc.lesson l
             left join lc.coursePackage p
@@ -95,11 +115,11 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
             order by lc.scheduledStartAt asc
             """)
     List<LiveClass> findStudentVisibleClasses(
-            @org.springframework.data.repository.query.Param("published") ContentStatus published,
-            @org.springframework.data.repository.query.Param("visibleStatuses") java.util.Collection<LiveClassStatus> visibleStatuses);
+            @Param("published") ContentStatus published,
+            @Param("visibleStatuses") Collection<LiveClassStatus> visibleStatuses);
 
     @EntityGraph(attributePaths = { "teacher", "teacher.user", "lesson", "lesson.teacher", "coursePackage", "coursePackage.teacher" })
-    @org.springframework.data.jpa.repository.Query(value = """
+    @Query(value = """
             select lc from LiveClass lc
             left join lc.lesson l
             left join lc.coursePackage p
@@ -118,7 +138,7 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
               and lc.liveClassStatus in :visibleStatuses
             """)
     Page<LiveClass> findStudentVisibleClasses(
-            @org.springframework.data.repository.query.Param("published") ContentStatus published,
-            @org.springframework.data.repository.query.Param("visibleStatuses") java.util.Collection<LiveClassStatus> visibleStatuses,
+            @Param("published") ContentStatus published,
+            @Param("visibleStatuses") Collection<LiveClassStatus> visibleStatuses,
             Pageable pageable);
 }

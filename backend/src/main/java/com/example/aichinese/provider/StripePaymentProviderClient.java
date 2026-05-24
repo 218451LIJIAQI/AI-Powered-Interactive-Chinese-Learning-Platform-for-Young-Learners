@@ -32,6 +32,55 @@ import com.example.aichinese.entity.OrderItem;
 import com.example.aichinese.entity.enums.PaymentStatus;
 import com.example.aichinese.service.model.CommerceCheckout;
 
+/**
+ * Real-money implementation of {@link PaymentProviderClient} that talks
+ * to Stripe Checkout via the Stripe REST API.
+ *
+ * <h2>Why a hand-rolled REST client (not the official Stripe SDK)</h2>
+ * <p>The platform only uses two Stripe endpoints
+ * ({@code POST /v1/checkout/sessions} and
+ * {@code GET /v1/checkout/sessions/{id}}); pulling in the full Stripe
+ * Java SDK would add ~10 MB of transitive dependencies for two HTTP
+ * calls. The form-encoded body shape, line-item indexing pattern, and
+ * metadata namespacing are stable Stripe contracts, so a direct
+ * {@link RestTemplate} call is both lighter and easier to mock in
+ * tests.</p>
+ *
+ * <h2>Currency / minor-unit handling</h2>
+ * <p>Stripe expects amounts in the currency's smallest unit (cents for
+ * USD, sen for MYR, etc.) — except for the small set of zero-decimal
+ * currencies enumerated in {@link #ZERO_DECIMAL_CURRENCIES} where the
+ * unit is the currency itself (JPY, KRW, etc., where there is no
+ * sub-unit). {@link #toMinorUnits(BigDecimal, String)} bridges the
+ * platform's {@link BigDecimal} amounts to the integer unit Stripe
+ * requires, with explicit half-up rounding so the rounded amount never
+ * silently differs from what the order shows the buyer.</p>
+ *
+ * <h2>Endpoint integrity</h2>
+ * <p>{@link #endpoint(String)} refuses to issue requests over
+ * {@code http} unless the host is loopback (used by integration tests
+ * that point Stripe at a local mock). Production traffic must be HTTPS
+ * to api.stripe.com — this is enforced by both
+ * {@link com.example.aichinese.config.PaymentProductionGuard}
+ * (startup) and this method (runtime), giving defence-in-depth against
+ * a configuration change that bypasses the startup gate.</p>
+ *
+ * <h2>Failure handling</h2>
+ * <p>Both {@link #createCheckoutSession} and {@link #getPaymentStatus}
+ * catch every {@link RestClientException} / {@link IllegalArgumentException}
+ * and translate it to an unavailable result with the canonical
+ * {@link #PAYMENT_UNAVAILABLE_MESSAGE}. The exception's message is
+ * logged at {@code WARN} but never propagated to the client, so a
+ * Stripe-side error message can never leak to a learner's browser.</p>
+ *
+ * <h2>Metadata round-trip</h2>
+ * <p>The metadata fields written via
+ * {@link #addMetadata(MultiValueMap, CommerceCheckout)} are read back by
+ * {@code StripeWebhookService} when Stripe POSTs a
+ * {@code checkout.session.completed} event, allowing the platform to
+ * reconcile the inbound webhook with the original order without
+ * scanning the entire {@code payment_records} table.</p>
+ */
 @Component
 public class StripePaymentProviderClient implements PaymentProviderClient {
 

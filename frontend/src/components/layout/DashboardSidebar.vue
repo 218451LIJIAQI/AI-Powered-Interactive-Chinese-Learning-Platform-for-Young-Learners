@@ -49,7 +49,7 @@
         <strong>{{ progressLabel }}</strong>
         <span class="muted">{{ progressCaption }}</span>
       </div>
-      <span v-else class="muted sidebar-footer-subtitle">Sign in to open lessons, practice, classes, rewards, and AI tools.</span>
+      <span v-else-if="!auth.isAuthenticated && !isGuestCatalog" class="muted sidebar-footer-subtitle">Sign in to open lessons, practice, classes, rewards, and AI tools.</span>
       <div class="sidebar-footer-ornament"><IconGlyph :name="footerDecorationIcon" :size="26" /></div>
     </div>
 
@@ -63,6 +63,16 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Vertical navigation rail for the authenticated dashboard layout.
+ *
+ * Reads {@link roleNavigation} for the active role and renders one
+ * `<RouterLink>` per item, applying the active-route highlight via
+ * `useRoute()`. The persona's labels come from i18n so the rail
+ * reads correctly in EN / BM / 简体中文 without per-role hardcoding.
+ *
+ * Hidden on mobile in favour of the topbar drawer.
+ */
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -80,11 +90,12 @@ const auth = useAuthStore()
 const route = useRoute()
 const { t } = useI18n()
 
+const isPreview = computed(() => auth.isPreviewSession)
+const studentProfile = computed(() => auth.currentUser?.studentProfile ?? null)
+
 const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
 const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
 const sceneRole = computed(() => (isGuestCatalog.value ? 'student' : role.value.toLowerCase()))
-const showFooterProgress = computed(() => !isGuestCatalog.value)
-
 const items = computed(() => (isGuestCatalog.value ? publicNav : roleNavigation[role.value]))
 const localizedItems = computed(() => items.value.map((item) => ({ ...item, label: t(item.labelKey) })))
 
@@ -178,11 +189,15 @@ const footerTitle = computed(() => {
 
   switch (role.value) {
     case 'TEACHER':
-      return 'Level 3 Teacher'
+      return auth.displayName || 'Teacher'
     case 'ADMIN':
-      return 'Admin Level'
+      return 'Admin workspace'
     default:
-      return 'Level 3 Little Learner'
+      // Use real level from student profile if available
+      if (!isPreview.value && studentProfile.value?.currentLevel) {
+        return studentProfile.value.currentLevel
+      }
+      return isPreview.value ? 'Preview learner' : 'Student'
   }
 })
 
@@ -191,9 +206,11 @@ const footerSubtitle = computed(() => {
 
   switch (role.value) {
     case 'TEACHER':
-      return 'Verified educator workspace'
+      return auth.currentUser?.teacherProfile?.teacherStatus === 'APPROVED'
+        ? 'Verified educator'
+        : 'Educator workspace'
     case 'ADMIN':
-      return 'Super Administrator'
+      return 'Administrator'
     default:
       return 'Keep learning and growing'
   }
@@ -202,40 +219,32 @@ const footerSubtitle = computed(() => {
 const progress = computed(() => {
   if (isGuestCatalog.value) return 0
 
-  switch (role.value) {
-    case 'TEACHER':
-      return 65
-    case 'ADMIN':
-      return 100
-    default:
-      return 55
+  // Only show real progress for students; teacher/admin sidebar footer
+  // doesn't have a progress concept, so hide the bar for them.
+  if (role.value !== 'STUDENT') return 0
+
+  if (!isPreview.value && studentProfile.value) {
+    return Math.max(0, Math.min(100, Math.round(studentProfile.value.totalPoints / 4)))
   }
+
+  return isPreview.value ? 55 : 0
 })
 
 const progressLabel = computed(() => {
   if (isGuestCatalog.value) return 'Public browsing'
+  if (role.value !== 'STUDENT') return ''
 
-  switch (role.value) {
-    case 'TEACHER':
-      return '780 / 1,200 XP'
-    case 'ADMIN':
-      return 'Full Access'
-    default:
-      return '220 / 400 XP'
+  if (!isPreview.value && studentProfile.value) {
+    return `${studentProfile.value.totalPoints} pts`
   }
+
+  return isPreview.value ? 'Preview XP' : ''
 })
 
 const progressCaption = computed(() => {
   if (isGuestCatalog.value) return 'sign in for the student workspace'
-
-  switch (role.value) {
-    case 'TEACHER':
-      return 'teaching XP'
-    case 'ADMIN':
-      return 'privileges'
-    default:
-      return 'next level'
-  }
+  if (role.value !== 'STUDENT') return ''
+  return isPreview.value ? 'preview session' : 'earned so far'
 })
 
 const footerIcon = computed(() => {
@@ -294,16 +303,11 @@ const showcaseAccent = computed(() => '#f6d056')
 
 const footerProgressTone = computed(() => {
   if (isGuestCatalog.value) return ''
-
-  switch (role.value) {
-    case 'TEACHER':
-      return 'warning'
-    case 'ADMIN':
-      return 'success'
-    default:
-      return ''
-  }
+  if (role.value !== 'STUDENT') return ''
+  return isPreview.value ? 'warning' : ''
 })
+
+const showFooterProgress = computed(() => !isGuestCatalog.value && role.value === 'STUDENT')
 
 function isLinkActive(to: string) {
   const [pathPart, queryPart] = to.split('?')

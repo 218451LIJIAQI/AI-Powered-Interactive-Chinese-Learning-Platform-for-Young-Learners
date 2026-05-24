@@ -14,6 +14,31 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Metadata row for any file the platform stores on its own object
+ * storage — verification documents, recorded lesson videos, AI-feedback
+ * audio uploads, etc.
+ *
+ * <p>{@link #fileName} is the original name as supplied by the
+ * uploader (kept for download UX) while {@link #storedFileName} is the
+ * platform-assigned UUID-based name used as the storage key. The
+ * unique constraint on {@code stored_file_name} prevents key
+ * collisions and is the natural primary lookup index for file-serving
+ * endpoints.</p>
+ *
+ * <p>{@link #accessLevel} drives the file-serving authorisation
+ * (currently free-form short codes like {@code "PUBLIC"},
+ * {@code "TEACHER_VERIFICATION"}, {@code "STUDENT_AI_INPUT"}). Values
+ * are interpreted by {@code FileStorageService} when generating signed
+ * URLs.</p>
+ *
+ * <p>{@link #active} provides soft-deletion: serving the file checks
+ * the flag in addition to the ACL, so a takedown can be staged before
+ * the bytes are physically purged.</p>
+ *
+ * <p>{@link #ownerUser} is nullable because system-uploaded files
+ * (seed data, automated exports) have no human owner.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -74,6 +74,22 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Post-checkout landing page that Stripe (or the mock provider)
+ * redirects to with `?status=success|cancel` plus the payment id.
+ *
+ * <h2>Why server verification</h2>
+ * <p>The query string alone is untrusted — a user can edit the URL
+ * and reach this page with `success` even when the payment failed.
+ * On mount we call {@code GET /payments/status/{id}} which is the
+ * authoritative source: the entitlement and notification are
+ * created by the backend webhook, not by this redirect.</p>
+ *
+ * <h2>Defensive copy</h2>
+ * <p>The success copy is gated on the verification result, not the
+ * query string, so an attacker can never make the page show
+ * "Payment confirmed" without an actual confirmed payment record.</p>
+ */
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 

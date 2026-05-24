@@ -14,6 +14,13 @@ import com.example.aichinese.service.ai.AiProviderResult;
 import com.example.aichinese.service.ai.AiAvailabilityService;
 import com.example.aichinese.service.ai.OpenAiCompatibleAiProviderClient;
 
+/**
+ * Unit coverage for {@code OpenAiCompatibleAiProviderClient} —
+ * proves the never-throw contract (missing key / model / endpoint
+ * surface as failure results rather than exceptions) and the
+ * HTTPS-only endpoint integrity check (HTTP only allowed for
+ * loopback hosts used by integration tests).
+ */
 class OpenAiCompatibleAiProviderClientTests {
 
     @Test

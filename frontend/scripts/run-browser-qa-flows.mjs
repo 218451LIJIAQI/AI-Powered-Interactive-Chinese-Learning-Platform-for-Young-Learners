@@ -1,3 +1,34 @@
+/**
+ * Driver / harness for {@link browser-qa-flows.mjs}.
+ *
+ * <h2>What it does</h2>
+ *   1. Probes the backend health endpoint across the common local
+ *      ports (8080 / 8081) so the harness "just works" regardless
+ *      of which the developer is running.
+ *   2. Finds an available frontend port — starts at
+ *      `QA_FRONTEND_PORT` (default 5174 to avoid clashing with the
+ *      developer's dev server on 5173) and walks forward up to 10
+ *      ports until one binds.
+ *   3. Spawns Vite in `previewqa` mode pointing at the resolved API
+ *      base URL.
+ *   4. Waits for the SPA to start serving `/auth` (signals
+ *      readiness, not just port-open).
+ *   5. Invokes `browser-qa-flows.mjs` as a child process with the
+ *      right env vars.
+ *   6. Cleans up: kills the Vite process tree (uses `taskkill /t`
+ *      on Windows because Vite spawns child esbuild processes that
+ *      a plain SIGTERM would not reach).
+ *
+ * <h2>Why a separate harness</h2>
+ * Keeps the actual flow logic in a single, well-documented script
+ * that does not have to know how Vite is started. Lets QA engineers
+ * iterate on the flow steps without touching process plumbing.
+ *
+ * <h2>Configuration</h2>
+ *   - `QA_FRONTEND_HOST` / `QA_FRONTEND_PORT` — preview server host/port
+ *   - `QA_API_HEALTH_URL` — explicit health URL override
+ *   - `QA_API_BASE_URL` / `VITE_API_BASE_URL` — backend base
+ */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'

@@ -19,6 +19,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Short-story reading activity in the platform practice library.
+ *
+ * <p>Carries the original Chinese narrative ({@link #storyText}),
+ * optional pinyin transliteration ({@link #pinyin}), and optional
+ * translation ({@link #translation}). After reading, the learner
+ * answers a small set of {@link StoryQuestion} prompts that test
+ * comprehension.</p>
+ *
+ * <p>Shares the activity metadata vocabulary with the other practice
+ * library entities for uniform filtering.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor

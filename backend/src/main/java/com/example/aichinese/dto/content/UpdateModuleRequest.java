@@ -11,6 +11,24 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Body for {@code PUT /api/v1/teachers/modules/{id}} — the
+ * teacher edits an existing module.
+ *
+ * <p>Mirrors {@link CreateModuleRequest} field-for-field. The
+ * service rejects the edit when the module is in a non-editable
+ * state (e.g.
+ * {@link com.example.aichinese.entity.enums.ContentStatus#ARCHIVED}
+ * or under active admin review) — see
+ * {@code TeacherContentAccessService.validateEditableStatus}.</p>
+ *
+ * <p>For archiving (soft delete), use
+ * {@code PATCH /api/v1/teachers/modules/{id}/archive} (no body) —
+ * not this endpoint.</p>
+ *
+ * <p>See {@link CreateModuleRequest} for the full discussion of
+ * shared content metadata vocabulary and validation rules.</p>
+ */
 public record UpdateModuleRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must not exceed 200 characters.")

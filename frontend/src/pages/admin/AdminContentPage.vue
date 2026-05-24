@@ -108,6 +108,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Admin content-review queue — approve / reject / request changes
+ * on teacher-submitted courses, modules, lessons.
+ *
+ * <p>The page calls into {@code AdminContentReviewService} which
+ * publishes the content only after admin approval. A rejection
+ * sends the content back to draft state with a note visible to the
+ * teacher in {@link TeacherContentPage}.</p>
+ */
 import { computed, ref } from 'vue'
 
 import { adminApi } from '@/api/services'

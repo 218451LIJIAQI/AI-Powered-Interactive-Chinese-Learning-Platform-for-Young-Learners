@@ -19,13 +19,33 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Teacher-initiated request to withdraw accumulated commission earnings.
+ *
+ * <p>Created by the teacher portal when their available balance — the
+ * sum of {@link TeacherEarning#getNetAmount()} across all
+ * {@link com.example.aichinese.entity.enums.TeacherEarningStatus#AVAILABLE}
+ * earnings minus already-committed payouts — is non-zero. The lifecycle
+ * follows {@link com.example.aichinese.entity.enums.PayoutStatus}:
+ * {@code PENDING → APPROVED → PAID} or {@code PENDING → REJECTED}.</p>
+ *
+ * <p>{@link #requestedNote} is a free-text note the teacher attaches
+ * (e.g. preferred payment method); {@link #decisionReason} is filled by
+ * the admin when the request is approved or rejected and is surfaced
+ * back to the teacher through {@code Notification}.</p>
+ *
+ * <p>{@link #version} prevents two admins from approving the same
+ * request concurrently, which would otherwise double-count the amount
+ * against the teacher's available balance.</p>
+ */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "payout_requests", indexes = {
         @Index(name = "idx_payout_requests_teacher_id", columnList = "teacher_id"),
-        @Index(name = "idx_payout_requests_status", columnList = "payout_status")
+        @Index(name = "idx_payout_requests_status", columnList = "payout_status"),
+        @Index(name = "idx_payout_requests_status_created_at", columnList = "payout_status,created_at")
 })
 public class PayoutRequest extends BaseEntity {
 

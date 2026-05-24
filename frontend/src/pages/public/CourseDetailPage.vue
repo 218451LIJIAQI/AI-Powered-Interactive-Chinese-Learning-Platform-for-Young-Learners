@@ -100,6 +100,20 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Single course / module / package detail page accessible from the
+ * catalogue or a marketing link.
+ *
+ * <h2>Visibility</h2>
+ * <p>The endpoint returns content only for PUBLISHED items authored
+ * by APPROVED teachers — so an unauthenticated visitor cannot see
+ * draft or hidden material via URL guessing.</p>
+ *
+ * <h2>Paid vs. free</h2>
+ * <p>Paid course pages display only price + teaser; the lesson body
+ * is locked behind the checkout flow. The action button routes
+ * through {@link AuthPage} when the visitor is not signed in.</p>
+ */
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -108,11 +122,10 @@ import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import { appEnv } from '@/config/env'
 import { publicCourseDetails } from '@/demo/data'
 import { useResource } from '@/composables/useResource'
 import { useAuthStore } from '@/stores/auth'
-import type { CheckoutResponse } from '@/types/api'
+import type { CheckoutResponse, PublicCourseDetail } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatCurrency } from '@/utils/format'
 
@@ -129,19 +142,7 @@ function readDemoCourseDetail() {
   return publicCourseDetails[courseId.value] ?? null
 }
 
-const resource = useResource(
-  () => {
-    const previewDetail = readDemoCourseDetail()
-    if (appEnv.useDemoData && appEnv.enablePreviewMode && previewDetail) {
-      return Promise.resolve(previewDetail)
-    }
-
-    return publicApi.getCourseDetail(courseId.value)
-  },
-  () => readDemoCourseDetail() ?? Object.values(publicCourseDetails)[0],
-)
-
-const emptyCourse = {
+const emptyCourse = computed<PublicCourseDetail>(() => ({
   id: courseId.value,
   contentId: 0,
   type: 'LESSON' as const,
@@ -170,10 +171,22 @@ const emptyCourse = {
   basicContent: 'Course content is unavailable right now.',
   packageItems: [],
   callToAction: 'Try again after the API route becomes available.',
-}
+}))
+
+const resource = useResource(
+  () => {
+    const previewDetail = readDemoCourseDetail()
+    if (auth.isPreviewSession && previewDetail) {
+      return Promise.resolve(previewDetail)
+    }
+
+    return publicApi.getCourseDetail(courseId.value)
+  },
+  () => readDemoCourseDetail() ?? emptyCourse.value,
+)
 
 const course = computed(
-  () => resource.data.value ?? (resource.usingFallback.value ? Object.values(publicCourseDetails)[0] : emptyCourse),
+  () => resource.data.value ?? emptyCourse.value,
 )
 const courseSceneVariant = computed(() => {
   const title = course.value.title.toLowerCase()

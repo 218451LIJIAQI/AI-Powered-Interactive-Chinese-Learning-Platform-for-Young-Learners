@@ -8,6 +8,13 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Tiny inline SVG for the four social brands the public footer
+ * links to (LinkedIn, Facebook, YouTube, Instagram). Rolled by hand
+ * instead of pulling a full brand-icon package so the production
+ * bundle stays small — `fill: currentColor` means the parent
+ * controls the colour via plain CSS.
+ */
 defineProps<{
   name: 'linkedin' | 'facebook' | 'youtube' | 'instagram'
 }>()

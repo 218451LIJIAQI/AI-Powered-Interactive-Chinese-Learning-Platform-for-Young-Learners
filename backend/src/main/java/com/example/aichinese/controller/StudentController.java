@@ -46,6 +46,27 @@ import com.example.aichinese.service.VideoProgressService;
 
 import jakarta.validation.Valid;
 
+/**
+ * Student persona REST surface — dashboard, lesson + quiz player,
+ * progress / rewards / streaks, AI report-this-response, recorded
+ * video playback, and live-class enrolment.
+ *
+ * <h2>Authorization</h2>
+ * <p>Class-level {@code hasRole("STUDENT")} is enforced in
+ * {@link com.example.aichinese.config.SecurityConfig}. Every
+ * endpoint additionally re-checks ownership / entitlement through
+ * {@link com.example.aichinese.service.StudentLearningAccessService}
+ * (lesson / quiz access) and
+ * {@link com.example.aichinese.service.LiveLearningAccessService}
+ * (live class / recorded video access) so a forged path id cannot
+ * cross-tenant into another student's content.</p>
+ *
+ * <h2>Input validation</h2>
+ * <p>Free-text query parameters (search keyword, sort) are
+ * {@code @Size}-capped at the controller boundary; JSON bodies use
+ * {@code @Valid} so per-field constraints declared on the request
+ * DTOs fire before the service is reached.</p>
+ */
 @Validated
 @RestController
 @RequestMapping("/api/v1/students")

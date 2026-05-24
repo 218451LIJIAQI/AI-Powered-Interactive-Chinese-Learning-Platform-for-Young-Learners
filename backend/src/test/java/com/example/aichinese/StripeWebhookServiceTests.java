@@ -27,6 +27,14 @@ import com.example.aichinese.service.PaymentService;
 import com.example.aichinese.service.StripeWebhookService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Unit coverage for {@code StripeWebhookService} — pins the
+ * security-critical signature verification:
+ * timestamp tolerance window, constant-time comparison, rejection of
+ * forged / replayed / mis-typed payloads, and the supported-event
+ * filter so unsupported event types are acknowledged 200 OK without
+ * any state change.
+ */
 class StripeWebhookServiceTests {
 
     private static final String SECRET = "whsec_test_secret";
@@ -56,6 +64,60 @@ class StripeWebhookServiceTests {
         assertThat(response.eventId()).isEqualTo("evt_paid");
         assertThat(response.eventType()).isEqualTo("checkout.session.completed");
         assertThat(response.paymentId()).isEqualTo(10L);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(response.processed()).isTrue();
+    }
+
+    @Test
+    void checkoutCompletedWithUnpaidAsyncPaymentDoesNotUnlockEntitlement() {
+        PaymentService paymentService = mock(PaymentService.class);
+        StripeWebhookService service = service(paymentService);
+        String payload = checkoutSessionPayload("evt_unpaid", "checkout.session.completed", "cs_test_unpaid", "complete", "unpaid");
+        String signature = signatureHeader(payload);
+        when(paymentService.applyProviderPaymentStatus(
+                eq("stripe"),
+                eq("cs_test_unpaid"),
+                argThat(status -> status.available()
+                        && status.paymentStatus() == PaymentStatus.PENDING
+                        && "CHECKOUT.SESSION.COMPLETED:COMPLETE:UNPAID".equals(status.providerStatus()))))
+                .thenReturn(Optional.of(new StripeWebhookResultResponse(
+                        null,
+                        null,
+                        12L,
+                        PaymentStatus.PENDING,
+                        "CHECKOUT.SESSION.COMPLETED:COMPLETE:UNPAID",
+                        true)));
+
+        StripeWebhookResultResponse response = service.handleWebhook(payload, signature);
+
+        assertThat(response.eventId()).isEqualTo("evt_unpaid");
+        assertThat(response.paymentId()).isEqualTo(12L);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(response.processed()).isTrue();
+    }
+
+    @Test
+    void asyncPaymentSucceededWebhookMarksPaymentPaid() {
+        PaymentService paymentService = mock(PaymentService.class);
+        StripeWebhookService service = service(paymentService);
+        String payload = checkoutSessionPayload("evt_async_paid", "checkout.session.async_payment_succeeded", "cs_test_async", "complete", "unpaid");
+        when(paymentService.applyProviderPaymentStatus(
+                eq("stripe"),
+                eq("cs_test_async"),
+                argThat(status -> status.available()
+                        && status.paymentStatus() == PaymentStatus.PAID
+                        && "CHECKOUT.SESSION.ASYNC_PAYMENT_SUCCEEDED:COMPLETE:UNPAID".equals(status.providerStatus()))))
+                .thenReturn(Optional.of(new StripeWebhookResultResponse(
+                        null,
+                        null,
+                        13L,
+                        PaymentStatus.PAID,
+                        "CHECKOUT.SESSION.ASYNC_PAYMENT_SUCCEEDED:COMPLETE:UNPAID",
+                        true)));
+
+        StripeWebhookResultResponse response = service.handleWebhook(payload, signatureHeader(payload));
+
+        assertThat(response.paymentId()).isEqualTo(13L);
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(response.processed()).isTrue();
     }
@@ -92,6 +154,36 @@ class StripeWebhookServiceTests {
         String payload = checkoutSessionPayload("evt_bad", "checkout.session.completed", "cs_test_paid", "complete", "paid");
 
         assertThatThrownBy(() -> service.handleWebhook(payload, "t=" + Instant.now().getEpochSecond() + ",v1=bad"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST");
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    void signedNonCheckoutSessionEventIsIgnored() {
+        PaymentService paymentService = mock(PaymentService.class);
+        StripeWebhookService service = service(paymentService);
+        String payload = """
+                {"id":"evt_charge","type":"charge.succeeded","data":{"object":{"id":"ch_test_paid","object":"charge","status":"succeeded","payment_status":"paid"}}}
+                """.trim();
+
+        StripeWebhookResultResponse response = service.handleWebhook(payload, signatureHeader(payload));
+
+        assertThat(response.eventId()).isEqualTo("evt_charge");
+        assertThat(response.eventType()).isEqualTo("charge.succeeded");
+        assertThat(response.processed()).isFalse();
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    void signedCheckoutSessionEventRejectsWrongObjectType() {
+        PaymentService paymentService = mock(PaymentService.class);
+        StripeWebhookService service = service(paymentService);
+        String payload = """
+                {"id":"evt_wrong_object","type":"checkout.session.completed","data":{"object":{"id":"ch_test_paid","object":"charge","status":"complete","payment_status":"paid"}}}
+                """.trim();
+
+        assertThatThrownBy(() -> service.handleWebhook(payload, signatureHeader(payload)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST");
         verifyNoInteractions(paymentService);

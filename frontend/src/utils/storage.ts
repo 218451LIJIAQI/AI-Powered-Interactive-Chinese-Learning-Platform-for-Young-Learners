@@ -1,3 +1,11 @@
+/**
+ * Single source of truth for `localStorage` keys used by the frontend,
+ * plus `safe*` wrappers that swallow exceptions so a Safari Private
+ * mode or quota-exceeded error never crashes the calling code.
+ *
+ * Keep keys prefixed with `mandarin-spark.` so they are easy to find
+ * in DevTools and do not clash with other apps on the same origin.
+ */
 export const storageKeys = {
   token: 'mandarin-spark.token',
   language: 'mandarin-spark.language',

@@ -19,6 +19,26 @@ import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.PaymentEntitlementRepository;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
+/**
+ * Resolves "does this student have paid access to this content?"
+ * queries.
+ *
+ * <h2>Entitlement sources</h2>
+ * <p>An entitlement row is created when a payment completes (see
+ * {@link PaymentService#completeOrder}) for every purchased
+ * {@link OrderItem}. Lessons inside a purchased
+ * {@link com.example.aichinese.entity.CoursePackage} or
+ * {@link com.example.aichinese.entity.LearningModule} are accessed
+ * indirectly — {@link #hasAccessToItem} also checks whether the
+ * lesson belongs to a purchased package / module, so we don't need
+ * to denormalise every lesson into its own entitlement row.</p>
+ *
+ * <h2>Used by</h2>
+ * <p>{@link StudentLearningAccessService} for lesson / quiz access,
+ * {@link LiveLearningAccessService} for live class + recorded video
+ * access, and {@link CartService} / {@link CheckoutService} to refuse
+ * re-purchase of already-owned items.</p>
+ */
 @Service
 public class EntitlementService {
 
