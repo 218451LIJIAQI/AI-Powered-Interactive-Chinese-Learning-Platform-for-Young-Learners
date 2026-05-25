@@ -25,9 +25,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.ai.AdminAiUsageLogResponse;
@@ -73,7 +78,9 @@ import com.example.aichinese.service.ai.AiAvailabilityService;
 import com.example.aichinese.service.ai.AiExecutionResult;
 import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderPrompt;
+import com.example.aichinese.service.ai.AiProviderResult;
 import com.example.aichinese.service.ai.AiProviderRouter;
+import com.example.aichinese.service.ai.AiUsageLimiter;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.TextUtils;
@@ -148,6 +155,9 @@ public class AiService {
     private final AiLogService aiLogService;
     private final AiFileStorageService aiFileStorageService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate recommendationContextReadTransaction;
+    private final MeterRegistry meterRegistry;
+    private final AiUsageLimiter aiUsageLimiter;
 
     public AiService(
             UserRepository userRepository,
@@ -163,7 +173,10 @@ public class AiService {
             AiAvailabilityService aiAvailabilityService,
             AiLogService aiLogService,
             AiFileStorageService aiFileStorageService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager,
+            MeterRegistry meterRegistry,
+            AiUsageLimiter aiUsageLimiter) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
@@ -178,9 +191,18 @@ public class AiService {
         this.aiLogService = Objects.requireNonNull(aiLogService, "aiLogService");
         this.aiFileStorageService = Objects.requireNonNull(aiFileStorageService, "aiFileStorageService");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+        this.recommendationContextReadTransaction = new TransactionTemplate(
+                Objects.requireNonNull(transactionManager, "transactionManager"));
+        this.recommendationContextReadTransaction.setReadOnly(true);
+        this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
+        this.aiUsageLimiter = Objects.requireNonNull(aiUsageLimiter, "aiUsageLimiter");
     }
 
-    @Transactional
+    /**
+     * Text-provider methods intentionally have no enclosing transaction. Repository and
+     * logging calls use their own short transactions, so the blocking provider request
+     * never reserves a JDBC connection while waiting for an AI response.
+     */
     public AiChatResponse chat(SecurityUserDetails currentUser, AiChatRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
@@ -223,7 +245,6 @@ public class AiService {
                 execution.status().name());
     }
 
-    @Transactional
     public AiVocabularyHelperResponse vocabularyHelper(SecurityUserDetails currentUser, AiVocabularyHelperRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
@@ -245,7 +266,6 @@ public class AiService {
         return parseVocabularyResponse(execution.responseText(), execution.status().name());
     }
 
-    @Transactional
     public AiSentencePracticeResponse sentencePractice(SecurityUserDetails currentUser, AiSentencePracticeRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
@@ -268,7 +288,6 @@ public class AiService {
         return parseSentenceResponse(sanitizedSentence, execution.responseText(), execution.status().name());
     }
 
-    @Transactional
     public AiQuizGeneratorResponse quizGenerator(SecurityUserDetails currentUser, AiQuizGeneratorRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
@@ -299,7 +318,6 @@ public class AiService {
         return parseQuizResponse(request, usageMode, execution.responseText(), execution.status().name());
     }
 
-    @Transactional
     public AiStoryGeneratorResponse storyGenerator(SecurityUserDetails currentUser, AiStoryGeneratorRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
@@ -323,37 +341,31 @@ public class AiService {
         return parseStoryResponse(request, usageMode, execution.responseText(), execution.status().name());
     }
 
-    @Transactional
     public AiLearningRecommendationResponse learningRecommendation(
             SecurityUserDetails currentUser,
             AiLearningRecommendationRequest request) {
-        User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
-        String language = resolveLanguage(user, request.languagePreference());
-        StudentProfile studentProfile = resolveCurrentStudentProfile(currentUser);
-        if (request.studentId() != null && !studentProfile.getId().equals(request.studentId())) {
-            throw new ResponseStatusException(FORBIDDEN, "Students can only request learning recommendations for their own account.");
-        }
-        String summary = buildStudentContextSummary(studentProfile);
+        LearningRecommendationContext context = Objects.requireNonNull(
+                recommendationContextReadTransaction.execute(status -> prepareLearningRecommendationContext(currentUser, request)),
+                "learning recommendation context");
 
         AiExecutionResult execution = generateText(
-                user,
+                context.user(),
                 AiFeatureKey.LEARNING_RECOMMENDATION,
-                language,
-                buildLearningRecommendationPrompt(request, summary, language),
+                context.language(),
+                buildLearningRecommendationPrompt(request, context.summary(), context.language()),
                 true,
                 List.of(),
                 "StudentProfile",
-                studentProfile.getId());
+                context.studentProfileId());
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
-            return fallbackLearningRecommendation(studentProfile, execution.status().name());
+            return fallbackLearningRecommendation(context.level(), execution.status().name());
         }
 
         return parseLearningRecommendation(execution.responseText(), execution.status().name());
     }
 
-    @Transactional
     public AiPronunciationFeedbackResponse pronunciationFeedback(
             SecurityUserDetails currentUser,
             MultipartFile audioFile,
@@ -404,7 +416,6 @@ public class AiService {
                 AiRequestStatus.UNAVAILABLE.name());
     }
 
-    @Transactional
     public AiWritingFeedbackResponse writingFeedback(
             SecurityUserDetails currentUser,
             MultipartFile imageFile,
@@ -532,8 +543,17 @@ public class AiService {
                     availability.message());
         }
 
+        aiUsageLimiter.checkProviderCallAllowed(user.getId());
         AiProviderPrompt prompt = aiPromptBuilder.buildPrompt(featureKey, language, userPrompt, expectJson, history);
-        var result = aiProviderRouter.resolveClient().generateText(prompt);
+        Timer.Sample providerTimer = Timer.start(meterRegistry);
+        AiProviderResult result;
+        try {
+            result = aiProviderRouter.resolveClient().generateText(prompt);
+        } catch (RuntimeException exception) {
+            recordProviderDuration(providerTimer, featureKey, "exception");
+            throw exception;
+        }
+        recordProviderDuration(providerTimer, featureKey, result.success() ? "success" : "failure");
         if (!result.success()) {
             aiLogService.createUsageLog(
                     user,
@@ -579,7 +599,7 @@ public class AiService {
             throw new ResponseStatusException(NOT_FOUND, "Authenticated user could not be found.");
         }
 
-        return userRepository.findById(userId)
+        return userRepository.findByIdIn(List.of(userId)).stream().findFirst()
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Authenticated user could not be found."));
     }
 
@@ -719,6 +739,21 @@ public class AiService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Student profile could not be found."));
     }
 
+    private LearningRecommendationContext prepareLearningRecommendationContext(
+            SecurityUserDetails currentUser,
+            AiLearningRecommendationRequest request) {
+        User user = requireUser(currentUser);
+        String language = resolveLanguage(user, request.languagePreference());
+        StudentProfile studentProfile = resolveCurrentStudentProfile(currentUser);
+        if (request.studentId() != null && !studentProfile.getId().equals(request.studentId())) {
+            throw new ResponseStatusException(FORBIDDEN, "Students can only request learning recommendations for their own account.");
+        }
+
+        String summary = buildStudentContextSummary(studentProfile);
+        String level = studentProfile.getCurrentLevel() != null ? studentProfile.getCurrentLevel().getName() : "Beginner";
+        return new LearningRecommendationContext(user, studentProfile.getId(), language, summary, level);
+    }
+
     private void requireRole(SecurityUserDetails currentUser, RoleName roleName, String message) {
         if (!hasRole(currentUser, roleName)) {
             throw new ResponseStatusException(FORBIDDEN, message);
@@ -835,8 +870,7 @@ public class AiService {
                 status);
     }
 
-    private AiLearningRecommendationResponse fallbackLearningRecommendation(StudentProfile studentProfile, String status) {
-        String level = studentProfile.getCurrentLevel() != null ? studentProfile.getCurrentLevel().getName() : "Beginner";
+    private AiLearningRecommendationResponse fallbackLearningRecommendation(String level, String status) {
         return new AiLearningRecommendationResponse(
                 "Continue with one short " + level + " lesson and review one vocabulary activity.",
                 "Beginner vocabulary practice",
@@ -1097,6 +1131,22 @@ public class AiService {
                 .sorted()
                 .findFirst()
                 .orElse("USER");
+    }
+
+    private record LearningRecommendationContext(
+            User user,
+            Long studentProfileId,
+            String language,
+            String summary,
+            String level) {
+    }
+
+    private void recordProviderDuration(Timer.Sample sample, AiFeatureKey featureKey, String outcome) {
+        sample.stop(Timer.builder("aichinese.ai.provider.duration")
+                .description("Latency of text generation calls to the configured AI provider")
+                .tag("feature", featureKey.name())
+                .tag("outcome", outcome)
+                .register(meterRegistry));
     }
 
     private String summarize(String value, int limit) {

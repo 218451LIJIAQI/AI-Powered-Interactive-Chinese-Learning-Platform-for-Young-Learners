@@ -1,6 +1,6 @@
 package com.example.aichinese.repository;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -50,7 +50,7 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
      * same order \u2014 used by the create-refund flow to surface a 400
      * before the database catches it.
      */
-    boolean existsByOrderIdAndRefundStatusIn(Long orderId, List<RefundStatus> statuses);
+    boolean existsByOrderIdAndRefundStatusIn(Long orderId, Collection<RefundStatus> statuses);
 
     /**
      * IDOR-safe single-row lookup so a learner cannot surface another

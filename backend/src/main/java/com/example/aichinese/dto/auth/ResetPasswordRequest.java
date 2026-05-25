@@ -1,7 +1,9 @@
 package com.example.aichinese.dto.auth;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -28,11 +30,11 @@ import jakarta.validation.constraints.Size;
  * input limit (longer values would be silently truncated).</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims} the
+ * <p>The canonical constructor eagerly {@link String#strip() strips} the
  * {@link #token} so a copy-pasted token with stray whitespace from a
  * mail client still hashes to the same value as the canonical token,
  * and so {@link Size @Size(max=128)} is evaluated against the canonical
- * form. Password fields are intentionally <em>not</em> trimmed:
+ * form. Password fields are intentionally <em>not</em> stripped:
  * leading or trailing spaces are significant characters bound directly
  * to the BCrypt hash.</p>
  *
@@ -53,7 +55,7 @@ import jakarta.validation.constraints.Size;
  * unchanged so unit tests can still assert structural equivalence.</p>
  *
  * @param token           raw reset token from the email link;
- *                        trimmed by the canonical constructor;
+ *                        stripped by the canonical constructor;
  *                        never logged
  * @param password        new raw password; hashed with BCrypt before
  *                        storage; never logged
@@ -73,7 +75,7 @@ public record ResetPasswordRequest(
         String confirmPassword) {
 
     /**
-     * Defensive canonical constructor: trims surrounding whitespace
+     * Defensive canonical constructor: strips surrounding whitespace
      * from the token so {@code AuthService.resetPassword} receives the
      * canonical form, and leaves password fields byte-identical so
      * BCrypt hashes the exact value the user typed. {@code null} is
@@ -83,8 +85,15 @@ public record ResetPasswordRequest(
      */
     public ResetPasswordRequest {
         if (token != null) {
-            token = token.trim();
+            token = token.strip();
         }
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "Password and confirm password must be at most 72 bytes when encoded as UTF-8")
+    public boolean isPasswordsWithinBcryptByteLimit() {
+        return AuthDtoValidation.isWithinBcryptByteLimit(password)
+                && AuthDtoValidation.isWithinBcryptByteLimit(confirmPassword);
     }
 
     /**

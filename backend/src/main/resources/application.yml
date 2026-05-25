@@ -8,6 +8,9 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       initialization-fail-timeout: 60000
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:30}
+      minimum-idle: ${DB_MIN_IDLE:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -44,6 +47,8 @@ spring:
           connectiontimeout: ${SMTP_CONNECTION_TIMEOUT_MS:5000}
           timeout: ${SMTP_TIMEOUT_MS:5000}
           writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -63,7 +68,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # Add prometheus explicitly after configuring an internal/authenticated scraper.
+        include: ${MANAGEMENT_EXPOSED_ENDPOINTS:health,info}
   endpoint:
     health:
       show-details: never
@@ -76,9 +82,9 @@ management:
       enabled: true
     # Spring Boot auto-registers a MailHealthIndicator whenever
     # spring-boot-starter-mail is on the classpath, and it actively opens an
-    # SMTP connection on every health check. SMTP is optional infrastructure
-    # here: when SMTP_ENABLED=false (the default) NoOpEmailService takes
-    # over and no mail is ever sent, so an unreachable SMTP host should NOT
+    # SMTP connection on every health check. SMTP is optional for local/test
+    # use: when SMTP_ENABLED=false NoOpEmailService takes over and no mail is
+    # sent. Production startup requires SMTP_ENABLED=true. An unreachable host should NOT
     # cause /actuator/health to flap to DOWN and fail the deployment platform's
     # liveness probe. We therefore disable the mail indicator outright; if a
     # real SMTP relay is wired up later, the application's own EmailService
@@ -99,16 +105,41 @@ springdoc:
     tags-sorter: alpha
     display-request-duration: true
 
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${APP_ENVIRONMENT:local}
+  release: ${APP_RELEASE:}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.0}
+
 app:
+  async:
+    core-pool-size: ${ASYNC_CORE_POOL_SIZE:2}
+    max-pool-size: ${ASYNC_MAX_POOL_SIZE:4}
+    queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176,http://localhost:5177,http://127.0.0.1:5177,http://localhost:5178,http://127.0.0.1:5178,http://localhost:5179,http://127.0.0.1:5179,http://localhost:5180,http://127.0.0.1:5180,http://localhost:5181,http://127.0.0.1:5181,http://localhost:5182,http://127.0.0.1:5182,http://localhost:5183,http://127.0.0.1:5183}
   security:
+    login-rate-limit:
+      max-failed-attempts: ${LOGIN_MAX_FAILED_ATTEMPTS:5}
+      attempt-window-minutes: ${LOGIN_ATTEMPT_WINDOW_MINUTES:15}
+      lock-duration-minutes: ${LOGIN_LOCK_DURATION_MINUTES:15}
+      max-tracked-records: ${LOGIN_MAX_TRACKED_RECORDS:10000}
+    public-auth-rate-limit:
+      register-requests: ${REGISTER_REQUESTS_PER_WINDOW:100}
+      forgot-password-requests: ${FORGOT_PASSWORD_REQUESTS_PER_WINDOW:10}
+      window-minutes: ${PUBLIC_AUTH_WINDOW_MINUTES:15}
+      max-tracked-records: ${PUBLIC_AUTH_MAX_TRACKED_RECORDS:10000}
     jwt:
       # JWT_SECRET must be supplied via environment variable; the default is empty so the
       # SecurityProperties @NotBlank validation fails fast at startup if it is not set.
       secret: ${JWT_SECRET:}
-      # Default token lifetime is one hour. Override via the JWT_EXPIRATION env variable.
-      expiration: ${JWT_EXPIRATION:3600000}
+      # Access tokens are deliberately short-lived; browser continuity is
+      # handled by rotating HttpOnly refresh-token cookies.
+      expiration: ${JWT_EXPIRATION:900000}
+      refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+      refresh-token-cookie-name: ${JWT_REFRESH_COOKIE_NAME:mandarin_spark_refresh}
+      refresh-token-cookie-secure: ${JWT_REFRESH_COOKIE_SECURE:false}
+      refresh-token-same-site: ${JWT_REFRESH_COOKIE_SAME_SITE:Strict}
     forwarded:
       # Comma-separated proxy IPs/CIDRs that are allowed to supply
       # X-Forwarded-For on auth endpoints. Loopback addresses are trusted
@@ -116,7 +147,10 @@ app:
       trusted-proxies: ${APP_SECURITY_FORWARDED_TRUSTED_PROXIES:}
   upload:
     directory: ${UPLOAD_DIR:./uploads}
-    max-file-size: ${MAX_FILE_SIZE:5MB}
+    max-file-size: ${MAX_FILE_SIZE:10MB}
+    verification-document-max-file-size: ${MAX_VERIFICATION_DOCUMENT_FILE_SIZE:5MB}
+    ai-audio-max-file-size: ${MAX_AI_AUDIO_FILE_SIZE:10MB}
+    ai-image-max-file-size: ${MAX_AI_IMAGE_FILE_SIZE:10MB}
     recorded-video-directory: ${RECORDED_VIDEO_UPLOAD_DIR:./uploads/recorded-videos}
     max-video-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
   ai:
@@ -127,6 +161,9 @@ app:
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:1200}
     enable-real-provider: ${AI_ENABLE_REAL_PROVIDER:false}
+    rate-limit:
+      requests-per-minute: ${AI_REQUESTS_PER_MINUTE:10}
+      requests-per-day: ${AI_REQUESTS_PER_DAY:100}
   payment:
     success-url: ${PAYMENT_SUCCESS_URL:${FRONTEND_BASE_URL:http://localhost:5173}/payment/success}
     cancel-url: ${PAYMENT_CANCEL_URL:${FRONTEND_BASE_URL:http://localhost:5173}/payment/cancel}

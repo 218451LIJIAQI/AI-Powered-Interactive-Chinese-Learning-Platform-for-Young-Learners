@@ -4,8 +4,8 @@ import com.example.aichinese.entity.base.BaseEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -25,18 +25,28 @@ import lombok.Setter;
  * continue to reference it without breaking.</p>
  *
  * <p>{@link #name} is unique to keep the gamification dashboard free
- * of duplicate displayed achievements.</p>
+ * of duplicate displayed achievements; the uniqueness is enforced by a
+ * single named constraint ({@code idx_badges_name}) declared via
+ * {@link UniqueConstraint} on the {@link Table @Table} annotation,
+ * matching the {@code alter table badges add constraint idx_badges_name
+ * unique (name)} statement in the Flyway baseline. The historical
+ * {@code idx_} prefix on the constraint name is intentionally
+ * preserved to match the database, even though {@code uk_} would be
+ * the more conventional prefix for a unique constraint.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "badges", indexes = {
-        @Index(name = "idx_badges_name", columnList = "name", unique = true)
-})
+@Table(
+        name = "badges",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "idx_badges_name", columnNames = "name")
+        }
+)
 public class Badge extends BaseEntity {
 
-    @Column(name = "name", nullable = false, unique = true, length = 120)
+    @Column(name = "name", nullable = false, length = 120)
     private String name;
 
     @Column(name = "description", length = 255)

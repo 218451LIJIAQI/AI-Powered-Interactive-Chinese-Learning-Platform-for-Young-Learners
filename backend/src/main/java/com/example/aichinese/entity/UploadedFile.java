@@ -38,6 +38,33 @@ import lombok.Setter;
  *
  * <p>{@link #ownerUser} is nullable because system-uploaded files
  * (seed data, automated exports) have no human owner.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ *
+ * <p>Once an upload lands on object storage, the bytes-and-metadata
+ * pairing is fundamentally immutable: rewriting the metadata in place
+ * would either orphan the storage key or contradict references already
+ * captured by downstream entities ({@link TeacherVerificationDocument},
+ * {@link RecordedLessonVideo}, AI feedback turns).</p>
+ *
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #ownerUser}, {@link #fileName},
+ *       {@link #storedFileName}, {@link #filePath},
+ *       {@link #contentType}, {@link #fileSize},
+ *       {@link #accessLevel}. The single legitimate write path is at
+ *       upload time inside {@code FileStorageService},
+ *       {@code AiFileStorageService} or
+ *       {@code RecordedVideoStorageService}.</li>
+ *   <li><b>Mutable</b>: {@link #active} only — reserved for the
+ *       documented soft-delete flow above; flipping the flag stages a
+ *       takedown without erasing the metadata row.</li>
+ * </ul>
+ *
+ * <p>Uniqueness of {@link #storedFileName} is enforced by the single
+ * named {@link UniqueConstraint} on the {@link Table @Table}
+ * annotation; the historical {@code @Column(unique = true)} duplicate
+ * was removed to avoid Hibernate emitting an extra unnamed unique
+ * declaration that the Flyway baseline does not own.</p>
  */
 @Getter
 @Setter
@@ -52,25 +79,25 @@ import lombok.Setter;
 public class UploadedFile extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_user_id")
+    @JoinColumn(name = "owner_user_id", updatable = false)
     private User ownerUser;
 
-    @Column(name = "file_name", nullable = false, length = 255)
+    @Column(name = "file_name", nullable = false, updatable = false, length = 255)
     private String fileName;
 
-    @Column(name = "stored_file_name", nullable = false, unique = true, length = 255)
+    @Column(name = "stored_file_name", nullable = false, updatable = false, length = 255)
     private String storedFileName;
 
-    @Column(name = "file_path", nullable = false, length = 500)
+    @Column(name = "file_path", nullable = false, updatable = false, length = 500)
     private String filePath;
 
-    @Column(name = "content_type", nullable = false, length = 120)
+    @Column(name = "content_type", nullable = false, updatable = false, length = 120)
     private String contentType;
 
-    @Column(name = "file_size", nullable = false)
+    @Column(name = "file_size", nullable = false, updatable = false)
     private Long fileSize;
 
-    @Column(name = "access_level", nullable = false, length = 30)
+    @Column(name = "access_level", nullable = false, updatable = false, length = 30)
     private String accessLevel;
 
     @Column(name = "active", nullable = false)

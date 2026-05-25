@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -33,19 +34,35 @@ import lombok.Setter;
  * student-facing UI (so a parent can set a friendly nickname distinct
  * from the formal account name); when {@code null} the UI falls back
  * to the {@code User} display name.</p>
+ *
+ * <p>Uniqueness of {@code user_id} (one student profile per user) is
+ * enforced by a single named constraint
+ * ({@code idx_student_profiles_user_id}) declared via
+ * {@link UniqueConstraint} on the {@link Table @Table} annotation,
+ * matching the Flyway baseline. {@link #user} is also mapped
+ * {@code updatable = false}: a student profile is bound to one user
+ * account for its entire lifetime; re-targeting is both logically
+ * meaningless and physically blocked by the unique constraint above.
+ * Every other field (display name, country, school, avatar, total
+ * points, current level) stays mutable for normal profile edits.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "student_profiles", indexes = {
-        @Index(name = "idx_student_profiles_user_id", columnList = "user_id", unique = true),
-        @Index(name = "idx_student_profiles_current_level_id", columnList = "current_level_id")
-})
+@Table(
+        name = "student_profiles",
+        indexes = {
+                @Index(name = "idx_student_profiles_current_level_id", columnList = "current_level_id")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "idx_student_profiles_user_id", columnNames = "user_id")
+        }
+)
 public class StudentProfile extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)

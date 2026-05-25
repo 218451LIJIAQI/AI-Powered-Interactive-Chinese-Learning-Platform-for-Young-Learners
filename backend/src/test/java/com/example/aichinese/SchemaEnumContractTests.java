@@ -6,9 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -26,15 +24,17 @@ import com.example.aichinese.entity.enums.TeacherEarningStatus;
 import com.example.aichinese.entity.enums.TeacherVerificationDocumentType;
 
 /**
- * Pins the contract between Java enum values and the Flyway migration
- * SQL definitions. Scans every {@code V*__*.sql} for the canonical
- * enum strings and fails if a Java-side enum constant has no matching
- * column / check-constraint clause — catching the classic
- * "add enum value but forget the migration" bug at compile time.
+ * Pins Java enum values against the single consolidated Flyway baseline.
  */
 class SchemaEnumContractTests {
 
-    private static final Pattern MIGRATION_VERSION = Pattern.compile("^V(\\d+)__.*\\.sql$");
+    private static final Path CONSOLIDATED_MIGRATION = Path.of(
+            "src",
+            "main",
+            "resources",
+            "db",
+            "migration",
+            "V1__consolidated_schema.sql");
     private static final Pattern NOTIFICATION_TYPE_ENUM = Pattern.compile(
             "notification_type\\s+enum\\s*\\((.*?)\\)",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -53,13 +53,7 @@ class SchemaEnumContractTests {
 
     @Test
     void finalDomainCheckConstraintsContainEveryApplicationEnumValue() throws IOException {
-        String migration = Files.readString(Path.of(
-                "src",
-                "main",
-                "resources",
-                "db",
-                "migration",
-                "V14__final_database_contract_hardening.sql"));
+        String migration = Files.readString(CONSOLIDATED_MIGRATION);
 
         assertCheckValues(migration, "chk_ai_chat_messages_sender_role", AiChatSenderRole.values());
         assertCheckValues(migration, "chk_teacher_earnings_status", TeacherEarningStatus.values());
@@ -70,33 +64,16 @@ class SchemaEnumContractTests {
     }
 
     private Set<String> latestNotificationTypeEnumValues() throws IOException {
-        Path migrationDirectory = Path.of("src", "main", "resources", "db", "migration");
-        List<Path> migrations = Files.list(migrationDirectory)
-                .filter(Files::isRegularFile)
-                .filter(path -> MIGRATION_VERSION.matcher(path.getFileName().toString()).matches())
-                .sorted(Comparator.comparingInt(SchemaEnumContractTests::migrationVersion))
-                .toList();
-
         Set<String> latestValues = null;
-        for (Path migration : migrations) {
-            Matcher enumMatcher = NOTIFICATION_TYPE_ENUM.matcher(Files.readString(migration));
-            while (enumMatcher.find()) {
-                latestValues = extractEnumValues(enumMatcher.group(1));
-            }
+        Matcher enumMatcher = NOTIFICATION_TYPE_ENUM.matcher(Files.readString(CONSOLIDATED_MIGRATION));
+        while (enumMatcher.find()) {
+            latestValues = extractEnumValues(enumMatcher.group(1));
         }
 
         assertThat(latestValues)
-                .as("At least one Flyway migration must define notifications.notification_type")
+                .as("The consolidated Flyway baseline must define notifications.notification_type")
                 .isNotNull();
         return latestValues;
-    }
-
-    private static int migrationVersion(Path path) {
-        Matcher matcher = MIGRATION_VERSION.matcher(path.getFileName().toString());
-        if (!matcher.matches()) {
-            throw new IllegalArgumentException("Unexpected migration filename: " + path.getFileName());
-        }
-        return Integer.parseInt(matcher.group(1));
     }
 
     private static Set<String> extractEnumValues(String rawEnumBody) {

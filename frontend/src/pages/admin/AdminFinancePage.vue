@@ -12,7 +12,9 @@
       <div>
         <span class="admin-ops-kicker">Finance Operations</span>
         <h2>Monitor payments, refunds, payouts, and commission signals in one trusted view.</h2>
-        <p>Every action here stays connected to real backend finance endpoints while preserving a calm admin workflow.</p>
+        <p>
+          Every action here stays connected to real backend finance endpoints while preserving a calm admin workflow.
+        </p>
       </div>
       <div class="admin-ops-stat-grid">
         <article v-for="stat in financeHighlights" :key="stat.label">
@@ -24,10 +26,20 @@
     </section>
 
     <section class="stats-grid admin-finance-stats">
-      <MetricCard label="Payments" :value="String(payments.length)" subtitle="Recorded payment transactions" icon="finance" />
+      <MetricCard
+        label="Payments"
+        :value="String(payments.length)"
+        subtitle="Recorded payment transactions"
+        icon="finance"
+      />
       <MetricCard label="Refunds" :value="String(refunds.length)" subtitle="Current refund records" icon="help" />
       <MetricCard label="Payouts" :value="String(payouts.length)" subtitle="Teacher payout requests" icon="earnings" />
-      <MetricCard label="Commission" :value="`${Math.round(commission.commissionRate * 100)}%`" subtitle="Platform commission rate" icon="chart" />
+      <MetricCard
+        label="Commission"
+        :value="`${Math.round(commission.commissionRate * 100)}%`"
+        subtitle="Platform commission rate"
+        icon="chart"
+      />
     </section>
 
     <section class="two-col admin-finance-grid">
@@ -62,13 +74,28 @@
             <template #aside>
               <div class="list-action-row">
                 <StatusPill :label="refund.refundStatus" :tone="refundTone(refund.refundStatus)" />
-                <button class="btn btn-secondary" type="button" :disabled="refundReadOnly || financeActionBusy || !canApproveRefund(refund.refundStatus)" @click="approveRefund(refund.id)">
+                <button
+                  class="btn btn-secondary"
+                  type="button"
+                  :disabled="refundReadOnly || financeActionBusy || !canApproveRefund(refund.refundStatus)"
+                  @click="approveRefund(refund.id)"
+                >
                   Approve
                 </button>
-                <button class="btn btn-secondary" type="button" :disabled="refundReadOnly || financeActionBusy || !canRejectRefund(refund.refundStatus)" @click="openRefundReject(refund.id)">
+                <button
+                  class="btn btn-secondary"
+                  type="button"
+                  :disabled="refundReadOnly || financeActionBusy || !canRejectRefund(refund.refundStatus)"
+                  @click="openRefundReject(refund.id)"
+                >
                   Reject
                 </button>
-                <button class="btn btn-ghost" type="button" :disabled="refundReadOnly || financeActionBusy || !canMarkRefunded(refund.refundStatus)" @click="markRefunded(refund.id)">
+                <button
+                  class="btn btn-ghost"
+                  type="button"
+                  :disabled="refundReadOnly || financeActionBusy || !canMarkRefunded(refund.refundStatus)"
+                  @click="markRefunded(refund.id)"
+                >
                   Mark refunded
                 </button>
               </div>
@@ -93,13 +120,28 @@
                 <strong>{{ formatCurrency(payout.amount) }}</strong>
                 <div class="list-action-row">
                   <StatusPill :label="payout.payoutStatus" :tone="payoutTone(payout.payoutStatus)" />
-                  <button class="btn btn-secondary" type="button" :disabled="payoutReadOnly || financeActionBusy || !canApprovePayout(payout.payoutStatus)" @click="approvePayout(payout.id)">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="payoutReadOnly || financeActionBusy || !canApprovePayout(payout.payoutStatus)"
+                    @click="approvePayout(payout.id)"
+                  >
                     Approve
                   </button>
-                  <button class="btn btn-secondary" type="button" :disabled="payoutReadOnly || financeActionBusy || !canRejectPayout(payout.payoutStatus)" @click="openPayoutReject(payout.id)">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="payoutReadOnly || financeActionBusy || !canRejectPayout(payout.payoutStatus)"
+                    @click="openPayoutReject(payout.id)"
+                  >
                     Reject
                   </button>
-                  <button class="btn btn-ghost" type="button" :disabled="payoutReadOnly || financeActionBusy || !canMarkPaid(payout.payoutStatus)" @click="markPaid(payout.id)">
+                  <button
+                    class="btn btn-ghost"
+                    type="button"
+                    :disabled="payoutReadOnly || financeActionBusy || !canMarkPaid(payout.payoutStatus)"
+                    @click="markPaid(payout.id)"
+                  >
                     Mark paid
                   </button>
                 </div>
@@ -139,7 +181,11 @@
     <section v-if="pendingFinanceDecision" class="two-col admin-finance-grid">
       <ActionFormCard
         :title="pendingFinanceDecision.kind === 'refund' ? 'Reject refund request' : 'Reject payout request'"
-        :subtitle="pendingFinanceDecision.kind === 'refund' ? 'A real decision reason is required before rejecting the refund.' : 'A real decision reason is required before rejecting the payout.'"
+        :subtitle="
+          pendingFinanceDecision.kind === 'refund'
+            ? 'A real decision reason is required before rejecting the refund.'
+            : 'A real decision reason is required before rejecting the payout.'
+        "
         icon="help"
         submit-label="Submit rejection"
         submitting-label="Submitting..."
@@ -155,11 +201,18 @@
             class="textarea"
             maxlength="1000"
             placeholder="Explain why this request is being rejected."
-            :disabled="financeActionBusy || (pendingFinanceDecision.kind === 'refund' ? refundReadOnly : payoutReadOnly)"
+            :disabled="
+              financeActionBusy || (pendingFinanceDecision.kind === 'refund' ? refundReadOnly : payoutReadOnly)
+            "
           />
         </div>
         <div class="list-action-row">
-          <button class="teacher-outline-button" type="button" :disabled="financeActionBusy" @click="cancelFinanceDecision">
+          <button
+            class="teacher-outline-button"
+            type="button"
+            :disabled="financeActionBusy"
+            @click="cancelFinanceDecision"
+          >
             Cancel
           </button>
         </div>
@@ -208,15 +261,23 @@ const emptyCommission = {
   description: 'Platform commission rate is unavailable right now.',
 }
 
-const payments = computed(() => paymentsResource.data.value ?? (paymentsResource.usingFallback.value ? adminPayments : []))
+const payments = computed(
+  () => paymentsResource.data.value ?? (paymentsResource.usingFallback.value ? adminPayments : []),
+)
 const refunds = computed(() => refundsResource.data.value ?? (refundsResource.usingFallback.value ? adminRefunds : []))
 const payouts = computed(() => payoutsResource.data.value ?? (payoutsResource.usingFallback.value ? adminPayouts : []))
-const commission = computed(() => commissionResource.data.value ?? (commissionResource.usingFallback.value ? commissionSetting : emptyCommission))
+const commission = computed(
+  () => commissionResource.data.value ?? (commissionResource.usingFallback.value ? commissionSetting : emptyCommission),
+)
 const totalRevenue = computed(() => payments.value.reduce((sum, payment) => sum + Number(payment.amount || 0), 0))
 const pendingRefundCount = computed(() => refunds.value.filter((refund) => refund.refundStatus === 'PENDING').length)
 const pendingPayoutCount = computed(() => payouts.value.filter((payout) => payout.payoutStatus === 'PENDING').length)
 const financeHighlights = computed(() => [
-  { icon: 'finance', label: 'Verified revenue', value: formatCurrency(totalRevenue.value, payments.value[0]?.currencyCode ?? 'USD') },
+  {
+    icon: 'finance',
+    label: 'Verified revenue',
+    value: formatCurrency(totalRevenue.value, payments.value[0]?.currencyCode ?? 'USD'),
+  },
   { icon: 'chevronLeft', label: 'Refund queue', value: String(pendingRefundCount.value) },
   { icon: 'earnings', label: 'Payout queue', value: String(pendingPayoutCount.value) },
 ])
@@ -338,7 +399,8 @@ function canMarkPaid(status: string) {
 }
 
 function openRefundReject(id: number) {
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.'))
+    return
   pendingFinanceDecision.value = { kind: 'refund', id }
   financeDecisionReason.value = ''
   actionError.value = null
@@ -346,7 +408,8 @@ function openRefundReject(id: number) {
 }
 
 function openPayoutReject(id: number) {
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.'))
+    return
   pendingFinanceDecision.value = { kind: 'payout', id }
   financeDecisionReason.value = ''
   actionError.value = null
@@ -361,30 +424,43 @@ function cancelFinanceDecision() {
 
 async function approveRefund(id: number) {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.'))
+    return
   if (!confirmFinanceAction('Approve this refund request?')) return
   await runFinanceAction(() => adminApi.approveRefund(id), refundsResource.reload, 'Unable to approve this refund.')
 }
 
 async function markRefunded(id: number) {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
-  if (!confirmFinanceAction('Mark this refund as refunded? Confirm only after the provider refund has been completed.')) return
-  await runFinanceAction(() => adminApi.markRefunded(id), refundsResource.reload, 'Unable to mark this refund as refunded.')
+  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.'))
+    return
+  if (!confirmFinanceAction('Mark this refund as refunded? Confirm only after the provider refund has been completed.'))
+    return
+  await runFinanceAction(
+    () => adminApi.markRefunded(id),
+    refundsResource.reload,
+    'Unable to mark this refund as refunded.',
+  )
 }
 
 async function approvePayout(id: number) {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.'))
+    return
   if (!confirmFinanceAction('Approve this teacher payout request?')) return
   await runFinanceAction(() => adminApi.approvePayout(id), payoutsResource.reload, 'Unable to approve this payout.')
 }
 
 async function markPaid(id: number) {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.'))
+    return
   if (!confirmFinanceAction('Mark this payout as paid? Confirm only after funds have been sent.')) return
-  await runFinanceAction(() => adminApi.markPayoutPaid(id), payoutsResource.reload, 'Unable to mark this payout as paid.')
+  await runFinanceAction(
+    () => adminApi.markPayoutPaid(id),
+    payoutsResource.reload,
+    'Unable to mark this payout as paid.',
+  )
 }
 
 async function submitFinanceRejection() {
@@ -421,7 +497,10 @@ async function submitFinanceRejection() {
 
 async function saveCommission() {
   if (submittingCommission.value) return
-  if (!ensureFinanceLive(commissionReadOnly.value, 'Commission settings cannot be changed while preview data is active.')) return
+  if (
+    !ensureFinanceLive(commissionReadOnly.value, 'Commission settings cannot be changed while preview data is active.')
+  )
+    return
   actionError.value = null
   actionSuccess.value = null
   submittingCommission.value = true

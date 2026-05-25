@@ -69,6 +69,8 @@ export interface ApiResponse<T> {
   message: string
   data: T
   errors: string[]
+  fieldErrors: Record<string, string[]>
+  requestId?: string | null
 }
 
 export interface PageResponse<T> {

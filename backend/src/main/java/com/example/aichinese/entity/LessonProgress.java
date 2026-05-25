@@ -38,6 +38,21 @@ import lombok.Setter;
  * <p>{@link #version} prevents two concurrent progress writes (e.g.
  * the auto-saver and an explicit "mark complete" click) from
  * overwriting each other's increments.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li>{@link #student} and {@link #lesson} are mapped
+ *       {@code updatable = false}: the row's identity is the
+ *       {@code (student, lesson)} pair and re-targeting either field
+ *       would additionally collide with
+ *       {@code uk_lesson_progress_student_lesson}. The ORM-layer
+ *       guard simply makes that contract explicit.</li>
+ *   <li>{@link #completionPercent}, {@link #completed},
+ *       {@link #lastAccessedAt} are mutated on every learning event
+ *       by {@code StudentLearningProgressService}; the
+ *       {@link Version @Version} field above protects those writes
+ *       against lost-update races.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -52,11 +67,11 @@ import lombok.Setter;
 public class LessonProgress extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "lesson_id", nullable = false)
+    @JoinColumn(name = "lesson_id", nullable = false, updatable = false)
     private Lesson lesson;
 
     @Column(name = "completion_percent")

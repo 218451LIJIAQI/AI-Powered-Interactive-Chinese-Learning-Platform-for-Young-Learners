@@ -45,6 +45,34 @@ public enum AiResponseReportStatus {
     public static final Set<AiResponseReportStatus> TERMINAL =
             Collections.unmodifiableSet(EnumSet.of(RESOLVED, DISMISSED));
 
+    /*
+     * Startup-time exhaustiveness guard: every constant must belong to
+     * exactly one of the two disjoint category sets.  If a developer
+     * adds a new AiResponseReportStatus (e.g. {@code ESCALATED}) without
+     * classifying it as either open or terminal, the JVM will throw an
+     * AssertionError the moment this class is loaded — preventing
+     * silent drift where dashboards / dispatch routing would see the
+     * new status report as neither open nor terminal.
+     */
+    static {
+        EnumSet<AiResponseReportStatus> covered = EnumSet.copyOf(OPEN);
+        covered.addAll(TERMINAL);
+        if (!covered.equals(EnumSet.allOf(AiResponseReportStatus.class))) {
+            EnumSet<AiResponseReportStatus> missing = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "AiResponseReportStatus category sets do not cover all constants; uncovered: " + missing);
+        }
+        // Defensive symmetry check: the two category sets MUST be
+        // disjoint so that isOpen() and isTerminal() remain mutually
+        // exclusive predicates.
+        EnumSet<AiResponseReportStatus> overlap = EnumSet.copyOf(OPEN);
+        overlap.retainAll(TERMINAL);
+        if (!overlap.isEmpty()) {
+            throw new AssertionError(
+                    "AiResponseReportStatus OPEN and TERMINAL sets must be disjoint; overlap: " + overlap);
+        }
+    }
+
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, AiResponseReportStatus> LOOKUP =
             EnumLookups.indexByName(AiResponseReportStatus.class);

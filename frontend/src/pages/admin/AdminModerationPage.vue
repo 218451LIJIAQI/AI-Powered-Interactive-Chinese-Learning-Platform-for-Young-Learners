@@ -127,12 +127,7 @@
 
         <div class="field">
           <label for="admin-moderation-status">Review status</label>
-          <select
-            id="admin-moderation-status"
-            v-model="reviewForm.status"
-            class="select"
-            :disabled="reviewDisabled"
-          >
+          <select id="admin-moderation-status" v-model="reviewForm.status" class="select" :disabled="reviewDisabled">
             <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
@@ -204,10 +199,12 @@ import { formatDateTime } from '@/utils/format'
 const moderationResource = useResource(() => adminApi.moderationRecords(), adminModerationRecords)
 const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
 
-const moderationRecords = computed(() =>
-  moderationResource.data.value ?? (moderationResource.usingFallback.value ? adminModerationRecords : []),
+const moderationRecords = computed(
+  () => moderationResource.data.value ?? (moderationResource.usingFallback.value ? adminModerationRecords : []),
 )
-const aiReports = computed(() => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []))
+const aiReports = computed(
+  () => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []),
+)
 const selectedReportId = ref(0)
 const selectedReport = computed(() => aiReports.value.find((item) => item.id === selectedReportId.value) ?? null)
 
@@ -229,8 +226,8 @@ const submittingReview = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 
-const openReportCount = computed(() =>
-  aiReports.value.filter((item) => item.status === 'PENDING_REVIEW' || item.status === 'IN_REVIEW').length,
+const openReportCount = computed(
+  () => aiReports.value.filter((item) => item.status === 'PENDING_REVIEW' || item.status === 'IN_REVIEW').length,
 )
 const pendingReviewCount = computed(() => aiReports.value.filter((item) => item.status === 'PENDING_REVIEW').length)
 const reviewReadOnly = computed(() => aiReportsResource.usingFallback.value)

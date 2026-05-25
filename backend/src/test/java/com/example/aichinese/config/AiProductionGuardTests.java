@@ -8,22 +8,22 @@ import org.springframework.mock.env.MockEnvironment;
 
 /**
  * Unit coverage for {@code AiProductionGuard} — pins the fail-fast
- * behaviour: production with the real-provider toggle on requires
- * a configured API key + supported provider + HTTPS base URL, and
- * any missing piece aborts the startup so a mis-configured deployment
- * never silently serves traffic.
+ * behaviour: production requires the real-provider toggle, a configured
+ * API key, a supported provider and an HTTPS base URL; any missing piece
+ * aborts startup so production never silently serves stub AI responses.
  */
 class AiProductionGuardTests {
 
     @Test
-    void allowsProdProfileToDisableRealProviderExplicitly() {
+    void rejectsProdProfileWhenRealProviderIsDisabled() {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles("prod");
         AiProperties properties = configuredProperties();
         properties.setEnableRealProvider(false);
 
-        assertThatCode(() -> new AiProductionGuard(environment, properties))
-                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> new AiProductionGuard(environment, properties))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI_ENABLE_REAL_PROVIDER");
     }
 
     @Test

@@ -5,9 +5,9 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 import org.springframework.data.domain.Page;
@@ -65,8 +65,12 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class LiveClassService {
 
-    private static final EnumSet<LiveClassStatus> STUDENT_VISIBLE_STATUSES =
-            EnumSet.of(LiveClassStatus.SCHEDULED, LiveClassStatus.ONGOING, LiveClassStatus.RESCHEDULED);
+    // Delegate to the canonical set on the enum so the Javadoc contract
+    // ("Mirrors LiveClassService.STUDENT_VISIBLE_STATUSES") is enforced by
+    // the type system rather than by parallel literal lists.  The
+    // underlying implementation is still an immutable EnumSet wrapper,
+    // so contains() remains O(1).
+    private static final Set<LiveClassStatus> STUDENT_VISIBLE_STATUSES = LiveClassStatus.STUDENT_VISIBLE;
     private static final int MAX_LIVE_CLASS_TITLE_LENGTH = 200;
     private static final int MAX_LIVE_CLASS_DESCRIPTION_LENGTH = 1000;
 

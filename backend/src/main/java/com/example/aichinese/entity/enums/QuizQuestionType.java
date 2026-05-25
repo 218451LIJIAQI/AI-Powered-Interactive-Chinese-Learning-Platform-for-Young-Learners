@@ -81,11 +81,23 @@ public enum QuizQuestionType {
             Collections.unmodifiableSet(EnumSet.of(REARRANGE_SENTENCE));
 
     /*
-     * Startup-time exhaustiveness guard: every constant must belong to
-     * exactly one of the three disjoint answer-format sets.  If a
-     * developer adds a new QuizQuestionType without classifying it,
-     * the JVM will throw an AssertionError the moment this class is
-     * loaded.
+     * Startup-time exhaustiveness AND pairwise-disjointness guard.
+     *
+     *   1. Coverage: every constant must belong to at least one of the
+     *      three answer-format sets.  An unclassified constant would
+     *      silently produce false from all three predicates and crash
+     *      the grading dispatch downstream.
+     *
+     *   2. Disjointness: no constant may belong to more than one set.
+     *      The Javadoc above states "exactly one" disjoint set; the
+     *      grading path uses isOptionBased() / isFreeText() /
+     *      hasStructuredPayload() on that contract.  A constant
+     *      accidentally placed in two sets would cause grading to
+     *      take the wrong branch and silently mis-score student
+     *      answers.  Pairwise intersections must all be empty.
+     *
+     * Both checks run exactly once at class load and fail fast with a
+     * message naming the offending constants.
      */
     static {
         EnumSet<QuizQuestionType> covered = EnumSet.copyOf(OPTION_BASED_TYPES);
@@ -95,6 +107,21 @@ public enum QuizQuestionType {
             EnumSet<QuizQuestionType> missing = EnumSet.complementOf(covered);
             throw new AssertionError(
                     "QuizQuestionType category sets do not cover all constants; uncovered: " + missing);
+        }
+        requireDisjoint("OPTION_BASED_TYPES", OPTION_BASED_TYPES, "FREE_TEXT_TYPES", FREE_TEXT_TYPES);
+        requireDisjoint("OPTION_BASED_TYPES", OPTION_BASED_TYPES, "STRUCTURED_PAYLOAD_TYPES", STRUCTURED_PAYLOAD_TYPES);
+        requireDisjoint("FREE_TEXT_TYPES", FREE_TEXT_TYPES, "STRUCTURED_PAYLOAD_TYPES", STRUCTURED_PAYLOAD_TYPES);
+    }
+
+    private static void requireDisjoint(
+            String leftName, Set<QuizQuestionType> left,
+            String rightName, Set<QuizQuestionType> right) {
+        EnumSet<QuizQuestionType> overlap = EnumSet.copyOf(left);
+        overlap.retainAll(right);
+        if (!overlap.isEmpty()) {
+            throw new AssertionError(
+                    "QuizQuestionType " + leftName + " and " + rightName
+                            + " must be disjoint; overlapping: " + overlap);
         }
     }
 

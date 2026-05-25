@@ -26,6 +26,13 @@ import lombok.Setter;
  * <p>{@link #optionText} is {@code LONGTEXT} so authors can include
  * code snippets, formatted Chinese passages, or rich explanations as
  * options when needed.</p>
+ *
+ * <p>{@link #question} is mapped {@code updatable = false}: an option
+ * belongs to a single parent question for its entire lifetime. The
+ * teacher edit workflow modifies {@link #optionText},
+ * {@link #correctOption} and {@link #sortOrder} in place but never
+ * re-parents an option to a different question — the latter is
+ * expressed by deleting and re-creating instead.</p>
  */
 @Getter
 @Setter
@@ -37,7 +44,7 @@ import lombok.Setter;
 public class QuizOption extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "question_id", nullable = false)
+    @JoinColumn(name = "question_id", nullable = false, updatable = false)
     private QuizQuestion question;
 
     @Lob

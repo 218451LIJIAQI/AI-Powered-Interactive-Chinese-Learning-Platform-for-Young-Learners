@@ -92,7 +92,10 @@ class PaymentServiceTests {
 
     @Test
     void verifyPaymentStatusDoesNotPollProviderForNonPendingStatuses() {
-        for (PaymentStatus status : List.of(PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.REFUNDED)) {
+        // Iterate over the canonical PaymentStatus.TERMINAL set rather than
+        // re-listing its members so the coverage self-updates if a new
+        // terminal status is ever introduced on the enum.
+        for (PaymentStatus status : PaymentStatus.TERMINAL) {
             PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
             OrderRepository orderRepository = mock(OrderRepository.class);
             OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
@@ -163,7 +166,10 @@ class PaymentServiceTests {
 
     @Test
     void markPaymentPaidDoesNotReviveNonPendingStatuses() {
-        for (PaymentStatus status : List.of(PaymentStatus.PAID, PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.REFUNDED)) {
+        // Iterate over the canonical PaymentStatus.TERMINAL set so this
+        // regression guard automatically expands when a new terminal status
+        // is introduced (e.g. a hypothetical PARTIALLY_REFUNDED).
+        for (PaymentStatus status : PaymentStatus.TERMINAL) {
             PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
             OrderRepository orderRepository = mock(OrderRepository.class);
             OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);

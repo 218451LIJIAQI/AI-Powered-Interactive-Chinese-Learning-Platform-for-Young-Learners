@@ -23,11 +23,17 @@ class UploadPropertiesTests {
         properties.setDirectory("  ./target/uploads  ");
         properties.setRecordedVideoDirectory("  ./target/videos  ");
         properties.setMaxFileSize(DataSize.ofKilobytes(1));
+        properties.setVerificationDocumentMaxFileSize(DataSize.ofKilobytes(2));
+        properties.setAiAudioMaxFileSize(DataSize.ofKilobytes(3));
+        properties.setAiImageMaxFileSize(DataSize.ofKilobytes(4));
         properties.setMaxVideoFileSize(DataSize.ofMegabytes(1));
 
         assertThat(properties.getDirectory()).isEqualTo("./target/uploads");
         assertThat(properties.getRecordedVideoDirectory()).isEqualTo("./target/videos");
         assertThat(properties.getMaxFileSize().toBytes()).isEqualTo(1024);
+        assertThat(properties.getVerificationDocumentMaxFileSize().toBytes()).isEqualTo(2048);
+        assertThat(properties.getAiAudioMaxFileSize().toBytes()).isEqualTo(3072);
+        assertThat(properties.getAiImageMaxFileSize().toBytes()).isEqualTo(4096);
         assertThat(properties.getMaxVideoFileSize().toBytes()).isEqualTo(1024 * 1024);
     }
 
@@ -42,6 +48,15 @@ class UploadPropertiesTests {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("directory");
         assertThatThrownBy(() -> properties.setMaxFileSize(DataSize.ofBytes(0)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file size");
+        assertThatThrownBy(() -> properties.setVerificationDocumentMaxFileSize(DataSize.ofBytes(0)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file size");
+        assertThatThrownBy(() -> properties.setAiAudioMaxFileSize(DataSize.ofBytes(0)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("file size");
+        assertThatThrownBy(() -> properties.setAiImageMaxFileSize(DataSize.ofBytes(0)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("file size");
         assertThatThrownBy(() -> properties.setMaxVideoFileSize(DataSize.ofBytes(-1)))

@@ -35,6 +35,13 @@ import lombok.Setter;
  * XP a learner earns on first successful completion; the actual
  * awarded amount is multiplied by
  * {@link com.example.aichinese.entity.enums.ActivityDifficulty#xpMultiplier()}.</p>
+ *
+ * <p>{@link #createdByUser} is mapped {@code updatable = false}:
+ * authorship is captured once at insert time by
+ * {@code AdminActivityMapper#toEntity} and is intentionally not
+ * touched again by the matching {@code applyTo} update method. Every
+ * other domain field remains mutable so administrators can edit the
+ * activity through the standard moderation workflow.</p>
  */
 @Getter
 @Setter
@@ -50,7 +57,7 @@ import lombok.Setter;
 public class DragDropActivity extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id")
+    @JoinColumn(name = "created_by_user_id", updatable = false)
     private User createdByUser;
 
     @Column(name = "title", nullable = false, length = 200)

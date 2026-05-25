@@ -47,6 +47,24 @@ import lombok.Setter;
  *
  * <p>{@link #version} guards against the rare race between a refund
  * and a payout calculation reading the same row.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ *
+ * <p>The three monetary fields plus the identity FKs are mapped
+ * {@code updatable = false}, making the Javadoc claim above
+ * ("retroactive rate changes do not corrupt historical earnings")
+ * a technical guarantee rather than a documentation promise.</p>
+ *
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #teacher}, {@link #orderItem},
+ *       {@link #grossAmount}, {@link #commissionAmount},
+ *       {@link #netAmount}. The single legitimate write path is
+ *       {@code TeacherEarningService#createEarning}.</li>
+ *   <li><b>Mutable</b>: {@link #earningStatus} only, flipped by
+ *       {@code RefundService} from {@code AVAILABLE} to
+ *       {@code REFUNDED} during clawback. Guarded by
+ *       {@link Version @Version} above.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -62,24 +80,24 @@ import lombok.Setter;
 public class TeacherEarning extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "teacher_id", nullable = false)
+    @JoinColumn(name = "teacher_id", nullable = false, updatable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "order_item_id", nullable = false)
+    @JoinColumn(name = "order_item_id", nullable = false, updatable = false)
     private OrderItem orderItem;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "earning_status", nullable = false, length = 30)
     private TeacherEarningStatus earningStatus = TeacherEarningStatus.AVAILABLE;
 
-    @Column(name = "gross_amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "gross_amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal grossAmount;
 
-    @Column(name = "commission_amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "commission_amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal commissionAmount;
 
-    @Column(name = "net_amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "net_amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal netAmount;
 
     @Version

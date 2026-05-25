@@ -1,6 +1,7 @@
 package com.example.aichinese.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.constraints.NotBlank;
@@ -27,7 +28,22 @@ public record SecurityProperties(
         @NotBlank(message = "JWT secret must not be blank.")
         String secret,
         @Positive(message = "JWT expiration must be greater than zero.")
-        long expiration) {
+        long expiration,
+        @Positive(message = "Refresh token expiration must be greater than zero.")
+        long refreshTokenExpiration,
+        @NotBlank(message = "Refresh token cookie name must not be blank.")
+        String refreshTokenCookieName,
+        boolean refreshTokenCookieSecure,
+        @NotBlank(message = "Refresh token SameSite policy must not be blank.")
+        String refreshTokenSameSite) {
+
+    @ConstructorBinding
+    public SecurityProperties {
+    }
+
+    public SecurityProperties(String secret, long expiration) {
+        this(secret, expiration, 604_800_000L, "mandarin_spark_refresh", false, "Strict");
+    }
 
     /**
      * Diagnostic representation that masks the signing secret. The
@@ -42,7 +58,11 @@ public record SecurityProperties(
     @Override
     public String toString() {
         return "SecurityProperties[secret=" + maskedSecret()
-                + ", expiration=" + expiration + "ms]";
+                + ", expiration=" + expiration + "ms"
+                + ", refreshTokenExpiration=" + refreshTokenExpiration + "ms"
+                + ", refreshTokenCookieName=" + refreshTokenCookieName
+                + ", refreshTokenCookieSecure=" + refreshTokenCookieSecure
+                + ", refreshTokenSameSite=" + refreshTokenSameSite + "]";
     }
 
     private String maskedSecret() {

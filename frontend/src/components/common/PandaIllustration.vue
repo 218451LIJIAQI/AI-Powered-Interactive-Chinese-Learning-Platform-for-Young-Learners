@@ -232,9 +232,7 @@ withDefaults(defineProps<Props>(), {
   width: 46%;
   height: 26%;
   border-radius: 34% 34% 44% 44%;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.08)),
-    var(--panda-outfit);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.08)), var(--panda-outfit);
   box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.08);
 }
 

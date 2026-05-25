@@ -28,9 +28,16 @@ app:
   security:
     jwt:
       secret: RuntimeStyleJwtSecretForTests1234567890AB
-      expiration: 3600000
+      expiration: 900000
+      refresh-token-expiration: 604800000
+      refresh-token-cookie-name: mandarin_spark_refresh
+      refresh-token-cookie-secure: false
+      refresh-token-same-site: Strict
   upload:
     directory: ./target/test-uploads
     max-file-size: 1KB
+    verification-document-max-file-size: 1KB
+    ai-audio-max-file-size: 1KB
+    ai-image-max-file-size: 1KB
     recorded-video-directory: ./target/test-recorded-videos
     max-video-file-size: 1KB

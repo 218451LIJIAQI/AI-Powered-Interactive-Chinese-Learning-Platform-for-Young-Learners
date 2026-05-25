@@ -52,11 +52,17 @@ import lombok.Setter;
 public class Flashcard extends BaseEntity {
 
     /**
-     * Admin user who authored or curates this card. Nullable to preserve
-     * legacy rows that pre-date the platform library.
+     * Admin user who authored this card. Nullable to preserve legacy
+     * rows that pre-date the platform library.
+     *
+     * <p>Mapped {@code updatable = false}: authorship is captured once
+     * at insert time by {@code AdminActivityMapper#toEntity} and is
+     * intentionally not touched again by the matching {@code applyTo}
+     * update method, so the original author remains attributable for
+     * audit purposes even after later edits.</p>
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id")
+    @JoinColumn(name = "created_by_user_id", updatable = false)
     private User createdByUser;
 
     @Column(name = "title", length = 200)

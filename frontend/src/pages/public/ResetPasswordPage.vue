@@ -47,12 +47,25 @@
         <form class="auth-reset-form" @submit.prevent="submitReset">
           <div class="field">
             <label for="reset-token">Reset token</label>
-            <input id="reset-token" v-model="token" class="input auth-input" autocomplete="one-time-code" placeholder="Paste your reset token" />
+            <input
+              id="reset-token"
+              v-model="token"
+              class="input auth-input"
+              autocomplete="one-time-code"
+              placeholder="Paste your reset token"
+            />
           </div>
 
           <div class="field">
             <label for="reset-password">New password</label>
-            <input id="reset-password" v-model="password" class="input auth-input" autocomplete="new-password" type="password" placeholder="Enter a new password" />
+            <input
+              id="reset-password"
+              v-model="password"
+              class="input auth-input"
+              autocomplete="new-password"
+              type="password"
+              placeholder="Enter a new password"
+            />
           </div>
 
           <div class="auth-reset-strength">
@@ -72,7 +85,14 @@
 
           <div class="field">
             <label for="reset-confirm-password">Confirm new password</label>
-            <input id="reset-confirm-password" v-model="confirmPassword" class="input auth-input" autocomplete="new-password" type="password" placeholder="Confirm your new password" />
+            <input
+              id="reset-confirm-password"
+              v-model="confirmPassword"
+              class="input auth-input"
+              autocomplete="new-password"
+              type="password"
+              placeholder="Confirm your new password"
+            />
           </div>
 
           <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmit" type="submit">
@@ -144,7 +164,9 @@ const passwordChecks = computed(() => [
   { label: 'Passwords match', met: Boolean(confirmPassword.value && password.value === confirmPassword.value) },
 ])
 const passwordStrengthScore = computed(() => passwordChecks.value.filter((check) => check.met).length)
-const passwordStrengthLabel = computed(() => ['Start typing', 'Getting close', 'Almost ready', 'Ready'][passwordStrengthScore.value])
+const passwordStrengthLabel = computed(
+  () => ['Start typing', 'Getting close', 'Almost ready', 'Ready'][passwordStrengthScore.value],
+)
 const passwordStrengthClass = computed(() => `is-${passwordStrengthScore.value}`)
 const passwordStrengthWidth = computed(() => `${(passwordStrengthScore.value / passwordChecks.value.length) * 100}%`)
 
@@ -176,7 +198,10 @@ async function submitReset() {
     confirmPassword.value = ''
     success.value = 'Password reset successfully. You can sign in with your new password now.'
   } catch (reason) {
-    error.value = resolveApiError(reason, 'Unable to reset the password. Please request a new reset link and try again.')
+    error.value = resolveApiError(
+      reason,
+      'Unable to reset the password. Please request a new reset link and try again.',
+    )
   } finally {
     submitting.value = false
   }

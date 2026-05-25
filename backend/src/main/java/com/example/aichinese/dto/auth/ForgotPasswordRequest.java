@@ -29,7 +29,7 @@ import jakarta.validation.constraints.Size;
  * to flood mailboxes or measure response timing differences.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly {@link String#strip() strips}
  * surrounding whitespace before Bean Validation runs, so a stray space
  * in a copy-pasted email address does not slip past
  * {@link Size @Size(max=320)} (which would otherwise count the
@@ -40,7 +40,7 @@ import jakarta.validation.constraints.Size;
  * {@code NullPointerException}. Lower-casing is intentionally left to
  * the service layer to keep the DTO purely a wire-format contract.</p>
  *
- * @param email the address to send the reset instruction to; trimmed
+ * @param email the address to send the reset instruction to; stripped
  *              by the canonical constructor and case-normalised
  *              server-side
  */
@@ -51,17 +51,17 @@ public record ForgotPasswordRequest(
         String email) {
 
     /**
-     * Defensive canonical constructor: trims surrounding whitespace so
+     * Defensive canonical constructor: strips surrounding whitespace so
      * Bean Validation operates on the canonical form of the email and
      * the downstream service receives a value identical to what
-     * {@code AuthService.normalizeEmail} would produce on the trim
+     * {@code AuthService.normalizeEmail} would produce on the strip
      * step. {@code null} is preserved for {@link NotBlank @NotBlank}
      * to render the user-facing "Email is required" message instead
      * of a {@link NullPointerException}.
      */
     public ForgotPasswordRequest {
         if (email != null) {
-            email = email.trim();
+            email = email.strip();
         }
     }
 }

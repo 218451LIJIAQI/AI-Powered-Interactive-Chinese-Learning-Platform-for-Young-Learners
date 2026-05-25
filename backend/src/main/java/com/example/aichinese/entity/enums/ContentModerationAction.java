@@ -44,9 +44,11 @@ public enum ContentModerationAction {
             Collections.unmodifiableSet(EnumSet.of(RESTORE));
 
     /*
-     * Startup-time exhaustiveness guard: every constant must be either
-     * restrictive or restorative.  Catches forgotten classification at
-     * class-load time rather than at runtime.
+     * Startup-time exhaustiveness guard: every constant must belong to
+     * exactly one of the two disjoint category sets.  Catches forgotten
+     * or duplicated classification at class-load time rather than at
+     * runtime where it would manifest as contradictory dashboard badges
+     * (isRestrictive() and isRestorative() simultaneously true).
      */
     static {
         EnumSet<ContentModerationAction> covered = EnumSet.copyOf(RESTRICTIVE);
@@ -55,6 +57,16 @@ public enum ContentModerationAction {
             EnumSet<ContentModerationAction> missing = EnumSet.complementOf(covered);
             throw new AssertionError(
                     "ContentModerationAction category sets do not cover all constants; uncovered: " + missing);
+        }
+        // Defensive symmetry check: an action must NOT be both restrictive
+        // and restorative — those predicates are advertised as mutually
+        // exclusive to the rest of the codebase.
+        EnumSet<ContentModerationAction> overlap = EnumSet.copyOf(RESTRICTIVE);
+        overlap.retainAll(RESTORATIVE);
+        if (!overlap.isEmpty()) {
+            throw new AssertionError(
+                    "ContentModerationAction RESTRICTIVE and RESTORATIVE sets must be disjoint; overlap: "
+                            + overlap);
         }
     }
 

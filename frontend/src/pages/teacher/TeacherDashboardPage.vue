@@ -6,7 +6,10 @@
       icon="dashboard"
     >
       <template #actions>
-        <StatusPill :label="teacherStatusLabel" :tone="dashboard.teacherStatus === 'APPROVED' ? 'success' : 'warning'" />
+        <StatusPill
+          :label="teacherStatusLabel"
+          :tone="dashboard.teacherStatus === 'APPROVED' ? 'success' : 'warning'"
+        />
       </template>
     </PageHeaderBlock>
 
@@ -32,7 +35,9 @@
             <div class="student-section-heading">
               <strong>Content Snapshot</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/content')">Manage Content</button>
+            <button class="student-link-button" type="button" @click="router.push('/teacher/content')">
+              Manage Content
+            </button>
           </div>
 
           <div class="teacher-dashboard-content-top">
@@ -79,7 +84,14 @@
             <div class="student-section-heading">
               <strong>Upcoming Live Classes</strong>
             </div>
-            <button class="student-link-button" type="button" :disabled="teacherApprovalLocked" @click="router.push('/teacher/classes')">Open Calendar</button>
+            <button
+              class="student-link-button"
+              type="button"
+              :disabled="teacherApprovalLocked"
+              @click="router.push('/teacher/classes')"
+            >
+              Open Calendar
+            </button>
           </div>
 
           <StatePanel
@@ -114,7 +126,9 @@
             <div class="student-section-heading">
               <strong>Recent Quiz Results</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/students')">Open Students</button>
+            <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+              Open Students
+            </button>
           </div>
 
           <div v-if="dashboard.recentQuizResults.length" class="teacher-dashboard-list">
@@ -144,7 +158,9 @@
             <div class="student-section-heading">
               <strong>Recent Notifications</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/profile')">Open Profile</button>
+            <button class="student-link-button" type="button" @click="router.push('/teacher/profile')">
+              Open Profile
+            </button>
           </div>
 
           <div v-if="dashboard.recentNotifications.length" class="teacher-dashboard-list">
@@ -179,7 +195,9 @@
             <div class="student-section-heading">
               <strong>Teaching Operations</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/students')">Open Learners</button>
+            <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+              Open Learners
+            </button>
           </div>
 
           <div class="teacher-dashboard-operations-grid">
@@ -303,9 +321,15 @@ const emptyAnalytics = {
   contentStatusBreakdown: [],
 }
 
-const dashboard = computed(() => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? teacherDashboard : emptyDashboard))
-const analytics = computed(() => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? teacherAnalytics : emptyAnalytics))
-const liveClasses = computed(() => liveClassesResource.data.value ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses : []))
+const dashboard = computed(
+  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? teacherDashboard : emptyDashboard),
+)
+const analytics = computed(
+  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? teacherAnalytics : emptyAnalytics),
+)
+const liveClasses = computed(
+  () => liveClassesResource.data.value ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses : []),
+)
 
 const pageLoading = computed(
   () => dashboardResource.loading.value || analyticsResource.loading.value || liveClassesResource.loading.value,
@@ -369,8 +393,7 @@ const statCards = computed(() => [
     icon: 'earnings',
     tone: 'mint',
   },
-]
-)
+])
 
 const upcomingClasses = computed(() =>
   [...liveClasses.value]

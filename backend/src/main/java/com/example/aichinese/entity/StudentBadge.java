@@ -32,6 +32,15 @@ import lombok.Setter;
  * keeping the initializer here (rather than a {@code @PrePersist}
  * hook) simplifies the gamification rule code that reads
  * {@link #getAwardedAt()} immediately after construction.</p>
+ *
+ * <p>Awards are append-only: every domain field is mapped
+ * {@code updatable = false}. Badges are never un-awarded by the
+ * platform — even refunds preserve the historical achievement — so
+ * any subsequent {@code save()} on a managed instance silently drops
+ * mutations at flush time. Re-issuing an award after some hypothetical
+ * revocation would be a fresh row, blocked at the database layer by
+ * {@code uk_student_badges_student_badge} until manual cleanup, which
+ * is the intended safety net.</p>
  */
 @Getter
 @Setter
@@ -47,13 +56,13 @@ import lombok.Setter;
 public class StudentBadge extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "badge_id", nullable = false)
+    @JoinColumn(name = "badge_id", nullable = false, updatable = false)
     private Badge badge;
 
-    @Column(name = "awarded_at", nullable = false)
+    @Column(name = "awarded_at", nullable = false, updatable = false)
     private LocalDateTime awardedAt = LocalDateTime.now();
 }

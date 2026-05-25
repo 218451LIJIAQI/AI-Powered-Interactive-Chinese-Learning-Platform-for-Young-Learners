@@ -6,7 +6,12 @@
       icon="content"
     />
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" :success="actionSuccess" :detail="teacherContentDetail" />
+    <DataNotice
+      :using-fallback="usingFallback"
+      :error="pageError"
+      :success="actionSuccess"
+      :detail="teacherContentDetail"
+    />
 
     <section class="panel teacher-content-toolbar">
       <button
@@ -29,7 +34,12 @@
           <button class="student-link-button" type="button" @click="reloadAll">Refresh</button>
         </div>
 
-        <button class="btn btn-primary teacher-create-course" type="button" :disabled="previewReadOnly" @click="openPackageBuilder()">
+        <button
+          class="btn btn-primary teacher-create-course"
+          type="button"
+          :disabled="previewReadOnly"
+          @click="openPackageBuilder()"
+        >
           <span class="teacher-inline-plus">+</span>
           <span>Create New Course</span>
         </button>
@@ -74,17 +84,30 @@
                 <h2 class="teacher-content-title">{{ selectedCourse.title }}</h2>
                 <div class="row teacher-content-summary-meta">
                   <span class="muted">{{ selectedCourse.subtitle }}</span>
-                  <StatusPill :label="selectedCourse.statusLabel" :tone="contentStatusTone(selectedCourse.statusLabel)" />
+                  <StatusPill
+                    :label="selectedCourse.statusLabel"
+                    :tone="contentStatusTone(selectedCourse.statusLabel)"
+                  />
                 </div>
               </div>
             </div>
 
             <div class="row teacher-content-summary-right">
               <span class="muted">{{ selectedCourse.lessonCount }} Items</span>
-              <button class="student-link-button" type="button" :disabled="!selectedCourse.source || previewReadOnly" @click="openPackageBuilder(selectedCourse.source ?? undefined)">
+              <button
+                class="student-link-button"
+                type="button"
+                :disabled="!selectedCourse.source || previewReadOnly"
+                @click="openPackageBuilder(selectedCourse.source ?? undefined)"
+              >
                 Edit Course
               </button>
-              <button class="btn btn-secondary" type="button" :disabled="!selectedCourse.source || previewReadOnly || packageBusy" @click="archiveSelectedPackage">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                :disabled="!selectedCourse.source || previewReadOnly || packageBusy"
+                @click="archiveSelectedPackage"
+              >
                 {{ packageBusy ? 'Working...' : 'Archive' }}
               </button>
             </div>
@@ -114,7 +137,12 @@
 
           <div class="row-between teacher-content-section-head">
             <strong>Course Package Items</strong>
-            <button class="btn btn-secondary teacher-add-module" type="button" :disabled="!selectedCourse.source || previewReadOnly" @click="openPackageBuilder(selectedCourse.source ?? undefined)">
+            <button
+              class="btn btn-secondary teacher-add-module"
+              type="button"
+              :disabled="!selectedCourse.source || previewReadOnly"
+              @click="openPackageBuilder(selectedCourse.source ?? undefined)"
+            >
               <span class="teacher-inline-plus">+</span>
               <span>Edit Course</span>
             </button>
@@ -130,7 +158,12 @@
 
                 <div class="row teacher-module-right">
                   <span class="muted">{{ item.itemType }}</span>
-                  <button class="btn btn-secondary" type="button" :disabled="!selectedCourse.source || previewReadOnly || packageItemRemovingId === item.id" @click="removePackageItem(item.id)">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="!selectedCourse.source || previewReadOnly || packageItemRemovingId === item.id"
+                    @click="removePackageItem(item.id)"
+                  >
                     {{ packageItemRemovingId === item.id ? 'Removing...' : 'Remove' }}
                   </button>
                 </div>
@@ -140,7 +173,9 @@
 
           <div v-else class="teacher-builder-helper">
             <strong>No modules or lessons are attached to this course yet.</strong>
-            <span class="muted">Use the package item form in the builder to add modules or lessons to the selected course.</span>
+            <span class="muted"
+              >Use the package item form in the builder to add modules or lessons to the selected course.</span
+            >
           </div>
 
           <form class="panel form-grid" @submit.prevent="submitPackageItem">
@@ -167,26 +202,46 @@
 
               <div class="field">
                 <label>Display order</label>
-                <input v-model.number="packageItemForm.displayOrder" class="input" type="number" min="0" aria-label="Course item display order" />
+                <input
+                  v-model.number="packageItemForm.displayOrder"
+                  class="input"
+                  type="number"
+                  min="0"
+                  aria-label="Course item display order"
+                />
               </div>
             </div>
 
             <div class="field">
               <label>Available item</label>
-              <select v-model.number="packageItemForm.itemId" class="select" aria-label="Available course item" :disabled="!selectedCourse.source || previewReadOnly">
+              <select
+                v-model.number="packageItemForm.itemId"
+                class="select"
+                aria-label="Available course item"
+                :disabled="!selectedCourse.source || previewReadOnly"
+              >
                 <option :value="0">Select an item</option>
                 <option v-for="item in packageItemOptions" :key="item.id" :value="item.id">{{ item.title }}</option>
               </select>
             </div>
 
-            <button class="btn btn-primary" type="submit" :disabled="!selectedCourse.source || previewReadOnly || submitting.packageItem">
+            <button
+              class="btn btn-primary"
+              type="submit"
+              :disabled="!selectedCourse.source || previewReadOnly || submitting.packageItem"
+            >
               {{ submitting.packageItem ? 'Saving...' : 'Add to Course' }}
             </button>
           </form>
 
           <div class="row-between teacher-content-section-head">
             <strong>Modules and Lessons</strong>
-            <button class="btn btn-secondary teacher-add-module" type="button" :disabled="previewReadOnly" @click="openModuleBuilder()">
+            <button
+              class="btn btn-secondary teacher-add-module"
+              type="button"
+              :disabled="previewReadOnly"
+              @click="openModuleBuilder()"
+            >
               <span class="teacher-inline-plus">+</span>
               <span>Add Module</span>
             </button>
@@ -207,10 +262,20 @@
 
                 <div class="row teacher-module-right">
                   <span class="muted">{{ module.lessonCount }} Lessons</span>
-                  <button class="student-link-button" type="button" :disabled="!module.source || previewReadOnly" @click="openModuleBuilder(module.source ?? undefined)">
+                  <button
+                    class="student-link-button"
+                    type="button"
+                    :disabled="!module.source || previewReadOnly"
+                    @click="openModuleBuilder(module.source ?? undefined)"
+                  >
                     Edit
                   </button>
-                  <button class="btn btn-secondary" type="button" :disabled="!module.source || previewReadOnly || moduleBusyId === module.id" @click="archiveModule(module.source ?? undefined)">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="!module.source || previewReadOnly || moduleBusyId === module.id"
+                    @click="archiveModule(module.source ?? undefined)"
+                  >
                     {{ moduleBusyId === module.id ? 'Working...' : 'Archive' }}
                   </button>
                 </div>
@@ -228,10 +293,20 @@
 
                   <div class="row teacher-lesson-actions">
                     <StatusPill :label="lesson.statusLabel" :tone="contentStatusTone(lesson.statusLabel)" />
-                    <button class="student-link-button" type="button" :disabled="!lesson.source || previewReadOnly" @click="openLessonBuilder(lesson.source ?? undefined, lesson.moduleId)">
+                    <button
+                      class="student-link-button"
+                      type="button"
+                      :disabled="!lesson.source || previewReadOnly"
+                      @click="openLessonBuilder(lesson.source ?? undefined, lesson.moduleId)"
+                    >
                       Edit
                     </button>
-                    <button class="btn btn-secondary" type="button" :disabled="!lesson.source || previewReadOnly || lessonBusyId === lesson.id" @click="archiveLesson(lesson.source ?? undefined)">
+                    <button
+                      class="btn btn-secondary"
+                      type="button"
+                      :disabled="!lesson.source || previewReadOnly || lessonBusyId === lesson.id"
+                      @click="archiveLesson(lesson.source ?? undefined)"
+                    >
                       {{ lessonBusyId === lesson.id ? 'Working...' : 'Archive' }}
                     </button>
                   </div>
@@ -244,7 +319,12 @@
         <section v-else-if="activeSurfaceTab === 'resources'" class="panel teacher-content-card">
           <div class="row-between teacher-content-section-head">
             <strong>Recorded Lesson Resources</strong>
-            <button class="btn btn-secondary teacher-resource-upload" type="button" :disabled="previewReadOnly" @click="openResourceBuilder()">
+            <button
+              class="btn btn-secondary teacher-resource-upload"
+              type="button"
+              :disabled="previewReadOnly"
+              @click="openResourceBuilder()"
+            >
               <span class="teacher-inline-plus">+</span>
               <span>Upload New Resource</span>
             </button>
@@ -280,10 +360,20 @@
 
                 <div class="row teacher-module-right">
                   <span class="muted">{{ video.sourceType }} / {{ formatDuration(video.durationSeconds) }}</span>
-                  <button class="student-link-button" type="button" :disabled="previewReadOnly" @click="openResourceBuilder(video)">
+                  <button
+                    class="student-link-button"
+                    type="button"
+                    :disabled="previewReadOnly"
+                    @click="openResourceBuilder(video)"
+                  >
                     Edit
                   </button>
-                  <button class="btn btn-secondary" type="button" :disabled="previewReadOnly || archivingResourceId === video.id" @click="archiveRecordedResource(video.id)">
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="previewReadOnly || archivingResourceId === video.id"
+                    @click="archiveRecordedResource(video.id)"
+                  >
                     {{ archivingResourceId === video.id ? 'Working...' : 'Archive' }}
                   </button>
                 </div>
@@ -315,7 +405,10 @@
 
           <div v-else class="teacher-builder-helper">
             <strong>No recorded lessons for this selection yet.</strong>
-            <span class="muted">Attach an external URL or uploaded video file from the builder to open this lesson for self-paced learning.</span>
+            <span class="muted"
+              >Attach an external URL or uploaded video file from the builder to open this lesson for self-paced
+              learning.</span
+            >
           </div>
 
           <div class="row-between teacher-content-section-head">
@@ -324,7 +417,11 @@
           </div>
 
           <div v-if="lessonVideoProgress.length" class="teacher-module-list">
-            <article v-for="progressRow in lessonVideoProgress" :key="`${progressRow.studentId}-${progressRow.recordedVideoId}`" class="teacher-module-card">
+            <article
+              v-for="progressRow in lessonVideoProgress"
+              :key="`${progressRow.studentId}-${progressRow.recordedVideoId}`"
+              class="teacher-module-card"
+            >
               <div class="row-between teacher-module-head">
                 <div class="row teacher-module-title-row">
                   <span class="teacher-module-index">{{ Math.round(progressRow.progressPercentage) }}%</span>
@@ -333,20 +430,28 @@
 
                 <div class="row teacher-module-right">
                   <span class="muted">{{ progressRow.recordedVideoTitle }}</span>
-                  <StatusPill :label="progressRow.completed ? 'Completed' : 'Watching'" :tone="progressRow.completed ? 'success' : 'warning'" />
+                  <StatusPill
+                    :label="progressRow.completed ? 'Completed' : 'Watching'"
+                    :tone="progressRow.completed ? 'success' : 'warning'"
+                  />
                 </div>
               </div>
 
               <div class="teacher-overview-grid">
                 <div>
                   <strong>{{ progressRow.studentEmail }}</strong>
-                  <p class="muted">Watched {{ formatDuration(progressRow.watchedSeconds) }} of {{ formatDuration(progressRow.totalSeconds) }}.</p>
+                  <p class="muted">
+                    Watched {{ formatDuration(progressRow.watchedSeconds) }} of
+                    {{ formatDuration(progressRow.totalSeconds) }}.
+                  </p>
                 </div>
 
                 <div class="teacher-overview-meta">
                   <div>
                     <span class="muted">Last Watched</span>
-                    <strong>{{ progressRow.lastWatchedAt ? formatDate(progressRow.lastWatchedAt, shortDateOptions) : '--' }}</strong>
+                    <strong>{{
+                      progressRow.lastWatchedAt ? formatDate(progressRow.lastWatchedAt, shortDateOptions) : '--'
+                    }}</strong>
                   </div>
                 </div>
               </div>
@@ -362,7 +467,12 @@
         <section v-else-if="activeSurfaceTab === 'activity-types'" class="panel teacher-content-card">
           <div class="row-between teacher-content-section-head">
             <strong>Quiz Builder</strong>
-            <button class="btn btn-secondary teacher-builder-launch" type="button" :disabled="previewReadOnly" @click="openQuizBuilder()">
+            <button
+              class="btn btn-secondary teacher-builder-launch"
+              type="button"
+              :disabled="previewReadOnly"
+              @click="openQuizBuilder()"
+            >
               <span class="teacher-inline-plus">+</span>
               <span>Create Quiz</span>
             </button>
@@ -397,10 +507,25 @@
                 </div>
 
                 <div class="row teacher-module-right">
-                  <StatusPill :label="normalizeStatus(quiz.contentStatus)" :tone="contentStatusTone(normalizeStatus(quiz.contentStatus))" />
+                  <StatusPill
+                    :label="normalizeStatus(quiz.contentStatus)"
+                    :tone="contentStatusTone(normalizeStatus(quiz.contentStatus))"
+                  />
                   <button class="student-link-button" type="button" @click="selectQuiz(quiz.id)">Open</button>
-                  <button class="student-link-button" type="button" :disabled="previewReadOnly" @click="openQuizBuilder(quiz)">Edit</button>
-                  <button class="btn btn-secondary" type="button" :disabled="previewReadOnly || quizDeleteId === quiz.id" @click="deleteQuiz(quiz.id)">
+                  <button
+                    class="student-link-button"
+                    type="button"
+                    :disabled="previewReadOnly"
+                    @click="openQuizBuilder(quiz)"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="previewReadOnly || quizDeleteId === quiz.id"
+                    @click="deleteQuiz(quiz.id)"
+                  >
                     {{ quizDeleteId === quiz.id ? 'Working...' : 'Delete' }}
                   </button>
                 </div>
@@ -438,7 +563,12 @@
           <template v-if="selectedQuiz">
             <div class="row-between teacher-content-section-head">
               <strong>Selected Quiz Questions</strong>
-              <button class="btn btn-secondary teacher-add-module" type="button" :disabled="previewReadOnly" @click="openQuestionBuilder()">
+              <button
+                class="btn btn-secondary teacher-add-module"
+                type="button"
+                :disabled="previewReadOnly"
+                @click="openQuestionBuilder()"
+              >
                 <span class="teacher-inline-plus">+</span>
                 <span>Add Question</span>
               </button>
@@ -454,10 +584,20 @@
 
                   <div class="row teacher-module-right">
                     <span class="muted">{{ question.questionType }}</span>
-                    <button class="student-link-button" type="button" :disabled="previewReadOnly" @click="openQuestionBuilder(question)">
+                    <button
+                      class="student-link-button"
+                      type="button"
+                      :disabled="previewReadOnly"
+                      @click="openQuestionBuilder(question)"
+                    >
                       Edit
                     </button>
-                    <button class="btn btn-secondary" type="button" :disabled="previewReadOnly || questionDeleteId === question.id" @click="deleteQuestion(question.id)">
+                    <button
+                      class="btn btn-secondary"
+                      type="button"
+                      :disabled="previewReadOnly || questionDeleteId === question.id"
+                      @click="deleteQuestion(question.id)"
+                    >
                       {{ questionDeleteId === question.id ? 'Working...' : 'Delete' }}
                     </button>
                   </div>
@@ -466,7 +606,9 @@
                 <div class="teacher-overview-grid">
                   <div>
                     <strong>Answer</strong>
-                    <p class="muted">{{ question.correctAnswerText || 'Use the options below to mark a correct answer.' }}</p>
+                    <p class="muted">
+                      {{ question.correctAnswerText || 'Use the options below to mark a correct answer.' }}
+                    </p>
                     <p v-if="question.explanation" class="muted">{{ question.explanation }}</p>
                   </div>
 
@@ -490,7 +632,10 @@
                     </div>
 
                     <div class="row teacher-lesson-actions">
-                      <StatusPill :label="option.correctOption ? 'Correct' : 'Distractor'" :tone="option.correctOption ? 'success' : 'info'" />
+                      <StatusPill
+                        :label="option.correctOption ? 'Correct' : 'Distractor'"
+                        :tone="option.correctOption ? 'success' : 'info'"
+                      />
                     </div>
                   </div>
                 </div>
@@ -499,12 +644,17 @@
 
             <div v-else class="teacher-builder-helper">
               <strong>No question items yet.</strong>
-              <span class="muted">Create the quiz first, then add question text, options, points, and explanations from the builder.</span>
+              <span class="muted"
+                >Create the quiz first, then add question text, options, points, and explanations from the
+                builder.</span
+              >
             </div>
 
             <div class="row-between teacher-content-section-head">
               <strong>Recent Attempts</strong>
-              <button class="student-link-button" type="button" @click="loadQuizAttempts(selectedQuiz.id)">Refresh Attempts</button>
+              <button class="student-link-button" type="button" @click="loadQuizAttempts(selectedQuiz.id)">
+                Refresh Attempts
+              </button>
             </div>
 
             <div v-if="loadingQuizAttempts" class="teacher-builder-helper">
@@ -516,7 +666,9 @@
               <article v-for="attempt in quizAttempts" :key="attempt.attemptId" class="teacher-module-card">
                 <div class="row-between teacher-module-head">
                   <div class="row teacher-module-title-row">
-                    <span class="teacher-module-index">{{ Math.round((attempt.score / Math.max(attempt.maxScore, 1)) * 100) }}%</span>
+                    <span class="teacher-module-index"
+                      >{{ Math.round((attempt.score / Math.max(attempt.maxScore, 1)) * 100) }}%</span
+                    >
                     <strong>{{ attempt.studentName }}</strong>
                   </div>
 
@@ -611,29 +763,63 @@
         <div v-if="previewReadOnly" class="teacher-builder-helper">
           <strong>{{ teacherApprovalLocked ? 'Verification pending.' : 'Preview mode is read-only.' }}</strong>
           <span class="muted">
-            {{ teacherApprovalLocked ? teacherApprovalMessage : 'Sign in as an approved teacher to save content, upload files, package lessons, and manage quizzes.' }}
+            {{
+              teacherApprovalLocked
+                ? teacherApprovalMessage
+                : 'Sign in as an approved teacher to save content, upload files, package lessons, and manage quizzes.'
+            }}
           </span>
         </div>
 
-        <button class="btn btn-secondary btn-block teacher-builder-launch" type="button" :disabled="previewReadOnly" @click="openBuilderForActiveSurface">
+        <button
+          class="btn btn-secondary btn-block teacher-builder-launch"
+          type="button"
+          :disabled="previewReadOnly"
+          @click="openBuilderForActiveSurface"
+        >
           <span class="teacher-inline-plus">+</span>
           <span>{{ builderLaunchLabel }}</span>
         </button>
 
         <div v-if="activeBuilder" class="teacher-builder-tabs">
-          <button class="tab-button" :class="{ 'is-active': activeBuilder === 'package' }" type="button" @click="openPackageBuilder(editingPackageSource ?? selectedCourse.source ?? undefined)">
+          <button
+            class="tab-button"
+            :class="{ 'is-active': activeBuilder === 'package' }"
+            type="button"
+            @click="openPackageBuilder(editingPackageSource ?? selectedCourse.source ?? undefined)"
+          >
             Course
           </button>
-          <button class="tab-button" :class="{ 'is-active': activeBuilder === 'module' }" type="button" @click="openModuleBuilder(editingModuleSource)">
+          <button
+            class="tab-button"
+            :class="{ 'is-active': activeBuilder === 'module' }"
+            type="button"
+            @click="openModuleBuilder(editingModuleSource)"
+          >
             Module
           </button>
-          <button class="tab-button" :class="{ 'is-active': activeBuilder === 'lesson' }" type="button" @click="openLessonBuilder(editingLessonSource)">
+          <button
+            class="tab-button"
+            :class="{ 'is-active': activeBuilder === 'lesson' }"
+            type="button"
+            @click="openLessonBuilder(editingLessonSource)"
+          >
             Lesson
           </button>
-          <button class="tab-button" :class="{ 'is-active': activeBuilder === 'resource' }" type="button" @click="openResourceBuilder(editingResourceSource)">
+          <button
+            class="tab-button"
+            :class="{ 'is-active': activeBuilder === 'resource' }"
+            type="button"
+            @click="openResourceBuilder(editingResourceSource)"
+          >
             Resource
           </button>
-          <button class="tab-button" :class="{ 'is-active': activeBuilder === 'quiz' }" type="button" @click="openQuizBuilder(editingQuizSource)">
+          <button
+            class="tab-button"
+            :class="{ 'is-active': activeBuilder === 'quiz' }"
+            type="button"
+            @click="openQuizBuilder(editingQuizSource)"
+          >
             Quiz
           </button>
         </div>
@@ -659,7 +845,12 @@
 
           <div class="field">
             <label>Description</label>
-            <textarea v-model="packageForm.description" class="textarea" maxlength="2000" aria-label="Course description" />
+            <textarea
+              v-model="packageForm.description"
+              class="textarea"
+              maxlength="2000"
+              aria-label="Course description"
+            />
           </div>
 
           <div class="form-grid two">
@@ -675,7 +866,9 @@
               <label>Category</label>
               <select v-model.number="packageForm.categoryId" class="select" aria-label="Course category">
                 <option :value="0">Select a category</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
               </select>
             </div>
           </div>
@@ -702,12 +895,25 @@
           <div class="form-grid two">
             <div class="field">
               <label>Price</label>
-              <input v-model.number="packageForm.price" class="input" type="number" min="0" step="0.01" aria-label="Course price" />
+              <input
+                v-model.number="packageForm.price"
+                class="input"
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label="Course price"
+              />
             </div>
 
             <div class="field">
               <label>Cover image URL</label>
-              <input v-model="packageForm.coverImageUrl" class="input" type="url" maxlength="255" aria-label="Course cover image URL" />
+              <input
+                v-model="packageForm.coverImageUrl"
+                class="input"
+                type="url"
+                maxlength="255"
+                aria-label="Course cover image URL"
+              />
             </div>
           </div>
         </ActionFormCard>
@@ -733,7 +939,12 @@
 
           <div class="field">
             <label>Description</label>
-            <textarea v-model="moduleForm.description" class="textarea" maxlength="2000" aria-label="Module description" />
+            <textarea
+              v-model="moduleForm.description"
+              class="textarea"
+              maxlength="2000"
+              aria-label="Module description"
+            />
           </div>
 
           <div class="form-grid two">
@@ -749,7 +960,9 @@
               <label>Category</label>
               <select v-model.number="moduleForm.categoryId" class="select" aria-label="Module category">
                 <option :value="0">Select a category</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
               </select>
             </div>
           </div>
@@ -765,13 +978,26 @@
 
             <div class="field">
               <label>Price</label>
-              <input v-model.number="moduleForm.price" class="input" type="number" min="0" step="0.01" aria-label="Module price" />
+              <input
+                v-model.number="moduleForm.price"
+                class="input"
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label="Module price"
+              />
             </div>
           </div>
 
           <div class="field">
             <label>Cover image URL</label>
-            <input v-model="moduleForm.coverImageUrl" class="input" type="url" maxlength="255" aria-label="Module cover image URL" />
+            <input
+              v-model="moduleForm.coverImageUrl"
+              class="input"
+              type="url"
+              maxlength="255"
+              aria-label="Module cover image URL"
+            />
           </div>
         </ActionFormCard>
 
@@ -796,7 +1022,12 @@
 
           <div class="field">
             <label>Description</label>
-            <textarea v-model="lessonForm.description" class="textarea" maxlength="1000" aria-label="Lesson description" />
+            <textarea
+              v-model="lessonForm.description"
+              class="textarea"
+              maxlength="1000"
+              aria-label="Lesson description"
+            />
           </div>
 
           <div class="form-grid two">
@@ -804,7 +1035,9 @@
               <label>Module</label>
               <select v-model.number="lessonForm.moduleId" class="select" aria-label="Lesson module">
                 <option :value="0">Select a module</option>
-                <option v-for="module in liveModuleOptions" :key="module.id" :value="module.id">{{ module.title }}</option>
+                <option v-for="module in liveModuleOptions" :key="module.id" :value="module.id">
+                  {{ module.title }}
+                </option>
               </select>
             </div>
 
@@ -831,7 +1064,9 @@
               <label>Category</label>
               <select v-model.number="lessonForm.categoryId" class="select" aria-label="Lesson category">
                 <option :value="0">Select a category</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
               </select>
             </div>
           </div>
@@ -847,19 +1082,38 @@
 
             <div class="field">
               <label>Price</label>
-              <input v-model.number="lessonForm.price" class="input" type="number" min="0" step="0.01" aria-label="Lesson price" />
+              <input
+                v-model.number="lessonForm.price"
+                class="input"
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label="Lesson price"
+              />
             </div>
           </div>
 
           <div class="form-grid two">
             <div class="field">
               <label>Estimated duration (minutes)</label>
-              <input v-model.number="lessonForm.estimatedDurationMinutes" class="input" type="number" min="0" aria-label="Lesson estimated duration in minutes" />
+              <input
+                v-model.number="lessonForm.estimatedDurationMinutes"
+                class="input"
+                type="number"
+                min="0"
+                aria-label="Lesson estimated duration in minutes"
+              />
             </div>
 
             <div class="field">
               <label>Cover image URL</label>
-              <input v-model="lessonForm.coverImageUrl" class="input" type="url" maxlength="255" aria-label="Lesson cover image URL" />
+              <input
+                v-model="lessonForm.coverImageUrl"
+                class="input"
+                type="url"
+                maxlength="255"
+                aria-label="Lesson cover image URL"
+              />
             </div>
           </div>
 
@@ -880,7 +1134,9 @@
           @submit="submitRecordedResource"
         >
           <template #header-end>
-            <button class="teacher-outline-button" type="button" @click="resetResourceForm(resourceLessonId)">Clear</button>
+            <button class="teacher-outline-button" type="button" @click="resetResourceForm(resourceLessonId)">
+              Clear
+            </button>
           </template>
 
           <div class="field">
@@ -893,7 +1149,11 @@
 
           <div class="field">
             <label>Course package (optional)</label>
-            <select v-model.number="resourceForm.packageId" class="select" aria-label="Recorded lesson linked course package">
+            <select
+              v-model.number="resourceForm.packageId"
+              class="select"
+              aria-label="Recorded lesson linked course package"
+            >
               <option :value="0">No package link</option>
               <option v-for="item in livePackageOptions" :key="item.id" :value="item.id">{{ item.title }}</option>
             </select>
@@ -906,7 +1166,12 @@
 
           <div class="field">
             <label>Description</label>
-            <textarea v-model="resourceForm.description" class="textarea" maxlength="1000" aria-label="Recorded lesson description" />
+            <textarea
+              v-model="resourceForm.description"
+              class="textarea"
+              maxlength="1000"
+              aria-label="Recorded lesson description"
+            />
           </div>
 
           <div class="form-grid two">
@@ -920,18 +1185,36 @@
 
             <div class="field">
               <label>Duration seconds</label>
-              <input v-model.number="resourceForm.durationSeconds" class="input" type="number" min="0" aria-label="Recorded lesson duration in seconds" />
+              <input
+                v-model.number="resourceForm.durationSeconds"
+                class="input"
+                type="number"
+                min="0"
+                aria-label="Recorded lesson duration in seconds"
+              />
             </div>
           </div>
 
           <div v-if="resourceForm.sourceType === 'EXTERNAL_URL'" class="field">
             <label>External video URL</label>
-            <input v-model="resourceForm.externalVideoUrl" class="input" type="url" maxlength="2048" aria-label="External video URL" />
+            <input
+              v-model="resourceForm.externalVideoUrl"
+              class="input"
+              type="url"
+              maxlength="2048"
+              aria-label="External video URL"
+            />
           </div>
 
           <div v-else class="field">
             <label>Video file</label>
-            <input ref="resourceFileInput" class="input" type="file" accept="video/*" aria-label="Recorded lesson video file" />
+            <input
+              ref="resourceFileInput"
+              class="input"
+              type="file"
+              accept="video/*"
+              aria-label="Recorded lesson video file"
+            />
           </div>
         </ActionFormCard>
 
@@ -964,18 +1247,31 @@
 
             <div class="field">
               <label>Description</label>
-              <textarea v-model="quizForm.description" class="textarea" maxlength="1000" aria-label="Quiz description" />
+              <textarea
+                v-model="quizForm.description"
+                class="textarea"
+                maxlength="1000"
+                aria-label="Quiz description"
+              />
             </div>
 
             <div class="field">
               <label>Time limit (minutes)</label>
-              <input v-model.number="quizForm.timeLimitMinutes" class="input" type="number" min="0" aria-label="Quiz time limit in minutes" />
+              <input
+                v-model.number="quizForm.timeLimitMinutes"
+                class="input"
+                type="number"
+                min="0"
+                aria-label="Quiz time limit in minutes"
+              />
             </div>
           </ActionFormCard>
 
           <ActionFormCard
             :title="editingQuestionId ? 'Edit Question' : 'Add Question'"
-            :subtitle="selectedQuiz ? `Active quiz: ${selectedQuiz.title}` : 'Create or open a quiz before adding questions.'"
+            :subtitle="
+              selectedQuiz ? `Active quiz: ${selectedQuiz.title}` : 'Create or open a quiz before adding questions.'
+            "
             icon="practice"
             :submit-label="editingQuestionId ? 'Save question changes' : 'Add question'"
             submitting-label="Saving..."
@@ -995,30 +1291,57 @@
 
             <div class="field">
               <label>Question text</label>
-              <textarea v-model="questionForm.questionText" class="textarea" maxlength="1000" aria-label="Question text" />
+              <textarea
+                v-model="questionForm.questionText"
+                class="textarea"
+                maxlength="1000"
+                aria-label="Question text"
+              />
             </div>
 
             <div class="form-grid two">
               <div class="field">
                 <label>Correct answer</label>
-                <input v-model="questionForm.correctAnswerText" class="input" maxlength="500" aria-label="Correct answer" />
+                <input
+                  v-model="questionForm.correctAnswerText"
+                  class="input"
+                  maxlength="500"
+                  aria-label="Correct answer"
+                />
               </div>
 
               <div class="field">
                 <label>Points</label>
-                <input v-model.number="questionForm.points" class="input" type="number" min="1" aria-label="Question points" />
+                <input
+                  v-model.number="questionForm.points"
+                  class="input"
+                  type="number"
+                  min="1"
+                  aria-label="Question points"
+                />
               </div>
             </div>
 
             <div class="form-grid two">
               <div class="field">
                 <label>Display order</label>
-                <input v-model.number="questionForm.displayOrder" class="input" type="number" min="0" aria-label="Question display order" />
+                <input
+                  v-model.number="questionForm.displayOrder"
+                  class="input"
+                  type="number"
+                  min="0"
+                  aria-label="Question display order"
+                />
               </div>
 
               <div class="field">
                 <label>Explanation</label>
-                <input v-model="questionForm.explanation" class="input" maxlength="1000" aria-label="Question explanation" />
+                <input
+                  v-model="questionForm.explanation"
+                  class="input"
+                  maxlength="1000"
+                  aria-label="Question explanation"
+                />
               </div>
             </div>
 
@@ -1031,7 +1354,13 @@
               <div v-for="(option, index) in questionForm.options" :key="`option-${index}`" class="teacher-lesson-row">
                 <div class="row teacher-lesson-main">
                   <span class="teacher-lesson-index">{{ index + 1 }}</span>
-                  <input v-model="option.optionText" class="input" placeholder="Option text" maxlength="255" :aria-label="`Answer option ${index + 1} text`" />
+                  <input
+                    v-model="option.optionText"
+                    class="input"
+                    placeholder="Option text"
+                    maxlength="255"
+                    :aria-label="`Answer option ${index + 1} text`"
+                  />
                 </div>
 
                 <div class="row teacher-lesson-actions">
@@ -1039,8 +1368,19 @@
                     <input v-model="option.correctOption" type="checkbox" />
                     Correct
                   </label>
-                  <input v-model.number="option.displayOrder" class="input" type="number" min="0" :aria-label="`Answer option ${index + 1} display order`" />
-                  <button class="btn btn-secondary" type="button" :disabled="questionForm.options.length <= 1" @click="removeQuestionOption(index)">
+                  <input
+                    v-model.number="option.displayOrder"
+                    class="input"
+                    type="number"
+                    min="0"
+                    :aria-label="`Answer option ${index + 1} display order`"
+                  />
+                  <button
+                    class="btn btn-secondary"
+                    type="button"
+                    :disabled="questionForm.options.length <= 1"
+                    @click="removeQuestionOption(index)"
+                  >
                     Remove
                   </button>
                 </div>
@@ -1198,7 +1538,9 @@ const previewReadOnly = computed(
     categoriesResource.usingFallback.value,
 )
 const levels = computed(() => levelsResource.data.value ?? (levelsResource.usingFallback.value ? demoLevels : []))
-const categories = computed(() => categoriesResource.data.value ?? (categoriesResource.usingFallback.value ? demoCategories : []))
+const categories = computed(
+  () => categoriesResource.data.value ?? (categoriesResource.usingFallback.value ? demoCategories : []),
+)
 const livePackages = computed(() => (packagesResource.usingFallback.value ? [] : (packagesResource.data.value ?? [])))
 const liveLessons = computed(() => (lessonsResource.usingFallback.value ? [] : (lessonsResource.data.value ?? [])))
 const liveModules = computed(() => (modulesResource.usingFallback.value ? [] : (modulesResource.data.value ?? [])))
@@ -1227,12 +1569,24 @@ const questionTypeOptions: QuizQuestionType[] = [
 ]
 
 const activityTypes = [
-  { title: 'Flashcards', copy: 'Vocabulary and recognition practice are powered from the shared activity library.', icon: 'clip' },
+  {
+    title: 'Flashcards',
+    copy: 'Vocabulary and recognition practice are powered from the shared activity library.',
+    icon: 'clip',
+  },
   { title: 'Quizzes', copy: 'Teacher-owned quizzes are now fully editable from this page.', icon: 'quiz' },
   { title: 'Matching', copy: 'Matching games can be curated centrally in the admin activity library.', icon: 'fun' },
   { title: 'Listening', copy: 'Listening exercises connect with recorded media and AI support.', icon: 'live' },
-  { title: 'Tracing', copy: 'Character tracing ties into practice progress and worksheet resources.', icon: 'practice' },
-  { title: 'Drag and Drop', copy: 'Interactive sequence activities are available in the student activity library.', icon: 'practice' },
+  {
+    title: 'Tracing',
+    copy: 'Character tracing ties into practice progress and worksheet resources.',
+    icon: 'practice',
+  },
+  {
+    title: 'Drag and Drop',
+    copy: 'Interactive sequence activities are available in the student activity library.',
+    icon: 'practice',
+  },
 ]
 
 const resourceTypes = [
@@ -1493,9 +1847,7 @@ const livePackageOptions = computed(() =>
 )
 
 const packageItemOptions = computed(() => {
-  const existingPairs = new Set(
-    selectedCourse.value.packageItems.map((item) => `${item.itemType}:${item.itemId}`),
-  )
+  const existingPairs = new Set(selectedCourse.value.packageItems.map((item) => `${item.itemType}:${item.itemId}`))
 
   if (packageItemForm.itemType === 'MODULE') {
     return liveModules.value
@@ -1570,18 +1922,12 @@ const builderLaunchLabel = computed(() => {
 const editingPackageSource = computed(
   () => livePackages.value.find((item) => item.id === editingPackageId.value) ?? null,
 )
-const editingModuleSource = computed(
-  () => liveModules.value.find((item) => item.id === editingModuleId.value) ?? null,
-)
-const editingLessonSource = computed(
-  () => liveLessons.value.find((item) => item.id === editingLessonId.value) ?? null,
-)
+const editingModuleSource = computed(() => liveModules.value.find((item) => item.id === editingModuleId.value) ?? null)
+const editingLessonSource = computed(() => liveLessons.value.find((item) => item.id === editingLessonId.value) ?? null)
 const editingResourceSource = computed(
   () => uploadedResourceVideos.value.find((item) => item.id === editingResourceId.value) ?? null,
 )
-const editingQuizSource = computed(
-  () => quizList.value.find((item) => item.id === editingQuizId.value) ?? null,
-)
+const editingQuizSource = computed(() => quizList.value.find((item) => item.id === editingQuizId.value) ?? null)
 
 watch(
   displayCourses,
@@ -1608,9 +1954,10 @@ watch(
       quizLessonId.value = firstId
     }
     if (!items.some((item) => item.id === lessonForm.moduleId)) {
-      lessonForm.moduleId = lessonForm.moduleId && liveModuleOptions.value.some((module) => module.id === lessonForm.moduleId)
-        ? lessonForm.moduleId
-        : 0
+      lessonForm.moduleId =
+        lessonForm.moduleId && liveModuleOptions.value.some((module) => module.id === lessonForm.moduleId)
+          ? lessonForm.moduleId
+          : 0
     }
   },
   { immediate: true },
@@ -1730,9 +2077,9 @@ function clearActionFeedback() {
   actionSuccess.value = null
 }
 
-function seedSharedContentFields<T extends { levelId: number; categoryId: number; accessType: 'FREE' | 'PAID'; price?: number | null }>(
-  target: T,
-) {
+function seedSharedContentFields<
+  T extends { levelId: number; categoryId: number; accessType: 'FREE' | 'PAID'; price?: number | null },
+>(target: T) {
   if (!selectedCourse.value.source) return
   target.levelId = selectedCourse.value.source.level.id
   target.categoryId = selectedCourse.value.source.category.id
@@ -2001,7 +2348,7 @@ async function loadQuizzesForLesson(lessonId: number, preferredQuizId?: number |
         ? preferredQuizId
         : selectedQuizId.value && items.some((item) => item.id === selectedQuizId.value)
           ? selectedQuizId.value
-          : items[0]?.id ?? null
+          : (items[0]?.id ?? null)
     selectedQuizId.value = nextId
     if (nextId) {
       await loadQuizAttempts(nextId)
@@ -2052,7 +2399,12 @@ async function reloadAll() {
 async function archiveSelectedPackage() {
   if (packageBusy.value) return
   if (!selectedCourse.value.source || !ensureLiveWrite('Course management')) return
-  if (!confirmTeacherContentMutation(`Archive the course "${selectedCourse.value.title}"? Students may lose access to this course package.`)) return
+  if (
+    !confirmTeacherContentMutation(
+      `Archive the course "${selectedCourse.value.title}"? Students may lose access to this course package.`,
+    )
+  )
+    return
 
   clearActionFeedback()
   packageBusy.value = true
@@ -2070,7 +2422,12 @@ async function archiveSelectedPackage() {
 async function archiveModule(item?: LearningModuleResponse | null) {
   if (moduleBusyId.value) return
   if (!item || !ensureLiveWrite('Module management')) return
-  if (!confirmTeacherContentMutation(`Archive the module "${item.title}"? Linked lessons may become harder for learners to find.`)) return
+  if (
+    !confirmTeacherContentMutation(
+      `Archive the module "${item.title}"? Linked lessons may become harder for learners to find.`,
+    )
+  )
+    return
 
   clearActionFeedback()
   moduleBusyId.value = item.id
@@ -2088,7 +2445,8 @@ async function archiveModule(item?: LearningModuleResponse | null) {
 async function archiveLesson(item?: LessonResponse | null) {
   if (lessonBusyId.value) return
   if (!item || !ensureLiveWrite('Lesson management')) return
-  if (!confirmTeacherContentMutation(`Archive the lesson "${item.title}"? Learners may lose access to its materials.`)) return
+  if (!confirmTeacherContentMutation(`Archive the lesson "${item.title}"? Learners may lose access to its materials.`))
+    return
 
   clearActionFeedback()
   lessonBusyId.value = item.id
@@ -2270,7 +2628,10 @@ async function submitLesson() {
       description: (lessonForm.description ?? '').trim() || null,
       moduleId: lessonForm.moduleId,
       price: lessonForm.accessType === 'FREE' ? 0 : Number(lessonForm.price || 0),
-      estimatedDurationMinutes: lessonForm.estimatedDurationMinutes && lessonForm.estimatedDurationMinutes > 0 ? lessonForm.estimatedDurationMinutes : 0,
+      estimatedDurationMinutes:
+        lessonForm.estimatedDurationMinutes && lessonForm.estimatedDurationMinutes > 0
+          ? lessonForm.estimatedDurationMinutes
+          : 0,
       basicContent: (lessonForm.basicContent ?? '').trim() || null,
       coverImageUrl: (lessonForm.coverImageUrl ?? '').trim() || null,
     }
@@ -2357,7 +2718,8 @@ async function submitRecordedResource() {
 async function archiveRecordedResource(videoId: number) {
   if (archivingResourceId.value) return
   if (!ensureLiveWrite('Recorded lesson management') || resourceLessonId.value <= 0) return
-  if (!confirmTeacherContentMutation('Archive this recorded lesson resource? Learners may lose access to the video.')) return
+  if (!confirmTeacherContentMutation('Archive this recorded lesson resource? Learners may lose access to the video.'))
+    return
 
   clearActionFeedback()
   archivingResourceId.value = videoId
@@ -2484,7 +2846,12 @@ async function submitQuestion() {
 async function deleteQuiz(quizId: number) {
   if (quizDeleteId.value) return
   if (!ensureLiveWrite('Quiz management')) return
-  if (!confirmTeacherContentMutation('Delete this quiz? Existing learner attempts may no longer have a visible quiz source.')) return
+  if (
+    !confirmTeacherContentMutation(
+      'Delete this quiz? Existing learner attempts may no longer have a visible quiz source.',
+    )
+  )
+    return
 
   clearActionFeedback()
   quizDeleteId.value = quizId

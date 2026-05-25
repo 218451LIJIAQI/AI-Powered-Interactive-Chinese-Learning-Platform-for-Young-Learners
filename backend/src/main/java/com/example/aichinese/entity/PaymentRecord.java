@@ -82,28 +82,59 @@ public class PaymentRecord extends BaseEntity {
      */
     public static final String GRAPH_DETAIL = "PaymentRecord.detail";
 
+    /**
+     * Owning order. Mapped {@code updatable = false}: a payment record
+     * is bound to the order it was issued for and cannot be re-targeted.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "order_id", nullable = false, updatable = false)
     private Order order;
 
+    /**
+     * Buyer. Mapped {@code updatable = false}: a payment record always
+     * settles against the original buyer, never a different one.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
-    @Column(name = "provider_name", nullable = false, length = 100)
+    /**
+     * Provider identifier (e.g. {@code "stripe"}, {@code "mock"},
+     * {@code "no-op"}). Mapped {@code updatable = false}: switching the
+     * provider on an existing record would break webhook routing.
+     */
+    @Column(name = "provider_name", nullable = false, updatable = false, length = 100)
     private String providerName;
 
+    /**
+     * Provider-side session/payment reference (e.g. Stripe
+     * {@code checkout.session.id}). Filled by
+     * {@code PaymentService.startCheckout} <em>after</em> the initial
+     * insert, so this field MUST remain mutable; it then settles as the
+     * effective idempotency key together with {@link #providerName}.
+     */
     @Column(name = "provider_reference", length = 150)
     private String providerReference;
 
-    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
+    /**
+     * Amount captured at provider-session creation time. Mapped
+     * {@code updatable = false}: refunds are tracked as separate
+     * {@code RefundRequest} rows rather than rewriting historical
+     * payment amounts; accounting exports therefore stay reproducible.
+     */
+    @Column(name = "amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
+    /**
+     * ISO-4217 currency code captured at payment-creation time.
+     * Mapped {@code updatable = false} for the same reproducibility
+     * reason as {@link #amount}.
+     */
+    @Column(name = "currency_code", nullable = false, updatable = false, length = 3)
     private String currencyCode = "MYR";
 
     @Enumerated(EnumType.STRING)

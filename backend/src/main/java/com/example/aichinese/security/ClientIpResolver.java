@@ -21,14 +21,14 @@ import jakarta.servlet.http.HttpServletRequest;
  * throttled or traced across requests. When the deployment runs behind
  * one or more reverse proxies (NGINX, CloudFront, Cloudflare, etc.) the
  * direct {@link HttpServletRequest#getRemoteAddr()} only reports the
- * <em>last hop</em> — every request would look like it came from the
+ * <em>last hop</em> - every request would look like it came from the
  * proxy. The {@code X-Forwarded-For} header is the standard escape
  * hatch, but it is also trivially spoofable when blindly trusted:
  * a malicious client can send {@code X-Forwarded-For: 1.2.3.4} and
  * masquerade as any IP it likes.</p>
  *
  * <h2>Trust model</h2>
- * <p>The {@code app.forwarded.trusted-proxies} configuration property
+ * <p>The {@code app.security.forwarded.trusted-proxies} configuration property
  * lists the IPs / CIDR ranges of proxies the application explicitly
  * trusts. {@link #resolve(HttpServletRequest)} only honours the
  * {@code X-Forwarded-For} header when {@code remoteAddr} is one of
@@ -38,10 +38,13 @@ import jakarta.servlet.http.HttpServletRequest;
  * making header spoofing impossible.</p>
  *
  * <h2>Header parsing</h2>
- * <p>Only the <em>first</em> comma-separated value in
- * {@code X-Forwarded-For} is honoured — that is the client's IP as
- * reported by the first proxy in the chain. Subsequent values record
- * each downstream proxy and are intentionally ignored. IPv6 addresses
+ * <p>The comma-separated {@code X-Forwarded-For} chain is examined
+ * from right to left after the immediate peer is trusted. Known proxy
+ * hops are discarded until the first untrusted numeric IP is found;
+ * that value is the originating client. This prevents an upstream
+ * appending proxy from accidentally preserving a client-supplied spoofed
+ * left-most value. The bundled Nginx configuration also replaces inbound
+ * forwarding headers as defense in depth. IPv6 addresses
  * enclosed in {@code [brackets]} are unwrapped via
  * {@link #normalizeHostLiteral(String)} so comparison against the
  * trust list is consistent regardless of which notation the proxy
@@ -60,7 +63,7 @@ public class ClientIpResolver {
         Objects.requireNonNull(forwardedHeaderProperties, "forwardedHeaderProperties");
         this.trustedProxyLiterals = forwardedHeaderProperties.trustedProxies().stream()
                 .filter(entry -> !entry.contains("/"))
-                .map(ClientIpResolver::normalizeHostLiteral)
+                .map(ClientIpResolver::canonicalNumericAddressOrLiteral)
                 .toList();
         this.trustedProxyCidrs = forwardedHeaderProperties.trustedProxies().stream()
                 .filter(entry -> entry.contains("/"))
@@ -81,14 +84,26 @@ public class ClientIpResolver {
             return "";
         }
 
-        String remoteAddress = normalizeHostLiteral(request.getRemoteAddr());
+        String remoteAddress = canonicalNumericAddressOrLiteral(request.getRemoteAddr());
         String forwardedHeader = request.getHeader(X_FORWARDED_FOR_HEADER);
         if (isTrustedForwardingProxy(remoteAddress) && forwardedHeader != null && !forwardedHeader.isBlank()) {
-            int comma = forwardedHeader.indexOf(',');
-            String forwardedClientIp = (comma < 0 ? forwardedHeader : forwardedHeader.substring(0, comma)).trim();
-            if (!forwardedClientIp.isBlank()) {
-                return forwardedClientIp;
+            String[] forwardedHops = forwardedHeader.split(",", -1);
+            String leftMostTrustedHop = remoteAddress;
+            for (int index = forwardedHops.length - 1; index >= 0; index--) {
+                String candidate = normalizeHostLiteral(forwardedHops[index]);
+                InetAddress parsedCandidate = parseNumericAddress(candidate);
+                if (parsedCandidate == null) {
+                    // Invalid or hostname-based forwarding chains are not trusted
+                    // as rate-limit keys; fall back to the authenticated peer.
+                    return remoteAddress;
+                }
+                candidate = canonicalNumericAddressOrLiteral(candidate);
+                leftMostTrustedHop = candidate;
+                if (!isTrustedForwardingProxy(candidate)) {
+                    return candidate;
+                }
             }
+            return leftMostTrustedHop;
         }
         return remoteAddress;
     }
@@ -105,26 +120,25 @@ public class ClientIpResolver {
             return false;
         }
 
-        try {
-            InetAddress remoteInetAddress = InetAddress.getByName(remoteAddress);
-            if (remoteInetAddress.isLoopbackAddress()) {
-                return true;
-            }
-
-            String canonicalRemoteAddress = normalizeHostLiteral(remoteInetAddress.getHostAddress());
-            if (trustedProxyLiterals.contains(remoteAddress) || trustedProxyLiterals.contains(canonicalRemoteAddress)) {
-                return true;
-            }
-
-            return trustedProxyCidrs.stream().anyMatch(range -> range.matches(remoteInetAddress));
-        } catch (UnknownHostException exception) {
-            return trustedProxyLiterals.contains(normalizeHostLiteral(remoteAddress));
+        InetAddress remoteInetAddress = parseNumericAddress(remoteAddress);
+        if (remoteInetAddress == null) {
+            return false;
         }
+        if (remoteInetAddress.isLoopbackAddress()) {
+            return true;
+        }
+
+        String canonicalRemoteAddress = normalizeHostLiteral(remoteInetAddress.getHostAddress());
+        if (trustedProxyLiterals.contains(remoteAddress) || trustedProxyLiterals.contains(canonicalRemoteAddress)) {
+            return true;
+        }
+
+        return trustedProxyCidrs.stream().anyMatch(range -> range.matches(remoteInetAddress));
     }
 
     /**
      * Lower-cases the input and unwraps an IPv6 bracket notation
-     * ({@code [::1]} → {@code ::1}) so subsequent string comparisons
+     * ({@code [::1]} to {@code ::1}) so subsequent string comparisons
      * against the trusted-proxy list are stable across the literal
      * notation any individual proxy may use.
      */
@@ -139,6 +153,47 @@ public class ClientIpResolver {
         return normalized;
     }
 
+    private static String canonicalNumericAddressOrLiteral(String value) {
+        String normalized = normalizeHostLiteral(value);
+        InetAddress parsedAddress = parseNumericAddress(normalized);
+        return parsedAddress == null
+                ? normalized
+                : normalizeHostLiteral(parsedAddress.getHostAddress());
+    }
+
+    /**
+     * Parses only numeric IPv4/IPv6 literals from request metadata. Avoiding
+     * hostname resolution means a forwarding header can never trigger DNS.
+     */
+    private static InetAddress parseNumericAddress(String value) {
+        String normalized = normalizeHostLiteral(value);
+        try {
+            String[] ipv4Parts = normalized.split("\\.", -1);
+            if (ipv4Parts.length == 4) {
+                byte[] address = new byte[4];
+                for (int index = 0; index < ipv4Parts.length; index++) {
+                    if (ipv4Parts[index].isBlank() || !ipv4Parts[index].chars().allMatch(Character::isDigit)) {
+                        return null;
+                    }
+                    int octet = Integer.parseInt(ipv4Parts[index]);
+                    if (octet < 0 || octet > 255) {
+                        return null;
+                    }
+                    address[index] = (byte) octet;
+                }
+                return InetAddress.getByAddress(address);
+            }
+            if (!normalized.contains(":")
+                    || normalized.contains("%")
+                    || !normalized.matches("[0-9a-f:.]+")) {
+                return null;
+            }
+            return InetAddress.getByName(normalized);
+        } catch (UnknownHostException | NumberFormatException exception) {
+            return null;
+        }
+    }
+
     private record CidrRange(byte[] network, int prefixLength) {
 
         static CidrRange parse(String value) {
@@ -148,15 +203,16 @@ public class ClientIpResolver {
             }
 
             try {
-                InetAddress networkAddress = InetAddress.getByName(parts[0].trim());
+                InetAddress networkAddress = parseNumericAddress(parts[0].trim());
+                if (networkAddress == null) {
+                    throw new IllegalArgumentException("Trusted proxy CIDR contains an invalid address: " + value);
+                }
                 int prefixLength = Integer.parseInt(parts[1].trim());
                 int maxBits = networkAddress.getAddress().length * 8;
                 if (prefixLength < 0 || prefixLength > maxBits) {
                     throw new IllegalArgumentException("Trusted proxy CIDR prefix is out of range: " + value);
                 }
                 return new CidrRange(mask(networkAddress.getAddress(), prefixLength), prefixLength);
-            } catch (UnknownHostException exception) {
-                throw new IllegalArgumentException("Trusted proxy CIDR contains an invalid address: " + value, exception);
             } catch (NumberFormatException exception) {
                 throw new IllegalArgumentException("Trusted proxy CIDR contains an invalid prefix: " + value, exception);
             }

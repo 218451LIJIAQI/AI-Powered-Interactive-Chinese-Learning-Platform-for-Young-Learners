@@ -217,17 +217,21 @@ async function main() {
   })
   const token = adminLogin.data.token
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1440,1000',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
   chrome.stderr.on('data', (data) => chromeLogs.push(data.toString()))
@@ -252,7 +256,9 @@ async function main() {
       }
     })
     on('Runtime.exceptionThrown', (params) => {
-      report.runtimeExceptions.push(params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception')
+      report.runtimeExceptions.push(
+        params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception',
+      )
     })
     on('Network.requestWillBeSent', (params) => {
       requests.set(params.requestId, {
@@ -347,7 +353,10 @@ async function main() {
     })()`)
     await send('Page.navigate', { url: `${baseUrl}/admin/moderation` })
     await waitFor('document.readyState === "complete"')
-    await waitFor(`Array.from(document.querySelectorAll('option')).some((option) => option.value === '${reportId}')`, 20000)
+    await waitFor(
+      `Array.from(document.querySelectorAll('option')).some((option) => option.value === '${reportId}')`,
+      20000,
+    )
     await evaluate(`
       (() => {
         const select = document.querySelector('#admin-moderation-report');
@@ -358,11 +367,14 @@ async function main() {
         return true;
       })()
     `)
-    await waitFor(`(() => {
+    await waitFor(
+      `(() => {
       const select = document.querySelector('#admin-moderation-report');
       const detail = document.querySelector('.admin-report-detail')?.innerText || '';
       return select?.value === '${reportId}' && detail.includes(${JSON.stringify(runId)});
-    })()`, 15000)
+    })()`,
+      15000,
+    )
 
     const reportState = await evaluate(`(() => {
       const select = document.querySelector('#admin-moderation-report');
@@ -396,16 +408,22 @@ async function main() {
         })()
       `)
       await sleep(300)
-      await waitFor(`(() => {
+      await waitFor(
+        `(() => {
         const button = document.querySelector('.admin-moderation-page form button[type="submit"]');
         return button && !button.disabled && button.innerText.includes('Save review');
-      })()`, 5000)
+      })()`,
+        5000,
+      )
       report.submitButton = await submitReviewForm('.admin-moderation-page form button[type="submit"]')
       if (!report.submitButton || report.submitButton.disabled) {
         throw new Error(`Cannot submit AI report review: ${JSON.stringify(report.submitButton)}`)
       }
       const reviewedSnapshot = await waitForReviewedReport(reportId, token)
-      await waitFor(`document.body.innerText.includes('AI report updated to Resolved and queue refreshed.')`, 15000).catch(() => null)
+      await waitFor(
+        `document.body.innerText.includes('AI report updated to Resolved and queue refreshed.')`,
+        15000,
+      ).catch(() => null)
 
       report.reviewedReport = {
         success: true,
@@ -421,24 +439,28 @@ async function main() {
 
     const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
     await writeFile(path.join(evidenceDir, 'admin-ai-report-review.png'), Buffer.from(screenshot.data, 'base64'))
-    report.selectedReportText = await evaluate(`(() => document.querySelector('.admin-report-detail')?.innerText || '')()`)
+    report.selectedReportText = await evaluate(
+      `(() => document.querySelector('.admin-report-detail')?.innerText || '')()`,
+    )
     report.finalBodyText = await evaluate('document.body.innerText')
     report.finalUrl = await evaluate('location.href')
-    report.uiShowsResolved = report.selectedReportText.includes('Resolved') || report.selectedReportText.includes('Reviewed by')
+    report.uiShowsResolved =
+      report.selectedReportText.includes('Resolved') || report.selectedReportText.includes('Reviewed by')
     report.uiSuccess = report.finalBodyText.includes('AI report updated to Resolved and queue refreshed.')
-    report.reviewRequest = report.network.find((entry) =>
-      entry.method === 'POST' && entry.url.includes(`/admin/ai-response-reports/${reportId}/review`),
+    report.reviewRequest = report.network.find(
+      (entry) => entry.method === 'POST' && entry.url.includes(`/admin/ai-response-reports/${reportId}/review`),
     )
     const reviewedData = report.reviewedReport?.data
     report.pass = Boolean(
-      report.reviewRequest?.status === 200
-        && reviewedData?.status && reviewedData.status !== 'PENDING_REVIEW'
-        && reviewedData?.reviewedAt
-        && report.uiShowsTargetPendingReport
-        && (report.uiShowsResolved || report.finalBodyText.includes('Saved successfully'))
-        && report.uiSuccess
-        && report.consoleErrors.length === 0
-        && report.runtimeExceptions.length === 0,
+      report.reviewRequest?.status === 200 &&
+      reviewedData?.status &&
+      reviewedData.status !== 'PENDING_REVIEW' &&
+      reviewedData?.reviewedAt &&
+      report.uiShowsTargetPendingReport &&
+      (report.uiShowsResolved || report.finalBodyText.includes('Saved successfully')) &&
+      report.uiSuccess &&
+      report.consoleErrors.length === 0 &&
+      report.runtimeExceptions.length === 0,
     )
   } catch (error) {
     mainError = error
@@ -466,13 +488,19 @@ async function main() {
   if (!report.pass) {
     throw new Error(`AI report review UI verification failed: ${JSON.stringify(report, null, 2)}`)
   }
-  console.log(JSON.stringify({
-    pass: report.pass,
-    evidenceDir,
-    reviewRequest: report.reviewRequest,
-    consoleErrors: report.consoleErrors.length,
-    runtimeExceptions: report.runtimeExceptions.length,
-  }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        pass: report.pass,
+        evidenceDir,
+        reviewRequest: report.reviewRequest,
+        consoleErrors: report.consoleErrors.length,
+        runtimeExceptions: report.runtimeExceptions.length,
+      },
+      null,
+      2,
+    ),
+  )
 }
 
 await main()

@@ -61,7 +61,9 @@
                 <div class="student-section-heading">
                   <strong>Recent Badges</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/rewards')">View Rewards</button>
+                <button type="button" class="student-link-button" @click="router.push('/student/rewards')">
+                  View Rewards
+                </button>
               </div>
 
               <div v-if="badgeCards.length" class="student-profile-badge-grid">
@@ -84,7 +86,9 @@
                 <div class="student-section-heading">
                   <strong>Recent Points Activity</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/rewards')">Open Rewards</button>
+                <button type="button" class="student-link-button" @click="router.push('/student/rewards')">
+                  Open Rewards
+                </button>
               </div>
 
               <div v-if="pointsFeed.length" class="student-profile-list">
@@ -110,7 +114,9 @@
                 <div class="student-section-heading">
                   <strong>Recent Lessons</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/learn')">Open Learn</button>
+                <button type="button" class="student-link-button" @click="router.push('/student/learn')">
+                  Open Learn
+                </button>
               </div>
 
               <div v-if="recentLessons.length" class="student-profile-list">
@@ -136,7 +142,9 @@
                 <div class="student-section-heading">
                   <strong>Teacher Feedback</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/practice')">Open Practice</button>
+                <button type="button" class="student-link-button" @click="router.push('/student/practice')">
+                  Open Practice
+                </button>
               </div>
 
               <div v-if="feedback.length" class="student-profile-feedback-list">
@@ -165,7 +173,11 @@
               <strong>Learning Snapshot</strong>
             </div>
 
-            <ProgressRing :progress="progress.overallCompletionPercent" title="Keep going" subtitle="Your student progress" />
+            <ProgressRing
+              :progress="progress.overallCompletionPercent"
+              title="Keep going"
+              subtitle="Your student progress"
+            />
 
             <div class="student-profile-side-stats">
               <div>
@@ -188,7 +200,12 @@
               <div class="student-section-heading">
                 <strong>Recent Notifications</strong>
               </div>
-              <button type="button" class="student-link-button" :disabled="markingNotificationsRead || !hasUnreadNotifications" @click="markAllNotificationsRead">
+              <button
+                type="button"
+                class="student-link-button"
+                :disabled="markingNotificationsRead || !hasUnreadNotifications"
+                @click="markAllNotificationsRead"
+              >
                 {{ markingNotificationsRead ? 'Marking...' : 'Mark all read' }}
               </button>
             </div>
@@ -208,7 +225,10 @@
                     <span>{{ item.message }}</span>
                     <small>{{ formatDateTime(item.createdAt) }}</small>
                   </div>
-                  <StatusPill :label="item.status === 'READ' ? 'Read' : 'Unread'" :tone="item.status === 'READ' ? 'info' : 'warning'" />
+                  <StatusPill
+                    :label="item.status === 'READ' ? 'Read' : 'Unread'"
+                    :tone="item.status === 'READ' ? 'info' : 'warning'"
+                  />
                 </article>
               </NotificationLinkButton>
             </div>
@@ -225,7 +245,9 @@
               <div class="student-section-heading">
                 <strong>Activity Library</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/practice')">Open Practice</button>
+              <button type="button" class="student-link-button" @click="router.push('/student/practice')">
+                Open Practice
+              </button>
             </div>
 
             <div v-if="activityRows.length" class="student-profile-list">
@@ -275,7 +297,11 @@
             </div>
 
             <div v-if="payments.length" class="student-profile-payment-list">
-              <article v-for="payment in payments.slice(0, 4)" :key="payment.paymentId" class="student-profile-payment-item">
+              <article
+                v-for="payment in payments.slice(0, 4)"
+                :key="payment.paymentId"
+                class="student-profile-payment-item"
+              >
                 <div>
                   <strong>{{ payment.orderNumber }}</strong>
                   <span>{{ payment.providerName }} - {{ payment.paymentStatus }}</span>
@@ -312,10 +338,18 @@
             >
               <div class="field">
                 <label for="student-refund-order">Order</label>
-                <select id="student-refund-order" v-model.number="refundForm.orderId" class="select" :disabled="refundFormDisabled || !refundablePayments.length">
-                  <option :value="0">{{ refundablePayments.length ? 'Select an order' : 'No refundable order available' }}</option>
+                <select
+                  id="student-refund-order"
+                  v-model.number="refundForm.orderId"
+                  class="select"
+                  :disabled="refundFormDisabled || !refundablePayments.length"
+                >
+                  <option :value="0">
+                    {{ refundablePayments.length ? 'Select an order' : 'No refundable order available' }}
+                  </option>
                   <option v-for="payment in refundablePayments" :key="payment.paymentId" :value="payment.orderId">
-                    {{ payment.orderNumber }} · {{ formatCurrency(payment.amount, payment.currencyCode) }} · {{ payment.providerName }}
+                    {{ payment.orderNumber }} · {{ formatCurrency(payment.amount, payment.currencyCode) }} ·
+                    {{ payment.providerName }}
                   </option>
                 </select>
               </div>
@@ -424,18 +458,30 @@ const emptyActivities = {
   totalPages: 0,
 }
 
-const profile = computed(() => profileResource.data.value ?? (profileResource.usingFallback.value ? demoUsers.STUDENT : emptyProfile))
+const profile = computed(
+  () => profileResource.data.value ?? (profileResource.usingFallback.value ? demoUsers.STUDENT : emptyProfile),
+)
 const feedback = computed(() =>
   (feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? studentFeedbackList : [])).map((item) => ({
     ...item,
     feedbackType: formatTeacherFeedbackType(item.feedbackType),
   })),
 )
-const payments = computed(() => paymentsResource.data.value ?? (paymentsResource.usingFallback.value ? studentPayments : []))
-const refunds = computed(() => refundsResource.data.value ?? (refundsResource.usingFallback.value ? studentRefunds : []))
-const rewards = computed(() => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards))
-const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
-const activities = computed(() => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : emptyActivities))
+const payments = computed(
+  () => paymentsResource.data.value ?? (paymentsResource.usingFallback.value ? studentPayments : []),
+)
+const refunds = computed(
+  () => refundsResource.data.value ?? (refundsResource.usingFallback.value ? studentRefunds : []),
+)
+const rewards = computed(
+  () => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards),
+)
+const progress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
+)
+const activities = computed(
+  () => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : emptyActivities),
+)
 const notifications = computed(() => notificationsResource.data.value ?? [])
 
 const usingFallback = computed(
@@ -487,11 +533,17 @@ const profileNoticeDetail = computed(() => {
   return null
 })
 
-const displayName = computed(() => profile.value.studentProfile?.displayName || profile.value.fullName.split(' ')[0] || 'Student')
-const currentLevelTitle = computed(() => profile.value.studentProfile?.currentLevel || `Level ${rewards.value.currentLevelNumber}`)
+const displayName = computed(
+  () => profile.value.studentProfile?.displayName || profile.value.fullName.split(' ')[0] || 'Student',
+)
+const currentLevelTitle = computed(
+  () => profile.value.studentProfile?.currentLevel || `Level ${rewards.value.currentLevelNumber}`,
+)
 const accountModeLabel = computed(() => (usingFallback.value ? 'Preview profile data' : 'Live student account'))
 const streakDateLabel = computed(() =>
-  rewards.value.streak.lastLearningDate ? `Last active ${formatDate(rewards.value.streak.lastLearningDate)}` : 'No learning date yet',
+  rewards.value.streak.lastLearningDate
+    ? `Last active ${formatDate(rewards.value.streak.lastLearningDate)}`
+    : 'No learning date yet',
 )
 const preferredLanguageLabel = computed(() => {
   const value = profile.value.preferredLanguage || 'en'
@@ -500,8 +552,13 @@ const preferredLanguageLabel = computed(() => {
   return 'English'
 })
 const hasUnreadNotifications = computed(() => notifications.value.some((item) => item.status !== 'READ'))
-const activeRefundOrderIds = computed(() =>
-  new Set(refunds.value.filter((item) => item.refundStatus === 'PENDING' || item.refundStatus === 'APPROVED').map((item) => item.orderId)),
+const activeRefundOrderIds = computed(
+  () =>
+    new Set(
+      refunds.value
+        .filter((item) => item.refundStatus === 'PENDING' || item.refundStatus === 'APPROVED')
+        .map((item) => item.orderId),
+    ),
 )
 const refundablePayments = computed(() =>
   payments.value.filter((item) => item.paymentStatus === 'PAID' && !activeRefundOrderIds.value.has(item.orderId)),
@@ -514,13 +571,14 @@ const badgeCards = computed(() =>
     id: badge.badgeId,
     title: badge.name,
     subtitle: badge.awardedAt ? `Awarded ${formatDate(badge.awardedAt)}` : badge.description,
-    initials: badge.name
-      .split(' ')
-      .filter(Boolean)
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase() || '?',
+    initials:
+      badge.name
+        .split(' ')
+        .filter(Boolean)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || '?',
   })),
 )
 
@@ -538,7 +596,12 @@ const recentLessons = computed(() =>
   progress.value.recentLessons.slice(0, 4).map((lesson) => ({
     ...lesson,
     progressLabel: formatPercent(lesson.completionPercent),
-    statusLabel: lesson.completed || lesson.completionPercent >= 100 ? 'Completed' : lesson.completionPercent > 0 ? 'In progress' : 'Not started',
+    statusLabel:
+      lesson.completed || lesson.completionPercent >= 100
+        ? 'Completed'
+        : lesson.completionPercent > 0
+          ? 'In progress'
+          : 'Not started',
     lastAccessedLabel: lesson.lastAccessedAt ? formatDateTime(lesson.lastAccessedAt) : 'No last access timestamp',
   })),
 )
@@ -594,9 +657,10 @@ async function markAllNotificationsRead() {
       item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() },
     )
     window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
-    actionSuccess.value = result.updatedCount > 0
-      ? `Marked ${result.updatedCount} notification(s) as read.`
-      : 'All notifications are already read.'
+    actionSuccess.value =
+      result.updatedCount > 0
+        ? `Marked ${result.updatedCount} notification(s) as read.`
+        : 'All notifications are already read.'
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to mark notifications as read.')
   } finally {

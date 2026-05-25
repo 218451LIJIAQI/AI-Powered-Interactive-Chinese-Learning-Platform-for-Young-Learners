@@ -19,6 +19,10 @@ import com.example.aichinese.config.UploadProperties;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
+import com.example.aichinese.service.storage.StorageProvider;
+import com.example.aichinese.service.storage.StorageReadRequest;
+import com.example.aichinese.service.storage.StorageWriteRequest;
+import com.example.aichinese.service.storage.StoredObject;
 
 /**
  * Generic upload pipeline for the teacher verification document
@@ -46,10 +50,15 @@ public class FileStorageService {
 
     private final UploadedFileRepository uploadedFileRepository;
     private final UploadProperties uploadProperties;
+    private final StorageProvider storageProvider;
 
-    public FileStorageService(UploadedFileRepository uploadedFileRepository, UploadProperties uploadProperties) {
+    public FileStorageService(
+            UploadedFileRepository uploadedFileRepository,
+            UploadProperties uploadProperties,
+            StorageProvider storageProvider) {
         this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
         this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
+        this.storageProvider = Objects.requireNonNull(storageProvider, "storageProvider");
     }
 
     @Transactional
@@ -64,18 +73,19 @@ public class FileStorageService {
                 "Uploaded file must include a valid extension. Allowed types are PDF, JPG, JPEG, and PNG.");
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
 
-        Path targetPath = UploadStorageSupport.storeMultipartFile(
+        StoredObject storedObject = storageProvider.store(
                 multipartFile,
-                resolveBaseDirectory(),
-                storedFileName,
-                "Invalid upload target path.",
-                "Uploaded file could not be stored.");
+                new StorageWriteRequest(
+                        resolveBaseDirectory(),
+                        storedFileName,
+                        "Invalid upload target path.",
+                        "Uploaded file could not be stored."));
 
         UploadedFile uploadedFile = new UploadedFile();
         uploadedFile.setOwnerUser(ownerUser);
         uploadedFile.setFileName(originalFileName);
         uploadedFile.setStoredFileName(storedFileName);
-        uploadedFile.setFilePath(targetPath.toString());
+        uploadedFile.setFilePath(storedObject.location().toString());
         uploadedFile.setContentType(UploadStorageSupport.normalizeContentType(multipartFile.getContentType()));
         uploadedFile.setFileSize(multipartFile.getSize());
         uploadedFile.setAccessLevel("PRIVATE");
@@ -84,10 +94,10 @@ public class FileStorageService {
     }
 
     public StoredFileDownload loadAsDownload(UploadedFile uploadedFile) {
-        return UploadStorageSupport.loadManagedFile(
+        return storageProvider.load(new StorageReadRequest(
                 uploadProperties.getDirectory(),
                 uploadedFile,
-                "Requested file could not be found.");
+                "Requested file could not be found."));
     }
 
     private void validateMultipartFile(MultipartFile multipartFile) {
@@ -95,7 +105,7 @@ public class FileStorageService {
             throw new ResponseStatusException(BAD_REQUEST, "Verification document file is required.");
         }
 
-        if (multipartFile.getSize() > uploadProperties.getMaxFileSize().toBytes()) {
+        if (multipartFile.getSize() > uploadProperties.getVerificationDocumentMaxFileSize().toBytes()) {
             throw new ResponseStatusException(PAYLOAD_TOO_LARGE, "Uploaded file exceeds the maximum allowed file size.");
         }
 

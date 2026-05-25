@@ -22,13 +22,31 @@ import java.util.Optional;
 public enum ActivityDifficulty {
 
     /** Introductory level suitable for absolute beginners. */
-    EASY,
+    EASY(1.0d),
 
     /** Standard level expected for the majority of learners at the target age. */
-    MEDIUM,
+    MEDIUM(1.5d),
 
     /** Advanced level intended for fluency reinforcement and challenge. */
-    HARD;
+    HARD(2.0d);
+
+    /**
+     * Reward multiplier associated with this difficulty tier; final, immutable,
+     * and stored alongside the constant declaration so the data and the label
+     * cannot drift apart.
+     */
+    private final double xpMultiplier;
+
+    ActivityDifficulty(double xpMultiplier) {
+        if (!(xpMultiplier > 0.0d) || Double.isInfinite(xpMultiplier)) {
+            // Defensive: every multiplier must be a finite positive number;
+            // a non-finite or non-positive value would silently zero-out or
+            // negate the XP reward for every activity at that tier.
+            throw new IllegalArgumentException(
+                    "xpMultiplier must be a finite positive number; got " + xpMultiplier);
+        }
+        this.xpMultiplier = xpMultiplier;
+    }
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, ActivityDifficulty> LOOKUP =
@@ -67,12 +85,11 @@ public enum ActivityDifficulty {
      *
      * @return {@code 1.0} for {@link #EASY}, {@code 1.5} for {@link #MEDIUM},
      *         {@code 2.0} for {@link #HARD}
+     * @implNote Backed by a {@code private final} field initialised in the
+     *           enum constructor; the public signature is preserved so every
+     *           existing call site is binary- and source-compatible.
      */
     public double xpMultiplier() {
-        return switch (this) {
-            case EASY -> 1.0d;
-            case MEDIUM -> 1.5d;
-            case HARD -> 2.0d;
-        };
+        return xpMultiplier;
     }
 }

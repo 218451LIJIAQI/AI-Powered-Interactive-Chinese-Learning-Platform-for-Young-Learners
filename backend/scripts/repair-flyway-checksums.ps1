@@ -5,8 +5,8 @@
 .DESCRIPTION
     Used after a migration file's bytes change in a way that does not
     alter its applied effect (typically: re-formatting, adding header
-    comments, or re-encoding line endings on V1__consolidated_schema.sql
-    or V14__final_database_contract_hardening.sql). Flyway will normally
+    comments, or re-encoding line endings on V1__consolidated_schema.sql).
+    Flyway will normally
     refuse to start the application with "checksum mismatch" — this
     script invokes the Flyway Maven plugin's `repair` goal so the
     schema_history rows pick up the new checksums without re-running

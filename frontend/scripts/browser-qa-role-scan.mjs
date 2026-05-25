@@ -110,9 +110,24 @@ const scenarios = [
 ]
 
 const guardScenarios = [
-  { role: 'student', token: process.env.QA_STUDENT_TOKEN || '', route: '/admin/dashboard', expectedPath: '/unauthorized' },
-  { role: 'teacher', token: process.env.QA_TEACHER_TOKEN || '', route: '/admin/dashboard', expectedPath: '/unauthorized' },
-  { role: 'student', token: process.env.QA_STUDENT_TOKEN || '', route: '/teacher/dashboard', expectedPath: '/unauthorized' },
+  {
+    role: 'student',
+    token: process.env.QA_STUDENT_TOKEN || '',
+    route: '/admin/dashboard',
+    expectedPath: '/unauthorized',
+  },
+  {
+    role: 'teacher',
+    token: process.env.QA_TEACHER_TOKEN || '',
+    route: '/admin/dashboard',
+    expectedPath: '/unauthorized',
+  },
+  {
+    role: 'student',
+    token: process.env.QA_STUDENT_TOKEN || '',
+    route: '/teacher/dashboard',
+    expectedPath: '/unauthorized',
+  },
   { role: 'guest', token: null, route: '/student/home', expectedPath: '/auth' },
 ]
 
@@ -291,7 +306,12 @@ function summarizeEventText(value) {
 function getCaseStatus(record) {
   if (record.navigationError || record.pageError) return 'FAIL'
   if (!record.ui?.rendered) return 'FAIL'
-  if (record.runtimeExceptions.length || record.consoleErrors.length || record.appHttpErrors.length || record.failedRequests.length) {
+  if (
+    record.runtimeExceptions.length ||
+    record.consoleErrors.length ||
+    record.appHttpErrors.length ||
+    record.failedRequests.length
+  ) {
     return 'NEEDS_FIX'
   }
   if (record.expectedPath && !pathMatches(record.actualPath, record.expectedPath)) return 'NEEDS_FIX'
@@ -342,17 +362,21 @@ async function main() {
 
   await mkdir(evidenceDir, { recursive: true })
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1440,1000',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
 
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
@@ -584,7 +608,9 @@ async function main() {
     }
 
     const allCases = [
-      ...scenarios.flatMap((scenario) => scenario.routes.map((route) => ({ role: scenario.role, token: scenario.token, route }))),
+      ...scenarios.flatMap((scenario) =>
+        scenario.routes.map((route) => ({ role: scenario.role, token: scenario.token, route })),
+      ),
       ...guardScenarios,
     ]
 
@@ -701,7 +727,9 @@ async function main() {
       if (record.ui?.overflowElements?.length) issues.push(`overflowElements=${record.ui.overflowElements.length}`)
       if (record.ui?.blankControls?.length) issues.push(`blankControls=${record.ui.blankControls.length}`)
       if (record.ui?.suspiciousText?.length) issues.push(`text=${record.ui.suspiciousText.join('|')}`)
-      console.log(`${record.status}\t${record.viewport}\t${record.role}\t${record.route}\t${record.ui?.title || ''}\t${issues.join(',')}`)
+      console.log(
+        `${record.status}\t${record.viewport}\t${record.role}\t${record.route}\t${record.ui?.title || ''}\t${issues.join(',')}`,
+      )
     }
 
     console.log(`ROLE_REPORT_JSON=${path.join(evidenceDir, 'report.json')}`)

@@ -8,9 +8,17 @@ PROJECT_FULL_SCOPE_TOP_TIER_AUDIT_PROMPT.md
 PROJECT_FULL_SCOPE_TOP_TIER_AUDIT_PROMPT_ZH.md
 
 # Generated and runtime artifacts
+node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
 frontend/browser-qa-evidence/
 backend/target/
 backend/uploads/
 backend/$tmp
+
+# Local secrets and deployment configuration
+.env
+.env.*
+!.env.prod.example

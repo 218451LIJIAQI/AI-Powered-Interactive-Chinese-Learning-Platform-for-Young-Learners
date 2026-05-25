@@ -24,7 +24,9 @@
                 </div>
                 <div class="student-level-progress">
                   <span>{{ level.progress }}</span>
-                  <span><IconGlyph :name="level.locked ? 'safe' : level.active ? 'star' : 'history'" :size="16" /></span>
+                  <span
+                    ><IconGlyph :name="level.locked ? 'safe' : level.active ? 'star' : 'history'" :size="16"
+                  /></span>
                 </div>
               </article>
             </div>
@@ -52,7 +54,12 @@
                 <ProgressBar :progress="lesson.completionPercent" />
               </div>
 
-              <button class="btn btn-accent student-learn-hero-cta" type="button" :disabled="!hasActiveLesson" @click="openLessonQuiz">
+              <button
+                class="btn btn-accent student-learn-hero-cta"
+                type="button"
+                :disabled="!hasActiveLesson"
+                @click="openLessonQuiz"
+              >
                 Continue Unit
                 <span><IconGlyph name="chevronRight" :size="18" /></span>
               </button>
@@ -81,12 +88,20 @@
               >
                 <div class="student-module-index">
                   <span>{{ module.displayIndex }}</span>
-                  <span v-if="module.complete" class="student-module-index-badge is-complete"><IconGlyph name="status" :size="12" /></span>
-                  <span v-else-if="module.locked" class="student-module-index-badge is-locked"><IconGlyph name="safe" :size="12" /></span>
-                  <span v-else-if="module.current" class="student-module-index-badge is-current"><IconGlyph name="flash" :size="12" /></span>
+                  <span v-if="module.complete" class="student-module-index-badge is-complete"
+                    ><IconGlyph name="status" :size="12"
+                  /></span>
+                  <span v-else-if="module.locked" class="student-module-index-badge is-locked"
+                    ><IconGlyph name="safe" :size="12"
+                  /></span>
+                  <span v-else-if="module.current" class="student-module-index-badge is-current"
+                    ><IconGlyph name="flash" :size="12"
+                  /></span>
                 </div>
 
-                <div class="student-module-icon" :class="`is-${module.variant}`"><IconGlyph :name="module.icon" :size="24" /></div>
+                <div class="student-module-icon" :class="`is-${module.variant}`">
+                  <IconGlyph :name="module.icon" :size="24" />
+                </div>
 
                 <strong>{{ module.title }}</strong>
                 <div class="student-module-status">{{ module.statusLabel }}</div>
@@ -121,7 +136,12 @@
                 <strong>Ni hao!</strong>
                 <span>Hello!</span>
               </div>
-              <button class="student-recorded-play" type="button" aria-label="Open recorded lesson" @click="openRecordedLesson">
+              <button
+                class="student-recorded-play"
+                type="button"
+                aria-label="Open recorded lesson"
+                @click="openRecordedLesson"
+              >
                 <IconGlyph name="play" :size="20" />
               </button>
             </div>
@@ -139,10 +159,20 @@
               <span>{{ videoProgressLabel }}</span>
             </div>
 
-            <button class="btn btn-secondary btn-block" type="button" :disabled="videoActionLoading || !hasPlayableVideo" @click="openRecordedLesson">
+            <button
+              class="btn btn-secondary btn-block"
+              type="button"
+              :disabled="videoActionLoading || !hasPlayableVideo"
+              @click="openRecordedLesson"
+            >
               {{ videoActionLoading ? 'Saving progress...' : 'Start Watching' }}
             </button>
-            <button class="btn btn-accent btn-block" type="button" :disabled="videoActionLoading || !hasPlayableVideo || videoProgress?.completed" @click="markRecordedLessonComplete">
+            <button
+              class="btn btn-accent btn-block"
+              type="button"
+              :disabled="videoActionLoading || !hasPlayableVideo || videoProgress?.completed"
+              @click="markRecordedLessonComplete"
+            >
               {{ videoProgress?.completed ? 'Completed' : 'Mark Complete' }}
             </button>
           </article>
@@ -226,8 +256,18 @@ const auth = useAuthStore()
 
 const requestedVideoId = computed(() => numericQuery(route.query.videoId))
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
-const emptyProgress = { ...studentProgressDemo, completedLessons: 0, totalLessonsStarted: 0, quizAverage: 0, overallCompletionPercent: 0, weakAreas: [], recentLessons: [] }
-const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
+const emptyProgress = {
+  ...studentProgressDemo,
+  completedLessons: 0,
+  totalLessonsStarted: 0,
+  quizAverage: 0,
+  overallCompletionPercent: 0,
+  weakAreas: [],
+  recentLessons: [],
+}
+const progress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
+)
 const lessonCandidateIds = computed(() => {
   const lessonIds = [
     numericQuery(route.query.lessonId),
@@ -237,7 +277,10 @@ const lessonCandidateIds = computed(() => {
   return Array.from(new Set(lessonIds.filter((lessonId): lessonId is number => Boolean(lessonId && lessonId > 0))))
 })
 const selectedLessonId = computed(() => lessonCandidateIds.value[0] ?? null)
-const fallbackLesson = (): StudentLessonPlayerResponse => ({ ...studentLessonPlayer, lessonId: selectedLessonId.value ?? 0 })
+const fallbackLesson = (): StudentLessonPlayerResponse => ({
+  ...studentLessonPlayer,
+  lessonId: selectedLessonId.value ?? 0,
+})
 const resource = useResource(loadLessonPlayer, fallbackLesson)
 
 const emptyLesson = {
@@ -259,7 +302,9 @@ const videoActionLoading = ref(false)
 const pageLoading = computed(() => resource.loading.value || progressResource.loading.value)
 const pageError = computed(() => resource.error.value || progressResource.error.value)
 const usingFallback = computed(() => resource.usingFallback.value || progressResource.usingFallback.value)
-const studentName = computed(() => auth.currentUser?.studentProfile?.displayName || auth.displayName.split(' ')[0] || 'Learner')
+const studentName = computed(
+  () => auth.currentUser?.studentProfile?.displayName || auth.displayName.split(' ')[0] || 'Learner',
+)
 function emptyVideo(lessonId: number): RecordedLessonVideoResponse {
   return {
     id: 0,
@@ -289,13 +334,17 @@ const videoDurationLabel = computed(() => {
   if (durationSeconds > 0) return formatDuration(durationSeconds)
   return 'Duration unavailable'
 })
-const playableVideoUrl = computed(() => safeHttpUrl(primaryVideo.value.streamUrl || primaryVideo.value.externalVideoUrl))
+const playableVideoUrl = computed(() =>
+  safeHttpUrl(primaryVideo.value.streamUrl || primaryVideo.value.externalVideoUrl),
+)
 const hasPlayableVideo = computed(() => Boolean(primaryVideo.value.id && playableVideoUrl.value))
 const videoProgressLabel = computed(() => {
   if (videoProgressLoading.value) return 'Loading progress'
   if (!primaryVideo.value.id) return 'No video'
   if (!videoProgress.value) return 'Not started'
-  return videoProgress.value.completed ? '100% complete' : `${Math.round(videoProgress.value.progressPercentage)}% watched`
+  return videoProgress.value.completed
+    ? '100% complete'
+    : `${Math.round(videoProgress.value.progressPercentage)}% watched`
 })
 const currentLessonProgressLabel = computed(() => {
   if (lesson.value.completionPercent >= 100) return 'Completed'
@@ -369,10 +418,14 @@ const learningModules = computed(() =>
   }),
 )
 
-watch(lessonCandidateIds, () => {
-  videoProgress.value = null
-  void resource.reload()
-}, { deep: true })
+watch(
+  lessonCandidateIds,
+  () => {
+    videoProgress.value = null
+    void resource.reload()
+  },
+  { deep: true },
+)
 
 watch(
   () => primaryVideo.value.id,
@@ -436,7 +489,8 @@ function formatDuration(totalSeconds: number) {
 function startProgressPayload(video: RecordedLessonVideoResponse) {
   const totalSeconds = video.durationSeconds ?? undefined
   const watchedSeconds = totalSeconds ? Math.max(1, Math.min(30, Math.floor(totalSeconds * 0.1))) : undefined
-  const progressPercentage = totalSeconds && watchedSeconds ? Math.min(95, Math.max(1, Math.round((watchedSeconds / totalSeconds) * 100))) : 1
+  const progressPercentage =
+    totalSeconds && watchedSeconds ? Math.min(95, Math.max(1, Math.round((watchedSeconds / totalSeconds) * 100))) : 1
 
   return {
     watchedSeconds,
@@ -474,7 +528,10 @@ async function openRecordedLesson() {
 
     videoActionLoading.value = true
     try {
-      videoProgress.value = await studentApi.saveVideoProgress(primaryVideo.value.id, startProgressPayload(primaryVideo.value))
+      videoProgress.value = await studentApi.saveVideoProgress(
+        primaryVideo.value.id,
+        startProgressPayload(primaryVideo.value),
+      )
       actionSuccess.value = 'Opening the recorded lesson and saving your watch progress.'
     } catch (reason) {
       actionError.value = resolveApiError(reason, 'Recorded lesson opened, but progress could not be saved.')
@@ -497,7 +554,8 @@ async function markRecordedLessonComplete() {
   }
 
   if (resource.usingFallback.value) {
-    actionError.value = 'Preview recorded lessons cannot save completion progress. Use a live student account to update progress.'
+    actionError.value =
+      'Preview recorded lessons cannot save completion progress. Use a live student account to update progress.'
     return
   }
 
@@ -531,5 +589,3 @@ function reloadAll() {
   void loadVideoProgress()
 }
 </script>
-
-

@@ -43,6 +43,44 @@ public enum RefundStatus {
     public static final Set<RefundStatus> ACTIONABLE =
             Collections.unmodifiableSet(EnumSet.of(PENDING, APPROVED));
 
+    /*
+     * Startup-time perfect-complement guard.
+     *
+     *   1. TERMINAL union ACTIONABLE == ALL.  Every state must be
+     *      either terminal or still actionable.  An "orphan" state in
+     *      neither set would silently disappear from the admin's
+     *      "needs decision" queue (which filters by ACTIONABLE) and
+     *      from the terminal-records archive.
+     *
+     *   2. TERMINAL intersect ACTIONABLE == empty.  No state may be
+     *      both terminal AND actionable, otherwise the admin could
+     *      double-act on an already-decided request: approve a
+     *      REJECTED refund, or reject a REFUNDED one, both of which
+     *      would emit duplicate notifications and corrupt the
+     *      financial audit trail.
+     *
+     * Both checks run exactly once at class load with EnumSet
+     * bit-operations and fail fast with a message naming the
+     * offending constants.
+     */
+    static {
+        EnumSet<RefundStatus> covered = EnumSet.copyOf(TERMINAL);
+        covered.addAll(ACTIONABLE);
+        if (!covered.equals(EnumSet.allOf(RefundStatus.class))) {
+            EnumSet<RefundStatus> orphans = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "RefundStatus has constants in neither TERMINAL nor ACTIONABLE; orphans: "
+                            + orphans);
+        }
+        EnumSet<RefundStatus> overlap = EnumSet.copyOf(TERMINAL);
+        overlap.retainAll(ACTIONABLE);
+        if (!overlap.isEmpty()) {
+            throw new AssertionError(
+                    "RefundStatus TERMINAL and ACTIONABLE must be disjoint; overlapping: "
+                            + overlap);
+        }
+    }
+
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, RefundStatus> LOOKUP =
             EnumLookups.indexByName(RefundStatus.class);

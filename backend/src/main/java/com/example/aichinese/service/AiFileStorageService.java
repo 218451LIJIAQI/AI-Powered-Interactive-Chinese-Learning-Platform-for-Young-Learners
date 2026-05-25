@@ -8,7 +8,9 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -16,6 +18,9 @@ import com.example.aichinese.config.UploadProperties;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
+import com.example.aichinese.service.storage.StorageProvider;
+import com.example.aichinese.service.storage.StorageWriteRequest;
+import com.example.aichinese.service.storage.StoredObject;
 
 /**
  * Persists learner-uploaded audio (pronunciation feedback) and image
@@ -60,29 +65,38 @@ public class AiFileStorageService {
 
     private final UploadProperties uploadProperties;
     private final UploadedFileRepository uploadedFileRepository;
+    private final TransactionTemplate metadataWriteTransaction;
+    private final StorageProvider storageProvider;
 
-    public AiFileStorageService(UploadProperties uploadProperties, UploadedFileRepository uploadedFileRepository) {
+    public AiFileStorageService(
+            UploadProperties uploadProperties,
+            UploadedFileRepository uploadedFileRepository,
+            PlatformTransactionManager transactionManager,
+            StorageProvider storageProvider) {
         this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
         this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
+        this.metadataWriteTransaction = new TransactionTemplate(
+                Objects.requireNonNull(transactionManager, "transactionManager"));
+        this.storageProvider = Objects.requireNonNull(storageProvider, "storageProvider");
     }
 
-    @Transactional
     public UploadedFile storePronunciationAudio(MultipartFile multipartFile, User ownerUser) {
         String[] validated = validateMultipartFile(multipartFile,
                 ALLOWED_AUDIO_CONTENT_TYPES, ALLOWED_AUDIO_EXTENSIONS,
                 "Unsupported audio file type. Allowed types are WEBM, WAV, MPEG, and MP3.",
                 ALLOWED_AUDIO_SIGNATURES,
-                "Uploaded audio content does not match the declared WEBM/WAV/MP3 type.");
+                "Uploaded audio content does not match the declared WEBM/WAV/MP3 type.",
+                uploadProperties.getAiAudioMaxFileSize());
         return storeFile(multipartFile, ownerUser, "PRIVATE", validated[0], validated[1]);
     }
 
-    @Transactional
     public UploadedFile storeWritingImage(MultipartFile multipartFile, User ownerUser) {
         String[] validated = validateMultipartFile(multipartFile,
                 ALLOWED_IMAGE_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS,
                 "Unsupported image file type. Allowed types are PNG, JPG, and JPEG.",
                 ALLOWED_IMAGE_SIGNATURES,
-                "Uploaded image content does not match the declared PNG/JPG/JPEG type.");
+                "Uploaded image content does not match the declared PNG/JPG/JPEG type.",
+                uploadProperties.getAiImageMaxFileSize());
         return storeFile(multipartFile, ownerUser, "PRIVATE", validated[0], validated[1]);
     }
 
@@ -101,23 +115,26 @@ public class AiFileStorageService {
             String extension) {
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
 
-        Path targetPath = UploadStorageSupport.storeMultipartFile(
+        StoredObject storedObject = storageProvider.store(
                 multipartFile,
-                resolveAiDirectory(),
-                storedFileName,
-                "Invalid upload target path.",
-                "Uploaded file could not be stored.");
+                new StorageWriteRequest(
+                        resolveAiDirectory(),
+                        storedFileName,
+                        "Invalid upload target path.",
+                        "Uploaded file could not be stored."));
 
         UploadedFile uploadedFile = new UploadedFile();
         uploadedFile.setOwnerUser(ownerUser);
         uploadedFile.setFileName(originalFileName);
         uploadedFile.setStoredFileName(storedFileName);
-        uploadedFile.setFilePath(targetPath.toString());
+        uploadedFile.setFilePath(storedObject.location().toString());
         uploadedFile.setContentType(UploadStorageSupport.normalizeContentType(multipartFile.getContentType()));
         uploadedFile.setFileSize(multipartFile.getSize());
         uploadedFile.setAccessLevel(accessLevel);
         uploadedFile.setActive(true);
-        return uploadedFileRepository.save(uploadedFile);
+        return Objects.requireNonNull(
+                metadataWriteTransaction.execute(status -> uploadedFileRepository.save(uploadedFile)),
+                "uploaded file metadata");
     }
 
     /**
@@ -132,12 +149,13 @@ public class AiFileStorageService {
             Set<String> allowedExtensions,
             String invalidTypeMessage,
             Set<UploadStorageSupport.FileSignature> allowedSignatures,
-            String invalidSignatureMessage) {
+            String invalidSignatureMessage,
+            DataSize maxFileSize) {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Uploaded file is required.");
         }
 
-        if (multipartFile.getSize() > uploadProperties.getMaxFileSize().toBytes()) {
+        if (multipartFile.getSize() > maxFileSize.toBytes()) {
             throw new ResponseStatusException(PAYLOAD_TOO_LARGE,
                     "Uploaded file exceeds the maximum allowed file size.");
         }

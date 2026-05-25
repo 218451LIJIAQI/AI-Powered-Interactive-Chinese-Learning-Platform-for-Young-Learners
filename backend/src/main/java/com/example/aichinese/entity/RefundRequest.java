@@ -42,6 +42,22 @@ import lombok.Setter;
  *
  * <p>{@link #version} guards against concurrent admin decisions on the
  * same request.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #student}, {@link #order},
+ *       {@link #amount}, {@link #reason} — the request identity (who,
+ *       what order, captured settlement amount, student rationale) is
+ *       fixed at submission time. The captured {@link #amount} in
+ *       particular must stay frozen so partial refunds through other
+ *       channels never retroactively alter this row's settlement
+ *       target.</li>
+ *   <li><b>Mutable</b>: {@link #refundStatus} (state machine driven
+ *       by {@code RefundService} approve/reject/applyRefund actions)
+ *       and {@link #decisionReason} (filled by admin at the rejection
+ *       or settlement step). Both are guarded by the
+ *       {@link Version @Version} column above.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -56,21 +72,21 @@ import lombok.Setter;
 public class RefundRequest extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "order_id", nullable = false, updatable = false)
     private Order order;
 
-    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
 
-    @Column(name = "reason", length = 1000)
+    @Column(name = "reason", updatable = false, length = 1000)
     private String reason;
 
     @Column(name = "decision_reason", length = 1000)

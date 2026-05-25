@@ -35,6 +35,16 @@ import lombok.Setter;
  * <p>{@link #pointsDelta} may be negative (e.g. badge revocation,
  * compensating entry for a refunded purchase) — clamping is performed
  * at the service layer rather than the column.</p>
+ *
+ * <p>The append-only contract is enforced at the ORM layer: every
+ * domain field is mapped {@code updatable = false}, so any subsequent
+ * {@code save()} on a managed instance silently drops attempted
+ * mutations at flush time. This keeps the
+ * {@code SUM(points_delta) GROUP BY student_id} aggregate that backs
+ * {@link StudentProfile#getTotalPoints()} trustworthy even if a service
+ * accidentally re-saves a ledger row. Reversals or corrections MUST
+ * be expressed as a new ledger entry with an opposite-signed
+ * {@link #pointsDelta}, never an in-place rewrite.</p>
  */
 @Getter
 @Setter
@@ -49,19 +59,19 @@ import lombok.Setter;
 public class PointsTransaction extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
-    @Column(name = "points_delta", nullable = false)
+    @Column(name = "points_delta", nullable = false, updatable = false)
     private Integer pointsDelta;
 
-    @Column(name = "reason", nullable = false, length = 255)
+    @Column(name = "reason", nullable = false, updatable = false, length = 255)
     private String reason;
 
-    @Column(name = "source_type", length = 100)
+    @Column(name = "source_type", updatable = false, length = 100)
     private String sourceType;
 
-    @Column(name = "source_id")
+    @Column(name = "source_id", updatable = false)
     private Long sourceId;
 
     @Column(name = "source_key", insertable = false, updatable = false, length = 220)

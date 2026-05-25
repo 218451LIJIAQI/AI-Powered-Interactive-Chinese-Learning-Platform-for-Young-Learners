@@ -38,7 +38,9 @@
         :aria-label="notificationCount > 0 ? `Notifications — ${notificationCount} unread` : 'Notifications'"
       >
         <IconGlyph name="bell" :size="18" class="topbar-icon-glyph" />
-        <span v-if="notificationCount" class="topbar-notification-badge" aria-hidden="true">{{ notificationCount }}</span>
+        <span v-if="notificationCount" class="topbar-notification-badge" aria-hidden="true">{{
+          notificationCount
+        }}</span>
       </RouterLink>
 
       <button
@@ -107,7 +109,7 @@ const streakResource = useResource(
       : Promise.resolve({ currentStreak: 0, bestStreak: 0, lastLearningDate: null }),
   undefined,
 )
-const streakCount = computed(() => (role.value === 'STUDENT' ? streakResource.data.value?.currentStreak ?? 0 : 0))
+const streakCount = computed(() => (role.value === 'STUDENT' ? (streakResource.data.value?.currentStreak ?? 0) : 0))
 const roleTone = computed(() => {
   if (isGuestCatalog.value) return 'guest'
   if (role.value === 'ADMIN') return 'admin'
@@ -156,7 +158,9 @@ const profilePath = computed(() => {
       return '/student/profile'
   }
 })
-const notificationPath = computed(() => (role.value === 'ADMIN' ? '/admin/settings?section=support' : profilePath.value))
+const notificationPath = computed(() =>
+  role.value === 'ADMIN' ? '/admin/settings?section=support' : profilePath.value,
+)
 const profileLabel = computed(() => {
   if (isGuestCatalog.value) return 'Preview workspace'
   if (role.value === 'ADMIN') return 'Platform owner'
@@ -165,8 +169,10 @@ const profileLabel = computed(() => {
 })
 const contextTitle = computed(() => {
   if (isGuestCatalog.value) return 'Explore lessons before you commit'
-  if (role.value === 'ADMIN') return route.path.includes('/analytics') ? 'Monitor platform signals' : 'Keep operations clear and safe'
-  if (role.value === 'TEACHER') return route.path.includes('/classes') ? 'Run live classes with confidence' : 'Guide each learner with clarity'
+  if (role.value === 'ADMIN')
+    return route.path.includes('/analytics') ? 'Monitor platform signals' : 'Keep operations clear and safe'
+  if (role.value === 'TEACHER')
+    return route.path.includes('/classes') ? 'Run live classes with confidence' : 'Guide each learner with clarity'
   return route.path.includes('/profile') ? 'Celebrate steady progress' : 'Learning dashboard'
 })
 const contextSubtitle = computed(() => {
@@ -196,7 +202,9 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 })
 const dateLabel = computed<string>(() => dateFormatter.format(new Date()))
 
-const notificationCount = computed<number>(() => (showNotifications.value ? unreadResource.data.value?.unreadCount ?? 0 : 0))
+const notificationCount = computed<number>(() =>
+  showNotifications.value ? (unreadResource.data.value?.unreadCount ?? 0) : 0,
+)
 const showSessionAction = computed<boolean>(() => auth.isAuthenticated && !isGuestCatalog.value)
 const signingOut = ref<boolean>(false)
 

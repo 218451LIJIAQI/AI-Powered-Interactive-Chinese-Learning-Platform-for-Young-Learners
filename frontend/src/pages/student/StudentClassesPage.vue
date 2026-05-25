@@ -1,6 +1,10 @@
 <template>
   <div class="page-stack student-classes-page">
-    <DataNotice :using-fallback="liveResource.usingFallback.value" :error="actionError || liveResource.error.value" :success="actionSuccess" />
+    <DataNotice
+      :using-fallback="liveResource.usingFallback.value"
+      :error="actionError || liveResource.error.value"
+      :success="actionSuccess"
+    />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="student-classes-layout">
@@ -35,20 +39,35 @@
                   </div>
 
                   <div class="student-live-actions">
-                    <button class="btn btn-secondary" type="button" @click="openLinkedLesson">View Class Content</button>
+                    <button class="btn btn-secondary" type="button" @click="openLinkedLesson">
+                      View Class Content
+                    </button>
                   </div>
                 </div>
 
                 <div class="student-live-scene">
-                  <PandaIllustration class="student-live-panda" :size="164" outfit="#7d56ff" accent="#f6d056" pose="wave" />
+                  <PandaIllustration
+                    class="student-live-panda"
+                    :size="164"
+                    outfit="#7d56ff"
+                    accent="#f6d056"
+                    pose="wave"
+                  />
                 </div>
               </div>
 
               <div class="student-live-footer">
-                <button class="btn btn-accent student-live-join" type="button" :disabled="liveReadOnly" @click="join(upcomingClass.id)">
+                <button
+                  class="btn btn-accent student-live-join"
+                  type="button"
+                  :disabled="liveReadOnly"
+                  @click="join(upcomingClass.id)"
+                >
                   {{ upcomingClass.canJoin ? 'Join Class' : upcomingClass.canEnrol ? 'Enrol First' : 'Class Locked' }}
                 </button>
-                <button class="student-live-setup" type="button" @click="router.push('/student/profile')">Open Profile</button>
+                <button class="student-live-setup" type="button" @click="router.push('/student/profile')">
+                  Open Profile
+                </button>
               </div>
             </template>
 
@@ -85,7 +104,9 @@
                 message="Teacher details will appear here when a live class includes teacher information."
               />
 
-              <button class="btn btn-secondary btn-block" type="button" @click="router.push('/student/profile')">View Feedback</button>
+              <button class="btn btn-secondary btn-block" type="button" @click="router.push('/student/profile')">
+                View Feedback
+              </button>
             </article>
 
             <article class="panel student-library-card">
@@ -232,7 +253,9 @@ const router = useRouter()
 
 const liveResource = useResource(() => studentApi.liveClasses(), studentLiveClasses)
 
-const liveClasses = computed(() => liveResource.data.value ?? (liveResource.usingFallback.value ? studentLiveClasses : []))
+const liveClasses = computed(
+  () => liveResource.data.value ?? (liveResource.usingFallback.value ? studentLiveClasses : []),
+)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const classBusy = ref(false)
@@ -250,23 +273,22 @@ const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(()
   return 'female'
 })
 
-const teacherInitials = computed(() =>
-  primaryTeacherName.value
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || '?',
+const teacherInitials = computed(
+  () =>
+    primaryTeacherName.value
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || '?',
 )
 
 const classDate = computed(() => new Date(upcomingClass.value?.startTime ?? new Date().toISOString()))
 const upcomingMonth = computed(() =>
   new Intl.DateTimeFormat('en-US', { month: 'short' }).format(classDate.value).toUpperCase(),
 )
-const upcomingDay = computed(() =>
-  new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(classDate.value),
-)
+const upcomingDay = computed(() => new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(classDate.value))
 const upcomingWeekday = computed(() =>
   new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(classDate.value).toUpperCase(),
 )
@@ -392,9 +414,11 @@ function packageCourseId(packageId: number) {
 }
 
 function fallbackLessonIdFromPackage(packageId: number) {
-  return teacherCoursePackages
-    .find((item: CoursePackageResponse) => item.id === packageId && item.contentStatus === 'PUBLISHED')
-    ?.packageItems.find((item) => item.itemType === 'LESSON')?.itemId ?? null
+  return (
+    teacherCoursePackages
+      .find((item: CoursePackageResponse) => item.id === packageId && item.contentStatus === 'PUBLISHED')
+      ?.packageItems.find((item) => item.itemType === 'LESSON')?.itemId ?? null
+  )
 }
 
 async function openPackageLinkedContent(packageId: number) {
@@ -448,14 +472,18 @@ async function openRecordedLesson(video: RecordedLessonRow) {
 async function openLinkedLesson() {
   actionError.value = null
   actionSuccess.value = null
-  const lessonId = upcomingClass.value?.lesson?.lessonId ?? recordedLessonRows.value.find((item) => item.lessonId)?.lessonId
+  const lessonId =
+    upcomingClass.value?.lesson?.lessonId ?? recordedLessonRows.value.find((item) => item.lessonId)?.lessonId
 
   if (lessonId) {
     await router.push({ name: 'student-learn', query: { lessonId: String(lessonId) } })
     return
   }
 
-  const packageId = upcomingClass.value?.coursePackage?.packageId ?? recordedLessonRows.value.find((item) => item.packageId)?.packageId ?? null
+  const packageId =
+    upcomingClass.value?.coursePackage?.packageId ??
+    recordedLessonRows.value.find((item) => item.packageId)?.packageId ??
+    null
 
   if (packageId) {
     await openPackageLinkedContent(packageId)

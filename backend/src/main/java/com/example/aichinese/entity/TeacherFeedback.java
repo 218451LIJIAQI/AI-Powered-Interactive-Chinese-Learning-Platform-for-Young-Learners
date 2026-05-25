@@ -87,20 +87,41 @@ public class TeacherFeedback extends BaseEntity {
      */
     public static final String GRAPH_DETAIL = "TeacherFeedback.detail";
 
+    /**
+     * Author. Mapped {@code updatable = false}: a feedback record always
+     * stays attributed to its original author. Re-targeting authorship
+     * is blocked at the ORM layer so audit trails remain coherent.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "teacher_id", nullable = false)
+    @JoinColumn(name = "teacher_id", nullable = false, updatable = false)
     private TeacherProfile teacher;
 
+    /**
+     * Recipient. Mapped {@code updatable = false}: feedback is
+     * permanently addressed to its original recipient. Sending the same
+     * message to a different student would create a fresh row.
+     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
+    /**
+     * Optional quiz-attempt anchor. Mapped {@code updatable = false}:
+     * the scoped artefact is part of the feedback's identity ("teacher
+     * feedback on this specific attempt"); detaching it would change
+     * the dashboard surface where the feedback shows up.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_attempt_id")
+    @JoinColumn(name = "quiz_attempt_id", updatable = false)
     private QuizAttempt quizAttempt;
 
+    /**
+     * Optional lesson anchor. Same {@code updatable = false} rationale
+     * as {@link #quizAttempt} — the surface where students see the
+     * feedback is fixed at creation time.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "lesson_id")
+    @JoinColumn(name = "lesson_id", updatable = false)
     private Lesson lesson;
 
     @Column(name = "feedback_type", length = 50)

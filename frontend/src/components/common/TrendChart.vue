@@ -17,15 +17,7 @@
       stroke-linecap="round"
       stroke-linejoin="round"
     />
-    <circle
-      v-for="point in points"
-      :key="point.x"
-      :cx="point.x"
-      :cy="point.y"
-      r="4.5"
-      :fill="stroke"
-      opacity="0.92"
-    />
+    <circle v-for="point in points" :key="point.x" :cx="point.x" :cy="point.y" r="4.5" :fill="stroke" opacity="0.92" />
   </svg>
 </template>
 
@@ -84,7 +76,5 @@ const points = computed<ChartPoint[]>(() => {
   })
 })
 
-const polylinePoints = computed<string>(() =>
-  points.value.map((p) => `${p.x},${p.y}`).join(' '),
-)
+const polylinePoints = computed<string>(() => points.value.map((p) => `${p.x},${p.y}`).join(' '))
 </script>

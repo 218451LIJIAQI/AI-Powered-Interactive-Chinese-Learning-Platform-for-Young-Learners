@@ -42,11 +42,23 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Frontend lint
+        run: npm run lint
+
+      - name: Frontend unit tests
+        run: npm run test:unit
+
       - name: Frontend typecheck
         run: npm run typecheck
 
       - name: Frontend production build
         run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Frontend E2E smoke test
+        run: npm run test:e2e
 
   backend:
     name: Backend Test And Package
@@ -67,7 +79,43 @@ jobs:
           cache: maven
 
       - name: Backend tests
-        run: ./mvnw -B test
+        run: bash ./mvnw -B test
+
+      - name: Backend static analysis
+        run: bash ./mvnw -B spotbugs:check
+
+      - name: Backend coverage gate
+        run: bash ./mvnw -B verify
+
+      - name: Export OpenAPI contract
+        run: bash ./mvnw -B -DskipTests -Djacoco.skip=true -DskipOpenApiContract=false verify
 
       - name: Backend package
-        run: ./mvnw -B -DskipTests package
+        run: bash ./mvnw -B -DskipTests package
+
+  dependency-and-image-scan:
+    name: Dependency And Container Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.34.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"

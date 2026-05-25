@@ -35,6 +35,13 @@ import lombok.Setter;
  * <p>{@link #relatedTeacher} attributes the affected teacher (when the
  * action targets teacher-owned content), enabling per-teacher
  * compliance dashboards.</p>
+ *
+ * <p>The audit row is append-only: every domain field is mapped
+ * {@code updatable = false}, so any subsequent {@code save()} on a
+ * managed instance silently drops attempted mutations at flush time.
+ * The legitimate write paths are {@code ContentModerationService}
+ * and {@code AdminContentReviewService#recordModeration}, both of
+ * which insert a fresh row per moderation action and never amend it.</p>
  */
 @Getter
 @Setter
@@ -47,26 +54,26 @@ import lombok.Setter;
 public class ContentModerationRecord extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "admin_user_id")
+    @JoinColumn(name = "admin_user_id", updatable = false)
     private User adminUser;
 
-    @Column(name = "target_type", nullable = false, length = 50)
+    @Column(name = "target_type", nullable = false, updatable = false, length = 50)
     private String targetType;
 
-    @Column(name = "target_id", nullable = false)
+    @Column(name = "target_id", nullable = false, updatable = false)
     private Long targetId;
 
-    @Column(name = "action_taken", nullable = false, length = 100)
+    @Column(name = "action_taken", nullable = false, updatable = false, length = 100)
     private String actionTaken;
 
     @Lob
-    @Column(name = "note", columnDefinition = "LONGTEXT")
+    @Column(name = "note", updatable = false, columnDefinition = "LONGTEXT")
     private String note;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "related_teacher_id")
+    @JoinColumn(name = "related_teacher_id", updatable = false)
     private TeacherProfile relatedTeacher;
 
-    @Column(name = "target_title_snapshot", length = 255)
+    @Column(name = "target_title_snapshot", updatable = false, length = 255)
     private String targetTitleSnapshot;
 }

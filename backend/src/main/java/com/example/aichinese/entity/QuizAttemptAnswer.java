@@ -27,6 +27,14 @@ import lombok.Setter;
  * shows up at most once per attempt, but the constraint is enforced
  * at the service layer (not via a unique index) so the grader can
  * append a corrective answer when a learner re-enters the same quiz.</p>
+ *
+ * <p>{@link #quizAttempt} and {@link #question} are mapped
+ * {@code updatable = false}: an answer row is permanently bound to the
+ * attempt and question it was recorded against. Corrective answers
+ * are expressed as new rows, never as in-place rewrites of existing
+ * ones, so the gradebook history stays auditable. {@link #answerText}
+ * and {@link #correct} stay mutable to leave room for future
+ * re-grading and partial-credit override flows.</p>
  */
 @Getter
 @Setter
@@ -39,11 +47,11 @@ import lombok.Setter;
 public class QuizAttemptAnswer extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "quiz_attempt_id", nullable = false)
+    @JoinColumn(name = "quiz_attempt_id", nullable = false, updatable = false)
     private QuizAttempt quizAttempt;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "question_id", nullable = false)
+    @JoinColumn(name = "question_id", nullable = false, updatable = false)
     private QuizQuestion question;
 
     @Lob

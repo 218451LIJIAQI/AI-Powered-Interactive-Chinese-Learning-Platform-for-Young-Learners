@@ -16,6 +16,10 @@ import com.example.aichinese.config.UploadProperties;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
+import com.example.aichinese.service.storage.StorageProvider;
+import com.example.aichinese.service.storage.StorageReadRequest;
+import com.example.aichinese.service.storage.StorageWriteRequest;
+import com.example.aichinese.service.storage.StoredObject;
 
 /**
  * Persists teacher-uploaded lesson videos with the same defence-in-depth
@@ -42,10 +46,15 @@ public class RecordedVideoStorageService {
 
     private final UploadedFileRepository uploadedFileRepository;
     private final UploadProperties uploadProperties;
+    private final StorageProvider storageProvider;
 
-    public RecordedVideoStorageService(UploadedFileRepository uploadedFileRepository, UploadProperties uploadProperties) {
+    public RecordedVideoStorageService(
+            UploadedFileRepository uploadedFileRepository,
+            UploadProperties uploadProperties,
+            StorageProvider storageProvider) {
         this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
         this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
+        this.storageProvider = Objects.requireNonNull(storageProvider, "storageProvider");
     }
 
     @Transactional
@@ -55,18 +64,19 @@ public class RecordedVideoStorageService {
         String extension = validated[1];
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
 
-        Path targetPath = UploadStorageSupport.storeMultipartFile(
+        StoredObject storedObject = storageProvider.store(
                 multipartFile,
-                resolveBaseDirectory(),
-                storedFileName,
-                "Invalid upload target path.",
-                "Recorded video could not be stored.");
+                new StorageWriteRequest(
+                        resolveBaseDirectory(),
+                        storedFileName,
+                        "Invalid upload target path.",
+                        "Recorded video could not be stored."));
 
         UploadedFile uploadedFile = new UploadedFile();
         uploadedFile.setOwnerUser(ownerUser);
         uploadedFile.setFileName(originalFileName);
         uploadedFile.setStoredFileName(storedFileName);
-        uploadedFile.setFilePath(targetPath.toString());
+        uploadedFile.setFilePath(storedObject.location().toString());
         uploadedFile.setContentType(UploadStorageSupport.normalizeContentType(multipartFile.getContentType()));
         uploadedFile.setFileSize(multipartFile.getSize());
         uploadedFile.setAccessLevel("PRIVATE");
@@ -75,10 +85,10 @@ public class RecordedVideoStorageService {
     }
 
     public StoredFileDownload loadAsDownload(UploadedFile uploadedFile) {
-        return UploadStorageSupport.loadManagedFile(
+        return storageProvider.load(new StorageReadRequest(
                 uploadProperties.getRecordedVideoDirectory(),
                 uploadedFile,
-                "Requested video could not be found.");
+                "Requested video could not be found."));
     }
 
     /**

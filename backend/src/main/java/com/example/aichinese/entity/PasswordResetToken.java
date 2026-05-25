@@ -41,27 +41,46 @@ import lombok.Setter;
  *
  * <p>{@link #expiresAt} is checked at redemption time so a token
  * leaked from email after its window closes is still useless.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ *
+ * <p>The only mutable column is {@link #usedAt}: the redemption flow
+ * stamps it once with the current time to claim the single-use
+ * semantics. Every other domain field is mapped {@code updatable = false}
+ * — the {@link #tokenHash}, {@link #expiresAt} and target {@link #user}
+ * cannot be silently rewritten by application-layer code, so a
+ * compromised admin endpoint cannot retroactively turn a stale token
+ * back into a valid one. {@link #activeTokenUserId} is a
+ * database-managed generated column (mapped
+ * {@code insertable = false, updatable = false}).</p>
+ *
+ * <p>Uniqueness of the token hash is enforced by a single named
+ * constraint ({@code idx_password_reset_tokens_token}) declared via
+ * {@link UniqueConstraint} on the {@link Table @Table} annotation,
+ * matching the {@code alter table password_reset_tokens add constraint
+ * idx_password_reset_tokens_token unique (token)} statement in the
+ * Flyway baseline. The historical {@code idx_} prefix is preserved.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
 @Table(name = "password_reset_tokens", indexes = {
-        @Index(name = "idx_password_reset_tokens_token", columnList = "token", unique = true),
         @Index(name = "idx_password_reset_tokens_user_id", columnList = "user_id")
 }, uniqueConstraints = {
+        @UniqueConstraint(name = "idx_password_reset_tokens_token", columnNames = "token"),
         @UniqueConstraint(name = "uk_password_reset_tokens_active_user", columnNames = { "active_token_user_id" })
 })
 public class PasswordResetToken extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
-    @Column(name = "token", nullable = false, unique = true, length = 128)
+    @Column(name = "token", nullable = false, updatable = false, length = 128)
     private String tokenHash;
 
-    @Column(name = "expires_at", nullable = false)
+    @Column(name = "expires_at", nullable = false, updatable = false)
     private LocalDateTime expiresAt;
 
     @Column(name = "used_at")

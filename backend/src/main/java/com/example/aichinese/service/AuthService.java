@@ -19,8 +19,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,9 +30,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.dto.auth.AuthResponse;
+import com.example.aichinese.dto.auth.AuthSessionResponse;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
 import com.example.aichinese.dto.auth.ForgotPasswordRequest;
 import com.example.aichinese.dto.auth.LoginRequest;
+import com.example.aichinese.dto.auth.RefreshSessionResponse;
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
@@ -95,7 +95,6 @@ import com.example.aichinese.util.TextUtils;
 @Service
 public class AuthService {
 
-    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     /** Reset tokens are short-lived to limit the window during which a leaked link can be redeemed. */
@@ -109,9 +108,10 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
     private final LoginAttemptLimiter loginAttemptLimiter;
     private final AuditLogService auditLogService;
-    private final EmailService emailService;
+    private final TransactionalEmailDispatcher transactionalEmailDispatcher;
     private final EmailProperties emailProperties;
 
     public AuthService(
@@ -123,9 +123,10 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
             JwtService jwtService,
+            RefreshTokenService refreshTokenService,
             LoginAttemptLimiter loginAttemptLimiter,
             AuditLogService auditLogService,
-            EmailService emailService,
+            TransactionalEmailDispatcher transactionalEmailDispatcher,
             EmailProperties emailProperties) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository");
@@ -135,9 +136,10 @@ public class AuthService {
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder, "passwordEncoder");
         this.authenticationManager = Objects.requireNonNull(authenticationManager, "authenticationManager");
         this.jwtService = Objects.requireNonNull(jwtService, "jwtService");
+        this.refreshTokenService = Objects.requireNonNull(refreshTokenService, "refreshTokenService");
         this.loginAttemptLimiter = Objects.requireNonNull(loginAttemptLimiter, "loginAttemptLimiter");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
-        this.emailService = Objects.requireNonNull(emailService, "emailService");
+        this.transactionalEmailDispatcher = Objects.requireNonNull(transactionalEmailDispatcher, "transactionalEmailDispatcher");
         this.emailProperties = Objects.requireNonNull(emailProperties, "emailProperties");
     }
 
@@ -198,7 +200,7 @@ public class AuthService {
      * brute-force rate limiter so a misbehaving network does not lock out
      * every user account behind the same gateway.
      */
-    public AuthResponse login(LoginRequest request, String clientIp) {
+    public AuthSessionResponse login(LoginRequest request, String clientIp, String userAgent) {
         String email = normalizeEmail(request.email());
 
         if (!loginAttemptLimiter.isAllowed(email, clientIp)) {
@@ -232,6 +234,22 @@ public class AuthService {
 
         loginAttemptLimiter.recordSuccess(email, clientIp);
 
+        AuthResponse authResponse = toAuthResponse(user, teacherStatus);
+        return new AuthSessionResponse(
+                authResponse,
+                refreshTokenService.issue(user, clientIp, userAgent));
+    }
+
+    public RefreshSessionResponse refreshSession(String rawRefreshToken, String clientIp, String userAgent) {
+        RefreshTokenService.RefreshSession refreshed = refreshTokenService.rotate(rawRefreshToken, clientIp, userAgent);
+        User user = refreshed.user();
+        TeacherStatus teacherStatus = teacherProfileRepository.findByUserId(user.getId())
+                .map(TeacherProfile::getTeacherStatus)
+                .orElse(null);
+        return new RefreshSessionResponse(toAuthResponse(user, teacherStatus), refreshed.refreshToken());
+    }
+
+    private AuthResponse toAuthResponse(User user, TeacherStatus teacherStatus) {
         String token = jwtService.generateToken(user);
         return new AuthResponse(token, new AuthResponse.UserSummary(
                 user.getId(),
@@ -276,6 +294,7 @@ public class AuthService {
         User user = requireCurrentUser(currentUser);
         rotateSessionVersion(user);
         userRepository.save(user);
+        refreshTokenService.revokeActiveTokensForUser(user.getId());
 
         auditLogService.safeRecord(
                 user,
@@ -292,7 +311,7 @@ public class AuthService {
      * <p>The public controller response is intentionally the same whether or not the email is
      * registered, so this method does not surface enumeration information through exceptions.
      * If the email belongs to a real account we invalidate any still-active reset tokens, persist
-     * a fresh one with a 60-minute TTL, and ask {@link EmailService} to deliver the link. When
+     * a fresh one with a 60-minute TTL, and enqueue delivery after this transaction commits. When
      * SMTP is not configured the {@code NoOpEmailService} simply logs the attempt so that local
      * development can still demonstrate the flow.</p>
      */
@@ -322,13 +341,7 @@ public class AuthService {
         String resetLink = emailProperties.resolvePasswordResetBaseUrl()
                 + "?token=" + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);
 
-        try {
-            emailService.sendPasswordResetEmail(user, resetLink, rawToken);
-        } catch (Exception exception) {
-            // Email delivery failure must not leak through to the caller because that would
-            // re-introduce the enumeration oracle this endpoint is designed to suppress.
-            log.warn("Password reset email could not be delivered for user id {}.", user.getId(), exception);
-        }
+        transactionalEmailDispatcher.enqueuePasswordReset(user, resetLink, rawToken);
 
         auditLogService.safeRecord(
                 user,
@@ -377,6 +390,7 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         rotateSessionVersion(user);
         userRepository.save(user);
+        refreshTokenService.revokeActiveTokensForUser(user.getId());
 
         auditLogService.safeRecord(
                 user,

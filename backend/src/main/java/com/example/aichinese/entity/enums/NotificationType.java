@@ -75,6 +75,75 @@ public enum NotificationType {
     public static final Set<NotificationType> LEARNER_PEDAGOGICAL = Collections.unmodifiableSet(EnumSet.of(
             TEACHER_FEEDBACK, QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, LIVE_CLASS_REMINDER));
 
+    /*
+     * Startup-time invariant guard.  This enum has *three* category sets
+     * (commerce / admin-facing / learner-pedagogical) plus exactly one
+     * residual constant ({@link #SYSTEM}) that intentionally belongs to
+     * none of them.  Two invariants must hold:
+     *
+     *   1. The three category sets are pairwise disjoint.  Otherwise
+     *      isCommerce() / isAdminFacing() / isLearnerPedagogical()
+     *      would no longer be mutually exclusive predicates and a
+     *      single notification could be routed to multiple inboxes /
+     *      double-counted in analytics dashboards.
+     *
+     *   2. Their union equals {@code ALL \ {SYSTEM}}.  Otherwise a
+     *      newly-added unclassified constant would silently produce
+     *      {@code false} from every predicate and "disappear" from
+     *      every dashboard's category roll-up.
+     *
+     * Both checks run exactly once at class load and fail fast with a
+     * clear AssertionError naming the offending constants — a future
+     * contributor sees the problem before any tests run.
+     */
+    static {
+        EnumSet<NotificationType> commerce = EnumSet.copyOf(COMMERCE);
+        EnumSet<NotificationType> adminFacing = EnumSet.copyOf(ADMIN_FACING);
+        EnumSet<NotificationType> learnerPedagogical = EnumSet.copyOf(LEARNER_PEDAGOGICAL);
+
+        // Pairwise disjointness.
+        EnumSet<NotificationType> commerceAdmin = EnumSet.copyOf(commerce);
+        commerceAdmin.retainAll(adminFacing);
+        if (!commerceAdmin.isEmpty()) {
+            throw new AssertionError(
+                    "NotificationType COMMERCE and ADMIN_FACING sets must be disjoint; overlap: "
+                            + commerceAdmin);
+        }
+        EnumSet<NotificationType> commerceLearner = EnumSet.copyOf(commerce);
+        commerceLearner.retainAll(learnerPedagogical);
+        if (!commerceLearner.isEmpty()) {
+            throw new AssertionError(
+                    "NotificationType COMMERCE and LEARNER_PEDAGOGICAL sets must be disjoint; overlap: "
+                            + commerceLearner);
+        }
+        EnumSet<NotificationType> adminLearner = EnumSet.copyOf(adminFacing);
+        adminLearner.retainAll(learnerPedagogical);
+        if (!adminLearner.isEmpty()) {
+            throw new AssertionError(
+                    "NotificationType ADMIN_FACING and LEARNER_PEDAGOGICAL sets must be disjoint; overlap: "
+                            + adminLearner);
+        }
+
+        // Coverage: union of categories + {SYSTEM} must equal the full enum.
+        EnumSet<NotificationType> classified = EnumSet.copyOf(commerce);
+        classified.addAll(adminFacing);
+        classified.addAll(learnerPedagogical);
+        classified.add(SYSTEM);
+        if (!classified.equals(EnumSet.allOf(NotificationType.class))) {
+            EnumSet<NotificationType> missing = EnumSet.complementOf(classified);
+            throw new AssertionError(
+                    "NotificationType is missing a category classification (and is not SYSTEM); "
+                            + "uncovered: " + missing);
+        }
+        // SYSTEM specifically must NOT appear in any category set, since it
+        // is documented as the residual fallback used by fromValueOrSystem().
+        if (commerce.contains(SYSTEM) || adminFacing.contains(SYSTEM) || learnerPedagogical.contains(SYSTEM)) {
+            throw new AssertionError(
+                    "NotificationType SYSTEM is the residual fallback and must not be classified into "
+                            + "COMMERCE / ADMIN_FACING / LEARNER_PEDAGOGICAL.");
+        }
+    }
+
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, NotificationType> LOOKUP =
             EnumLookups.indexByName(NotificationType.class);

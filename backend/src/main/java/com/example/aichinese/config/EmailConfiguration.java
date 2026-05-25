@@ -5,7 +5,6 @@ import java.net.URISyntaxException;
 import java.util.Locale;
 
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -13,18 +12,16 @@ import org.springframework.core.env.Profiles;
 import org.springframework.util.StringUtils;
 
 /**
- * Conditional SMTP / outbound-email validation, only active when
- * {@code app.email.enabled=true}.
+ * SMTP / outbound-email startup validation.
  *
  * <p>Registers an {@link InitializingBean} that runs after configuration
- * binding but before any application bean opens an SMTP connection,
- * verifying the {@code spring.mail.*} properties match what the email
- * service needs. Failures throw {@link IllegalStateException} so a
- * mis-configured email pipeline cannot reach production unnoticed.</p>
+ * binding but before any application bean opens an SMTP connection. Non-production
+ * environments may intentionally use the no-op sender; production must enable
+ * SMTP because password reset otherwise issues an unusable reset flow.</p>
  *
  * <p>Production-specific gates additionally require the
  * {@code app.email.password-reset-base-url} to be HTTPS and target a
- * non-loopback host — preventing a stray {@code localhost} URL in a
+ * non-loopback host - preventing a stray {@code localhost} URL in a
  * password-reset email from ever being sent to a real user.</p>
  *
  * <p>{@code proxyBeanMethods = false} is intentional: this class
@@ -35,9 +32,15 @@ import org.springframework.util.StringUtils;
 public class EmailConfiguration {
 
     @Bean
-    @ConditionalOnProperty(prefix = "app.email", name = "enabled", havingValue = "true")
     InitializingBean emailConfigurationValidator(Environment environment, EmailProperties emailProperties) {
-        return () -> validateSmtpConfiguration(environment, emailProperties);
+        return () -> {
+            if (isProductionProfileActive(environment) && !emailProperties.enabled()) {
+                throw new IllegalStateException("SMTP_ENABLED must be true when the prod profile is active.");
+            }
+            if (emailProperties.enabled()) {
+                validateSmtpConfiguration(environment, emailProperties);
+            }
+        };
     }
 
     private static void validateSmtpConfiguration(Environment environment, EmailProperties emailProperties) {

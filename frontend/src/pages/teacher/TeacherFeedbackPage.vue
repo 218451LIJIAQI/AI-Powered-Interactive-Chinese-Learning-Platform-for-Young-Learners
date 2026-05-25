@@ -6,7 +6,12 @@
       icon="help"
     />
 
-    <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" :detail="feedbackNoticeDetail" />
+    <DataNotice
+      :using-fallback="usingFallback"
+      :error="actionError || pageError"
+      :success="actionSuccess"
+      :detail="feedbackNoticeDetail"
+    />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <div class="teacher-feedback-tabs">
@@ -30,7 +35,11 @@
             </div>
             <div class="row teacher-feedback-queue-actions">
               <span class="teacher-feedback-queue-count">{{ filteredFeedbackItems.length }}</span>
-              <select v-model="queueFilter" class="select teacher-feedback-filter" aria-label="Filter feedback by context">
+              <select
+                v-model="queueFilter"
+                class="select teacher-feedback-filter"
+                aria-label="Filter feedback by context"
+              >
                 <option value="ALL">All Contexts</option>
                 <option value="QUIZ">Quiz</option>
                 <option value="LESSON">Lesson</option>
@@ -66,11 +75,7 @@
           </div>
 
           <div v-else-if="activeTab === 'History'">
-            <StatePanel
-              icon="help"
-              title="No feedback found"
-              message="No saved feedback matches the current filter."
-            />
+            <StatePanel icon="help" title="No feedback found" message="No saved feedback matches the current filter." />
           </div>
 
           <div v-else class="teacher-feedback-create-help">
@@ -104,7 +109,9 @@
                 </div>
                 <div class="teacher-feedback-detail-side">
                   <span>Saved: {{ selectedFeedbackItem.createdExact }}</span>
-                  <span class="teacher-feedback-priority" :class="`is-${selectedFeedbackItem.priorityTone}`">{{ selectedFeedbackItem.priority }}</span>
+                  <span class="teacher-feedback-priority" :class="`is-${selectedFeedbackItem.priorityTone}`">{{
+                    selectedFeedbackItem.priority
+                  }}</span>
                 </div>
               </div>
 
@@ -153,10 +160,16 @@
                 <article class="teacher-feedback-detail-panel">
                   <div class="row-between teacher-feedback-card-head">
                     <strong>Linked Student Snapshot</strong>
-                    <button class="student-link-button" type="button" @click="router.push('/teacher/students')">View Students</button>
+                    <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+                      View Students
+                    </button>
                   </div>
                   <div class="teacher-feedback-progress-list">
-                    <article v-for="metric in progressMetrics" :key="metric.label" class="teacher-feedback-progress-item">
+                    <article
+                      v-for="metric in progressMetrics"
+                      :key="metric.label"
+                      class="teacher-feedback-progress-item"
+                    >
                       <div class="teacher-feedback-progress-ring" :style="{ '--progress': metric.value }">
                         <strong>{{ metric.value }}%</strong>
                       </div>
@@ -188,7 +201,12 @@
               <div class="teacher-feedback-create-grid">
                 <div class="field">
                   <label for="teacher-feedback-student">Student</label>
-                  <select id="teacher-feedback-student" v-model.number="commentForm.studentId" class="select" :disabled="feedbackFormDisabled">
+                  <select
+                    id="teacher-feedback-student"
+                    v-model.number="commentForm.studentId"
+                    class="select"
+                    :disabled="feedbackFormDisabled"
+                  >
                     <option :value="0">Select a linked student</option>
                     <option v-for="option in studentOptions" :key="option.studentId" :value="option.studentId">
                       {{ option.label }}
@@ -198,7 +216,12 @@
 
                 <div class="field">
                   <label for="teacher-feedback-type">Feedback Type</label>
-                  <select id="teacher-feedback-type" v-model="commentForm.feedbackType" class="select" :disabled="feedbackFormDisabled">
+                  <select
+                    id="teacher-feedback-type"
+                    v-model="commentForm.feedbackType"
+                    class="select"
+                    :disabled="feedbackFormDisabled"
+                  >
                     <option value="GENERAL">General</option>
                     <option value="PROGRESS">Progress</option>
                     <option value="ENCOURAGING">Encouraging</option>
@@ -209,7 +232,12 @@
 
                 <div class="field">
                   <label for="teacher-feedback-lesson">Lesson (optional)</label>
-                  <select id="teacher-feedback-lesson" v-model.number="commentForm.lessonId" class="select" :disabled="feedbackFormDisabled">
+                  <select
+                    id="teacher-feedback-lesson"
+                    v-model.number="commentForm.lessonId"
+                    class="select"
+                    :disabled="feedbackFormDisabled"
+                  >
                     <option :value="0">No lesson context</option>
                     <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">
                       {{ lesson.title }}
@@ -219,7 +247,12 @@
 
                 <div class="field">
                   <label for="teacher-feedback-quiz">Quiz (optional)</label>
-                  <select id="teacher-feedback-quiz" v-model.number="selectedQuizId" class="select" :disabled="feedbackFormDisabled || !commentForm.lessonId || loadingQuizzes">
+                  <select
+                    id="teacher-feedback-quiz"
+                    v-model.number="selectedQuizId"
+                    class="select"
+                    :disabled="feedbackFormDisabled || !commentForm.lessonId || loadingQuizzes"
+                  >
                     <option :value="0">{{ loadingQuizzes ? 'Loading quizzes...' : 'No quiz context' }}</option>
                     <option v-for="quiz in quizOptions" :key="quiz.id" :value="quiz.id">
                       {{ quiz.title }}
@@ -229,10 +262,18 @@
 
                 <div class="field">
                   <label for="teacher-feedback-quiz-attempt">Quiz Attempt (optional)</label>
-                  <select id="teacher-feedback-quiz-attempt" v-model.number="commentForm.quizAttemptId" class="select" :disabled="feedbackFormDisabled || !selectedQuizId || loadingQuizAttempts">
-                    <option :value="0">{{ loadingQuizAttempts ? 'Loading attempts...' : 'No quiz attempt selected' }}</option>
+                  <select
+                    id="teacher-feedback-quiz-attempt"
+                    v-model.number="commentForm.quizAttemptId"
+                    class="select"
+                    :disabled="feedbackFormDisabled || !selectedQuizId || loadingQuizAttempts"
+                  >
+                    <option :value="0">
+                      {{ loadingQuizAttempts ? 'Loading attempts...' : 'No quiz attempt selected' }}
+                    </option>
                     <option v-for="attempt in quizAttemptOptions" :key="attempt.attemptId" :value="attempt.attemptId">
-                      {{ attempt.studentName }} · {{ attempt.score }}/{{ attempt.maxScore }} · {{ formatDateTime(attempt.submittedAt) }}
+                      {{ attempt.studentName }} · {{ attempt.score }}/{{ attempt.maxScore }} ·
+                      {{ formatDateTime(attempt.submittedAt) }}
                     </option>
                   </select>
                 </div>
@@ -246,7 +287,13 @@
                 <strong>{{ activeTab === 'History' ? 'Edit Message' : 'Teacher Comment' }}</strong>
               </div>
 
-              <textarea v-model="commentForm.message" class="textarea teacher-feedback-textarea" aria-label="Teacher feedback message" maxlength="2000" :disabled="feedbackFormDisabled" />
+              <textarea
+                v-model="commentForm.message"
+                class="textarea teacher-feedback-textarea"
+                aria-label="Teacher feedback message"
+                maxlength="2000"
+                :disabled="feedbackFormDisabled"
+              />
 
               <div class="teacher-feedback-toolbar">
                 <span>Plain text</span>
@@ -261,14 +308,26 @@
                   <strong>Draft Guidance</strong>
                   <p>Use the suggestion as a starting point, then send the final version yourself.</p>
                 </div>
-                <button class="student-link-button" type="button" :disabled="feedbackFormDisabled" @click="regenerateSuggestion">Regenerate</button>
+                <button
+                  class="student-link-button"
+                  type="button"
+                  :disabled="feedbackFormDisabled"
+                  @click="regenerateSuggestion"
+                >
+                  Regenerate
+                </button>
               </div>
 
               <div class="teacher-feedback-draft-box">
                 <p>{{ draftGuidance }}</p>
               </div>
 
-              <button class="teacher-outline-button teacher-feedback-use-draft" type="button" :disabled="feedbackFormDisabled" @click="useSuggestedDraft">
+              <button
+                class="teacher-outline-button teacher-feedback-use-draft"
+                type="button"
+                :disabled="feedbackFormDisabled"
+                @click="useSuggestedDraft"
+              >
                 Use this guidance
               </button>
             </article>
@@ -279,8 +338,21 @@
               </div>
 
               <div class="teacher-feedback-actions-stack">
-                <button class="btn btn-primary btn-block" type="button" :disabled="feedbackReadOnly || submittingCreate || submittingUpdate" @click="submitFeedback">
-                  {{ isEditingExistingFeedback ? (submittingUpdate ? 'Saving...' : 'Save Feedback') : (submittingCreate ? 'Sending...' : 'Send Feedback') }}
+                <button
+                  class="btn btn-primary btn-block"
+                  type="button"
+                  :disabled="feedbackReadOnly || submittingCreate || submittingUpdate"
+                  @click="submitFeedback"
+                >
+                  {{
+                    isEditingExistingFeedback
+                      ? submittingUpdate
+                        ? 'Saving...'
+                        : 'Save Feedback'
+                      : submittingCreate
+                        ? 'Sending...'
+                        : 'Send Feedback'
+                  }}
                 </button>
                 <button
                   class="teacher-outline-button teacher-feedback-action-alt"
@@ -301,7 +373,8 @@
               </div>
 
               <small class="teacher-feedback-actions-note">
-                Saved feedback stays editable in history, and optional lesson or quiz context is attached from live teacher content.
+                Saved feedback stays editable in history, and optional lesson or quiz context is attached from live
+                teacher content.
               </small>
             </article>
           </section>
@@ -340,7 +413,13 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { useTeacherAccess } from '@/composables/useTeacherAccess'
-import { teacherFeedback, teacherLessons, teacherQuizAttempts, teacherQuizzes, teacherStudentSummaries } from '@/demo/data'
+import {
+  teacherFeedback,
+  teacherLessons,
+  teacherQuizAttempts,
+  teacherQuizzes,
+  teacherStudentSummaries,
+} from '@/demo/data'
 import type {
   LessonResponse,
   TeacherFeedbackResponse,
@@ -416,8 +495,12 @@ const actionSuccess = ref<string | null>(null)
 const quizzes = ref<TeacherQuizResponse[]>([])
 const quizAttempts = ref<TeacherQuizAttemptSummaryResponse[]>([])
 
-const feedback = computed<TeacherFeedbackResponse[]>(() => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []))
-const lessons = computed<LessonResponse[]>(() => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []))
+const feedback = computed<TeacherFeedbackResponse[]>(
+  () => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []),
+)
+const lessons = computed<LessonResponse[]>(
+  () => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []),
+)
 const studentOptions = computed<StudentOption[]>(() =>
   (studentsResource.data.value ?? []).map((item: TeacherStudentSummaryResponse, index: number) => ({
     ...item,
@@ -426,16 +509,25 @@ const studentOptions = computed<StudentOption[]>(() =>
     meta: `${item.currentLevel?.trim() || 'Level not set'} • ${item.email}`,
   })),
 )
-const lessonOptions = computed<LessonResponse[]>(() => lessons.value.filter((item: LessonResponse) => item.contentStatus !== 'ARCHIVED'))
+const lessonOptions = computed<LessonResponse[]>(() =>
+  lessons.value.filter((item: LessonResponse) => item.contentStatus !== 'ARCHIVED'),
+)
 const quizOptions = computed<TeacherQuizResponse[]>(() => quizzes.value)
 const quizAttemptOptions = computed<TeacherQuizAttemptSummaryResponse[]>(() =>
-  quizAttempts.value.filter((item: TeacherQuizAttemptSummaryResponse) => !commentForm.studentId || item.studentId === commentForm.studentId),
+  quizAttempts.value.filter(
+    (item: TeacherQuizAttemptSummaryResponse) => !commentForm.studentId || item.studentId === commentForm.studentId,
+  ),
 )
 
-const pageLoading = computed(() => feedbackResource.loading.value || studentsResource.loading.value || lessonsResource.loading.value)
-const pageError = computed(() => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value)
+const pageLoading = computed(
+  () => feedbackResource.loading.value || studentsResource.loading.value || lessonsResource.loading.value,
+)
+const pageError = computed(
+  () => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value,
+)
 const usingFallback = computed(
-  () => feedbackResource.usingFallback.value || studentsResource.usingFallback.value || lessonsResource.usingFallback.value,
+  () =>
+    feedbackResource.usingFallback.value || studentsResource.usingFallback.value || lessonsResource.usingFallback.value,
 )
 const feedbackReadOnly = computed(() => teacherApprovalLocked.value || usingFallback.value)
 const feedbackFormDisabled = computed(() => feedbackReadOnly.value || submittingCreate.value || submittingUpdate.value)
@@ -454,7 +546,10 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
     const linkedStudent = studentOptions.value.find((student: StudentOption) => student.studentId === item.studentId)
     const category: FeedbackQueueItem['category'] =
       item.quizAttemptId != null ? 'QUIZ' : item.lessonId != null ? 'LESSON' : 'GENERAL'
-    const quizAverage = linkedStudent?.quizAveragePercent == null ? 'No quiz data' : `${Math.round(linkedStudent.quizAveragePercent)}% quiz average`
+    const quizAverage =
+      linkedStudent?.quizAveragePercent == null
+        ? 'No quiz data'
+        : `${Math.round(linkedStudent.quizAveragePercent)}% quiz average`
     const progress = linkedStudent ? `${linkedStudent.progressPercent}% progress` : 'Progress unavailable'
 
     return {
@@ -463,15 +558,15 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
       studentName: item.studentName,
       studentMeta: linkedStudent?.meta || 'Linked learner',
       title: item.quizTitle || item.lessonTitle || formatTeacherFeedbackType(item.feedbackType),
-      contextLine:
-        item.quizTitle
-          ? `Quiz attempt ${item.quizAttemptId ?? '--'}`
-          : item.lessonTitle
-            ? `Lesson ${item.lessonId ?? '--'}`
-            : 'General teacher feedback',
+      contextLine: item.quizTitle
+        ? `Quiz attempt ${item.quizAttemptId ?? '--'}`
+        : item.lessonTitle
+          ? `Lesson ${item.lessonId ?? '--'}`
+          : 'General teacher feedback',
       message: item.message,
       typeLabel: category === 'QUIZ' ? 'Quiz' : category === 'LESSON' ? 'Lesson' : 'General',
-      typeDisplay: category === 'QUIZ' ? 'Quiz Feedback' : category === 'LESSON' ? 'Lesson Feedback' : 'General Feedback',
+      typeDisplay:
+        category === 'QUIZ' ? 'Quiz Feedback' : category === 'LESSON' ? 'Lesson Feedback' : 'General Feedback',
       feedbackTypeLabel: formatTeacherFeedbackType(item.feedbackType),
       createdLabel: formatDateTime(item.createdAt),
       createdExact: formatDateTime(item.createdAt),
@@ -488,16 +583,23 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
 )
 
 const filteredFeedbackItems = computed(() =>
-  feedbackItems.value.filter((item: FeedbackQueueItem) => (queueFilter.value === 'ALL' ? true : item.category === queueFilter.value)),
+  feedbackItems.value.filter((item: FeedbackQueueItem) =>
+    queueFilter.value === 'ALL' ? true : item.category === queueFilter.value,
+  ),
 )
 
 const selectedFeedbackItem = computed<FeedbackQueueItem | null>(
-  () => filteredFeedbackItems.value.find((item: FeedbackQueueItem) => item.id === selectedFeedbackId.value) ?? filteredFeedbackItems.value[0] ?? null,
+  () =>
+    filteredFeedbackItems.value.find((item: FeedbackQueueItem) => item.id === selectedFeedbackId.value) ??
+    filteredFeedbackItems.value[0] ??
+    null,
 )
 const selectedExistingFeedback = computed<TeacherFeedbackResponse | null>(
   () => feedback.value.find((item: TeacherFeedbackResponse) => item.id === selectedFeedbackId.value) ?? null,
 )
-const isEditingExistingFeedback = computed(() => activeTab.value === 'History' && selectedExistingFeedback.value != null)
+const isEditingExistingFeedback = computed(
+  () => activeTab.value === 'History' && selectedExistingFeedback.value != null,
+)
 const selectedStudentOption = computed<StudentOption | null>(
   () => studentOptions.value.find((item: StudentOption) => item.studentId === commentForm.studentId) ?? null,
 )
@@ -530,12 +632,15 @@ const progressMetrics = computed(() => {
 })
 
 const draftGuidance = computed(() => {
-  const student = selectedStudentOption.value?.label.split(' ')[0]
-    ?? selectedFeedbackItem.value?.studentName.split(' ')[0]
-    ?? 'learner'
-  const weakest = selectedStudentOption.value?.weakAreas[0]
-    ?? studentOptions.value.find((item: StudentOption) => item.studentId === selectedFeedbackItem.value?.studentId)?.weakAreas[0]
-    ?? 'the next practice target'
+  const student =
+    selectedStudentOption.value?.label.split(' ')[0] ??
+    selectedFeedbackItem.value?.studentName.split(' ')[0] ??
+    'learner'
+  const weakest =
+    selectedStudentOption.value?.weakAreas[0] ??
+    studentOptions.value.find((item: StudentOption) => item.studentId === selectedFeedbackItem.value?.studentId)
+      ?.weakAreas[0] ??
+    'the next practice target'
 
   const variants = [
     `Start with one thing ${student} did well, then give one practical step for ${weakest.toLowerCase()}.`,
@@ -606,7 +711,12 @@ watch(
 watch(
   [() => commentForm.studentId, quizAttemptOptions],
   () => {
-    if (commentForm.quizAttemptId && !quizAttemptOptions.value.some((item: TeacherQuizAttemptSummaryResponse) => item.attemptId === commentForm.quizAttemptId)) {
+    if (
+      commentForm.quizAttemptId &&
+      !quizAttemptOptions.value.some(
+        (item: TeacherQuizAttemptSummaryResponse) => item.attemptId === commentForm.quizAttemptId,
+      )
+    ) {
       commentForm.quizAttemptId = 0
     }
   },
@@ -640,9 +750,7 @@ async function loadQuizAttempts(quizId: number) {
 
   loadingQuizAttempts.value = true
   try {
-    quizAttempts.value = usingFallback.value
-      ? teacherQuizAttempts
-      : await teacherApi.quizAttempts(quizId)
+    quizAttempts.value = usingFallback.value ? teacherQuizAttempts : await teacherApi.quizAttempts(quizId)
   } catch (reason) {
     quizAttempts.value = []
     actionError.value = resolveApiError(reason, 'Unable to load quiz attempts.')
@@ -702,7 +810,8 @@ function useSuggestedDraft() {
 
 function prepareRetryMessage() {
   commentForm.feedbackType = 'CORRECTIVE'
-  commentForm.message = 'Please review the key pattern once more and try again. You are close, and one careful retry will help.'
+  commentForm.message =
+    'Please review the key pattern once more and try again. You are close, and one careful retry will help.'
   actionError.value = null
   actionSuccess.value = 'Retry note drafted for review.'
 }

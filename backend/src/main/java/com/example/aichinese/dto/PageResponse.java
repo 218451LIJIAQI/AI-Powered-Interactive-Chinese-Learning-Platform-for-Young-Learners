@@ -41,11 +41,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  *       defensively copied via {@link List#copyOf(java.util.Collection)
  *       List.copyOf} so a caller mutating the original list afterwards
  *       cannot affect the already-serialised payload.</li>
- *   <li>{@link #page}, {@link #size}, {@link #totalItems} and
- *       {@link #totalPages} are clamped to be non-negative; a programming
- *       error or malformed deserialisation that yields a negative value
- *       is silently normalised so the wire format never exposes
- *       impossible counts to the frontend.</li>
+ *   <li>{@link #page}, {@link #size} and {@link #totalItems} are
+ *       clamped to be non-negative; a programming error or malformed
+ *       deserialisation that yields a negative value is silently
+ *       normalised so the wire format never exposes impossible
+ *       counts to the frontend. {@link #totalPages} is always
+ *       re-derived from the canonical {@link #totalItems} and
+ *       {@link #size} values.</li>
  * </ol>
  *
  * <h2>Thread safety</h2>
@@ -91,16 +93,16 @@ public record PageResponse<T>(
         page = Math.max(page, 0);
         size = Math.max(size, 0);
         totalItems = Math.max(totalItems, 0L);
-        totalPages = Math.max(totalPages, 0);
+        totalPages = computeTotalPages(totalItems, size);
     }
 
     /**
      * Build a page response from a Spring Data {@link Page} that has
-     * already been mapped to the response type. Spring Data computes
-     * {@code totalElements} and {@code totalPages} authoritatively, so
-     * this factory simply forwards them — recomputing would risk
-     * disagreeing with whatever {@link Page} implementation the
-     * repository chose (slice vs. full count, etc.).
+     * already been mapped to the response type. The item count is taken
+     * from Spring Data's authoritative {@code totalElements}, while
+     * {@link #totalPages} is still derived by this DTO from
+     * {@code totalItems} and the requested size so every constructor path
+     * exposes one pagination invariant.
      *
      * @param page          the underlying Spring Data page (already
      *                      mapped to {@code T}); must not be {@code null}
@@ -111,12 +113,7 @@ public record PageResponse<T>(
      */
     public static <T> PageResponse<T> of(Page<T> page, int requestedPage, int requestedSize) {
         Objects.requireNonNull(page, "page");
-        return new PageResponse<>(
-                page.getContent(),
-                requestedPage,
-                requestedSize,
-                page.getTotalElements(),
-                page.getTotalPages());
+        return of(page.getContent(), requestedPage, requestedSize, page.getTotalElements());
     }
 
     /**
@@ -151,7 +148,7 @@ public record PageResponse<T>(
 
     /**
      * Overflow-safe computation of {@code ceil(totalItems / size)}. Uses
-     * the {@code (totalItems + size - 1) / size} idiom in {@code long}
+     * the {@code ((totalItems - 1) / size) + 1} idiom in {@code long}
      * arithmetic and saturates at {@link Integer#MAX_VALUE} so a
      * pathological combination cannot wrap to a negative page count.
      */
@@ -159,7 +156,8 @@ public record PageResponse<T>(
         if (totalItems <= 0L || size <= 0) {
             return 0;
         }
-        long pages = (totalItems + size - 1L) / size;
+        long pages = ((totalItems - 1L) / size) + 1L;
         return pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
     }
+
 }

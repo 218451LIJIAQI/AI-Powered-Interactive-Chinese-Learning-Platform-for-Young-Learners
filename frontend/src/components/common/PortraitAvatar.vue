@@ -1,5 +1,11 @@
 <template>
-  <div class="portrait-avatar" :class="[rounded === 'soft' ? 'is-soft' : 'is-circle', `is-${kind}`]" :style="{ '--portrait-size': `${size}px`, '--portrait-accent': accent }" role="img" aria-label="User avatar">
+  <div
+    class="portrait-avatar"
+    :class="[rounded === 'soft' ? 'is-soft' : 'is-circle', `is-${kind}`]"
+    :style="{ '--portrait-size': `${size}px`, '--portrait-accent': accent }"
+    role="img"
+    aria-label="User avatar"
+  >
     <span class="portrait-backdrop" />
     <span class="portrait-shoulders" />
     <span class="portrait-neck" />

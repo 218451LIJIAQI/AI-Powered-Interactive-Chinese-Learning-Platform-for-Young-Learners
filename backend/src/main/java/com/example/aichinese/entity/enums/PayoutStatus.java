@@ -53,6 +53,87 @@ public enum PayoutStatus {
     public static final Set<PayoutStatus> COMMITTED =
             Collections.unmodifiableSet(EnumSet.of(PENDING, APPROVED, PAID));
 
+    /**
+     * States that have committed funds against the teacher's balance
+     * but have NOT yet been disbursed -- equivalently,
+     * {@code COMMITTED \ TERMINAL}. Surfaced on
+     * {@code TeacherEarningSummaryResponse.pendingPayoutAmount}: the
+     * total a teacher has requested-but-not-yet-received. Class-load
+     * guard #5 below enforces this set-algebra identity so that adding
+     * a new state to either {@link #COMMITTED} or {@link #TERMINAL}
+     * without updating {@code IN_FLIGHT} fails fast.
+     */
+    public static final Set<PayoutStatus> IN_FLIGHT =
+            Collections.unmodifiableSet(EnumSet.of(PENDING, APPROVED));
+
+    /*
+     * Startup-time financial-safety invariant guard.  These five checks
+     * encode the relationship between the three category sets that
+     * {@code PayoutService.computeAvailableBalance} and
+     * {@code PayoutService.getTeacherEarningSummary} rely on:
+     *
+     *   1. PENDING is NOT in TERMINAL.  A pending request must always
+     *      remain transitionable so the admin can approve or reject it.
+     *
+     *   2. REJECTED is NOT in COMMITTED.  Rejection releases the balance
+     *      earmark; if a future contributor accidentally added REJECTED
+     *      to COMMITTED, every rejected request would permanently
+     *      reduce the teacher's withdrawable balance.
+     *
+     *   3. TERMINAL union COMMITTED == ALL.  Every state has a defined
+     *      disposition relative to the balance.  An "orphan" state in
+     *      neither set would silently produce false from both
+     *      isTerminal() and isCommitted().
+     *
+     *   4. TERMINAL intersect COMMITTED == {PAID}.  PAID is the only
+     *      state that is both an outcome AND counts against the balance
+     *      -- once disbursed, the money has left the platform but is
+     *      still part of the teacher's earnings ledger.  Any other
+     *      state appearing in both sets would mean a single request is
+     *      simultaneously "still earmarked" and "already done", a
+     *      contradiction.
+     *
+     *   5. IN_FLIGHT == COMMITTED \ TERMINAL.  The set-algebra identity
+     *      that defines IN_FLIGHT: committed against the balance but
+     *      not yet disbursed.  Without this guard, adding a hypothetical
+     *      DISPUTED state to COMMITTED while forgetting to add it to
+     *      IN_FLIGHT would silently understate the teacher's pending
+     *      payout total in the earnings summary.
+     */
+    static {
+        if (TERMINAL.contains(PENDING)) {
+            throw new AssertionError(
+                    "PayoutStatus.PENDING must never be in TERMINAL -- a pending request "
+                            + "must remain transitionable until an admin approves or rejects it.");
+        }
+        if (COMMITTED.contains(REJECTED)) {
+            throw new AssertionError(
+                    "PayoutStatus.REJECTED must never be in COMMITTED -- rejection "
+                            + "releases the balance earmark.");
+        }
+        EnumSet<PayoutStatus> covered = EnumSet.copyOf(TERMINAL);
+        covered.addAll(COMMITTED);
+        if (!covered.equals(EnumSet.allOf(PayoutStatus.class))) {
+            EnumSet<PayoutStatus> orphans = EnumSet.complementOf(covered);
+            throw new AssertionError(
+                    "PayoutStatus has constants in neither TERMINAL nor COMMITTED; orphans: "
+                            + orphans);
+        }
+        EnumSet<PayoutStatus> both = EnumSet.copyOf(TERMINAL);
+        both.retainAll(COMMITTED);
+        if (!both.equals(EnumSet.of(PAID))) {
+            throw new AssertionError(
+                    "PayoutStatus TERMINAL intersect COMMITTED must equal {PAID}; actual: " + both);
+        }
+        EnumSet<PayoutStatus> derivedInFlight = EnumSet.copyOf(COMMITTED);
+        derivedInFlight.removeAll(TERMINAL);
+        if (!derivedInFlight.equals(IN_FLIGHT)) {
+            throw new AssertionError(
+                    "PayoutStatus.IN_FLIGHT must equal COMMITTED \\ TERMINAL; expected: "
+                            + derivedInFlight + ", actual: " + IN_FLIGHT);
+        }
+    }
+
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, PayoutStatus> LOOKUP =
             EnumLookups.indexByName(PayoutStatus.class);

@@ -68,6 +68,9 @@ public class CorsConfig {
      */
     private static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
     private static final String DEFAULT_LOCAL_DEV_ORIGINS_CSV = String.join(",", DEFAULT_LOCAL_DEV_ORIGINS);
+    private static final List<String> ALLOWED_METHODS = List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+    private static final List<String> ALLOWED_HEADERS = List.of(
+            "Authorization", "Content-Type", "Accept", "X-Requested-With", "X-Request-ID");
 
     private final Environment environment;
 
@@ -123,8 +126,8 @@ public class CorsConfig {
         }
 
         configuration.setAllowedOrigins(exactOrigins);
-        configuration.addAllowedHeader("*");
-        configuration.addAllowedMethod("*");
+        configuration.setAllowedHeaders(ALLOWED_HEADERS);
+        configuration.setAllowedMethods(ALLOWED_METHODS);
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(PREFLIGHT_CACHE_MAX_AGE);
 

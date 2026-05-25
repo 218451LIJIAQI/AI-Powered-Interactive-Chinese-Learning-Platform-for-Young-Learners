@@ -39,6 +39,9 @@ public class UploadProperties {
 
     private String directory = "./uploads";
     private DataSize maxFileSize = DataSize.ofMegabytes(5);
+    private DataSize verificationDocumentMaxFileSize = DataSize.ofMegabytes(5);
+    private DataSize aiAudioMaxFileSize = DataSize.ofMegabytes(10);
+    private DataSize aiImageMaxFileSize = DataSize.ofMegabytes(10);
     private String recordedVideoDirectory = "./uploads/recorded-videos";
     private DataSize maxVideoFileSize = DataSize.ofMegabytes(100);
 
@@ -56,6 +59,36 @@ public class UploadProperties {
 
     public void setMaxFileSize(DataSize maxFileSize) {
         this.maxFileSize = requirePositive(maxFileSize, "Maximum upload file size must be greater than zero.");
+    }
+
+    public DataSize getVerificationDocumentMaxFileSize() {
+        return verificationDocumentMaxFileSize;
+    }
+
+    public void setVerificationDocumentMaxFileSize(DataSize verificationDocumentMaxFileSize) {
+        this.verificationDocumentMaxFileSize = requirePositive(
+                verificationDocumentMaxFileSize,
+                "Maximum verification document file size must be greater than zero.");
+    }
+
+    public DataSize getAiAudioMaxFileSize() {
+        return aiAudioMaxFileSize;
+    }
+
+    public void setAiAudioMaxFileSize(DataSize aiAudioMaxFileSize) {
+        this.aiAudioMaxFileSize = requirePositive(
+                aiAudioMaxFileSize,
+                "Maximum AI audio file size must be greater than zero.");
+    }
+
+    public DataSize getAiImageMaxFileSize() {
+        return aiImageMaxFileSize;
+    }
+
+    public void setAiImageMaxFileSize(DataSize aiImageMaxFileSize) {
+        this.aiImageMaxFileSize = requirePositive(
+                aiImageMaxFileSize,
+                "Maximum AI image file size must be greater than zero.");
     }
 
     public String getRecordedVideoDirectory() {

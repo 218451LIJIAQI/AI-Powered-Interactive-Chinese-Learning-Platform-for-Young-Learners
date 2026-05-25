@@ -5,7 +5,10 @@
     <article class="hero-card light legal-hero">
       <span class="legal-eyebrow">MandarinSpark</span>
       <h1>Terms of Service</h1>
-      <p>These terms explain the rules for using MandarinSpark learning, teaching, AI assistance, payments, and account tools.</p>
+      <p>
+        These terms explain the rules for using MandarinSpark learning, teaching, AI assistance, payments, and account
+        tools.
+      </p>
     </article>
 
     <section class="legal-grid">

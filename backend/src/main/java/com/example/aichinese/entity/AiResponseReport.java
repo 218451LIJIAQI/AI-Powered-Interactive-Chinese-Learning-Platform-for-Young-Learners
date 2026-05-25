@@ -48,6 +48,29 @@ import lombok.Setter;
  * without a session reference still produces a parseable report row;
  * deleting the underlying chat artefacts does not require cascading the
  * report.</p>
+ *
+ * <h3>Tamper-evident evidence contract</h3>
+ *
+ * <p>Every field that captures the student's original complaint is
+ * mapped {@code updatable = false} so the moderation workflow can
+ * never overwrite the evidence at the ORM layer:</p>
+ *
+ * <ul>
+ *   <li><b>Immutable evidence</b> (cannot change after creation):
+ *       {@link #studentUser}, {@link #aiUsageLog}, {@link #chatSession},
+ *       {@link #chatMessage}, {@link #featureKey},
+ *       {@link #reasonCategory}, {@link #description},
+ *       {@link #promptSnapshot}, {@link #aiResponseSnapshot}.</li>
+ *   <li><b>Mutable review state</b> (assigned during moderation):
+ *       {@link #status}, {@link #reviewerUser}, {@link #reviewerNote},
+ *       {@link #reviewedAt}.</li>
+ * </ul>
+ *
+ * <p>Service-layer code that attempts to rewrite an immutable column on
+ * a managed instance and call {@code save()} will see its change
+ * silently dropped at flush time. Bulk JPQL/native updates can still
+ * bypass this guard, so the moderation API is the only sanctioned write
+ * path; see {@code AiResponseReportService}.</p>
  */
 @Getter
 @Setter
@@ -89,37 +112,37 @@ public class AiResponseReport extends BaseEntity {
     public static final String GRAPH_ADMIN_DETAIL = "AiResponseReport.adminDetail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_user_id", nullable = false)
+    @JoinColumn(name = "student_user_id", nullable = false, updatable = false)
     private User studentUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ai_usage_log_id")
+    @JoinColumn(name = "ai_usage_log_id", updatable = false)
     private AiUsageLog aiUsageLog;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chat_session_id")
+    @JoinColumn(name = "chat_session_id", updatable = false)
     private AiChatSession chatSession;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chat_message_id")
+    @JoinColumn(name = "chat_message_id", updatable = false)
     private AiChatMessage chatMessage;
 
-    @Column(name = "feature_key", nullable = false, length = 100)
+    @Column(name = "feature_key", nullable = false, updatable = false, length = 100)
     private String featureKey;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "reason_category", nullable = false, length = 40)
+    @Column(name = "reason_category", nullable = false, updatable = false, length = 40)
     private AiResponseReportReason reasonCategory;
 
-    @Column(name = "description", length = 1000)
+    @Column(name = "description", updatable = false, length = 1000)
     private String description;
 
     @Lob
-    @Column(name = "prompt_snapshot", columnDefinition = "LONGTEXT")
+    @Column(name = "prompt_snapshot", updatable = false, columnDefinition = "LONGTEXT")
     private String promptSnapshot;
 
     @Lob
-    @Column(name = "ai_response_snapshot", columnDefinition = "LONGTEXT")
+    @Column(name = "ai_response_snapshot", updatable = false, columnDefinition = "LONGTEXT")
     private String aiResponseSnapshot;
 
     @Enumerated(EnumType.STRING)

@@ -20,7 +20,8 @@
  */
 import type { AxiosResponse } from 'axios'
 
-import { http } from './http'
+import { getAccessToken, http, refreshAccessToken } from './http'
+import { appEnv } from '@/config/env'
 import type {
   AdminAnalyticsResponse,
   AdminActivitySummaryResponse,
@@ -127,7 +128,7 @@ import type {
 import type { ApiResponse } from '@/types/api'
 
 class ApiEnvelopeError extends Error {
-  response: { data: { message: string; errors: string[] } }
+  response: { data: { message: string; errors: string[]; fieldErrors: Record<string, string[]> } }
 
   constructor(message: string, errors: string[] = []) {
     super(message)
@@ -136,6 +137,7 @@ class ApiEnvelopeError extends Error {
       data: {
         message,
         errors,
+        fieldErrors: {},
       },
     }
   }
@@ -158,6 +160,119 @@ async function unwrap<T>(request: Promise<{ data: ApiResponse<T> }>): Promise<T>
   }
 
   return payload.data
+}
+
+function apiUrl(path: string) {
+  const baseUrl = appEnv.apiBaseUrl.replace(/\/$/, '')
+  const suffix = path.startsWith('/') ? path : `/${path}`
+  return `${baseUrl}${suffix}`
+}
+
+function parseSseEvent(rawEvent: string): { event: string; data: string } | null {
+  let event = 'message'
+  const dataLines: string[] = []
+  rawEvent.split(/\r?\n/).forEach((line) => {
+    if (line.startsWith('event:')) {
+      event = line.slice('event:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trimStart())
+    }
+  })
+  if (!dataLines.length) return null
+  return { event, data: dataLines.join('\n') }
+}
+
+async function readSseStream(
+  response: Response,
+  handlers: {
+    onDelta?: (chunk: string) => void
+    onComplete?: (payload: AiChatResponse) => void
+  },
+): Promise<AiChatResponse> {
+  if (!response.body) {
+    throw new ApiEnvelopeError('The server did not open an AI stream.')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finalPayload: AiChatResponse | null = null
+
+  while (true) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+    const events = buffer.split(/\r?\n\r?\n/)
+    buffer = events.pop() ?? ''
+
+    for (const rawEvent of events) {
+      const parsed = parseSseEvent(rawEvent)
+      if (!parsed) continue
+      if (parsed.event === 'delta') {
+        handlers.onDelta?.(parsed.data)
+      } else if (parsed.event === 'complete') {
+        finalPayload = JSON.parse(parsed.data) as AiChatResponse
+        handlers.onComplete?.(finalPayload)
+      } else if (parsed.event === 'error') {
+        throw new ApiEnvelopeError(parsed.data || 'The AI stream stopped unexpectedly.')
+      }
+    }
+
+    if (done) break
+  }
+
+  if (!finalPayload) {
+    throw new ApiEnvelopeError('The AI stream ended before the final response arrived.')
+  }
+  return finalPayload
+}
+
+async function postSseChat(
+  payload: AiChatPayload,
+  handlers: {
+    onDelta?: (chunk: string) => void
+    onComplete?: (payload: AiChatResponse) => void
+  } = {},
+) {
+  const sendRequest = () => {
+    const headers = new Headers({
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    })
+    const token = getAccessToken()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+
+    return fetch(apiUrl('/ai/chat/stream'), {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify(payload),
+    })
+  }
+
+  let response = await sendRequest()
+  if (response.status === 401 && (await refreshAccessToken())) {
+    response = await sendRequest()
+  }
+
+  if (!response.ok) {
+    throw {
+      response: {
+        status: response.status,
+        data: {
+          message:
+            response.status === 429
+              ? 'You are doing that too often. Please wait a moment and try again.'
+              : 'Unable to get an AI chat response.',
+          errors: [],
+          fieldErrors: {},
+        },
+      },
+    }
+  }
+
+  return readSseStream(response, handlers)
 }
 
 async function unwrapPageItems<T>(request: Promise<{ data: ApiResponse<PageResponse<T>> }>): Promise<T[]> {
@@ -201,6 +316,14 @@ interface PublicCourseFilters {
   sort?: string
   page?: number
   size?: number
+}
+
+interface AiChatPayload {
+  message: string
+  languagePreference?: string
+  sessionId?: number
+  context?: string
+  relatedLessonId?: number
 }
 
 export interface TeacherModulePayload {
@@ -407,6 +530,9 @@ export interface AdminStoryActivityPayload {
 export const authApi = {
   login(payload: { email: string; password: string }) {
     return unwrap<AuthResponse>(http.post('/auth/login', payload))
+  },
+  refresh() {
+    return unwrap<AuthResponse>(http.post('/auth/refresh'))
   },
   registerStudent(payload: {
     fullName: string
@@ -627,9 +753,10 @@ export const aiApi = {
   availability() {
     return unwrap<AiAvailabilityResponse>(http.get('/ai/availability'))
   },
-  chat(payload: { message: string; languagePreference?: string; sessionId?: number; context?: string; relatedLessonId?: number }) {
+  chat(payload: AiChatPayload) {
     return unwrap<AiChatResponse>(http.post('/ai/chat', payload))
   },
+  chatStream: postSseChat,
   vocabularyHelper(payload: {
     word: string
     inputLanguage?: string
@@ -784,10 +911,14 @@ export const teacherApi = {
     return unwrap<RecordedLessonVideoResponse>(http.post(`/teachers/lessons/${lessonId}/recorded-videos`, formData))
   },
   updateRecordedVideo(lessonId: number, videoId: number, formData: FormData) {
-    return unwrap<RecordedLessonVideoResponse>(http.put(`/teachers/lessons/${lessonId}/recorded-videos/${videoId}`, formData))
+    return unwrap<RecordedLessonVideoResponse>(
+      http.put(`/teachers/lessons/${lessonId}/recorded-videos/${videoId}`, formData),
+    )
   },
   archiveRecordedVideo(lessonId: number, videoId: number) {
-    return unwrap<RecordedLessonVideoResponse>(http.patch(`/teachers/lessons/${lessonId}/recorded-videos/${videoId}/archive`))
+    return unwrap<RecordedLessonVideoResponse>(
+      http.patch(`/teachers/lessons/${lessonId}/recorded-videos/${videoId}/archive`),
+    )
   },
   lessonVideoProgress(lessonId: number) {
     return unwrapPageItems<LessonVideoProgressSummaryResponse>(http.get(`/teachers/lessons/${lessonId}/video-progress`))
@@ -931,7 +1062,9 @@ export const adminApi = {
     return unwrap<AdminListeningExerciseResponse>(http.put(`/admin/activities/listening-exercises/${id}`, payload))
   },
   updateListeningExerciseStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
-    return unwrap<AdminListeningExerciseResponse>(http.patch(`/admin/activities/listening-exercises/${id}/status`, { status }))
+    return unwrap<AdminListeningExerciseResponse>(
+      http.patch(`/admin/activities/listening-exercises/${id}/status`, { status }),
+    )
   },
   deleteListeningExercise(id: number) {
     return unwrap<void>(http.delete(`/admin/activities/listening-exercises/${id}`))
@@ -946,7 +1079,9 @@ export const adminApi = {
     return unwrap<AdminTracingExerciseResponse>(http.put(`/admin/activities/tracing-exercises/${id}`, payload))
   },
   updateTracingExerciseStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
-    return unwrap<AdminTracingExerciseResponse>(http.patch(`/admin/activities/tracing-exercises/${id}/status`, { status }))
+    return unwrap<AdminTracingExerciseResponse>(
+      http.patch(`/admin/activities/tracing-exercises/${id}/status`, { status }),
+    )
   },
   deleteTracingExercise(id: number) {
     return unwrap<void>(http.delete(`/admin/activities/tracing-exercises/${id}`))
@@ -961,7 +1096,9 @@ export const adminApi = {
     return unwrap<AdminDragDropActivityResponse>(http.put(`/admin/activities/drag-drop-activities/${id}`, payload))
   },
   updateDragDropActivityStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
-    return unwrap<AdminDragDropActivityResponse>(http.patch(`/admin/activities/drag-drop-activities/${id}/status`, { status }))
+    return unwrap<AdminDragDropActivityResponse>(
+      http.patch(`/admin/activities/drag-drop-activities/${id}/status`, { status }),
+    )
   },
   deleteDragDropActivity(id: number) {
     return unwrap<void>(http.delete(`/admin/activities/drag-drop-activities/${id}`))
@@ -988,7 +1125,9 @@ export const adminApi = {
     return unwrap<ContentSubmissionDetailResponse>(http.get(`/admin/content/submissions/${contentType}/${id}`))
   },
   archiveContent(contentType: string, id: number, note?: string) {
-    return unwrap<ContentSubmissionDetailResponse>(http.patch(`/admin/content/${contentType}/${id}/archive`, note ? { note } : {}))
+    return unwrap<ContentSubmissionDetailResponse>(
+      http.patch(`/admin/content/${contentType}/${id}/archive`, note ? { note } : {}),
+    )
   },
   moderationRecords(params: Record<string, unknown> = {}) {
     return unwrapPageItems<ModerationRecordResponse>(http.get('/admin/moderation-records', { params }))

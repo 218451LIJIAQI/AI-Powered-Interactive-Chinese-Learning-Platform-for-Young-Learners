@@ -23,13 +23,26 @@
             </div>
 
             <div class="admin-settings-form-row">
-              <select v-model="ui.locale" class="admin-settings-select" aria-label="Admin interface language" :disabled="platformSettingsReadOnly" @change="ui.setLocale(ui.locale)">
+              <select
+                v-model="ui.locale"
+                class="admin-settings-select"
+                aria-label="Admin interface language"
+                :disabled="platformSettingsReadOnly"
+                @change="ui.setLocale(ui.locale)"
+              >
                 <option value="en">English (EN)</option>
                 <option value="ms">Bahasa Melayu (BM)</option>
                 <option value="zh">简体中文</option>
               </select>
 
-              <button class="btn btn-primary admin-settings-save" type="button" :disabled="platformSettingsReadOnly" @click="saveLocale">Save</button>
+              <button
+                class="btn btn-primary admin-settings-save"
+                type="button"
+                :disabled="platformSettingsReadOnly"
+                @click="saveLocale"
+              >
+                Save
+              </button>
             </div>
           </article>
 
@@ -46,10 +59,21 @@
 
             <div class="admin-settings-form-row admin-settings-form-row--stacked">
               <div class="admin-settings-textarea-wrap">
-                <textarea v-model="disclaimerText" class="admin-settings-textarea" aria-label="AI disclaimer text" maxlength="200" :disabled="platformSettingsFormDisabled" />
+                <textarea
+                  v-model="disclaimerText"
+                  class="admin-settings-textarea"
+                  aria-label="AI disclaimer text"
+                  maxlength="200"
+                  :disabled="platformSettingsFormDisabled"
+                />
                 <small>{{ disclaimerText.length }} / 200</small>
               </div>
-              <button class="btn btn-primary admin-settings-save" type="button" :disabled="platformSettingsFormDisabled" @click="saveDisclaimer">
+              <button
+                class="btn btn-primary admin-settings-save"
+                type="button"
+                :disabled="platformSettingsFormDisabled"
+                @click="saveDisclaimer"
+              >
                 {{ savingPlatformSettings ? 'Saving...' : 'Save' }}
               </button>
             </div>
@@ -91,7 +115,12 @@
             </div>
 
             <div class="admin-settings-actions">
-              <button class="btn btn-primary admin-settings-save" type="button" :disabled="platformSettingsFormDisabled" @click="saveLocalPreferences">
+              <button
+                class="btn btn-primary admin-settings-save"
+                type="button"
+                :disabled="platformSettingsFormDisabled"
+                @click="saveLocalPreferences"
+              >
                 {{ savingPlatformSettings ? 'Saving...' : 'Save Settings' }}
               </button>
             </div>
@@ -129,7 +158,12 @@
             </div>
 
             <div class="admin-settings-actions">
-              <button class="btn btn-primary admin-settings-save" type="button" :disabled="platformSettingsFormDisabled" @click="saveLocalPreferences">
+              <button
+                class="btn btn-primary admin-settings-save"
+                type="button"
+                :disabled="platformSettingsFormDisabled"
+                @click="saveLocalPreferences"
+              >
                 {{ savingPlatformSettings ? 'Saving...' : 'Save Settings' }}
               </button>
             </div>
@@ -153,13 +187,32 @@
               </article>
               <article class="admin-settings-basic-row">
                 <span>Support Email</span>
-                <input class="admin-settings-input" value="Configured in backend environment" aria-label="Support email" readonly />
+                <input
+                  class="admin-settings-input"
+                  value="Configured in backend environment"
+                  aria-label="Support email"
+                  readonly
+                />
               </article>
               <article class="admin-settings-basic-row">
                 <span>Commission Rate</span>
                 <div class="admin-settings-commission">
-                  <input v-model.number="commissionRate" class="admin-settings-input" type="number" min="0" max="1" step="0.01" aria-label="Commission rate" :disabled="commissionFormDisabled" />
-                  <button class="btn btn-primary admin-settings-save" type="button" :disabled="commissionReadOnly || savingCommission" @click="saveCommission">
+                  <input
+                    v-model.number="commissionRate"
+                    class="admin-settings-input"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    aria-label="Commission rate"
+                    :disabled="commissionFormDisabled"
+                  />
+                  <button
+                    class="btn btn-primary admin-settings-save"
+                    type="button"
+                    :disabled="commissionReadOnly || savingCommission"
+                    @click="saveCommission"
+                  >
                     {{ savingCommission ? 'Saving...' : 'Save' }}
                   </button>
                 </div>
@@ -181,8 +234,12 @@
           </div>
 
           <div class="admin-settings-filters">
-            <button class="teacher-outline-button admin-settings-filter" type="button" @click="cycleTypeFilter">{{ typeFilterLabel }}</button>
-            <button class="teacher-outline-button admin-settings-filter" type="button" @click="cycleActorFilter">{{ actorFilterLabel }}</button>
+            <button class="teacher-outline-button admin-settings-filter" type="button" @click="cycleTypeFilter">
+              {{ typeFilterLabel }}
+            </button>
+            <button class="teacher-outline-button admin-settings-filter" type="button" @click="cycleActorFilter">
+              {{ actorFilterLabel }}
+            </button>
             <div class="teacher-outline-button admin-settings-filter is-icon" role="status" aria-live="polite">
               <IconGlyph name="calendar" :size="16" />
               {{ selectedDateLabel }}
@@ -196,7 +253,9 @@
           <div class="admin-settings-audit-list">
             <article v-for="item in filteredAuditLogs" :key="item.id" class="admin-settings-audit-item">
               <div class="admin-settings-audit-main">
-                <span class="admin-settings-audit-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
+                <span class="admin-settings-audit-icon" :class="`is-${item.tone}`"
+                  ><IconGlyph :name="item.icon" :size="18"
+                /></span>
                 <div class="admin-settings-audit-copy">
                   <div class="row u-gap-10 u-wrap">
                     <strong>{{ item.title }}</strong>
@@ -217,13 +276,21 @@
           <div class="admin-settings-pagination">
             <div class="row admin-settings-pagination-left">
               <span>Rows per page:</span>
-              <span class="teacher-outline-button admin-settings-page-size" aria-label="Rows per page is fixed at 10">10</span>
+              <span class="teacher-outline-button admin-settings-page-size" aria-label="Rows per page is fixed at 10"
+                >10</span
+              >
             </div>
 
             <span>{{ paginationLabel }}</span>
 
             <div class="row admin-settings-pagination-right">
-              <button class="admin-settings-page-button" type="button" aria-label="Previous audit log page" :disabled="currentPage === 1" @click="currentPage = Math.max(1, currentPage - 1)">
+              <button
+                class="admin-settings-page-button"
+                type="button"
+                aria-label="Previous audit log page"
+                :disabled="currentPage === 1"
+                @click="currentPage = Math.max(1, currentPage - 1)"
+              >
                 <IconGlyph name="chevronLeft" :size="16" />
               </button>
 
@@ -238,7 +305,13 @@
                 {{ page }}
               </button>
 
-              <button class="admin-settings-page-button" type="button" aria-label="Next audit log page" :disabled="currentPage === totalPages" @click="currentPage = Math.min(totalPages, currentPage + 1)">
+              <button
+                class="admin-settings-page-button"
+                type="button"
+                aria-label="Next audit log page"
+                :disabled="currentPage === totalPages"
+                @click="currentPage = Math.min(totalPages, currentPage + 1)"
+              >
                 <IconGlyph name="chevronRight" :size="16" />
               </button>
             </div>
@@ -258,17 +331,29 @@
 
             <div class="admin-settings-info-list">
               <div><span>Platform Version</span><strong>Repository build</strong></div>
-              <div><span>Environment</span><strong>{{ environmentLabel }}</strong></div>
-              <div><span>Last Health Check</span><strong>{{ lastHealthCheckLabel }}</strong></div>
-              <div><span>Uptime</span><strong>{{ uptimeLabel }}</strong></div>
-              <div><span>Active Users (Today)</span><strong>{{ formatNumber(activeUsersToday) }}</strong></div>
+              <div>
+                <span>Environment</span><strong>{{ environmentLabel }}</strong>
+              </div>
+              <div>
+                <span>Last Health Check</span><strong>{{ lastHealthCheckLabel }}</strong>
+              </div>
+              <div>
+                <span>Uptime</span><strong>{{ uptimeLabel }}</strong>
+              </div>
+              <div>
+                <span>Active Users (Today)</span><strong>{{ formatNumber(activeUsersToday) }}</strong>
+              </div>
               <div>
                 <span>Database Status</span>
                 <strong class="admin-settings-healthy"><i /> {{ databaseStatusLabel }}</strong>
               </div>
             </div>
 
-            <button class="teacher-outline-button admin-settings-health-button" type="button" @click="router.push('/admin/analytics')">
+            <button
+              class="teacher-outline-button admin-settings-health-button"
+              type="button"
+              @click="router.push('/admin/analytics')"
+            >
               View Analytics
             </button>
           </article>
@@ -284,7 +369,13 @@
             </div>
 
             <div class="admin-settings-quick-list">
-              <button v-for="item in quickActions" :key="item.label" class="admin-settings-quick-item" type="button" @click="item.action">
+              <button
+                v-for="item in quickActions"
+                :key="item.label"
+                class="admin-settings-quick-item"
+                type="button"
+                @click="item.action"
+              >
                 <span class="row u-gap-10">
                   <IconGlyph :name="item.icon" :size="18" />
                   <span>{{ item.label }}</span>
@@ -422,14 +513,11 @@ const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics
 const commissionResource = useResource(() => adminApi.commissionSetting(), commissionSetting)
 const notificationsResource = useResource(() => adminApi.notifications({ size: 8 }), [])
 const platformSettingsResource = useResource(() => adminApi.platformSettings(), platformSettingsFallback)
-const healthResource = useResource(
-  () => systemApi.health(),
-  {
-    status: 'UP',
-    service: 'backend',
-    timestamp: new Date().toISOString(),
-  },
-)
+const healthResource = useResource(() => systemApi.health(), {
+  status: 'UP',
+  service: 'backend',
+  timestamp: new Date().toISOString(),
+})
 const emptyHealth = {
   status: 'UNKNOWN',
   service: 'backend',
@@ -460,14 +548,22 @@ const emptyAnalytics = {
 }
 
 const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? adminAuditLogs : []))
-const analytics = computed(() => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics))
+const analytics = computed(
+  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics),
+)
 const adminNotifications = computed(() => notificationsResource.data.value ?? [])
 const platformSettings = computed(() => platformSettingsResource.data.value ?? platformSettingsFallback)
-const health = computed(() => healthResource.data.value ?? (healthResource.usingFallback.value ? {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-} : emptyHealth))
+const health = computed(
+  () =>
+    healthResource.data.value ??
+    (healthResource.usingFallback.value
+      ? {
+          status: 'UP',
+          service: 'backend',
+          timestamp: new Date().toISOString(),
+        }
+      : emptyHealth),
+)
 
 const pageLoading = computed(
   () =>
@@ -545,15 +641,35 @@ watch(
 )
 
 const notificationOptions: Array<{ key: LocalSettingKey; title: string; description: string }> = [
-  { key: 'emailNotifications', title: 'Email Notifications', description: 'Control email notifications for admin workflows.' },
-  { key: 'inAppNotifications', title: 'In-App Notifications', description: 'Control in-app notifications for admin workflows.' },
+  {
+    key: 'emailNotifications',
+    title: 'Email Notifications',
+    description: 'Control email notifications for admin workflows.',
+  },
+  {
+    key: 'inAppNotifications',
+    title: 'In-App Notifications',
+    description: 'Control in-app notifications for admin workflows.',
+  },
   { key: 'dailySummary', title: 'Daily Summary Email', description: 'Control daily summary delivery for admins.' },
 ]
 
 const safetyOptions: Array<{ key: LocalSettingKey; title: string; description: string }> = [
-  { key: 'strictContentFiltering', title: 'Strict Content Filtering', description: 'Control strict filtering for safety-sensitive flows.' },
-  { key: 'sensitiveWordFilter', title: 'Profanity & Sensitive Words Filter', description: 'Control the sensitive word filter used by the platform.' },
-  { key: 'aiSafetyCheck', title: 'AI Content Safety Check', description: 'Control AI safety checks before AI guidance is shown.' },
+  {
+    key: 'strictContentFiltering',
+    title: 'Strict Content Filtering',
+    description: 'Control strict filtering for safety-sensitive flows.',
+  },
+  {
+    key: 'sensitiveWordFilter',
+    title: 'Profanity & Sensitive Words Filter',
+    description: 'Control the sensitive word filter used by the platform.',
+  },
+  {
+    key: 'aiSafetyCheck',
+    title: 'AI Content Safety Check',
+    description: 'Control AI safety checks before AI guidance is shown.',
+  },
 ]
 
 const typeFilter = ref<AuditTypeFilter>('ALL')
@@ -562,7 +678,9 @@ const sortOrder = ref<SortOrder>('NEWEST')
 const currentPage = ref(1)
 const pageSize = 10
 const selectedDateLabel = computed(() => {
-  const timestamps = auditLogs.value.map((item) => new Date(item.createdAt).getTime()).filter((value) => !Number.isNaN(value))
+  const timestamps = auditLogs.value
+    .map((item) => new Date(item.createdAt).getTime())
+    .filter((value) => !Number.isNaN(value))
   if (!timestamps.length) return 'All dates'
   const latest = new Date(Math.max(...timestamps))
   return formatDate(latest.toISOString())
@@ -581,13 +699,7 @@ const normalizedAuditLogs = computed(() =>
             : 'MODERATION'
 
     const tone =
-      type === 'SECURITY'
-        ? 'orange'
-        : type === 'ADMIN_ACTION'
-          ? 'purple'
-          : type === 'CONTENT_CHANGE'
-            ? 'blue'
-            : 'green'
+      type === 'SECURITY' ? 'orange' : type === 'ADMIN_ACTION' ? 'purple' : type === 'CONTENT_CHANGE' ? 'blue' : 'green'
 
     const icon =
       type === 'SECURITY'
@@ -613,7 +725,11 @@ const normalizedAuditLogs = computed(() =>
       description: item.description,
       actor: item.actorEmail || 'System',
       time: formatDateTime(item.createdAt),
-      trace: item.requestId ? `Request ${item.requestId}` : item.ipAddress ? `IP ${item.ipAddress}` : 'No trace captured',
+      trace: item.requestId
+        ? `Request ${item.requestId}`
+        : item.ipAddress
+          ? `IP ${item.ipAddress}`
+          : 'No trace captured',
       type,
       tone,
       icon,
@@ -642,13 +758,14 @@ const filteredAuditLogs = computed(() => {
   return result.slice(start, start + pageSize)
 })
 
-const totalAuditCount = computed(() =>
-  normalizedAuditLogs.value.filter((item) => {
-    if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
-    if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
-    if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
-    return true
-  }).length,
+const totalAuditCount = computed(
+  () =>
+    normalizedAuditLogs.value.filter((item) => {
+      if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
+      if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
+      if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
+      return true
+    }).length,
 )
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalAuditCount.value / pageSize)))
@@ -740,9 +857,10 @@ async function markAllAdminNotificationsRead() {
       item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() },
     )
     window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
-    actionSuccess.value = result.updatedCount > 0
-      ? `Marked ${result.updatedCount} notification(s) as read.`
-      : 'All notifications are already read.'
+    actionSuccess.value =
+      result.updatedCount > 0
+        ? `Marked ${result.updatedCount} notification(s) as read.`
+        : 'All notifications are already read.'
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to mark admin notifications as read.')
   } finally {

@@ -30,6 +30,12 @@ import lombok.Setter;
  * historical telemetry; the canonical AI request outcome lives in the
  * companion {@link AiUsageLog} row keyed by the same {@code featureKey}
  * and {@code userId}.</p>
+ *
+ * <p>The record is append-only: every domain field is mapped
+ * {@code updatable = false}, so any subsequent {@code save()} on a
+ * managed instance silently drops attempted mutations at flush time.
+ * The single call site is {@code AiLogService#createFeedbackRecord},
+ * which persists each row exactly once and then never touches it again.</p>
  */
 @Getter
 @Setter
@@ -42,30 +48,30 @@ import lombok.Setter;
 public class AiFeedbackRecord extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
-    @Column(name = "feature_key", nullable = false, length = 100)
+    @Column(name = "feature_key", nullable = false, updatable = false, length = 100)
     private String featureKey;
 
-    @Column(name = "input_file_url", length = 255)
+    @Column(name = "input_file_url", updatable = false, length = 255)
     private String inputFileUrl;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_file_id")
+    @JoinColumn(name = "uploaded_file_id", updatable = false)
     private UploadedFile uploadedFile;
 
     @Lob
-    @Column(name = "input_text", columnDefinition = "LONGTEXT")
+    @Column(name = "input_text", updatable = false, columnDefinition = "LONGTEXT")
     private String inputText;
 
     @Lob
-    @Column(name = "feedback_text", columnDefinition = "LONGTEXT")
+    @Column(name = "feedback_text", updatable = false, columnDefinition = "LONGTEXT")
     private String feedbackText;
 
-    @Column(name = "language_preference", length = 20)
+    @Column(name = "language_preference", updatable = false, length = 20)
     private String languagePreference;
 
-    @Column(name = "status", length = 50)
+    @Column(name = "status", updatable = false, length = 50)
     private String status;
 }

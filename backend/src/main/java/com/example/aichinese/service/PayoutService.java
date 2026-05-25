@@ -4,7 +4,6 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
-import java.util.EnumSet;
 import java.util.Objects;
 
 import org.slf4j.Logger;
@@ -107,14 +106,18 @@ public class PayoutService {
                 teacherEarningRepository.sumGrossAmountByTeacherIdAndEarningStatusNot(teacher.getId(), TeacherEarningStatus.REFUNDED));
         BigDecimal totalNetAmount = commerceMoneyService.normalize(
                 teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(teacher.getId(), TeacherEarningStatus.REFUNDED));
+        // In-flight payouts = COMMITTED \ TERMINAL: amounts the admin has
+        // committed against the balance but not yet disbursed.  The enum's
+        // class-load guard enforces PayoutStatus.IN_FLIGHT == COMMITTED \
+        // TERMINAL so this set cannot drift if a new status is introduced.
         BigDecimal pendingPayoutAmount = commerceMoneyService.normalize(
                 payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                         teacher.getId(),
-                        EnumSet.of(PayoutStatus.PENDING, PayoutStatus.APPROVED)));
+                        PayoutStatus.IN_FLIGHT));
         BigDecimal committedPayoutAmount = commerceMoneyService.normalize(
                 payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                         teacher.getId(),
-                        EnumSet.of(PayoutStatus.PENDING, PayoutStatus.APPROVED, PayoutStatus.PAID)));
+                        PayoutStatus.COMMITTED));
         return new TeacherEarningSummaryResponse(
                 grossAmount,
                 totalNetAmount,
@@ -253,7 +256,7 @@ public class PayoutService {
         BigDecimal committedPayoutAmount = commerceMoneyService.normalize(
                 payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                         teacherId,
-                        EnumSet.of(PayoutStatus.PENDING, PayoutStatus.APPROVED, PayoutStatus.PAID)));
+                        PayoutStatus.COMMITTED));
         return commerceMoneyService.subtract(totalNetAmount, committedPayoutAmount);
     }
 

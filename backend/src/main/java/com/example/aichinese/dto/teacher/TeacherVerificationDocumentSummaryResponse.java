@@ -10,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * {@link TeacherProfileResponse#verificationDocuments()} and
  * {@link TeacherVerificationStatusResponse#latestSubmittedDocuments()}.
  *
- * <p>The bytes themselves are not on the wire — only the metadata.
+ * <p>The bytes themselves are not on the wire - only the metadata.
  * The teacher's own download endpoint is
  * {@code GET /api/v1/teachers/verification-documents/{id}}, which
  * returns the file content with the original
@@ -25,14 +25,14 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * is preserved with {@code currentVersion = false} (for the audit
  * trail) and the new row becomes the current version. This is why
  * {@link TeacherVerificationStatusResponse} filters to
- * {@code currentVersion == true} only — the dashboard banner shows
- * "what is on file right now" — while {@link TeacherProfileResponse}
+ * {@code currentVersion == true} only - the dashboard banner shows
+ * "what is on file right now" - while {@link TeacherProfileResponse}
  * keeps the full history.</p>
  *
- * <p>{@link #fileSize} is reported in bytes; the front-end formats it
- * as KB/MB on display. Primitive {@code boolean} for
- * {@link #currentVersion} so the JSON wire format always emits a
- * value (no null/false ambiguity).</p>
+ * <p>{@link #fileSize} is reported in bytes when available; the
+ * front-end formats it as KB/MB on display. Primitive {@code boolean}
+ * for {@link #currentVersion} means the JSON wire format always emits
+ * a value with no null/false ambiguity.</p>
  *
  * <h2>Wire format</h2>
  * <p>The component order is locked via {@link JsonPropertyOrder} so
@@ -42,15 +42,17 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * <h2>Invariants</h2>
  * <p>The canonical constructor enforces the persistence contract:</p>
  * <ul>
- *   <li>{@link #id}, {@link #documentType}, {@link #originalFileName},
- *       {@link #contentType}, {@link #fileSize} and
- *       {@link #submittedAt} are required — they are guaranteed by
+ *   <li>{@link #id}, {@link #documentType} and
+ *       {@link #submittedAt} are required. They are guaranteed by
  *       {@code TeacherManagementMapper.toDocumentSummary} for any
  *       persisted document row.</li>
- *   <li>{@link #fileSize} must be non-negative — a negative byte
- *       count is structurally meaningless and would confuse the
- *       front-end formatter.</li>
- *   <li>{@link #description} remains nullable — it is the
+ *   <li>{@link #originalFileName}, {@link #contentType} and
+ *       {@link #fileSize} remain nullable for legacy rows whose
+ *       upload metadata was not captured.</li>
+ *   <li>{@link #fileSize} must be non-negative when present. A
+ *       negative byte count is structurally meaningless and would
+ *       confuse the front-end formatter.</li>
+ *   <li>{@link #description} remains nullable because it is the
  *       teacher-supplied free-text caption at upload time.</li>
  * </ul>
  *
@@ -62,12 +64,12 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  *                          {@code null}
  * @param description       optional free-text caption supplied by the
  *                          teacher at upload time; nullable
- * @param originalFileName  filename as the teacher uploaded it; never
- *                          {@code null}
- * @param contentType       MIME type from the multipart upload; never
- *                          {@code null}
- * @param fileSize          raw byte size; never {@code null};
- *                          non-negative
+ * @param originalFileName  filename as the teacher uploaded it;
+ *                          nullable for legacy rows
+ * @param contentType       MIME type from the multipart upload;
+ *                          nullable for legacy rows
+ * @param fileSize          raw byte size; nullable for legacy rows;
+ *                          non-negative when present
  * @param submittedAt       upload timestamp; never {@code null}
  * @param currentVersion    {@code true} when this is the latest
  *                          version of {@link #documentType} on file
@@ -93,19 +95,15 @@ public record TeacherVerificationDocumentSummaryResponse(
         boolean currentVersion) {
 
     /**
-     * Defensive canonical constructor: enforces non-null on the six
-     * fields the mapper guarantees and rejects negative file sizes
-     * so a malformed metadata row cannot reach the wire format and
-     * confuse the front-end download/format logic.
+     * Defensive canonical constructor: enforces non-null on the document
+     * identity fields and rejects negative file sizes so malformed metadata
+     * cannot reach the wire format and confuse front-end download handling.
      */
     public TeacherVerificationDocumentSummaryResponse {
         Objects.requireNonNull(id, "id must not be null");
         Objects.requireNonNull(documentType, "documentType must not be null");
-        Objects.requireNonNull(originalFileName, "originalFileName must not be null");
-        Objects.requireNonNull(contentType, "contentType must not be null");
-        Objects.requireNonNull(fileSize, "fileSize must not be null");
         Objects.requireNonNull(submittedAt, "submittedAt must not be null");
-        if (fileSize < 0L) {
+        if (fileSize != null && fileSize < 0L) {
             throw new IllegalArgumentException("fileSize must be non-negative, got " + fileSize);
         }
     }

@@ -18,6 +18,8 @@ app:
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
   security:
+    jwt:
+      refresh-token-cookie-secure: ${JWT_REFRESH_COOKIE_SECURE:true}
     forwarded:
       trusted-proxies: ${APP_SECURITY_FORWARDED_TRUSTED_PROXIES:}
   payment:

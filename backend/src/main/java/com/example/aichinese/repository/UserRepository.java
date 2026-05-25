@@ -76,6 +76,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("select u from User u where lower(u.email) = lower(:email)")
     Optional<User> findLockedByEmail(@Param("email") String email);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> findLockedById(@Param("id") Long id);
+
     /**
      * Counts users holding the given role. Used by the admin
      * dashboard's role-distribution tile and by the

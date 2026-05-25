@@ -6,13 +6,20 @@
       icon="content"
     />
 
-    <DataNotice :using-fallback="contentResource.usingFallback.value" :error="actionError || contentResource.error.value" :success="actionSuccess" />
+    <DataNotice
+      :using-fallback="contentResource.usingFallback.value"
+      :error="actionError || contentResource.error.value"
+      :success="actionSuccess"
+    />
 
     <section class="admin-ops-hero admin-ops-hero--content">
       <div>
         <span class="admin-ops-kicker">Content Quality</span>
         <h2>Keep published learning materials aligned, safe, and ready for families.</h2>
-        <p>Teachers publish directly while admins monitor quality, archive outdated items, and take moderation action after publication.</p>
+        <p>
+          Teachers publish directly while admins monitor quality, archive outdated items, and take moderation action
+          after publication.
+        </p>
       </div>
       <div class="admin-ops-stat-grid">
         <article v-for="stat in contentStats" :key="stat.label">
@@ -24,7 +31,8 @@
     </section>
 
     <section class="soft-banner">
-      Admin content management here is intentionally post-publication. Teachers publish directly; admins oversee and moderate after publication.
+      Admin content management here is intentionally post-publication. Teachers publish directly; admins oversee and
+      moderate after publication.
     </section>
 
     <section class="three-col admin-content-layout">
@@ -41,12 +49,24 @@
               <template #meta>
                 <span class="tag">{{ item.contentType }}</span>
                 <span class="tag">{{ item.teacher.fullName }}</span>
-                <StatusPill :label="item.contentStatus" :tone="item.contentStatus === 'PUBLISHED' ? 'success' : 'warning'" />
+                <StatusPill
+                  :label="item.contentStatus"
+                  :tone="item.contentStatus === 'PUBLISHED' ? 'success' : 'warning'"
+                />
               </template>
               <template #aside>
                 <div class="list-action-row">
-                  <button class="btn btn-secondary" type="button" @click="loadDetail(item.contentType, item.id)">Review</button>
-                  <button class="btn btn-ghost" type="button" :disabled="contentReadOnly" @click="archiveContent(item.contentType, item.id)">Archive</button>
+                  <button class="btn btn-secondary" type="button" @click="loadDetail(item.contentType, item.id)">
+                    Review
+                  </button>
+                  <button
+                    class="btn btn-ghost"
+                    type="button"
+                    :disabled="contentReadOnly"
+                    @click="archiveContent(item.contentType, item.id)"
+                  >
+                    Archive
+                  </button>
                 </div>
               </template>
             </ListInfoItem>
@@ -55,7 +75,11 @@
       </div>
 
       <div class="stack">
-        <InfoCard title="Selected content detail" subtitle="Inspect teacher-owned content after publishing." icon="content">
+        <InfoCard
+          title="Selected content detail"
+          subtitle="Inspect teacher-owned content after publishing."
+          icon="content"
+        >
           <div v-if="detail" class="stack">
             <strong>{{ detail.title }}</strong>
             <span class="muted">{{ detail.description || 'No description.' }}</span>
@@ -96,10 +120,38 @@
             />
           </div>
           <div class="list-action-row list-action-row--start">
-            <button class="btn btn-secondary" type="button" :disabled="contentReadOnly || detailReadOnly" @click="moderate('hide')">Hide</button>
-            <button class="btn btn-secondary" type="button" :disabled="contentReadOnly || detailReadOnly" @click="moderate('unpublish')">Unpublish</button>
-            <button class="btn btn-secondary" type="button" :disabled="contentReadOnly || detailReadOnly" @click="moderate('archive')">Archive</button>
-            <button class="btn btn-secondary" type="button" :disabled="contentReadOnly || detailReadOnly" @click="moderate('restore')">Restore</button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="contentReadOnly || detailReadOnly"
+              @click="moderate('hide')"
+            >
+              Hide
+            </button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="contentReadOnly || detailReadOnly"
+              @click="moderate('unpublish')"
+            >
+              Unpublish
+            </button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="contentReadOnly || detailReadOnly"
+              @click="moderate('archive')"
+            >
+              Archive
+            </button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="contentReadOnly || detailReadOnly"
+              @click="moderate('restore')"
+            >
+              Restore
+            </button>
           </div>
         </ActionFormCard>
       </div>
@@ -147,14 +199,24 @@ const emptyContentList = {
   totalPages: 0,
 }
 
-const content = computed(() => contentResource.data.value ?? (contentResource.usingFallback.value ? adminContentList : emptyContentList))
+const content = computed(
+  () => contentResource.data.value ?? (contentResource.usingFallback.value ? adminContentList : emptyContentList),
+)
 const detail = computed(() => detailResource.data.value)
 const contentReadOnly = computed(() => contentResource.usingFallback.value)
 const detailReadOnly = computed(() => detailResource.usingFallback.value)
 const contentStats = computed(() => [
   { icon: 'content', label: 'Visible content', value: String(content.value.items.length) },
-  { icon: 'status', label: 'Published', value: String(content.value.items.filter((item) => item.contentStatus === 'PUBLISHED').length) },
-  { icon: 'teacher', label: 'Teachers', value: String(new Set(content.value.items.map((item) => item.teacher.fullName)).size) },
+  {
+    icon: 'status',
+    label: 'Published',
+    value: String(content.value.items.filter((item) => item.contentStatus === 'PUBLISHED').length),
+  },
+  {
+    icon: 'teacher',
+    label: 'Teachers',
+    value: String(new Set(content.value.items.map((item) => item.teacher.fullName)).size),
+  },
 ])
 const moderationReason = ref('Please revise this content for quality and consistency.')
 const submittingModeration = ref(false)
@@ -164,13 +226,16 @@ const actionSuccess = ref<string | null>(null)
 async function loadDetail(contentType: string, id: number) {
   actionError.value = null
   actionSuccess.value = null
-  await adminApi.contentDetail(contentType, id).then((data) => {
-    detailResource.data.value = data
-    actionSuccess.value = 'Content detail loaded for review.'
-  }).catch((reason) => {
-    actionError.value = resolveApiError(reason, 'Unable to load this content detail.')
-    detailResource.data.value = null
-  })
+  await adminApi
+    .contentDetail(contentType, id)
+    .then((data) => {
+      detailResource.data.value = data
+      actionSuccess.value = 'Content detail loaded for review.'
+    })
+    .catch((reason) => {
+      actionError.value = resolveApiError(reason, 'Unable to load this content detail.')
+      detailResource.data.value = null
+    })
 }
 
 const archivingContentId = ref<number | null>(null)

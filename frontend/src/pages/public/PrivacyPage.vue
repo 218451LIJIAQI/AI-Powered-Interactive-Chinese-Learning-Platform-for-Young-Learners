@@ -5,7 +5,10 @@
     <article class="hero-card light legal-hero">
       <span class="legal-eyebrow">MandarinSpark</span>
       <h1>Privacy Policy</h1>
-      <p>This policy explains how MandarinSpark handles learner, teacher, admin, learning, AI, commerce, notification, and moderation data.</p>
+      <p>
+        This policy explains how MandarinSpark handles learner, teacher, admin, learning, AI, commerce, notification,
+        and moderation data.
+      </p>
     </article>
 
     <section class="legal-grid">

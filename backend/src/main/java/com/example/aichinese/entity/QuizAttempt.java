@@ -29,6 +29,22 @@ import lombok.Setter;
  * UI distinguishes from {@code 0} to display "in progress" rather
  * than "scored zero". Per-question detail lives in
  * {@link QuizAttemptAnswer}.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #quiz}, {@link #student},
+ *       {@link #startedAt} — the attempt's identity (who tried which
+ *       quiz at what wall-clock instant) is fixed once the row is
+ *       inserted. Re-targeting either FK would silently transfer an
+ *       attempt to a different student or quiz and corrupt the
+ *       gradebook.</li>
+ *   <li><b>Mutable</b>: {@link #submitted}, {@link #completedAt},
+ *       {@link #score}, {@link #maxScore} — populated by the grader
+ *       in the same transaction as the initial insert (and potentially
+ *       by future re-grading flows). The Hibernate dirty-checking on
+ *       these fields is what makes the score-after-save idiom in
+ *       {@code StudentLearningService.submitQuiz} work.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -42,11 +58,11 @@ import lombok.Setter;
 public class QuizAttempt extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "quiz_id", nullable = false)
+    @JoinColumn(name = "quiz_id", nullable = false, updatable = false)
     private Quiz quiz;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @Column(name = "score")
@@ -58,7 +74,7 @@ public class QuizAttempt extends BaseEntity {
     @Column(name = "submitted", nullable = false)
     private boolean submitted;
 
-    @Column(name = "started_at")
+    @Column(name = "started_at", updatable = false)
     private LocalDateTime startedAt;
 
     @Column(name = "completed_at")

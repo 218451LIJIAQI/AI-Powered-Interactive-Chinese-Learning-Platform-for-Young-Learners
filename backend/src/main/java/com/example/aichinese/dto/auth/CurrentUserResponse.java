@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.auth;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -44,8 +45,8 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * @param preferredLanguage UI locale ({@code en}, {@code ms}, or
  *                          {@code zh}); never {@code null} / blank
  *                          after the service layer's defaulting step
- * @param roles             Spring Security authority strings prefixed
- *                          with {@code ROLE_}; never {@code null}
+ * @param roles             application role names (e.g. {@code STUDENT});
+ *                          never {@code null}
  * @param studentProfile    student-extension data, or {@code null} for
  *                          non-student accounts
  * @param teacherProfile    teacher-extension data, or {@code null} for
@@ -77,19 +78,10 @@ public record CurrentUserResponse(
      */
     public CurrentUserResponse {
         Objects.requireNonNull(id, "id must not be null");
-        Objects.requireNonNull(fullName, "fullName must not be null");
-        if (fullName.isBlank()) {
-            throw new IllegalArgumentException("fullName must not be blank");
-        }
-        Objects.requireNonNull(email, "email must not be null");
-        if (email.isBlank()) {
-            throw new IllegalArgumentException("email must not be blank");
-        }
-        Objects.requireNonNull(preferredLanguage, "preferredLanguage must not be null");
-        if (preferredLanguage.isBlank()) {
-            throw new IllegalArgumentException("preferredLanguage must not be blank");
-        }
-        roles = roles == null ? List.of() : List.copyOf(roles);
+        fullName = requireNonBlank(fullName, "fullName");
+        email = requireNonBlank(email, "email");
+        preferredLanguage = requireNonBlank(preferredLanguage, "preferredLanguage");
+        roles = normalizeRoles(roles);
     }
 
     /**
@@ -124,6 +116,8 @@ public record CurrentUserResponse(
 
         public StudentProfileSummary {
             Objects.requireNonNull(id, "id must not be null");
+            displayName = normalizeOptionalText(displayName);
+            currentLevel = normalizeOptionalText(currentLevel);
         }
     }
 
@@ -153,6 +147,35 @@ public record CurrentUserResponse(
         public TeacherProfileSummary {
             Objects.requireNonNull(id, "id must not be null");
             Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
+            bio = normalizeOptionalText(bio);
+            rejectionReason = normalizeOptionalText(rejectionReason);
         }
+    }
+
+    private static String requireNonBlank(String value, String fieldName) {
+        String stripped = Objects.requireNonNull(value, fieldName + " must not be null").strip();
+        if (stripped.isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return stripped;
+    }
+
+    private static List<String> normalizeRoles(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>(source.size());
+        for (String role : source) {
+            normalized.add(requireNonBlank(role, "role"));
+        }
+        return List.copyOf(normalized);
+    }
+
+    private static String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String stripped = value.strip();
+        return stripped.isEmpty() ? null : stripped;
     }
 }

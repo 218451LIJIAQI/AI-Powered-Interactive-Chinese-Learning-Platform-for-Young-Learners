@@ -26,7 +26,12 @@
       <div v-if="group.title" class="sidebar-section-label">{{ group.title }}</div>
       <nav class="sidebar-nav" :aria-label="group.ariaLabel">
         <RouterLink v-for="item in group.items" :key="item.to" :to="item.to" custom v-slot="{ href, navigate }">
-          <a :href="href" class="sidebar-link" :class="{ 'router-link-active': isLinkActive(item.to) }" @click="navigate">
+          <a
+            :href="href"
+            class="sidebar-link"
+            :class="{ 'router-link-active': isLinkActive(item.to) }"
+            @click="navigate"
+          >
             <IconGlyph :name="item.icon" class="sidebar-icon" />
             <span>{{ item.label }}</span>
           </a>
@@ -49,7 +54,9 @@
         <strong>{{ progressLabel }}</strong>
         <span class="muted">{{ progressCaption }}</span>
       </div>
-      <span v-else-if="!auth.isAuthenticated && !isGuestCatalog" class="muted sidebar-footer-subtitle">Sign in to open lessons, practice, classes, rewards, and AI tools.</span>
+      <span v-else-if="!auth.isAuthenticated && !isGuestCatalog" class="muted sidebar-footer-subtitle"
+        >Sign in to open lessons, practice, classes, rewards, and AI tools.</span
+      >
       <div class="sidebar-footer-ornament"><IconGlyph :name="footerDecorationIcon" :size="26" /></div>
     </div>
 
@@ -206,9 +213,7 @@ const footerSubtitle = computed(() => {
 
   switch (role.value) {
     case 'TEACHER':
-      return auth.currentUser?.teacherProfile?.teacherStatus === 'APPROVED'
-        ? 'Verified educator'
-        : 'Educator workspace'
+      return auth.currentUser?.teacherProfile?.teacherStatus === 'APPROVED' ? 'Verified educator' : 'Educator workspace'
     case 'ADMIN':
       return 'Administrator'
     default:
@@ -273,9 +278,7 @@ const footerDecorationIcon = computed(() => {
   }
 })
 
-const showcasePandaSize = computed<number>(() =>
-  !isGuestCatalog.value && role.value === 'TEACHER' ? 122 : 118,
-)
+const showcasePandaSize = computed<number>(() => (!isGuestCatalog.value && role.value === 'TEACHER' ? 122 : 118))
 
 const showcaseOutfit = computed<string>(() =>
   !isGuestCatalog.value && role.value === 'TEACHER' ? '#7d56ff' : '#ef6b40',
@@ -285,9 +288,7 @@ const showcaseAccent = computed<string>(() => '#f6d056')
 
 const showFooterProgress = computed<boolean>(() => !isGuestCatalog.value && role.value === 'STUDENT')
 
-const footerProgressTone = computed<string>(() =>
-  showFooterProgress.value && isPreview.value ? 'warning' : '',
-)
+const footerProgressTone = computed<string>(() => (showFooterProgress.value && isPreview.value ? 'warning' : ''))
 
 function isLinkActive(to: string): boolean {
   const hashIdx = to.indexOf('#')

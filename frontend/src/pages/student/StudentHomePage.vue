@@ -69,7 +69,12 @@
 
             <div class="student-hero-checklist">
               <strong>Lesson checklist:</strong>
-              <div v-for="item in checklist" :key="item.title" class="student-hero-check" :class="{ 'student-hero-check--muted': !item.done }">
+              <div
+                v-for="item in checklist"
+                :key="item.title"
+                class="student-hero-check"
+                :class="{ 'student-hero-check--muted': !item.done }"
+              >
                 <IconGlyph :name="item.done ? 'status' : 'history'" :size="16" />
                 <span>{{ item.title }}</span>
               </div>
@@ -99,7 +104,11 @@
                     @keydown.enter.prevent="clickNode(node)"
                     @keydown.space.prevent="clickNode(node)"
                   >
-                    <span v-if="node.complete || node.current" class="student-path-node-badge" :class="node.complete ? 'is-check' : 'is-current'">
+                    <span
+                      v-if="node.complete || node.current"
+                      class="student-path-node-badge"
+                      :class="node.complete ? 'is-check' : 'is-current'"
+                    >
                       <IconGlyph :name="node.complete ? 'status' : 'flash'" :size="14" />
                     </span>
                     <div class="student-path-icon" :class="`is-${node.variant}`">
@@ -153,14 +162,24 @@
                     <strong>Live speaking practice</strong>
                     <span class="muted">Join the next teacher-guided session.</span>
                   </div>
-                  <button class="btn btn-primary student-class-button" type="button" @click="router.push('/student/classes')">
+                  <button
+                    class="btn btn-primary student-class-button"
+                    type="button"
+                    @click="router.push('/student/classes')"
+                  >
                     View Classes
                   </button>
                 </div>
                 <div class="student-class-scene">
                   <div class="student-class-board">Hello!</div>
                   <div class="student-class-table" />
-                  <PandaIllustration class="student-class-teacher" :size="92" outfit="#7e52ff" accent="#f6d056" compact />
+                  <PandaIllustration
+                    class="student-class-teacher"
+                    :size="92"
+                    outfit="#7e52ff"
+                    accent="#f6d056"
+                    compact
+                  />
                 </div>
               </div>
             </article>
@@ -178,10 +197,18 @@
                     <strong>{{ displayLessonTitle }}</strong>
                     <span class="muted">Review this unit and reinforce recent words.</span>
                   </div>
-                  <button class="btn btn-secondary student-watch-button" type="button" @click="continueLearning">Watch Now</button>
+                  <button class="btn btn-secondary student-watch-button" type="button" @click="continueLearning">
+                    Watch Now
+                  </button>
                 </div>
                 <div class="student-recorded-preview">
-                  <PandaIllustration class="student-recorded-scene" :size="88" outfit="#7e52ff" accent="#f6d056" compact />
+                  <PandaIllustration
+                    class="student-recorded-scene"
+                    :size="88"
+                    outfit="#7e52ff"
+                    accent="#f6d056"
+                    compact
+                  />
                   <div class="student-recorded-duration">{{ nextLessonDuration }}</div>
                 </div>
               </div>
@@ -302,18 +329,20 @@ const emptyProgress: StudentProgressSummaryResponse = {
   recentLessons: [],
 }
 
-const dashboard = computed(() =>
-  dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboard : emptyDashboard),
+const dashboard = computed(
+  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboard : emptyDashboard),
 )
-const progress = computed(() =>
-  progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgress : emptyProgress),
+const progress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgress : emptyProgress),
 )
 const pageLoading = computed(() => dashboardResource.loading.value || progressResource.loading.value)
 const pageError = computed(() => dashboardResource.error.value || progressResource.error.value)
 const usingFallback = computed(() => dashboardResource.usingFallback.value || progressResource.usingFallback.value)
 
 const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || 'Learner').trim())
-const overallProgress = computed(() => safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent))
+const overallProgress = computed(() =>
+  safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
+)
 const nextLesson = computed(() => {
   const unfinished = dashboard.value.unfinishedLessons[0]
   const recent = progress.value.recentLessons[0]
@@ -348,7 +377,10 @@ const heroFocusText = computed(() =>
 
 const checklist = computed(() => [
   { title: 'Open the next lesson', done: nextLesson.value.completionPercent > 0 },
-  { title: 'Review a practice set', done: progress.value.recentLessons.some((lesson) => lesson.completionPercent >= 50) },
+  {
+    title: 'Review a practice set',
+    done: progress.value.recentLessons.some((lesson) => lesson.completionPercent >= 50),
+  },
   { title: 'Build quiz accuracy', done: progress.value.quizAverage >= 80 },
   { title: 'Keep your streak alive', done: dashboard.value.dailyStreak > 0 },
 ])
@@ -403,7 +435,13 @@ const pathNodes = computed(() => {
       title: normalizeLessonTitle(lesson.lessonTitle) || 'Learning step',
       icon: iconForLesson(lesson.lessonTitle),
       progressPercent: completionPercent,
-      statusLabel: completed ? 'Complete' : current ? `${completionPercent}% in progress` : completionPercent > 0 ? `${completionPercent}% started` : 'Up next',
+      statusLabel: completed
+        ? 'Complete'
+        : current
+          ? `${completionPercent}% in progress`
+          : completionPercent > 0
+            ? `${completionPercent}% started`
+            : 'Up next',
       complete: completed,
       current,
       variant: variantForLesson(lesson.lessonTitle),

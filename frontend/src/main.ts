@@ -25,6 +25,8 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import { i18n } from './plugins/i18n'
+import { initObservability } from './plugins/observability'
+import { clearOfflineCaches } from './plugins/pwa'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'
 import './styles/main.css'
@@ -32,6 +34,7 @@ import './styles/main.css'
 const app = createApp(App)
 const pinia = createPinia()
 
+initObservability(app, router)
 app.use(pinia)
 app.use(i18n)
 app.use(router)
@@ -44,6 +47,7 @@ window.addEventListener('mandarin-spark:auth-invalidated', () => {
   const shouldRedirectToAuth = Boolean(activeRoute.meta.roles?.length)
 
   auth.clearSession()
+  void clearOfflineCaches()
 
   if (shouldRedirectToAuth) {
     void router.replace({ name: 'auth', query: { redirect: activeRoute.fullPath } })

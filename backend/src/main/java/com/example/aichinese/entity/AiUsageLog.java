@@ -39,6 +39,12 @@ import lombok.Setter;
  * {@code AiChatSession}) without forcing a JPA association — useful for
  * post-hoc log slicing and intentionally insulated from cascade deletes
  * of the referenced entity.</p>
+ *
+ * <p>Telemetry is append-only by design: every domain field is mapped
+ * {@code updatable = false}, so even an accidental {@code save()} on a
+ * managed instance is a no-op at flush time. The single legitimate
+ * write path is {@code AiLogService#createUsageLog}, which inserts the
+ * row exactly once after the upstream provider call resolves.</p>
  */
 @Getter
 @Setter
@@ -53,42 +59,42 @@ import lombok.Setter;
 public class AiUsageLog extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", updatable = false)
     private User user;
 
-    @Column(name = "feature_key", nullable = false, length = 100)
+    @Column(name = "feature_key", nullable = false, updatable = false, length = 100)
     private String featureKey;
 
-    @Column(name = "provider_name", length = 100)
+    @Column(name = "provider_name", updatable = false, length = 100)
     private String providerName;
 
-    @Column(name = "model_name", length = 120)
+    @Column(name = "model_name", updatable = false, length = 120)
     private String modelName;
 
-    @Column(name = "status", nullable = false, length = 50)
+    @Column(name = "status", nullable = false, updatable = false, length = 50)
     private String status;
 
-    @Column(name = "token_count")
+    @Column(name = "token_count", updatable = false)
     private Integer tokenCount;
 
-    @Column(name = "user_role", length = 50)
+    @Column(name = "user_role", updatable = false, length = 50)
     private String userRole;
 
-    @Column(name = "language_preference", length = 20)
+    @Column(name = "language_preference", updatable = false, length = 20)
     private String languagePreference;
 
-    @Column(name = "input_summary", length = 500)
+    @Column(name = "input_summary", updatable = false, length = 500)
     private String inputSummary;
 
-    @Column(name = "output_summary", length = 500)
+    @Column(name = "output_summary", updatable = false, length = 500)
     private String outputSummary;
 
-    @Column(name = "error_summary", length = 255)
+    @Column(name = "error_summary", updatable = false, length = 255)
     private String errorSummary;
 
-    @Column(name = "related_entity_type", length = 100)
+    @Column(name = "related_entity_type", updatable = false, length = 100)
     private String relatedEntityType;
 
-    @Column(name = "related_entity_id")
+    @Column(name = "related_entity_id", updatable = false)
     private Long relatedEntityId;
 }

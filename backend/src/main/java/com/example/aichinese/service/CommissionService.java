@@ -5,9 +5,11 @@ import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.dto.commerce.CommissionSettingRequest;
 import com.example.aichinese.dto.commerce.CommissionSettingResponse;
 import com.example.aichinese.entity.SystemSetting;
@@ -55,6 +57,7 @@ public class CommissionService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = CacheConfig.COMMISSION_RATE, allEntries = true)
     public CommissionSettingResponse updateCommissionSetting(SecurityUserDetails currentUser, CommissionSettingRequest request) {
         BigDecimal normalizedRate = commerceSettingsService.normalizeCommissionRate(request.commissionRate());
         SystemSetting setting = systemSettingRepository.findBySettingKey(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY)

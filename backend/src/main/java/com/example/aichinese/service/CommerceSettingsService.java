@@ -7,9 +7,11 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 
@@ -50,6 +52,7 @@ public class CommerceSettingsService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.DEFAULT_CURRENCY)
     public String getDefaultCurrency() {
         return systemSettingRepository.findBySettingKey(DEFAULT_CURRENCY_KEY)
                 .map(SystemSetting::getSettingValue)
@@ -62,6 +65,7 @@ public class CommerceSettingsService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.COMMISSION_RATE)
     public BigDecimal getPlatformCommissionRate() {
         return systemSettingRepository.findBySettingKey(PLATFORM_COMMISSION_RATE_KEY)
                 .map(SystemSetting::getSettingValue)

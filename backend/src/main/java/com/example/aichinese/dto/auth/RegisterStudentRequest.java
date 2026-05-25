@@ -1,7 +1,11 @@
 package com.example.aichinese.dto.auth;
 
+import java.util.Locale;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -38,11 +42,11 @@ import jakarta.validation.constraints.Size;
  * {@code AuthService.normalizePreferredLanguage}.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly {@link String#strip() strips}
  * {@link #fullName}, {@link #email} and {@link #preferredLanguage} so
  * Bean Validation operates on the canonical form and downstream
  * {@code AuthService} normalisation steps remain idempotent. Password
- * fields are intentionally <em>not</em> trimmed: leading or trailing
+ * fields are intentionally <em>not</em> stripped: leading or trailing
  * spaces are significant characters bound directly to the BCrypt
  * hash.</p>
  *
@@ -55,14 +59,14 @@ import jakarta.validation.constraints.Size;
  * can still assert structural equivalence.</p>
  *
  * @param fullName          display name used across student-facing UI;
- *                          trimmed by the canonical constructor
- * @param email             login identifier; trimmed by the canonical
+ *                          stripped by the canonical constructor
+ * @param email             login identifier; stripped by the canonical
  *                          constructor and lower-cased server-side
  * @param password          raw password; hashed with BCrypt before
  *                          storage; never logged
  * @param confirmPassword   must equal {@link #password}; checked in
  *                          {@code AuthService}; never logged
- * @param preferredLanguage UI locale hint; trimmed by the canonical
+ * @param preferredLanguage UI locale hint; stripped by the canonical
  *                          constructor; empty/null defaults to
  *                          {@code en}
  */
@@ -86,7 +90,7 @@ public record RegisterStudentRequest(
         String preferredLanguage) {
 
     /**
-     * Defensive canonical constructor: trims user-typed text fields so
+     * Defensive canonical constructor: strips user-typed text fields so
      * Bean Validation operates on the canonical form, and leaves
      * password fields byte-identical so BCrypt hashes the exact value
      * the user typed. {@code null} is preserved for any field so the
@@ -96,14 +100,21 @@ public record RegisterStudentRequest(
      */
     public RegisterStudentRequest {
         if (fullName != null) {
-            fullName = fullName.trim();
+            fullName = fullName.strip();
         }
         if (email != null) {
-            email = email.trim();
+            email = email.strip();
         }
         if (preferredLanguage != null) {
-            preferredLanguage = preferredLanguage.trim();
+            preferredLanguage = preferredLanguage.strip().toLowerCase(Locale.ROOT);
         }
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "Password and confirm password must be at most 72 bytes when encoded as UTF-8")
+    public boolean isPasswordsWithinBcryptByteLimit() {
+        return AuthDtoValidation.isWithinBcryptByteLimit(password)
+                && AuthDtoValidation.isWithinBcryptByteLimit(confirmPassword);
     }
 
     /**

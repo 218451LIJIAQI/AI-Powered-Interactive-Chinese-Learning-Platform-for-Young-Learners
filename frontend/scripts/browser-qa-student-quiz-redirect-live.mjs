@@ -262,17 +262,21 @@ async function main() {
     throw new Error(`Student registration failed with ${registration.status}`)
   }
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1440,1000',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
 
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
@@ -300,12 +304,18 @@ async function main() {
     const { send, on, waitFor } = client
 
     on('Runtime.consoleAPICalled', (params) => {
-      const message = params.args?.map((arg) => arg.value || arg.description || '').filter(Boolean).join(' ') || params.type
+      const message =
+        params.args
+          ?.map((arg) => arg.value || arg.description || '')
+          .filter(Boolean)
+          .join(' ') || params.type
       if (params.type === 'error') evidence.consoleErrors.push(message)
       if (params.type === 'warning' || params.type === 'warn') evidence.consoleWarnings.push(message)
     })
     on('Runtime.exceptionThrown', (params) => {
-      evidence.runtimeExceptions.push(params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception')
+      evidence.runtimeExceptions.push(
+        params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception',
+      )
     })
     on('Network.requestWillBeSent', (params) => {
       requestsById.set(params.requestId, { method: params.request?.method || '', url: params.request?.url || '' })
@@ -313,14 +323,25 @@ async function main() {
     on('Network.loadingFailed', (params) => {
       if (params.canceled || params.errorText === 'net::ERR_ABORTED') return
       const request = requestsById.get(params.requestId) || {}
-      evidence.failedRequests.push({ method: request.method || '', url: request.url || '', errorText: params.errorText, type: params.type })
+      evidence.failedRequests.push({
+        method: request.method || '',
+        url: request.url || '',
+        errorText: params.errorText,
+        type: params.type,
+      })
     })
     on('Network.responseReceived', (params) => {
       const response = params.response || {}
       if (response.url?.startsWith(apiBaseUrl)) {
-        evidence.apiResponses.push({ status: response.status, url: response.url, type: params.type, method: requestsById.get(params.requestId)?.method || '' })
+        evidence.apiResponses.push({
+          status: response.status,
+          url: response.url,
+          type: params.type,
+          method: requestsById.get(params.requestId)?.method || '',
+        })
       }
-      if (response.status >= 400) evidence.httpErrors.push({ status: response.status, url: response.url, type: params.type })
+      if (response.status >= 400)
+        evidence.httpErrors.push({ status: response.status, url: response.url, type: params.type })
     })
 
     await send('Page.enable')
@@ -380,7 +401,8 @@ async function main() {
     evidence.authPageState = await poll(
       'auth login form',
       pageState,
-      (state) => state.path.startsWith('/auth') && state.text.includes('Email Address') && state.text.includes('Password'),
+      (state) =>
+        state.path.startsWith('/auth') && state.text.includes('Email Address') && state.text.includes('Password'),
       15000,
       250,
     )
@@ -391,8 +413,10 @@ async function main() {
     evidence.finalState = await poll(
       'student quiz page after redirect login',
       pageState,
-      (state) => state.path.startsWith('/student/quiz') && state.title.includes('Quiz')
-        && (state.text.includes('Question') || state.text.includes('No quiz ready')),
+      (state) =>
+        state.path.startsWith('/student/quiz') &&
+        state.title.includes('Quiz') &&
+        (state.text.includes('Question') || state.text.includes('No quiz ready')),
       25000,
       250,
     )
@@ -400,25 +424,32 @@ async function main() {
     const screenshot = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
     evidence.screenshotPath = path.join(evidenceDir, 'student-quiz-after-login.png')
     await writeFile(evidence.screenshotPath, Buffer.from(screenshot.data, 'base64'))
-    evidence.pass = evidence.consoleErrors.length === 0
-      && evidence.runtimeExceptions.length === 0
-      && evidence.failedRequests.length === 0
-      && evidence.httpErrors.length === 0
-      && evidence.apiResponses.some((response) => response.url.includes('/auth/login') && response.status === 200)
-      && evidence.apiResponses.some((response) => response.url.includes('/students/quizzes') && response.status === 200)
-      && evidence.finalState.path.startsWith('/student/quiz')
-      && (evidence.finalState.text.includes('Question') || evidence.finalState.text.includes('No quiz ready'))
+    evidence.pass =
+      evidence.consoleErrors.length === 0 &&
+      evidence.runtimeExceptions.length === 0 &&
+      evidence.failedRequests.length === 0 &&
+      evidence.httpErrors.length === 0 &&
+      evidence.apiResponses.some((response) => response.url.includes('/auth/login') && response.status === 200) &&
+      evidence.apiResponses.some((response) => response.url.includes('/students/quizzes') && response.status === 200) &&
+      evidence.finalState.path.startsWith('/student/quiz') &&
+      (evidence.finalState.text.includes('Question') || evidence.finalState.text.includes('No quiz ready'))
   } finally {
     client?.close()
     chrome.kill()
     await sleep(500)
     await rm(userDataDir, { recursive: true, force: true })
     await frontend.stop()
-    await writeFile(path.join(evidenceDir, 'student-quiz-redirect-live-report.json'), JSON.stringify(evidence, null, 2), 'utf8')
+    await writeFile(
+      path.join(evidenceDir, 'student-quiz-redirect-live-report.json'),
+      JSON.stringify(evidence, null, 2),
+      'utf8',
+    )
     await writeFile(path.join(evidenceDir, 'chrome.log'), chromeLogs.join('\n'), 'utf8')
   }
 
-  console.log(`STUDENT_QUIZ_REDIRECT_LIVE_REPORT_JSON=${path.join(evidenceDir, 'student-quiz-redirect-live-report.json')}`)
+  console.log(
+    `STUDENT_QUIZ_REDIRECT_LIVE_REPORT_JSON=${path.join(evidenceDir, 'student-quiz-redirect-live-report.json')}`,
+  )
   if (!evidence.pass) {
     process.exitCode = 1
   }

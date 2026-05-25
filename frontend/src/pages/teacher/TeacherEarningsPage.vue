@@ -12,7 +12,9 @@
       <div>
         <span>Teacher revenue</span>
         <h2>{{ formatCurrency(summary.availableBalance) }} ready for payout</h2>
-        <p>Review released earnings, pending balances, and payout requests with a parent-friendly platform finance flow.</p>
+        <p>
+          Review released earnings, pending balances, and payout requests with a parent-friendly platform finance flow.
+        </p>
       </div>
       <div class="teacher-earnings-hero-grid">
         <article v-for="item in earningHighlights" :key="item.label">
@@ -24,10 +26,30 @@
     </section>
 
     <section class="stats-grid teacher-earnings-stats">
-      <MetricCard label="Gross" :value="formatCurrency(summary.grossAmount)" subtitle="Total teacher sales" icon="money" />
-      <MetricCard label="Net" :value="formatCurrency(summary.totalNetAmount)" subtitle="After commission" icon="earnings" />
-      <MetricCard label="Available" :value="formatCurrency(summary.availableBalance)" subtitle="Ready for payout request" icon="finance" />
-      <MetricCard label="Pending" :value="formatCurrency(summary.pendingBalance)" subtitle="Awaiting release" icon="chart" />
+      <MetricCard
+        label="Gross"
+        :value="formatCurrency(summary.grossAmount)"
+        subtitle="Total teacher sales"
+        icon="money"
+      />
+      <MetricCard
+        label="Net"
+        :value="formatCurrency(summary.totalNetAmount)"
+        subtitle="After commission"
+        icon="earnings"
+      />
+      <MetricCard
+        label="Available"
+        :value="formatCurrency(summary.availableBalance)"
+        subtitle="Ready for payout request"
+        icon="finance"
+      />
+      <MetricCard
+        label="Pending"
+        :value="formatCurrency(summary.pendingBalance)"
+        subtitle="Awaiting release"
+        icon="chart"
+      />
     </section>
 
     <section class="two-col teacher-earnings-layout">
@@ -149,11 +171,15 @@ const emptySummary = {
   availableBalance: 0,
   pendingBalance: 0,
 }
-const earnings = computed(() => earningsResource.data.value ?? (earningsResource.usingFallback.value ? teacherEarnings : []))
+const earnings = computed(
+  () => earningsResource.data.value ?? (earningsResource.usingFallback.value ? teacherEarnings : []),
+)
 const summary = computed(
   () => summaryResource.data.value ?? (summaryResource.usingFallback.value ? teacherEarningsSummary : emptySummary),
 )
-const payouts = computed(() => payoutsResource.data.value ?? (payoutsResource.usingFallback.value ? teacherPayouts : []))
+const payouts = computed(
+  () => payoutsResource.data.value ?? (payoutsResource.usingFallback.value ? teacherPayouts : []),
+)
 const earningHighlights = computed(() => [
   { icon: 'money', label: 'Net earned', value: formatCurrency(summary.value.totalNetAmount) },
   { icon: 'history', label: 'Pending balance', value: formatCurrency(summary.value.pendingBalance) },
@@ -163,16 +189,10 @@ const payoutUsingFallback = computed(() => summaryResource.usingFallback.value |
 const payoutFormDisabled = computed(() => payoutUsingFallback.value || submittingPayout.value)
 const usingFallback = computed(
   () =>
-    earningsResource.usingFallback.value ||
-    summaryResource.usingFallback.value ||
-    payoutsResource.usingFallback.value,
+    earningsResource.usingFallback.value || summaryResource.usingFallback.value || payoutsResource.usingFallback.value,
 )
 const pageError = computed(
-  () =>
-    actionError.value ||
-    earningsResource.error.value ||
-    summaryResource.error.value ||
-    payoutsResource.error.value,
+  () => actionError.value || earningsResource.error.value || summaryResource.error.value || payoutsResource.error.value,
 )
 
 const payoutForm = reactive({

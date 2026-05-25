@@ -54,14 +54,35 @@ final class EnumLookups {
      * @param type concrete enum class, never {@code null}
      * @param <E>  the enum type
      * @return immutable index of upper-cased names to enum constants
-     * @throws NullPointerException if {@code type} is {@code null}
+     * @throws NullPointerException  if {@code type} is {@code null}
+     * @throws IllegalStateException if two constants of {@code type} share
+     *                               the same name after upper-casing under
+     *                               {@link Locale#ROOT} (which would make the
+     *                               tolerant lookup ambiguous); the message
+     *                               names both colliding constants so the
+     *                               violation can be fixed at the source.
      */
     static <E extends Enum<E>> Map<String, E> indexByName(Class<E> type) {
         Objects.requireNonNull(type, "enum type must not be null");
         return Arrays.stream(type.getEnumConstants())
                 .collect(Collectors.toUnmodifiableMap(
                         value -> value.name().toUpperCase(Locale.ROOT),
-                        Function.identity()));
+                        Function.identity(),
+                        (existing, duplicate) -> {
+                            // Java permits case-distinct constant names (e.g. `foo` and `FOO`)
+                            // in the same enum; once we collapse to upper-case under
+                            // Locale.ROOT they collide and the tolerant lookup becomes
+                            // ambiguous. Fail at class-load time with a diagnostic that
+                            // pinpoints the offending enum + both colliding constants so
+                            // the violation cannot ship to production.
+                            throw new IllegalStateException(
+                                    "Enum " + type.getName()
+                                            + " declares constants whose names collide after"
+                                            + " upper-casing under Locale.ROOT: '" + existing.name()
+                                            + "' and '" + duplicate.name()
+                                            + "'. Rename one constant so the package-wide"
+                                            + " tolerant lookup remains unambiguous.");
+                        }));
     }
 
     /**

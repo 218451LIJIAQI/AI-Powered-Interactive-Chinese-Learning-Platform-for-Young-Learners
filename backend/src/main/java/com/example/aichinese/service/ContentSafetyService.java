@@ -13,8 +13,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.aichinese.entity.SystemSetting;
-import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.util.AiInputSanitizer;
 
 /**
@@ -85,10 +83,10 @@ public class ContentSafetyService {
             "殺了你",
             "去死");
 
-    private final SystemSettingRepository systemSettingRepository;
+    private final ContentSafetySettingsReader contentSafetySettingsReader;
 
-    public ContentSafetyService(SystemSettingRepository systemSettingRepository) {
-        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
+    public ContentSafetyService(ContentSafetySettingsReader contentSafetySettingsReader) {
+        this.contentSafetySettingsReader = Objects.requireNonNull(contentSafetySettingsReader, "contentSafetySettingsReader");
     }
 
     public String requireSafeText(String value, int maxLength, String requiredMessage) {
@@ -109,7 +107,7 @@ public class ContentSafetyService {
     }
 
     public void requireSafeContent(String value) {
-        if (value == null || !sensitiveWordFilterEnabled()) {
+        if (value == null || !contentSafetySettingsReader.sensitiveWordFilterEnabled()) {
             return;
         }
         String normalized = normalize(value);
@@ -129,14 +127,6 @@ public class ContentSafetyService {
 
     private String sanitize(String value, int maxLength) {
         return AiInputSanitizer.sanitize(value, maxLength);
-    }
-
-    private boolean sensitiveWordFilterEnabled() {
-        return systemSettingRepository.findBySettingKey(PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY)
-                .map(SystemSetting::getSettingValue)
-                .map(String::trim)
-                .map(value -> !"false".equalsIgnoreCase(value))
-                .orElse(true);
     }
 
     private static String normalize(String value) {

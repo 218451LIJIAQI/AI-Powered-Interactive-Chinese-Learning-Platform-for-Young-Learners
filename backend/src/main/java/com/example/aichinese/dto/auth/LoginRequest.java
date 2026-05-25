@@ -1,7 +1,9 @@
 package com.example.aichinese.dto.auth;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -16,22 +18,22 @@ import jakarta.validation.constraints.Size;
  * or as a structured {@code 429 Too Many Requests} when
  * {@code LoginAttemptLimiter} has locked the account out.</p>
  *
- * <p><b>Why the 72-character password cap.</b> BCrypt — the password
- * hash function used by {@code passwordEncoder} — silently truncates
- * inputs to 72 bytes. Capping the request at the same length ensures
- * the {@code @NotBlank} validator and the hash function agree, and
- * prevents users from believing their long passphrase is more secure
- * than the actually-hashed prefix.</p>
+ * <p><b>Why the 72-byte password cap.</b> BCrypt - the password
+ * hash function used by {@code passwordEncoder} - silently truncates
+ * inputs to 72 bytes. Capping the request by character count and by
+ * UTF-8 byte count ensures validation and the hash function agree,
+ * and prevents users from believing their long passphrase is more
+ * secure than the actually-hashed prefix.</p>
  *
  * <p><b>Why the 320-character email cap.</b> RFC 5321 §4.5.3.1 limits
  * the {@code local@domain} pair to 320 octets total. Anything longer
  * is non-deliverable in practice.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims} the
+ * <p>The canonical constructor eagerly {@link String#strip() strips} the
  * email so Bean Validation sees the canonical form and downstream
- * {@code AuthService.normalizeEmail} (trim + lowercase) is idempotent.
- * The password is intentionally <em>not</em> trimmed: leading or
+ * {@code AuthService.normalizeEmail} (strip + lowercase) is idempotent.
+ * The password is intentionally <em>not</em> stripped: leading or
  * trailing spaces in a password are significant characters and the
  * BCrypt hash binds to the exact byte sequence.</p>
  *
@@ -44,7 +46,7 @@ import jakarta.validation.constraints.Size;
  * equivalence (e.g. when verifying that a deserialiser reproduces an
  * expected payload).</p>
  *
- * @param email    user-facing login identifier; trimmed by the
+ * @param email    user-facing login identifier; stripped by the
  *                 canonical constructor and case-normalised at the
  *                 service layer
  * @param password raw password; never stored, never logged — hashed
@@ -61,7 +63,7 @@ public record LoginRequest(
         String password) {
 
     /**
-     * Defensive canonical constructor: trims surrounding whitespace
+     * Defensive canonical constructor: strips surrounding whitespace
      * from the email so Bean Validation operates on the canonical
      * form, and leaves the password byte-identical so BCrypt hashes
      * the exact value the user typed. {@code null} is preserved for
@@ -71,8 +73,14 @@ public record LoginRequest(
      */
     public LoginRequest {
         if (email != null) {
-            email = email.trim();
+            email = email.strip();
         }
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "Password must be at most 72 bytes when encoded as UTF-8")
+    public boolean isPasswordWithinBcryptByteLimit() {
+        return AuthDtoValidation.isWithinBcryptByteLimit(password);
     }
 
     /**

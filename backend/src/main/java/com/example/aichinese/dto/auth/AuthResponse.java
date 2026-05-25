@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.auth;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -50,10 +51,7 @@ public record AuthResponse(
      * preferable to silent corruption.
      */
     public AuthResponse {
-        Objects.requireNonNull(token, "token must not be null");
-        if (token.isBlank()) {
-            throw new IllegalArgumentException("token must not be blank");
-        }
+        token = requireNonBlank(token, "token");
         Objects.requireNonNull(user, "user must not be null");
     }
 
@@ -77,7 +75,7 @@ public record AuthResponse(
      *   <li>{@link #id} — for client-side cache keys</li>
      *   <li>{@link #fullName} — header greeting</li>
      *   <li>{@link #email} — settings panel</li>
-     *   <li>{@link #roles} — role-aware menu (e.g. {@code ROLE_STUDENT})</li>
+     *   <li>{@link #roles} — role-aware menu (e.g. {@code STUDENT})</li>
      *   <li>{@link #teacherStatus} — when the user is a teacher, signals
      *       whether they may navigate into the publishing flows or are
      *       still pending verification</li>
@@ -94,8 +92,7 @@ public record AuthResponse(
      *                      never {@code null} / blank
      * @param email         the email used to authenticate (lower-cased);
      *                      never {@code null} / blank
-     * @param roles         Spring Security authority strings prefixed
-     *                      with {@code ROLE_} (e.g. {@code ROLE_TEACHER});
+     * @param roles         application role names (e.g. {@code TEACHER});
      *                      never {@code null}
      * @param teacherStatus the teacher's verification state, or
      *                      {@code null} for non-teacher accounts
@@ -117,15 +114,29 @@ public record AuthResponse(
          */
         public UserSummary {
             Objects.requireNonNull(id, "id must not be null");
-            Objects.requireNonNull(fullName, "fullName must not be null");
-            if (fullName.isBlank()) {
-                throw new IllegalArgumentException("fullName must not be blank");
-            }
-            Objects.requireNonNull(email, "email must not be null");
-            if (email.isBlank()) {
-                throw new IllegalArgumentException("email must not be blank");
-            }
-            roles = roles == null ? List.of() : List.copyOf(roles);
+            fullName = requireNonBlank(fullName, "fullName");
+            email = requireNonBlank(email, "email");
+            roles = normalizeRoles(roles);
         }
+    }
+
+    private static String requireNonBlank(String value, String fieldName) {
+        String stripped = Objects.requireNonNull(value, fieldName + " must not be null").strip();
+        if (stripped.isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return stripped;
+    }
+
+    private static List<String> normalizeRoles(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>(source.size());
+        for (String role : source) {
+            String stripped = requireNonBlank(role, "role");
+            normalized.add(stripped);
+        }
+        return List.copyOf(normalized);
     }
 }

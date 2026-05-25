@@ -70,18 +70,12 @@ const exactAppRoutes = new Set([
   '/admin/settings',
 ])
 
-const dynamicRoutePrefixes = [
-  '/courses/',
-  '/student/quiz/',
-]
+const dynamicRoutePrefixes = ['/courses/', '/student/quiz/']
 
 function splitPathAndSuffix(path: string) {
   const queryStart = path.indexOf('?')
   const hashStart = path.indexOf('#')
-  const suffixStart = Math.min(
-    queryStart >= 0 ? queryStart : path.length,
-    hashStart >= 0 ? hashStart : path.length,
-  )
+  const suffixStart = Math.min(queryStart >= 0 ? queryStart : path.length, hashStart >= 0 ? hashStart : path.length)
 
   return {
     basePath: path.slice(0, suffixStart),

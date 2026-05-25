@@ -28,5 +28,8 @@ export const appEnv = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   useDemoData: parseBoolean(import.meta.env.VITE_USE_DEMO_DATA, false),
   enablePreviewMode: parseBoolean(import.meta.env.VITE_ENABLE_PREVIEW_MODE, false),
+  sentryDsn: import.meta.env.VITE_SENTRY_DSN || '',
+  release: import.meta.env.VITE_APP_RELEASE || import.meta.env.VITE_GIT_SHA || '',
+  environment: import.meta.env.MODE || 'local',
   appName: 'MandarinSpark',
 } as const

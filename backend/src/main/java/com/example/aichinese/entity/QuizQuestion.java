@@ -28,6 +28,12 @@ import lombok.Setter;
  * {@link #sortOrder} drives the canonical question order during a
  * student attempt; the {@link QuizAttempt} flow may optionally
  * shuffle.</p>
+ *
+ * <p>{@link #quiz} is mapped {@code updatable = false}: a question
+ * belongs to a single parent quiz for its entire lifetime. Moving a
+ * question between quizzes is expressed by deleting and re-creating
+ * (so the {@link Quiz#getTotalPoints()} cache stays consistent), not
+ * by re-parenting in place.</p>
  */
 @Getter
 @Setter
@@ -39,7 +45,7 @@ import lombok.Setter;
 public class QuizQuestion extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "quiz_id", nullable = false)
+    @JoinColumn(name = "quiz_id", nullable = false, updatable = false)
     private Quiz quiz;
 
     @Column(name = "question_type", nullable = false, length = 50)

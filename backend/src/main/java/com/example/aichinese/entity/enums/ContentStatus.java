@@ -44,8 +44,10 @@ public enum ContentStatus {
     ARCHIVED;
 
     /**
-     * Statuses that an approved teacher may edit. Single source of truth
-     * mirrored by {@code TeacherContentAccessService.TEACHER_EDITABLE_STATUSES}.
+     * Statuses that an approved teacher may edit. The single source of
+     * truth for editor-side gating — {@code TeacherContentAccessService
+     * .TEACHER_EDITABLE_STATUSES} delegates directly to this constant
+     * so the two cannot drift apart.
      */
     public static final Set<ContentStatus> TEACHER_EDITABLE =
             Collections.unmodifiableSet(EnumSet.of(DRAFT, PUBLISHED, REJECTED));
@@ -55,7 +57,8 @@ public enum ContentStatus {
      * identical to {@link #TEACHER_EDITABLE} by design — the two sets
      * are kept separate so each policy can evolve independently (e.g.
      * an admin might later allow archiving {@code SUBMITTED} content
-     * while forbidding edits to it).
+     * while forbidding edits to it). {@code TeacherContentAccessService
+     * .TEACHER_ARCHIVABLE_STATUSES} delegates directly to this constant.
      */
     public static final Set<ContentStatus> TEACHER_ARCHIVABLE =
             Collections.unmodifiableSet(EnumSet.of(DRAFT, PUBLISHED, REJECTED));

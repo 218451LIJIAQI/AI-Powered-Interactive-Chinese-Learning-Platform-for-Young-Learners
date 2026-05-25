@@ -25,6 +25,12 @@ import lombok.Setter;
  * can stage the activity (e.g. show the easier targets first); the
  * front-end is free to randomise the deck on each play, but the
  * authoritative order is preserved here for the catalogue preview.</p>
+ *
+ * <p>{@link #dragDropActivity} is mapped {@code updatable = false}:
+ * an item belongs to exactly one parent activity for its entire
+ * lifetime. The admin workflow deletes and recreates rather than
+ * re-parenting, so the ORM-layer guard simply makes that contract
+ * explicit. All other domain fields remain mutable.</p>
  */
 @Getter
 @Setter
@@ -36,7 +42,7 @@ import lombok.Setter;
 public class DragDropItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "drag_drop_activity_id", nullable = false)
+    @JoinColumn(name = "drag_drop_activity_id", nullable = false, updatable = false)
     private DragDropActivity dragDropActivity;
 
     /**

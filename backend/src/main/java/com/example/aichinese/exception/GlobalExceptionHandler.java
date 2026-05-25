@@ -1,7 +1,9 @@
 package com.example.aichinese.exception;
 
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -23,6 +25,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -34,6 +38,7 @@ import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.util.RequestIdHolder;
 
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 
 /**
  * Centralised, never-leaking translation layer from Spring / JPA /
@@ -43,8 +48,9 @@ import jakarta.validation.ConstraintViolationException;
  * <h2>Why a single class</h2>
  * <p>Every controller in the platform returns {@link ApiResponse}; every
  * thrown exception must therefore land here so the front-end (and any
- * future API client) sees the same {@code { success, message, errors }}
- * shape regardless of what failed deep in the stack. The order of the
+ * future API client) sees the same
+ * {@code { success, message, data, errors, fieldErrors, requestId }} shape
+ * regardless of what failed deep in the stack. The order of the
  * handlers below is deliberately specific-to-generic, so a typed handler
  * (e.g. {@link MaxUploadSizeExceededException}) always wins over the
  * catch-all {@link Exception} handler at the bottom.</p>
@@ -61,15 +67,12 @@ import jakarta.validation.ConstraintViolationException;
  * we never expose stack-trace-style internals to the browser.</p>
  *
  * <h2>Validation handlers</h2>
- * <p>{@link MethodArgumentNotValidException} and
- * {@link ConstraintViolationException} are deliberately collapsed to the
- * single {@code "validation failed"} canonical message instead of being
- * expanded into per-field errors: the platform's DTO-level
- * {@code @NotBlank} / {@code @Size} / {@code @Pattern} messages are
- * already user-facing English strings, and surfacing them per-field can
- * leak internal field names. The front-end runs its own client-side
- * validation that produces matching field-level highlights, so server
- * messages remain coarse-grained.</p>
+ * <p>Validation responses preserve the coarse top-level
+ * {@code "validation failed"} message for every client. For authenticated
+ * form routes, the envelope also includes a safe {@code fieldErrors} map so
+ * the UI can anchor messages next to fields. Public authentication routes
+ * keep that map empty to avoid account-enumeration and credential-policy
+ * hints.</p>
  *
  * <h2>Advice ordering</h2>
  * <p>The class is annotated {@link Order @Order(HIGHEST_PRECEDENCE)} so
@@ -95,13 +98,21 @@ public class GlobalExceptionHandler {
      */
     private static final int MAX_CAUSE_DEPTH = 20;
 
+    private static final Set<String> PUBLIC_AUTH_VALIDATION_PATHS = Set.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/register/student",
+            "/api/v1/auth/register/teacher",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/reset-password",
+            "/api/v1/auth/refresh");
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
         log.warn("Bean validation rejected request body with HTTP 400 [requestId={}]: {} field error(s)",
                 requestId(),
                 exception.getBindingResult().getErrorCount());
-        return badRequest(FriendlyErrorMessageResolver.validationFailedMessage());
+        return validationBadRequest(extractFieldErrors(exception));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -156,7 +167,7 @@ public class GlobalExceptionHandler {
         log.warn("Constraint violation rejected request with HTTP 400 [requestId={}]: {} violation(s)",
                 requestId(),
                 exception.getConstraintViolations() == null ? 0 : exception.getConstraintViolations().size());
-        return badRequest(FriendlyErrorMessageResolver.validationFailedMessage());
+        return validationBadRequest(extractFieldErrors(exception));
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
@@ -165,7 +176,7 @@ public class GlobalExceptionHandler {
         log.warn("Handler-method validation rejected request with HTTP 400 [requestId={}]: {} error(s)",
                 requestId(),
                 exception.getAllErrors().size());
-        return badRequest(FriendlyErrorMessageResolver.validationFailedMessage());
+        return validationBadRequest(Map.of());
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -265,6 +276,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(failure(message));
     }
 
+    private static ResponseEntity<ApiResponse<Void>> validationBadRequest(Map<String, List<String>> fieldErrors) {
+        String message = FriendlyErrorMessageResolver.validationFailedMessage();
+        Map<String, List<String>> safeFieldErrors = shouldExposeFieldErrors() ? fieldErrors : Map.of();
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.failure(message, List.of(message), safeFieldErrors));
+    }
+
     /**
      * Builds the canonical failure envelope used by every handler:
      * a non-success {@link ApiResponse} with the same message both at
@@ -274,6 +292,67 @@ public class GlobalExceptionHandler {
      */
     private static ApiResponse<Void> failure(String message) {
         return ApiResponse.failure(message, List.of(message));
+    }
+
+    private static Map<String, List<String>> extractFieldErrors(MethodArgumentNotValidException exception) {
+        Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
+        exception.getBindingResult().getFieldErrors().forEach(error -> {
+            String field = error.getField();
+            String message = error.getDefaultMessage();
+            if (field != null && message != null && !message.isBlank()) {
+                fieldErrors.computeIfAbsent(field, ignored -> new java.util.ArrayList<>())
+                        .add(message.strip());
+            }
+        });
+        return copyFieldErrors(fieldErrors);
+    }
+
+    private static Map<String, List<String>> extractFieldErrors(ConstraintViolationException exception) {
+        if (exception.getConstraintViolations() == null || exception.getConstraintViolations().isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
+        exception.getConstraintViolations().forEach(violation -> {
+            String field = lastPathSegment(violation.getPropertyPath());
+            String message = violation.getMessage();
+            if (field != null && message != null && !message.isBlank()) {
+                fieldErrors.computeIfAbsent(field, ignored -> new java.util.ArrayList<>())
+                        .add(message.strip());
+            }
+        });
+        return copyFieldErrors(fieldErrors);
+    }
+
+    private static String lastPathSegment(Path path) {
+        if (path == null) {
+            return null;
+        }
+        String last = null;
+        for (Path.Node node : path) {
+            if (node != null && node.getName() != null && !node.getName().isBlank()) {
+                last = node.getName();
+            }
+        }
+        return last;
+    }
+
+    private static Map<String, List<String>> copyFieldErrors(Map<String, List<String>> source) {
+        if (source.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<String>> copied = new LinkedHashMap<>();
+        source.forEach((field, messages) -> copied.put(field, List.copyOf(messages)));
+        return Map.copyOf(copied);
+    }
+
+    private static boolean shouldExposeFieldErrors() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return false;
+        }
+        String path = attributes.getRequest().getRequestURI();
+        return path == null || !PUBLIC_AUTH_VALIDATION_PATHS.contains(path);
     }
 
     /**

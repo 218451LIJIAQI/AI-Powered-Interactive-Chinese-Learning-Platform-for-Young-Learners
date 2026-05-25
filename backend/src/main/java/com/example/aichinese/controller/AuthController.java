@@ -1,9 +1,12 @@
 package com.example.aichinese.controller;
 
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,13 +15,16 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.auth.AuthResponse;
+import com.example.aichinese.dto.auth.AuthSessionResponse;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
 import com.example.aichinese.dto.auth.ForgotPasswordRequest;
 import com.example.aichinese.dto.auth.LoginRequest;
+import com.example.aichinese.dto.auth.RefreshSessionResponse;
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
 import com.example.aichinese.dto.auth.ResetPasswordRequest;
+import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.security.ClientIpResolver;
 import com.example.aichinese.security.PublicAuthRequestLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
@@ -59,14 +65,17 @@ public class AuthController {
     private final AuthService authService;
     private final PublicAuthRequestLimiter publicAuthRequestLimiter;
     private final ClientIpResolver clientIpResolver;
+    private final SecurityProperties securityProperties;
 
     public AuthController(
             AuthService authService,
             PublicAuthRequestLimiter publicAuthRequestLimiter,
-            ClientIpResolver clientIpResolver) {
+            ClientIpResolver clientIpResolver,
+            SecurityProperties securityProperties) {
         this.authService = authService;
         this.publicAuthRequestLimiter = publicAuthRequestLimiter;
         this.clientIpResolver = clientIpResolver;
+        this.securityProperties = securityProperties;
     }
 
     @PostMapping("/register/student")
@@ -90,10 +99,26 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<AuthResponse> login(
+    public ResponseEntity<ApiResponse<AuthResponse>> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
-        return ApiResponse.success("Login successful.", authService.login(request, clientIpResolver.resolve(httpRequest)));
+        AuthSessionResponse session = authService.login(
+                request,
+                clientIpResolver.resolve(httpRequest),
+                httpRequest.getHeader(HttpHeaders.USER_AGENT));
+        return withRefreshCookie("Login successful.", session.authResponse(), session.refreshToken());
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(
+            @CookieValue(name = "${app.security.jwt.refresh-token-cookie-name:mandarin_spark_refresh}", required = false)
+            String refreshToken,
+            HttpServletRequest httpRequest) {
+        RefreshSessionResponse session = authService.refreshSession(
+                refreshToken,
+                clientIpResolver.resolve(httpRequest),
+                httpRequest.getHeader(HttpHeaders.USER_AGENT));
+        return withRefreshCookie("Session refreshed successfully.", session.authResponse(), session.refreshToken());
     }
 
     @GetMapping("/me")
@@ -113,9 +138,11 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ApiResponse<Void> logout(@AuthenticationPrincipal SecurityUserDetails currentUser) {
+    public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal SecurityUserDetails currentUser) {
         authService.logout(currentUser);
-        return ApiResponse.success("Logged out successfully.", null);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
+                .body(ApiResponse.success("Logged out successfully.", null));
     }
 
     @PostMapping("/forgot-password")
@@ -136,5 +163,34 @@ public class AuthController {
         // the reset token; invalid or expired tokens have already surfaced as
         // structured 4xx responses through the exception handler.
         return ApiResponse.success("Password reset request processed successfully.", null);
+    }
+
+    private ResponseEntity<ApiResponse<AuthResponse>> withRefreshCookie(
+            String message,
+            AuthResponse authResponse,
+            com.example.aichinese.dto.auth.RefreshTokenIssue refreshToken) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie(refreshToken.rawToken(), refreshToken.ttl()).toString())
+                .body(ApiResponse.success(message, authResponse));
+    }
+
+    private ResponseCookie refreshCookie(String rawToken, java.time.Duration maxAge) {
+        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), rawToken)
+                .httpOnly(true)
+                .secure(securityProperties.refreshTokenCookieSecure())
+                .sameSite(securityProperties.refreshTokenSameSite())
+                .path("/api/v1/auth")
+                .maxAge(maxAge)
+                .build();
+    }
+
+    private ResponseCookie clearRefreshCookie() {
+        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), "")
+                .httpOnly(true)
+                .secure(securityProperties.refreshTokenCookieSecure())
+                .sameSite(securityProperties.refreshTokenSameSite())
+                .path("/api/v1/auth")
+                .maxAge(0)
+                .build();
     }
 }

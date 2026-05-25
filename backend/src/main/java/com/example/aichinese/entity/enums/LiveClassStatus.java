@@ -46,16 +46,18 @@ public enum LiveClassStatus {
     RESCHEDULED;
 
     /**
-     * Statuses for which the meeting URL may be opened. Mirrors the
-     * existing {@code LiveLearningAccessService.JOINABLE_STATUSES}
-     * constant — a single source of truth here keeps both in sync.
+     * Statuses for which the meeting URL may be opened. Single source
+     * of truth for the join-window gate — {@code
+     * LiveLearningAccessService.JOINABLE_STATUSES} delegates directly
+     * to this constant so the two cannot drift apart.
      */
     public static final Set<LiveClassStatus> JOINABLE =
             Collections.unmodifiableSet(EnumSet.of(SCHEDULED, ONGOING));
 
     /**
-     * Statuses surfaced in the student-visible listing. Mirrors
-     * {@code LiveClassService.STUDENT_VISIBLE_STATUSES}.
+     * Statuses surfaced in the student-visible listing. Single source
+     * of truth — {@code LiveClassService.STUDENT_VISIBLE_STATUSES}
+     * delegates directly to this constant.
      */
     public static final Set<LiveClassStatus> STUDENT_VISIBLE =
             Collections.unmodifiableSet(EnumSet.of(SCHEDULED, ONGOING, RESCHEDULED));

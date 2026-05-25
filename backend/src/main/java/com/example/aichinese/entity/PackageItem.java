@@ -32,6 +32,14 @@ import lombok.Setter;
  *
  * <p>{@link #sortOrder} is the package author's preferred ordering and
  * is honoured when the catalogue lists package contents.</p>
+ *
+ * <p>All domain fields are mapped {@code updatable = false}: a
+ * package-item row identifies the {@code (parent, child)} link plus
+ * the snapshot taken at bundling time, and the admin workflow removes
+ * and re-adds rather than re-targeting in place. {@link #titleSnapshot}
+ * in particular MUST stay frozen — its only purpose is to keep
+ * customer receipts and historic catalogues bit-for-bit reproducible
+ * after the underlying lesson or module is renamed.</p>
  */
 @Getter
 @Setter
@@ -43,19 +51,19 @@ import lombok.Setter;
 public class PackageItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "course_package_id", nullable = false)
+    @JoinColumn(name = "course_package_id", nullable = false, updatable = false)
     private CoursePackage coursePackage;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "item_type", nullable = false, length = 50)
+    @Column(name = "item_type", nullable = false, updatable = false, length = 50)
     private PackageItemType itemType;
 
-    @Column(name = "item_id", nullable = false)
+    @Column(name = "item_id", nullable = false, updatable = false)
     private Long itemId;
 
-    @Column(name = "sort_order", nullable = false)
+    @Column(name = "sort_order", nullable = false, updatable = false)
     private Integer sortOrder = 0;
 
-    @Column(name = "title_snapshot", length = 200)
+    @Column(name = "title_snapshot", updatable = false, length = 200)
     private String titleSnapshot;
 }

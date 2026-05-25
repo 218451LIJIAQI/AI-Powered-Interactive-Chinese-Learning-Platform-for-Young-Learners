@@ -300,8 +300,22 @@ export const studentDashboard: StudentDashboardResponse = {
   points: 850,
   badgeCount: 12,
   recentQuizResults: [
-    { attemptId: 88, quizId: 1, quizTitle: 'Greetings Quiz', score: 8, maxScore: 10, completedAt: '2026-05-18T04:20:00Z' },
-    { attemptId: 89, quizId: 1, quizTitle: 'Tones Check-in', score: 7, maxScore: 10, completedAt: '2026-05-16T06:05:00Z' },
+    {
+      attemptId: 88,
+      quizId: 1,
+      quizTitle: 'Greetings Quiz',
+      score: 8,
+      maxScore: 10,
+      completedAt: '2026-05-18T04:20:00Z',
+    },
+    {
+      attemptId: 89,
+      quizId: 1,
+      quizTitle: 'Tones Check-in',
+      score: 7,
+      maxScore: 10,
+      completedAt: '2026-05-16T06:05:00Z',
+    },
   ],
   weakAreas: ['Tone 3 and tone 4', 'Listening for fast classroom phrases'],
   unfinishedLessons: [
@@ -351,24 +365,117 @@ export const studentStreak: DailyStreakResponse = {
 }
 
 export const studentBadges: BadgeSummaryResponse[] = [
-  { badgeId: 1, name: 'First Steps', description: 'Complete your first lesson', iconKey: 'star', awardedAt: '2026-05-08T04:00:00Z' },
-  { badgeId: 2, name: 'Word Explorer', description: 'Learn 50 new words', iconKey: 'book', awardedAt: '2026-05-11T04:00:00Z' },
-  { badgeId: 3, name: 'Speaking Star', description: 'Practice speaking 10 times', iconKey: 'mic', awardedAt: '2026-05-15T04:00:00Z' },
-  { badgeId: 4, name: 'Tone Builder', description: 'Master basic tone pairs', iconKey: 'sparkles', awardedAt: '2026-05-16T04:00:00Z' },
-  { badgeId: 5, name: 'Listening Hero', description: 'Complete listening exercises', iconKey: 'headphones', awardedAt: '2026-05-16T05:00:00Z' },
-  { badgeId: 6, name: 'Daily Learner', description: 'Keep a seven-day learning streak', iconKey: 'flame', awardedAt: '2026-05-16T06:00:00Z' },
-  { badgeId: 7, name: 'Quiz Champion', description: 'Score 80%+ in a quiz', iconKey: 'trophy', awardedAt: '2026-05-16T07:00:00Z' },
-  { badgeId: 8, name: 'Tracing Star', description: 'Complete character tracing', iconKey: 'pen', awardedAt: '2026-05-16T08:00:00Z' },
-  { badgeId: 9, name: 'Conversation Ready', description: 'Use a new daily phrase', iconKey: 'message', awardedAt: '2026-05-16T09:00:00Z' },
-  { badgeId: 10, name: 'Culture Explorer', description: 'Explore festivals and stories', iconKey: 'book-open', awardedAt: '2026-05-16T10:00:00Z' },
-  { badgeId: 11, name: 'Class Participant', description: 'Join a live class', iconKey: 'users', awardedAt: '2026-05-16T11:00:00Z' },
-  { badgeId: 12, name: 'Mandarin Spark', description: 'Earn a level-up bonus', iconKey: 'award', awardedAt: '2026-05-16T12:00:00Z' },
+  {
+    badgeId: 1,
+    name: 'First Steps',
+    description: 'Complete your first lesson',
+    iconKey: 'star',
+    awardedAt: '2026-05-08T04:00:00Z',
+  },
+  {
+    badgeId: 2,
+    name: 'Word Explorer',
+    description: 'Learn 50 new words',
+    iconKey: 'book',
+    awardedAt: '2026-05-11T04:00:00Z',
+  },
+  {
+    badgeId: 3,
+    name: 'Speaking Star',
+    description: 'Practice speaking 10 times',
+    iconKey: 'mic',
+    awardedAt: '2026-05-15T04:00:00Z',
+  },
+  {
+    badgeId: 4,
+    name: 'Tone Builder',
+    description: 'Master basic tone pairs',
+    iconKey: 'sparkles',
+    awardedAt: '2026-05-16T04:00:00Z',
+  },
+  {
+    badgeId: 5,
+    name: 'Listening Hero',
+    description: 'Complete listening exercises',
+    iconKey: 'headphones',
+    awardedAt: '2026-05-16T05:00:00Z',
+  },
+  {
+    badgeId: 6,
+    name: 'Daily Learner',
+    description: 'Keep a seven-day learning streak',
+    iconKey: 'flame',
+    awardedAt: '2026-05-16T06:00:00Z',
+  },
+  {
+    badgeId: 7,
+    name: 'Quiz Champion',
+    description: 'Score 80%+ in a quiz',
+    iconKey: 'trophy',
+    awardedAt: '2026-05-16T07:00:00Z',
+  },
+  {
+    badgeId: 8,
+    name: 'Tracing Star',
+    description: 'Complete character tracing',
+    iconKey: 'pen',
+    awardedAt: '2026-05-16T08:00:00Z',
+  },
+  {
+    badgeId: 9,
+    name: 'Conversation Ready',
+    description: 'Use a new daily phrase',
+    iconKey: 'message',
+    awardedAt: '2026-05-16T09:00:00Z',
+  },
+  {
+    badgeId: 10,
+    name: 'Culture Explorer',
+    description: 'Explore festivals and stories',
+    iconKey: 'book-open',
+    awardedAt: '2026-05-16T10:00:00Z',
+  },
+  {
+    badgeId: 11,
+    name: 'Class Participant',
+    description: 'Join a live class',
+    iconKey: 'users',
+    awardedAt: '2026-05-16T11:00:00Z',
+  },
+  {
+    badgeId: 12,
+    name: 'Mandarin Spark',
+    description: 'Earn a level-up bonus',
+    iconKey: 'award',
+    awardedAt: '2026-05-16T12:00:00Z',
+  },
 ]
 
 export const studentPointsHistory: PointsTransactionResponse[] = [
-  { id: 1, pointsDelta: 25, reason: 'Completed lesson', sourceType: 'LESSON', sourceId: 10, createdAt: '2026-05-18T04:10:00Z' },
-  { id: 2, pointsDelta: 30, reason: 'Quiz score 90%', sourceType: 'QUIZ', sourceId: 1, createdAt: '2026-05-17T08:10:00Z' },
-  { id: 3, pointsDelta: 10, reason: 'Daily login bonus', sourceType: 'STREAK', sourceId: null, createdAt: '2026-05-17T00:10:00Z' },
+  {
+    id: 1,
+    pointsDelta: 25,
+    reason: 'Completed lesson',
+    sourceType: 'LESSON',
+    sourceId: 10,
+    createdAt: '2026-05-18T04:10:00Z',
+  },
+  {
+    id: 2,
+    pointsDelta: 30,
+    reason: 'Quiz score 90%',
+    sourceType: 'QUIZ',
+    sourceId: 1,
+    createdAt: '2026-05-17T08:10:00Z',
+  },
+  {
+    id: 3,
+    pointsDelta: 10,
+    reason: 'Daily login bonus',
+    sourceType: 'STREAK',
+    sourceId: null,
+    createdAt: '2026-05-17T00:10:00Z',
+  },
 ]
 
 export const studentRewards: RewardSummaryResponse = {
@@ -558,8 +665,24 @@ export const matchingActivity: StudentMatchingGameResponse = {
   estimatedSeconds: 300,
   completed: true,
   items: [
-    { id: 1, leftText: 'father', rightText: 'baba', leftImageUrl: null, rightImageUrl: null, pinyin: 'baba', sortOrder: 1 },
-    { id: 2, leftText: 'mother', rightText: 'mama', leftImageUrl: null, rightImageUrl: null, pinyin: 'mama', sortOrder: 2 },
+    {
+      id: 1,
+      leftText: 'father',
+      rightText: 'baba',
+      leftImageUrl: null,
+      rightImageUrl: null,
+      pinyin: 'baba',
+      sortOrder: 1,
+    },
+    {
+      id: 2,
+      leftText: 'mother',
+      rightText: 'mama',
+      leftImageUrl: null,
+      rightImageUrl: null,
+      pinyin: 'mama',
+      sortOrder: 2,
+    },
   ],
 }
 
@@ -631,7 +754,15 @@ export const storyActivity: StudentStoryActivityResponse = {
   xpReward: 30,
   estimatedSeconds: 420,
   completed: false,
-  questions: [{ id: 1, questionText: 'Who says hello first?', optionsPayload: 'Xiao Ming\nXiao Hong', explanation: 'Xiao Ming says hello first.', sortOrder: 1 }],
+  questions: [
+    {
+      id: 1,
+      questionText: 'Who says hello first?',
+      optionsPayload: 'Xiao Ming\nXiao Hong',
+      explanation: 'Xiao Ming says hello first.',
+      sortOrder: 1,
+    },
+  ],
 }
 
 export const studentQuiz: StudentQuizResponse = {
@@ -712,8 +843,22 @@ export const teacherDashboard: TeacherDashboardResponse = {
     pendingBalance: 460,
   },
   recentQuizResults: [
-    { attemptId: 88, quizTitle: 'Greetings Quiz', studentName: 'Learner', score: 8, maxScore: 10, completedAt: '2026-05-18T04:12:00Z' },
-    { attemptId: 89, quizTitle: 'Numbers Quiz', studentName: 'Chen Hao', score: 9, maxScore: 10, completedAt: '2026-05-17T10:00:00Z' },
+    {
+      attemptId: 88,
+      quizTitle: 'Greetings Quiz',
+      studentName: 'Learner',
+      score: 8,
+      maxScore: 10,
+      completedAt: '2026-05-18T04:12:00Z',
+    },
+    {
+      attemptId: 89,
+      quizTitle: 'Numbers Quiz',
+      studentName: 'Chen Hao',
+      score: 9,
+      maxScore: 10,
+      completedAt: '2026-05-17T10:00:00Z',
+    },
   ],
   recentNotifications: demoNotifications.map((item) => ({
     notificationId: item.id,
@@ -832,7 +977,9 @@ export const teacherCoursePackages: CoursePackageResponse[] = [
     contentStatus: 'PUBLISHED',
     rejectionReason: null,
     teacher: teacherOwnerLi,
-    packageItems: [{ id: 3, packageId: 2, itemType: 'LESSON', itemId: 11, displayOrder: 1, titleSnapshot: 'Family Members' }],
+    packageItems: [
+      { id: 3, packageId: 2, itemType: 'LESSON', itemId: 11, displayOrder: 1, titleSnapshot: 'Family Members' },
+    ],
     createdAt: '2026-04-15T04:00:00Z',
     updatedAt: '2026-05-10T04:00:00Z',
   },
@@ -889,7 +1036,9 @@ export const teacherCoursePackages: CoursePackageResponse[] = [
     contentStatus: 'DRAFT',
     rejectionReason: null,
     teacher: teacherOwnerLi,
-    packageItems: [{ id: 8, packageId: 5, itemType: 'LESSON', itemId: 16, displayOrder: 1, titleSnapshot: 'Finding Places' }],
+    packageItems: [
+      { id: 8, packageId: 5, itemType: 'LESSON', itemId: 16, displayOrder: 1, titleSnapshot: 'Finding Places' },
+    ],
     createdAt: '2026-04-25T04:00:00Z',
     updatedAt: '2026-05-09T04:00:00Z',
   },
@@ -1104,7 +1253,12 @@ export const teacherLiveClasses: LiveClassResponse[] = [
     meetingLink: 'https://example.com/teacher/live/3',
     teacher: { teacherId: 301, userId: 102, displayName: 'Li Wei' },
     lesson: { lessonId: 14, lessonTitle: 'Dragon Boat Festival', learningType: 'RECORDED', accessType: 'PAID' },
-    coursePackage: { packageId: 4, packageTitle: 'Chinese Culture & Festivals', learningType: 'RECORDED', accessType: 'PAID' },
+    coursePackage: {
+      packageId: 4,
+      packageTitle: 'Chinese Culture & Festivals',
+      learningType: 'RECORDED',
+      accessType: 'PAID',
+    },
     createdAt: '2026-05-04T04:00:00Z',
     updatedAt: '2026-05-15T04:00:00Z',
   },
@@ -1192,8 +1346,22 @@ export const teacherQuizzes: TeacherQuizResponse[] = [
 ]
 
 export const teacherQuizAttempts: TeacherQuizAttemptSummaryResponse[] = [
-  { attemptId: 88, studentId: 101, studentName: 'Learner', score: 8, maxScore: 10, submittedAt: '2026-05-18T04:12:00Z' },
-  { attemptId: 89, studentId: 110, studentName: 'Chen Hao', score: 9, maxScore: 10, submittedAt: '2026-05-17T10:00:00Z' },
+  {
+    attemptId: 88,
+    studentId: 101,
+    studentName: 'Learner',
+    score: 8,
+    maxScore: 10,
+    submittedAt: '2026-05-18T04:12:00Z',
+  },
+  {
+    attemptId: 89,
+    studentId: 110,
+    studentName: 'Chen Hao',
+    score: 9,
+    maxScore: 10,
+    submittedAt: '2026-05-17T10:00:00Z',
+  },
 ]
 
 export const teacherFeedback: TeacherFeedbackResponse[] = [
@@ -1306,8 +1474,20 @@ export const adminDashboard: AdminDashboardResponse = {
   totalQuizzes: 122,
   totalGames: 88,
   recentUserActivity: [
-    { userId: 101, fullName: 'Learner', email: 'learner@example.com', roles: ['STUDENT'], createdAt: '2026-05-18T05:00:00Z' },
-    { userId: 201, fullName: 'Teacher Lily', email: 'lily@example.com', roles: ['TEACHER'], createdAt: '2026-05-17T05:00:00Z' },
+    {
+      userId: 101,
+      fullName: 'Learner',
+      email: 'learner@example.com',
+      roles: ['STUDENT'],
+      createdAt: '2026-05-18T05:00:00Z',
+    },
+    {
+      userId: 201,
+      fullName: 'Teacher Lily',
+      email: 'lily@example.com',
+      roles: ['TEACHER'],
+      createdAt: '2026-05-17T05:00:00Z',
+    },
   ],
   aiUsageSummary: {
     totalRequests: 24198,
@@ -1321,8 +1501,20 @@ export const adminDashboard: AdminDashboardResponse = {
   pendingRefunds: 6,
   pendingPayouts: 4,
   recentAuditLogs: [
-    { auditLogId: 1, actionType: 'TEACHER_APPROVED', targetType: 'TeacherProfile', description: 'Approved teacher Li Wei', createdAt: '2026-05-18T04:12:00Z' },
-    { auditLogId: 2, actionType: 'CONTENT_ARCHIVED', targetType: 'CoursePackage', description: 'Archived outdated package', createdAt: '2026-05-17T07:40:00Z' },
+    {
+      auditLogId: 1,
+      actionType: 'TEACHER_APPROVED',
+      targetType: 'TeacherProfile',
+      description: 'Approved teacher Li Wei',
+      createdAt: '2026-05-18T04:12:00Z',
+    },
+    {
+      auditLogId: 2,
+      actionType: 'CONTENT_ARCHIVED',
+      targetType: 'CoursePackage',
+      description: 'Archived outdated package',
+      createdAt: '2026-05-17T07:40:00Z',
+    },
   ],
 }
 
@@ -1375,15 +1567,96 @@ export const adminAnalytics: AdminAnalyticsResponse = {
 
 export const adminUsers: PageResponse<AdminUserListItemResponse> = {
   items: [
-    { userId: 101, fullName: 'Learner', email: 'learner@example.com', roles: ['STUDENT'], active: true, teacherStatus: null, createdAt: '2026-03-01T04:00:00Z', updatedAt: '2026-05-18T04:00:00Z' },
-    { userId: 110, fullName: 'Chen Hao', email: 'chen.hao.edu@gmail.com', roles: ['STUDENT'], active: true, teacherStatus: null, createdAt: '2026-03-06T04:00:00Z', updatedAt: '2026-05-18T01:45:00Z' },
-    { userId: 111, fullName: 'Zhang Yuxi', email: 'zhang.yuxi@gmail.com', roles: ['STUDENT'], active: false, teacherStatus: null, createdAt: '2026-04-28T04:00:00Z', updatedAt: '2026-05-13T04:00:00Z' },
-    { userId: 102, fullName: 'Li Wei', email: 'li.wei@email.com', roles: ['STUDENT'], active: true, teacherStatus: null, createdAt: '2026-05-14T04:00:00Z', updatedAt: '2026-05-18T02:30:00Z' },
-    { userId: 201, fullName: 'Teacher Lily', email: 'lily.teach@gmail.com', roles: ['TEACHER'], active: true, teacherStatus: 'APPROVED', createdAt: '2026-04-20T04:00:00Z', updatedAt: '2026-05-18T00:20:00Z' },
-    { userId: 202, fullName: 'Teacher Ken', email: 'ken.chen@mandarinspark.com', roles: ['TEACHER'], active: true, teacherStatus: 'APPROVED', createdAt: '2026-04-18T04:00:00Z', updatedAt: '2026-05-18T00:15:00Z' },
-    { userId: 203, fullName: 'Mei Lin', email: 'mei.lin@teachmail.com', roles: ['TEACHER'], active: true, teacherStatus: 'PENDING', createdAt: '2026-05-13T04:00:00Z', updatedAt: '2026-05-17T18:15:00Z' },
-    { userId: 103, fullName: 'Admin Olivia', email: 'admin@example.com', roles: ['ADMIN'], active: true, teacherStatus: null, createdAt: '2026-01-10T04:00:00Z', updatedAt: '2026-05-18T04:00:00Z' },
-    { userId: 104, fullName: 'Admin Daniel', email: 'daniel.admin@mandarinspark.com', roles: ['ADMIN'], active: true, teacherStatus: null, createdAt: '2026-02-22T04:00:00Z', updatedAt: '2026-05-18T01:10:00Z' },
+    {
+      userId: 101,
+      fullName: 'Learner',
+      email: 'learner@example.com',
+      roles: ['STUDENT'],
+      active: true,
+      teacherStatus: null,
+      createdAt: '2026-03-01T04:00:00Z',
+      updatedAt: '2026-05-18T04:00:00Z',
+    },
+    {
+      userId: 110,
+      fullName: 'Chen Hao',
+      email: 'chen.hao.edu@gmail.com',
+      roles: ['STUDENT'],
+      active: true,
+      teacherStatus: null,
+      createdAt: '2026-03-06T04:00:00Z',
+      updatedAt: '2026-05-18T01:45:00Z',
+    },
+    {
+      userId: 111,
+      fullName: 'Zhang Yuxi',
+      email: 'zhang.yuxi@gmail.com',
+      roles: ['STUDENT'],
+      active: false,
+      teacherStatus: null,
+      createdAt: '2026-04-28T04:00:00Z',
+      updatedAt: '2026-05-13T04:00:00Z',
+    },
+    {
+      userId: 102,
+      fullName: 'Li Wei',
+      email: 'li.wei@email.com',
+      roles: ['STUDENT'],
+      active: true,
+      teacherStatus: null,
+      createdAt: '2026-05-14T04:00:00Z',
+      updatedAt: '2026-05-18T02:30:00Z',
+    },
+    {
+      userId: 201,
+      fullName: 'Teacher Lily',
+      email: 'lily.teach@gmail.com',
+      roles: ['TEACHER'],
+      active: true,
+      teacherStatus: 'APPROVED',
+      createdAt: '2026-04-20T04:00:00Z',
+      updatedAt: '2026-05-18T00:20:00Z',
+    },
+    {
+      userId: 202,
+      fullName: 'Teacher Ken',
+      email: 'ken.chen@mandarinspark.com',
+      roles: ['TEACHER'],
+      active: true,
+      teacherStatus: 'APPROVED',
+      createdAt: '2026-04-18T04:00:00Z',
+      updatedAt: '2026-05-18T00:15:00Z',
+    },
+    {
+      userId: 203,
+      fullName: 'Mei Lin',
+      email: 'mei.lin@teachmail.com',
+      roles: ['TEACHER'],
+      active: true,
+      teacherStatus: 'PENDING',
+      createdAt: '2026-05-13T04:00:00Z',
+      updatedAt: '2026-05-17T18:15:00Z',
+    },
+    {
+      userId: 103,
+      fullName: 'Admin Olivia',
+      email: 'admin@example.com',
+      roles: ['ADMIN'],
+      active: true,
+      teacherStatus: null,
+      createdAt: '2026-01-10T04:00:00Z',
+      updatedAt: '2026-05-18T04:00:00Z',
+    },
+    {
+      userId: 104,
+      fullName: 'Admin Daniel',
+      email: 'daniel.admin@mandarinspark.com',
+      roles: ['ADMIN'],
+      active: true,
+      teacherStatus: null,
+      createdAt: '2026-02-22T04:00:00Z',
+      updatedAt: '2026-05-18T01:10:00Z',
+    },
   ],
   page: 0,
   size: 10,
@@ -1393,10 +1666,38 @@ export const adminUsers: PageResponse<AdminUserListItemResponse> = {
 
 export const adminStudents: PageResponse<AdminStudentListItemResponse> = {
   items: [
-    { studentId: 201, userId: 101, fullName: 'Learner', email: 'learner@example.com', preferredLanguage: 'en', createdAt: '2026-03-01T04:00:00Z' },
-    { studentId: 202, userId: 110, fullName: 'Chen Hao', email: 'chen@example.com', preferredLanguage: 'zh', createdAt: '2026-03-06T04:00:00Z' },
-    { studentId: 203, userId: 111, fullName: 'Zhang Yuxi', email: 'zhang.yuxi@gmail.com', preferredLanguage: 'en', createdAt: '2026-04-28T04:00:00Z' },
-    { studentId: 204, userId: 102, fullName: 'Li Wei', email: 'li.wei@email.com', preferredLanguage: 'en', createdAt: '2026-05-14T04:00:00Z' },
+    {
+      studentId: 201,
+      userId: 101,
+      fullName: 'Learner',
+      email: 'learner@example.com',
+      preferredLanguage: 'en',
+      createdAt: '2026-03-01T04:00:00Z',
+    },
+    {
+      studentId: 202,
+      userId: 110,
+      fullName: 'Chen Hao',
+      email: 'chen@example.com',
+      preferredLanguage: 'zh',
+      createdAt: '2026-03-06T04:00:00Z',
+    },
+    {
+      studentId: 203,
+      userId: 111,
+      fullName: 'Zhang Yuxi',
+      email: 'zhang.yuxi@gmail.com',
+      preferredLanguage: 'en',
+      createdAt: '2026-04-28T04:00:00Z',
+    },
+    {
+      studentId: 204,
+      userId: 102,
+      fullName: 'Li Wei',
+      email: 'li.wei@email.com',
+      preferredLanguage: 'en',
+      createdAt: '2026-05-14T04:00:00Z',
+    },
   ],
   page: 0,
   size: 10,
@@ -1507,7 +1808,15 @@ export const adminTeacherDetail: AdminTeacherDetailResponse = {
     },
   ],
   verificationReviewHistory: [],
-  recentAuditLogs: [{ auditLogId: 1, actionType: 'APPLICATION_SUBMITTED', targetType: 'TeacherProfile', description: 'Teacher application submitted', createdAt: '2026-05-14T04:00:00Z' }],
+  recentAuditLogs: [
+    {
+      auditLogId: 1,
+      actionType: 'APPLICATION_SUBMITTED',
+      targetType: 'TeacherProfile',
+      description: 'Teacher application submitted',
+      createdAt: '2026-05-14T04:00:00Z',
+    },
+  ],
   createdAt: '2026-03-20T04:00:00Z',
   updatedAt: '2026-05-14T04:05:00Z',
 }
@@ -1646,15 +1955,7 @@ export const adminAiReports: AdminAiResponseReportResponse[] = [
 ]
 
 export const studentAiReports: StudentAiResponseReportResponse[] = adminAiReports.map(
-  ({
-    studentUserId,
-    studentName,
-    studentEmail,
-    reviewerUserId,
-    reviewerName,
-    reviewerNote,
-    ...report
-  }) => report,
+  ({ studentUserId, studentName, studentEmail, reviewerUserId, reviewerName, reviewerNote, ...report }) => report,
 )
 
 export const adminNotifications: NotificationResponse[] = [
@@ -1735,8 +2036,28 @@ export const commissionSetting: CommissionSettingResponse = {
 export const cartDemo: CartResponse = {
   cartId: 1,
   items: [
-    { cartItemId: 1, itemType: 'PACKAGE' as ManagedContentType, itemId: 1, title: 'Mandarin for Beginners', unitPrice: 49, currencyCode: 'USD', quantity: 1, subtotal: 49, teacherOwned: true },
-    { cartItemId: 2, itemType: 'LESSON' as ManagedContentType, itemId: 2, title: 'Everyday Conversations', unitPrice: 79, currencyCode: 'USD', quantity: 1, subtotal: 79, teacherOwned: true },
+    {
+      cartItemId: 1,
+      itemType: 'PACKAGE' as ManagedContentType,
+      itemId: 1,
+      title: 'Mandarin for Beginners',
+      unitPrice: 49,
+      currencyCode: 'USD',
+      quantity: 1,
+      subtotal: 49,
+      teacherOwned: true,
+    },
+    {
+      cartItemId: 2,
+      itemType: 'LESSON' as ManagedContentType,
+      itemId: 2,
+      title: 'Everyday Conversations',
+      unitPrice: 79,
+      currencyCode: 'USD',
+      quantity: 1,
+      subtotal: 79,
+      teacherOwned: true,
+    },
   ],
   totalAmount: 128,
   currencyCode: 'USD',
@@ -1797,8 +2118,17 @@ export const aiStoryReply: AiStoryGeneratorResponse = {
   pinyin: 'Xiǎo Míng zài xuéxiào kànjiàn Xiǎo Hóng, shuō: “Nǐ hǎo!”',
   englishTranslation: 'At school, Xiao Ming sees Xiao Hong and says, “Hello!”',
   bahasaMelayuTranslation: 'Di sekolah, Xiao Ming nampak Xiao Hong lalu berkata, “Hello!”',
-  vocabularyList: [{ chineseWord: '学校', pinyin: 'xuéxiào', englishMeaning: 'school', bahasaMelayuMeaning: 'sekolah' }],
-  comprehensionQuestions: [{ question: 'Where are they?', options: ['At school', 'At home'], answer: 'At school.', explanation: 'The story says they meet at school.' }],
+  vocabularyList: [
+    { chineseWord: '学校', pinyin: 'xuéxiào', englishMeaning: 'school', bahasaMelayuMeaning: 'sekolah' },
+  ],
+  comprehensionQuestions: [
+    {
+      question: 'Where are they?',
+      options: ['At school', 'At home'],
+      answer: 'At school.',
+      explanation: 'The story says they meet at school.',
+    },
+  ],
   encouragement: 'Short stories help you remember words better.',
   usageMode: 'Reading practice',
   status: 'SUCCESS',

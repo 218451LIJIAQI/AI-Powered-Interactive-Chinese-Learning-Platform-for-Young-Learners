@@ -1,5 +1,5 @@
 -- =====================================================================
--- V1 — Consolidated baseline schema.
+-- V1 - Consolidated baseline schema.
 --
 -- This is the single source-of-truth migration that creates every
 -- table, index, foreign-key constraint, and default-seed row used by
@@ -13,9 +13,9 @@
 --   - The schema reads top-to-bottom like a contract: a reviewer can
 --     see every table, its columns, and its constraints in a single
 --     pass without jumping across files.
---   - New additive changes go into V2+ migrations (see
---     V14__final_database_contract_hardening.sql for the most recent
---     example) so the consolidated baseline remains immutable.
+--   - During this pre-production assessment phase, every accepted
+--     schema change is folded back into this one baseline file so a
+--     fresh install has one database contract to review and apply.
 --
 -- Conventions used throughout:
 --   - Primary keys are `bigint auto_increment`.
@@ -30,11 +30,13 @@
 --     for query performance on the FK column.
 --
 -- Forward-only:
---   This file never changes once a release ships. All future schema
---   changes ship as V2..VN migrations.
+--   This file is the only migration in this repository. If the project
+--   later ships against a long-lived production database, freeze this
+--   baseline at that release and create a new baseline only through a
+--   deliberate migration-squash process.
 -- =====================================================================
 
--- ===== Source: V1__baseline_existing_schema.sql =====
+-- ===== Section: baseline core schema =====
 
     create table ai_chat_messages (
         created_at datetime(6) not null,
@@ -1721,7 +1723,7 @@
        references student_profiles (id);
 
 
--- ===== Source: V2__create_ai_response_reports.sql =====
+-- ===== Section: ai response reports =====
 create table ai_response_reports (
     created_at datetime(6) not null,
     id bigint not null auto_increment,
@@ -1783,11 +1785,11 @@ alter table ai_response_reports
     references users (id);
 
 
--- ===== Source: V3__drop_legacy_lesson_activities.sql =====
+-- ===== Section: legacy lesson activity cleanup =====
 drop table if exists lesson_activities;
 
 
--- ===== Source: V4__remove_legacy_activity_package_items.sql =====
+-- ===== Section: package item activity cleanup =====
 set @delete_legacy_activity_package_items = if(
     (
         select count(*)
@@ -1824,7 +1826,7 @@ alter table package_items
     modify column item_type enum ('MODULE','LESSON') not null;
 
 
--- ===== Source: V5__rename_student_activity_progress_to_quiz_progress.sql =====
+-- ===== Section: student quiz progress consolidation =====
 create table if not exists student_quiz_progress (
     attempt_count integer not null,
     completed bit not null,
@@ -1987,7 +1989,7 @@ deallocate prepare create_student_quiz_progress_student_fk_stmt;
 drop table if exists student_activity_progress;
 
 
--- ===== Source: V6__sync_activity_library_schema.sql =====
+-- ===== Section: activity library schema sync =====
 set @add_drag_drop_created_by_user_id = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'drag_drop_activities' and column_name = 'created_by_user_id') = 0,
     'alter table drag_drop_activities add column created_by_user_id bigint',
@@ -2790,7 +2792,7 @@ execute add_tracing_created_by_user_id_fk_stmt;
 deallocate prepare add_tracing_created_by_user_id_fk_stmt;
 
 
--- ===== Source: V7__add_hot_path_indexes.sql =====
+-- ===== Section: hot path indexes =====
 set @add_payment_records_student_created_at_index = if(
     (select count(*) from information_schema.statistics where table_schema = database() and table_name = 'payment_records' and index_name = 'idx_payment_records_student_created_at') = 0,
     'create index idx_payment_records_student_created_at on payment_records (student_id, created_at)',
@@ -2927,7 +2929,7 @@ execute add_course_packages_status_created_at_index_stmt;
 deallocate prepare add_course_packages_status_created_at_index_stmt;
 
 
--- ===== Source: V8__strengthen_financial_data_integrity.sql =====
+-- ===== Section: financial integrity hardening =====
 update orders set total_amount = 0.00 where total_amount is null;
 update orders set currency_code = upper(trim(currency_code)) where currency_code is not null;
 update order_items set unit_price = 0.00 where unit_price is null;
@@ -2939,34 +2941,34 @@ update teacher_earnings set gross_amount = 0.00 where gross_amount is null;
 update teacher_earnings set commission_amount = 0.00 where commission_amount is null;
 update teacher_earnings set net_amount = 0.00 where net_amount is null;
 
-set @v8_orders_invalid_count = (
+set @baseline_financial_orders_invalid_count = (
     select count(*) from orders
     where total_amount < 0 or currency_code is null or currency_code not regexp '^[A-Z]{3}$'
 );
-set @v8_sql = if(@v8_orders_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: orders contain negative totals or invalid currency codes''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_orders_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: orders contain negative totals or invalid currency codes''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_order_items_invalid_count = (
+set @baseline_financial_order_items_invalid_count = (
     select count(*) from order_items
     where quantity <= 0 or unit_price < 0 or line_total < 0
 );
-set @v8_sql = if(@v8_order_items_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: order_items contain non-positive quantities or negative amounts''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_order_items_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: order_items contain non-positive quantities or negative amounts''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_payment_records_invalid_count = (
+set @baseline_financial_payment_records_invalid_count = (
     select count(*) from payment_records
     where order_id is null or student_id is null or amount < 0 or currency_code is null or currency_code not regexp '^[A-Z]{3}$'
 );
-set @v8_sql = if(@v8_payment_records_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: payment_records contain missing owner/order, negative amounts, or invalid currency codes''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_payment_records_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: payment_records contain missing owner/order, negative amounts, or invalid currency codes''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_payment_provider_duplicate_count = (
+set @baseline_financial_payment_provider_duplicate_count = (
     select count(*) from (
         select provider_name, provider_reference
         from payment_records
@@ -2975,21 +2977,21 @@ set @v8_payment_provider_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v8_sql = if(@v8_payment_provider_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: duplicate payment provider references exist''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_payment_provider_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate payment provider references exist''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_entitlements_invalid_count = (
+set @baseline_financial_entitlements_invalid_count = (
     select count(*) from payment_entitlements
     where order_id is null or payment_record_id is null
 );
-set @v8_sql = if(@v8_entitlements_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: payment_entitlements contain missing order/payment links''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_entitlements_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: payment_entitlements contain missing order/payment links''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_entitlements_duplicate_count = (
+set @baseline_financial_entitlements_duplicate_count = (
     select count(*) from (
         select order_id, item_type, item_id, coalesce(feature_key, '') as feature_key_normalized
         from payment_entitlements
@@ -2997,21 +2999,21 @@ set @v8_entitlements_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v8_sql = if(@v8_entitlements_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: duplicate payment entitlement tuples exist''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_entitlements_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate payment entitlement tuples exist''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_refunds_invalid_count = (
+set @baseline_financial_refunds_invalid_count = (
     select count(*) from refund_requests
     where order_id is null or amount < 0
 );
-set @v8_sql = if(@v8_refunds_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: refund_requests contain missing orders or negative amounts''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_refunds_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: refund_requests contain missing orders or negative amounts''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_active_refund_duplicate_count = (
+set @baseline_financial_active_refund_duplicate_count = (
     select count(*) from (
         select order_id
         from refund_requests
@@ -3020,21 +3022,21 @@ set @v8_active_refund_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v8_sql = if(@v8_active_refund_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: multiple active refund requests exist for an order''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_active_refund_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: multiple active refund requests exist for an order''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_payouts_invalid_count = (
+set @baseline_financial_payouts_invalid_count = (
     select count(*) from payout_requests
     where amount is null or amount <= 0
 );
-set @v8_sql = if(@v8_payouts_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: payout_requests contain missing or non-positive amounts''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_payouts_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: payout_requests contain missing or non-positive amounts''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_teacher_earnings_invalid_count = (
+set @baseline_financial_teacher_earnings_invalid_count = (
     select count(*) from teacher_earnings
     where order_item_id is null
        or gross_amount < 0
@@ -3043,12 +3045,12 @@ set @v8_teacher_earnings_invalid_count = (
        or commission_amount > gross_amount
        or net_amount <> gross_amount - commission_amount
 );
-set @v8_sql = if(@v8_teacher_earnings_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: teacher_earnings contain missing order items or inconsistent amounts''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_teacher_earnings_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: teacher_earnings contain missing order items or inconsistent amounts''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
-set @v8_teacher_earnings_duplicate_count = (
+set @baseline_financial_teacher_earnings_duplicate_count = (
     select count(*) from (
         select order_item_id
         from teacher_earnings
@@ -3056,10 +3058,10 @@ set @v8_teacher_earnings_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v8_sql = if(@v8_teacher_earnings_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V8 blocked: duplicate teacher earning rows exist for an order item''');
-prepare v8_stmt from @v8_sql;
-execute v8_stmt;
-deallocate prepare v8_stmt;
+set @baseline_financial_sql = if(@baseline_financial_teacher_earnings_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate teacher earning rows exist for an order item''');
+prepare baseline_financial_stmt from @baseline_financial_sql;
+execute baseline_financial_stmt;
+deallocate prepare baseline_financial_stmt;
 
 alter table payment_entitlements
     drop foreign key FK7d9y052u9mtl9qawornj5nwy7,
@@ -3147,7 +3149,7 @@ alter table teacher_earnings
     add constraint FKh0ecr76qq1quwldf7lapak879 foreign key (order_item_id) references order_items (id);
 
 
--- ===== Source: V9__add_audit_request_traceability.sql =====
+-- ===== Section: audit request traceability =====
 alter table audit_logs
     add column request_id varchar(120) null;
 
@@ -3155,7 +3157,7 @@ create index idx_audit_logs_request_id
     on audit_logs (request_id);
 
 
--- ===== Source: V10__minimize_ai_response_report_snapshot_retention.sql =====
+-- ===== Section: ai report snapshot retention minimization =====
 alter table ai_response_reports
     modify column ai_response_snapshot LONGTEXT null;
 
@@ -3165,12 +3167,12 @@ set prompt_snapshot = null,
 where chat_message_id is not null;
 
 
--- ===== Source: V11__add_user_session_version.sql =====
+-- ===== Section: user session version =====
 alter table users
     add column session_version bigint not null default 0;
 
 
--- ===== Source: V12__enforce_database_contracts_and_privacy_bounds.sql =====
+-- ===== Section: database contracts and privacy bounds =====
 update cart_items set unit_price = 0.00 where unit_price is null;
 update ai_feedback_records
 set input_text = concat('legacy_content_redacted_length=', char_length(input_text))
@@ -3180,7 +3182,7 @@ set feedback_text = concat('legacy_content_redacted_length=', char_length(feedba
 where feedback_text is not null and feedback_text not regexp '^(content_length|legacy_content_redacted_length)=';
 update ai_feedback_records set input_file_url = null where input_file_url is not null;
 
-set @v12_cart_duplicate_count = (
+set @baseline_contract_cart_duplicate_count = (
     select count(*) from (
         select cart_id, item_type, item_id
         from cart_items
@@ -3188,12 +3190,12 @@ set @v12_cart_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_cart_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: duplicate cart item tuples exist''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_cart_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate cart item tuples exist''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_lesson_progress_duplicate_count = (
+set @baseline_contract_lesson_progress_duplicate_count = (
     select count(*) from (
         select student_id, lesson_id
         from lesson_progress
@@ -3201,12 +3203,12 @@ set @v12_lesson_progress_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_lesson_progress_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: duplicate lesson progress tuples exist''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_lesson_progress_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate lesson progress tuples exist''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_student_progress_duplicate_count = (
+set @baseline_contract_student_progress_duplicate_count = (
     select count(*) from (
         select student_id
         from student_progress
@@ -3214,12 +3216,12 @@ set @v12_student_progress_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_student_progress_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: duplicate student progress summaries exist''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_student_progress_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate student progress summaries exist''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_daily_streak_duplicate_count = (
+set @baseline_contract_daily_streak_duplicate_count = (
     select count(*) from (
         select student_id
         from daily_streaks
@@ -3227,12 +3229,12 @@ set @v12_daily_streak_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_daily_streak_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: duplicate daily streak rows exist''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_daily_streak_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate daily streak rows exist''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_points_duplicate_count = (
+set @baseline_contract_points_duplicate_count = (
     select count(*) from (
         select student_id, source_type, source_id
         from points_transactions
@@ -3241,12 +3243,12 @@ set @v12_points_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_points_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: duplicate point-award source tuples exist''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_points_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate point-award source tuples exist''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_uploaded_duplicate_count = (
+set @baseline_contract_uploaded_duplicate_count = (
     select count(*) from (
         select stored_file_name
         from uploaded_files
@@ -3254,12 +3256,12 @@ set @v12_uploaded_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_uploaded_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: duplicate stored upload filenames exist''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_uploaded_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: duplicate stored upload filenames exist''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_active_reset_token_duplicate_count = (
+set @baseline_contract_active_reset_token_duplicate_count = (
     select count(*) from (
         select user_id
         from password_reset_tokens
@@ -3268,12 +3270,12 @@ set @v12_active_reset_token_duplicate_count = (
         having count(*) > 1
     ) duplicates
 );
-set @v12_sql = if(@v12_active_reset_token_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: multiple active password reset tokens exist for a user''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_active_reset_token_duplicate_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: multiple active password reset tokens exist for a user''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_invalid_count = (
+set @baseline_contract_invalid_count = (
     select
         (select count(*) from cart_items where quantity <= 0 or unit_price < 0)
       + (select count(*) from lesson_progress where completion_percent is not null and (completion_percent < 0 or completion_percent > 100))
@@ -3286,165 +3288,165 @@ set @v12_invalid_count = (
       + (select count(*) from users where session_version < 0)
       + (select count(*) from password_reset_tokens where used_at is not null and used_at < created_at)
 );
-set @v12_sql = if(@v12_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''V12 blocked: rows violate strengthened integrity checks''');
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+set @baseline_contract_sql = if(@baseline_contract_invalid_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: rows violate strengthened integrity checks''');
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select is_nullable from information_schema.columns where table_schema = database() and table_name = 'cart_items' and column_name = 'unit_price') = 'YES',
     'alter table cart_items modify unit_price decimal(10,2) not null',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'cart_items' and constraint_name = 'uk_cart_items_cart_item') = 0,
     'alter table cart_items add constraint uk_cart_items_cart_item unique (cart_id, item_type, item_id)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'lesson_progress' and column_name = 'version') = 0,
     'alter table lesson_progress add column version bigint not null default 0',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'lesson_progress' and constraint_name = 'uk_lesson_progress_student_lesson') = 0,
     'alter table lesson_progress add constraint uk_lesson_progress_student_lesson unique (student_id, lesson_id)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'lesson_progress' and constraint_name = 'chk_lesson_progress_percent_range') = 0,
     'alter table lesson_progress add constraint chk_lesson_progress_percent_range check (completion_percent is null or completion_percent between 0 and 100)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'student_progress' and column_name = 'version') = 0,
     'alter table student_progress add column version bigint not null default 0',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'student_progress' and constraint_name = 'uk_student_progress_student') = 0,
     'alter table student_progress add constraint uk_student_progress_student unique (student_id)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'student_progress' and constraint_name = 'chk_student_progress_percent_range') = 0,
     'alter table student_progress add constraint chk_student_progress_percent_range check (completion_percent is null or completion_percent between 0 and 100)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'daily_streaks' and column_name = 'version') = 0,
     'alter table daily_streaks add column version bigint not null default 0',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'daily_streaks' and constraint_name = 'uk_daily_streaks_student') = 0,
     'alter table daily_streaks add constraint uk_daily_streaks_student unique (student_id)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'daily_streaks' and constraint_name = 'chk_daily_streaks_non_negative') = 0,
     'alter table daily_streaks add constraint chk_daily_streaks_non_negative check (current_streak >= 0 and best_streak >= 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'daily_streaks' and constraint_name = 'chk_daily_streaks_best_not_less_current') = 0,
     'alter table daily_streaks add constraint chk_daily_streaks_best_not_less_current check (best_streak >= current_streak)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'points_transactions' and column_name = 'source_key') = 0,
     'alter table points_transactions add column source_key varchar(220) generated always as (case when source_type is not null and source_id is not null then concat(source_type, ''#'', source_id) else null end) stored',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'uk_points_transactions_student_source') = 0,
     'alter table points_transactions add constraint uk_points_transactions_student_source unique (student_id, source_key)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'chk_points_transactions_delta_non_negative') = 0,
     'alter table points_transactions add constraint chk_points_transactions_delta_non_negative check (points_delta >= 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'chk_points_transactions_source_pair') = 0,
     'alter table points_transactions add constraint chk_points_transactions_source_pair check ((source_type is null and source_id is null) or (source_type is not null and source_id is not null))',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'video_progress' and column_name = 'version') = 0,
     'alter table video_progress add column version bigint not null default 0',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_recorded_video_fk_name = (
+set @baseline_contract_recorded_video_fk_name = (
     select constraint_name
     from information_schema.key_column_usage
     where table_schema = database()
@@ -3453,25 +3455,25 @@ set @v12_recorded_video_fk_name = (
       and referenced_table_name = 'recorded_lesson_videos'
     limit 1
 );
-set @v12_sql = if(
-    @v12_recorded_video_fk_name is null,
+set @baseline_contract_sql = if(
+    @baseline_contract_recorded_video_fk_name is null,
     'select 1',
-    concat('alter table video_progress drop foreign key `', replace(@v12_recorded_video_fk_name, '`', '``'), '`')
+    concat('alter table video_progress drop foreign key `', replace(@baseline_contract_recorded_video_fk_name, '`', '``'), '`')
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select is_nullable from information_schema.columns where table_schema = database() and table_name = 'video_progress' and column_name = 'recorded_video_id') = 'YES',
     'alter table video_progress modify recorded_video_id bigint not null',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*)
      from information_schema.key_column_usage
      where table_schema = database()
@@ -3481,171 +3483,171 @@ set @v12_sql = if(
     'alter table video_progress add constraint FKdjbxt2h00nn3l4ckqkc0f92mo foreign key (recorded_video_id) references recorded_lesson_videos (id)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'video_progress' and constraint_name = 'chk_video_progress_seconds_non_negative') = 0,
     'alter table video_progress add constraint chk_video_progress_seconds_non_negative check (watched_seconds is null or watched_seconds >= 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'video_progress' and constraint_name = 'chk_video_progress_total_seconds_non_negative') = 0,
     'alter table video_progress add constraint chk_video_progress_total_seconds_non_negative check (total_seconds is null or total_seconds >= 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'video_progress' and constraint_name = 'chk_video_progress_percentage_range') = 0,
     'alter table video_progress add constraint chk_video_progress_percentage_range check (progress_percentage is null or progress_percentage between 0 and 100)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'video_progress' and constraint_name = 'chk_video_progress_watched_within_total') = 0,
     'alter table video_progress add constraint chk_video_progress_watched_within_total check (watched_seconds is null or total_seconds is null or watched_seconds <= total_seconds)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'live_classes' and column_name = 'version') = 0,
     'alter table live_classes add column version bigint not null default 0',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'live_classes' and constraint_name = 'chk_live_classes_max_participants_positive') = 0,
     'alter table live_classes add constraint chk_live_classes_max_participants_positive check (max_participants is null or max_participants > 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'live_classes' and constraint_name = 'chk_live_classes_time_order') = 0,
     'alter table live_classes add constraint chk_live_classes_time_order check (scheduled_start_at is null or scheduled_end_at is null or scheduled_end_at > scheduled_start_at)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'live_classes' and constraint_name = 'chk_live_classes_linked_content') = 0,
     'alter table live_classes add constraint chk_live_classes_linked_content check (lesson_id is not null or course_package_id is not null)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'live_class_enrolments' and column_name = 'version') = 0,
     'alter table live_class_enrolments add column version bigint not null default 0',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'live_class_enrolments' and column_name = 'active_enrolment_key') = 0,
     'alter table live_class_enrolments add column active_enrolment_key varchar(220) generated always as (case when enrolment_status in (''ENROLLED'',''ATTENDED'') then concat(live_class_id, ''#'', student_id) else null end) stored',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'live_class_enrolments' and constraint_name = 'uk_live_class_enrolments_active_student') = 0,
     'alter table live_class_enrolments add constraint uk_live_class_enrolments_active_student unique (active_enrolment_key)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'uploaded_files' and constraint_name = 'uk_uploaded_files_stored_file_name') = 0,
     'alter table uploaded_files add constraint uk_uploaded_files_stored_file_name unique (stored_file_name)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'uploaded_files' and constraint_name = 'chk_uploaded_files_file_size_non_negative') = 0,
     'alter table uploaded_files add constraint chk_uploaded_files_file_size_non_negative check (file_size >= 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'uploaded_files' and constraint_name = 'chk_uploaded_files_private_access') = 0,
     'alter table uploaded_files add constraint chk_uploaded_files_private_access check (access_level in (''PRIVATE''))',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'users' and constraint_name = 'chk_users_session_version_non_negative') = 0,
     'alter table users add constraint chk_users_session_version_non_negative check (session_version >= 0)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.columns where table_schema = database() and table_name = 'password_reset_tokens' and column_name = 'active_token_user_id') = 0,
     'alter table password_reset_tokens add column active_token_user_id bigint generated always as (case when used_at is null then user_id else null end) stored',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'password_reset_tokens' and constraint_name = 'uk_password_reset_tokens_active_user') = 0,
     'alter table password_reset_tokens add constraint uk_password_reset_tokens_active_user unique (active_token_user_id)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
-set @v12_sql = if(
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'password_reset_tokens' and constraint_name = 'chk_password_reset_tokens_used_after_created') = 0,
     'alter table password_reset_tokens add constraint chk_password_reset_tokens_used_after_created check (used_at is null or used_at >= created_at)',
     'select 1'
 );
-prepare v12_stmt from @v12_sql;
-execute v12_stmt;
-deallocate prepare v12_stmt;
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
 
 set @add_cart_items_cart_created_at_index = if(
     (select count(*) from information_schema.statistics where table_schema = database() and table_name = 'cart_items' and index_name = 'idx_cart_items_cart_created_at') = 0,
@@ -3738,7 +3740,7 @@ execute add_audit_logs_actor_created_index_stmt;
 deallocate prepare add_audit_logs_actor_created_index_stmt;
 
 
--- ===== Source: V13__add_ai_report_review_notification_type.sql =====
+-- ===== Section: ai report review notification type =====
 alter table notifications
     modify column notification_type enum (
         'ADMIN_TASK',
@@ -3757,4 +3759,247 @@ alter table notifications
         'TEACHER_FEEDBACK'
     ) not null;
 
+-- ===== Consolidated production hardening / sessions / quota / search =====
 
+set @baseline_invalid_status_count = (
+    select
+        (select count(*) from ai_chat_messages where sender_role not in ('USER', 'ASSISTANT'))
+      + (select count(*) from teacher_earnings where earning_status not in ('AVAILABLE', 'REFUNDED'))
+      + (select count(*) from ai_usage_logs where status not in ('SUCCESS', 'FAILED', 'UNAVAILABLE'))
+      + (select count(*) from ai_response_reports where status not in ('PENDING_REVIEW', 'IN_REVIEW', 'RESOLVED', 'DISMISSED'))
+      + (select count(*) from ai_response_reports where reason_category not in ('INCORRECT_CONTENT', 'HALLUCINATION', 'UNSAFE_CONTENT', 'AGE_INAPPROPRIATE', 'OTHER'))
+      + (select count(*) from teacher_verification_documents where document_type not in ('CERTIFICATE', 'QUALIFICATION', 'IDENTITY', 'OTHER'))
+      + (select count(*) from teacher_verification_documents where submitted_at is null)
+      + (select count(*) from teacher_verification_reviews where reviewed_at is null or decision_status not in ('APPROVED', 'REJECTED'))
+      + (select count(*) from orders where checkout_source is not null and checkout_source not in ('CART', 'BUY_NOW'))
+      + (select count(*) from learning_modules where not ((access_type = 'FREE' and (price is null or price = 0)) or (access_type = 'PAID' and price > 0)))
+      + (select count(*) from lessons where not ((access_type = 'FREE' and (price is null or price = 0)) or (access_type = 'PAID' and price > 0)))
+      + (select count(*) from course_packages where not ((access_type = 'FREE' and (price is null or price = 0)) or (access_type = 'PAID' and price > 0)))
+);
+set @baseline_sql = if(@baseline_invalid_status_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: rows violate tightened status/domain checks''');
+prepare baseline_stmt from @baseline_sql;
+execute baseline_stmt;
+deallocate prepare baseline_stmt;
+
+set @baseline_duplicate_current_teacher_document_count = (
+    select count(*) from (
+        select teacher_id, document_type
+        from teacher_verification_documents
+        where current_version = 1
+        group by teacher_id, document_type
+        having count(*) > 1
+    ) duplicates
+);
+set @baseline_sql = if(@baseline_duplicate_current_teacher_document_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: multiple current teacher verification documents exist for the same type''');
+prepare baseline_stmt from @baseline_sql;
+execute baseline_stmt;
+deallocate prepare baseline_stmt;
+
+set @baseline_invalid_state_count = (
+    select
+        (select count(*) from ai_response_reports
+         where not (
+             (status = 'PENDING_REVIEW' and reviewed_at is null)
+             or (status in ('IN_REVIEW', 'RESOLVED', 'DISMISSED') and reviewed_at is not null)
+         ))
+      + (select count(*) from notifications
+         where not (
+             (notification_status = 'UNREAD' and read_at is null)
+             or (notification_status = 'READ' and read_at is not null)
+         ))
+);
+set @baseline_sql = if(@baseline_invalid_state_count = 0, 'select 1', 'signal sqlstate ''45000'' set message_text = ''Baseline blocked: rows violate review/read state consistency checks''');
+prepare baseline_stmt from @baseline_sql;
+execute baseline_stmt;
+deallocate prepare baseline_stmt;
+
+alter table teacher_verification_documents
+    add column current_document_key varchar(160) generated always as (
+        case when current_version = 1 then concat(teacher_id, '#', document_type) else null end
+    ) stored,
+    add constraint uk_teacher_verification_documents_current_type unique (current_document_key);
+
+alter table ai_chat_messages
+    add constraint chk_ai_chat_messages_sender_role check (sender_role in ('USER', 'ASSISTANT'));
+
+alter table teacher_earnings
+    add constraint chk_teacher_earnings_status check (earning_status in ('AVAILABLE', 'REFUNDED'));
+
+alter table ai_usage_logs
+    add constraint chk_ai_usage_logs_status check (status in ('SUCCESS', 'FAILED', 'UNAVAILABLE'));
+
+alter table ai_response_reports
+    add constraint chk_ai_response_reports_status check (status in ('PENDING_REVIEW', 'IN_REVIEW', 'RESOLVED', 'DISMISSED')),
+    add constraint chk_ai_response_reports_reason_category check (reason_category in ('INCORRECT_CONTENT', 'HALLUCINATION', 'UNSAFE_CONTENT', 'AGE_INAPPROPRIATE', 'OTHER')),
+    add constraint chk_ai_response_reports_snapshot_source check (
+        chat_message_id is not null
+        or ai_response_snapshot is not null
+    ),
+    add constraint chk_ai_response_reports_review_consistency check (
+        (status = 'PENDING_REVIEW' and reviewed_at is null)
+        or (status in ('IN_REVIEW', 'RESOLVED', 'DISMISSED') and reviewed_at is not null)
+    );
+
+alter table teacher_verification_documents
+    add constraint chk_teacher_verification_documents_type check (document_type in ('CERTIFICATE', 'QUALIFICATION', 'IDENTITY', 'OTHER')),
+    add constraint chk_teacher_verification_documents_submitted_at check (submitted_at is not null);
+
+alter table teacher_verification_reviews
+    add constraint chk_teacher_verification_reviews_reviewed_at check (reviewed_at is not null),
+    add constraint chk_teacher_verification_reviews_final_decision check (decision_status in ('APPROVED', 'REJECTED'));
+
+alter table orders
+    add constraint chk_orders_checkout_source check (checkout_source is null or checkout_source in ('CART', 'BUY_NOW'));
+
+alter table learning_modules
+    add constraint chk_learning_modules_access_price check (
+        (access_type = 'FREE' and (price is null or price = 0))
+        or (access_type = 'PAID' and price > 0)
+    );
+
+alter table lessons
+    add constraint chk_lessons_access_price check (
+        (access_type = 'FREE' and (price is null or price = 0))
+        or (access_type = 'PAID' and price > 0)
+    );
+
+alter table course_packages
+    add constraint chk_course_packages_access_price check (
+        (access_type = 'FREE' and (price is null or price = 0))
+        or (access_type = 'PAID' and price > 0)
+    );
+
+alter table notifications
+    add constraint chk_notifications_read_state check (
+        (notification_status = 'UNREAD' and read_at is null)
+        or (notification_status = 'READ' and read_at is not null)
+    );
+
+create index idx_ai_chat_messages_session_role_id
+    on ai_chat_messages (session_id, sender_role, id);
+
+create index idx_ai_chat_messages_session_created
+    on ai_chat_messages (session_id, created_at);
+
+create index idx_ai_chat_sessions_user_feature_created
+    on ai_chat_sessions (user_id, feature_key, created_at);
+
+create index idx_ai_usage_logs_user_feature_created
+    on ai_usage_logs (user_id, feature_key, created_at);
+
+create index idx_ai_response_reports_student_created
+    on ai_response_reports (student_user_id, created_at);
+
+create index idx_order_items_order_created
+    on order_items (order_id, created_at);
+
+create index idx_payment_records_status_created
+    on payment_records (payment_status, created_at);
+
+create index idx_teacher_earnings_teacher_status_created
+    on teacher_earnings (teacher_id, earning_status, created_at);
+
+create index idx_teacher_verification_documents_teacher_current_submitted
+    on teacher_verification_documents (teacher_id, current_version, submitted_at, id);
+
+create index idx_teacher_verification_documents_latest
+    on teacher_verification_documents (teacher_id, submitted_at, id);
+
+create index idx_teacher_verification_reviews_latest
+    on teacher_verification_reviews (teacher_id, reviewed_at, id);
+
+create index idx_audit_logs_actor_email_created
+    on audit_logs (actor_email, created_at);
+
+create index idx_notifications_user_status_created_id
+    on notifications (user_id, notification_status, created_at, id);
+
+create table refresh_tokens (
+    created_at datetime(6) not null,
+    expires_at datetime(6) not null,
+    id bigint not null auto_increment,
+    revoked_at datetime(6),
+    rotated_at datetime(6),
+    updated_at datetime(6) not null,
+    user_id bigint not null,
+    created_by_ip varchar(64),
+    family_id varchar(36) not null,
+    replaced_by_token_hash varchar(64),
+    token_hash varchar(64) not null,
+    user_agent varchar(255),
+    primary key (id)
+) engine=InnoDB;
+
+alter table refresh_tokens
+    add constraint uk_refresh_tokens_token_hash unique (token_hash);
+
+alter table refresh_tokens
+    add constraint fk_refresh_tokens_user
+    foreign key (user_id) references users (id);
+
+alter table refresh_tokens
+    add constraint chk_refresh_tokens_expiry_after_created
+    check (expires_at > created_at);
+
+alter table refresh_tokens
+    add constraint chk_refresh_tokens_revoked_after_created
+    check (revoked_at is null or revoked_at >= created_at);
+
+alter table refresh_tokens
+    add constraint chk_refresh_tokens_rotated_after_created
+    check (rotated_at is null or rotated_at >= created_at);
+
+alter table refresh_tokens
+    add constraint chk_refresh_tokens_replacement_on_rotation
+    check (
+        (rotated_at is null and replaced_by_token_hash is null)
+        or (rotated_at is not null and replaced_by_token_hash is not null)
+    );
+
+create index idx_refresh_tokens_user_id
+    on refresh_tokens (user_id);
+
+create index idx_refresh_tokens_family_id
+    on refresh_tokens (family_id);
+
+create index idx_refresh_tokens_expires_at
+    on refresh_tokens (expires_at);
+
+create table ai_usage_quota_counters (
+    created_at datetime(6) not null,
+    day_count integer not null,
+    id bigint not null auto_increment,
+    minute_count integer not null,
+    minute_started_at datetime(6) not null,
+    updated_at datetime(6) not null,
+    usage_day date not null,
+    user_id bigint not null,
+    primary key (id)
+) engine=InnoDB;
+
+alter table ai_usage_quota_counters
+    add constraint uk_ai_usage_quota_counters_user unique (user_id);
+
+alter table ai_usage_quota_counters
+    add constraint fk_ai_usage_quota_counters_user
+    foreign key (user_id) references users (id);
+
+alter table ai_usage_quota_counters
+    add constraint chk_ai_usage_quota_counters_minute_count
+    check (minute_count >= 0);
+
+alter table ai_usage_quota_counters
+    add constraint chk_ai_usage_quota_counters_day_count
+    check (day_count >= 0);
+
+create index idx_ai_usage_quota_counters_user_id
+    on ai_usage_quota_counters (user_id);
+
+alter table lessons
+    add fulltext index ft_lessons_title_summary_content (title, summary, lesson_content);
+
+alter table course_packages
+    add fulltext index ft_course_packages_title_description (title, description);
+
+alter table flashcards
+    add fulltext index ft_flashcards_learning_text (title, front_text, back_text, pinyin, english_meaning, malay_meaning, tags);

@@ -33,6 +33,14 @@ import lombok.Setter;
  * sum of {@link QuizQuestion#getPoints()} values for fast catalogue
  * rendering — kept in sync by {@code TeacherQuizService} on every
  * question save.</p>
+ *
+ * <p>{@link #lesson} and {@link #teacher} are mapped
+ * {@code updatable = false}: the quiz's anchor lesson and authorship
+ * are fixed at creation time. Verified against
+ * {@code TeacherQuizService#updateQuiz}, which only mutates title,
+ * description and {@code timeLimitMinutes}. Re-targeting either field
+ * would silently transfer authorship or split a quiz from its lesson's
+ * access-control gate, so the ORM-layer guard rules it out.</p>
  */
 @Getter
 @Setter
@@ -45,11 +53,11 @@ import lombok.Setter;
 public class Quiz extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "lesson_id")
+    @JoinColumn(name = "lesson_id", updatable = false)
     private Lesson lesson;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @JoinColumn(name = "teacher_id", updatable = false)
     private TeacherProfile teacher;
 
     @Column(name = "title", nullable = false, length = 200)

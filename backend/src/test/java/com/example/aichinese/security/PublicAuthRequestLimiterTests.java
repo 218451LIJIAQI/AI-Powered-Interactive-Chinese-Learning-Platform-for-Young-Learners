@@ -71,6 +71,19 @@ class PublicAuthRequestLimiterTests {
     }
 
     @Test
+    void requestBudgetResetsExactlyAtWindowBoundary() {
+        AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
+        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(movingClock(now), 1, 1, 10);
+
+        limiter.checkRegisterAllowed(IP);
+        now.set(now.get().plus(PublicAuthRequestLimiter.WINDOW));
+
+        limiter.checkRegisterAllowed(IP);
+        assertThatThrownBy(() -> limiter.checkRegisterAllowed(IP))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
     void trackedRequestRecordsStayWithinCapacity() {
         AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
         Clock movingClock = movingClock(now);

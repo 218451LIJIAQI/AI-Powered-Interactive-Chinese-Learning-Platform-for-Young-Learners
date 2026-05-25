@@ -22,7 +22,7 @@ import com.example.aichinese.service.SmtpEmailService;
  * {@link com.example.aichinese.service.NoOpEmailService}, while
  * {@code enabled=true} wires the SMTP-backed
  * {@link com.example.aichinese.service.SmtpEmailService} and fails
- * fast if the SMTP credentials are missing / malformed.
+ * fast if production disables SMTP or its credentials are malformed.
  */
 class EmailConfigurationTests {
 
@@ -92,6 +92,18 @@ class EmailConfigurationTests {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasRootCauseMessage("spring.mail.username must be configured when app.email.enabled=true.");
+                });
+    }
+
+    @Test
+    void prodProfileRequiresSmtpToBeEnabled() {
+        contextRunner.withPropertyValues(
+                "spring.profiles.active=prod",
+                "app.email.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasRootCauseMessage("SMTP_ENABLED must be true when the prod profile is active.");
                 });
     }
 

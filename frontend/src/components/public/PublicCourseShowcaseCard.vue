@@ -32,8 +32,14 @@
     </div>
 
     <div class="public-course-card-actions">
-      <button class="btn btn-secondary public-course-card-button" type="button" @click="$emit('view')">View Details</button>
-      <button class="btn btn-accent public-course-card-button public-course-card-button--accent" type="button" @click="$emit('action')">
+      <button class="btn btn-secondary public-course-card-button" type="button" @click="$emit('view')">
+        View Details
+      </button>
+      <button
+        class="btn btn-accent public-course-card-button public-course-card-button--accent"
+        type="button"
+        @click="$emit('action')"
+      >
         {{ actionLabel }}
       </button>
     </div>
@@ -72,7 +78,9 @@ defineEmits<{
   action: []
 }>()
 
-const descriptionText = computed<string>(() => props.course.shortDescription || 'Beginner-friendly Mandarin learning content.')
+const descriptionText = computed<string>(
+  () => props.course.shortDescription || 'Beginner-friendly Mandarin learning content.',
+)
 const teacherName = computed<string>(() => props.course.teacher.displayName)
 const priceValue = computed<string>(() => formatCurrency(props.course.price).replace(/\.00$/, ''))
 const priceSuffix = computed<string>(() => 'USD')

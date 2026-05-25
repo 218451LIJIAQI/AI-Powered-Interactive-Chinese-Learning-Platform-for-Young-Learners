@@ -5,13 +5,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 /**
  * Lightweight, in-memory rate limiter for the login endpoint.
@@ -34,8 +37,10 @@ import org.springframework.stereotype.Component;
  *       legitimate owner is not punished for past mistakes.</li>
  * </ul>
  *
- * <p>Records that have been idle for longer than the lockout window are
- * removed eagerly during normal access so the map cannot grow unbounded.
+ * <p>Failure counters and active lockouts are held in separate bounded Caffeine
+ * caches. Keeping active lockouts separate prevents a spray of fresh, one-off
+ * failure keys from evicting an already locked slot, while avoiding repeated
+ * full-map capacity scans.
  */
 @Component
 public class LoginAttemptLimiter {
@@ -56,12 +61,29 @@ public class LoginAttemptLimiter {
     private static final int MAX_EMAIL_KEY_LENGTH = 320;
     private static final int MAX_IP_KEY_LENGTH = 64;
 
-    private final Map<String, AttemptRecord> attempts = new ConcurrentHashMap<>();
+    private final Cache<String, AttemptRecord> attempts;
+    private final Cache<String, Instant> lockouts;
     private final Clock clock;
-    private final int maxTrackedAttemptRecords;
+    private final int maxFailedAttempts;
+    private final Duration attemptWindow;
+    private final Duration lockDuration;
 
     public LoginAttemptLimiter() {
         this(Clock.systemUTC());
+    }
+
+    @Autowired
+    public LoginAttemptLimiter(
+            @Value("${app.security.login-rate-limit.max-failed-attempts:5}") int maxFailedAttempts,
+            @Value("${app.security.login-rate-limit.attempt-window-minutes:15}") long attemptWindowMinutes,
+            @Value("${app.security.login-rate-limit.lock-duration-minutes:15}") long lockDurationMinutes,
+            @Value("${app.security.login-rate-limit.max-tracked-records:10000}") int maxTrackedAttemptRecords) {
+        this(
+                Clock.systemUTC(),
+                maxFailedAttempts,
+                Duration.ofMinutes(attemptWindowMinutes),
+                Duration.ofMinutes(lockDurationMinutes),
+                maxTrackedAttemptRecords);
     }
 
     LoginAttemptLimiter(Clock clock) {
@@ -69,11 +91,33 @@ public class LoginAttemptLimiter {
     }
 
     LoginAttemptLimiter(Clock clock, int maxTrackedAttemptRecords) {
-        if (maxTrackedAttemptRecords < 1) {
-            throw new IllegalArgumentException("maxTrackedAttemptRecords must be positive");
+        this(clock, MAX_FAILED_ATTEMPTS, ATTEMPT_WINDOW, LOCK_DURATION, maxTrackedAttemptRecords);
+    }
+
+    LoginAttemptLimiter(
+            Clock clock,
+            int maxFailedAttempts,
+            Duration attemptWindow,
+            Duration lockDuration,
+            int maxTrackedAttemptRecords) {
+        if (maxFailedAttempts < 1
+                || attemptWindow == null || attemptWindow.isZero() || attemptWindow.isNegative()
+                || lockDuration == null || lockDuration.isZero() || lockDuration.isNegative()
+                || maxTrackedAttemptRecords < 1) {
+            throw new IllegalArgumentException("Login rate limit settings must be positive");
         }
         this.clock = Objects.requireNonNull(clock, "clock");
-        this.maxTrackedAttemptRecords = maxTrackedAttemptRecords;
+        this.maxFailedAttempts = maxFailedAttempts;
+        this.attemptWindow = attemptWindow;
+        this.lockDuration = lockDuration;
+        this.attempts = Caffeine.newBuilder()
+                .maximumSize(maxTrackedAttemptRecords)
+                .expireAfterAccess(attemptWindow)
+                .build();
+        this.lockouts = Caffeine.newBuilder()
+                .maximumSize(maxTrackedAttemptRecords)
+                .expireAfterWrite(lockDuration)
+                .build();
     }
 
     /**
@@ -83,27 +127,25 @@ public class LoginAttemptLimiter {
      */
     public boolean isAllowed(String email, String clientIp) {
         String key = key(email, clientIp);
-        AttemptRecord record = attempts.get(key);
-        if (record == null) {
+        Instant now = clock.instant();
+        Instant lockedUntil = lockouts.getIfPresent(key);
+        if (lockedUntil != null) {
+            if (lockedUntil.isAfter(now)) {
+                return false;
+            }
+            lockouts.invalidate(key);
             return true;
         }
 
-        Instant now = clock.instant();
-        if (record.lockedUntil != null) {
-            if (record.lockedUntil.isAfter(now)) {
-                return false;
-            }
-            // Lock window has elapsed; clear the slot so the user gets a fresh
-            // attempt budget from this point onwards. Use the two-arg remove so a
-            // concurrent failure update is not silently discarded.
-            attempts.remove(key, record);
+        AttemptRecord record = attempts.getIfPresent(key);
+        if (record == null) {
             return true;
         }
 
         // Drop stale records whose window has elapsed without ever locking;
         // keeps the map size bounded in long-running deployments.
-        if (record.firstFailureAt.plus(ATTEMPT_WINDOW).isBefore(now)) {
-            attempts.remove(key, record);
+        if (!record.firstFailureAt.plus(attemptWindow).isAfter(now)) {
+            attempts.asMap().remove(key, record);
         }
         return true;
     }
@@ -113,12 +155,17 @@ public class LoginAttemptLimiter {
      * Returns {@link Duration#ZERO} when the slot is not locked.
      */
     public Duration retryAfter(String email, String clientIp) {
-        AttemptRecord record = attempts.get(key(email, clientIp));
-        if (record == null || record.lockedUntil == null) {
+        String key = key(email, clientIp);
+        Instant lockedUntil = lockouts.getIfPresent(key);
+        if (lockedUntil == null) {
             return Duration.ZERO;
         }
-        Duration remaining = Duration.between(clock.instant(), record.lockedUntil);
-        return remaining.isNegative() ? Duration.ZERO : remaining;
+        Duration remaining = Duration.between(clock.instant(), lockedUntil);
+        if (remaining.isZero() || remaining.isNegative()) {
+            lockouts.invalidate(key);
+            return Duration.ZERO;
+        }
+        return remaining;
     }
 
     /**
@@ -129,27 +176,29 @@ public class LoginAttemptLimiter {
     public boolean recordFailure(String email, String clientIp) {
         String key = key(email, clientIp);
         Instant now = clock.instant();
-        removeExpiredAttempts(now);
+        Instant existingLockout = lockouts.getIfPresent(key);
+        if (existingLockout != null && existingLockout.isAfter(now)) {
+            return true;
+        }
 
-        AttemptRecord updated = attempts.compute(key, (ignored, existing) -> {
-            if (existing == null || existing.firstFailureAt.plus(ATTEMPT_WINDOW).isBefore(now)) {
-                return new AttemptRecord(now, 1, null, now);
-            }
-            int nextCount = existing.failedAttempts + 1;
-            if (nextCount >= MAX_FAILED_ATTEMPTS) {
-                return new AttemptRecord(existing.firstFailureAt, nextCount, now.plus(LOCK_DURATION), now);
-            }
-            return new AttemptRecord(existing.firstFailureAt, nextCount, null, now);
+        AttemptRecord updated = attempts.asMap().compute(key, (ignored, existing) -> {
+            boolean freshWindow = existing == null || !existing.firstFailureAt.plus(attemptWindow).isAfter(now);
+            Instant firstFailureAt = freshWindow ? now : existing.firstFailureAt;
+            int nextCount = freshWindow ? 1 : existing.failedAttempts + 1;
+            return new AttemptRecord(firstFailureAt, nextCount);
         });
-        enforceCapacity();
+        attempts.cleanUp();
 
-        boolean nowLocked = updated.lockedUntil != null;
+        boolean nowLocked = updated.failedAttempts >= maxFailedAttempts;
         if (nowLocked) {
+            Instant lockedUntil = now.plus(lockDuration);
+            lockouts.put(key, lockedUntil);
+            attempts.invalidate(key);
             log.warn(
                     "Login lockout engaged for key={} after {} failed attempts; locked until {}.",
                     anonymizedKey(email, clientIp),
                     updated.failedAttempts,
-                    updated.lockedUntil);
+                    lockedUntil);
         }
         return nowLocked;
     }
@@ -160,48 +209,15 @@ public class LoginAttemptLimiter {
      * mistyped passwords once they get the credentials right.
      */
     public void recordSuccess(String email, String clientIp) {
-        attempts.remove(key(email, clientIp));
+        String key = key(email, clientIp);
+        attempts.invalidate(key);
+        lockouts.invalidate(key);
     }
 
     int trackedAttemptCount() {
-        return attempts.size();
-    }
-
-    private void removeExpiredAttempts(Instant now) {
-        attempts.entrySet().removeIf(entry -> isExpired(entry.getValue(), now));
-    }
-
-    private boolean isExpired(AttemptRecord record, Instant now) {
-        if (record.lockedUntil != null) {
-            return !record.lockedUntil.isAfter(now);
-        }
-        return record.firstFailureAt.plus(ATTEMPT_WINDOW).isBefore(now);
-    }
-
-    private void enforceCapacity() {
-        while (attempts.size() > maxTrackedAttemptRecords) {
-            if (!evictOldestAttempt(clock.instant())) {
-                return;
-            }
-        }
-    }
-
-    private boolean evictOldestAttempt(Instant now) {
-        String candidateKey = null;
-        AttemptRecord candidateRecord = null;
-        boolean candidateLocked = true;
-        for (Map.Entry<String, AttemptRecord> entry : attempts.entrySet()) {
-            AttemptRecord currentRecord = entry.getValue();
-            boolean currentLocked = currentRecord.lockedUntil != null && currentRecord.lockedUntil.isAfter(now);
-            if (candidateRecord == null
-                    || (candidateLocked && !currentLocked)
-                    || (candidateLocked == currentLocked && currentRecord.lastUpdatedAt.isBefore(candidateRecord.lastUpdatedAt))) {
-                candidateKey = entry.getKey();
-                candidateRecord = currentRecord;
-                candidateLocked = currentLocked;
-            }
-        }
-        return candidateKey != null && attempts.remove(candidateKey, candidateRecord);
+        attempts.cleanUp();
+        lockouts.cleanUp();
+        return Math.toIntExact(attempts.estimatedSize() + lockouts.estimatedSize());
     }
 
     private String key(String email, String clientIp) {
@@ -235,6 +251,6 @@ public class LoginAttemptLimiter {
         return HEX_FORMAT.toHexDigits(key(email, clientIp).hashCode());
     }
 
-    private record AttemptRecord(Instant firstFailureAt, int failedAttempts, Instant lockedUntil, Instant lastUpdatedAt) {
+    private record AttemptRecord(Instant firstFailureAt, int failedAttempts) {
     }
 }

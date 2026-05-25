@@ -31,6 +31,12 @@ import lombok.Setter;
  *
  * <p>Shares the activity metadata vocabulary with the other practice
  * library entities for uniform filtering.</p>
+ *
+ * <p>{@link #createdByUser} is mapped {@code updatable = false}:
+ * authorship is captured once at insert time by
+ * {@code AdminActivityMapper#toEntity} and intentionally not touched
+ * again by the matching {@code applyTo} update method. All other
+ * domain fields remain mutable through the admin moderation workflow.</p>
  */
 @Getter
 @Setter
@@ -46,7 +52,7 @@ import lombok.Setter;
 public class ListeningExercise extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id")
+    @JoinColumn(name = "created_by_user_id", updatable = false)
     private User createdByUser;
 
     @Column(name = "title", nullable = false, length = 200)

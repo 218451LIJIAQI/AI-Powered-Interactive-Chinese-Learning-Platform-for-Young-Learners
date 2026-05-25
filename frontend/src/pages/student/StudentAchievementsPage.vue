@@ -12,7 +12,10 @@
               <strong>Level {{ rewards.currentLevelNumber }}</strong>
               <small>{{ levelTitle }}</small>
               <ProgressBar :progress="rewards.progressToNextLevelPercent" />
-              <em>{{ formatNumber(rewards.totalPoints) }} XP - {{ rewards.progressToNextLevelPercent }}% to next level</em>
+              <em
+                >{{ formatNumber(rewards.totalPoints) }} XP - {{ rewards.progressToNextLevelPercent }}% to next
+                level</em
+              >
             </div>
             <div class="student-achievements-stats">
               <div v-for="stat in achievementStats" :key="stat.label" class="student-achievements-stat">
@@ -33,9 +36,16 @@
                 <span class="student-achievements-range">Recent lessons</span>
               </div>
               <div class="student-achievements-chart">
-                <span v-for="point in chartPoints" :key="point.left" :style="{ left: point.left, bottom: point.bottom }" />
+                <span
+                  v-for="point in chartPoints"
+                  :key="point.left"
+                  :style="{ left: point.left, bottom: point.bottom }"
+                />
               </div>
-              <p><IconGlyph name="star" :size="16" /> {{ progress.lastActivitySummary || 'Your progress trend updates as you complete lessons and quizzes.' }}</p>
+              <p>
+                <IconGlyph name="star" :size="16" />
+                {{ progress.lastActivitySummary || 'Your progress trend updates as you complete lessons and quizzes.' }}
+              </p>
             </article>
 
             <article class="panel student-achievements-badges-card">
@@ -44,11 +54,15 @@
                   <span><IconGlyph name="trophy" :size="20" /></span>
                   <strong>Your Achievements</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="router.push('/student/rewards')">Open Rewards</button>
+                <button class="student-link-button" type="button" @click="router.push('/student/rewards')">
+                  Open Rewards
+                </button>
               </div>
               <div v-if="badgeCards.length" class="student-achievements-badge-grid">
                 <article v-for="badge in badgeCards" :key="badge.id" class="student-achievements-badge">
-                  <div class="student-achievements-badge-icon" :class="`is-${badge.tone}`"><IconGlyph :name="badge.icon" :size="24" /></div>
+                  <div class="student-achievements-badge-icon" :class="`is-${badge.tone}`">
+                    <IconGlyph :name="badge.icon" :size="24" />
+                  </div>
                   <strong>{{ badge.title }}</strong>
                   <span>{{ badge.subtitle }}</span>
                 </article>
@@ -92,7 +106,9 @@
                   <span><IconGlyph name="learn" :size="20" /></span>
                   <strong>Recent Lesson Progress</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="router.push('/student/learn')">Open Learn</button>
+                <button class="student-link-button" type="button" @click="router.push('/student/learn')">
+                  Open Learn
+                </button>
               </div>
               <div v-if="moduleProgress.length" class="student-achievements-module-list">
                 <article v-for="module in moduleProgress" :key="module.title" class="student-achievements-module-row">
@@ -119,7 +135,11 @@
             <div class="student-section-heading">
               <strong>Overall Progress</strong>
             </div>
-            <ProgressRing :progress="progress.overallCompletionPercent" title="Course Progress" subtitle="You're doing great!" />
+            <ProgressRing
+              :progress="progress.overallCompletionPercent"
+              title="Course Progress"
+              subtitle="You're doing great!"
+            />
             <div class="student-achievements-progress-mini">
               <strong>{{ progress.completedLessons }} / {{ progress.totalLessonsStarted }}</strong>
               <span>Units Completed</span>
@@ -201,10 +221,20 @@ const emptyProgress = {
 }
 
 const badges = computed(() => badgesResource.data.value ?? (badgesResource.usingFallback.value ? studentBadges : []))
-const streak = computed(() => streakResource.data.value ?? (streakResource.usingFallback.value ? studentStreak : emptyStreak))
-const rewards = computed(() => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards))
-const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
-const pointsHistory = computed(() => pointsResource.data.value ?? (pointsResource.usingFallback.value ? studentPointsHistory : rewards.value.recentPoints))
+const streak = computed(
+  () => streakResource.data.value ?? (streakResource.usingFallback.value ? studentStreak : emptyStreak),
+)
+const rewards = computed(
+  () => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards),
+)
+const progress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
+)
+const pointsHistory = computed(
+  () =>
+    pointsResource.data.value ??
+    (pointsResource.usingFallback.value ? studentPointsHistory : rewards.value.recentPoints),
+)
 const pageLoading = computed(
   () =>
     badgesResource.loading.value ||
@@ -240,7 +270,11 @@ const achievementStats = computed(() => [
   { icon: 'streak', value: String(streak.value.currentStreak), label: 'Day Streak' },
   { icon: 'star', value: formatNumber(rewards.value.totalPoints), label: 'XP' },
   { icon: 'rewards', value: `${progress.value.quizAverage}%`, label: 'Quiz Avg' },
-  { icon: 'shield', value: String(badges.value.length > 0 ? badges.value.length : rewards.value.badges.length), label: 'Badges' },
+  {
+    icon: 'shield',
+    value: String(badges.value.length > 0 ? badges.value.length : rewards.value.badges.length),
+    label: 'Badges',
+  },
 ])
 
 const badgeCards = computed(() =>
@@ -276,13 +310,15 @@ const milestoneCards = computed(() =>
 
 type ProgressTone = 'primary' | 'success' | 'warning' | 'info'
 
-const moduleProgress = computed<Array<{
-  id: string
-  title: string
-  progress: number
-  tone: string
-  barTone: ProgressTone
-}>>(() =>
+const moduleProgress = computed<
+  Array<{
+    id: string
+    title: string
+    progress: number
+    tone: string
+    barTone: ProgressTone
+  }>
+>(() =>
   progress.value.recentLessons.slice(0, 5).map((lesson, index) => ({
     id: lesson.lessonId ? `L${lesson.lessonId}` : String(index + 1),
     title: lesson.lessonTitle || `Lesson ${index + 1}`,

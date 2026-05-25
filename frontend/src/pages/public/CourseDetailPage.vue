@@ -1,8 +1,14 @@
 ﻿<template>
   <div class="page-stack public-course-detail-page">
-    <button class="btn btn-ghost public-course-detail-back" type="button" @click="goBackToCatalog">Back to catalog</button>
+    <button class="btn btn-ghost public-course-detail-back" type="button" @click="goBackToCatalog">
+      Back to catalog
+    </button>
 
-    <DataNotice :using-fallback="resource.usingFallback.value" :error="actionError || resource.error.value" :success="actionSuccess" />
+    <DataNotice
+      :using-fallback="resource.usingFallback.value"
+      :error="actionError || resource.error.value"
+      :success="actionSuccess"
+    />
 
     <section class="hero-card light public-course-detail-hero">
       <span class="public-course-detail-cloud public-course-detail-cloud--one" />
@@ -24,7 +30,12 @@
             <button class="btn btn-accent" type="button" :disabled="primaryActionDisabled" @click="handlePrimaryAction">
               {{ primaryActionLabel }}
             </button>
-            <button class="btn btn-secondary" type="button" :disabled="secondaryActionDisabled" @click="handleSecondaryAction">
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="secondaryActionDisabled"
+              @click="handleSecondaryAction"
+            >
               {{ secondaryActionLabel }}
             </button>
           </div>
@@ -38,7 +49,11 @@
             </div>
             <p>{{ course.teacher.displayName }}</p>
             <strong>{{ course.accessType === 'FREE' ? 'Free' : formatCurrency(course.price) }}</strong>
-            <span>{{ course.accessType === 'FREE' ? 'Start learning after signing in.' : 'Secure checkout unlocks student access.' }}</span>
+            <span>{{
+              course.accessType === 'FREE'
+                ? 'Start learning after signing in.'
+                : 'Secure checkout unlocks student access.'
+            }}</span>
           </div>
         </div>
       </div>
@@ -62,7 +77,11 @@
         </div>
         <p class="muted">{{ course.basicContent || 'Structured beginner material plus interactive practice.' }}</p>
         <div class="list public-course-detail-item-list">
-          <div v-for="item in course.packageItems" :key="`${item.type}-${item.contentId}`" class="list-item public-course-detail-item">
+          <div
+            v-for="item in course.packageItems"
+            :key="`${item.type}-${item.contentId}`"
+            class="list-item public-course-detail-item"
+          >
             <div class="row">
               <IconGlyph :name="item.type === 'MODULE' ? 'content' : 'learn'" :size="18" />
               <div class="stack">
@@ -186,9 +205,7 @@ const resource = useResource(
   () => readDemoCourseDetail() ?? emptyCourse.value,
 )
 
-const course = computed(
-  () => resource.data.value ?? emptyCourse.value,
-)
+const course = computed(() => resource.data.value ?? emptyCourse.value)
 const courseSceneVariant = computed(() => {
   const title = course.value.title.toLowerCase()
   if (title.includes('family')) return 'family'
@@ -213,8 +230,12 @@ const secondaryActionLabel = computed(() => {
   if (course.value.accessType === 'FREE') return 'Ask AI Helper'
   return submittingCart.value ? 'Adding...' : 'Add to cart'
 })
-const primaryActionDisabled = computed(() => submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0)
-const secondaryActionDisabled = computed(() => submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0)
+const primaryActionDisabled = computed(
+  () => submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
+)
+const secondaryActionDisabled = computed(
+  () => submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
+)
 const courseReadOnly = computed(() => resource.usingFallback.value)
 
 function goToAuth() {

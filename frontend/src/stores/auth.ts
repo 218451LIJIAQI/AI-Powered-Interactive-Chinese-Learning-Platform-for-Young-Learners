@@ -19,11 +19,12 @@
  * </ul>
  *
  * <h2>Storage hardening</h2>
- * <p>Tokens are stored in {@code sessionStorage} (not
- * {@code localStorage}) so they don't survive browser restart — see
- * {@code readPersistedToken} for the one-time legacy migration.
- * Preview role is also session-scoped because it's an explicit
- * synthetic state that should not silently persist.</p>
+ * <p>The access token lives in memory only and is restored by calling
+ * {@code /api/v1/auth/refresh} with the HttpOnly refresh-token cookie.
+ * Legacy {@code localStorage}/{@code sessionStorage} bearer tokens are
+ * cleared on every auth state change. Preview role remains
+ * session-scoped because it is an explicit synthetic state that should
+ * not silently persist.</p>
  *
  * <h2>Failure-tolerant logout</h2>
  * <p>{@code logout} falls back to local session clearing when the
@@ -33,9 +34,11 @@
  */
 import { defineStore } from 'pinia'
 
+import { setAccessToken } from '@/api/http'
 import { authApi } from '@/api/services'
 import { appEnv } from '@/config/env'
 import { demoUsers } from '@/demo/data'
+import { clearOfflineCaches } from '@/plugins/pwa'
 import type { CurrentUserResponse, UserRole } from '@/types/api'
 import { safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
 
@@ -45,18 +48,6 @@ function canUsePreviewMode() {
 
 function isUserRole(value: string | null): value is UserRole {
   return value === 'STUDENT' || value === 'TEACHER' || value === 'ADMIN'
-}
-
-function readPersistedToken() {
-  const sessionToken = safeGetItem(storageKeys.token, window.sessionStorage)
-  if (sessionToken) {
-    return sessionToken
-  }
-
-  // One-time migration: older builds persisted bearer tokens in localStorage.
-  // Read once so an existing signed-in user is not abruptly logged out during
-  // upgrade, then immediately rely on session storage going forward.
-  return safeGetItem(storageKeys.token)
 }
 
 function readPersistedPreviewRole() {
@@ -80,10 +71,7 @@ function readPersistedPreviewRole() {
 function persistToken(token: string | null) {
   safeRemoveItem(storageKeys.token)
   safeRemoveItem(storageKeys.token, window.sessionStorage)
-
-  if (token) {
-    safeSetItem(storageKeys.token, token, window.sessionStorage)
-  }
+  setAccessToken(token)
 }
 
 function persistPreviewRole(role: UserRole | null) {
@@ -97,7 +85,7 @@ function persistPreviewRole(role: UserRole | null) {
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: readPersistedToken() as string | null,
+    token: null as string | null,
     currentUser: null as CurrentUserResponse | null,
     previewRole: readPersistedPreviewRole(),
     bootstrapped: false,
@@ -129,7 +117,8 @@ export const useAuthStore = defineStore('auth', {
       return 'Guest Learner'
     },
     hasRole: (state) => (role: UserRole) =>
-      (state.currentUser?.roles ?? []).includes(role) || (canUsePreviewMode() && !state.token && state.previewRole === role),
+      (state.currentUser?.roles ?? []).includes(role) ||
+      (canUsePreviewMode() && !state.token && state.previewRole === role),
   },
   actions: {
     async bootstrap() {
@@ -154,8 +143,20 @@ export const useAuthStore = defineStore('auth', {
         } catch {
           this.clearSession()
         }
-      } else if (canUsePreviewMode() && this.previewRole) {
-        this.currentUser = demoUsers[this.previewRole]
+      } else {
+        try {
+          const response = await authApi.refresh()
+          this.token = response.token
+          persistToken(response.token)
+          this.previewRole = null
+          persistPreviewRole(null)
+          this.currentUser = await authApi.me()
+        } catch {
+          persistToken(null)
+          if (canUsePreviewMode() && this.previewRole) {
+            this.currentUser = demoUsers[this.previewRole]
+          }
+        }
       }
 
       this.bootstrapped = true
@@ -198,6 +199,7 @@ export const useAuthStore = defineStore('auth', {
       this.previewRole = null
       persistToken(null)
       persistPreviewRole(null)
+      void clearOfflineCaches()
     },
     async logout() {
       if (this.token) {

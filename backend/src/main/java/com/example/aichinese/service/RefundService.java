@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -98,7 +97,10 @@ public class RefundService {
             throw new ResponseStatusException(BAD_REQUEST, "Only paid orders can be refunded.");
         }
 
-        if (refundRequestRepository.existsByOrderIdAndRefundStatusIn(order.getId(), List.of(RefundStatus.PENDING, RefundStatus.APPROVED))) {
+        // Delegate to the canonical RefundStatus.ACTIONABLE set so the "active
+        // refund" definition cannot drift away from the enum's class-load guard
+        // (which enforces ACTIONABLE union TERMINAL == ALL and disjointness).
+        if (refundRequestRepository.existsByOrderIdAndRefundStatusIn(order.getId(), RefundStatus.ACTIONABLE)) {
             throw new ResponseStatusException(BAD_REQUEST, "A refund request is already active for this order.");
         }
 

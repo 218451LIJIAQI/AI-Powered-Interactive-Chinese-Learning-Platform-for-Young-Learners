@@ -48,6 +48,24 @@ import lombok.Setter;
  * <p>The composite index
  * {@code (user_id, notification_status, created_at, id)} backs the
  * "unread bell" query that paginates by recency.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ *
+ * <p>Every field except the read-state pair is mapped
+ * {@code updatable = false}: once a notification is dispatched, its
+ * recipient, content, type and target metadata cannot be rewritten
+ * through the application layer.</p>
+ *
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #user}, {@link #title},
+ *       {@link #message}, {@link #notificationType},
+ *       {@link #targetType}, {@link #targetId}, {@link #targetPath},
+ *       {@link #createdByUser}. The single legitimate write path is
+ *       {@code NotificationService#send}.</li>
+ *   <li><b>Mutable</b>: {@link #notificationStatus} and
+ *       {@link #readAt}, both touched only by
+ *       {@code NotificationService#markAsRead} / bulk equivalents.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -62,35 +80,35 @@ import lombok.Setter;
 public class Notification extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
-    @Column(name = "title", nullable = false, length = 200)
+    @Column(name = "title", nullable = false, updatable = false, length = 200)
     private String title;
 
     @Lob
-    @Column(name = "message", nullable = false, columnDefinition = "LONGTEXT")
+    @Column(name = "message", nullable = false, updatable = false, columnDefinition = "LONGTEXT")
     private String message;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "notification_type", nullable = false, length = 40)
+    @Column(name = "notification_type", nullable = false, updatable = false, length = 40)
     private NotificationType notificationType = NotificationType.SYSTEM;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "notification_status", nullable = false, length = 20)
     private NotificationStatus notificationStatus = NotificationStatus.UNREAD;
 
-    @Column(name = "target_type", length = 50)
+    @Column(name = "target_type", updatable = false, length = 50)
     private String targetType;
 
-    @Column(name = "target_id")
+    @Column(name = "target_id", updatable = false)
     private Long targetId;
 
-    @Column(name = "target_path", length = 255)
+    @Column(name = "target_path", updatable = false, length = 255)
     private String targetPath;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id")
+    @JoinColumn(name = "created_by_user_id", updatable = false)
     private User createdByUser;
 
     @Column(name = "read_at")

@@ -7,6 +7,9 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.example.aichinese.dto.ai.AiLearningRecommendationRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
@@ -27,6 +30,7 @@ import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.ai.AiAvailabilityService;
 import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderRouter;
+import com.example.aichinese.service.ai.AiUsageLimiter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -123,7 +127,10 @@ class AiServicePromptTests {
                 mock(AiAvailabilityService.class),
                 mock(AiLogService.class),
                 mock(AiFileStorageService.class),
-                new ObjectMapper());
+                new ObjectMapper(),
+                mock(PlatformTransactionManager.class),
+                new SimpleMeterRegistry(),
+                mock(AiUsageLimiter.class));
     }
 
     private String invokeBuildVocabularyPrompt(AiService service, AiVocabularyHelperRequest request) throws Exception {

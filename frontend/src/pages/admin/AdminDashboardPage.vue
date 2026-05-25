@@ -64,7 +64,9 @@
             <div class="student-section-heading">
               <strong>Moderation and AI Reports</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">Open Queue</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">
+              Open Queue
+            </button>
           </div>
 
           <div v-if="moderationItems.length" class="admin-dashboard-list">
@@ -128,7 +130,9 @@
             <div class="student-section-heading">
               <strong>Platform Analytics Snapshot</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/analytics')">Open Analytics</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/analytics')">
+              Open Analytics
+            </button>
           </div>
 
           <div class="admin-dashboard-analytics-grid">
@@ -175,7 +179,9 @@
             <div class="student-section-heading">
               <strong>Finance Overview</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/finance')">Open Finance</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/finance')">
+              Open Finance
+            </button>
           </div>
 
           <div class="admin-dashboard-finance-grid">
@@ -263,7 +269,13 @@
           </div>
 
           <div class="admin-dashboard-actions">
-            <button v-for="item in quickActions" :key="item.label" class="admin-dashboard-action" type="button" @click="router.push(item.to)">
+            <button
+              v-for="item in quickActions"
+              :key="item.label"
+              class="admin-dashboard-action"
+              type="button"
+              @click="router.push(item.to)"
+            >
               <IconGlyph :name="item.icon" :size="18" />
               <span>{{ item.label }}</span>
             </button>
@@ -316,14 +328,11 @@ const moderationResource = useResource(() => adminApi.moderationRecords(), admin
 const notificationsResource = useResource(() => adminApi.notifications(), adminNotifications)
 const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
 const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
-const healthResource = useResource(
-  () => systemApi.health(),
-  {
-    status: 'UP',
-    service: 'backend',
-    timestamp: new Date().toISOString(),
-  },
-)
+const healthResource = useResource(() => systemApi.health(), {
+  status: 'UP',
+  service: 'backend',
+  timestamp: new Date().toISOString(),
+})
 
 const emptyDashboard = {
   fullName: '',
@@ -376,18 +385,36 @@ const emptyHealth = {
   timestamp: '',
 }
 
-const dashboard = computed(() => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? adminDashboard : emptyDashboard))
-const analytics = computed(() => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics))
-const pendingTeachers = computed(() => teachersResource.data.value ?? (teachersResource.usingFallback.value ? teacherApplicationsPending : []))
-const moderationRecords = computed(() => moderationResource.data.value ?? (moderationResource.usingFallback.value ? adminModerationRecords : []))
-const notifications = computed(() => notificationsResource.data.value ?? (notificationsResource.usingFallback.value ? adminNotifications : []))
+const dashboard = computed(
+  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? adminDashboard : emptyDashboard),
+)
+const analytics = computed(
+  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics),
+)
+const pendingTeachers = computed(
+  () => teachersResource.data.value ?? (teachersResource.usingFallback.value ? teacherApplicationsPending : []),
+)
+const moderationRecords = computed(
+  () => moderationResource.data.value ?? (moderationResource.usingFallback.value ? adminModerationRecords : []),
+)
+const notifications = computed(
+  () => notificationsResource.data.value ?? (notificationsResource.usingFallback.value ? adminNotifications : []),
+)
 const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? adminAuditLogs : []))
-const aiReports = computed(() => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []))
-const health = computed(() => healthResource.data.value ?? (healthResource.usingFallback.value ? {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-} : emptyHealth))
+const aiReports = computed(
+  () => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []),
+)
+const health = computed(
+  () =>
+    healthResource.data.value ??
+    (healthResource.usingFallback.value
+      ? {
+          status: 'UP',
+          service: 'backend',
+          timestamp: new Date().toISOString(),
+        }
+      : emptyHealth),
+)
 
 const pageLoading = computed(
   () =>
@@ -474,8 +501,7 @@ const statCards = computed(() => [
     icon: 'money',
     tone: 'mint',
   },
-]
-)
+])
 
 const teacherQueueItems = computed(() =>
   pendingTeachers.value.slice(0, 4).map((item, index) => ({

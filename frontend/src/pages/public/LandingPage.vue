@@ -21,15 +21,17 @@
             Open a world of <span class="accent-orange">possibilities</span>.
           </h1>
 
-          <p>
-            MandarinSpark makes learning Mandarin fun, effective, and safe for young learners anywhere, anytime.
-          </p>
+          <p>MandarinSpark makes learning Mandarin fun, effective, and safe for young learners anywhere, anytime.</p>
 
           <div class="public-hero-actions">
             <button class="btn btn-primary public-hero-button" type="button" @click="router.push('/courses')">
               <span>Explore Courses</span>
             </button>
-            <button class="btn btn-accent public-hero-button public-hero-button--gold" type="button" @click="router.push('/auth')">
+            <button
+              class="btn btn-accent public-hero-button public-hero-button--gold"
+              type="button"
+              @click="router.push('/auth')"
+            >
               <span>Start Learning</span>
             </button>
           </div>
@@ -94,11 +96,7 @@
           </div>
 
           <div v-if="featuredCourses.length" class="public-featured-grid">
-            <article
-              v-for="(course, index) in featuredCourses"
-              :key="course.id"
-              class="public-featured-card"
-            >
+            <article v-for="(course, index) in featuredCourses" :key="course.id" class="public-featured-card">
               <button
                 class="public-featured-card-button"
                 type="button"
@@ -297,12 +295,42 @@ const featuredCourses = computed<PublicCourseSummary[]>(() =>
 )
 
 const featureStrip = [
-  { icon: 'status', title: 'Beginner Mandarin Made Easy', description: 'Start from the basics with step-by-step lessons.', tone: 'purple' as const },
-  { icon: 'play', title: 'Interactive Activities', description: 'Fun games and quizzes that build real skills.', tone: 'green' as const },
-  { icon: 'ai', title: 'AI-Assisted Support', description: 'Get help anytime with SparkBot AI Helper.', tone: 'blue' as const },
-  { icon: 'live', title: 'Live & Recorded Learning', description: 'Join live classes or learn at your own pace.', tone: 'orange' as const },
-  { icon: 'trophy', title: 'Progress Tracking & Rewards', description: 'Earn stars, badges, and celebrate your growth.', tone: 'gold' as const },
-  { icon: 'teacher', title: 'Teacher-Guided Learning', description: 'Learn with verified teachers who care about you.', tone: 'pink' as const },
+  {
+    icon: 'status',
+    title: 'Beginner Mandarin Made Easy',
+    description: 'Start from the basics with step-by-step lessons.',
+    tone: 'purple' as const,
+  },
+  {
+    icon: 'play',
+    title: 'Interactive Activities',
+    description: 'Fun games and quizzes that build real skills.',
+    tone: 'green' as const,
+  },
+  {
+    icon: 'ai',
+    title: 'AI-Assisted Support',
+    description: 'Get help anytime with SparkBot AI Helper.',
+    tone: 'blue' as const,
+  },
+  {
+    icon: 'live',
+    title: 'Live & Recorded Learning',
+    description: 'Join live classes or learn at your own pace.',
+    tone: 'orange' as const,
+  },
+  {
+    icon: 'trophy',
+    title: 'Progress Tracking & Rewards',
+    description: 'Earn stars, badges, and celebrate your growth.',
+    tone: 'gold' as const,
+  },
+  {
+    icon: 'teacher',
+    title: 'Teacher-Guided Learning',
+    description: 'Learn with verified teachers who care about you.',
+    tone: 'pink' as const,
+  },
 ]
 
 const socialLinks = [
@@ -319,15 +347,36 @@ const heroProof = [
 ]
 
 const familyJourney = [
-  { step: '1', title: 'Explore with confidence', copy: 'Families can compare course styles, age fit, and teacher guidance before signing in.' },
-  { step: '2', title: 'Learn in small wins', copy: 'Students move from lessons to practice, class support, and rewards without losing momentum.' },
-  { step: '3', title: 'Stay supported', copy: 'Teachers, parents, and admins all see the progress signals they need to keep learners growing.' },
+  {
+    step: '1',
+    title: 'Explore with confidence',
+    copy: 'Families can compare course styles, age fit, and teacher guidance before signing in.',
+  },
+  {
+    step: '2',
+    title: 'Learn in small wins',
+    copy: 'Students move from lessons to practice, class support, and rewards without losing momentum.',
+  },
+  {
+    step: '3',
+    title: 'Stay supported',
+    copy: 'Teachers, parents, and admins all see the progress signals they need to keep learners growing.',
+  },
 ]
 
 const supportOptions = [
-  { title: 'Families and students', copy: 'Sign in to review learning progress, feedback, payments, refunds, rewards, and notifications from the student profile area.' },
-  { title: 'Teachers', copy: 'Use the teacher profile, verification, class, content, feedback, and earnings pages to resolve account and teaching workflow questions.' },
-  { title: 'Platform operations', copy: 'Admins can review users, teacher verification, moderation, audit logs, finance, notifications, and safety settings from the admin workspace.' },
+  {
+    title: 'Families and students',
+    copy: 'Sign in to review learning progress, feedback, payments, refunds, rewards, and notifications from the student profile area.',
+  },
+  {
+    title: 'Teachers',
+    copy: 'Use the teacher profile, verification, class, content, feedback, and earnings pages to resolve account and teaching workflow questions.',
+  },
+  {
+    title: 'Platform operations',
+    copy: 'Admins can review users, teacher verification, moderation, audit logs, finance, notifications, and safety settings from the admin workspace.',
+  },
 ]
 
 function viewCourse(id: string) {
@@ -341,8 +390,9 @@ function featuredThumb(index: number): CourseSceneVariant {
 }
 
 function featuredCopy(course: PublicCourseSummary) {
-  return course.shortDescription?.trim() || `${course.teacher.displayName} teaches this ${course.category.name.toLowerCase()} course.`
+  return (
+    course.shortDescription?.trim() ||
+    `${course.teacher.displayName} teaches this ${course.category.name.toLowerCase()} course.`
+  )
 }
 </script>
-
-

@@ -32,6 +32,19 @@ import lombok.Setter;
  * <p>{@link #version} prevents two concurrent learning events from
  * the same student (e.g. quiz submission and lesson completion in
  * parallel browser tabs) from double-incrementing the streak.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li>{@link #student} is mapped {@code updatable = false}: a streak
+ *       row is permanently bound to one learner. Re-targeting would
+ *       additionally collide with {@code uk_daily_streaks_student},
+ *       so the ORM-layer guard simply makes that contract explicit.</li>
+ *   <li>{@link #currentStreak}, {@link #bestStreak},
+ *       {@link #lastLearningDate} are mutated on every learning event
+ *       by {@code StudentLearningProgressService}; the
+ *       {@link Version @Version} field above protects those writes
+ *       against lost-update races.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -45,7 +58,7 @@ import lombok.Setter;
 public class DailyStreak extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @Column(name = "current_streak", nullable = false)

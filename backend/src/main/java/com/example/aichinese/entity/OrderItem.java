@@ -36,6 +36,14 @@ import lombok.Setter;
  * <p>{@link #featureKey} is populated when {@link #itemType} is
  * {@code PREMIUM_AI} so the entitlement flow knows which AI feature
  * the subscription unlocks.</p>
+ *
+ * <p>The Javadoc contract above ("financial fields are immutable
+ * once written") is enforced at the ORM layer: every domain field is
+ * mapped {@code updatable = false}. The single legitimate write path
+ * is {@code OrderService#createOrder}, which inserts each row exactly
+ * once. Any later {@code entity.setX(\u2026)} + {@code save()} attempt is
+ * silently dropped by Hibernate at flush time \u2014 receipts, refunds and
+ * accounting exports therefore remain bit-for-bit reproducible.</p>
  */
 @Getter
 @Setter
@@ -48,31 +56,31 @@ import lombok.Setter;
 public class OrderItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "order_id", nullable = false, updatable = false)
     private Order order;
 
-    @Column(name = "item_type", nullable = false, length = 50)
+    @Column(name = "item_type", nullable = false, updatable = false, length = 50)
     private String itemType;
 
-    @Column(name = "item_id", nullable = false)
+    @Column(name = "item_id", nullable = false, updatable = false)
     private Long itemId;
 
-    @Column(name = "item_title_snapshot", length = 200)
+    @Column(name = "item_title_snapshot", updatable = false, length = 200)
     private String itemTitleSnapshot;
 
-    @Column(name = "feature_key", length = 100)
+    @Column(name = "feature_key", updatable = false, length = 100)
     private String featureKey;
 
-    @Column(name = "quantity", nullable = false)
+    @Column(name = "quantity", nullable = false, updatable = false)
     private Integer quantity = 1;
 
-    @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
+    @Column(name = "unit_price", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal unitPrice;
 
-    @Column(name = "line_total", nullable = false, precision = 10, scale = 2)
+    @Column(name = "line_total", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal lineTotal;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @JoinColumn(name = "teacher_id", updatable = false)
     private TeacherProfile teacher;
 }

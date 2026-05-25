@@ -7,7 +7,12 @@
       eyebrow="Teaching flow"
     >
       <template #actions>
-        <button class="teacher-sample-link" type="button" :disabled="teacherApprovalLocked" @click="showComposer = !showComposer">
+        <button
+          class="teacher-sample-link"
+          type="button"
+          :disabled="teacherApprovalLocked"
+          @click="showComposer = !showComposer"
+        >
           {{ teacherApprovalLocked ? 'Verification pending' : showComposer ? 'Close scheduler' : 'Schedule class' }}
         </button>
       </template>
@@ -31,7 +36,12 @@
           </div>
           <div class="row teacher-classes-header-actions">
             <span class="teacher-classes-date-pill">{{ currentDateLabel }}</span>
-            <button class="student-link-button teacher-classes-head-link" type="button" :disabled="teacherApprovalLocked" @click="showComposer = true">
+            <button
+              class="student-link-button teacher-classes-head-link"
+              type="button"
+              :disabled="teacherApprovalLocked"
+              @click="showComposer = true"
+            >
               Open scheduler
             </button>
           </div>
@@ -40,9 +50,7 @@
         <div v-if="teacherApprovalLocked" class="teacher-classes-empty">
           Complete teacher verification first to unlock class scheduling, rosters, and recording progress.
         </div>
-        <div v-else-if="!liveClassCards.length" class="teacher-classes-empty">
-          No live classes are scheduled yet.
-        </div>
+        <div v-else-if="!liveClassCards.length" class="teacher-classes-empty">No live classes are scheduled yet.</div>
         <div v-else class="teacher-classes-live-list">
           <article
             v-for="item in liveClassCards"
@@ -70,7 +78,9 @@
             </div>
 
             <div class="teacher-classes-live-platform">
-              <span class="teacher-classes-platform-icon" :class="`is-${item.platformTone}`">{{ item.platformGlyph }}</span>
+              <span class="teacher-classes-platform-icon" :class="`is-${item.platformTone}`">{{
+                item.platformGlyph
+              }}</span>
               <div class="stack u-gap-2">
                 <strong>{{ item.platform }}</strong>
                 <span>{{ item.platformMeta }}</span>
@@ -89,7 +99,12 @@
                   View Roster
                 </button>
               </div>
-              <button class="teacher-classes-live-more" type="button" aria-label="Open class details" @click="selectClass(item.id)">
+              <button
+                class="teacher-classes-live-more"
+                type="button"
+                aria-label="Open class details"
+                @click="selectClass(item.id)"
+              >
                 Details
               </button>
             </div>
@@ -100,13 +115,20 @@
           <div class="row">
             <span class="teacher-classes-support-icon">i</span>
             <span>
-              Live support is provided through external tools such as Zoom or Google Meet. MandarinSpark does not include
-              built-in video conferencing.
+              Live support is provided through external tools such as Zoom or Google Meet. MandarinSpark does not
+              include built-in video conferencing.
             </span>
           </div>
           <div class="row teacher-classes-support-actions">
             <span>Need help with live classes?</span>
-            <button class="teacher-guide-button" type="button" :disabled="teacherApprovalLocked" @click="showComposer = true">Open scheduler</button>
+            <button
+              class="teacher-guide-button"
+              type="button"
+              :disabled="teacherApprovalLocked"
+              @click="showComposer = true"
+            >
+              Open scheduler
+            </button>
           </div>
         </div>
       </section>
@@ -126,11 +148,23 @@
             <div class="form-grid two">
               <div class="field">
                 <label for="teacher-class-title">Class title</label>
-                <input id="teacher-class-title" v-model="classForm.title" class="input" maxlength="200" required :disabled="classComposerDisabled" />
+                <input
+                  id="teacher-class-title"
+                  v-model="classForm.title"
+                  class="input"
+                  maxlength="200"
+                  required
+                  :disabled="classComposerDisabled"
+                />
               </div>
               <div class="field">
                 <label for="teacher-class-platform">Meeting platform</label>
-                <select id="teacher-class-platform" v-model="classForm.meetingPlatform" class="select" :disabled="classComposerDisabled">
+                <select
+                  id="teacher-class-platform"
+                  v-model="classForm.meetingPlatform"
+                  class="select"
+                  :disabled="classComposerDisabled"
+                >
                   <option value="Zoom">Zoom</option>
                   <option value="Google Meet">Google Meet</option>
                   <option value="Microsoft Teams">Microsoft Teams</option>
@@ -140,13 +174,24 @@
 
             <div class="field">
               <label for="teacher-class-description">Topic / description</label>
-              <textarea id="teacher-class-description" v-model="classForm.description" class="textarea" maxlength="1000" :disabled="classComposerDisabled" />
+              <textarea
+                id="teacher-class-description"
+                v-model="classForm.description"
+                class="textarea"
+                maxlength="1000"
+                :disabled="classComposerDisabled"
+              />
             </div>
 
             <div class="form-grid two">
               <div class="field">
                 <label for="teacher-class-lesson">Lesson</label>
-                <select id="teacher-class-lesson" v-model.number="classForm.lessonId" class="select" :disabled="classComposerDisabled">
+                <select
+                  id="teacher-class-lesson"
+                  v-model.number="classForm.lessonId"
+                  class="select"
+                  :disabled="classComposerDisabled"
+                >
                   <option :value="0">No lesson context</option>
                   <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">
                     {{ lesson.title }}
@@ -155,7 +200,12 @@
               </div>
               <div class="field">
                 <label for="teacher-class-package">Package</label>
-                <select id="teacher-class-package" v-model.number="classForm.packageId" class="select" :disabled="classComposerDisabled">
+                <select
+                  id="teacher-class-package"
+                  v-model.number="classForm.packageId"
+                  class="select"
+                  :disabled="classComposerDisabled"
+                >
                   <option :value="0">No package context</option>
                   <option v-for="coursePackage in packageOptions" :key="coursePackage.id" :value="coursePackage.id">
                     {{ coursePackage.title }}
@@ -167,28 +217,57 @@
             <div class="form-grid two">
               <div class="field">
                 <label for="teacher-class-start-time">Start time</label>
-                <input id="teacher-class-start-time" v-model="classForm.startTime" class="input" type="datetime-local" required :disabled="classComposerDisabled" />
+                <input
+                  id="teacher-class-start-time"
+                  v-model="classForm.startTime"
+                  class="input"
+                  type="datetime-local"
+                  required
+                  :disabled="classComposerDisabled"
+                />
               </div>
               <div class="field">
                 <label for="teacher-class-end-time">End time</label>
-                <input id="teacher-class-end-time" v-model="classForm.endTime" class="input" type="datetime-local" required :disabled="classComposerDisabled" />
+                <input
+                  id="teacher-class-end-time"
+                  v-model="classForm.endTime"
+                  class="input"
+                  type="datetime-local"
+                  required
+                  :disabled="classComposerDisabled"
+                />
               </div>
             </div>
 
             <div class="form-grid two">
               <div class="field">
                 <label for="teacher-class-meeting-link">Meeting link</label>
-                <input id="teacher-class-meeting-link" v-model="classForm.meetingLink" class="input" type="url" required :disabled="classComposerDisabled" />
+                <input
+                  id="teacher-class-meeting-link"
+                  v-model="classForm.meetingLink"
+                  class="input"
+                  type="url"
+                  required
+                  :disabled="classComposerDisabled"
+                />
               </div>
               <div class="field">
                 <label for="teacher-class-max-participants">Max participants</label>
-                <input id="teacher-class-max-participants" v-model.number="classForm.maxParticipants" class="input" type="number" min="1" :disabled="classComposerDisabled" />
+                <input
+                  id="teacher-class-max-participants"
+                  v-model.number="classForm.maxParticipants"
+                  class="input"
+                  type="number"
+                  min="1"
+                  :disabled="classComposerDisabled"
+                />
               </div>
             </div>
 
             <div class="teacher-classes-form-footer">
               <div class="teacher-classes-form-note">
-                Teachers can publish courses directly. Live classes remain teacher-managed and use external meeting links only.
+                Teachers can publish courses directly. Live classes remain teacher-managed and use external meeting
+                links only.
               </div>
               <div class="row u-justify-end u-wrap">
                 <button
@@ -200,7 +279,11 @@
                 >
                   {{ submittingCancel ? 'Cancelling...' : 'Cancel class' }}
                 </button>
-                <button class="btn btn-primary" type="submit" :disabled="classesReadOnly || submittingCreate || submittingUpdate">
+                <button
+                  class="btn btn-primary"
+                  type="submit"
+                  :disabled="classesReadOnly || submittingCreate || submittingUpdate"
+                >
                   {{
                     selectedLiveClass
                       ? submittingUpdate
@@ -280,7 +363,9 @@
                 <strong>Attendance Check-ins</strong>
                 <small class="teacher-classes-head-note">(Selected Class)</small>
               </div>
-              <button class="student-link-button" type="button" @click="loadEnrolments(primaryClass.id)">View Details</button>
+              <button class="student-link-button" type="button" @click="loadEnrolments(primaryClass.id)">
+                View Details
+              </button>
             </div>
 
             <div class="teacher-classes-attendance-wrap">
@@ -307,12 +392,16 @@
               <div class="student-section-heading">
                 <strong>Class Follow-ups</strong>
               </div>
-              <button class="student-link-button" type="button" @click="router.push('/teacher/students')">Open Students</button>
+              <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+                Open Students
+              </button>
             </div>
 
             <div class="teacher-classes-reminder-list">
               <article v-for="item in reminderCards" :key="item.title" class="teacher-classes-reminder-item">
-                <span class="teacher-classes-reminder-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="20" /></span>
+                <span class="teacher-classes-reminder-icon" :class="`is-${item.tone}`"
+                  ><IconGlyph :name="item.icon" :size="20"
+                /></span>
                 <div class="teacher-classes-reminder-copy">
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.copy }}</span>
@@ -329,12 +418,16 @@
               <div class="student-section-heading">
                 <strong>Learning Follow-ups</strong>
               </div>
-              <button class="student-link-button" type="button" @click="router.push('/teacher/content')">Open Content</button>
+              <button class="student-link-button" type="button" @click="router.push('/teacher/content')">
+                Open Content
+              </button>
             </div>
 
             <div class="teacher-classes-homework-list">
               <article v-for="item in assignmentCards" :key="item.title" class="teacher-classes-homework-item">
-                <span class="teacher-classes-homework-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="20" /></span>
+                <span class="teacher-classes-homework-icon" :class="`is-${item.tone}`"
+                  ><IconGlyph :name="item.icon" :size="20"
+                /></span>
                 <div class="teacher-classes-homework-copy">
                   <div class="row u-wrap">
                     <strong>{{ item.title }}</strong>
@@ -359,8 +452,16 @@
             </div>
 
             <div class="teacher-classes-actions-grid">
-              <button v-for="item in quickActions" :key="item.title" class="teacher-classes-action-button" type="button" @click="item.action">
-                <span class="teacher-classes-action-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="20" /></span>
+              <button
+                v-for="item in quickActions"
+                :key="item.title"
+                class="teacher-classes-action-button"
+                type="button"
+                @click="item.action"
+              >
+                <span class="teacher-classes-action-icon" :class="`is-${item.tone}`"
+                  ><IconGlyph :name="item.icon" :size="20"
+                /></span>
                 <span>{{ item.title }}</span>
               </button>
             </div>
@@ -468,15 +569,37 @@ const progressResource = useResource(
   false,
 )
 
-const liveClasses = computed(() => liveClassesResource.data.value ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses : []))
-const analytics = computed(() => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? teacherAnalytics : { ...teacherAnalytics, overview: { ...teacherAnalytics.overview, totalActiveStudents: 0 } }))
-const lessons = computed<LessonResponse[]>(() => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []))
-const coursePackages = computed<CoursePackageResponse[]>(() => packagesResource.data.value ?? (packagesResource.usingFallback.value ? teacherCoursePackages : []))
-const enrolments = computed(() => enrolmentsResource.data.value ?? (enrolmentsResource.usingFallback.value ? teacherEnrolments : []))
-const recordedVideos = computed(() => recordedResource.data.value ?? (recordedResource.usingFallback.value ? teacherRecordedVideos : []))
-const videoProgress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? teacherVideoProgress : []))
-const lessonOptions = computed<LessonResponse[]>(() => lessons.value.filter((item: LessonResponse) => item.contentStatus !== 'ARCHIVED'))
-const packageOptions = computed<CoursePackageResponse[]>(() => coursePackages.value.filter((item: CoursePackageResponse) => item.contentStatus !== 'ARCHIVED'))
+const liveClasses = computed(
+  () => liveClassesResource.data.value ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses : []),
+)
+const analytics = computed(
+  () =>
+    analyticsResource.data.value ??
+    (analyticsResource.usingFallback.value
+      ? teacherAnalytics
+      : { ...teacherAnalytics, overview: { ...teacherAnalytics.overview, totalActiveStudents: 0 } }),
+)
+const lessons = computed<LessonResponse[]>(
+  () => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []),
+)
+const coursePackages = computed<CoursePackageResponse[]>(
+  () => packagesResource.data.value ?? (packagesResource.usingFallback.value ? teacherCoursePackages : []),
+)
+const enrolments = computed(
+  () => enrolmentsResource.data.value ?? (enrolmentsResource.usingFallback.value ? teacherEnrolments : []),
+)
+const recordedVideos = computed(
+  () => recordedResource.data.value ?? (recordedResource.usingFallback.value ? teacherRecordedVideos : []),
+)
+const videoProgress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? teacherVideoProgress : []),
+)
+const lessonOptions = computed<LessonResponse[]>(() =>
+  lessons.value.filter((item: LessonResponse) => item.contentStatus !== 'ARCHIVED'),
+)
+const packageOptions = computed<CoursePackageResponse[]>(() =>
+  coursePackages.value.filter((item: CoursePackageResponse) => item.contentStatus !== 'ARCHIVED'),
+)
 
 const pageLoading = computed(
   () =>
@@ -522,7 +645,9 @@ const classesNoticeDetail = computed(() => {
   }
 
   if (actionError.value || pageError.value) {
-    return selectedClassId.value ? 'The selected class context stays visible so you can retry without losing your place.' : 'Open a class again once the live endpoints respond.'
+    return selectedClassId.value
+      ? 'The selected class context stays visible so you can retry without losing your place.'
+      : 'Open a class again once the live endpoints respond.'
   }
 
   if (usingFallback.value) {
@@ -530,7 +655,9 @@ const classesNoticeDetail = computed(() => {
   }
 
   if (actionSuccess.value) {
-    return selectedLiveClass.value ? `Current focus: ${selectedLiveClass.value.title}` : 'Your latest class action completed successfully.'
+    return selectedLiveClass.value
+      ? `Current focus: ${selectedLiveClass.value.title}`
+      : 'Your latest class action completed successfully.'
   }
 
   return null
@@ -565,15 +692,18 @@ const currentDateLabel = computed(() =>
   }).format(new Date()),
 )
 
-const primaryClass = computed(() => liveClasses.value[0] ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses[0] : null))
+const primaryClass = computed(
+  () => liveClasses.value[0] ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses[0] : null),
+)
 const selectedLiveClass = computed(() => liveClasses.value.find((item) => item.id === selectedClassId.value) ?? null)
 
 const liveClassCards = computed(() =>
   liveClasses.value.slice(0, 3).map((item, index) => {
     const start = new Date(item.startTime)
-    const platformMeta = item.meetingPlatform === 'Google Meet'
-      ? `Meeting code: ${meetingCodeFromLink(item.meetingLink)}`
-      : `Meeting ID: ${meetingCodeFromLink(item.meetingLink)}`
+    const platformMeta =
+      item.meetingPlatform === 'Google Meet'
+        ? `Meeting code: ${meetingCodeFromLink(item.meetingLink)}`
+        : `Meeting ID: ${meetingCodeFromLink(item.meetingLink)}`
 
     return {
       id: item.id,
@@ -600,14 +730,18 @@ const recordingCards = computed(() =>
     id: item.id,
     title: item.title,
     meta: `Lesson ${item.lessonId} - ${formatDate(item.createdAt)}`,
-    lengthLabel: item.durationSeconds ? `${Math.max(1, Math.round(item.durationSeconds / 60))}m` : 'Duration unavailable',
+    lengthLabel: item.durationSeconds
+      ? `${Math.max(1, Math.round(item.durationSeconds / 60))}m`
+      : 'Duration unavailable',
     thumbLabel: item.title.slice(0, 6) || 'play',
     art: ['purple', 'orange', 'festival'][index % 3],
   })),
 )
 
 const attendedCount = computed(() => enrolments.value.filter((item) => item.attendedAt).length)
-const pendingCheckInCount = computed(() => enrolments.value.filter((item) => item.enrolmentStatus !== 'CANCELLED' && !item.attendedAt).length)
+const pendingCheckInCount = computed(
+  () => enrolments.value.filter((item) => item.enrolmentStatus !== 'CANCELLED' && !item.attendedAt).length,
+)
 const cancelledCount = computed(() => enrolments.value.filter((item) => item.enrolmentStatus === 'CANCELLED').length)
 const totalRosterCount = computed(() => enrolments.value.length)
 const presentCount = computed(() => attendedCount.value)
@@ -617,9 +751,24 @@ const attendanceLegend = computed(() => {
   const total = Math.max(totalRosterCount.value, 1)
 
   return [
-    { label: 'Checked in', count: presentCount.value, percent: Math.round((presentCount.value / total) * 100), tone: 'green' },
-    { label: 'Pending', count: pendingCheckInCount.value, percent: Math.round((pendingCheckInCount.value / total) * 100), tone: 'yellow' },
-    { label: 'Cancelled', count: cancelledCount.value, percent: Math.round((cancelledCount.value / total) * 100), tone: 'red' },
+    {
+      label: 'Checked in',
+      count: presentCount.value,
+      percent: Math.round((presentCount.value / total) * 100),
+      tone: 'green',
+    },
+    {
+      label: 'Pending',
+      count: pendingCheckInCount.value,
+      percent: Math.round((pendingCheckInCount.value / total) * 100),
+      tone: 'yellow',
+    },
+    {
+      label: 'Cancelled',
+      count: cancelledCount.value,
+      percent: Math.round((cancelledCount.value / total) * 100),
+      tone: 'red',
+    },
   ]
 })
 
@@ -652,7 +801,8 @@ const assignmentCards = computed(() => {
   const totalVideos = Math.max(recordedVideos.value.length, 1)
   const completedVideoViews = videoProgress.value.filter((item) => item.completed).length
   const progressAverage = Math.round(
-    videoProgress.value.reduce((sum, item) => sum + item.progressPercentage, 0) / Math.max(videoProgress.value.length, 1),
+    videoProgress.value.reduce((sum, item) => sum + item.progressPercentage, 0) /
+      Math.max(videoProgress.value.length, 1),
   )
 
   return [
@@ -669,7 +819,9 @@ const assignmentCards = computed(() => {
       title: 'Average recording progress',
       classCode: 'Recorded progress',
       deadline: `${totalVideos} video(s)`,
-      progressLabel: videoProgress.value.length ? `${videoProgress.value.length} learner progress record(s)` : 'No video progress records loaded yet',
+      progressLabel: videoProgress.value.length
+        ? `${videoProgress.value.length} learner progress record(s)`
+        : 'No video progress records loaded yet',
       progress: Math.max(0, Math.min(100, progressAverage)),
       icon: 'status',
       tone: 'orange',
@@ -732,14 +884,16 @@ function toApiDateTime(value: string) {
 function meetingCodeFromLink(link?: string | null) {
   if (!link) return 'External link'
 
-  return link
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .split('/')
-    .slice(-2)
-    .join('-')
-    .replace(/[^a-zA-Z0-9-]/g, '')
-    .slice(0, 18) || 'External link'
+  return (
+    link
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .split('/')
+      .slice(-2)
+      .join('-')
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      .slice(0, 18) || 'External link'
+  )
 }
 
 function formatClassDate(date: Date) {
@@ -785,7 +939,8 @@ function resetComposer() {
   classForm.title = ''
   classForm.description = ''
   classForm.lessonId = selectedLiveClass.value?.lesson?.lessonId ?? primaryClass.value?.lesson?.lessonId ?? 0
-  classForm.packageId = selectedLiveClass.value?.coursePackage?.packageId ?? primaryClass.value?.coursePackage?.packageId ?? 0
+  classForm.packageId =
+    selectedLiveClass.value?.coursePackage?.packageId ?? primaryClass.value?.coursePackage?.packageId ?? 0
   selectedLessonId.value = classForm.lessonId || null
   classForm.startTime = toInputDateTime(tomorrow.toISOString())
   classForm.endTime = toInputDateTime(end.toISOString())
@@ -955,7 +1110,10 @@ function reloadAll() {
   void lessonsResource.reload()
   void packagesResource.reload()
   if (selectedClassId.value) {
-    void loadDependentResources(selectedClassId.value, selectedLiveClass.value?.lesson?.lessonId ?? selectedLessonId.value)
+    void loadDependentResources(
+      selectedClassId.value,
+      selectedLiveClass.value?.lesson?.lessonId ?? selectedLessonId.value,
+    )
   }
 }
 
@@ -1082,7 +1240,9 @@ watch(
 }
 
 .teacher-classes-live-item.is-purple {
-  box-shadow: inset 0 0 0 1px rgba(134, 104, 255, 0.1), 0 10px 20px rgba(124, 102, 222, 0.05);
+  box-shadow:
+    inset 0 0 0 1px rgba(134, 104, 255, 0.1),
+    0 10px 20px rgba(124, 102, 222, 0.05);
 }
 
 .teacher-classes-live-time {

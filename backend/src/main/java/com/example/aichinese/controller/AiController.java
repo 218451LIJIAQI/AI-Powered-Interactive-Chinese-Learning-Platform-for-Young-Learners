@@ -1,8 +1,10 @@
 package com.example.aichinese.controller;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
@@ -37,6 +40,8 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.AiService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -82,6 +87,9 @@ import jakarta.validation.constraints.Size;
 @RequestMapping("/api/v1/ai")
 public class AiController {
 
+    private static final long CHAT_STREAM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
+    private static final int STREAM_CHUNK_SIZE = 24;
+
     private final AiService aiService;
     private final AiResponseReportService aiResponseReportService;
 
@@ -93,6 +101,12 @@ public class AiController {
     }
 
     @GetMapping("/availability")
+    @Operation(summary = "Get AI provider availability", description = "Returns current text, audio, and image capability flags for the authenticated student.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "AI availability returned."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Authentication is required."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Only students can use learner AI endpoints.")
+    })
     public ResponseEntity<ApiResponse<AiAvailabilityResponse>> getAvailability() {
         // GET is the semantically-correct verb for an idempotent "what is the
         // current AI provider state?" probe. Cache-Control: private, max-age=30
@@ -107,13 +121,50 @@ public class AiController {
     }
 
     @PostMapping("/chat")
+    @Operation(summary = "Send an AI chat message", description = "Processes one SparkBot chat turn and returns the persisted student/assistant exchange.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Chat turn processed."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid chat request."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Authentication is required."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Only students can use learner AI endpoints."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "AI usage quota exceeded.")
+    })
     public ApiResponse<AiChatResponse> chat(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiChatRequest request) {
         return ApiResponse.success("AI chat request processed.", aiService.chat(currentUser, request));
     }
 
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Stream an AI chat response", description = "Returns Server-Sent Events for the SparkBot answer, ending with the complete persisted chat response.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SSE chat stream opened."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid chat request."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Authentication is required."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Only students can use learner AI endpoints."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "AI usage quota exceeded.")
+    })
+    public SseEmitter chatStream(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @Valid @RequestBody AiChatRequest request) {
+        SseEmitter emitter = new SseEmitter(CHAT_STREAM_TIMEOUT_MS);
+        Thread.startVirtualThread(() -> {
+            try {
+                AiChatResponse response = aiService.chat(currentUser, request);
+                sendChunkedText(emitter, response.aiResponse());
+                emitter.send(SseEmitter.event()
+                        .name("complete")
+                        .data(response, MediaType.APPLICATION_JSON));
+                emitter.complete();
+            } catch (Exception exception) {
+                completeWithError(emitter, exception);
+            }
+        });
+        return emitter;
+    }
+
     @PostMapping("/reports")
+    @Operation(summary = "Report an AI response", description = "Submits a learner report for admin review when SparkBot content looks wrong or unsafe.")
     public ApiResponse<StudentAiResponseReportResponse> reportAiResponse(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateAiResponseReportRequest request) {
@@ -133,6 +184,7 @@ public class AiController {
     }
 
     @PostMapping("/vocabulary-helper")
+    @Operation(summary = "Generate vocabulary help", description = "Explains a Chinese word with pinyin, translations, examples, and encouragement.")
     public ApiResponse<AiVocabularyHelperResponse> vocabularyHelper(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiVocabularyHelperRequest request) {
@@ -142,6 +194,7 @@ public class AiController {
     }
 
     @PostMapping("/sentence-practice")
+    @Operation(summary = "Review a practice sentence", description = "Checks a learner sentence and returns beginner-friendly improvement feedback.")
     public ApiResponse<AiSentencePracticeResponse> sentencePractice(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiSentencePracticeRequest request) {
@@ -151,6 +204,7 @@ public class AiController {
     }
 
     @PostMapping("/quiz-generator")
+    @Operation(summary = "Generate a self-practice quiz", description = "Creates a short learner-only quiz draft from a topic.")
     public ApiResponse<AiQuizGeneratorResponse> quizGenerator(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiQuizGeneratorRequest request) {
@@ -160,6 +214,7 @@ public class AiController {
     }
 
     @PostMapping("/story-generator")
+    @Operation(summary = "Generate a practice story", description = "Creates a short Mandarin story draft for self-practice.")
     public ApiResponse<AiStoryGeneratorResponse> storyGenerator(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiStoryGeneratorRequest request) {
@@ -169,6 +224,7 @@ public class AiController {
     }
 
     @PostMapping("/learning-recommendation")
+    @Operation(summary = "Generate learning recommendations", description = "Uses progress context to suggest the student's next Mandarin practice step.")
     public ApiResponse<AiLearningRecommendationResponse> learningRecommendation(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiLearningRecommendationRequest request) {
@@ -178,6 +234,7 @@ public class AiController {
     }
 
     @PostMapping("/pronunciation-feedback")
+    @Operation(summary = "Upload pronunciation audio", description = "Stores a prototype pronunciation recording and returns provider capability feedback.")
     public ApiResponse<AiPronunciationFeedbackResponse> pronunciationFeedback(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam("file") MultipartFile file,
@@ -196,6 +253,7 @@ public class AiController {
     }
 
     @PostMapping("/writing-feedback")
+    @Operation(summary = "Upload writing image", description = "Stores a prototype handwriting image and returns provider capability feedback.")
     public ApiResponse<AiWritingFeedbackResponse> writingFeedback(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam("file") MultipartFile file,
@@ -207,5 +265,26 @@ public class AiController {
         return ApiResponse.success(
                 "AI writing feedback request processed.",
                 aiService.writingFeedback(currentUser, file, targetCharacter, languagePreference));
+    }
+
+    private static void sendChunkedText(SseEmitter emitter, String text) throws IOException {
+        String safeText = text == null ? "" : text;
+        for (int start = 0; start < safeText.length(); start += STREAM_CHUNK_SIZE) {
+            int end = Math.min(start + STREAM_CHUNK_SIZE, safeText.length());
+            emitter.send(SseEmitter.event()
+                    .name("delta")
+                    .data(safeText.substring(start, end)));
+        }
+    }
+
+    private static void completeWithError(SseEmitter emitter, Exception exception) {
+        try {
+            emitter.send(SseEmitter.event()
+                    .name("error")
+                    .data("AI chat stream failed. Please try again."));
+        } catch (IOException ignored) {
+            // Client may have disconnected; completeWithError below records the failure.
+        }
+        emitter.completeWithError(exception);
     }
 }

@@ -55,6 +55,57 @@ public enum PaymentStatus {
     public static final Set<PaymentStatus> GRANTS_ENTITLEMENT =
             Collections.unmodifiableSet(EnumSet.of(PAID));
 
+    /*
+     * Startup-time financial-safety invariant guard.
+     *
+     *   1. TERMINAL == ALL \ {PENDING}.  The Javadoc above advertises
+     *      "only PENDING is transient" and PaymentService.verifyPaymentStatus
+     *      relies on this property to stop polling.  A future contributor
+     *      who adds a new transient state (e.g. {@code AUTHORIZED} for
+     *      Stripe pre-capture holds) without consciously updating
+     *      TERMINAL would silently break webhook reconciliation; one
+     *      who adds a new terminal state without adding it to TERMINAL
+     *      would cause infinite polling.
+     *
+     *   2. GRANTS_ENTITLEMENT ⊆ TERMINAL.  Entitlements must NEVER be
+     *      granted on a transient record (otherwise a student could
+     *      access paid content while the bank is still settling, then
+     *      keep it if the payment ultimately fails).  This invariant is
+     *      the single most important financial-safety property of the
+     *      enum, so the check is duplicated as an explicit subset
+     *      assertion in addition to the disjointness check above.
+     *
+     * Both checks run exactly once at class load and fail fast with a
+     * clear AssertionError naming the offending constants.
+     */
+    static {
+        EnumSet<PaymentStatus> terminal = EnumSet.copyOf(TERMINAL);
+        EnumSet<PaymentStatus> expectedTerminal = EnumSet.complementOf(EnumSet.of(PENDING));
+        if (!terminal.equals(expectedTerminal)) {
+            EnumSet<PaymentStatus> missing = EnumSet.copyOf(expectedTerminal);
+            missing.removeAll(terminal);
+            EnumSet<PaymentStatus> extra = EnumSet.copyOf(terminal);
+            extra.removeAll(expectedTerminal);
+            throw new AssertionError(
+                    "PaymentStatus TERMINAL must equal ALL \\ {PENDING}; missing=" + missing
+                            + ", extra=" + extra);
+        }
+
+        EnumSet<PaymentStatus> grants = EnumSet.copyOf(GRANTS_ENTITLEMENT);
+        if (!terminal.containsAll(grants)) {
+            EnumSet<PaymentStatus> nonTerminalGrants = EnumSet.copyOf(grants);
+            nonTerminalGrants.removeAll(terminal);
+            throw new AssertionError(
+                    "PaymentStatus GRANTS_ENTITLEMENT must be a subset of TERMINAL; "
+                            + "transient-yet-granting: " + nonTerminalGrants);
+        }
+        if (grants.contains(PENDING)) {
+            throw new AssertionError(
+                    "PaymentStatus PENDING must not be present in GRANTS_ENTITLEMENT — "
+                            + "entitlements must never be issued on an unconfirmed payment.");
+        }
+    }
+
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, PaymentStatus> LOOKUP =
             EnumLookups.indexByName(PaymentStatus.class);

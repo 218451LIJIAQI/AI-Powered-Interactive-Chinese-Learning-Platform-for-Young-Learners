@@ -64,10 +64,12 @@ public class TeacherContentAccessService {
     // They may continue to edit / archive their own PUBLISHED content; legacy
     // DRAFT / REJECTED rows from the previous review flow are also editable so
     // historic data remains accessible.
-    private static final Set<ContentStatus> TEACHER_EDITABLE_STATUSES =
-            Set.of(ContentStatus.DRAFT, ContentStatus.PUBLISHED, ContentStatus.REJECTED);
-    private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES =
-            Set.of(ContentStatus.DRAFT, ContentStatus.PUBLISHED, ContentStatus.REJECTED);
+    //
+    // Delegate to the canonical sets on the enum so the Javadoc contract on
+    // ContentStatus ("Single source of truth mirrored by ...") is enforced by
+    // the type system rather than by parallel literal lists.
+    private static final Set<ContentStatus> TEACHER_EDITABLE_STATUSES = ContentStatus.TEACHER_EDITABLE;
+    private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES = ContentStatus.TEACHER_ARCHIVABLE;
     private static final int MAX_TITLE_LENGTH = 200;
     private static final int MAX_DESCRIPTION_LENGTH = 2000;
     private static final int MAX_LESSON_CONTENT_LENGTH = 10000;

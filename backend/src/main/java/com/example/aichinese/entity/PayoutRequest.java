@@ -37,6 +37,20 @@ import lombok.Setter;
  * <p>{@link #version} prevents two admins from approving the same
  * request concurrently, which would otherwise double-count the amount
  * against the teacher's available balance.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #teacher}, {@link #amount},
+ *       {@link #requestedNote} — the request identity (who, how much,
+ *       teacher rationale) is fixed at submission time. Re-targeting
+ *       any of these would silently let an admin re-bid a different
+ *       amount or transfer the request to a different teacher.</li>
+ *   <li><b>Mutable</b>: {@link #payoutStatus} (state machine driven by
+ *       {@code PayoutService} approve/reject/markPaid actions) and
+ *       {@link #decisionReason} (filled by admin at the rejection or
+ *       payment step). Both are guarded by the {@link Version @Version}
+ *       column above.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -50,17 +64,17 @@ import lombok.Setter;
 public class PayoutRequest extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "teacher_id", nullable = false)
+    @JoinColumn(name = "teacher_id", nullable = false, updatable = false)
     private TeacherProfile teacher;
 
-    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
 
-    @Column(name = "requested_note", length = 1000)
+    @Column(name = "requested_note", updatable = false, length = 1000)
     private String requestedNote;
 
     @Column(name = "decision_reason", length = 1000)

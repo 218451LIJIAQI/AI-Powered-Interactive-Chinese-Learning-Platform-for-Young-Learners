@@ -1,7 +1,9 @@
 <template>
   <div class="page-stack student-rewards-page">
     <section class="student-simple-header">
-      <h1>Rewards <span><IconGlyph name="rewards" :size="28" /></span></h1>
+      <h1>
+        Rewards <span><IconGlyph name="rewards" :size="28" /></span>
+      </h1>
       <p>Keep learning, earn points, and unlock milestones that make practice feel playful.</p>
     </section>
 
@@ -44,7 +46,10 @@
                 <span class="student-rewards-next-icon"><IconGlyph name="rewards" :size="26" /></span>
                 <div class="student-rewards-next-copy">
                   <strong>Next Milestone</strong>
-                  <p>Progress is {{ rewards.progressToNextLevelPercent }}% toward Level {{ rewards.currentLevelNumber + 1 }}.</p>
+                  <p>
+                    Progress is {{ rewards.progressToNextLevelPercent }}% toward Level
+                    {{ rewards.currentLevelNumber + 1 }}.
+                  </p>
                   <div class="student-rewards-next-progress">
                     <ProgressBar :progress="rewards.progressToNextLevelPercent" />
                     <span>Level {{ rewards.currentLevelNumber + 1 }} target</span>
@@ -64,18 +69,27 @@
                 <span><IconGlyph name="trophy" :size="20" /></span>
                 <strong>Earned Badges</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">Open Achievements</button>
+              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">
+                Open Achievements
+              </button>
             </div>
 
             <div v-if="earnedBadgeCards.length" class="student-badge-grid">
-              <article v-for="badge in earnedBadgeCards" :key="badge.id" class="student-badge-card" :class="{ 'is-locked': badge.locked }">
+              <article
+                v-for="badge in earnedBadgeCards"
+                :key="badge.id"
+                class="student-badge-card"
+                :class="{ 'is-locked': badge.locked }"
+              >
                 <div class="student-badge-emblem" :class="`is-${badge.tone}`">
                   <span><IconGlyph :name="badge.icon" :size="26" /></span>
                   <small v-if="badge.locked"><IconGlyph name="safe" :size="14" /></small>
                 </div>
                 <strong>{{ badge.title }}</strong>
                 <span>{{ badge.subtitle }}</span>
-                <div class="student-badge-status is-earned"><IconGlyph name="status" :size="12" /> {{ badge.statusLabel }}</div>
+                <div class="student-badge-status is-earned">
+                  <IconGlyph name="status" :size="12" /> {{ badge.statusLabel }}
+                </div>
               </article>
             </div>
             <div v-else class="student-badges-empty">
@@ -116,11 +130,15 @@
                 </div>
                 <strong>{{ badge.title }}</strong>
                 <span>{{ badge.subtitle }}</span>
-                <div class="student-badge-status is-locked"><IconGlyph name="safe" :size="12" /> {{ badge.statusLabel }}</div>
+                <div class="student-badge-status is-locked">
+                  <IconGlyph name="safe" :size="12" /> {{ badge.statusLabel }}
+                </div>
               </article>
             </div>
 
-            <p class="student-badges-note">Keep going! Reward progress stays aligned with your real learning activity and streak data.</p>
+            <p class="student-badges-note">
+              Keep going! Reward progress stays aligned with your real learning activity and streak data.
+            </p>
           </article>
 
           <article class="panel student-rewards-journey-card">
@@ -165,7 +183,9 @@
 
             <div class="student-weekly-goal-list">
               <article v-for="goal in weeklyGoals" :key="goal.title" class="student-weekly-goal-item">
-                <span class="student-weekly-goal-icon" :class="`is-${goal.tone}`"><IconGlyph :name="goal.icon" :size="18" /></span>
+                <span class="student-weekly-goal-icon" :class="`is-${goal.tone}`"
+                  ><IconGlyph :name="goal.icon" :size="18"
+                /></span>
                 <div class="student-weekly-goal-copy">
                   <strong>{{ goal.title }}</strong>
                   <ProgressBar :progress="goal.progress" />
@@ -186,8 +206,13 @@
           <article class="student-rewards-promo-card">
             <div class="student-rewards-promo-copy">
               <strong>Keep Earning Points!</strong>
-              <p>Reward tracking focuses on points, levels, streaks, and badges so every practice session shows visible progress.</p>
-              <button type="button" class="btn btn-primary" @click="router.push('/student/practice')">Continue Practice</button>
+              <p>
+                Reward tracking focuses on points, levels, streaks, and badges so every practice session shows visible
+                progress.
+              </p>
+              <button type="button" class="btn btn-primary" @click="router.push('/student/practice')">
+                Continue Practice
+              </button>
             </div>
             <div class="student-rewards-promo-chest"><IconGlyph name="rewards" :size="58" /></div>
           </article>
@@ -198,7 +223,9 @@
                 <span><IconGlyph name="file" :size="20" /></span>
                 <strong>Reward History</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/profile')">Points Activity</button>
+              <button type="button" class="student-link-button" @click="router.push('/student/profile')">
+                Points Activity
+              </button>
             </div>
 
             <div v-if="rewardHistoryCards.length" class="student-reward-history-list">
@@ -226,12 +253,16 @@
                 <span><IconGlyph name="star" :size="20" /></span>
                 <strong>Recent Achievements</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">Open</button>
+              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">
+                Open
+              </button>
             </div>
 
             <div class="student-achievement-list">
               <article v-for="item in achievementFeed" :key="item.id" class="student-achievement-item">
-                <span class="student-achievement-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
+                <span class="student-achievement-icon" :class="`is-${item.tone}`"
+                  ><IconGlyph :name="item.icon" :size="18"
+                /></span>
                 <div class="student-achievement-copy">
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.subtitle }}</span>
@@ -327,10 +358,18 @@ const emptyActivities = {
 }
 
 const rewards = computed(() => resource.data.value ?? (resource.usingFallback.value ? studentRewards : emptyRewards))
-const pointsHistory = computed(() => historyResource.data.value ?? (historyResource.usingFallback.value ? studentPointsHistory : []))
-const dashboard = computed(() => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboardDemo : emptyDashboard))
-const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
-const activities = computed(() => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : emptyActivities))
+const pointsHistory = computed(
+  () => historyResource.data.value ?? (historyResource.usingFallback.value ? studentPointsHistory : []),
+)
+const dashboard = computed(
+  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboardDemo : emptyDashboard),
+)
+const progress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
+)
+const activities = computed(
+  () => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : emptyActivities),
+)
 const actionSuccess = ref<string | null>(null)
 
 const usingFallback = computed(
@@ -382,7 +421,9 @@ const heroStats = computed(() => [
 
 const quizzesAbove80 = computed(
   () =>
-    dashboard.value.recentQuizResults.filter((item) => item.maxScore > 0 && Math.round((item.score / item.maxScore) * 100) >= 80).length,
+    dashboard.value.recentQuizResults.filter(
+      (item) => item.maxScore > 0 && Math.round((item.score / item.maxScore) * 100) >= 80,
+    ).length,
 )
 
 const earnedBadgeCards = computed(() => {
@@ -434,11 +475,41 @@ const earnedBadgeCards = computed(() => {
 })
 
 const lockedBadgeCards = [
-  { id: 'lock-1', title: 'Sentence Builder', subtitle: 'Unlock with more rearrange practice', statusLabel: 'Locked', icon: 'clip' },
-  { id: 'lock-2', title: 'Story Starter', subtitle: 'Unlock after story activity streaks', statusLabel: 'Locked', icon: 'learn' },
-  { id: 'lock-3', title: 'Character Master', subtitle: 'Unlock after tracing drills', statusLabel: 'Locked', icon: 'language' },
-  { id: 'lock-4', title: 'Quiz Whiz', subtitle: 'Unlock with stronger quiz consistency', statusLabel: 'Locked', icon: 'quiz' },
-  { id: 'lock-5', title: 'Culture Explorer', subtitle: 'Unlock from culture lesson progress', statusLabel: 'Locked', icon: 'globe' },
+  {
+    id: 'lock-1',
+    title: 'Sentence Builder',
+    subtitle: 'Unlock with more rearrange practice',
+    statusLabel: 'Locked',
+    icon: 'clip',
+  },
+  {
+    id: 'lock-2',
+    title: 'Story Starter',
+    subtitle: 'Unlock after story activity streaks',
+    statusLabel: 'Locked',
+    icon: 'learn',
+  },
+  {
+    id: 'lock-3',
+    title: 'Character Master',
+    subtitle: 'Unlock after tracing drills',
+    statusLabel: 'Locked',
+    icon: 'language',
+  },
+  {
+    id: 'lock-4',
+    title: 'Quiz Whiz',
+    subtitle: 'Unlock with stronger quiz consistency',
+    statusLabel: 'Locked',
+    icon: 'quiz',
+  },
+  {
+    id: 'lock-5',
+    title: 'Culture Explorer',
+    subtitle: 'Unlock from culture lesson progress',
+    statusLabel: 'Locked',
+    icon: 'globe',
+  },
 ]
 
 const achievementFeed = computed(() => [
@@ -513,7 +584,12 @@ const rewardHistoryCards = computed(() =>
 const journeySteps = computed(() =>
   Array.from({ length: 5 }, (_, index) => {
     const level = index + 1
-    const status = level < rewards.value.currentLevelNumber ? 'complete' : level === rewards.value.currentLevelNumber ? 'current' : 'future'
+    const status =
+      level < rewards.value.currentLevelNumber
+        ? 'complete'
+        : level === rewards.value.currentLevelNumber
+          ? 'current'
+          : 'future'
     return {
       level,
       title: levelTitleFor(level),
@@ -605,9 +681,39 @@ function reloadAll() {
   width: 116px;
   height: 98px;
   opacity: 0.22;
-  background:
-    linear-gradient(180deg, #ffffff 0 12%, transparent 12% 18%, #fff1cf 18% 30%, transparent 30% 36%, #ffe6b0 36% 48%, transparent 48% 56%, #ffd799 56% 100%);
-  clip-path: polygon(50% 0, 76% 14%, 100% 34%, 80% 36%, 80% 44%, 100% 52%, 78% 54%, 78% 62%, 96% 70%, 74% 72%, 74% 100%, 26% 100%, 26% 72%, 4% 70%, 22% 62%, 22% 54%, 0 52%, 20% 44%, 20% 36%, 0 34%, 24% 14%);
+  background: linear-gradient(
+    180deg,
+    #ffffff 0 12%,
+    transparent 12% 18%,
+    #fff1cf 18% 30%,
+    transparent 30% 36%,
+    #ffe6b0 36% 48%,
+    transparent 48% 56%,
+    #ffd799 56% 100%
+  );
+  clip-path: polygon(
+    50% 0,
+    76% 14%,
+    100% 34%,
+    80% 36%,
+    80% 44%,
+    100% 52%,
+    78% 54%,
+    78% 62%,
+    96% 70%,
+    74% 72%,
+    74% 100%,
+    26% 100%,
+    26% 72%,
+    4% 70%,
+    22% 62%,
+    22% 54%,
+    0 52%,
+    20% 44%,
+    20% 36%,
+    0 34%,
+    24% 14%
+  );
 }
 
 .student-rewards-level,
@@ -1410,7 +1516,9 @@ function reloadAll() {
   border-radius: 16px;
   color: #cf7c0e;
   background: linear-gradient(135deg, rgba(255, 226, 145, 0.92), rgba(255, 197, 96, 0.92));
-  box-shadow: 0 12px 22px rgba(255, 175, 71, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 12px 22px rgba(255, 175, 71, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .student-rewards-page .student-simple-header p {
@@ -1502,7 +1610,10 @@ function reloadAll() {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 10px 22px rgba(124, 132, 184, 0.06);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .student-badge-card:hover {
@@ -1545,7 +1656,9 @@ function reloadAll() {
   width: 72px;
   height: 72px;
   border-radius: 22px;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.08), 0 14px 22px rgba(120, 96, 220, 0.16);
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.08),
+    0 14px 22px rgba(120, 96, 220, 0.16);
 }
 
 .student-badge-emblem.is-gold {
@@ -1560,7 +1673,9 @@ function reloadAll() {
 .student-badge-emblem.is-gray {
   background: linear-gradient(180deg, #f3f4f8, #dee0ea);
   color: #8a93ad;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.04), 0 8px 14px rgba(150, 156, 180, 0.12);
+  box-shadow:
+    inset 0 -2px 0 rgba(0, 0, 0, 0.04),
+    0 8px 14px rgba(150, 156, 180, 0.12);
 }
 
 .student-badge-emblem small {
@@ -1586,9 +1701,7 @@ function reloadAll() {
   padding: 16px;
   border: 1px dashed rgba(126, 96, 255, 0.28);
   border-radius: 22px;
-  background:
-    radial-gradient(circle at 96% 4%, rgba(255, 226, 144, 0.18), transparent 32%),
-    rgba(247, 245, 255, 0.7);
+  background: radial-gradient(circle at 96% 4%, rgba(255, 226, 144, 0.18), transparent 32%), rgba(247, 245, 255, 0.7);
 }
 
 .student-badges-empty-head {

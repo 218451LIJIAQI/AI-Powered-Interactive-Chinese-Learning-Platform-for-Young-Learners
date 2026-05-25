@@ -40,6 +40,14 @@ import lombok.Setter;
  * <p>The compound indexes back the typical "search by actor and time
  * window" admin queries plus the "all events on this resource"
  * forensic query.</p>
+ *
+ * <p>The append-only contract is enforced at the ORM layer: every
+ * domain field is mapped {@code updatable = false}, so even an
+ * accidental {@code entity.setX(…)} + {@code save()} on a managed
+ * instance is silently dropped at flush time. The only legitimate
+ * write path is {@code AuditLogService#record}; bulk JPQL/native
+ * updates can still bypass this guard and must never be issued against
+ * this table outside controlled migrations.</p>
  */
 @Getter
 @Setter
@@ -56,28 +64,28 @@ import lombok.Setter;
 public class AuditLog extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "actor_user_id")
+    @JoinColumn(name = "actor_user_id", updatable = false)
     private User actorUser;
 
-    @Column(name = "actor_email", length = 150)
+    @Column(name = "actor_email", updatable = false, length = 150)
     private String actorEmail;
 
-    @Column(name = "action_type", nullable = false, length = 100)
+    @Column(name = "action_type", nullable = false, updatable = false, length = 100)
     private String actionType;
 
-    @Column(name = "target_type", length = 100)
+    @Column(name = "target_type", updatable = false, length = 100)
     private String targetType;
 
-    @Column(name = "target_id")
+    @Column(name = "target_id", updatable = false)
     private Long targetId;
 
     @Lob
-    @Column(name = "description", columnDefinition = "LONGTEXT")
+    @Column(name = "description", updatable = false, columnDefinition = "LONGTEXT")
     private String description;
 
-    @Column(name = "ip_address", length = 64)
+    @Column(name = "ip_address", updatable = false, length = 64)
     private String ipAddress;
 
-    @Column(name = "request_id", length = 120)
+    @Column(name = "request_id", updatable = false, length = 120)
     private String requestId;
 }

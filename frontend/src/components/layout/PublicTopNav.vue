@@ -5,7 +5,12 @@
 
     <nav class="nav-links public-nav-links" aria-label="Primary">
       <RouterLink v-for="item in items" :key="item.to" :to="item.to" custom v-slot="{ href, navigate }">
-        <a :href="href" class="public-nav-link" :class="{ 'router-link-active': isNavActive(item.to) }" @click="navigate">
+        <a
+          :href="href"
+          class="public-nav-link"
+          :class="{ 'router-link-active': isNavActive(item.to) }"
+          @click="navigate"
+        >
           {{ item.label }}
         </a>
       </RouterLink>
@@ -17,9 +22,7 @@
         <span>Designed for families, learners, and teachers</span>
       </div>
       <LanguageSwitcher size="compact" />
-      <button class="btn btn-secondary public-nav-button" type="button" @click="openSignIn">
-        Sign In
-      </button>
+      <button class="btn btn-secondary public-nav-button" type="button" @click="openSignIn">Sign In</button>
       <button class="btn btn-accent public-nav-button public-nav-button--primary" type="button" @click="openSignUp">
         Create Account
       </button>
@@ -55,9 +58,7 @@ const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 
-const items = computed<LocalizedNavItem[]>(() =>
-  publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })),
-)
+const items = computed<LocalizedNavItem[]>(() => publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })))
 
 function openSignIn(): void {
   void router.push({ path: '/auth', query: { tab: 'signin' } })

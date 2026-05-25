@@ -65,9 +65,12 @@ public enum AiFeatureKey {
 
     /*
      * Startup-time exhaustiveness guard: every constant must belong to
-     * exactly one of the two disjoint category sets.  If a developer
-     * adds a new AiFeatureKey without classifying it, the JVM will
-     * throw an AssertionError the moment this class is loaded.
+     * exactly one of the two disjoint category sets.  Catches both
+     * "forgotten classification" (constant in neither set) and
+     * "duplicated classification" (constant in both sets) at class-load
+     * time rather than at runtime, where the latter would manifest as
+     * isTextGenerative() and isMediaFeedback() simultaneously true and
+     * silently break quota routing / safety-screening dispatch.
      */
     static {
         EnumSet<AiFeatureKey> covered = EnumSet.copyOf(TEXT_GENERATIVE);
@@ -76,6 +79,16 @@ public enum AiFeatureKey {
             EnumSet<AiFeatureKey> missing = EnumSet.complementOf(covered);
             throw new AssertionError(
                     "AiFeatureKey category sets do not cover all constants; uncovered: " + missing);
+        }
+        // Defensive symmetry check: a feature must NOT be both text-
+        // generative and media-feedback — those predicates are
+        // advertised as mutually exclusive to the rest of the codebase.
+        EnumSet<AiFeatureKey> overlap = EnumSet.copyOf(TEXT_GENERATIVE);
+        overlap.retainAll(MEDIA_FEEDBACK);
+        if (!overlap.isEmpty()) {
+            throw new AssertionError(
+                    "AiFeatureKey TEXT_GENERATIVE and MEDIA_FEEDBACK sets must be disjoint; overlap: "
+                            + overlap);
         }
     }
 

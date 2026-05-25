@@ -43,12 +43,15 @@ function openTarget(): void {
 
   if (props.notificationId) {
     const id = props.notificationId
-    notificationsApi.markAsRead(id).then(() => {
-      emit('read', id)
-      window.dispatchEvent(
-        new CustomEvent('mandarin-spark:notification-read', { detail: { notificationId: id } }),
-      )
-    }).catch(() => { /* swallowed — navigation proceeds regardless */ })
+    notificationsApi
+      .markAsRead(id)
+      .then(() => {
+        emit('read', id)
+        window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { notificationId: id } }))
+      })
+      .catch(() => {
+        /* swallowed — navigation proceeds regardless */
+      })
   }
 
   void router.push(target)

@@ -45,9 +45,22 @@ public enum PurchasableItemType {
             Collections.unmodifiableSet(EnumSet.of(PREMIUM_AI));
 
     /*
-     * Startup-time exhaustiveness guard: every constant must be either
-     * a content item or a subscription item.  Catches forgotten
-     * classification at class-load time rather than at runtime.
+     * Startup-time exhaustiveness AND disjointness guard.
+     *
+     *   1. Coverage: every constant must belong to at least one of
+     *      CONTENT_ITEMS or SUBSCRIPTION_ITEMS.  A forgotten constant
+     *      would silently produce false from both isContent() and
+     *      isSubscription(), and would crash the switch in
+     *      PurchasableItemService.resolve at runtime.
+     *
+     *   2. Disjointness: no constant may belong to both sets.  The
+     *      predicates isContent() / isSubscription() are exposed on
+     *      the contract that exactly one returns true; a "hybrid"
+     *      item placed in both sets would non-deterministically
+     *      route through whichever branch the checkout dispatch
+     *      reaches first.  If a real hybrid product is needed later,
+     *      add a third disjoint set (e.g. HYBRID_ITEMS) and a third
+     *      predicate rather than overlapping the existing two.
      */
     static {
         EnumSet<PurchasableItemType> covered = EnumSet.copyOf(CONTENT_ITEMS);
@@ -56,6 +69,13 @@ public enum PurchasableItemType {
             EnumSet<PurchasableItemType> missing = EnumSet.complementOf(covered);
             throw new AssertionError(
                     "PurchasableItemType category sets do not cover all constants; uncovered: " + missing);
+        }
+        EnumSet<PurchasableItemType> overlap = EnumSet.copyOf(CONTENT_ITEMS);
+        overlap.retainAll(SUBSCRIPTION_ITEMS);
+        if (!overlap.isEmpty()) {
+            throw new AssertionError(
+                    "PurchasableItemType CONTENT_ITEMS and SUBSCRIPTION_ITEMS must be "
+                            + "disjoint; overlapping: " + overlap);
         }
     }
 

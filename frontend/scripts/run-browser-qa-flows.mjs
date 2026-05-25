@@ -157,14 +157,18 @@ async function main() {
   )
 
   const viteLogs = []
-  const vite = spawn(process.execPath, [viteBin, '--mode', 'previewqa', '--host', host, '--port', String(resolvedPort), '--strictPort'], {
-    cwd: frontendDir,
-    env: {
-      ...process.env,
-      VITE_API_BASE_URL: apiBaseUrl,
+  const vite = spawn(
+    process.execPath,
+    [viteBin, '--mode', 'previewqa', '--host', host, '--port', String(resolvedPort), '--strictPort'],
+    {
+      cwd: frontendDir,
+      env: {
+        ...process.env,
+        VITE_API_BASE_URL: apiBaseUrl,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  )
   pipeToBuffer(vite.stdout, viteLogs, 'stdout')
   pipeToBuffer(vite.stderr, viteLogs, 'stderr')
 

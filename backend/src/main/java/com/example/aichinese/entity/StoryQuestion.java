@@ -25,6 +25,11 @@ import lombok.Setter;
  *
  * <p>{@link #sortOrder} preserves the author's preferred order; the
  * front-end may optionally shuffle per attempt.</p>
+ *
+ * <p>{@link #storyActivity} is mapped {@code updatable = false}: a
+ * question belongs to a single parent activity for its entire lifetime.
+ * The admin workflow deletes and recreates rather than re-parenting,
+ * so the ORM-layer guard simply makes that contract explicit.</p>
  */
 @Getter
 @Setter
@@ -36,7 +41,7 @@ import lombok.Setter;
 public class StoryQuestion extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "story_activity_id", nullable = false)
+    @JoinColumn(name = "story_activity_id", nullable = false, updatable = false)
     private StoryActivity storyActivity;
 
     @Column(name = "question_text", nullable = false, length = 500)

@@ -187,7 +187,12 @@ function createCdpClient(webSocketUrl) {
 }
 
 function safeName(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'step'
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'step'
+  )
 }
 
 async function main() {
@@ -204,17 +209,21 @@ async function main() {
     ),
   }
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1280,900',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1280,900',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
 
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
@@ -232,12 +241,18 @@ async function main() {
 
     on('Runtime.consoleAPICalled', (params) => {
       if (!activeFlow) return
-      const message = params.args?.map((arg) => arg.value || arg.description || '').filter(Boolean).join(' ') || params.type
+      const message =
+        params.args
+          ?.map((arg) => arg.value || arg.description || '')
+          .filter(Boolean)
+          .join(' ') || params.type
       if (params.type === 'error') activeFlow.consoleErrors.push(message)
       if (params.type === 'warning' || params.type === 'warn') activeFlow.consoleWarnings.push(message)
     })
     on('Runtime.exceptionThrown', (params) => {
-      activeFlow?.runtimeExceptions.push(params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception')
+      activeFlow?.runtimeExceptions.push(
+        params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception',
+      )
     })
     on('Network.requestWillBeSent', (params) => {
       requestsById.set(params.requestId, { method: params.request?.method || '', url: params.request?.url || '' })
@@ -245,12 +260,18 @@ async function main() {
     on('Network.loadingFailed', (params) => {
       if (!activeFlow || params.canceled || params.errorText === 'net::ERR_ABORTED') return
       const request = requestsById.get(params.requestId) || {}
-      activeFlow.failedRequests.push({ method: request.method || '', url: request.url || '', errorText: params.errorText, type: params.type })
+      activeFlow.failedRequests.push({
+        method: request.method || '',
+        url: request.url || '',
+        errorText: params.errorText,
+        type: params.type,
+      })
     })
     on('Network.responseReceived', (params) => {
       if (!activeFlow) return
       const response = params.response || {}
-      if (response.status >= 400) activeFlow.httpErrors.push({ status: response.status, url: response.url, type: params.type })
+      if (response.status >= 400)
+        activeFlow.httpErrors.push({ status: response.status, url: response.url, type: params.type })
     })
 
     await send('Page.enable')
@@ -317,15 +338,15 @@ async function main() {
       )
       previewPreflight = available
         ? {
-          available: true,
-          buttons: labels,
-        }
+            available: true,
+            buttons: labels,
+          }
         : {
-          available: false,
-          buttons: labels,
-          reason:
-            'Preview-only browser QA requires the repository preview QA frontend mode. Missing preview role buttons on /auth. Start the frontend with `npm run dev:preview-qa -- --host 127.0.0.1 --port 5174`.',
-        }
+            available: false,
+            buttons: labels,
+            reason:
+              'Preview-only browser QA requires the repository preview QA frontend mode. Missing preview role buttons on /auth. Start the frontend with `npm run dev:preview-qa -- --host 127.0.0.1 --port 5174`.',
+          }
 
       if (!previewPreflight.available) {
         throw new BlockedError(previewPreflight.reason)
@@ -338,14 +359,28 @@ async function main() {
       const snapshot = await pageState()
       record.snapshots.push(snapshot)
       const screenshot = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-      const file = path.join(evidenceDir, `${String(records.length + 1).padStart(2, '0')}-${safeName(record.name)}${suffix}.png`)
+      const file = path.join(
+        evidenceDir,
+        `${String(records.length + 1).padStart(2, '0')}-${safeName(record.name)}${suffix}.png`,
+      )
       await writeFile(file, Buffer.from(screenshot.data, 'base64'))
       record.screenshots.push(file)
       return snapshot
     }
 
     async function runFlow(name, fn) {
-      const record = { name, status: 'PASS', error: '', consoleErrors: [], consoleWarnings: [], runtimeExceptions: [], failedRequests: [], httpErrors: [], snapshots: [], screenshots: [] }
+      const record = {
+        name,
+        status: 'PASS',
+        error: '',
+        consoleErrors: [],
+        consoleWarnings: [],
+        runtimeExceptions: [],
+        failedRequests: [],
+        httpErrors: [],
+        snapshots: [],
+        screenshots: [],
+      }
       activeFlow = record
       try {
         await fn(record)
@@ -356,7 +391,13 @@ async function main() {
           await capture(record, '-failure')
         } catch {}
       }
-      if (record.status === 'PASS' && (record.consoleErrors.length || record.runtimeExceptions.length || record.failedRequests.length || record.httpErrors.length)) {
+      if (
+        record.status === 'PASS' &&
+        (record.consoleErrors.length ||
+          record.runtimeExceptions.length ||
+          record.failedRequests.length ||
+          record.httpErrors.length)
+      ) {
         record.status = 'NEEDS_FIX'
       }
       records.push(record)
@@ -413,11 +454,7 @@ async function main() {
       await requirePreviewMode()
       await navigate('/auth')
       await clickByText(buttonLabel)
-      return waitForPage(
-        `${buttonLabel} destination`,
-        (state) => state.path.startsWith(expectedPath),
-        15000,
-      )
+      return waitForPage(`${buttonLabel} destination`, (state) => state.path.startsWith(expectedPath), 15000)
     }
 
     await runFlow('Public navigation course and browser history', async (record) => {
@@ -429,7 +466,9 @@ async function main() {
       await clickByText('View Details', 'a,button')
       await waitForPage('course detail page after View Details', (state) => state.path.startsWith('/courses/'))
       await capture(record, '-detail')
-      await send('Page.navigateToHistoryEntry', { entryId: (await send('Page.getNavigationHistory')).entries.at(-2).id })
+      await send('Page.navigateToHistoryEntry', {
+        entryId: (await send('Page.getNavigationHistory')).entries.at(-2).id,
+      })
       await waitForPage('courses page after browser back', (state) => state.path.startsWith('/courses'))
       const snapshot = await capture(record, '-back')
       if (!snapshot.path.startsWith('/courses')) throw new Error('Browser back did not return to courses')
@@ -442,7 +481,9 @@ async function main() {
       const disabled = await evaluate(`document.querySelector('.auth-submit-button')?.disabled === true`)
       if (!disabled) throw new Error('Empty sign-in button should be disabled')
       await setValue('#login-email', 'bad-email')
-      const forgotDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).find((button) => button.innerText.includes('Forgot password'))?.disabled === true`)
+      const forgotDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).find((button) => button.innerText.includes('Forgot password'))?.disabled === true`,
+      )
       if (!forgotDisabled) throw new Error('Forgot password should stay disabled for invalid email')
       await setValue('#login-email', 'learner@example.com')
       await clickByText('Forgot password?')
@@ -451,17 +492,21 @@ async function main() {
       await waitForPage('auth page after back', (state) => state.path.startsWith('/auth'))
       await clickByText('Create Account')
       await capture(record, '-register-empty')
-      const registerDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).find((button) => button.innerText.includes('Create Account') && button.className.includes('auth-submit-button'))?.disabled === true`)
+      const registerDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).find((button) => button.innerText.includes('Create Account') && button.className.includes('auth-submit-button'))?.disabled === true`,
+      )
       if (!registerDisabled) throw new Error('Empty register submit should be disabled')
       let snapshot = await enterPreviewRole('Preview Student', '/student/home')
       snapshot = await capture(record, '-preview-student')
       if (!snapshot.path.startsWith('/student/home')) throw new Error('Preview Student did not route to student home')
       snapshot = await enterPreviewRole('Preview Teacher', '/teacher/dashboard')
       snapshot = await capture(record, '-preview-teacher')
-      if (!snapshot.path.startsWith('/teacher/dashboard')) throw new Error('Preview Teacher did not route to teacher dashboard')
+      if (!snapshot.path.startsWith('/teacher/dashboard'))
+        throw new Error('Preview Teacher did not route to teacher dashboard')
       snapshot = await enterPreviewRole('Preview Admin', '/admin/dashboard')
       snapshot = await capture(record, '-preview-admin')
-      if (!snapshot.path.startsWith('/admin/dashboard')) throw new Error('Preview Admin did not route to admin dashboard')
+      if (!snapshot.path.startsWith('/admin/dashboard'))
+        throw new Error('Preview Admin did not route to admin dashboard')
     })
 
     await runFlow('Reset password validation states', async (record) => {
@@ -470,21 +515,27 @@ async function main() {
       await setValue('#reset-password', 'Password1')
       await setValue('#reset-confirm-password', 'Mismatch1')
       await clickByText('Reset password')
-      await waitForPage('password mismatch validation', (state) => state.text.includes('Confirm password does not match'))
+      await waitForPage('password mismatch validation', (state) =>
+        state.text.includes('Confirm password does not match'),
+      )
       const snapshot = await capture(record, '-mismatch')
-      if (!snapshot.text.includes('Confirm password does not match')) throw new Error('Password mismatch validation not shown')
+      if (!snapshot.text.includes('Confirm password does not match'))
+        throw new Error('Password mismatch validation not shown')
     })
 
     await runFlow('Student learning navigation quiz and AI helper', async (record) => {
       await enterPreviewRole('Preview Student', '/student/home')
       await capture(record, '-home')
       await clickByText('Continue Learning')
-      await waitForPage('student learn page after Continue Learning', (state) => state.path.startsWith('/student/learn'))
+      await waitForPage('student learn page after Continue Learning', (state) =>
+        state.path.startsWith('/student/learn'),
+      )
       let snapshot = await capture(record, '-learn')
       if (!snapshot.path.startsWith('/student/learn')) throw new Error('Continue Learning did not open Learn page')
       await navigate('/student/quiz')
       snapshot = await capture(record, '-quiz-initial')
-      if (!snapshot.text.includes('Answer') || !snapshot.text.includes('Feedback unlocks after you submit')) throw new Error('Quiz initial disabled/read-only state was not visible')
+      if (!snapshot.text.includes('Answer') || !snapshot.text.includes('Feedback unlocks after you submit'))
+        throw new Error('Quiz initial disabled/read-only state was not visible')
       await clickByText('A')
       await clickByText('Next')
       await clickByText('A')
@@ -494,18 +545,27 @@ async function main() {
       )
       snapshot = await capture(record, '-quiz-readonly')
       const submitDisabled = await evaluate(`document.querySelector('.student-quiz-submit')?.disabled === true`)
-      if (!submitDisabled || !snapshot.text.includes('Preview data mode') || !snapshot.text.includes('Submit quiz')) throw new Error('Quiz preview read-only disabled state not shown')
+      if (!submitDisabled || !snapshot.text.includes('Preview data mode') || !snapshot.text.includes('Submit quiz'))
+        throw new Error('Quiz preview read-only disabled state not shown')
       await navigate('/student/ai-helper')
       await setValue('.student-ai-helper-chatbar input', '')
-      await evaluate(`document.querySelector('.student-ai-helper-chatbar')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))`)
-      await waitForPage('AI empty chat validation', (state) => state.text.includes('Type a question before asking SparkBot'))
+      await evaluate(
+        `document.querySelector('.student-ai-helper-chatbar')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))`,
+      )
+      await waitForPage('AI empty chat validation', (state) =>
+        state.text.includes('Type a question before asking SparkBot'),
+      )
       snapshot = await capture(record, '-ai-empty-chat')
-      if (!snapshot.text.includes('Type a question before asking SparkBot')) throw new Error('AI empty chat validation not shown')
+      if (!snapshot.text.includes('Type a question before asking SparkBot'))
+        throw new Error('AI empty chat validation not shown')
       await setValue('.student-ai-helper-chatbar input', 'How do you say hello?')
       await evaluate(`document.querySelector('.student-ai-helper-chatbar button')?.click()`)
-      await waitForPage('AI preview response', (state) => state.text.includes('Preview mode used a safe sample response'))
+      await waitForPage('AI preview response', (state) =>
+        state.text.includes('Preview mode used a safe sample response'),
+      )
       snapshot = await capture(record, '-ai-chat')
-      if (!snapshot.text.includes('Preview mode used a safe sample response')) throw new Error('AI preview success not shown')
+      if (!snapshot.text.includes('Preview mode used a safe sample response'))
+        throw new Error('AI preview success not shown')
     })
 
     await runFlow('Teacher and admin guarded preview actions', async (record) => {
@@ -524,7 +584,8 @@ async function main() {
       if (!snapshot.text.includes('Preview operations mode')) throw new Error('Admin users preview notice missing')
       await setValue('input[placeholder*="Search users"]', 'teacher')
       snapshot = await capture(record, '-admin-search')
-      if (!snapshot.text.toLowerCase().includes('teacher')) throw new Error('Admin search input did not update page state')
+      if (!snapshot.text.toLowerCase().includes('teacher'))
+        throw new Error('Admin search input did not update page state')
       const accountActionDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).some((button) =>
         ['Suspend account', 'Reactivate account'].includes(button.innerText.trim()) && button.disabled
       )`)
@@ -536,11 +597,16 @@ async function main() {
 
       await navigate('/teacher/classes')
       let snapshot = await capture(record, '-classes')
-      if (!snapshot.text.includes('Scheduler, roster, recording, and attendance flows remain reviewable in preview mode.')) {
+      if (
+        !snapshot.text.includes('Scheduler, roster, recording, and attendance flows remain reviewable in preview mode.')
+      ) {
         throw new Error('Teacher classes preview notice missing')
       }
       await clickByText('Open scheduler')
-      await waitForPage('teacher class composer', (state) => state.text.includes('Schedule Live Class') || state.text.includes('Edit Live Class'))
+      await waitForPage(
+        'teacher class composer',
+        (state) => state.text.includes('Schedule Live Class') || state.text.includes('Edit Live Class'),
+      )
       const classControlsReadOnly = await evaluate(`(() => ({
         titleDisabled: Boolean(document.querySelector('#teacher-class-title')?.disabled),
         platformDisabled: Boolean(document.querySelector('#teacher-class-platform')?.disabled),
@@ -637,8 +703,12 @@ async function main() {
         documentDescriptionDisabled: Boolean(document.querySelector('#teacher-verification-description')?.disabled),
         documentFileDisabled: Boolean(document.querySelector('#teacher-verification-file')?.disabled),
       }))()`)
-      const saveDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Save profile') && button.disabled)`)
-      const uploadDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Upload document') && button.disabled)`)
+      const saveDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Save profile') && button.disabled)`,
+      )
+      const uploadDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Upload document') && button.disabled)`,
+      )
       if (
         !saveDisabled ||
         !uploadDisabled ||
@@ -663,7 +733,9 @@ async function main() {
       if (teacherDocumentDownloadsReadOnly?.count > 0 && !teacherDocumentDownloadsReadOnly?.allDisabled) {
         throw new Error('Teacher document download controls were not readonly in preview mode')
       }
-      const markAllDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Mark all read') && button.disabled)`)
+      const markAllDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Mark all read') && button.disabled)`,
+      )
       if (!markAllDisabled) throw new Error('Teacher mark-all-read preview button was not disabled')
     })
 
@@ -723,10 +795,17 @@ async function main() {
       await navigate('/admin/finance')
       const snapshot = await capture(record, '-finance')
       if (!snapshot.text.includes('Preview data mode')) throw new Error('Admin finance preview notice missing')
-      const actionButtonsDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).filter((button) => ['Approve', 'Reject', 'Mark refunded', 'Mark paid'].includes(button.innerText.trim())).every((button) => button.disabled)`)
-      const commissionDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Save commission') && button.disabled)`)
-      const commissionInputDisabled = await evaluate(`document.querySelector('#admin-commission-rate')?.disabled === true`)
-      if (!actionButtonsDisabled || !commissionDisabled || !commissionInputDisabled) throw new Error('Admin finance readonly controls were not fully disabled in preview mode')
+      const actionButtonsDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).filter((button) => ['Approve', 'Reject', 'Mark refunded', 'Mark paid'].includes(button.innerText.trim())).every((button) => button.disabled)`,
+      )
+      const commissionDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Save commission') && button.disabled)`,
+      )
+      const commissionInputDisabled = await evaluate(
+        `document.querySelector('#admin-commission-rate')?.disabled === true`,
+      )
+      if (!actionButtonsDisabled || !commissionDisabled || !commissionInputDisabled)
+        throw new Error('Admin finance readonly controls were not fully disabled in preview mode')
     })
 
     await runFlow('Admin content moderation readonly protection', async (record) => {
@@ -818,7 +897,8 @@ async function main() {
       if (!snapshot.text.toLowerCase().includes('mei')) throw new Error('Teacher verification search did not update')
       await clickByText('Mei Lin')
       snapshot = await capture(record, '-selected')
-      if (!snapshot.text.includes('Mei Lin')) throw new Error('Teacher verification row selection did not retain selected applicant')
+      if (!snapshot.text.includes('Mei Lin'))
+        throw new Error('Teacher verification row selection did not retain selected applicant')
       await clickByText('Documents')
       const adminTeacherDocumentDownloadsReadOnly = await evaluate(`(() => {
         const buttons = Array.from(document.querySelectorAll('button')).filter((button) => button.innerText.includes('Download'));
@@ -834,8 +914,11 @@ async function main() {
       await clickByText('Open Decision Tab')
       await waitForPage('teacher verification decision tab', (state) => state.text.includes('Decision Notes'))
       snapshot = await capture(record, '-decision')
-      const approveRejectDisabled = await evaluate(`Array.from(document.querySelectorAll('button')).filter((button) => ['Approve', 'Reject'].includes(button.innerText.trim())).every((button) => button.disabled)`)
-      if (!snapshot.text.includes('Decision Notes') || !approveRejectDisabled) throw new Error('Teacher verification decision controls were not readonly in preview mode')
+      const approveRejectDisabled = await evaluate(
+        `Array.from(document.querySelectorAll('button')).filter((button) => ['Approve', 'Reject'].includes(button.innerText.trim())).every((button) => button.disabled)`,
+      )
+      if (!snapshot.text.includes('Decision Notes') || !approveRejectDisabled)
+        throw new Error('Teacher verification decision controls were not readonly in preview mode')
     })
 
     const report = {

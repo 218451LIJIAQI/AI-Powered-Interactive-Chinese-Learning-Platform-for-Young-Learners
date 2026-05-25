@@ -10,7 +10,11 @@
       <div class="admin-verification-toolbar">
         <label class="admin-verification-search">
           <IconGlyph name="search" :size="16" />
-          <input v-model="searchTerm" class="admin-verification-search-input" placeholder="Search applicants by name or email" />
+          <input
+            v-model="searchTerm"
+            class="admin-verification-search-input"
+            placeholder="Search applicants by name or email"
+          />
         </label>
 
         <button class="teacher-outline-button admin-verification-tool-button" type="button" @click="cycleSortMode">
@@ -24,7 +28,11 @@
       </div>
     </section>
 
-    <DataNotice :using-fallback="pendingResource.usingFallback.value" :error="actionError || pageError" :success="actionSuccess" />
+    <DataNotice
+      :using-fallback="pendingResource.usingFallback.value"
+      :error="actionError || pageError"
+      :success="actionSuccess"
+    />
 
     <section class="admin-verification-stats">
       <article v-for="card in statCards" :key="card.label" class="admin-verification-stat">
@@ -111,9 +119,30 @@
           </div>
 
           <div class="tabs admin-review-tabs">
-            <button class="tab-button" type="button" :class="{ 'is-active': activeDetailTab === 'overview' }" @click="activeDetailTab = 'overview'">Overview</button>
-            <button class="tab-button" type="button" :class="{ 'is-active': activeDetailTab === 'documents' }" @click="activeDetailTab = 'documents'">Documents</button>
-            <button class="tab-button" type="button" :class="{ 'is-active': activeDetailTab === 'notes' }" @click="activeDetailTab = 'notes'">Decision</button>
+            <button
+              class="tab-button"
+              type="button"
+              :class="{ 'is-active': activeDetailTab === 'overview' }"
+              @click="activeDetailTab = 'overview'"
+            >
+              Overview
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              :class="{ 'is-active': activeDetailTab === 'documents' }"
+              @click="activeDetailTab = 'documents'"
+            >
+              Documents
+            </button>
+            <button
+              class="tab-button"
+              type="button"
+              :class="{ 'is-active': activeDetailTab === 'notes' }"
+              @click="activeDetailTab = 'notes'"
+            >
+              Decision
+            </button>
           </div>
 
           <template v-if="activeDetailTab === 'overview'">
@@ -124,11 +153,21 @@
                 </div>
 
                 <div class="admin-verification-basic-info">
-                  <div><span>Teacher ID</span><strong>#{{ selectedApplicant.teacherId }}</strong></div>
-                  <div><span>User ID</span><strong>#{{ selectedApplicant.userId }}</strong></div>
-                  <div><span>Status</span><strong>{{ formatStatus(selectedApplicant.teacherStatus) }}</strong></div>
-                  <div><span>Submitted</span><strong>{{ selectedApplicant.appliedLabel }}</strong></div>
-                  <div><span>Teaching Categories</span><strong>{{ selectedApplicant.categoriesLabel }}</strong></div>
+                  <div>
+                    <span>Teacher ID</span><strong>#{{ selectedApplicant.teacherId }}</strong>
+                  </div>
+                  <div>
+                    <span>User ID</span><strong>#{{ selectedApplicant.userId }}</strong>
+                  </div>
+                  <div>
+                    <span>Status</span><strong>{{ formatStatus(selectedApplicant.teacherStatus) }}</strong>
+                  </div>
+                  <div>
+                    <span>Submitted</span><strong>{{ selectedApplicant.appliedLabel }}</strong>
+                  </div>
+                  <div>
+                    <span>Teaching Categories</span><strong>{{ selectedApplicant.categoriesLabel }}</strong>
+                  </div>
                   <div class="admin-verification-block-row">
                     <span>Short Introduction</span>
                     <div class="stack u-gap-4">
@@ -154,16 +193,18 @@
                     </div>
                   </article>
                 </div>
-                <p v-else class="admin-verification-empty-copy">
-                  No review history has been recorded yet.
-                </p>
+                <p v-else class="admin-verification-empty-copy">No review history has been recorded yet.</p>
 
                 <div class="admin-verification-section-head admin-verification-audit-head">
                   <strong>Recent Audit Logs</strong>
                 </div>
 
                 <div v-if="auditTrail.length" class="admin-verification-audit-list">
-                  <article v-for="entry in auditTrail" :key="entry.title + entry.time" class="admin-verification-audit-item">
+                  <article
+                    v-for="entry in auditTrail"
+                    :key="entry.title + entry.time"
+                    class="admin-verification-audit-item"
+                  >
                     <span class="admin-verification-audit-dot" />
                     <div class="stack u-gap-4">
                       <strong>{{ entry.title }}</strong>
@@ -172,14 +213,15 @@
                     </div>
                   </article>
                 </div>
-                <p v-else class="admin-verification-empty-copy">
-                  No audit trail is available for this teacher yet.
-                </p>
+                <p v-else class="admin-verification-empty-copy">No audit trail is available for this teacher yet.</p>
               </section>
             </div>
           </template>
 
-          <section v-else-if="activeDetailTab === 'documents'" class="panel admin-verification-doc-card admin-verification-doc-card--solo">
+          <section
+            v-else-if="activeDetailTab === 'documents'"
+            class="panel admin-verification-doc-card admin-verification-doc-card--solo"
+          >
             <div class="admin-verification-section-head">
               <strong>Verification Documents</strong>
             </div>
@@ -255,11 +297,23 @@
           </section>
 
           <div class="admin-verification-footer-actions">
-            <button class="btn btn-secondary" type="button" @click="activeDetailTab = 'notes'">Open Decision Tab</button>
-            <button class="btn btn-danger" type="button" :disabled="verificationReadOnly || submittingReject" @click="rejectTeacher">
+            <button class="btn btn-secondary" type="button" @click="activeDetailTab = 'notes'">
+              Open Decision Tab
+            </button>
+            <button
+              class="btn btn-danger"
+              type="button"
+              :disabled="verificationReadOnly || submittingReject"
+              @click="rejectTeacher"
+            >
               {{ submittingReject ? 'Rejecting...' : 'Reject' }}
             </button>
-            <button class="btn btn-primary" type="button" :disabled="verificationReadOnly || submittingApprove" @click="approveTeacher">
+            <button
+              class="btn btn-primary"
+              type="button"
+              :disabled="verificationReadOnly || submittingApprove"
+              @click="approveTeacher"
+            >
               {{ submittingApprove ? 'Approving...' : 'Approve' }}
             </button>
           </div>
@@ -306,12 +360,23 @@ import { formatDate, formatDateTime, formatNumber } from '@/utils/format'
 
 const pendingResource = useResource(() => adminApi.pendingTeachers(), teacherApplicationsPending)
 const teachersResource = useResource(() => adminApi.teachers(), adminTeachers)
-const detailResource = useResource(() => adminApi.teacherDetail(adminTeacherDetail.teacherId), adminTeacherDetail, false)
+const detailResource = useResource(
+  () => adminApi.teacherDetail(adminTeacherDetail.teacherId),
+  adminTeacherDetail,
+  false,
+)
 
-const pageError = computed(() => pendingResource.error.value || teachersResource.error.value || detailResource.error.value)
+const pageError = computed(
+  () => pendingResource.error.value || teachersResource.error.value || detailResource.error.value,
+)
 const detailUsingFallback = computed(() => detailResource.usingFallback.value)
-const verificationReadOnly = computed(() => pendingResource.usingFallback.value || teachersResource.usingFallback.value || detailResource.usingFallback.value)
-const verificationDecisionReadOnly = computed(() => verificationReadOnly.value || submittingApprove.value || submittingReject.value)
+const verificationReadOnly = computed(
+  () =>
+    pendingResource.usingFallback.value || teachersResource.usingFallback.value || detailResource.usingFallback.value,
+)
+const verificationDecisionReadOnly = computed(
+  () => verificationReadOnly.value || submittingApprove.value || submittingReject.value,
+)
 
 const approvalNote = ref('')
 const rejectionReason = ref('')
@@ -423,7 +488,10 @@ watch(
 )
 
 const selectedBaseApplicant = computed(
-  () => filteredApplicants.value.find((item) => item.teacherId === selectedTeacherId.value) ?? filteredApplicants.value[0] ?? null,
+  () =>
+    filteredApplicants.value.find((item) => item.teacherId === selectedTeacherId.value) ??
+    filteredApplicants.value[0] ??
+    null,
 )
 
 const selectedDetail = computed<AdminTeacherDetailResponse | null>(() => {
@@ -488,14 +556,18 @@ const statCards = computed(() => [
   },
   {
     label: 'Approved Teachers',
-    value: formatNumber((teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'APPROVED').length),
+    value: formatNumber(
+      (teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'APPROVED').length,
+    ),
     copy: 'Teacher directory count',
     icon: 'status',
     tone: 'green',
   },
   {
     label: 'Rejected Teachers',
-    value: formatNumber((teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'REJECTED').length),
+    value: formatNumber(
+      (teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'REJECTED').length,
+    ),
     copy: 'Teacher directory count',
     icon: 'close',
     tone: 'red',

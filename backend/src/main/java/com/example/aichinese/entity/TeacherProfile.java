@@ -14,6 +14,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -42,20 +43,36 @@ import lombok.Setter;
  * <p>{@link #rejectionReason} is populated when the most recent
  * verification review is {@code REJECTED} and is surfaced back to the
  * teacher so they know what to correct on resubmission.</p>
+ *
+ * <p>Uniqueness of {@code user_id} (one teacher profile per user) is
+ * enforced by a single named constraint
+ * ({@code idx_teacher_profiles_user_id}) declared via
+ * {@link UniqueConstraint} on the {@link Table @Table} annotation,
+ * matching the Flyway baseline. {@link #user} is also mapped
+ * {@code updatable = false}: a teacher profile is bound to one user
+ * account for its entire lifetime. Every other field (status, bio,
+ * qualifications, categories, rejection reason, verifiedAt, public
+ * visibility) stays mutable for verification and self-service edit
+ * workflows.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "teacher_profiles", indexes = {
-        @Index(name = "idx_teacher_profiles_user_id", columnList = "user_id", unique = true),
-        @Index(name = "idx_teacher_profiles_status", columnList = "teacher_status"),
-        @Index(name = "idx_teacher_profiles_status_created", columnList = "teacher_status,created_at")
-})
+@Table(
+        name = "teacher_profiles",
+        indexes = {
+                @Index(name = "idx_teacher_profiles_status", columnList = "teacher_status"),
+                @Index(name = "idx_teacher_profiles_status_created", columnList = "teacher_status,created_at")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "idx_teacher_profiles_user_id", columnNames = "user_id")
+        }
+)
 public class TeacherProfile extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
     @Enumerated(EnumType.STRING)

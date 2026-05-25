@@ -156,6 +156,30 @@ class LoginAttemptLimiterTests {
     }
 
     @Test
+    void activeLockoutIsNotEvictedByFreshFailureKeySpray() {
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC(), 3);
+        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
+            limiter.recordFailure(EMAIL, IP);
+        }
+
+        for (int i = 0; i < 30; i++) {
+            limiter.recordFailure("spray-" + i + "@example.com", "198.51.100." + i);
+        }
+
+        assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
+        assertThat(limiter.retryAfter(EMAIL, IP)).isPositive();
+    }
+
+    @Test
+    void configurableThresholdOfOneLocksOnFirstFailure() {
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(
+                Clock.systemUTC(), 1, Duration.ofMinutes(15), Duration.ofMinutes(15), 10);
+
+        assertThat(limiter.recordFailure(EMAIL, IP)).isTrue();
+        assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
+    }
+
+    @Test
     void oversizedLimiterKeysAreNormalisedToBoundedEntries() {
         LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC(), 10);
         String longEmailPrefix = "a".repeat(400);

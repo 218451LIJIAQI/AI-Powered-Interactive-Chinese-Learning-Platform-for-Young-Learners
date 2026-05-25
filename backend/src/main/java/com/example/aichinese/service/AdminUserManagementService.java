@@ -66,6 +66,7 @@ public class AdminUserManagementService {
     private final TeacherManagementMapper teacherManagementMapper;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final RefreshTokenService refreshTokenService;
 
     public AdminUserManagementService(
             UserRepository userRepository,
@@ -73,13 +74,15 @@ public class AdminUserManagementService {
             TeacherProfileRepository teacherProfileRepository,
             TeacherManagementMapper teacherManagementMapper,
             NotificationService notificationService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            RefreshTokenService refreshTokenService) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.refreshTokenService = Objects.requireNonNull(refreshTokenService, "refreshTokenService");
     }
 
     @Transactional(readOnly = true)
@@ -160,6 +163,7 @@ public class AdminUserManagementService {
         targetUser.setActive(nextActive);
         targetUser.setSessionVersion(targetUser.getSessionVersion() + 1);
         userRepository.save(targetUser);
+        refreshTokenService.revokeActiveTokensForUser(targetUser.getId());
 
         if (teacherProfile != null) {
             if (!nextActive) {

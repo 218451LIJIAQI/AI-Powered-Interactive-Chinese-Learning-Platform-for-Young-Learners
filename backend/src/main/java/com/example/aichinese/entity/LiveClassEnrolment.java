@@ -43,6 +43,25 @@ import lombok.Setter;
  *
  * <p>{@link #version} guards against the rare race between an automatic
  * "missed" job and a late "attended" check-in.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li>{@link #liveClass} and {@link #student} are mapped
+ *       {@code updatable = false}: the row's identity is the
+ *       {@code (live_class, student)} pair and re-targeting either
+ *       would additionally collide with
+ *       {@code uk_live_class_enrolments_live_class_student}. The
+ *       re-enrolment-after-cancel flow already keys on the same pair,
+ *       so the {@code setLiveClass/setStudent} calls inside
+ *       {@code LiveClassService} are guaranteed no-ops at flush time.</li>
+ *   <li>{@link #enrolmentStatus}, {@link #enrolledAt},
+ *       {@link #cancelledAt}, {@link #attendedAt} are mutated by the
+ *       enrolment state-machine; the {@link Version @Version} field
+ *       above protects those writes against lost-update races.</li>
+ *   <li>{@link #activeEnrolmentKey} is database-managed (a generated
+ *       column) and therefore mapped {@code insertable = false,
+ *       updatable = false}.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -58,11 +77,11 @@ import lombok.Setter;
 public class LiveClassEnrolment extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "live_class_id", nullable = false)
+    @JoinColumn(name = "live_class_id", nullable = false, updatable = false)
     private LiveClass liveClass;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @Enumerated(EnumType.STRING)

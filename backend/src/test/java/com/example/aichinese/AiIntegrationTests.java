@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.File;
@@ -180,6 +181,32 @@ class AiIntegrationTests {
                 .andExpect(jsonPath("$.data.aiResponse").value("AI tutor is currently unavailable. Please try again later."));
 
         assertThat(aiUsageLogRepository.findAll()).anyMatch(log -> "CHAT_TUTOR".equals(log.getFeatureKey()));
+    }
+
+    @Test
+    void aiChatStreamReturnsSseDeltasAndCompletionEvent() throws Exception {
+        String studentToken = registerStudentAndLogin(uniqueEmail("ai-chat-stream-student"));
+
+        MvcResult pending = mockMvc.perform(post("/api/v1/ai/chat/stream")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_EVENT_STREAM)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "message", "Can you help me say hello in Chinese?",
+                        "languagePreference", "en"))))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        pending.getAsyncResult(5_000);
+        assertThat(pending.getResponse().getStatus()).isEqualTo(200);
+        assertThat(pending.getResponse().getContentType()).contains(MediaType.TEXT_EVENT_STREAM_VALUE);
+
+        String body = pending.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body).contains("event:delta");
+        assertThat(body).contains("AI tutor is currently unavailable");
+        assertThat(body).contains("event:complete");
+        assertThat(body).contains("\"status\":\"UNAVAILABLE\"");
     }
 
     @Test

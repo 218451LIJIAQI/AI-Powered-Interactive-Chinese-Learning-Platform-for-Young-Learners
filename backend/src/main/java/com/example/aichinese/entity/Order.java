@@ -14,6 +14,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,39 +44,71 @@ import lombok.Setter;
  * <p>{@link #checkoutSource} is a free-form short tag (e.g.
  * {@code "web"}, {@code "mobile_v1"}) used by analytics to slice
  * conversion funnels.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ *
+ * <p>Financial fields are mapped {@code updatable = false} so the
+ * application layer cannot rewrite an order's monetary identity after
+ * checkout — audit trails and accounting reports stay reproducible
+ * even when the rest of the order is updated in place.</p>
+ *
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #student}, {@link #orderNumber},
+ *       {@link #totalAmount}, {@link #currencyCode},
+ *       {@link #checkoutSource}. The single legitimate write path is
+ *       {@code OrderService#createOrder}.</li>
+ *   <li><b>Mutable</b>: {@link #paymentStatus}, which mirrors the
+ *       state machine driven by
+ *       {@code PaymentService#applyProviderPaymentStatus} and
+ *       {@code RefundService#applyRefund}. The {@link Version @Version}
+ *       column above protects this write against the inevitable race
+ *       between Stripe webhook delivery and student-initiated
+ *       cancellation.</li>
+ * </ul>
+ *
+ * <p>Uniqueness of {@link #orderNumber} is enforced by a single named
+ * constraint ({@code idx_orders_order_number}) declared via
+ * {@link UniqueConstraint} on the {@link Table @Table} annotation,
+ * matching the Flyway baseline. The historical {@code idx_} prefix is
+ * preserved to match the database.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "orders", indexes = {
-        @Index(name = "idx_orders_order_number", columnList = "order_number", unique = true),
-        @Index(name = "idx_orders_student_id", columnList = "student_id"),
-        @Index(name = "idx_orders_payment_status", columnList = "payment_status")
-})
+@Table(
+        name = "orders",
+        indexes = {
+                @Index(name = "idx_orders_student_id", columnList = "student_id"),
+                @Index(name = "idx_orders_payment_status", columnList = "payment_status")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "idx_orders_order_number", columnNames = "order_number")
+        }
+)
 public class Order extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
-    @Column(name = "order_number", nullable = false, unique = true, length = 50)
+    @Column(name = "order_number", nullable = false, updatable = false, length = 50)
     private String orderNumber;
 
-    @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "total_amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
+    @Column(name = "currency_code", nullable = false, updatable = false, length = 3)
     private String currencyCode = "MYR";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false, length = 30)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
-    @Column(name = "checkout_source", length = 30)
+    @Column(name = "checkout_source", updatable = false, length = 30)
     private String checkoutSource;
 }

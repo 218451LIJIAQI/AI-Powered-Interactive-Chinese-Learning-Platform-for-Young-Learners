@@ -294,19 +294,19 @@ public class ContentModerationService {
             boolean currentlyVisible,
             ContentModerationAction action,
             String entityName) {
-        switch (action) {
-            case HIDE, UNPUBLISH, ARCHIVE, REQUEST_REVISION -> {
-                if (!currentlyVisible) {
-                    throw new ResponseStatusException(BAD_REQUEST,
-                            "This " + entityName + " is already hidden.");
-                }
-            }
-            case RESTORE -> {
-                if (currentlyVisible) {
-                    throw new ResponseStatusException(BAD_REQUEST,
-                            "This " + entityName + " is already visible.");
-                }
-            }
+        // Delegate the restrictive/restorative classification to the enum's
+        // own predicates rather than re-listing every member of RESTRICTIVE
+        // and RESTORATIVE here.  ContentModerationAction's class-load guard
+        // enforces RESTRICTIVE union RESTORATIVE == ALL and disjointness, so
+        // every action is guaranteed to satisfy exactly one of the two
+        // predicates -- an unclassified action could not have loaded.
+        if (action.isRestrictive() && !currentlyVisible) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "This " + entityName + " is already hidden.");
+        }
+        if (action.isRestorative() && currentlyVisible) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "This " + entityName + " is already visible.");
         }
     }
 

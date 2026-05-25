@@ -33,9 +33,7 @@ export function formatDate(value: string | null | undefined, options?: Intl.Date
   const date = parseDate(value)
   if (!date) return '--'
 
-  return new Intl.DateTimeFormat('en-US', options ?? { month: 'short', day: 'numeric', year: 'numeric' }).format(
-    date,
-  )
+  return new Intl.DateTimeFormat('en-US', options ?? { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
 }
 
 export function formatDateTime(value: string | null | undefined) {

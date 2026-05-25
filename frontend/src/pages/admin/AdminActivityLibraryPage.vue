@@ -6,7 +6,12 @@
       icon="practice"
     >
       <template #actions>
-        <button class="teacher-outline-button admin-activity-header-button" type="button" @click="reloadFeed('keep')" :disabled="pageBusy">
+        <button
+          class="teacher-outline-button admin-activity-header-button"
+          type="button"
+          @click="reloadFeed('keep')"
+          :disabled="pageBusy"
+        >
           <IconGlyph name="refresh" :size="16" />
           <span>{{ pageBusy ? 'Refreshing...' : 'Refresh feed' }}</span>
         </button>
@@ -131,11 +136,21 @@
           />
 
           <div v-if="feed.totalPages > 1" class="admin-activity-pagination">
-            <button class="admin-activity-page-button" type="button" :disabled="currentPage <= 1 || pageBusy" @click="goToPage(currentPage - 1)">
+            <button
+              class="admin-activity-page-button"
+              type="button"
+              :disabled="currentPage <= 1 || pageBusy"
+              @click="goToPage(currentPage - 1)"
+            >
               Previous
             </button>
             <span>Page {{ currentPage }} of {{ feed.totalPages }}</span>
-            <button class="admin-activity-page-button" type="button" :disabled="currentPage >= feed.totalPages || pageBusy" @click="goToPage(currentPage + 1)">
+            <button
+              class="admin-activity-page-button"
+              type="button"
+              :disabled="currentPage >= feed.totalPages || pageBusy"
+              @click="goToPage(currentPage + 1)"
+            >
               Next
             </button>
           </div>
@@ -149,8 +164,19 @@
             <span>{{ editorSubtitle }}</span>
           </div>
           <div class="admin-activity-panel-actions">
-            <StatusPill v-if="hasSelectedRecord && selectedSummary" :label="humanizeEnum(selectedSummary.status)" :tone="statusTone(selectedSummary.status)" />
-            <button class="teacher-outline-button" type="button" @click="startNewDraft(form.type)" :disabled="previewReadOnly">New {{ activityTypeLabel(form.type) }}</button>
+            <StatusPill
+              v-if="hasSelectedRecord && selectedSummary"
+              :label="humanizeEnum(selectedSummary.status)"
+              :tone="statusTone(selectedSummary.status)"
+            />
+            <button
+              class="teacher-outline-button"
+              type="button"
+              @click="startNewDraft(form.type)"
+              :disabled="previewReadOnly"
+            >
+              New {{ activityTypeLabel(form.type) }}
+            </button>
           </div>
         </div>
 
@@ -165,14 +191,25 @@
           <div class="admin-activity-editor-grid">
             <label class="field">
               <span>Activity type</span>
-              <select v-model="form.type" class="select" :disabled="hasSelectedRecord || formBusy" @change="changeDraftType">
-                <option v-for="item in activityTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              <select
+                v-model="form.type"
+                class="select"
+                :disabled="hasSelectedRecord || formBusy"
+                @change="changeDraftType"
+              >
+                <option v-for="item in activityTypeOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
               </select>
             </label>
 
             <label class="field">
               <span>{{ form.type === 'FLASHCARD' ? 'Title (optional)' : 'Title' }}</span>
-              <input v-model="form.title" class="input" :placeholder="form.type === 'FLASHCARD' ? 'Optional flashcard title' : 'Activity title'" />
+              <input
+                v-model="form.title"
+                class="input"
+                :placeholder="form.type === 'FLASHCARD' ? 'Optional flashcard title' : 'Activity title'"
+              />
             </label>
 
             <label class="field">
@@ -195,7 +232,9 @@
               <span>Difficulty</span>
               <select v-model="form.difficulty" class="select">
                 <option value="">Not set</option>
-                <option v-for="item in difficultyOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                <option v-for="item in difficultyOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </option>
               </select>
             </label>
 
@@ -273,10 +312,21 @@
             </div>
 
             <div class="admin-activity-repeat-list">
-              <article v-for="(item, index) in form.matchingItems" :key="`matching-${index}`" class="admin-activity-repeat-card">
+              <article
+                v-for="(item, index) in form.matchingItems"
+                :key="`matching-${index}`"
+                class="admin-activity-repeat-card"
+              >
                 <div class="row-between">
                   <strong>Pair {{ index + 1 }}</strong>
-                  <button class="teacher-outline-button" type="button" @click="removeMatchingItem(index)" :disabled="form.matchingItems.length <= 1">Remove</button>
+                  <button
+                    class="teacher-outline-button"
+                    type="button"
+                    @click="removeMatchingItem(index)"
+                    :disabled="form.matchingItems.length <= 1"
+                  >
+                    Remove
+                  </button>
                 </div>
                 <div class="admin-activity-editor-grid">
                   <label class="field">
@@ -321,7 +371,12 @@
               </label>
               <label class="field admin-activity-editor-grid-wide">
                 <span>Question payload</span>
-                <textarea v-model="form.questionPayload" class="textarea" rows="5" placeholder='{"prompt":"Listen and identify the word"}' />
+                <textarea
+                  v-model="form.questionPayload"
+                  class="textarea"
+                  rows="5"
+                  placeholder='{"prompt":"Listen and identify the word"}'
+                />
               </label>
             </div>
           </section>
@@ -329,7 +384,9 @@
           <section v-else-if="form.type === 'TRACING_EXERCISE'" class="admin-activity-section">
             <div class="admin-activity-section-head">
               <strong>Tracing exercise content</strong>
-              <span>Capture the worksheet, character, pronunciation, meaning, and teacher guidance for the activity.</span>
+              <span
+                >Capture the worksheet, character, pronunciation, meaning, and teacher guidance for the activity.</span
+              >
             </div>
 
             <div class="admin-activity-editor-grid">
@@ -368,10 +425,21 @@
             </label>
 
             <div class="admin-activity-repeat-list">
-              <article v-for="(item, index) in form.dragItems" :key="`drag-${index}`" class="admin-activity-repeat-card">
+              <article
+                v-for="(item, index) in form.dragItems"
+                :key="`drag-${index}`"
+                class="admin-activity-repeat-card"
+              >
                 <div class="row-between">
                   <strong>Draggable item {{ index + 1 }}</strong>
-                  <button class="teacher-outline-button" type="button" @click="removeDragItem(index)" :disabled="form.dragItems.length <= 1">Remove</button>
+                  <button
+                    class="teacher-outline-button"
+                    type="button"
+                    @click="removeDragItem(index)"
+                    :disabled="form.dragItems.length <= 1"
+                  >
+                    Remove
+                  </button>
                 </div>
                 <div class="admin-activity-editor-grid">
                   <label class="field">
@@ -429,10 +497,21 @@
             </div>
 
             <div class="admin-activity-repeat-list">
-              <article v-for="(item, index) in form.storyQuestions" :key="`story-${index}`" class="admin-activity-repeat-card">
+              <article
+                v-for="(item, index) in form.storyQuestions"
+                :key="`story-${index}`"
+                class="admin-activity-repeat-card"
+              >
                 <div class="row-between">
                   <strong>Question {{ index + 1 }}</strong>
-                  <button class="teacher-outline-button" type="button" @click="removeStoryQuestion(index)" :disabled="form.storyQuestions.length <= 1">Remove</button>
+                  <button
+                    class="teacher-outline-button"
+                    type="button"
+                    @click="removeStoryQuestion(index)"
+                    :disabled="form.storyQuestions.length <= 1"
+                  >
+                    Remove
+                  </button>
                 </div>
                 <div class="admin-activity-editor-grid">
                   <label class="field admin-activity-editor-grid-wide">
@@ -458,20 +537,52 @@
 
           <div class="admin-activity-editor-footer">
             <div class="admin-activity-editor-meta">
-              <span v-if="hasSelectedRecord && selectedSummary">Created {{ formatDateTime(selectedSummary.createdAt) }}</span>
-              <span v-if="hasSelectedRecord && selectedSummary">Updated {{ formatDateTime(selectedSummary.updatedAt) }}</span>
+              <span v-if="hasSelectedRecord && selectedSummary"
+                >Created {{ formatDateTime(selectedSummary.createdAt) }}</span
+              >
+              <span v-if="hasSelectedRecord && selectedSummary"
+                >Updated {{ formatDateTime(selectedSummary.updatedAt) }}</span
+              >
               <span v-if="selectedSummary?.createdByDisplayName">By {{ selectedSummary.createdByDisplayName }}</span>
             </div>
 
             <div class="admin-activity-editor-actions">
-              <button class="btn btn-secondary" type="button" @click="startNewDraft(form.type)" :disabled="formBusy">Clear draft</button>
+              <button class="btn btn-secondary" type="button" @click="startNewDraft(form.type)" :disabled="formBusy">
+                Clear draft
+              </button>
               <button class="btn btn-primary" type="button" @click="saveActivity" :disabled="formBusy">
                 {{ saveButtonLabel }}
               </button>
-              <button class="btn btn-secondary" type="button" @click="updateStatus('DRAFT')" :disabled="!hasSelectedRecord || formBusy">Save as Draft</button>
-              <button class="btn btn-secondary" type="button" @click="updateStatus('PUBLISHED')" :disabled="!hasSelectedRecord || formBusy">Publish</button>
-              <button class="btn btn-secondary" type="button" @click="updateStatus('ARCHIVED')" :disabled="!hasSelectedRecord || formBusy">Archive</button>
-              <button class="btn btn-danger" type="button" @click="deleteActivity" :disabled="!hasSelectedRecord || formBusy">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                @click="updateStatus('DRAFT')"
+                :disabled="!hasSelectedRecord || formBusy"
+              >
+                Save as Draft
+              </button>
+              <button
+                class="btn btn-secondary"
+                type="button"
+                @click="updateStatus('PUBLISHED')"
+                :disabled="!hasSelectedRecord || formBusy"
+              >
+                Publish
+              </button>
+              <button
+                class="btn btn-secondary"
+                type="button"
+                @click="updateStatus('ARCHIVED')"
+                :disabled="!hasSelectedRecord || formBusy"
+              >
+                Archive
+              </button>
+              <button
+                class="btn btn-danger"
+                type="button"
+                @click="deleteActivity"
+                :disabled="!hasSelectedRecord || formBusy"
+              >
                 {{ deleting ? 'Deleting...' : 'Delete' }}
               </button>
             </div>
@@ -675,22 +786,56 @@ const statCards = computed(() => {
   const typeCount = new Set(pageItems.map((item) => item.type)).size
 
   return [
-    { label: 'Filtered Total', value: formatNumber(feed.value.totalItems), copy: 'Records matched by the current filters.', icon: 'practice', tone: 'purple' },
-    { label: 'Published', value: formatNumber(published), copy: 'Published items on the current page.', icon: 'status', tone: 'green' },
-    { label: 'Drafts', value: formatNumber(drafts), copy: 'Draft items ready for curation.', icon: 'content', tone: 'blue' },
-    { label: 'Archived', value: formatNumber(archived), copy: 'Archived items still tracked for audit.', icon: 'history', tone: 'orange' },
-    { label: 'Visible Types', value: formatNumber(typeCount), copy: 'Distinct activity types on this page.', icon: 'analytics', tone: 'gold' },
+    {
+      label: 'Filtered Total',
+      value: formatNumber(feed.value.totalItems),
+      copy: 'Records matched by the current filters.',
+      icon: 'practice',
+      tone: 'purple',
+    },
+    {
+      label: 'Published',
+      value: formatNumber(published),
+      copy: 'Published items on the current page.',
+      icon: 'status',
+      tone: 'green',
+    },
+    {
+      label: 'Drafts',
+      value: formatNumber(drafts),
+      copy: 'Draft items ready for curation.',
+      icon: 'content',
+      tone: 'blue',
+    },
+    {
+      label: 'Archived',
+      value: formatNumber(archived),
+      copy: 'Archived items still tracked for audit.',
+      icon: 'history',
+      tone: 'orange',
+    },
+    {
+      label: 'Visible Types',
+      value: formatNumber(typeCount),
+      copy: 'Distinct activity types on this page.',
+      icon: 'analytics',
+      tone: 'gold',
+    },
   ]
 })
 
-const editorTitle = computed(() => (hasSelectedRecord.value ? `${activityTypeLabel(selectedType.value)} details` : 'New activity draft'))
+const editorTitle = computed(() =>
+  hasSelectedRecord.value ? `${activityTypeLabel(selectedType.value)} details` : 'New activity draft',
+)
 const editorSubtitle = computed(() => {
   if (hasSelectedRecord.value && selectedSummary.value) {
     return `${humanizeEnum(selectedSummary.value.status)} · ${activitySummaryMeta(selectedSummary.value)}`
   }
   return `Create a new ${activityTypeLabel(form.type).toLowerCase()} and save it directly to the admin activity library.`
 })
-const saveButtonLabel = computed(() => (saving.value ? 'Saving...' : hasSelectedRecord.value ? 'Save changes' : 'Create activity'))
+const saveButtonLabel = computed(() =>
+  saving.value ? 'Saving...' : hasSelectedRecord.value ? 'Save changes' : 'Create activity',
+)
 
 onMounted(() => {
   if (previewReadOnly.value) {
@@ -1307,49 +1452,55 @@ async function saveActivity() {
     switch (type) {
       case 'FLASHCARD': {
         const payload = buildFlashcardPayload()
-        const response = hasSelectedRecord.value && recordId != null
-          ? await adminApi.updateFlashcard(recordId, payload)
-          : await adminApi.createFlashcard(payload)
+        const response =
+          hasSelectedRecord.value && recordId != null
+            ? await adminApi.updateFlashcard(recordId, payload)
+            : await adminApi.createFlashcard(payload)
         recordId = response.id
         break
       }
       case 'MATCHING_GAME': {
         const payload = buildMatchingGamePayload()
-        const response = hasSelectedRecord.value && recordId != null
-          ? await adminApi.updateMatchingGame(recordId, payload)
-          : await adminApi.createMatchingGame(payload)
+        const response =
+          hasSelectedRecord.value && recordId != null
+            ? await adminApi.updateMatchingGame(recordId, payload)
+            : await adminApi.createMatchingGame(payload)
         recordId = response.id
         break
       }
       case 'LISTENING_EXERCISE': {
         const payload = buildListeningExercisePayload()
-        const response = hasSelectedRecord.value && recordId != null
-          ? await adminApi.updateListeningExercise(recordId, payload)
-          : await adminApi.createListeningExercise(payload)
+        const response =
+          hasSelectedRecord.value && recordId != null
+            ? await adminApi.updateListeningExercise(recordId, payload)
+            : await adminApi.createListeningExercise(payload)
         recordId = response.id
         break
       }
       case 'TRACING_EXERCISE': {
         const payload = buildTracingExercisePayload()
-        const response = hasSelectedRecord.value && recordId != null
-          ? await adminApi.updateTracingExercise(recordId, payload)
-          : await adminApi.createTracingExercise(payload)
+        const response =
+          hasSelectedRecord.value && recordId != null
+            ? await adminApi.updateTracingExercise(recordId, payload)
+            : await adminApi.createTracingExercise(payload)
         recordId = response.id
         break
       }
       case 'DRAG_DROP_ACTIVITY': {
         const payload = buildDragDropPayload()
-        const response = hasSelectedRecord.value && recordId != null
-          ? await adminApi.updateDragDropActivity(recordId, payload)
-          : await adminApi.createDragDropActivity(payload)
+        const response =
+          hasSelectedRecord.value && recordId != null
+            ? await adminApi.updateDragDropActivity(recordId, payload)
+            : await adminApi.createDragDropActivity(payload)
         recordId = response.id
         break
       }
       case 'STORY_ACTIVITY': {
         const payload = buildStoryPayload()
-        const response = hasSelectedRecord.value && recordId != null
-          ? await adminApi.updateStoryActivity(recordId, payload)
-          : await adminApi.createStoryActivity(payload)
+        const response =
+          hasSelectedRecord.value && recordId != null
+            ? await adminApi.updateStoryActivity(recordId, payload)
+            : await adminApi.createStoryActivity(payload)
         recordId = response.id
         break
       }
@@ -1383,7 +1534,12 @@ async function updateStatus(status: StatusMutation) {
     return
   }
 
-  if (status !== 'DRAFT' && !confirmActivityMutation(`Move this ${activityTypeLabel(selectedType.value).toLowerCase()} to ${humanizeEnum(status)}?`)) {
+  if (
+    status !== 'DRAFT' &&
+    !confirmActivityMutation(
+      `Move this ${activityTypeLabel(selectedType.value).toLowerCase()} to ${humanizeEnum(status)}?`,
+    )
+  ) {
     return
   }
 
@@ -1434,7 +1590,11 @@ async function deleteActivity() {
     return
   }
 
-  if (!confirmActivityMutation(`Delete this ${activityTypeLabel(selectedType.value).toLowerCase()}? This action cannot be undone.`)) {
+  if (
+    !confirmActivityMutation(
+      `Delete this ${activityTypeLabel(selectedType.value).toLowerCase()}? This action cannot be undone.`,
+    )
+  ) {
     return
   }
 

@@ -43,18 +43,34 @@ import lombok.Setter;
  * <p>{@link #active} flips to {@code false} when an admin deactivates
  * the account; the user record is preserved for audit-log integrity
  * rather than physically deleted.</p>
+ *
+ * <p>Uniqueness of {@link #email} is enforced by a single named
+ * constraint ({@code idx_users_email}) declared via
+ * {@link UniqueConstraint} on the {@link Table @Table} annotation,
+ * matching the Flyway baseline. {@link #email} is also mapped
+ * {@code updatable = false}: {@code AuthService} sets it once at
+ * registration and the codebase has no email-change flow. If a real
+ * email-change feature is later added, removing this attribute will
+ * be a deliberate, reviewable diff that forces the implementer to
+ * also address the related re-verification and identity-merge
+ * concerns rather than silently mutate the login identity.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "users", indexes = {
-        @Index(name = "idx_users_email", columnList = "email", unique = true),
-        @Index(name = "idx_users_created_at", columnList = "created_at")
-})
+@Table(
+        name = "users",
+        indexes = {
+                @Index(name = "idx_users_created_at", columnList = "created_at")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "idx_users_email", columnNames = "email")
+        }
+)
 public class User extends BaseEntity {
 
-    @Column(name = "email", nullable = false, unique = true, length = 150)
+    @Column(name = "email", nullable = false, updatable = false, length = 150)
     private String email;
 
     @JsonIgnore

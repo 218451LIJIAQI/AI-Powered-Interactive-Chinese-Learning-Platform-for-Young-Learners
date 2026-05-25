@@ -2,8 +2,8 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockCookie;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,6 +38,7 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.PasswordResetTokenRepository;
+import com.example.aichinese.repository.RefreshTokenRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
@@ -98,6 +100,9 @@ class AuthControllerIntegrationTests {
 
     @Autowired
     private PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
 
     @MockitoSpyBean
     private NoOpEmailService noOpEmailService;
@@ -189,6 +194,9 @@ class AuthControllerIntegrationTests {
                         "password", "Password123!"))))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=")))
+                .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
+                .andExpect(header().string("Set-Cookie", containsString("SameSite=Strict")))
                 .andExpect(header().string("X-Request-Id", requestId))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.token").isString())
@@ -198,6 +206,79 @@ class AuthControllerIntegrationTests {
 
         assertThat(result.getResponse().getContentAsString()).doesNotContain("passwordHash");
         assertThat(result.getResponse().getContentAsString()).doesNotContain("password_hash");
+    }
+
+    @Test
+    void shouldRefreshAccessTokenRotateRefreshCookieAndRejectReplay() throws Exception {
+        String email = uniqueEmail("refresh-rotate");
+        registerStudent(email, "Password123!");
+
+        MvcResult loginResult = login(email, "Password123!");
+        String initialAccessToken = extractToken(loginResult);
+        String initialRefreshToken = extractRefreshCookieValue(loginResult);
+
+        MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .cookie(new MockCookie("mandarin_spark_refresh", initialRefreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=")))
+                .andExpect(jsonPath("$.data.token").isString())
+                .andReturn();
+
+        String rotatedAccessToken = extractToken(refreshResult);
+        String rotatedRefreshToken = extractRefreshCookieValue(refreshResult);
+        assertThat(rotatedAccessToken).isNotEqualTo(initialAccessToken);
+        assertThat(rotatedRefreshToken).isNotEqualTo(initialRefreshToken);
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                .header("Authorization", "Bearer " + rotatedAccessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.email").value(email));
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .cookie(new MockCookie("mandarin_spark_refresh", initialRefreshToken)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                .header("Authorization", "Bearer " + rotatedAccessToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void shouldClearRefreshCookieAndRevokeRefreshTokensOnLogout() throws Exception {
+        String email = uniqueEmail("refresh-logout");
+        registerStudent(email, "Password123!");
+
+        MvcResult loginResult = login(email, "Password123!");
+        String accessToken = extractToken(loginResult);
+        String refreshToken = extractRefreshCookieValue(loginResult);
+        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
+        assertThat(refreshTokenRepository.findAll().stream()
+                .filter(token -> token.getUser() != null && token.getUser().getId().equals(user.getId()))
+                .filter(token -> token.getRevokedAt() == null)
+                .count()).isEqualTo(1L);
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                .with(csrf())
+                .header("Authorization", "Bearer " + accessToken)
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=;")))
+                .andExpect(header().string("Set-Cookie", containsString("Max-Age=0")));
+
+        assertThat(refreshTokenRepository.findAll().stream()
+                .filter(token -> token.getUser() != null && token.getUser().getId().equals(user.getId()))
+                .filter(token -> token.getRevokedAt() == null)
+                .count()).isZero();
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
@@ -343,12 +424,18 @@ class AuthControllerIntegrationTests {
         String email = uniqueEmail("logout-token");
         registerStudent(email, "Password123!");
         String token = loginAndExtractToken(email, "Password123!");
+        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
 
         mockMvc.perform(post("/api/v1/auth/logout")
                 .with(csrf())
                 .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+
+        assertThat(refreshTokenRepository.findAll().stream()
+                .filter(record -> record.getUser() != null && record.getUser().getId().equals(user.getId()))
+                .filter(record -> record.getRevokedAt() == null)
+                .count()).isZero();
 
         mockMvc.perform(get("/api/v1/auth/me")
                 .header("Authorization", "Bearer " + token))
@@ -542,6 +629,8 @@ class AuthControllerIntegrationTests {
         String newPassword = "NewPassword456!";
         registerStudent(email, oldPassword);
         String originalToken = loginAndExtractToken(email, oldPassword);
+        MvcResult originalSession = login(email, oldPassword);
+        String originalRefreshToken = extractRefreshCookieValue(originalSession);
 
         String rawResetToken = issueResetToken(email);
 
@@ -565,6 +654,17 @@ class AuthControllerIntegrationTests {
                         "confirmPassword", newPassword))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+
+        assertThat(refreshTokenRepository.findAll().stream()
+                .filter(record -> record.getUser() != null && record.getUser().getId().equals(user.getId()))
+                .filter(record -> record.getRevokedAt() == null)
+                .count()).isZero();
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .cookie(new MockCookie("mandarin_spark_refresh", originalRefreshToken)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
 
         // The old password must no longer work; the new password must.
         mockMvc.perform(post("/api/v1/auth/login")
@@ -873,7 +973,13 @@ class AuthControllerIntegrationTests {
     }
 
     private String loginAndExtractToken(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult result = login(email, password);
+
+        return extractToken(result);
+    }
+
+    private MvcResult login(String email, String password) throws Exception {
+        return mockMvc.perform(post("/api/v1/auth/login")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
@@ -881,9 +987,20 @@ class AuthControllerIntegrationTests {
                         "password", password))))
                 .andExpect(status().isOk())
                 .andReturn();
+    }
 
+    private String extractToken(MvcResult result) throws Exception {
         JsonNode jsonNode = objectMapper.readTree(result.getResponse().getContentAsString());
         return jsonNode.path("data").path("token").asText();
+    }
+
+    private String extractRefreshCookieValue(MvcResult result) {
+        String setCookie = result.getResponse().getHeader("Set-Cookie");
+        assertThat(setCookie).isNotBlank();
+        assertThat(setCookie).contains("mandarin_spark_refresh=");
+        String cookieValue = setCookie.substring("mandarin_spark_refresh=".length());
+        int separatorIndex = cookieValue.indexOf(';');
+        return separatorIndex >= 0 ? cookieValue.substring(0, separatorIndex) : cookieValue;
     }
 
     private String issueResetToken(String email) throws Exception {
@@ -899,7 +1016,8 @@ class AuthControllerIntegrationTests {
         ArgumentCaptor<User> recipientCaptor = ArgumentCaptor.forClass(User.class);
         ArgumentCaptor<String> subjectCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
-        verify(noOpEmailService, atLeastOnce()).sendEmail(recipientCaptor.capture(), subjectCaptor.capture(), bodyCaptor.capture());
+        verify(noOpEmailService, timeout(2_000).atLeastOnce()).sendEmail(
+                recipientCaptor.capture(), subjectCaptor.capture(), bodyCaptor.capture());
 
         User recipient = recipientCaptor.getAllValues().get(recipientCaptor.getAllValues().size() - 1);
         String body = bodyCaptor.getAllValues().get(bodyCaptor.getAllValues().size() - 1);

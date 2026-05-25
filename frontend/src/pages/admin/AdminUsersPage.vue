@@ -44,12 +44,20 @@
                 />
               </label>
 
-              <button class="teacher-outline-button admin-users-compact-button is-icon" type="button" @click="cycleSortMode">
+              <button
+                class="teacher-outline-button admin-users-compact-button is-icon"
+                type="button"
+                @click="cycleSortMode"
+              >
                 <IconGlyph name="filter" :size="16" />
                 <span>{{ sortModeLabel }}</span>
               </button>
 
-              <button class="teacher-outline-button admin-users-compact-button is-icon" type="button" @click="openAnalytics">
+              <button
+                class="teacher-outline-button admin-users-compact-button is-icon"
+                type="button"
+                @click="openAnalytics"
+              >
                 <IconGlyph name="chart" :size="16" />
                 <span>Analytics</span>
               </button>
@@ -57,19 +65,39 @@
 
             <div class="admin-users-toolbar-bottom">
               <div class="admin-users-toolbar-filters">
-                <button class="teacher-outline-button admin-users-compact-button" type="button" @click="cycleRoleFilter">
+                <button
+                  class="teacher-outline-button admin-users-compact-button"
+                  type="button"
+                  @click="cycleRoleFilter"
+                >
                   {{ roleFilterLabel }}
                 </button>
-                <button class="teacher-outline-button admin-users-compact-button" type="button" @click="cycleStatusFilter">
+                <button
+                  class="teacher-outline-button admin-users-compact-button"
+                  type="button"
+                  @click="cycleStatusFilter"
+                >
                   {{ statusFilterLabel }}
                 </button>
-                <button class="teacher-outline-button admin-users-compact-button" type="button" @click="cycleAccountFilter">
+                <button
+                  class="teacher-outline-button admin-users-compact-button"
+                  type="button"
+                  @click="cycleAccountFilter"
+                >
                   {{ accountFilterLabel }}
                 </button>
-                <button class="teacher-outline-button admin-users-compact-button" type="button" @click="cycleClassFilter">
+                <button
+                  class="teacher-outline-button admin-users-compact-button"
+                  type="button"
+                  @click="cycleClassFilter"
+                >
                   {{ classFilterLabel }}
                 </button>
-                <button class="teacher-outline-button admin-users-compact-button is-icon" type="button" @click="cycleExtraFilter">
+                <button
+                  class="teacher-outline-button admin-users-compact-button is-icon"
+                  type="button"
+                  @click="cycleExtraFilter"
+                >
                   <IconGlyph name="filter" :size="16" />
                   <span>{{ extraFilterLabel }}</span>
                 </button>
@@ -138,7 +166,12 @@
                 <span>{{ user.lastActiveLabel }}</span>
                 <span>{{ user.joinedLabel }}</span>
 
-                <button class="admin-users-more" type="button" aria-label="Open user details" @click.stop="selectUser(user.userId)">
+                <button
+                  class="admin-users-more"
+                  type="button"
+                  aria-label="Open user details"
+                  @click.stop="selectUser(user.userId)"
+                >
                   <IconGlyph name="more" :size="18" />
                 </button>
               </article>
@@ -149,7 +182,11 @@
               icon="search"
               eyebrow="No matches"
               title="No users match this view"
-              :message="hasActiveFilters ? 'Clear or adjust the current filters to bring more users back into view.' : 'User records will appear here once the directory returns data.'"
+              :message="
+                hasActiveFilters
+                  ? 'Clear or adjust the current filters to bring more users back into view.'
+                  : 'User records will appear here once the directory returns data.'
+              "
             >
               <template v-if="hasActiveFilters" #actions>
                 <button class="btn btn-secondary" type="button" @click="clearFilters">Clear filters</button>
@@ -239,10 +276,18 @@
               </div>
 
               <div class="admin-users-info-grid">
-                <div><span>Joined Date</span><strong>{{ selectedUser.joinedLabel }}</strong></div>
-                <div><span>Last Active</span><strong>{{ selectedUser.lastActiveLabel }}</strong></div>
-                <div><span>Account State</span><strong>{{ selectedUser.accountLabel }}</strong></div>
-                <div><span>Profile Status</span><strong>{{ selectedUser.statusLabel }}</strong></div>
+                <div>
+                  <span>Joined Date</span><strong>{{ selectedUser.joinedLabel }}</strong>
+                </div>
+                <div>
+                  <span>Last Active</span><strong>{{ selectedUser.lastActiveLabel }}</strong>
+                </div>
+                <div>
+                  <span>Account State</span><strong>{{ selectedUser.accountLabel }}</strong>
+                </div>
+                <div>
+                  <span>Profile Status</span><strong>{{ selectedUser.statusLabel }}</strong>
+                </div>
               </div>
             </article>
 
@@ -251,14 +296,22 @@
                 <div class="student-section-heading">
                   <strong>Directory Context</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="openProgressTarget">Open Relevant Page</button>
+                <button class="student-link-button" type="button" @click="openProgressTarget">
+                  Open Relevant Page
+                </button>
               </div>
 
               <div class="admin-users-progress-wrap admin-users-progress-wrap--context">
                 <div class="admin-users-progress-copy">
-                  <div><span>Role</span><strong>{{ selectedUser.roleLabel }}</strong></div>
-                  <div><span>Account State</span><strong>{{ selectedUser.accountLabel }}</strong></div>
-                  <div><span>Profile Status</span><strong>{{ selectedUser.statusLabel }}</strong></div>
+                  <div>
+                    <span>Role</span><strong>{{ selectedUser.roleLabel }}</strong>
+                  </div>
+                  <div>
+                    <span>Account State</span><strong>{{ selectedUser.accountLabel }}</strong>
+                  </div>
+                  <div>
+                    <span>Profile Status</span><strong>{{ selectedUser.statusLabel }}</strong>
+                  </div>
                 </div>
               </div>
             </article>
@@ -273,7 +326,9 @@
 
               <div class="admin-users-activity-list">
                 <article v-for="item in selectedFollowUpRoutes" :key="item.title" class="admin-users-activity-item">
-                  <span class="admin-users-activity-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
+                  <span class="admin-users-activity-icon" :class="`is-${item.tone}`"
+                    ><IconGlyph :name="item.icon" :size="18"
+                  /></span>
                   <div class="admin-users-activity-copy">
                     <strong>{{ item.title }}</strong>
                     <span>{{ item.copy }}</span>
@@ -288,7 +343,9 @@
                 <div class="student-section-heading">
                   <strong>Audit Log (Latest 5)</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="router.push('/admin/settings')">View All</button>
+                <button class="student-link-button" type="button" @click="router.push('/admin/settings')">
+                  View All
+                </button>
               </div>
 
               <div class="admin-users-audit-list">
@@ -308,7 +365,12 @@
               </div>
 
               <div class="admin-users-actions-grid">
-                <button class="teacher-outline-button" type="button" :disabled="userStatusActionDisabled" @click="toggleSelectedUserStatus">
+                <button
+                  class="teacher-outline-button"
+                  type="button"
+                  :disabled="userStatusActionDisabled"
+                  @click="toggleSelectedUserStatus"
+                >
                   {{
                     submittingUserStatus
                       ? selectedUser.active
@@ -319,16 +381,28 @@
                         : 'Reactivate account'
                   }}
                 </button>
-                <button class="teacher-outline-button" type="button" @click="openPrimaryAction">{{ primaryActionLabel }}</button>
-                <button class="teacher-outline-button" type="button" @click="openSecondaryAction">{{ secondaryActionLabel }}</button>
-                <button v-if="selectedUser.roleKey === 'TEACHER'" class="admin-users-action-safe" type="button" @click="openTeacherVerification">
+                <button class="teacher-outline-button" type="button" @click="openPrimaryAction">
+                  {{ primaryActionLabel }}
+                </button>
+                <button class="teacher-outline-button" type="button" @click="openSecondaryAction">
+                  {{ secondaryActionLabel }}
+                </button>
+                <button
+                  v-if="selectedUser.roleKey === 'TEACHER'"
+                  class="admin-users-action-safe"
+                  type="button"
+                  @click="openTeacherVerification"
+                >
                   Review Teacher Verification
                 </button>
-                <button class="admin-users-action-safe" type="button" @click="openRecoveryAction">Open Settings & Audit</button>
+                <button class="admin-users-action-safe" type="button" @click="openRecoveryAction">
+                  Open Settings & Audit
+                </button>
               </div>
 
               <small class="admin-users-actions-note">
-                Suspend or restore live access here, then use verification, content, analytics, and audit routes for deeper follow-up.
+                Suspend or restore live access here, then use verification, content, analytics, and audit routes for
+                deeper follow-up.
               </small>
             </article>
           </template>
@@ -338,7 +412,11 @@
             icon="users"
             eyebrow="Selection"
             title="Pick a user to inspect details"
-            :message="filteredUsers.length ? 'Choose a user from the directory to review account context, progress, and audit history.' : 'Broaden the current filters or refresh the directory to restore the user list.'"
+            :message="
+              filteredUsers.length
+                ? 'Choose a user from the directory to review account context, progress, and audit history.'
+                : 'Broaden the current filters or refresh the directory to restore the user list.'
+            "
           />
         </aside>
       </section>
@@ -399,9 +477,15 @@ const emptyUserPage = {
   totalPages: 0,
 }
 
-const users = computed(() => usersResource.data.value ?? (usersResource.usingFallback.value ? adminUsers : emptyUserPage))
-const teachers = computed(() => teachersResource.data.value ?? (teachersResource.usingFallback.value ? adminTeachers : emptyUserPage))
-const students = computed(() => studentsResource.data.value ?? (studentsResource.usingFallback.value ? adminStudents : emptyUserPage))
+const users = computed(
+  () => usersResource.data.value ?? (usersResource.usingFallback.value ? adminUsers : emptyUserPage),
+)
+const teachers = computed(
+  () => teachersResource.data.value ?? (teachersResource.usingFallback.value ? adminTeachers : emptyUserPage),
+)
+const students = computed(
+  () => studentsResource.data.value ?? (studentsResource.usingFallback.value ? adminStudents : emptyUserPage),
+)
 const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? adminAuditLogs : []))
 
 const pageLoading = computed(
@@ -480,21 +564,16 @@ const combinedUsers = computed<CombinedUser[]>(() => {
   const studentUserIds = new Set(students.value.items.map((item) => item.userId))
 
   return users.value.items.map((item) => {
-    const primaryRole = item.roles.includes('ADMIN')
-      ? 'ADMIN'
-      : item.roles.includes('TEACHER')
-        ? 'TEACHER'
-        : 'STUDENT'
+    const primaryRole = item.roles.includes('ADMIN') ? 'ADMIN' : item.roles.includes('TEACHER') ? 'TEACHER' : 'STUDENT'
     const teacher = teacherByUserId.get(item.userId)
     const teacherStatus = teacher?.teacherStatus ?? item.teacherStatus ?? null
     const isStudent = studentUserIds.has(item.userId)
 
     const roleLabel = primaryRole === 'ADMIN' ? 'Admin' : primaryRole === 'TEACHER' ? 'Teacher' : 'Student'
     const roleTone = primaryRole === 'ADMIN' ? 'purple' : primaryRole === 'TEACHER' ? 'blue' : 'green'
-    const statusLabel =
-      !item.active
-        ? 'Inactive'
-        : primaryRole === 'TEACHER'
+    const statusLabel = !item.active
+      ? 'Inactive'
+      : primaryRole === 'TEACHER'
         ? teacherStatus === 'PENDING'
           ? 'Pending'
           : teacherStatus === 'REJECTED'
@@ -502,12 +581,11 @@ const combinedUsers = computed<CombinedUser[]>(() => {
             : 'Active'
         : 'Active'
     const statusTone = statusLabel === 'Active' ? 'active' : statusLabel === 'Pending' ? 'pending' : 'inactive'
-    const accountLabel =
-      !item.active
-        ? 'Suspended'
-        : primaryRole === 'TEACHER' && teacherStatus !== 'APPROVED'
-          ? 'Verification'
-          : 'Verified'
+    const accountLabel = !item.active
+      ? 'Suspended'
+      : primaryRole === 'TEACHER' && teacherStatus !== 'APPROVED'
+        ? 'Verification'
+        : 'Verified'
     const accountTone = accountLabel === 'Verified' ? 'verified' : 'warning'
 
     return {
@@ -638,7 +716,9 @@ const extraFilterLabel = computed(() => {
 const selectedUserMetaLabel = computed(() => {
   if (selectedUser.value) return `Focused on ${selectedUser.value.fullName}`
   if (!filteredUsers.value.length) {
-    return hasActiveFilters.value ? 'No users match the current filters.' : 'User records will appear here once the directory loads.'
+    return hasActiveFilters.value
+      ? 'No users match the current filters.'
+      : 'User records will appear here once the directory loads.'
   }
   return 'Choose a user to inspect account context.'
 })
@@ -650,24 +730,78 @@ const paginationLabel = computed(() => {
 const selectedFollowUpRoutes = computed(() => {
   if (selectedUser.value?.roleKey === 'TEACHER') {
     return [
-      { title: 'Teacher Verification', copy: 'Review status, documents, and approval notes.', icon: 'status', tone: 'green', path: '/admin/teacher-verification' },
-      { title: 'Content Review', copy: 'Open submitted teacher content and moderation flow.', icon: 'content', tone: 'blue', path: '/admin/content' },
-      { title: 'Audit Trail', copy: 'Review latest admin activity records.', icon: 'history', tone: 'purple', path: '/admin/settings' },
+      {
+        title: 'Teacher Verification',
+        copy: 'Review status, documents, and approval notes.',
+        icon: 'status',
+        tone: 'green',
+        path: '/admin/teacher-verification',
+      },
+      {
+        title: 'Content Review',
+        copy: 'Open submitted teacher content and moderation flow.',
+        icon: 'content',
+        tone: 'blue',
+        path: '/admin/content',
+      },
+      {
+        title: 'Audit Trail',
+        copy: 'Review latest admin activity records.',
+        icon: 'history',
+        tone: 'purple',
+        path: '/admin/settings',
+      },
     ]
   }
 
   if (selectedUser.value?.roleKey === 'ADMIN') {
     return [
-      { title: 'Audit Logs', copy: 'Inspect latest platform audit events.', icon: 'status', tone: 'green', path: '/admin/settings' },
-      { title: 'Analytics', copy: 'Review platform performance and usage trends.', icon: 'analytics', tone: 'blue', path: '/admin/analytics' },
-      { title: 'Moderation', copy: 'Open content and AI safety review queues.', icon: 'moderation', tone: 'purple', path: '/admin/moderation' },
+      {
+        title: 'Audit Logs',
+        copy: 'Inspect latest platform audit events.',
+        icon: 'status',
+        tone: 'green',
+        path: '/admin/settings',
+      },
+      {
+        title: 'Analytics',
+        copy: 'Review platform performance and usage trends.',
+        icon: 'analytics',
+        tone: 'blue',
+        path: '/admin/analytics',
+      },
+      {
+        title: 'Moderation',
+        copy: 'Open content and AI safety review queues.',
+        icon: 'moderation',
+        tone: 'purple',
+        path: '/admin/moderation',
+      },
     ]
   }
 
   return [
-    { title: 'Analytics', copy: 'Review learner progress from aggregate analytics.', icon: 'analytics', tone: 'green', path: '/admin/analytics' },
-    { title: 'Audit Logs', copy: 'Inspect account-related audit events.', icon: 'history', tone: 'blue', path: '/admin/settings' },
-    { title: 'Support Settings', copy: 'Open support and operational settings.', icon: 'settings', tone: 'purple', path: '/admin/settings' },
+    {
+      title: 'Analytics',
+      copy: 'Review learner progress from aggregate analytics.',
+      icon: 'analytics',
+      tone: 'green',
+      path: '/admin/analytics',
+    },
+    {
+      title: 'Audit Logs',
+      copy: 'Inspect account-related audit events.',
+      icon: 'history',
+      tone: 'blue',
+      path: '/admin/settings',
+    },
+    {
+      title: 'Support Settings',
+      copy: 'Open support and operational settings.',
+      icon: 'settings',
+      tone: 'purple',
+      path: '/admin/settings',
+    },
   ]
 })
 

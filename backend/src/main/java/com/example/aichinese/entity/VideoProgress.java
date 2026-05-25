@@ -33,6 +33,20 @@ import lombok.Setter;
  *
  * <p>{@link #version} prevents the lossy interleaving of frequent
  * progress pings during active playback.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #student}, {@link #lesson},
+ *       {@link #recordedVideo} — the bookmark's identity (which
+ *       learner, which lesson, which recorded video) is fixed at
+ *       creation and additionally protected by
+ *       {@code uk_video_progress_student_video}.</li>
+ *   <li><b>Mutable</b>: {@link #watchedSeconds}, {@link #totalSeconds},
+ *       {@link #progressPercentage}, {@link #completed},
+ *       {@link #lastWatchedAt} — the playback-state fields the
+ *       {@code VideoProgressService} ping handler rewrites on every
+ *       update, guarded by {@link Version @Version} above.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -48,15 +62,15 @@ import lombok.Setter;
 public class VideoProgress extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "lesson_id", nullable = false)
+    @JoinColumn(name = "lesson_id", nullable = false, updatable = false)
     private Lesson lesson;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "recorded_video_id", nullable = false)
+    @JoinColumn(name = "recorded_video_id", nullable = false, updatable = false)
     private RecordedLessonVideo recordedVideo;
 
     @Column(name = "watched_seconds")

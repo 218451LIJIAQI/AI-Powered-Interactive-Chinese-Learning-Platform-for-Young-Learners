@@ -114,6 +114,16 @@ public class SecurityConfig {
             "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
                     + "accelerometer=(), gyroscope=(), magnetometer=(), serial=()";
 
+    /**
+     * Restrictive browser policy for any same-origin UI or API error content
+     * served by this application. A frontend served by a separate web server
+     * must send the same policy at that delivery edge.
+     */
+    private static final String CONTENT_SECURITY_POLICY =
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+                    + "form-action 'self'; img-src 'self' data: https:; font-src 'self' data:; "
+                    + "script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'";
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
@@ -142,6 +152,7 @@ public class SecurityConfig {
                 .headers(headers -> headers
                         .contentTypeOptions(opts -> { })
                         .frameOptions(frame -> frame.deny())
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
                         .referrerPolicy(ref -> ref.policy(
                                 ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                         // HSTS: one year, include subdomains, request preload-list inclusion.
@@ -183,6 +194,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/register/student",
                                 "/api/v1/auth/register/teacher",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/refresh",
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password")
                         .permitAll()

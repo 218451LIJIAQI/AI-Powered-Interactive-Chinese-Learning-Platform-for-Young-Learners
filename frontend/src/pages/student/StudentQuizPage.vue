@@ -58,7 +58,12 @@
             </div>
 
             <div class="row-between u-wrap u-gap-12">
-              <button class="teacher-outline-button" type="button" :disabled="activeQuestionIndex === 0" @click="goToPreviousQuestion">
+              <button
+                class="teacher-outline-button"
+                type="button"
+                :disabled="activeQuestionIndex === 0"
+                @click="goToPreviousQuestion"
+              >
                 Previous
               </button>
               <span class="muted">{{ answeredCount }} / {{ totalQuestionCount }} answered</span>
@@ -67,21 +72,21 @@
               </button>
             </div>
 
-            <button class="btn btn-accent student-quiz-submit" :disabled="quizReadOnly || submitting || hasSubmitted || !allQuestionsAnswered" type="submit">
+            <button
+              class="btn btn-accent student-quiz-submit"
+              :disabled="quizReadOnly || submitting || hasSubmitted || !allQuestionsAnswered"
+              type="submit"
+            >
               {{ submitButtonLabel }}
             </button>
           </form>
 
-          <StatePanel
-            v-else
-            icon="quiz"
-            title="No quiz ready"
-            :message="quizEmptyMessage"
-            tone="empty"
-          >
+          <StatePanel v-else icon="quiz" title="No quiz ready" :message="quizEmptyMessage" tone="empty">
             <template #actions>
               <button class="btn btn-primary" type="button" @click="router.push('/student/learn')">Open Lessons</button>
-              <button class="btn btn-secondary" type="button" @click="router.push('/student/practice')">Practice Instead</button>
+              <button class="btn btn-secondary" type="button" @click="router.push('/student/practice')">
+                Practice Instead
+              </button>
             </template>
           </StatePanel>
 
@@ -108,7 +113,10 @@
               <span class="student-review-alert"><IconGlyph name="help" :size="14" /></span>
               <strong>Feedback unlocks after you submit</strong>
             </div>
-            <p>Choose an answer first. SparkBot will show review notes after your attempt so the quiz stays fair and encouraging.</p>
+            <p>
+              Choose an answer first. SparkBot will show review notes after your attempt so the quiz stays fair and
+              encouraging.
+            </p>
           </article>
         </div>
 
@@ -116,7 +124,9 @@
           <article class="panel student-quiz-side-card">
             <div class="row-between">
               <strong>Quiz Progress</strong>
-              <button class="student-link-button" type="button" @click="router.push('/student/practice')">View All</button>
+              <button class="student-link-button" type="button" @click="router.push('/student/practice')">
+                View All
+              </button>
             </div>
             <div class="student-quiz-ring">
               <span>{{ progress.quizAverage }}%</span>
@@ -137,7 +147,9 @@
           <article class="panel student-quiz-side-card">
             <div class="row-between">
               <strong>Recent Lesson Progress</strong>
-              <button class="student-link-button" type="button" @click="router.push('/student/practice')">Open Practice</button>
+              <button class="student-link-button" type="button" @click="router.push('/student/practice')">
+                Open Practice
+              </button>
             </div>
             <div v-if="performanceItems.length" class="student-quiz-performance-list">
               <div v-for="item in performanceItems" :key="item.title" class="student-quiz-performance-item">
@@ -155,7 +167,9 @@
           <article class="student-quiz-help-card">
             <strong>Need a hint?</strong>
             <p>SparkBot can explain the answer and help you try again.</p>
-            <button class="btn btn-primary" type="button" @click="router.push('/student/ai-helper')">Ask SparkBot</button>
+            <button class="btn btn-primary" type="button" @click="router.push('/student/ai-helper')">
+              Ask SparkBot
+            </button>
             <span><IconGlyph name="ai" :size="28" /></span>
           </article>
         </aside>
@@ -242,14 +256,18 @@ const emptyProgress = {
 }
 
 const quiz = computed(() => quizResource.data.value ?? (quizResource.usingFallback.value ? studentQuiz : emptyQuiz))
-const progress = computed(() => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress))
+const progress = computed(
+  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
+)
 const result = computed(() => resultData.value ?? emptyResult)
 const pageLoading = computed(() => quizResource.loading.value || progressResource.loading.value)
 const pageError = computed(() => quizResource.error.value || progressResource.error.value)
 const usingFallback = computed(() => quizResource.usingFallback.value || progressResource.usingFallback.value)
 const quizReadOnly = computed(() => quizResource.usingFallback.value)
 const hasQuizSelection = computed(() => Boolean(quiz.value.id))
-const orderedQuestions = computed(() => [...quiz.value.questions].sort((first, second) => first.displayOrder - second.displayOrder))
+const orderedQuestions = computed(() =>
+  [...quiz.value.questions].sort((first, second) => first.displayOrder - second.displayOrder),
+)
 const activeQuestion = computed(() => orderedQuestions.value[activeQuestionIndex.value])
 const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F']
 const totalQuestionCount = computed(() => orderedQuestions.value.length)
@@ -261,13 +279,21 @@ const quizMetaLabel = computed(() => {
   ]
   return parts.filter(Boolean).join(' - ')
 })
-const quizTimeLabel = computed(() => (quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : 'No time limit'))
-const currentQuestionNumber = computed(() => Math.min(activeQuestionIndex.value + 1, Math.max(totalQuestionCount.value, 1)))
+const quizTimeLabel = computed(() =>
+  quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : 'No time limit',
+)
+const currentQuestionNumber = computed(() =>
+  Math.min(activeQuestionIndex.value + 1, Math.max(totalQuestionCount.value, 1)),
+)
 const answeredCount = computed(() => orderedQuestions.value.filter((question) => Boolean(answers[question.id])).length)
 const unansweredQuestionCount = computed(() => Math.max(0, totalQuestionCount.value - answeredCount.value))
-const allQuestionsAnswered = computed(() => totalQuestionCount.value > 0 && answeredCount.value === totalQuestionCount.value)
+const allQuestionsAnswered = computed(
+  () => totalQuestionCount.value > 0 && answeredCount.value === totalQuestionCount.value,
+)
 const isLastQuestion = computed(() => activeQuestionIndex.value >= totalQuestionCount.value - 1)
-const quizProgressWidth = computed(() => `${Math.min(100, Math.max(8, (currentQuestionNumber.value / Math.max(totalQuestionCount.value, 1)) * 100))}%`)
+const quizProgressWidth = computed(
+  () => `${Math.min(100, Math.max(8, (currentQuestionNumber.value / Math.max(totalQuestionCount.value, 1)) * 100))}%`,
+)
 const submitButtonLabel = computed(() => {
   if (submitting.value) return 'Submitting...'
   if (hasSubmitted.value) return 'Submitted'
@@ -289,7 +315,9 @@ const performanceItems = computed(() =>
   progress.value.recentLessons.slice(0, 3).map((lesson) => ({
     icon: iconForLessonProgress(lesson.completionPercent, lesson.completed),
     title: lesson.lessonTitle,
-    when: lesson.lastAccessedAt ? formatDate(lesson.lastAccessedAt) : progressStatusLabel(lesson.completionPercent, lesson.completed),
+    when: lesson.lastAccessedAt
+      ? formatDate(lesson.lastAccessedAt)
+      : progressStatusLabel(lesson.completionPercent, lesson.completed),
     score: `${Math.round(lesson.completionPercent)}%`,
   })),
 )

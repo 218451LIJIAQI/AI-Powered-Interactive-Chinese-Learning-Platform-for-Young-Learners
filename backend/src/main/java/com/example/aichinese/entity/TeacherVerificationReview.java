@@ -37,6 +37,14 @@ import lombok.Setter;
  *
  * <p>{@link #reviewerUser} is nullable to support legacy data; the
  * application layer requires it for new reviews.</p>
+ *
+ * <p>This table is append-only: every field is mapped
+ * {@code updatable = false}. The Javadoc above ("full audit trail
+ * preserved, no soft-delete") describes the intent; the
+ * {@code updatable} flags here make the contract technical. Reversing
+ * a decision is expressed by inserting a fresh review row with the new
+ * status, never by mutating the historical decision in place — which
+ * would erase the very audit trail this table exists to preserve.</p>
  */
 @Getter
 @Setter
@@ -50,24 +58,24 @@ import lombok.Setter;
 public class TeacherVerificationReview extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "teacher_id", nullable = false)
+    @JoinColumn(name = "teacher_id", nullable = false, updatable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "document_id")
+    @JoinColumn(name = "document_id", updatable = false)
     private TeacherVerificationDocument document;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reviewer_user_id")
+    @JoinColumn(name = "reviewer_user_id", updatable = false)
     private User reviewerUser;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "decision_status", nullable = false, length = 30)
+    @Column(name = "decision_status", nullable = false, updatable = false, length = 30)
     private TeacherStatus decisionStatus;
 
-    @Column(name = "review_note", length = 1000)
+    @Column(name = "review_note", updatable = false, length = 1000)
     private String reviewNote;
 
-    @Column(name = "reviewed_at", nullable = false)
+    @Column(name = "reviewed_at", nullable = false, updatable = false)
     private LocalDateTime reviewedAt;
 }

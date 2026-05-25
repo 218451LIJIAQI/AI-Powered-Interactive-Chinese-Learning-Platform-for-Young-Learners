@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.auth;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -48,10 +49,9 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  *                          / blank
  * @param preferredLanguage UI locale defaulted from the request;
  *                          never {@code null} / blank
- * @param roles             Spring Security authority strings prefixed
- *                          with {@code ROLE_} (a single-element list
- *                          in current registration flows); never
- *                          {@code null}
+ * @param roles             application role names (a single-element
+ *                          list in current registration flows);
+ *                          never {@code null}
  * @param teacherStatus     {@code PENDING} for teacher registrations,
  *                          {@code null} for students
  */
@@ -79,18 +79,28 @@ public record RegistrationResponse(
      */
     public RegistrationResponse {
         Objects.requireNonNull(id, "id must not be null");
-        Objects.requireNonNull(fullName, "fullName must not be null");
-        if (fullName.isBlank()) {
-            throw new IllegalArgumentException("fullName must not be blank");
+        fullName = requireNonBlank(fullName, "fullName");
+        email = requireNonBlank(email, "email");
+        preferredLanguage = requireNonBlank(preferredLanguage, "preferredLanguage");
+        roles = normalizeRoles(roles);
+    }
+
+    private static String requireNonBlank(String value, String fieldName) {
+        String stripped = Objects.requireNonNull(value, fieldName + " must not be null").strip();
+        if (stripped.isEmpty()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
         }
-        Objects.requireNonNull(email, "email must not be null");
-        if (email.isBlank()) {
-            throw new IllegalArgumentException("email must not be blank");
+        return stripped;
+    }
+
+    private static List<String> normalizeRoles(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return List.of();
         }
-        Objects.requireNonNull(preferredLanguage, "preferredLanguage must not be null");
-        if (preferredLanguage.isBlank()) {
-            throw new IllegalArgumentException("preferredLanguage must not be blank");
+        LinkedHashSet<String> normalized = new LinkedHashSet<>(source.size());
+        for (String role : source) {
+            normalized.add(requireNonBlank(role, "role"));
         }
-        roles = roles == null ? List.of() : List.copyOf(roles);
+        return List.copyOf(normalized);
     }
 }

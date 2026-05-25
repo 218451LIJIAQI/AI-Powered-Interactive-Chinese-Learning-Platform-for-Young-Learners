@@ -44,7 +44,11 @@
             </div>
 
             <div class="admin-analytics-trend-list">
-              <article v-for="item in analytics.userRegistrationTrend" :key="item.label" class="admin-analytics-trend-row">
+              <article
+                v-for="item in analytics.userRegistrationTrend"
+                :key="item.label"
+                class="admin-analytics-trend-row"
+              >
                 <strong>{{ item.label }}</strong>
                 <span>{{ formatNumber(item.value) }}</span>
               </article>
@@ -63,7 +67,9 @@
             <div class="student-section-heading">
               <strong>Teacher Approval Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/teacher-verification')">Open Queue</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/teacher-verification')">
+              Open Queue
+            </button>
           </div>
 
           <div v-if="teacherApprovalRows.length" class="admin-analytics-breakdown-list">
@@ -90,7 +96,9 @@
             <div class="student-section-heading">
               <strong>Content Status Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/content')">Open Content</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/content')">
+              Open Content
+            </button>
           </div>
 
           <div v-if="contentRows.length" class="admin-analytics-breakdown-list">
@@ -117,7 +125,9 @@
             <div class="student-section-heading">
               <strong>Payment Status Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/finance')">Open Finance</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/finance')">
+              Open Finance
+            </button>
           </div>
 
           <div v-if="paymentRows.length" class="admin-analytics-breakdown-list">
@@ -144,7 +154,9 @@
             <div class="student-section-heading">
               <strong>AI Request Status Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">Open Moderation</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">
+              Open Moderation
+            </button>
           </div>
 
           <div v-if="aiRows.length" class="admin-analytics-breakdown-list">
@@ -171,7 +183,9 @@
             <div class="student-section-heading">
               <strong>Recent AI Usage</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">Open Moderation</button>
+            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">
+              Open Moderation
+            </button>
           </div>
 
           <div v-if="aiUsageRows.length" class="admin-analytics-audit-list">
@@ -290,8 +304,13 @@
           </div>
 
           <div class="admin-analytics-notes">
-            <p>This page intentionally renders only fields that the current admin analytics and audit endpoints expose.</p>
-            <p>Unsupported metrics such as uptime percentages, fabricated approval trends, and language-share estimates were removed during audit cleanup.</p>
+            <p>
+              This page intentionally renders only fields that the current admin analytics and audit endpoints expose.
+            </p>
+            <p>
+              Unsupported metrics such as uptime percentages, fabricated approval trends, and language-share estimates
+              were removed during audit cleanup.
+            </p>
           </div>
         </article>
       </section>
@@ -328,19 +347,19 @@ const router = useRouter()
 
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
 const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
-const aiUsageResource = useResource(
-  () => adminApi.aiUsageLogs({ size: 8 }),
-  { items: [], page: 0, size: 8, totalItems: 0, totalPages: 0 },
-)
+const aiUsageResource = useResource(() => adminApi.aiUsageLogs({ size: 8 }), {
+  items: [],
+  page: 0,
+  size: 8,
+  totalItems: 0,
+  totalPages: 0,
+})
 const liveClassesResource = useResource(() => adminApi.liveClasses(), [])
-const healthResource = useResource(
-  () => systemApi.health(),
-  {
-    status: 'UP',
-    service: 'backend',
-    timestamp: new Date().toISOString(),
-  },
-)
+const healthResource = useResource(() => systemApi.health(), {
+  status: 'UP',
+  service: 'backend',
+  timestamp: new Date().toISOString(),
+})
 
 const emptyAnalytics = {
   overview: {
@@ -370,15 +389,23 @@ const emptyHealth = {
   timestamp: '',
 }
 
-const analytics = computed(() => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics))
+const analytics = computed(
+  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics),
+)
 const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? adminAuditLogs : []))
 const aiUsageLogs = computed(() => aiUsageResource.data.value?.items ?? [])
 const liveClasses = computed(() => liveClassesResource.data.value ?? [])
-const health = computed(() => healthResource.data.value ?? (healthResource.usingFallback.value ? {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-} : emptyHealth))
+const health = computed(
+  () =>
+    healthResource.data.value ??
+    (healthResource.usingFallback.value
+      ? {
+          status: 'UP',
+          service: 'backend',
+          timestamp: new Date().toISOString(),
+        }
+      : emptyHealth),
+)
 
 const pageLoading = computed(
   () =>
@@ -454,8 +481,7 @@ const kpiCards = computed(() => [
     icon: 'history',
     tone: 'lavender',
   },
-]
-)
+])
 
 const teacherApprovalRows = computed(() => normalizeBreakdown(analytics.value.teacherApprovalBreakdown))
 const contentRows = computed(() => normalizeBreakdown(analytics.value.contentStatusBreakdown))

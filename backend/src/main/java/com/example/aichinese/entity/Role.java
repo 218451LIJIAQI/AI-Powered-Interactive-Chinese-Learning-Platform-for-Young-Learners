@@ -7,8 +7,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -23,18 +23,30 @@ import lombok.Setter;
  * opposed to denormalising the enum onto {@code users}) lets future
  * iterations attach per-role metadata (description, permissions list,
  * UI styling) without a schema change.</p>
+ *
+ * <p>Uniqueness of {@link #name} is enforced by a single named
+ * constraint ({@code idx_roles_name}) declared via {@link UniqueConstraint}
+ * on the {@link Table @Table} annotation, matching the Flyway baseline.
+ * The historical {@code idx_} prefix is preserved to match the
+ * database. {@link #name} is also mapped {@code updatable = false}: a
+ * row is the database mirror of a fixed {@link RoleName} enum constant
+ * and is never re-targeted to a different role; only {@link #description}
+ * stays mutable to support future per-role descriptive metadata.</p>
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "roles", indexes = {
-        @Index(name = "idx_roles_name", columnList = "name", unique = true)
-})
+@Table(
+        name = "roles",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "idx_roles_name", columnNames = "name")
+        }
+)
 public class Role extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "name", nullable = false, unique = true, length = 50)
+    @Column(name = "name", nullable = false, updatable = false, length = 50)
     private RoleName name;
 
     @Column(name = "description", length = 255)

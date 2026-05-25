@@ -34,6 +34,9 @@ class CorsConfigTests {
         assertThat(api.getAllowedOrigins())
                 .containsExactly("http://localhost:5173", "https://example.test");
         assertThat(api.getAllowCredentials()).isTrue();
+        assertThat(api.getAllowedMethods()).containsExactly("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+        assertThat(api.getAllowedHeaders())
+                .containsExactly("Authorization", "Content-Type", "Accept", "X-Requested-With", "X-Request-ID");
         // Pattern-based allow list must remain unused so '*' cannot ever sneak
         // through with credentials enabled.
         assertThat(api.getAllowedOriginPatterns()).isNull();

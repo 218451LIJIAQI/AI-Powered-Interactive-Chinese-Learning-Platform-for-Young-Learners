@@ -34,6 +34,19 @@ import lombok.Setter;
  * <p>{@link #completionSummary} is a free-form short JSON-or-text
  * payload (e.g. "best=8/10 attempts=3") used by the analytics tile
  * without re-querying the attempt detail.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li><b>Immutable</b>: {@link #student}, {@link #lesson},
+ *       {@link #quizId}, {@link #startedAt} — the row's identity
+ *       (which student, which lesson, which historical quiz, the
+ *       moment learning began) is fixed once the row is created and
+ *       additionally protected by {@code uk_student_quiz_progress_student_quiz}.</li>
+ *   <li><b>Mutable</b>: {@link #completed}, {@link #attemptCount},
+ *       {@link #completedAt}, {@link #lastInteractedAt},
+ *       {@link #completionSummary} — upserted by the grader after
+ *       every attempt.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -50,14 +63,14 @@ import lombok.Setter;
 public class StudentQuizProgress extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "lesson_id", nullable = false)
+    @JoinColumn(name = "lesson_id", nullable = false, updatable = false)
     private Lesson lesson;
 
-    @Column(name = "quiz_id", nullable = false)
+    @Column(name = "quiz_id", nullable = false, updatable = false)
     private Long quizId;
 
     @Column(name = "completed", nullable = false)
@@ -66,7 +79,7 @@ public class StudentQuizProgress extends BaseEntity {
     @Column(name = "attempt_count", nullable = false)
     private Integer attemptCount = 0;
 
-    @Column(name = "started_at")
+    @Column(name = "started_at", updatable = false)
     private LocalDateTime startedAt;
 
     @Column(name = "completed_at")

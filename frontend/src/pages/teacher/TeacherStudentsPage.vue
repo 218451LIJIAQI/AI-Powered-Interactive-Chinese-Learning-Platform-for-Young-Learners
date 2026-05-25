@@ -35,7 +35,12 @@
             <div class="teacher-students-directory-tools">
               <label class="teacher-students-search">
                 <IconGlyph name="search" :size="16" />
-                <input v-model="searchTerm" class="teacher-students-search-input" aria-label="Search students" placeholder="Search by learner, email, level, or weak area" />
+                <input
+                  v-model="searchTerm"
+                  class="teacher-students-search-input"
+                  aria-label="Search students"
+                  placeholder="Search by learner, email, level, or weak area"
+                />
               </label>
               <button class="teacher-outline-button teacher-students-filter-button" type="button" @click="cycleSort">
                 Sort: {{ sortModeLabel }}
@@ -167,9 +172,7 @@
                   </div>
                 </article>
               </div>
-              <p v-else class="teacher-students-empty-copy">
-                No weak areas are recorded yet for this learner.
-              </p>
+              <p v-else class="teacher-students-empty-copy">No weak areas are recorded yet for this learner.</p>
 
               <button class="teacher-footer-link" type="button" @click="router.push('/teacher/feedback')">
                 <span>Open feedback center</span>
@@ -184,7 +187,9 @@
 
               <div class="teacher-students-insight-list">
                 <article v-for="item in selectedInsights" :key="item.message" class="teacher-students-insight-item">
-                  <span class="teacher-students-insight-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
+                  <span class="teacher-students-insight-icon" :class="`is-${item.tone}`"
+                    ><IconGlyph :name="item.icon" :size="18"
+                  /></span>
                   <span>{{ item.message }}</span>
                 </article>
               </div>
@@ -196,12 +201,16 @@
           <article class="panel teacher-students-feedback-card">
             <div class="row-between teacher-students-card-head">
               <strong>Recent Feedback</strong>
-              <button class="student-link-button" type="button" @click="router.push('/teacher/feedback')">View All</button>
+              <button class="student-link-button" type="button" @click="router.push('/teacher/feedback')">
+                View All
+              </button>
             </div>
 
             <div v-if="selectedFeedbackCards.length" class="teacher-students-feedback-list">
               <article v-for="item in selectedFeedbackCards" :key="item.id" class="teacher-students-feedback-item">
-                <span class="teacher-students-feedback-icon" :class="`is-${item.tone}`"><IconGlyph :name="item.icon" :size="18" /></span>
+                <span class="teacher-students-feedback-icon" :class="`is-${item.tone}`"
+                  ><IconGlyph :name="item.icon" :size="18"
+                /></span>
                 <div class="teacher-students-feedback-copy">
                   <div class="row-between u-align-start">
                     <strong>{{ item.title }}</strong>
@@ -211,9 +220,7 @@
                 </div>
               </article>
             </div>
-            <p v-else class="teacher-students-empty-copy">
-              No feedback has been recorded for this learner yet.
-            </p>
+            <p v-else class="teacher-students-empty-copy">No feedback has been recorded for this learner yet.</p>
           </article>
 
           <article class="panel teacher-students-followup-card">
@@ -256,8 +263,20 @@
             </div>
 
             <div class="teacher-students-followup-actions">
-              <button class="teacher-outline-button" type="button" :disabled="followUpDisabled" @click="resetFollowUpDraft">Reset Draft</button>
-              <button class="btn btn-primary" type="button" :disabled="feedbackReadOnly || submittingFollowUp || !selectedStudent" @click="submitFollowUpFeedback">
+              <button
+                class="teacher-outline-button"
+                type="button"
+                :disabled="followUpDisabled"
+                @click="resetFollowUpDraft"
+              >
+                Reset Draft
+              </button>
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="feedbackReadOnly || submittingFollowUp || !selectedStudent"
+                @click="submitFollowUpFeedback"
+              >
                 {{ submittingFollowUp ? 'Sending...' : 'Send Feedback Now' }}
               </button>
             </div>
@@ -335,8 +354,8 @@ const students = computed<StudentRecord[]>(() =>
   })),
 )
 
-const feedback = computed<TeacherFeedbackResponse[]>(() =>
-  feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []),
+const feedback = computed<TeacherFeedbackResponse[]>(
+  () => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []),
 )
 
 const pageLoading = computed(() => studentsResource.loading.value || feedbackResource.loading.value)
@@ -371,7 +390,10 @@ const filteredStudents = computed(() => {
 })
 
 const selectedStudent = computed(
-  () => filteredStudents.value.find((item) => item.studentId === selectedStudentId.value) ?? filteredStudents.value[0] ?? null,
+  () =>
+    filteredStudents.value.find((item) => item.studentId === selectedStudentId.value) ??
+    filteredStudents.value[0] ??
+    null,
 )
 
 const summaryCards = computed(() => {
@@ -441,12 +463,11 @@ const selectedFeedbackCards = computed(() =>
     .slice(0, 4)
     .map((item, index) => ({
       id: item.id,
-      title:
-        item.quizTitle
-          ? `Feedback on ${item.quizTitle}`
-          : item.lessonTitle
-            ? `Lesson feedback: ${item.lessonTitle}`
-            : formatTeacherFeedbackType(item.feedbackType),
+      title: item.quizTitle
+        ? `Feedback on ${item.quizTitle}`
+        : item.lessonTitle
+          ? `Lesson feedback: ${item.lessonTitle}`
+          : formatTeacherFeedbackType(item.feedbackType),
       message: item.message,
       time: formatDateTime(item.createdAt),
       icon: ['file', 'status', 'help', 'history'][index % 4],
@@ -469,9 +490,10 @@ const selectedInsights = computed(() => {
 
   const learner = selectedStudentFirstName.value
   const weakArea = selectedStudent.value.weakAreas[0]
-  const quizAverage = selectedStudent.value.quizAveragePercent == null
-    ? 'No quiz average is available yet.'
-    : `Quiz average is ${Math.round(selectedStudent.value.quizAveragePercent)}%.`
+  const quizAverage =
+    selectedStudent.value.quizAveragePercent == null
+      ? 'No quiz average is available yet.'
+      : `Quiz average is ${Math.round(selectedStudent.value.quizAveragePercent)}%.`
 
   return [
     {
@@ -500,7 +522,9 @@ const selectedJoinedLabel = computed(() =>
   selectedStudent.value?.joinedAt ? `Joined ${formatDate(selectedStudent.value.joinedAt)}` : 'Join date unavailable',
 )
 const selectedLatestActivityLabel = computed(() =>
-  selectedStudent.value?.latestActivityAt ? formatDateTime(selectedStudent.value.latestActivityAt) : 'No activity recorded',
+  selectedStudent.value?.latestActivityAt
+    ? formatDateTime(selectedStudent.value.latestActivityAt)
+    : 'No activity recorded',
 )
 const selectedLatestFeedbackLabel = computed(() => {
   if (!selectedStudent.value?.latestFeedbackType) {
@@ -512,9 +536,7 @@ const selectedLatestFeedbackLabel = computed(() => {
     : normalized
 })
 const selectedRiskSummary = computed(() =>
-  selectedStudent.value?.atRisk
-    ? 'Progress or accuracy needs closer follow-up'
-    : 'No current risk signal'
+  selectedStudent.value?.atRisk ? 'Progress or accuracy needs closer follow-up' : 'No current risk signal',
 )
 const selectedStudentFirstName = computed(() => selectedStudent.value?.displayName.split(' ')[0] ?? 'student')
 const sortModeLabel = computed(() => (sortMode.value === 'progress' ? 'Progress' : 'Name'))
@@ -526,21 +548,24 @@ const manualFollowupDraft = computed(() => {
 
   const learner = selectedStudentFirstName.value
   const weakFocus = selectedStudent.value.weakAreas[0]
-  const quizLabel = selectedStudent.value.quizAveragePercent == null
-    ? 'their recent activities'
-    : `their ${Math.round(selectedStudent.value.quizAveragePercent)}% quiz average`
-  const toneLead = followUpTone.value === 'Corrective'
-    ? 'Please take another careful look at'
-    : followUpTone.value === 'Specific'
-      ? 'For the next step, focus on'
-      : 'You are making progress. Keep working on'
-  const focusText = followUpFocus.value === 'Quiz Accuracy'
-    ? quizLabel
-    : followUpFocus.value === 'Consistency'
-      ? 'consistent short practice throughout the week'
-      : weakFocus
-        ? weakFocus.toLowerCase()
-        : 'the next lesson target'
+  const quizLabel =
+    selectedStudent.value.quizAveragePercent == null
+      ? 'their recent activities'
+      : `their ${Math.round(selectedStudent.value.quizAveragePercent)}% quiz average`
+  const toneLead =
+    followUpTone.value === 'Corrective'
+      ? 'Please take another careful look at'
+      : followUpTone.value === 'Specific'
+        ? 'For the next step, focus on'
+        : 'You are making progress. Keep working on'
+  const focusText =
+    followUpFocus.value === 'Quiz Accuracy'
+      ? quizLabel
+      : followUpFocus.value === 'Consistency'
+        ? 'consistent short practice throughout the week'
+        : weakFocus
+          ? weakFocus.toLowerCase()
+          : 'the next lesson target'
 
   return `${toneLead} ${focusText}. ${learner} can improve with short, repeatable practice and one teacher check-in.`
 })

@@ -265,7 +265,12 @@ function getCaseStatus(record) {
   if (!record.ui?.rendered) {
     return 'FAIL'
   }
-  if (record.runtimeExceptions.length || record.consoleErrors.length || record.appHttpErrors.length || record.failedRequests.length) {
+  if (
+    record.runtimeExceptions.length ||
+    record.consoleErrors.length ||
+    record.appHttpErrors.length ||
+    record.failedRequests.length
+  ) {
     return 'NEEDS_FIX'
   }
   if (record.ui?.horizontalOverflow || record.ui?.suspiciousText?.length) {
@@ -298,17 +303,21 @@ async function main() {
 
   await mkdir(evidenceDir, { recursive: true })
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1440,1000',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
 
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
@@ -593,7 +602,9 @@ async function main() {
       if (record.failedRequests.length) issues.push(`network=${record.failedRequests.length}`)
       if (record.ui?.horizontalOverflow) issues.push('overflowX')
       if (record.ui?.suspiciousText?.length) issues.push(`text=${record.ui.suspiciousText.join('|')}`)
-      console.log(`${record.status}\t${record.viewport}\t${record.route}\t${record.ui?.title || ''}\t${issues.join(',')}`)
+      console.log(
+        `${record.status}\t${record.viewport}\t${record.route}\t${record.ui?.title || ''}\t${issues.join(',')}`,
+      )
     }
 
     console.log(`REPORT_JSON=${path.join(evidenceDir, 'report.json')}`)

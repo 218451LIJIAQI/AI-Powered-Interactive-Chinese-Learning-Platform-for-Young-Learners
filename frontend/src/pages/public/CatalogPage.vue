@@ -17,7 +17,10 @@
           <div class="public-catalog-header-copy">
             <span class="public-catalog-kicker">Find the right Mandarin path</span>
             <h1>Explore Courses</h1>
-            <p>Compare beginner-friendly lessons, teacher-led support, and kid-safe formats designed for real family decision-making.</p>
+            <p>
+              Compare beginner-friendly lessons, teacher-led support, and kid-safe formats designed for real family
+              decision-making.
+            </p>
           </div>
 
           <div class="public-catalog-header-meta">
@@ -42,7 +45,12 @@
               <IconGlyph name="search" :size="18" />
               <input v-model="filters.keyword" type="text" placeholder="Search courses" />
             </label>
-            <button class="btn btn-primary public-filter-button" type="button" :aria-expanded="filtersOpen" @click="filtersOpen = !filtersOpen">
+            <button
+              class="btn btn-primary public-filter-button"
+              type="button"
+              :aria-expanded="filtersOpen"
+              @click="filtersOpen = !filtersOpen"
+            >
               {{ filtersOpen ? 'Hide filters' : 'Show filters' }}
             </button>
             <button class="public-clear-button" type="button" @click="clearFilters">Clear All</button>
@@ -53,7 +61,9 @@
               <span>Category</span>
               <select v-model="filters.categoryId">
                 <option value="">All Categories</option>
-                <option v-for="category in categories" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
+                <option v-for="category in categories" :key="category.id" :value="String(category.id)">
+                  {{ category.name }}
+                </option>
               </select>
             </label>
 
@@ -96,10 +106,25 @@
         </section>
 
         <section class="public-catalog-feature-strip">
-          <PublicFeatureCard icon="safe" title="Kid-Safe & Ad-Free" description="Safe learning environment" tone="purple" />
-          <PublicFeatureCard icon="teacher" title="Expert Teachers" description="Certified and experienced" tone="blue" />
+          <PublicFeatureCard
+            icon="safe"
+            title="Kid-Safe & Ad-Free"
+            description="Safe learning environment"
+            tone="purple"
+          />
+          <PublicFeatureCard
+            icon="teacher"
+            title="Expert Teachers"
+            description="Certified and experienced"
+            tone="blue"
+          />
           <PublicFeatureCard icon="fun" title="Fun & Engaging" description="Games, stories, and practice" tone="gold" />
-          <PublicFeatureCard icon="progress" title="Progress You Can See" description="Track growth step by step" tone="purple" />
+          <PublicFeatureCard
+            icon="progress"
+            title="Progress You Can See"
+            description="Track growth step by step"
+            tone="purple"
+          />
         </section>
 
         <section class="public-course-list">
@@ -130,7 +155,9 @@
         <div v-if="canUseCart" class="public-cart-card">
           <div class="public-cart-header">
             <strong>My Course Cart ({{ cart?.items.length ?? 0 }})</strong>
-            <button v-if="cart?.items.length" class="public-clear-button" type="button" @click="clearCart">Clear</button>
+            <button v-if="cart?.items.length" class="public-clear-button" type="button" @click="clearCart">
+              Clear
+            </button>
           </div>
 
           <p class="public-cart-note">{{ cartNote }}</p>
@@ -147,7 +174,9 @@
               </div>
               <div class="public-cart-item-actions">
                 <strong>{{ formatCurrency(item.subtotal, item.currencyCode) }}</strong>
-                <button class="public-clear-button" type="button" @click="removeCartItem(item.cartItemId)">Remove</button>
+                <button class="public-clear-button" type="button" @click="removeCartItem(item.cartItemId)">
+                  Remove
+                </button>
               </div>
             </div>
           </div>
@@ -180,7 +209,9 @@
 
         <div v-else class="panel stack public-catalog-signin-card">
           <strong>Use the live cart</strong>
-          <p class="muted public-cart-empty">Sign in as a student to save courses, manage checkout, and return to lessons after payment.</p>
+          <p class="muted public-cart-empty">
+            Sign in as a student to save courses, manage checkout, and return to lessons after payment.
+          </p>
           <button class="btn btn-primary" type="button" @click="goToAuth">Sign in</button>
         </div>
 
@@ -281,15 +312,17 @@ watch(
   { immediate: true },
 )
 
-const levels = computed<LearningLevel[]>(() => levelsResource.data.value ?? (levelsResource.usingFallback.value ? demoLevels : []))
-const categories = computed<LearningCategory[]>(() =>
-  categoriesResource.data.value ?? (categoriesResource.usingFallback.value ? demoCategories : []),
+const levels = computed<LearningLevel[]>(
+  () => levelsResource.data.value ?? (levelsResource.usingFallback.value ? demoLevels : []),
 )
-const courses = computed<PublicCourseSummary[]>(() =>
-  coursesResource.data.value?.items ?? (coursesResource.usingFallback.value ? publicCourses : []),
+const categories = computed<LearningCategory[]>(
+  () => categoriesResource.data.value ?? (categoriesResource.usingFallback.value ? demoCategories : []),
 )
-const cart = computed<CartResponse | null>(() =>
-  cartResource.data.value ?? (cartResource.usingFallback.value ? cartDemo : null),
+const courses = computed<PublicCourseSummary[]>(
+  () => coursesResource.data.value?.items ?? (coursesResource.usingFallback.value ? publicCourses : []),
+)
+const cart = computed<CartResponse | null>(
+  () => cartResource.data.value ?? (cartResource.usingFallback.value ? cartDemo : null),
 )
 
 const catalogUsingFallback = computed(
@@ -308,11 +341,15 @@ const catalogNoticeError = computed(
 )
 const catalogNoticeDetail = computed(() => {
   if (catalogNoticeError.value) {
-    return canUseCart.value ? 'Course browsing still works while cart or catalog requests recover.' : 'Public visitors can still review course information and sign-in options.'
+    return canUseCart.value
+      ? 'Course browsing still works while cart or catalog requests recover.'
+      : 'Public visitors can still review course information and sign-in options.'
   }
 
   if (catalogUsingFallback.value) {
-    return canUseCart.value ? 'Cart actions are limited while preview data is active.' : 'Live cart and enrolment open after student sign-in.'
+    return canUseCart.value
+      ? 'Cart actions are limited while preview data is active.'
+      : 'Live cart and enrolment open after student sign-in.'
   }
 
   if (cartSuccess.value) {
@@ -523,7 +560,8 @@ async function checkoutCart() {
       return
     }
 
-    cartResource.error.value = 'Checkout completed but no redirect or payment reference was returned. Please contact support.'
+    cartResource.error.value =
+      'Checkout completed but no redirect or payment reference was returned. Please contact support.'
   } catch (reason) {
     cartResource.error.value = resolveApiError(reason, 'Unable to start checkout.')
   } finally {

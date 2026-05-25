@@ -1,36 +1,33 @@
 <#
 .SYNOPSIS
     Spin up a throwaway MySQL container and validate that the
-    Flyway migrations apply cleanly against it.
+    single consolidated Flyway V1 baseline applies cleanly.
 
 .DESCRIPTION
-    Validates the migration pipeline end-to-end before pushing a
+    Validates the consolidated V1 database contract end-to-end before accepting a
     schema change. Catches the kind of bugs that a unit test of
-    Flyway would NOT — checksum drift, dialect-specific syntax,
+    Flyway would NOT catch: checksum drift, dialect-specific syntax,
     accidental destructive ALTERs, ordering issues.
 
     Workflow:
       1. Wait for Docker Desktop / Docker Engine to be reachable
          (auto-launches Docker Desktop on Windows if installed).
       2. Run an ephemeral MySQL container (random container name,
-         random root + app passwords, random fresh + legacy schema
-         names — guarantees parallel runs do not stomp each other).
-      3. Apply the consolidated V1 schema directly to a "legacy"
-         schema to simulate what a pre-existing production database
-         looks like.
-      4. Apply ALL Flyway migrations (V1, V2, ..., V14, etc.) to
-         the "fresh" schema.
-      5. Apply migrations FROM V2 onward to the "legacy" schema
-         (since V1 is already there) — this simulates an upgrade.
-      6. Diff the resulting schemas: fresh-from-scratch and
-         legacy-then-upgrade must be byte-identical, OR the
-         migration set has drifted.
+         random root + app passwords, random fresh + compatibility
+         schema names so parallel runs do not stomp each other).
+      3. Start Spring Boot against a fresh schema and let Flyway apply
+         the single V1 baseline.
+      4. Assert migration history and key production constraints/indexes.
+      5. Execute compatibility checks for SQL fragments folded into V1
+         to prove their SQL remains valid after consolidation.
+      6. Verify repair safety by intentionally corrupting the V1 checksum
+         in the throwaway schema and repairing it under explicit opt-in.
       7. Tear the container down (unless -KeepContainer is set
          for post-mortem inspection).
 
 .PARAMETER Image
     Docker image tag for the throwaway MySQL. Defaults to
-    `mysql:8.4` — pin matches the production version.
+    `mysql:8.4` - pin matches the production version.
 
 .PARAMETER StartupTimeoutSeconds
     How long to wait for MySQL to become reachable inside the
@@ -38,7 +35,7 @@
     enough for cold image pulls on slow CI workers.
 
 .PARAMETER KeepContainer
-    Switch — do not remove the container at the end. Useful for
+    Switch - do not remove the container at the end. Useful for
     drilling into a failure with `docker exec -it`.
 #>
 [CmdletBinding()]
@@ -195,11 +192,11 @@ function Invoke-MySqlSql([string]$Database, [string]$Sql) {
     }
 }
 
-function Get-ConsolidatedMigrationSection([string]$SourceName) {
-    $Pattern = "(?ms)^-- ===== Source: " + [regex]::Escape($SourceName) + " =====\r?\n(.*?)(?=\r?\n-- ===== Source: |\z)"
+function Get-ConsolidatedMigrationSection([string]$SectionName) {
+    $Pattern = "(?ms)^-- ===== Section: " + [regex]::Escape($SectionName) + " =====\r?\n(.*?)(?=\r?\n-- ===== Section: |\z)"
     $Match = [regex]::Match($ConsolidatedMigrationContent, $Pattern)
     if (-not $Match.Success) {
-        throw "Could not find migration section '$SourceName' in $ConsolidatedMigrationPath."
+        throw "Could not find migration section '$SectionName' in $ConsolidatedMigrationPath."
     }
     return $Match.Groups[1].Value.Trim()
 }
@@ -318,7 +315,6 @@ function Invoke-FreshSpringBootValidation([string]$HostPort) {
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.tables where table_schema = database() and table_name = 'student_quiz_progress';") "fresh student_quiz_progress table"
     Assert-Equal "0" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.tables where table_schema = database() and table_name = 'student_activity_progress';") "fresh student_activity_progress table"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from flyway_schema_history where version = '1' and success = 1;") "fresh consolidated V1 migration history"
-    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from flyway_schema_history where version = '14' and success = 1;") "fresh final V14 migration history"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'cart_items' and constraint_name = 'uk_cart_items_cart_item';") "fresh cart item uniqueness"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'lesson_progress' and constraint_name = 'uk_lesson_progress_student_lesson';") "fresh lesson progress uniqueness"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'uk_points_transactions_student_source';") "fresh point-award source uniqueness"
@@ -394,8 +390,8 @@ function Invoke-ChecksumRepairValidation([string]$HostPort) {
     Write-Host "OK: Flyway repair updated consolidated V1 checksum from $BrokenChecksum to $AfterChecksum"
 }
 
-function Invoke-LegacyV4V5Validation {
-    Write-Section "Legacy V4/V5 SQL compatibility validation"
+function Invoke-FoldedCleanupCompatibilityValidation {
+    Write-Section "Folded cleanup SQL compatibility validation"
     Invoke-MySql "" "create database $LegacyDb;" | Out-Null
 
     $LegacySetup = @"
@@ -454,8 +450,8 @@ insert into student_activity_progress (
 "@
     Invoke-MySql $LegacyDb $LegacySetup | Out-Null
 
-    Invoke-MySqlSql $LegacyDb (Get-ConsolidatedMigrationSection "V4__remove_legacy_activity_package_items.sql")
-    Invoke-MySqlSql $LegacyDb (Get-ConsolidatedMigrationSection "V5__rename_student_activity_progress_to_quiz_progress.sql")
+    Invoke-MySqlSql $LegacyDb (Get-ConsolidatedMigrationSection "package item activity cleanup")
+    Invoke-MySqlSql $LegacyDb (Get-ConsolidatedMigrationSection "student quiz progress consolidation")
 
     $PackageItemType = Get-MySqlScalar $LegacyDb "select column_type from information_schema.columns where table_schema = database() and table_name = 'package_items' and column_name = 'item_type';"
     if ($PackageItemType -like "*'ACTIVITY'*") {
@@ -484,7 +480,7 @@ try {
 
     Invoke-FreshSpringBootValidation $HostPort
     Invoke-ChecksumRepairValidation $HostPort
-    Invoke-LegacyV4V5Validation
+    Invoke-FoldedCleanupCompatibilityValidation
 
     Write-Section "Result"
     Write-Host "Flyway MySQL validation passed." -ForegroundColor Green

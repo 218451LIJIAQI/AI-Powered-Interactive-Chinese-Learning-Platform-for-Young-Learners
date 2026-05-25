@@ -79,11 +79,23 @@
               <p>Use one sign-in for student lessons, teacher tools, and admin operations.</p>
             </div>
 
-            <div v-if="loginError" id="login-error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
+            <div
+              v-if="loginError"
+              id="login-error"
+              class="soft-banner auth-alert auth-alert--error"
+              role="alert"
+              aria-live="assertive"
+            >
               <span>{{ loginError }}</span>
             </div>
 
-            <div v-if="loginInfo" id="login-info" class="soft-banner auth-alert auth-alert--success" role="status" aria-live="polite">
+            <div
+              v-if="loginInfo"
+              id="login-info"
+              class="soft-banner auth-alert auth-alert--success"
+              role="status"
+              aria-live="polite"
+            >
               <span>{{ loginInfo }}</span>
             </div>
 
@@ -130,18 +142,34 @@
             </button>
           </form>
 
-          <form v-show="activeTab === 'register'" class="auth-form-panel auth-form-panel--register" @submit.prevent="submitRegister">
+          <form
+            v-show="activeTab === 'register'"
+            class="auth-form-panel auth-form-panel--register"
+            @submit.prevent="submitRegister"
+          >
             <div class="auth-form-title">
               <span class="auth-form-kicker">New account setup</span>
               <h2>Create account</h2>
               <p>Select the role first so the form only asks for what is needed.</p>
             </div>
 
-            <div v-if="registerError" id="register-error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
+            <div
+              v-if="registerError"
+              id="register-error"
+              class="soft-banner auth-alert auth-alert--error"
+              role="alert"
+              aria-live="assertive"
+            >
               <span>{{ registerError }}</span>
             </div>
 
-            <div v-if="registerInfo" id="register-info" class="soft-banner auth-alert auth-alert--success" role="status" aria-live="polite">
+            <div
+              v-if="registerInfo"
+              id="register-info"
+              class="soft-banner auth-alert auth-alert--success"
+              role="status"
+              aria-live="polite"
+            >
               <span>{{ registerInfo }}</span>
             </div>
 
@@ -176,9 +204,11 @@
                 </button>
               </div>
               <p class="helper-text auth-role-help">
-                {{ register.role === 'STUDENT'
-                  ? 'Student accounts open lessons, rewards, and AI practice for young learners.'
-                  : 'Teacher accounts unlock classes and content after verification is reviewed.' }}
+                {{
+                  register.role === 'STUDENT'
+                    ? 'Student accounts open lessons, rewards, and AI practice for young learners.'
+                    : 'Teacher accounts unlock classes and content after verification is reviewed.'
+                }}
               </p>
             </div>
 
@@ -404,7 +434,9 @@ const normalizedRegisterFullName = computed(() => register.fullName.trim())
 const normalizedRegisterEmail = computed(() => register.email.trim().toLowerCase())
 const registerEmailValid = computed(() => emailPattern.test(normalizedRegisterEmail.value))
 const registerPasswordReady = computed(() => register.password.length >= 8)
-const registerPasswordsMatch = computed(() => register.password === register.confirmPassword && register.confirmPassword.length > 0)
+const registerPasswordsMatch = computed(
+  () => register.password === register.confirmPassword && register.confirmPassword.length > 0,
+)
 const teacherBioReady = computed(() => register.role !== 'TEACHER' || register.bio.trim().length >= 20)
 const canSubmitRegister = computed(
   () =>
@@ -417,7 +449,9 @@ const canSubmitRegister = computed(
     register.agreedToTerms &&
     register.guardianConfirmed,
 )
-const loginDescriptionId = computed(() => (loginError.value ? 'login-error' : loginInfo.value ? 'login-info' : undefined))
+const loginDescriptionId = computed(() =>
+  loginError.value ? 'login-error' : loginInfo.value ? 'login-info' : undefined,
+)
 const registerDescriptionId = computed(() =>
   registerError.value ? 'register-error' : registerInfo.value ? 'register-info' : undefined,
 )
@@ -431,7 +465,7 @@ watch(
 )
 
 watch(
-  () => (route.query.role === 'teacher' ? 'TEACHER' as const : 'STUDENT' as const),
+  () => (route.query.role === 'teacher' ? ('TEACHER' as const) : ('STUDENT' as const)),
   (nextRole) => {
     register.role = nextRole
   },
@@ -439,7 +473,8 @@ watch(
 )
 
 function resolveRedirect() {
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : defaultRouteForRole(auth.activeRole)
+  const redirect =
+    typeof route.query.redirect === 'string' ? route.query.redirect : defaultRouteForRole(auth.activeRole)
   return normalizeAppRoute(redirect) ?? defaultRouteForRole(auth.activeRole)
 }
 
@@ -463,7 +498,10 @@ async function submitLogin() {
     await auth.login(normalizedLoginEmail.value, login.password)
     await router.push(resolveRedirect())
   } catch (reason) {
-    loginError.value = resolveApiError(reason, 'Unable to sign in. Please check your email and password, then try again.')
+    loginError.value = resolveApiError(
+      reason,
+      'Unable to sign in. Please check your email and password, then try again.',
+    )
   }
 }
 
@@ -507,29 +545,31 @@ async function submitRegister() {
   registerSubmitting.value = true
 
   try {
-    const response = register.role === 'STUDENT'
-      ? await authApi.registerStudent({
-          fullName: normalizedRegisterFullName.value,
-          email: normalizedRegisterEmail.value,
-          password: register.password,
-          confirmPassword: register.confirmPassword,
-          preferredLanguage: register.preferredLanguage,
-        })
-      : await authApi.registerTeacher({
-          fullName: normalizedRegisterFullName.value,
-          email: normalizedRegisterEmail.value,
-          password: register.password,
-          confirmPassword: register.confirmPassword,
-          bio: register.bio.trim(),
-        })
+    const response =
+      register.role === 'STUDENT'
+        ? await authApi.registerStudent({
+            fullName: normalizedRegisterFullName.value,
+            email: normalizedRegisterEmail.value,
+            password: register.password,
+            confirmPassword: register.confirmPassword,
+            preferredLanguage: register.preferredLanguage,
+          })
+        : await authApi.registerTeacher({
+            fullName: normalizedRegisterFullName.value,
+            email: normalizedRegisterEmail.value,
+            password: register.password,
+            confirmPassword: register.confirmPassword,
+            bio: register.bio.trim(),
+          })
 
     login.email = response?.email ?? normalizedRegisterEmail.value
     login.password = ''
     register.password = ''
     register.confirmPassword = ''
-    loginInfo.value = register.role === 'TEACHER'
-      ? 'Teacher account created. Please sign in and complete verification if required.'
-      : 'Student account created. You can sign in now.'
+    loginInfo.value =
+      register.role === 'TEACHER'
+        ? 'Teacher account created. Please sign in and complete verification if required.'
+        : 'Student account created. You can sign in now.'
     activateSignIn()
   } catch (reason) {
     registerError.value = resolveApiError(reason, 'Unable to create the account. Please check the form and try again.')
@@ -604,6 +644,3 @@ function previewAdmin() {
   previewRole('ADMIN', '/admin/dashboard')
 }
 </script>
-
-
-

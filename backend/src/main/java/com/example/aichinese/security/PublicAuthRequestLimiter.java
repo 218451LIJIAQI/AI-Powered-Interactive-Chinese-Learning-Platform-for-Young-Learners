@@ -6,13 +6,16 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 /**
  * In-memory rate limiter for the anonymous-accessible authentication
@@ -24,24 +27,23 @@ import org.springframework.web.server.ResponseStatusException;
  * surfaces (they reveal whether an email is already in use, or trigger
  * an external email send) but they have different abuse models:</p>
  * <ul>
- *   <li><b>Register</b> is bot-farmed for free signups → keyed only by
+ *   <li><b>Register</b> is bot-farmed for free signups - keyed only by
  *       IP, with a generous {@value #MAX_REGISTER_REQUESTS}-per-window
  *       cap so a school computer lab doesn't accidentally lock itself
  *       out.</li>
  *   <li><b>Forgot-password</b> is used both for credential-stuffing
  *       (probe one email per request) and for email bombing (force the
- *       SMTP service to spam one victim) → keyed by both IP <em>and</em>
+ *       SMTP service to spam one victim) - keyed by both IP <em>and</em>
  *       email so neither vector accumulates without limit, with a
  *       tighter {@value #MAX_FORGOT_PASSWORD_REQUESTS}-per-window cap.</li>
  * </ul>
  *
  * <h2>State management</h2>
- * <p>State is held in a process-local {@link ConcurrentHashMap},
+ * <p>State is held in a process-local bounded Caffeine cache,
  * matching the single-replica deployment assumption documented on
  * {@link LoginAttemptLimiter}. Expired records are evicted during
- * normal access; a hard cap on tracked entries
- * ({@value #MAX_TRACKED_REQUEST_RECORDS}) is enforced via LRU eviction
- * to bound memory under sustained abuse.</p>
+ * normal access; a hard cap on tracked entries bounds memory without
+ * scanning all tracked requests during sustained abuse.</p>
  */
 @Component
 public class PublicAuthRequestLimiter {
@@ -53,14 +55,28 @@ public class PublicAuthRequestLimiter {
     private static final int MAX_SUBJECT_KEY_LENGTH = 320;
     private static final int MAX_IP_KEY_LENGTH = 64;
 
-    private final Map<String, RequestRecord> requests = new ConcurrentHashMap<>();
+    private final Cache<String, RequestRecord> requests;
     private final Clock clock;
+    private final Duration window;
     private final int maxRegisterRequests;
     private final int maxForgotPasswordRequests;
-    private final int maxTrackedRequestRecords;
 
     public PublicAuthRequestLimiter() {
         this(Clock.systemUTC(), MAX_REGISTER_REQUESTS, MAX_FORGOT_PASSWORD_REQUESTS, MAX_TRACKED_REQUEST_RECORDS);
+    }
+
+    @Autowired
+    public PublicAuthRequestLimiter(
+            @Value("${app.security.public-auth-rate-limit.register-requests:100}") int maxRegisterRequests,
+            @Value("${app.security.public-auth-rate-limit.forgot-password-requests:10}") int maxForgotPasswordRequests,
+            @Value("${app.security.public-auth-rate-limit.max-tracked-records:10000}") int maxTrackedRequestRecords,
+            @Value("${app.security.public-auth-rate-limit.window-minutes:15}") long windowMinutes) {
+        this(
+                Clock.systemUTC(),
+                Duration.ofMinutes(windowMinutes),
+                maxRegisterRequests,
+                maxForgotPasswordRequests,
+                maxTrackedRequestRecords);
     }
 
     PublicAuthRequestLimiter(
@@ -68,13 +84,27 @@ public class PublicAuthRequestLimiter {
             int maxRegisterRequests,
             int maxForgotPasswordRequests,
             int maxTrackedRequestRecords) {
-        if (maxRegisterRequests < 1 || maxForgotPasswordRequests < 1 || maxTrackedRequestRecords < 1) {
+        this(clock, WINDOW, maxRegisterRequests, maxForgotPasswordRequests, maxTrackedRequestRecords);
+    }
+
+    PublicAuthRequestLimiter(
+            Clock clock,
+            Duration window,
+            int maxRegisterRequests,
+            int maxForgotPasswordRequests,
+            int maxTrackedRequestRecords) {
+        if (window == null || window.isZero() || window.isNegative()
+                || maxRegisterRequests < 1 || maxForgotPasswordRequests < 1 || maxTrackedRequestRecords < 1) {
             throw new IllegalArgumentException("Rate limit thresholds must be positive");
         }
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.window = window;
         this.maxRegisterRequests = maxRegisterRequests;
         this.maxForgotPasswordRequests = maxForgotPasswordRequests;
-        this.maxTrackedRequestRecords = maxTrackedRequestRecords;
+        this.requests = Caffeine.newBuilder()
+                .maximumSize(maxTrackedRequestRecords)
+                .expireAfterAccess(window)
+                .build();
     }
 
     public void checkRegisterAllowed(String clientIp) {
@@ -87,7 +117,8 @@ public class PublicAuthRequestLimiter {
     }
 
     int trackedRequestCount() {
-        return requests.size();
+        requests.cleanUp();
+        return Math.toIntExact(requests.estimatedSize());
     }
 
     private void checkAllowed(String action, String subject, String clientIp, int maxRequests) {
@@ -103,46 +134,20 @@ public class PublicAuthRequestLimiter {
     private Duration recordAndGetRetryAfter(String action, String subject, String clientIp, int maxRequests) {
         String key = key(action, subject, clientIp);
         Instant now = clock.instant();
-        removeExpiredRequests(now);
         AtomicReference<Duration> retryAfter = new AtomicReference<>(Duration.ZERO);
 
-        requests.compute(key, (ignored, existing) -> {
-            if (existing == null || existing.windowStartedAt.plus(WINDOW).isBefore(now)) {
+        requests.asMap().compute(key, (ignored, existing) -> {
+            if (existing == null || !existing.windowStartedAt.plus(window).isAfter(now)) {
                 return new RequestRecord(now, 1, now);
             }
             if (existing.requestCount >= maxRequests) {
-                retryAfter.set(Duration.between(now, existing.windowStartedAt.plus(WINDOW)));
+                retryAfter.set(Duration.between(now, existing.windowStartedAt.plus(window)));
                 return new RequestRecord(existing.windowStartedAt, existing.requestCount, now);
             }
             return new RequestRecord(existing.windowStartedAt, existing.requestCount + 1, now);
         });
-        enforceCapacity();
+        requests.cleanUp();
         return retryAfter.get();
-    }
-
-    private void removeExpiredRequests(Instant now) {
-        requests.entrySet().removeIf(entry -> !entry.getValue().windowStartedAt.plus(WINDOW).isAfter(now));
-    }
-
-    private void enforceCapacity() {
-        while (requests.size() > maxTrackedRequestRecords) {
-            if (!evictOldestRequest()) {
-                return;
-            }
-        }
-    }
-
-    private boolean evictOldestRequest() {
-        String candidateKey = null;
-        RequestRecord candidateRecord = null;
-        for (Map.Entry<String, RequestRecord> entry : requests.entrySet()) {
-            RequestRecord currentRecord = entry.getValue();
-            if (candidateRecord == null || currentRecord.lastUpdatedAt.isBefore(candidateRecord.lastUpdatedAt)) {
-                candidateKey = entry.getKey();
-                candidateRecord = currentRecord;
-            }
-        }
-        return candidateKey != null && requests.remove(candidateKey, candidateRecord);
     }
 
     private String key(String action, String subject, String clientIp) {

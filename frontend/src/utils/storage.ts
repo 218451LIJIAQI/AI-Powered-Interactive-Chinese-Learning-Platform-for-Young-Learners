@@ -25,15 +25,13 @@ export function safeGetItem(key: string, storage: Storage = window.localStorage)
 export function safeSetItem(key: string, value: string, storage: Storage = window.localStorage) {
   try {
     storage.setItem(key, value)
-  } catch {
-  }
+  } catch {}
 }
 
 export function safeRemoveItem(key: string, storage: Storage = window.localStorage) {
   try {
     storage.removeItem(key)
-  } catch {
-  }
+  } catch {}
 }
 
 const validLocales: ReadonlySet<string> = new Set<AppLanguage>(['en', 'ms', 'zh'])

@@ -199,7 +199,12 @@ function createCdpClient(webSocketUrl) {
 }
 
 function safeName(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'step'
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'step'
+  )
 }
 
 async function main() {
@@ -231,17 +236,21 @@ async function main() {
     ),
   }
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1440,1000',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
 
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
@@ -258,12 +267,18 @@ async function main() {
 
     on('Runtime.consoleAPICalled', (params) => {
       if (!activeFlow) return
-      const message = params.args?.map((arg) => arg.value || arg.description || '').filter(Boolean).join(' ') || params.type
+      const message =
+        params.args
+          ?.map((arg) => arg.value || arg.description || '')
+          .filter(Boolean)
+          .join(' ') || params.type
       if (params.type === 'error') activeFlow.consoleErrors.push(message)
       if (params.type === 'warning' || params.type === 'warn') activeFlow.consoleWarnings.push(message)
     })
     on('Runtime.exceptionThrown', (params) => {
-      activeFlow?.runtimeExceptions.push(params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception')
+      activeFlow?.runtimeExceptions.push(
+        params.exceptionDetails?.exception?.description || params.exceptionDetails?.text || 'Runtime exception',
+      )
     })
     on('Network.requestWillBeSent', (params) => {
       requestsById.set(params.requestId, { method: params.request?.method || '', url: params.request?.url || '' })
@@ -271,12 +286,18 @@ async function main() {
     on('Network.loadingFailed', (params) => {
       if (!activeFlow || params.canceled || params.errorText === 'net::ERR_ABORTED') return
       const request = requestsById.get(params.requestId) || {}
-      activeFlow.failedRequests.push({ method: request.method || '', url: request.url || '', errorText: params.errorText, type: params.type })
+      activeFlow.failedRequests.push({
+        method: request.method || '',
+        url: request.url || '',
+        errorText: params.errorText,
+        type: params.type,
+      })
     })
     on('Network.responseReceived', (params) => {
       if (!activeFlow) return
       const response = params.response || {}
-      if (response.status >= 400) activeFlow.httpErrors.push({ status: response.status, url: response.url, type: params.type })
+      if (response.status >= 400)
+        activeFlow.httpErrors.push({ status: response.status, url: response.url, type: params.type })
     })
 
     await send('Page.enable')
@@ -388,7 +409,17 @@ async function main() {
     }
 
     async function runFlow(name, fn) {
-      const record = { name, status: 'PASS', error: '', consoleErrors: [], consoleWarnings: [], runtimeExceptions: [], failedRequests: [], httpErrors: [], snapshots: [] }
+      const record = {
+        name,
+        status: 'PASS',
+        error: '',
+        consoleErrors: [],
+        consoleWarnings: [],
+        runtimeExceptions: [],
+        failedRequests: [],
+        httpErrors: [],
+        snapshots: [],
+      }
       activeFlow = record
       try {
         await fn(record)
@@ -400,7 +431,13 @@ async function main() {
         } catch {}
       }
 
-      if (record.status === 'PASS' && (record.consoleErrors.length || record.runtimeExceptions.length || record.failedRequests.length || record.httpErrors.length)) {
+      if (
+        record.status === 'PASS' &&
+        (record.consoleErrors.length ||
+          record.runtimeExceptions.length ||
+          record.failedRequests.length ||
+          record.httpErrors.length)
+      ) {
         record.status = 'NEEDS_FIX'
       }
 
@@ -439,22 +476,14 @@ async function main() {
       await setValue('#login-email', studentEmail)
       await setValue('#login-password', studentPassword)
       await clickSelector('.auth-submit-button:not([disabled])')
-      await waitForPage(
-        'student home after login',
-        (state) => state.path === '/student/home',
-        25000,
-      )
+      await waitForPage('student home after login', (state) => state.path === '/student/home', 25000)
       record.snapshots.push(await snapshot('student-home-after-login'))
       if (record.snapshots.at(-1).path !== '/student/home') {
         throw new Error('Student login did not land on /student/home')
       }
 
       await clickButtonByText('Sign out')
-      await waitForPage(
-        'auth page after logout',
-        (state) => state.path.startsWith('/auth'),
-        15000,
-      )
+      await waitForPage('auth page after logout', (state) => state.path.startsWith('/auth'), 15000)
       record.snapshots.push(await snapshot('after-sign-out'))
       if (!record.snapshots.at(-1).path.startsWith('/auth')) {
         throw new Error('Sign out did not return to auth')
@@ -466,11 +495,7 @@ async function main() {
       await setValue('#login-email', studentEmail)
       await setValue('#login-password', studentPassword)
       await clickSelector('.auth-submit-button:not([disabled])')
-      await waitForPage(
-        'student home before auth invalidation',
-        (state) => state.path === '/student/home',
-        25000,
-      )
+      await waitForPage('student home before auth invalidation', (state) => state.path === '/student/home', 25000)
       record.snapshots.push(await snapshot('session-before-invalidation'))
       if (record.snapshots.at(-1).path !== '/student/home') {
         throw new Error('Student login did not land on /student/home before invalidation')
@@ -495,20 +520,23 @@ async function main() {
       await navigate('/auth')
       await setValue('#login-email', studentEmail)
       await clickButtonByText('Forgot password?')
-      await waitForPage(
-        'forgot password page',
-        (state) => state.path.startsWith('/forgot-password'),
-        25000,
-      )
+      await waitForPage('forgot password page', (state) => state.path.startsWith('/forgot-password'), 25000)
       await setValue('#forgot-email', studentEmail)
       await clickSelector('.auth-submit-button:not([disabled])')
       await waitForPage(
         'forgot password success message',
-        (state) => state.text.includes(`If ${studentEmail.toLowerCase()} is registered, reset instructions will be sent shortly.`),
+        (state) =>
+          state.text.includes(
+            `If ${studentEmail.toLowerCase()} is registered, reset instructions will be sent shortly.`,
+          ),
         25000,
       )
       record.snapshots.push(await snapshot('forgot-password'))
-      if (!record.snapshots.at(-1).text.includes(`If ${studentEmail.toLowerCase()} is registered, reset instructions will be sent shortly.`)) {
+      if (
+        !record.snapshots
+          .at(-1)
+          .text.includes(`If ${studentEmail.toLowerCase()} is registered, reset instructions will be sent shortly.`)
+      ) {
         throw new Error('Forgot password success message was not shown')
       }
     })
@@ -519,17 +547,25 @@ async function main() {
       await setValue('#register-email', teacherEmail)
       await setValue('#register-password', teacherPassword)
       await setValue('#register-confirm-password', teacherPassword)
-      await setValue('#register-teacher-bio', 'Experienced Mandarin teacher validating live browser registration flows for production QA.')
+      await setValue(
+        '#register-teacher-bio',
+        'Experienced Mandarin teacher validating live browser registration flows for production QA.',
+      )
       await setCheckboxInRegisterForm(0, true)
       await setCheckboxInRegisterForm(1, true)
       await clickSelector('.auth-form-panel--register .auth-submit-button:not([disabled])')
       await waitForPage(
         'teacher registration success message',
-        (state) => state.text.includes('Teacher account created. Please sign in and complete verification if required.'),
+        (state) =>
+          state.text.includes('Teacher account created. Please sign in and complete verification if required.'),
         25000,
       )
       record.snapshots.push(await snapshot('register-teacher'))
-      if (!record.snapshots.at(-1).text.includes('Teacher account created. Please sign in and complete verification if required.')) {
+      if (
+        !record.snapshots
+          .at(-1)
+          .text.includes('Teacher account created. Please sign in and complete verification if required.')
+      ) {
         throw new Error('Teacher registration success message was not shown')
       }
     })

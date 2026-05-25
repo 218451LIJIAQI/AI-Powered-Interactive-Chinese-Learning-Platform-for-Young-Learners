@@ -72,7 +72,7 @@ public class AdminTeacherManagementService {
     private final TeacherManagementMapper teacherManagementMapper;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
-    private final EmailService emailService;
+    private final TransactionalEmailDispatcher transactionalEmailDispatcher;
     private final FileStorageService fileStorageService;
     private final AuditLogRepository auditLogRepository;
 
@@ -84,7 +84,7 @@ public class AdminTeacherManagementService {
             TeacherManagementMapper teacherManagementMapper,
             NotificationService notificationService,
             AuditLogService auditLogService,
-            EmailService emailService,
+            TransactionalEmailDispatcher transactionalEmailDispatcher,
             FileStorageService fileStorageService,
             AuditLogRepository auditLogRepository) {
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
@@ -94,7 +94,7 @@ public class AdminTeacherManagementService {
         this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
-        this.emailService = Objects.requireNonNull(emailService, "emailService");
+        this.transactionalEmailDispatcher = Objects.requireNonNull(transactionalEmailDispatcher, "transactionalEmailDispatcher");
         this.fileStorageService = Objects.requireNonNull(fileStorageService, "fileStorageService");
         this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
     }
@@ -210,7 +210,7 @@ public class AdminTeacherManagementService {
         log.info("Teacher approved: teacherId={}, adminUserId={}", teacherProfile.getId(), adminUser.getId());
         auditLogService.record(adminUser, "ADMIN_TEACHER_APPROVE", "TeacherProfile", teacherProfile.getId(),
                 "Admin approved teacher verification.");
-        emailService.safeSendTeacherApprovalNotice(teacherProfile.getUser(), note);
+        transactionalEmailDispatcher.enqueueTeacherApproval(teacherProfile.getUser(), note);
 
         return buildTeacherDetail(teacherProfile);
     }
@@ -256,7 +256,7 @@ public class AdminTeacherManagementService {
         log.info("Teacher rejected: teacherId={}, adminUserId={}, reason={}", teacherProfile.getId(), adminUser.getId(), trimmedReason);
         auditLogService.record(adminUser, "ADMIN_TEACHER_REJECT", "TeacherProfile", teacherProfile.getId(),
                 "Admin rejected teacher verification. Reason: " + trimmedReason);
-        emailService.safeSendTeacherRejectionNotice(teacherProfile.getUser(), trimmedReason);
+        transactionalEmailDispatcher.enqueueTeacherRejection(teacherProfile.getUser(), trimmedReason);
 
         return buildTeacherDetail(teacherProfile);
     }

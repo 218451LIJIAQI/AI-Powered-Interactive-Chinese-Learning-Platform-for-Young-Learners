@@ -43,6 +43,22 @@ import lombok.Setter;
  *
  * <p>{@link #version} guards against concurrent flips of {@link #active}
  * when a refund and a subsequent re-purchase race.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ *
+ * <p>Every identity field is mapped {@code updatable = false}: an
+ * entitlement row is defined by the {@code (student, order,
+ * paymentRecord, itemType, itemId, featureKey, sourceType)} tuple and
+ * is never re-targeted in place. The only fields the application layer
+ * is allowed to mutate are {@link #active} (flipped to {@code false}
+ * by {@code EntitlementService#revokeAccessAfterRefund}) and the
+ * inherited {@code updated_at} audit timestamp; the
+ * {@link Version @Version} field guards both against concurrent
+ * refund/re-purchase races.</p>
+ *
+ * <p>{@link #featureKeyNormalized} stays mapped
+ * {@code insertable = false, updatable = false} because the column is
+ * database-managed (a lower-cased generated column).</p>
  */
 @Getter
 @Setter
@@ -59,24 +75,24 @@ import lombok.Setter;
 public class PaymentEntitlement extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "student_id", nullable = false)
+    @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "order_id", nullable = false, updatable = false)
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "payment_record_id", nullable = false)
+    @JoinColumn(name = "payment_record_id", nullable = false, updatable = false)
     private PaymentRecord paymentRecord;
 
-    @Column(name = "item_type", nullable = false, length = 50)
+    @Column(name = "item_type", nullable = false, updatable = false, length = 50)
     private String itemType;
 
-    @Column(name = "item_id", nullable = false)
+    @Column(name = "item_id", nullable = false, updatable = false)
     private Long itemId;
 
-    @Column(name = "feature_key", length = 100)
+    @Column(name = "feature_key", updatable = false, length = 100)
     private String featureKey;
 
     @Column(name = "feature_key_normalized", insertable = false, updatable = false, length = 100)
@@ -85,7 +101,7 @@ public class PaymentEntitlement extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
-    @Column(name = "source_type", nullable = false, length = 50)
+    @Column(name = "source_type", nullable = false, updatable = false, length = 50)
     private String sourceType;
 
     @Version

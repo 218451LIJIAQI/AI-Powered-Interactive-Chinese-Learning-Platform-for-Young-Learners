@@ -7,7 +7,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.LocalDateTime;
-import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -70,8 +69,12 @@ import com.example.aichinese.security.SecurityUserDetails;
 @Service
 public class LiveLearningAccessService {
 
-    private static final EnumSet<LiveClassStatus> JOINABLE_STATUSES =
-            EnumSet.of(LiveClassStatus.SCHEDULED, LiveClassStatus.ONGOING);
+    // Delegate to the canonical set on the enum so the Javadoc contract
+    // ("Mirrors LiveLearningAccessService.JOINABLE_STATUSES") is enforced
+    // by the type system rather than by parallel literal lists.  The
+    // underlying implementation is still an immutable EnumSet wrapper,
+    // so contains() remains O(1).
+    private static final Set<LiveClassStatus> JOINABLE_STATUSES = LiveClassStatus.JOINABLE;
 
     private final StudentProfileRepository studentProfileRepository;
     private final LessonRepository lessonRepository;

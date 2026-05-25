@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.EnumSet;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -93,9 +92,12 @@ class PayoutServiceTests {
     private void mockCommittedBalance(Fixture fixture, BigDecimal currentNetAmount, BigDecimal committedPayoutAmount) {
         when(fixture.teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(200L, TeacherEarningStatus.REFUNDED))
                 .thenReturn(currentNetAmount);
+        // Reference the canonical PayoutStatus.COMMITTED set rather than
+        // re-listing its members so the mock matcher self-updates if the
+        // enum's COMMITTED set is ever extended (e.g. a new DISPUTED state).
         when(fixture.payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                 eq(200L),
-                eq(EnumSet.of(PayoutStatus.PENDING, PayoutStatus.APPROVED, PayoutStatus.PAID))))
+                eq(PayoutStatus.COMMITTED)))
                 .thenReturn(committedPayoutAmount);
     }
 

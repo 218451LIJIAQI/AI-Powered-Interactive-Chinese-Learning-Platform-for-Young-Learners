@@ -25,6 +25,12 @@ import lombok.Setter;
  * <p>{@link #sortOrder} sets the canonical authoring order; the
  * front-end shuffles each play so the learner cannot memorise
  * positional answers.</p>
+ *
+ * <p>{@link #matchingGame} is mapped {@code updatable = false}: an
+ * item belongs to exactly one parent game for its entire lifetime.
+ * The admin workflow deletes and recreates rather than re-parenting,
+ * so the ORM-layer guard simply makes that contract explicit. All
+ * other domain fields remain mutable.</p>
  */
 @Getter
 @Setter
@@ -36,7 +42,7 @@ import lombok.Setter;
 public class MatchingGameItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "matching_game_id", nullable = false)
+    @JoinColumn(name = "matching_game_id", nullable = false, updatable = false)
     private MatchingGame matchingGame;
 
     @Column(name = "left_text", nullable = false, length = 500)

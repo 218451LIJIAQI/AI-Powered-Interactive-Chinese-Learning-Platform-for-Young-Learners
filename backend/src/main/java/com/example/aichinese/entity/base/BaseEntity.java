@@ -1,7 +1,6 @@
 package com.example.aichinese.entity.base;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 import org.hibernate.Hibernate;
 
@@ -44,6 +43,27 @@ import lombok.Setter;
  *       triggers a lazy load or {@code LazyInitializationException}).</li>
  * </ol>
  *
+ * <h2>Lifecycle callback boundaries</h2>
+ *
+ * <p>{@link #onCreate()} and {@link #onUpdate()} are dispatched by
+ * Hibernate only when the {@code EntityManager} owns the state
+ * transition. They <em>do not</em> fire for:</p>
+ *
+ * <ul>
+ *   <li>Bulk JPQL/HQL {@code UPDATE} or {@code DELETE} statements
+ *       (typically declared with {@code @Modifying} on Spring Data
+ *       repository methods).</li>
+ *   <li>Native SQL statements issued via
+ *       {@code EntityManager#createNativeQuery} or JDBC.</li>
+ *   <li>Flyway migrations or any other write that bypasses the
+ *       {@code EntityManager}.</li>
+ * </ul>
+ *
+ * <p>Code paths that issue such bulk writes MUST set {@code updated_at}
+ * explicitly in the SQL/JPQL itself when audit freshness matters; the
+ * column will otherwise drift behind the row's real-world change
+ * timestamp.</p>
+ *
  * <h2>Timezone semantics</h2>
  *
  * <p>Both timestamp columns are typed {@link LocalDateTime} and
@@ -72,6 +92,14 @@ import lombok.Setter;
  *   <li>Subclasses MAY override {@link #toString()} when a richer
  *       diagnostic output is genuinely useful, but the override MUST
  *       NOT touch lazy associations.</li>
+ *   <li>Subclasses MUST NOT declare their own {@code @PrePersist} or
+ *       {@code @PreUpdate} callbacks that reassign {@link #createdAt}
+ *       or {@link #updatedAt}. Hibernate invokes both the parent and
+ *       the child callback in an unspecified order, so a child
+ *       callback racing the parent silently corrupts the audit
+ *       timestamps. Subclasses MAY declare unrelated callbacks (for
+ *       example to derive a denormalised column) as long as they do
+ *       not touch the timestamp fields owned by this class.</li>
  * </ul>
  */
 @Getter
@@ -88,37 +116,70 @@ public abstract class BaseEntity {
     private Long id;
 
     /**
-     * Wall-clock instant the row was first inserted. Assigned by
-     * {@link #onCreate()} when {@code null}; tests and import jobs may
-     * pre-populate this field to override the default — the lifecycle
-     * callback intentionally respects a non-null value so deterministic
-     * fixtures and bulk-import workflows keep working.
+     * Wall-clock instant the row was first inserted. Default-assigned
+     * by {@link #onCreate()} when {@code null} at the {@code @PrePersist}
+     * boundary; a caller that pre-sets a non-null value (for example a
+     * fixture builder or a historical-data import job) keeps that value
+     * through the flush, because the lifecycle callback respects any
+     * pre-existing timestamp.
+     *
+     * <p>The column is mapped {@code updatable = false}, so any setter
+     * call made <em>after</em> the first flush is silently dropped by
+     * Hibernate when the row is next updated — the original creation
+     * timestamp is therefore tamper-evident at the database layer.</p>
      */
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     /**
-     * Wall-clock instant the row was last modified. Assigned by
-     * {@link #onCreate()} on insert and refreshed by {@link #onUpdate()}
-     * before every subsequent {@code UPDATE}. Always greater than or
-     * equal to {@link #createdAt}.
+     * Wall-clock instant the row was last modified. Default-assigned
+     * by {@link #onCreate()} on insert and unconditionally refreshed
+     * by {@link #onUpdate()} before every subsequent {@code UPDATE}.
+     *
+     * <p>The invariant {@code updatedAt >= createdAt} therefore holds
+     * for every flushed row. The asymmetric "preserve on insert,
+     * overwrite on update" contract is intentional: import jobs can
+     * backfill the original creation moment, but every later change is
+     * always stamped with the current wall-clock time so the audit
+     * trail cannot be back-dated through the application layer.</p>
      */
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     /**
+     * Convenience predicate: {@code true} iff this instance has not
+     * yet been assigned a database identifier (transient or removed).
+     *
+     * <p>Service-layer code can branch on this method instead of
+     * comparing {@link #getId()} against {@code null}, which keeps the
+     * intent ("are we creating a new row?") explicit at call sites.
+     * The method does not consult the persistence context, so it is
+     * safe to invoke on detached entities and from inside collection
+     * streams that must not trigger a lazy load.</p>
+     */
+    public final boolean isNew() {
+        return id == null;
+    }
+
+    /**
      * Lifecycle hook fired exactly once before the row is inserted.
      *
-     * <p>Sets both timestamps to the current wall-clock time, but only
-     * when they have not been pre-populated by the caller. This lets
-     * data-import jobs and integration tests provide deterministic
-     * timestamps while preserving the default behaviour for normal
-     * application code (where neither field is touched before
-     * {@code persist}).</p>
+     * <p>Stamps both timestamps with the current wall-clock instant,
+     * but only when they have not been pre-populated by the caller.
+     * This escape hatch lets fixture builders and historical-data
+     * import jobs provide deterministic timestamps while preserving
+     * the default behaviour for normal application code (where neither
+     * field is touched before {@code persist}).</p>
+     *
+     * <p>The same instant is reused for both fields so that brand-new
+     * rows always satisfy {@code createdAt.equals(updatedAt)} on the
+     * first flush — downstream reports that compare the two columns to
+     * detect "has been edited since creation" therefore work without
+     * tolerance margins.</p>
      */
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
         if (createdAt == null) {
             createdAt = now;
         }
@@ -130,10 +191,11 @@ public abstract class BaseEntity {
     /**
      * Lifecycle hook fired before every {@code UPDATE} statement.
      *
-     * <p>Always refreshes {@link #updatedAt}; {@link #createdAt} is
-     * pinned by {@code updatable = false} on the column annotation, so
-     * even an explicit setter call would be ignored at flush time and
-     * the original creation timestamp is preserved.</p>
+     * <p>Always refreshes {@link #updatedAt} so the application layer
+     * cannot back-date audit timestamps; {@link #createdAt} is pinned
+     * by {@code updatable = false} on the column annotation, so any
+     * explicit setter call would be ignored at flush time and the
+     * original creation timestamp is preserved.</p>
      */
     @PreUpdate
     protected void onUpdate() {
@@ -149,11 +211,10 @@ public abstract class BaseEntity {
      *   <li>They share the same effective Hibernate class
      *       ({@link Hibernate#getClass(Object)} unwraps lazy proxies so
      *       a proxy compares equal to the entity it stands in for) AND
-     *       both have a non-null {@link #id} that is
-     *       {@link Objects#equals(Object, Object) equal}.</li>
+     *       both have a non-null {@link #id} whose values are equal.</li>
      * </ul>
      *
-     * <p>Two transient (id = {@code null}) instances are
+     * <p>Two transient ({@code id == null}) instances are
      * <em>not</em> equal even when their non-id fields match. This
      * keeps a {@link java.util.HashSet} stable when entities are added
      * before being persisted and then have their ids assigned — the
@@ -166,16 +227,13 @@ public abstract class BaseEntity {
         if (this == other) {
             return true;
         }
-        if (other == null) {
+        if (!(other instanceof BaseEntity that)) {
             return false;
         }
-        Class<?> thisEffectiveClass = Hibernate.getClass(this);
-        Class<?> otherEffectiveClass = Hibernate.getClass(other);
-        if (!thisEffectiveClass.equals(otherEffectiveClass)) {
+        if (!Hibernate.getClass(this).equals(Hibernate.getClass(that))) {
             return false;
         }
-        BaseEntity that = (BaseEntity) other;
-        return id != null && Objects.equals(id, that.id);
+        return id != null && id.equals(that.id);
     }
 
     /**

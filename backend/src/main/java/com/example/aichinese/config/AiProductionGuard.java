@@ -59,8 +59,12 @@ public class AiProductionGuard {
     }
 
     void validate() {
-        if (!isProductionProfileActive() || !aiProperties.isEnableRealProvider()) {
+        if (!isProductionProfileActive()) {
             return;
+        }
+        if (!aiProperties.isEnableRealProvider()) {
+            throw new IllegalStateException(
+                    "AI_ENABLE_REAL_PROVIDER must be true when the prod profile is active.");
         }
 
         String provider = normalizedProvider();

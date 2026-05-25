@@ -6,10 +6,17 @@
         <span class="payment-result-cloud payment-result-cloud--two" />
         <span class="payment-result-bamboo" />
         <span class="payment-result-pagoda" />
-        <PandaIllustration class="payment-result-panda" :size="210" :outfit="showCancelledState ? '#ff9f2f' : '#46b851'" accent="#ffcc2f" />
+        <PandaIllustration
+          class="payment-result-panda"
+          :size="210"
+          :outfit="showCancelledState ? '#ff9f2f' : '#46b851'"
+          accent="#ffcc2f"
+        />
         <div class="payment-result-speech">
           <strong>{{ showCancelledState ? 'No worries!' : 'Great job!' }}</strong>
-          <span>{{ showCancelledState ? 'You can return to courses anytime.' : 'Your learning journey continues.' }}</span>
+          <span>{{
+            showCancelledState ? 'You can return to courses anytime.' : 'Your learning journey continues.'
+          }}</span>
         </div>
       </aside>
 
@@ -66,7 +73,11 @@
         </div>
 
         <p class="payment-result-footnote">
-          {{ showCancelledState ? 'Your course access was not changed by this cancelled checkout.' : 'If access does not appear immediately, refresh your student profile payments area.' }}
+          {{
+            showCancelledState
+              ? 'Your course access was not changed by this cancelled checkout.'
+              : 'If access does not appear immediately, refresh your student profile payments area.'
+          }}
         </p>
       </div>
     </div>
@@ -116,7 +127,9 @@ const paymentId = computed(() => {
 const routeCancelled = computed(() => route.path.endsWith('/cancel') || route.query.cancelled === 'true')
 const paymentPaid = computed(() => payment.value?.paymentStatus === 'PAID')
 const showCancelledState = computed(() => routeCancelled.value && !paymentPaid.value)
-const title = computed(() => paymentPaid.value ? 'Payment successful' : showCancelledState.value ? 'Payment cancelled' : 'Payment status')
+const title = computed(() =>
+  paymentPaid.value ? 'Payment successful' : showCancelledState.value ? 'Payment cancelled' : 'Payment status',
+)
 const description = computed(() => {
   if (loading.value) return 'Verifying your payment status...'
   if (paymentPaid.value) return 'Your payment has been verified and your learning access is unlocked.'
@@ -133,7 +146,11 @@ const resultSteps = computed(() => [
   {
     icon: paymentPaid.value ? 'status' : showCancelledState.value ? 'chevronLeft' : 'history',
     label: 'Verification',
-    copy: paymentPaid.value ? 'Payment is confirmed.' : showCancelledState.value ? 'No payment confirmation needed.' : 'Status may need another check.',
+    copy: paymentPaid.value
+      ? 'Payment is confirmed.'
+      : showCancelledState.value
+        ? 'No payment confirmation needed.'
+        : 'Status may need another check.',
     state: paymentPaid.value ? 'done' : showCancelledState.value ? 'muted' : 'active',
   },
   {

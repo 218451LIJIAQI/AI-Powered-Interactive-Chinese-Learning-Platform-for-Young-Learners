@@ -39,6 +39,13 @@ import lombok.Setter;
  * <p>The {@code message_text} column is {@code LONGTEXT} so model output
  * up to 4 GiB can be stored without truncation; in practice it is bounded
  * by {@code app.ai.max-output-tokens} on the producer side.</p>
+ *
+ * <p>The transcript is append-only by design: every domain field on this
+ * entity is mapped {@code updatable = false}, so any attempt to mutate
+ * a persisted message via {@code entity.setX(…)} + {@code save()} is
+ * silently dropped at flush time. The only fields Hibernate writes on
+ * UPDATE are the inherited {@code updated_at} audit timestamp — in
+ * practice the row is inserted once and never touched again.</p>
  */
 @Getter
 @Setter
@@ -52,14 +59,14 @@ import lombok.Setter;
 public class AiChatMessage extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "session_id", nullable = false)
+    @JoinColumn(name = "session_id", nullable = false, updatable = false)
     private AiChatSession session;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "sender_role", nullable = false, length = 30)
+    @Column(name = "sender_role", nullable = false, updatable = false, length = 30)
     private AiChatSenderRole senderRole;
 
     @Lob
-    @Column(name = "message_text", nullable = false, columnDefinition = "LONGTEXT")
+    @Column(name = "message_text", nullable = false, updatable = false, columnDefinition = "LONGTEXT")
     private String messageText;
 }

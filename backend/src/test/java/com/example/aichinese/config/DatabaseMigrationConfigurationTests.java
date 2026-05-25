@@ -101,14 +101,14 @@ class DatabaseMigrationConfigurationTests {
     }
 
     @Test
-    void v8FinancialIntegrityMigrationFailsFastBeforeAddingConstraints() throws IOException {
+    void baselineFinancialIntegrityFailsFastBeforeAddingConstraints() throws IOException {
         String migration = readResource("src/main/resources/db/migration/V1__consolidated_schema.sql");
 
-        assertThat(migration).contains("V8 blocked: orders contain negative totals or invalid currency codes");
-        assertThat(migration).contains("V8 blocked: duplicate payment provider references exist");
-        assertThat(migration).contains("V8 blocked: duplicate payment entitlement tuples exist");
-        assertThat(migration).contains("V8 blocked: multiple active refund requests exist for an order");
-        assertThat(migration).contains("V8 blocked: duplicate teacher earning rows exist for an order item");
+        assertThat(migration).contains("Baseline blocked: orders contain negative totals or invalid currency codes");
+        assertThat(migration).contains("Baseline blocked: duplicate payment provider references exist");
+        assertThat(migration).contains("Baseline blocked: duplicate payment entitlement tuples exist");
+        assertThat(migration).contains("Baseline blocked: multiple active refund requests exist for an order");
+        assertThat(migration).contains("Baseline blocked: duplicate teacher earning rows exist for an order item");
         assertThat(migration).contains("add constraint chk_orders_total_amount_non_negative");
         assertThat(migration).contains("add constraint uk_payment_entitlements_order_item_feature");
         assertThat(migration).contains("add constraint uk_refund_requests_active_order");
@@ -125,13 +125,13 @@ class DatabaseMigrationConfigurationTests {
     }
 
     @Test
-    void v12EnforcesOperationalUniquenessPrivacyAndHotPathIndexes() throws IOException {
+    void baselineEnforcesOperationalUniquenessPrivacyAndHotPathIndexes() throws IOException {
         String migration = readResource("src/main/resources/db/migration/V1__consolidated_schema.sql");
 
-        assertThat(migration).contains("V12 blocked: duplicate cart item tuples exist");
-        assertThat(migration).contains("V12 blocked: duplicate lesson progress tuples exist");
-        assertThat(migration).contains("V12 blocked: duplicate point-award source tuples exist");
-        assertThat(migration).contains("V12 blocked: multiple active password reset tokens exist for a user");
+        assertThat(migration).contains("Baseline blocked: duplicate cart item tuples exist");
+        assertThat(migration).contains("Baseline blocked: duplicate lesson progress tuples exist");
+        assertThat(migration).contains("Baseline blocked: duplicate point-award source tuples exist");
+        assertThat(migration).contains("Baseline blocked: multiple active password reset tokens exist for a user");
         assertThat(migration).contains("legacy_content_redacted_length=");
         assertThat(migration).contains("add constraint uk_cart_items_cart_item");
         assertThat(migration).contains("add constraint uk_lesson_progress_student_lesson");
@@ -144,12 +144,12 @@ class DatabaseMigrationConfigurationTests {
     }
 
     @Test
-    void v14EnforcesFinalDomainChecksVerificationUniquenessAndHotPathIndexes() throws IOException {
-        String migration = readResource("src/main/resources/db/migration/V14__final_database_contract_hardening.sql");
+    void consolidatedBaselineEnforcesFinalDomainChecksSessionsQuotaSearchAndHotPathIndexes() throws IOException {
+        String migration = readResource("src/main/resources/db/migration/V1__consolidated_schema.sql");
         String validationScript = readResource("scripts/validate-flyway-mysql.ps1");
 
-        assertThat(migration).contains("V14 blocked: rows violate tightened status/domain checks");
-        assertThat(migration).contains("V14 blocked: rows violate review/read state consistency checks");
+        assertThat(migration).contains("Baseline blocked: rows violate tightened status/domain checks");
+        assertThat(migration).contains("Baseline blocked: rows violate review/read state consistency checks");
         assertThat(migration).contains("add constraint chk_ai_chat_messages_sender_role");
         assertThat(migration).contains("add constraint chk_teacher_earnings_status");
         assertThat(migration).contains("add constraint chk_ai_usage_logs_status");
@@ -163,10 +163,19 @@ class DatabaseMigrationConfigurationTests {
         assertThat(migration).contains("create index idx_ai_response_reports_student_created");
         assertThat(migration).contains("create index idx_teacher_verification_reviews_latest");
         assertThat(migration).contains("create index idx_notifications_user_status_created_id");
-        assertThat(migration).doesNotContain("create index idx_payment_records_provider_reference");
-        assertThat(migration).doesNotContain("create index idx_refund_requests_student_created");
+        assertThat(migration).contains("create table refresh_tokens");
+        assertThat(migration).contains("add constraint uk_refresh_tokens_token_hash");
+        assertThat(migration).contains("create table ai_usage_quota_counters");
+        assertThat(migration).contains("add constraint uk_ai_usage_quota_counters_user");
+        assertThat(migration).contains("add fulltext index ft_lessons_title_summary_content");
+        assertThat(migration).contains("add fulltext index ft_course_packages_title_description");
+        assertThat(migration).contains("add fulltext index ft_flashcards_learning_text");
+        assertThat(migration).doesNotContainPattern(
+                "create\\s+index\\s+idx_payment_records_provider_reference\\s+on\\s+payment_records");
+        assertThat(migration).doesNotContainPattern(
+                "create\\s+index\\s+idx_refund_requests_student_created\\s+on\\s+refund_requests");
 
-        assertThat(validationScript).contains("fresh final V14 migration history");
+        assertThat(validationScript).contains("fresh consolidated V1 migration history");
         assertThat(validationScript).contains("fresh AI chat sender role check");
         assertThat(validationScript).contains("fresh lesson access price check");
         assertThat(validationScript).contains("fresh current teacher verification document uniqueness");

@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Objects;
 
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.dto.content.LearningCategoryResponse;
 import com.example.aichinese.dto.content.LearningLevelResponse;
 import com.example.aichinese.entity.LearningCategory;
@@ -38,6 +40,7 @@ public class LearningCatalogService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.PUBLIC_LEVELS)
     public List<LearningLevelResponse> getPublicLevels() {
         return learningLevelRepository.findAllByOrderBySortOrderAscNameAsc().stream()
                 .map(this::toLevelResponse)
@@ -45,6 +48,7 @@ public class LearningCatalogService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheConfig.PUBLIC_CATEGORIES)
     public List<LearningCategoryResponse> getPublicCategories() {
         return learningCategoryRepository.findAllByOrderBySortOrderAscNameAsc().stream()
                 .map(this::toCategoryResponse)

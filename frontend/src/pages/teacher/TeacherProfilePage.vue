@@ -12,10 +12,17 @@
       <div class="teacher-profile-hero-copy">
         <span>Teacher identity</span>
         <h2>{{ profile.fullName || 'Teacher profile' }}</h2>
-        <p>{{ profile.shortIntroduction || profile.bio || 'Build a trusted teacher profile for MandarinSpark families.' }}</p>
+        <p>
+          {{
+            profile.shortIntroduction || profile.bio || 'Build a trusted teacher profile for MandarinSpark families.'
+          }}
+        </p>
       </div>
       <div class="teacher-profile-hero-status">
-        <StatusPill :label="verification.teacherStatus" :tone="verification.teacherStatus === 'APPROVED' ? 'success' : 'warning'" />
+        <StatusPill
+          :label="verification.teacherStatus"
+          :tone="verification.teacherStatus === 'APPROVED' ? 'success' : 'warning'"
+        />
         <div class="teacher-profile-hero-stats">
           <article v-for="item in profileHighlights" :key="item.label">
             <strong>{{ item.value }}</strong>
@@ -50,7 +57,13 @@
           </div>
           <div class="field">
             <label for="teacher-profile-bio">Bio</label>
-            <textarea id="teacher-profile-bio" v-model="profileForm.bio" class="textarea" maxlength="1000" :disabled="profileFormDisabled" />
+            <textarea
+              id="teacher-profile-bio"
+              v-model="profileForm.bio"
+              class="textarea"
+              maxlength="1000"
+              :disabled="profileFormDisabled"
+            />
           </div>
           <div class="field">
             <label for="teacher-profile-short-introduction">Short introduction</label>
@@ -104,7 +117,10 @@
 
       <div class="stack">
         <InfoCard title="Verification status" subtitle="Teacher identity protection." icon="verification">
-          <StatusPill :label="verification.teacherStatus" :tone="verification.teacherStatus === 'APPROVED' ? 'success' : 'warning'" />
+          <StatusPill
+            :label="verification.teacherStatus"
+            :tone="verification.teacherStatus === 'APPROVED' ? 'success' : 'warning'"
+          />
           <p class="muted u-m-0">
             {{ verification.latestReviewResult?.note || 'Your current verification state is shown here.' }}
           </p>
@@ -120,7 +136,12 @@
 
         <InfoCard title="Recent notifications" subtitle="Open a notification to mark it as read." icon="bell">
           <template #header-end>
-            <button class="teacher-outline-button" type="button" :disabled="markingNotificationsRead || !hasUnreadNotifications" @click="markAllNotificationsRead">
+            <button
+              class="teacher-outline-button"
+              type="button"
+              :disabled="markingNotificationsRead || !hasUnreadNotifications"
+              @click="markAllNotificationsRead"
+            >
               {{ markingNotificationsRead ? 'Marking...' : 'Mark all read' }}
             </button>
           </template>
@@ -137,7 +158,10 @@
               <ListInfoItem :title="item.title" :description="item.message" icon="bell">
                 <template #aside>
                   <div class="list-value-stack">
-                    <StatusPill :label="item.status === 'READ' ? 'Read' : 'Unread'" :tone="item.status === 'READ' ? 'info' : 'warning'" />
+                    <StatusPill
+                      :label="item.status === 'READ' ? 'Read' : 'Unread'"
+                      :tone="item.status === 'READ' ? 'info' : 'warning'"
+                    />
                     <span class="muted">{{ formatDateTime(item.createdAt) }}</span>
                   </div>
                 </template>
@@ -160,7 +184,12 @@
         >
           <div class="field">
             <label for="teacher-verification-document-type">Document type</label>
-            <select id="teacher-verification-document-type" v-model="uploadForm.documentType" class="input" :disabled="verificationUploadReadOnly">
+            <select
+              id="teacher-verification-document-type"
+              v-model="uploadForm.documentType"
+              class="input"
+              :disabled="verificationUploadReadOnly"
+            >
               <option v-for="option in verificationDocumentTypes" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
@@ -250,11 +279,15 @@ const emptyVerification = {
   resubmissionAllowed: false,
 }
 
-const profile = computed(() => profileResource.data.value ?? (profileResource.usingFallback.value ? teacherProfile : emptyProfile))
+const profile = computed(
+  () => profileResource.data.value ?? (profileResource.usingFallback.value ? teacherProfile : emptyProfile),
+)
 const profileUsingFallback = computed(() => profileResource.usingFallback.value)
 const profileFormDisabled = computed(() => profileUsingFallback.value || savingProfile.value)
 const verification = computed(
-  () => verificationResource.data.value ?? (verificationResource.usingFallback.value ? teacherVerification : emptyVerification),
+  () =>
+    verificationResource.data.value ??
+    (verificationResource.usingFallback.value ? teacherVerification : emptyVerification),
 )
 const notifications = computed(() => notificationsResource.data.value ?? [])
 const usingFallback = computed(
@@ -264,7 +297,11 @@ const usingFallback = computed(
     notificationsResource.usingFallback.value,
 )
 const pageError = computed(
-  () => actionError.value || profileResource.error.value || verificationResource.error.value || notificationsResource.error.value,
+  () =>
+    actionError.value ||
+    profileResource.error.value ||
+    verificationResource.error.value ||
+    notificationsResource.error.value,
 )
 const profileHighlights = computed(() => [
   { label: 'Categories', value: String(profile.value.teachingCategories.length) },
@@ -317,7 +354,10 @@ watch(
 function hasAllowedVerificationFileType(file: File) {
   const fileName = file.name.toLowerCase()
   const contentType = file.type.toLowerCase()
-  return verificationFileExtensions.some((extension) => fileName.endsWith(extension)) && verificationContentTypes.includes(contentType)
+  return (
+    verificationFileExtensions.some((extension) => fileName.endsWith(extension)) &&
+    verificationContentTypes.includes(contentType)
+  )
 }
 
 function resetVerificationFileInput() {
@@ -365,7 +405,10 @@ async function saveProfile() {
       fullName: profileForm.fullName,
       bio: profileForm.bio,
       shortIntroduction: profileForm.shortIntroduction,
-      teachingCategories: categoriesText.value.split(',').map((item) => item.trim()).filter(Boolean),
+      teachingCategories: categoriesText.value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
     })
     await profileResource.reload()
     actionSuccess.value = 'Teacher profile saved and refreshed.'
@@ -422,9 +465,10 @@ async function markAllNotificationsRead() {
       item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() },
     )
     window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
-    actionSuccess.value = result.updatedCount > 0
-      ? `Marked ${result.updatedCount} notification(s) as read.`
-      : 'All notifications are already read.'
+    actionSuccess.value =
+      result.updatedCount > 0
+        ? `Marked ${result.updatedCount} notification(s) as read.`
+        : 'All notifications are already read.'
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to mark notifications as read.')
   } finally {

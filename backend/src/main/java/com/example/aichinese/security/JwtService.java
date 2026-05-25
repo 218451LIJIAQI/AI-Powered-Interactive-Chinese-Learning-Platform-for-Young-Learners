@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -108,6 +109,7 @@ public class JwtService {
                 .claims(Map.of(
                         CLAIM_USER_ID, user.getId(),
                         CLAIM_SESSION_VERSION, currentSessionVersion(user)))
+                .id(UUID.randomUUID().toString())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey)

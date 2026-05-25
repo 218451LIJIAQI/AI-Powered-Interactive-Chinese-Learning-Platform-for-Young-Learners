@@ -277,7 +277,12 @@ function pathMatches(actualPath, expectedPath) {
 function getCaseStatus(record) {
   if (record.navigationError || record.pageError) return 'FAIL'
   if (!record.ui?.rendered) return 'FAIL'
-  if (record.runtimeExceptions.length || record.consoleErrors.length || record.appHttpErrors.length || record.failedRequests.length) {
+  if (
+    record.runtimeExceptions.length ||
+    record.consoleErrors.length ||
+    record.appHttpErrors.length ||
+    record.failedRequests.length
+  ) {
     return 'NEEDS_FIX'
   }
   if (record.expectedPath && !pathMatches(record.actualPath, record.expectedPath)) return 'NEEDS_FIX'
@@ -312,17 +317,21 @@ async function main() {
 
   await mkdir(evidenceDir, { recursive: true })
 
-  const chrome = spawn(chromePath, [
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${debuggingPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--window-size=1440,1000',
-    'about:blank',
-  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${debuggingPort}`,
+      `--user-data-dir=${userDataDir}`,
+      '--window-size=1440,1000',
+      'about:blank',
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  )
 
   const chromeLogs = []
   chrome.stdout.on('data', (data) => chromeLogs.push(data.toString()))
@@ -678,7 +687,9 @@ async function main() {
       if (record.ui?.smallTouchTargets?.length) issues.push(`smallTargets=${record.ui.smallTouchTargets.length}`)
       if (record.ui?.suspiciousText?.length) issues.push(`text=${record.ui.suspiciousText.join('|')}`)
       if (record.ui?.visibleReplacementCharacter) issues.push('replacementChar')
-      console.log(`${record.status}\t${record.viewport}\t${record.role}\t${record.route}\t${record.ui?.title || ''}\t${issues.join(',')}`)
+      console.log(
+        `${record.status}\t${record.viewport}\t${record.role}\t${record.route}\t${record.ui?.title || ''}\t${issues.join(',')}`,
+      )
     }
 
     console.log(`DEEP_AUDIT_REPORT_JSON=${path.join(evidenceDir, 'deep-audit-report.json')}`)

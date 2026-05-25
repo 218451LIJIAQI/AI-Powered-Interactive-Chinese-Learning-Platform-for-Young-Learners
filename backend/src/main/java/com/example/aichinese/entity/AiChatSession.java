@@ -33,6 +33,20 @@ import lombok.Setter;
  * <p>{@link #active} flips to {@code false} when the user explicitly
  * archives the session; soft-deletion preserves the audit trail required
  * by the AI moderation flow.</p>
+ *
+ * <h3>Field mutability contract</h3>
+ * <ul>
+ *   <li>{@link #user}, {@link #featureKey}, {@link #relatedLessonId}
+ *       are mapped {@code updatable = false} — the session owner, the
+ *       feature it was started under, and the lesson it links back to
+ *       are fixed at creation time. Any attempt to retarget a session
+ *       via {@code entity.setX(…)} + {@code save()} is silently dropped
+ *       by Hibernate at flush time; a retarget requires creating a
+ *       fresh session.</li>
+ *   <li>{@link #sessionTitle}, {@link #languagePreference},
+ *       {@link #active} remain mutable to support future rename and
+ *       archive workflows.</li>
+ * </ul>
  */
 @Getter
 @Setter
@@ -46,10 +60,10 @@ import lombok.Setter;
 public class AiChatSession extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
-    @Column(name = "feature_key", nullable = false, length = 100)
+    @Column(name = "feature_key", nullable = false, updatable = false, length = 100)
     private String featureKey;
 
     @Column(name = "session_title", length = 200)
@@ -58,7 +72,7 @@ public class AiChatSession extends BaseEntity {
     @Column(name = "language_preference", length = 20)
     private String languagePreference;
 
-    @Column(name = "related_lesson_id")
+    @Column(name = "related_lesson_id", updatable = false)
     private Long relatedLessonId;
 
     @Column(name = "active", nullable = false)

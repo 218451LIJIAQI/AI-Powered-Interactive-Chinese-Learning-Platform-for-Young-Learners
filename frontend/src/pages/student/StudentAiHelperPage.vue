@@ -2,7 +2,13 @@
   <div class="page-stack student-ai-helper-page">
     <DataNotice
       :using-fallback="usingFallback"
-      :error="actionError || availabilityResource.error.value || progressResource.error.value || reportsResource.error.value || platformSettingsResource.error.value"
+      :error="
+        actionError ||
+        availabilityResource.error.value ||
+        progressResource.error.value ||
+        reportsResource.error.value ||
+        platformSettingsResource.error.value
+      "
       :success="actionSuccess"
       fallback-title="Preview AI helper"
       fallback-message="SparkBot is showing safe sample guidance. Preview actions do not send live AI requests."
@@ -16,7 +22,13 @@
           <span class="student-ai-helper-cloud is-right" />
           <span class="student-ai-helper-pagoda" />
           <span class="student-ai-helper-hill" />
-          <PandaIllustration class="student-ai-helper-panda" :size="190" outfit="#7d56ff" accent="#f6d056" pose="wave" />
+          <PandaIllustration
+            class="student-ai-helper-panda"
+            :size="190"
+            outfit="#7d56ff"
+            accent="#f6d056"
+            pose="wave"
+          />
 
           <div class="student-ai-helper-prompt-card">
             <strong>I can help you learn Mandarin in fun and easy ways!</strong>
@@ -62,10 +74,15 @@
               {{ submitting.report ? 'Reporting...' : 'Report response' }}
             </button>
           </div>
-          <p>{{ chatReply.aiResponse }}</p>
+          <p>{{ streamingChatText || chatReply.aiResponse }}</p>
           <div class="student-ai-helper-report-controls">
             <label for="student-ai-report-reason">Reason</label>
-            <select id="student-ai-report-reason" v-model="reportForm.reasonCategory" class="select" :disabled="reportDisabled">
+            <select
+              id="student-ai-report-reason"
+              v-model="reportForm.reasonCategory"
+              class="select"
+              :disabled="reportDisabled"
+            >
               <option value="INCORRECT_CONTENT">Incorrect content</option>
               <option value="HALLUCINATION">Made-up information</option>
               <option value="UNSAFE_CONTENT">Unsafe content</option>
@@ -99,7 +116,12 @@
             <span><IconGlyph name="language" :size="24" /></span>
             <strong>Vocabulary Helper</strong>
             <p>Learn new words with meanings and examples.</p>
-            <input v-model="wordForm.word" aria-label="Chinese word for vocabulary help" autocomplete="off" placeholder="苹果" />
+            <input
+              v-model="wordForm.word"
+              aria-label="Chinese word for vocabulary help"
+              autocomplete="off"
+              placeholder="苹果"
+            />
             <button type="button" @click="runVocabulary" :disabled="submitting.vocab">
               Try it
               <IconGlyph name="chevronRight" :size="16" />
@@ -110,7 +132,12 @@
             <span><IconGlyph name="clip" :size="24" /></span>
             <strong>Sentence Practice</strong>
             <p>Build simple sentences and get feedback.</p>
-            <input v-model="sentenceForm.sentence" aria-label="Sentence for AI feedback" autocomplete="off" placeholder="我喜欢学习中文。" />
+            <input
+              v-model="sentenceForm.sentence"
+              aria-label="Sentence for AI feedback"
+              autocomplete="off"
+              placeholder="我喜欢学习中文。"
+            />
             <button type="button" @click="runSentence" :disabled="submitting.sentence">
               Try it
               <IconGlyph name="chevronRight" :size="16" />
@@ -121,8 +148,20 @@
             <span><IconGlyph name="live" :size="24" /></span>
             <strong>Pronunciation & Tone</strong>
             <p>{{ audioCapabilityMessage }}</p>
-            <input v-model="pronunciationForm.targetText" aria-label="Pronunciation target text" autocomplete="off" placeholder="妈妈" :disabled="audioUploadDisabled" />
-            <input v-model="pronunciationForm.pinyin" aria-label="Pronunciation pinyin guide" autocomplete="off" placeholder="mā ma" :disabled="audioUploadDisabled" />
+            <input
+              v-model="pronunciationForm.targetText"
+              aria-label="Pronunciation target text"
+              autocomplete="off"
+              placeholder="妈妈"
+              :disabled="audioUploadDisabled"
+            />
+            <input
+              v-model="pronunciationForm.pinyin"
+              aria-label="Pronunciation pinyin guide"
+              autocomplete="off"
+              placeholder="mā ma"
+              :disabled="audioUploadDisabled"
+            />
             <input
               type="file"
               accept=".webm,.wav,.mp3,audio/webm,audio/wav,audio/mpeg,audio/mp3"
@@ -139,7 +178,13 @@
             <span><IconGlyph name="file" :size="24" /></span>
             <strong>Character Help</strong>
             <p>{{ imageCapabilityMessage }}</p>
-            <input v-model="writingForm.targetCharacter" aria-label="Target Chinese character for writing feedback" autocomplete="off" placeholder="好" :disabled="imageUploadDisabled" />
+            <input
+              v-model="writingForm.targetCharacter"
+              aria-label="Target Chinese character for writing feedback"
+              autocomplete="off"
+              placeholder="好"
+              :disabled="imageUploadDisabled"
+            />
             <input
               type="file"
               accept=".png,.jpg,.jpeg,image/png,image/jpeg"
@@ -191,7 +236,10 @@
           <div v-if="quizReply" class="student-ai-helper-result">
             <strong>{{ quizReply.title }} - {{ quizReply.status }}</strong>
             <p>{{ quizReply.questions[0]?.questionText || 'Quiz draft is ready.' }}</p>
-            <small>{{ quizReply.questions.length }} question{{ quizReply.questions.length === 1 ? '' : 's' }} - {{ quizReply.usageMode }}</small>
+            <small
+              >{{ quizReply.questions.length }} question{{ quizReply.questions.length === 1 ? '' : 's' }} -
+              {{ quizReply.usageMode }}</small
+            >
           </div>
           <div v-if="pronunciationReply" class="student-ai-helper-result">
             <strong>Pronunciation Feedback - {{ pronunciationReply.status }}</strong>
@@ -240,7 +288,12 @@
 
         <article class="student-ai-helper-story-card">
           <strong>Story Generator</strong>
-          <input v-model="storyForm.topic" aria-label="Story topic" autocomplete="off" placeholder="Greetings at school" />
+          <input
+            v-model="storyForm.topic"
+            aria-label="Story topic"
+            autocomplete="off"
+            placeholder="Greetings at school"
+          />
           <button class="btn btn-primary" type="button" @click="runStory" :disabled="submitting.story">
             {{ submitting.story ? 'Generating...' : 'Create Story' }}
           </button>
@@ -326,16 +379,13 @@ import { resolveApiError } from '@/utils/apiError'
 const auth = useAuthStore()
 const availabilityResource = useResource(() => aiApi.availability(), aiAvailability)
 const progressResource = useResource(() => studentApi.progress(), studentProgress)
-const platformSettingsResource = useResource(
-  () => publicApi.platformSettings(),
-  {
-    platformName: appEnv.appName,
-    aiDisclaimerText: 'AI-generated content may not always be accurate. Please review before use.',
-    strictContentFiltering: true,
-    sensitiveWordFilter: true,
-    aiSafetyCheck: true,
-  },
-)
+const platformSettingsResource = useResource(() => publicApi.platformSettings(), {
+  platformName: appEnv.appName,
+  aiDisclaimerText: 'AI-generated content may not always be accurate. Please review before use.',
+  strictContentFiltering: true,
+  sensitiveWordFilter: true,
+  aiSafetyCheck: true,
+})
 
 const previewFallbackEnabled = computed(() => appEnv.useDemoData && auth.isPreviewSession)
 const emptyAvailability = {
@@ -358,8 +408,12 @@ const emptyProgress = {
   recentLessons: [],
 }
 
-const availability = computed(() => availabilityResource.data.value ?? (previewFallbackEnabled.value ? aiAvailability : emptyAvailability))
-const progress = computed(() => progressResource.data.value ?? (previewFallbackEnabled.value ? studentProgress : emptyProgress))
+const availability = computed(
+  () => availabilityResource.data.value ?? (previewFallbackEnabled.value ? aiAvailability : emptyAvailability),
+)
+const progress = computed(
+  () => progressResource.data.value ?? (previewFallbackEnabled.value ? studentProgress : emptyProgress),
+)
 const reportsResource = useResource(() => aiApi.reports(), studentAiReports)
 const usingFallback = computed(
   () =>
@@ -368,11 +422,12 @@ const usingFallback = computed(
     reportsResource.usingFallback.value ||
     platformSettingsResource.usingFallback.value,
 )
-const rawAiReports = computed(() => reportsResource.data.value ?? (reportsResource.usingFallback.value ? studentAiReports : []))
+const rawAiReports = computed(
+  () => reportsResource.data.value ?? (reportsResource.usingFallback.value ? studentAiReports : []),
+)
 const aiReports = computed(() =>
-  rawAiReports.value.filter(
-    (item): item is StudentAiResponseReportResponse =>
-      Boolean(item?.id && item.reasonCategory && item.status),
+  rawAiReports.value.filter((item): item is StudentAiResponseReportResponse =>
+    Boolean(item?.id && item.reasonCategory && item.status),
   ),
 )
 const platformSettings = computed(
@@ -441,11 +496,14 @@ const writingForm = reactive({
 })
 
 const chatReply = ref<AiChatResponse | null>(previewFallbackEnabled.value ? aiChatReply : null)
+const streamingChatText = ref('')
 const vocabularyReply = ref<AiVocabularyHelperResponse | null>(previewFallbackEnabled.value ? aiVocabularyReply : null)
 const sentenceReply = ref<AiSentencePracticeResponse | null>(previewFallbackEnabled.value ? aiSentenceReply : null)
 const storyReply = ref<AiStoryGeneratorResponse | null>(previewFallbackEnabled.value ? aiStoryReply : null)
 const quizReply = ref<AiQuizGeneratorResponse | null>(previewFallbackEnabled.value ? aiQuizReply : null)
-const recommendationReply = ref<AiLearningRecommendationResponse | null>(previewFallbackEnabled.value ? aiRecommendationReply : null)
+const recommendationReply = ref<AiLearningRecommendationResponse | null>(
+  previewFallbackEnabled.value ? aiRecommendationReply : null,
+)
 const pronunciationReply = ref<AiPronunciationFeedbackResponse | null>(null)
 const writingReply = ref<AiWritingFeedbackResponse | null>(null)
 const actionError = ref<string | null>(null)
@@ -535,6 +593,7 @@ async function runChat() {
   if (submitting.chat) return
   actionError.value = null
   actionSuccess.value = null
+  streamingChatText.value = ''
   if (!chatForm.message.trim()) {
     actionError.value = 'Type a question before asking SparkBot.'
     return
@@ -546,11 +605,32 @@ async function runChat() {
   }
   submitting.chat = true
   try {
-    chatReply.value = await aiApi.chat({ message: chatForm.message.trim(), languagePreference: 'en' })
-    applyAiResponseStatus(chatReply.value, 'SparkBot answered your question.', 'SparkBot returned safe fallback guidance instead of a live AI answer.')
+    chatReply.value = {
+      sessionId: chatReply.value?.sessionId ?? null,
+      userMessage: chatForm.message.trim(),
+      aiResponse: '',
+      language: 'en',
+      createdAt: new Date().toISOString(),
+      status: 'STREAMING',
+    }
+    chatReply.value = await aiApi.chatStream(
+      { message: chatForm.message.trim(), languagePreference: 'en', sessionId: chatReply.value.sessionId ?? undefined },
+      {
+        onDelta: (chunk) => {
+          streamingChatText.value += chunk
+        },
+      },
+    )
+    streamingChatText.value = ''
+    applyAiResponseStatus(
+      chatReply.value,
+      'SparkBot answered your question.',
+      'SparkBot returned safe fallback guidance instead of a live AI answer.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to get an AI chat response.')
     chatReply.value = null
+    streamingChatText.value = ''
   } finally {
     submitting.chat = false
   }
@@ -571,8 +651,16 @@ async function runVocabulary() {
   }
   submitting.vocab = true
   try {
-    vocabularyReply.value = await aiApi.vocabularyHelper({ word: wordForm.word.trim(), inputLanguage: 'zh', outputLanguage: 'en' })
-    applyAiResponseStatus(vocabularyReply.value, 'Vocabulary help is ready.', 'Vocabulary helper returned safe fallback guidance instead of a live AI answer.')
+    vocabularyReply.value = await aiApi.vocabularyHelper({
+      word: wordForm.word.trim(),
+      inputLanguage: 'zh',
+      outputLanguage: 'en',
+    })
+    applyAiResponseStatus(
+      vocabularyReply.value,
+      'Vocabulary help is ready.',
+      'Vocabulary helper returned safe fallback guidance instead of a live AI answer.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to get vocabulary help.')
     vocabularyReply.value = null
@@ -596,8 +684,15 @@ async function runSentence() {
   }
   submitting.sentence = true
   try {
-    sentenceReply.value = await aiApi.sentencePractice({ sentence: sentenceForm.sentence.trim(), learnerLevel: learnerLevelLabel.value })
-    applyAiResponseStatus(sentenceReply.value, 'Sentence feedback is ready.', 'Sentence practice returned safe fallback guidance instead of a live AI answer.')
+    sentenceReply.value = await aiApi.sentencePractice({
+      sentence: sentenceForm.sentence.trim(),
+      learnerLevel: learnerLevelLabel.value,
+    })
+    applyAiResponseStatus(
+      sentenceReply.value,
+      'Sentence feedback is ready.',
+      'Sentence practice returned safe fallback guidance instead of a live AI answer.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to review this sentence.')
     sentenceReply.value = null
@@ -621,8 +716,16 @@ async function runStory() {
   }
   submitting.story = true
   try {
-    storyReply.value = await aiApi.storyGenerator({ topic: storyForm.topic.trim(), level: learnerLevelLabel.value, languagePreference: 'en' })
-    applyAiResponseStatus(storyReply.value, 'Your Mandarin story is ready.', 'Story generator returned safe fallback guidance instead of a live AI answer.')
+    storyReply.value = await aiApi.storyGenerator({
+      topic: storyForm.topic.trim(),
+      level: learnerLevelLabel.value,
+      languagePreference: 'en',
+    })
+    applyAiResponseStatus(
+      storyReply.value,
+      'Your Mandarin story is ready.',
+      'Story generator returned safe fallback guidance instead of a live AI answer.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to generate this story.')
     storyReply.value = null
@@ -647,7 +750,11 @@ async function runRecommendation() {
       weakAreas: progress.value.weakAreas,
       languagePreference: 'en',
     })
-    applyAiResponseStatus(recommendationReply.value, 'A learning recommendation is ready.', 'Recommendation helper returned safe fallback guidance instead of a live AI answer.')
+    applyAiResponseStatus(
+      recommendationReply.value,
+      'A learning recommendation is ready.',
+      'Recommendation helper returned safe fallback guidance instead of a live AI answer.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to generate this recommendation.')
     recommendationReply.value = null
@@ -679,7 +786,11 @@ async function runQuiz() {
       targetRoleContext: 'student self practice',
       languagePreference: 'en',
     })
-    applyAiResponseStatus(quizReply.value, 'Practice quiz is ready.', 'Quiz maker returned safe fallback guidance instead of a live AI quiz.')
+    applyAiResponseStatus(
+      quizReply.value,
+      'Practice quiz is ready.',
+      'Quiz maker returned safe fallback guidance instead of a live AI quiz.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to create this practice quiz.')
     quizReply.value = null
@@ -753,7 +864,11 @@ async function runPronunciation() {
     }
     formData.append('languagePreference', 'en')
     pronunciationReply.value = await aiApi.pronunciationFeedback(formData)
-    applyAiResponseStatus(pronunciationReply.value, 'Pronunciation recording uploaded and feedback is ready.', 'Pronunciation analysis is unavailable for the current AI provider.')
+    applyAiResponseStatus(
+      pronunciationReply.value,
+      'Pronunciation recording uploaded and feedback is ready.',
+      'Pronunciation analysis is unavailable for the current AI provider.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to process pronunciation feedback.')
     pronunciationReply.value = null
@@ -790,7 +905,11 @@ async function runWriting() {
     formData.append('targetCharacter', writingForm.targetCharacter.trim())
     formData.append('languagePreference', 'en')
     writingReply.value = await aiApi.writingFeedback(formData)
-    applyAiResponseStatus(writingReply.value, 'Writing image uploaded and feedback is ready.', 'Writing image analysis is unavailable for the current AI provider.')
+    applyAiResponseStatus(
+      writingReply.value,
+      'Writing image uploaded and feedback is ready.',
+      'Writing image analysis is unavailable for the current AI provider.',
+    )
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to process writing feedback.')
     writingReply.value = null

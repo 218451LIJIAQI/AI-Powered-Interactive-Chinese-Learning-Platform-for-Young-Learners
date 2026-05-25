@@ -21,6 +21,7 @@ type ApiErrorPayload = {
     data?: {
       message?: unknown
       errors?: unknown[]
+      fieldErrors?: Record<string, unknown[]>
     }
   }
   request?: unknown
@@ -68,4 +69,24 @@ export function resolveApiError(reason: unknown, fallback = 'We could not comple
 
 export function isUnauthorizedApiError(reason: unknown) {
   return (reason as ApiErrorPayload | null)?.response?.status === 401
+}
+
+export function resolveFieldErrors(reason: unknown): Record<string, string[]> {
+  const fieldErrors = (reason as ApiErrorPayload | null)?.response?.data?.fieldErrors
+  if (!fieldErrors || typeof fieldErrors !== 'object') {
+    return {}
+  }
+
+  const result: Record<string, string[]> = {}
+  Object.entries(fieldErrors).forEach(([field, messages]) => {
+    if (!Array.isArray(messages)) return
+
+    const cleanMessages = messages.map(cleanServerMessage).filter((message): message is string => Boolean(message))
+
+    if (cleanMessages.length > 0) {
+      result[field] = cleanMessages
+    }
+  })
+
+  return result
 }
