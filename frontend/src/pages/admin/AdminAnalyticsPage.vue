@@ -341,7 +341,7 @@ import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAnalytics, adminAuditLogs } from '@/demo/data'
 import type { AdminAiUsageLogResponse, AnalyticsBreakdownItem, LiveClassResponse } from '@/types/api'
-import { formatCurrency, formatDateTime, formatNumber } from '@/utils/format'
+import { formatCurrency, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
 const router = useRouter()
 
@@ -536,14 +536,15 @@ const healthCheckedLabel = computed(() => (health.value.timestamp ? formatDateTi
 const liveClassSummaryLabel = computed(() => `${formatNumber(liveClasses.value.length)} row(s) loaded`)
 
 function normalizeBreakdown(items: AnalyticsBreakdownItem[]) {
-  const total = items.reduce((sum, item) => sum + (item.value ?? 0), 0)
+  const total = items.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item.value)), 0)
   const tones = ['purple', 'green', 'orange', 'blue'] as const
 
   return items.map((item, index) => {
-    const percentage = Math.round(total > 0 ? (item.value / total) * 100 : 0)
+    const value = Math.max(0, toFiniteNumber(item.value))
+    const percentage = ratioPercent(value, total)
     return {
       label: item.label,
-      displayValue: `${formatNumber(item.value)} (${percentage}%)`,
+      displayValue: `${formatNumber(value)} (${percentage}%)`,
       percentage,
       tone: tones[index % tones.length],
     }

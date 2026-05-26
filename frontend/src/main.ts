@@ -23,6 +23,7 @@
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
+import { AUTH_INVALIDATED_EVENT } from './api/http'
 import App from './App.vue'
 import { i18n } from './plugins/i18n'
 import { initObservability } from './plugins/observability'
@@ -41,7 +42,7 @@ app.use(router)
 
 app.mount('#app')
 
-window.addEventListener('mandarin-spark:auth-invalidated', () => {
+window.addEventListener(AUTH_INVALIDATED_EVENT, () => {
   const auth = useAuthStore(pinia)
   const activeRoute = router.currentRoute.value
   const shouldRedirectToAuth = Boolean(activeRoute.meta.roles?.length)

@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.admin.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -81,6 +84,14 @@ public record AdminMatchingGameItemRequest(
         @PositiveOrZero(message = "Sort order must be non-negative.")
         @Max(value = 10_000, message = "Sort order must not exceed 10000.")
         Integer sortOrder) {
+
+    public AdminMatchingGameItemRequest {
+        leftText = strip(leftText);
+        rightText = strip(rightText);
+        leftImageUrl = stripToNull(leftImageUrl);
+        rightImageUrl = stripToNull(rightImageUrl);
+        pinyin = stripToNull(pinyin);
+    }
 
     /**
      * Compile-time-constant regex used by the {@link Pattern} guards on

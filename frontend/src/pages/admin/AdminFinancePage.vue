@@ -36,7 +36,7 @@
       <MetricCard label="Payouts" :value="String(payouts.length)" subtitle="Teacher payout requests" icon="earnings" />
       <MetricCard
         label="Commission"
-        :value="`${Math.round(commission.commissionRate * 100)}%`"
+        :value="`${commissionRatePercent}%`"
         subtitle="Platform commission rate"
         icon="chart"
       />
@@ -248,7 +248,7 @@ import { useResource } from '@/composables/useResource'
 import { adminPayments, adminPayouts, adminRefunds, commissionSetting } from '@/demo/data'
 import type { AdminPayoutRequestResponse, AdminRefundRequestResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatCurrency } from '@/utils/format'
+import { clampNumber, clampPercent, formatCurrency, toFiniteNumber } from '@/utils/format'
 
 const paymentsResource = useResource(() => adminApi.payments(), adminPayments)
 const refundsResource = useResource(() => adminApi.refunds(), adminRefunds)
@@ -269,7 +269,8 @@ const payouts = computed(() => payoutsResource.data.value ?? (payoutsResource.us
 const commission = computed(
   () => commissionResource.data.value ?? (commissionResource.usingFallback.value ? commissionSetting : emptyCommission),
 )
-const totalRevenue = computed(() => payments.value.reduce((sum, payment) => sum + Number(payment.amount || 0), 0))
+const totalRevenue = computed(() => payments.value.reduce((sum, payment) => sum + toFiniteNumber(payment.amount), 0))
+const commissionRatePercent = computed(() => clampPercent(commission.value.commissionRate * 100))
 const pendingRefundCount = computed(() => refunds.value.filter((refund) => refund.refundStatus === 'PENDING').length)
 const pendingPayoutCount = computed(() => payouts.value.filter((payout) => payout.payoutStatus === 'PENDING').length)
 const financeHighlights = computed(() => [
@@ -311,7 +312,7 @@ const financeDecisionReason = ref('')
 watch(
   commission,
   (value) => {
-    commissionRate.value = value.commissionRate
+    commissionRate.value = clampCommissionRate(value.commissionRate)
   },
   { immediate: true },
 )
@@ -505,7 +506,9 @@ async function saveCommission() {
   actionSuccess.value = null
   submittingCommission.value = true
   try {
-    await adminApi.updateCommissionSetting({ commissionRate: commissionRate.value })
+    const normalizedRate = clampCommissionRate(commissionRate.value)
+    commissionRate.value = normalizedRate
+    await adminApi.updateCommissionSetting({ commissionRate: normalizedRate })
     await commissionResource.reload()
     actionSuccess.value = 'Commission setting saved and refreshed.'
   } catch (reason) {
@@ -537,6 +540,10 @@ function ensureFinanceLive(readOnly: boolean, message: string) {
   actionSuccess.value = null
   actionError.value = message
   return false
+}
+
+function clampCommissionRate(value: number) {
+  return clampNumber(value, 0, 1)
 }
 
 function confirmFinanceAction(message: string) {

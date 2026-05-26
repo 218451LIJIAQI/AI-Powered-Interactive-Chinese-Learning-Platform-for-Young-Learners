@@ -360,7 +360,14 @@ import type {
   StudentTracingExerciseResponse,
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDate, formatNumber } from '@/utils/format'
+import {
+  clampPercent,
+  formatDate,
+  formatNumber,
+  nonNegativeInteger,
+  ratioPercent,
+  toFiniteNumber,
+} from '@/utils/format'
 import { safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
@@ -388,8 +395,8 @@ const listeningDetail = ref<StudentListeningExerciseResponse | null>(null)
 const tracingDetail = ref<StudentTracingExerciseResponse | null>(null)
 const dragDropDetail = ref<StudentDragDropActivityResponse | null>(null)
 const storyDetail = ref<StudentStoryActivityResponse | null>(null)
-const safeListeningAudioUrl = computed(() => safeHttpUrl(listeningDetail.value?.audioUrl))
-const safeTracingWorksheetUrl = computed(() => safeHttpUrl(tracingDetail.value?.worksheetUrl))
+const safeListeningAudioUrl = computed(() => safeHttpUrl(listeningDetail.value?.audioUrl, { allowRelative: true }))
+const safeTracingWorksheetUrl = computed(() => safeHttpUrl(tracingDetail.value?.worksheetUrl, { allowRelative: true }))
 
 const activities = computed(
   () =>
@@ -464,9 +471,13 @@ const pageError = computed(
 
 const totalPracticeItems = computed(() => Math.max(activities.value.items.length, 1))
 const completedActivities = computed(() => activities.value.items.filter((item) => item.completed).length)
-const totalPracticeMinutes = computed(() =>
-  Math.round(activities.value.items.reduce((sum, item) => sum + (item.estimatedSeconds ?? 0), 0) / 60),
-)
+const totalPracticeMinutes = computed(() => {
+  const totalSeconds = activities.value.items.reduce(
+    (sum, item) => sum + Math.max(0, toFiniteNumber(item.estimatedSeconds)),
+    0,
+  )
+  return nonNegativeInteger(totalSeconds / 60)
+})
 const totalPracticeTime = computed(() => {
   const hours = Math.floor(totalPracticeMinutes.value / 60)
   const minutes = totalPracticeMinutes.value % 60
@@ -478,14 +489,12 @@ const totalPracticeTime = computed(() => {
   return `${totalPracticeMinutes.value}m`
 })
 
-const accuracy = computed(() => progress.value.quizAverage)
-const accuracyLabel = computed(() => `${Math.round(accuracy.value)}%`)
-const activityCompletionProgress = computed(() =>
-  Math.round((completedActivities.value / totalPracticeItems.value) * 100),
-)
+const accuracy = computed(() => clampPercent(progress.value.quizAverage))
+const accuracyLabel = computed(() => `${accuracy.value}%`)
+const activityCompletionProgress = computed(() => ratioPercent(completedActivities.value, totalPracticeItems.value))
 const activityCompletionLabel = computed(() => `${completedActivities.value} / ${totalPracticeItems.value}`)
 const practiceProgress = computed(() =>
-  Math.round(progress.value.overallCompletionPercent || activityCompletionProgress.value),
+  clampPercent(progress.value.overallCompletionPercent || activityCompletionProgress.value),
 )
 const flashcardAvailable = computed(() => Boolean(flashcard.value.id))
 const flashcardProgressLabel = computed(() => {
@@ -600,7 +609,7 @@ const activityOptions = computed(() => [
 
 const quizAttemptCards = computed(() =>
   dashboard.value.recentQuizResults.map((result) => {
-    const scorePercent = result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 100) : 0
+    const scorePercent = ratioPercent(result.score, result.maxScore)
 
     return {
       id: result.attemptId,

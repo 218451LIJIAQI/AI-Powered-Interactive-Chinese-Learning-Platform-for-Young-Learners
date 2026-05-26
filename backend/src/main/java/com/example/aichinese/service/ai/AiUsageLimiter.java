@@ -100,12 +100,13 @@ public class AiUsageLimiter {
     }
 
     private static void rollForward(AiUsageQuotaCounter counter, LocalDateTime now, LocalDate today) {
-        if (!counter.getMinuteStartedAt().plus(Duration.ofMinutes(1)).isAfter(now)) {
+        if (counter.getMinuteStartedAt() == null
+                || !counter.getMinuteStartedAt().plus(Duration.ofMinutes(1)).isAfter(now)) {
             counter.setMinuteStartedAt(now);
             counter.setMinuteCount(0);
         }
 
-        if (!counter.getUsageDay().equals(today)) {
+        if (counter.getUsageDay() == null || !counter.getUsageDay().equals(today)) {
             counter.setUsageDay(today);
             counter.setDayCount(0);
         }

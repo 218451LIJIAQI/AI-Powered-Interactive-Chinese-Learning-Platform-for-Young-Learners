@@ -74,6 +74,9 @@ public class VideoProgressService {
 
     @Transactional
     public VideoProgressResponse upsertProgress(SecurityUserDetails currentUser, Long videoId, VideoProgressRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Video progress request is required.");
+        }
         StudentProfile student = liveLearningAccessService.requireLockedStudent(currentUser);
         RecordedLessonVideo video = liveLearningAccessService.requireAccessibleRecordedVideo(
                 currentUser,

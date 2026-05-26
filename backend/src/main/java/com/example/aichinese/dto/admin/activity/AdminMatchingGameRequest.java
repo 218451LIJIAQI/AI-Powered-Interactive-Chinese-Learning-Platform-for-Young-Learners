@@ -1,5 +1,10 @@
 package com.example.aichinese.dto.admin.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -9,6 +14,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -86,5 +92,12 @@ public record AdminMatchingGameRequest(
 
         @Valid
         @Size(max = 200, message = "A matching game cannot contain more than 200 pairs.")
-        List<AdminMatchingGameItemRequest> items) {
+        List<@NotNull(message = "Matching game item must not be null.") AdminMatchingGameItemRequest> items) {
+
+    public AdminMatchingGameRequest {
+        title = strip(title);
+        topic = stripToNull(topic);
+        tags = strippedStringListOrNull(tags);
+        items = immutableListOrEmpty(items);
+    }
 }

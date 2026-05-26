@@ -93,8 +93,11 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  *                              otherwise the student's own display
  *                              name (see class-level Javadoc); never
  *                              {@code null}
- * @param email                 contact email from {@code users.email};
- *                              nullable when no user account is linked
+ * @param email                 reserved for backward-compatible wire
+ *                              shape only; always {@code null} on this
+ *                              teacher-facing roster so student contact
+ *                              details do not leak through the aggregate
+ *                              endpoint
  * @param displayName           classroom nickname from
  *                              {@code student_profiles.display_name};
  *                              never {@code null}

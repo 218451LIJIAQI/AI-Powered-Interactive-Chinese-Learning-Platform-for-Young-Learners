@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -65,6 +67,9 @@ class StudentActivityLibraryIntegrationTests {
 
     @Autowired
     private PointsTransactionRepository pointsTransactionRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void studentCanListAndCompletePublishedFlashcardAndXpIsAwardedExactlyOnce() throws Exception {
@@ -222,8 +227,9 @@ class StudentActivityLibraryIntegrationTests {
 
         long olderFlashcardId = createPublishedFlashcard(adminToken,
                 "Older Global Sort Card", "old", "older", 1, topicMarker, 5);
-        Thread.sleep(20);
         long newerMatchingGameId = createPublishedMatchingGame(adminToken, "Newer Global Sort Match", topicMarker);
+        setActivityUpdatedAt(ActivityTimestampTable.FLASHCARDS, olderFlashcardId, LocalDateTime.of(2025, 1, 1, 9, 0));
+        setActivityUpdatedAt(ActivityTimestampTable.MATCHING_GAMES, newerMatchingGameId, LocalDateTime.of(2025, 1, 1, 9, 5));
 
         String studentToken = registerStudentAndLogin(uniqueEmail("global-sort-student"));
 
@@ -420,6 +426,26 @@ class StudentActivityLibraryIntegrationTests {
     private StudentProfile findStudentProfile(String email) {
         User user = userRepository.findByEmailWithRoles(email).orElseThrow();
         return studentProfileRepository.findByUserId(user.getId()).orElseThrow();
+    }
+
+    private void setActivityUpdatedAt(ActivityTimestampTable table, long id, LocalDateTime updatedAt) {
+        int rows = jdbcTemplate.update(table.updateStatement(), updatedAt, id);
+        assertThat(rows).isEqualTo(1);
+    }
+
+    private enum ActivityTimestampTable {
+        FLASHCARDS("UPDATE flashcards SET updated_at = ? WHERE id = ?"),
+        MATCHING_GAMES("UPDATE matching_games SET updated_at = ? WHERE id = ?");
+
+        private final String updateStatement;
+
+        ActivityTimestampTable(String updateStatement) {
+            this.updateStatement = updateStatement;
+        }
+
+        String updateStatement() {
+            return updateStatement;
+        }
     }
 
     private String uniqueEmail(String prefix) {

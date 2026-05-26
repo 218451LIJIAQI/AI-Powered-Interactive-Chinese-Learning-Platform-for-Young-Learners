@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -33,10 +35,10 @@ import jakarta.validation.constraints.Size;
  * wire format and break consumers that pin on field positions.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * both fields so Bean Validation operates on the canonical form
  * (a whitespace-only {@code reviewerNote} correctly fails
- * {@link NotBlank @NotBlank} after trimming) and the service
+ * {@link NotBlank @NotBlank} after stripping) and the service
  * layer's {@code AiInputSanitizer} pass is idempotent.
  * {@code null} is preserved so {@link NotBlank @NotBlank} renders
  * its friendly user-facing message rather than a low-level
@@ -62,7 +64,7 @@ public record ReviewAiResponseReportRequest(
         String reviewerNote) {
 
     /**
-     * Defensive canonical constructor: trims both fields so Bean
+     * Defensive canonical constructor: strips both fields so Bean
      * Validation operates on the canonical form and downstream
      * sanitisation is idempotent. {@code null} is preserved so
      * {@link NotBlank @NotBlank} can render its friendly
@@ -70,12 +72,8 @@ public record ReviewAiResponseReportRequest(
      * {@link NullPointerException}.
      */
     public ReviewAiResponseReportRequest {
-        if (status != null) {
-            status = status.trim();
-        }
-        if (reviewerNote != null) {
-            reviewerNote = reviewerNote.trim();
-        }
+        status = strip(status);
+        reviewerNote = strip(reviewerNote);
     }
 
     /**

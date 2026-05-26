@@ -40,7 +40,7 @@ import { appEnv } from '@/config/env'
 import { demoUsers } from '@/demo/data'
 import { clearOfflineCaches } from '@/plugins/pwa'
 import type { CurrentUserResponse, UserRole } from '@/types/api'
-import { safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
+import { getSessionStorage, safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
 
 function canUsePreviewMode() {
   return appEnv.useDemoData && appEnv.enablePreviewMode
@@ -55,7 +55,7 @@ function readPersistedPreviewRole() {
     return null
   }
 
-  const role = safeGetItem(storageKeys.previewRole, window.sessionStorage)
+  const role = safeGetItem(storageKeys.previewRole, getSessionStorage())
   if (isUserRole(role)) {
     return role
   }
@@ -70,16 +70,16 @@ function readPersistedPreviewRole() {
 
 function persistToken(token: string | null) {
   safeRemoveItem(storageKeys.token)
-  safeRemoveItem(storageKeys.token, window.sessionStorage)
+  safeRemoveItem(storageKeys.token, getSessionStorage())
   setAccessToken(token)
 }
 
 function persistPreviewRole(role: UserRole | null) {
   safeRemoveItem(storageKeys.previewRole)
-  safeRemoveItem(storageKeys.previewRole, window.sessionStorage)
+  safeRemoveItem(storageKeys.previewRole, getSessionStorage())
 
   if (role && canUsePreviewMode()) {
-    safeSetItem(storageKeys.previewRole, role, window.sessionStorage)
+    safeSetItem(storageKeys.previewRole, role, getSessionStorage())
   }
 }
 

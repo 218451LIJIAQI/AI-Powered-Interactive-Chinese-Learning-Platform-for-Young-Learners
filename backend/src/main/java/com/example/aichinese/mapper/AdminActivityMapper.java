@@ -42,6 +42,7 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
 import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.util.TextUtils;
 
 /**
  * Translates between the platform-managed activity entities and the
@@ -79,8 +80,8 @@ public class AdminActivityMapper {
         }
         String joined = tags.stream()
                 .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
+                .map(AdminActivityMapper::normalizeDelimitedToken)
+                .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.joining(","));
         return joined.isEmpty() ? null : joined;
@@ -97,9 +98,17 @@ public class AdminActivityMapper {
             return List.of();
         }
         return Arrays.stream(tags.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
                 .toList();
+    }
+
+    private static String normalizeDelimitedToken(String value) {
+        String normalized = TextUtils.collapseWhitespaceToNull(value);
+        if (normalized == null) {
+            return null;
+        }
+        return TextUtils.trimToNull(normalized.replace(",", ""));
     }
 
     private static String creatorName(User user) {
@@ -227,7 +236,8 @@ public class AdminActivityMapper {
     }
 
     public AdminMatchingGameResponse toResponse(MatchingGame entity, List<MatchingGameItem> items) {
-        List<AdminMatchingGameItemResponse> itemResponses = items.stream()
+        List<MatchingGameItem> safeItems = items == null ? List.of() : items;
+        List<AdminMatchingGameItemResponse> itemResponses = safeItems.stream()
                 .sorted(MATCHING_GAME_ITEM_ORDER)
                 .map(this::toResponse)
                 .toList();
@@ -418,7 +428,8 @@ public class AdminActivityMapper {
     }
 
     public AdminDragDropActivityResponse toResponse(DragDropActivity entity, List<DragDropItem> items) {
-        List<AdminDragDropItemResponse> itemResponses = items.stream()
+        List<DragDropItem> safeItems = items == null ? List.of() : items;
+        List<AdminDragDropItemResponse> itemResponses = safeItems.stream()
                 .sorted(DRAG_DROP_ITEM_ORDER)
                 .map(this::toResponse)
                 .toList();
@@ -498,7 +509,8 @@ public class AdminActivityMapper {
     }
 
     public AdminStoryActivityResponse toResponse(StoryActivity entity, List<StoryQuestion> questions) {
-        List<AdminStoryQuestionResponse> questionResponses = questions.stream()
+        List<StoryQuestion> safeQuestions = questions == null ? List.of() : questions;
+        List<AdminStoryQuestionResponse> questionResponses = safeQuestions.stream()
                 .sorted(STORY_QUESTION_ORDER)
                 .map(this::toResponse)
                 .toList();

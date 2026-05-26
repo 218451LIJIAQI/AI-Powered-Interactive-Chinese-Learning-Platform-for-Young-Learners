@@ -49,9 +49,9 @@
               <div class="student-learn-progress-block">
                 <div class="row-between">
                   <strong>Progress</strong>
-                  <strong>{{ formatPercent(lesson.completionPercent) }} - {{ currentLessonProgressLabel }}</strong>
+                  <strong>{{ formatPercent(currentLessonPercent) }} - {{ currentLessonProgressLabel }}</strong>
                 </div>
-                <ProgressBar :progress="lesson.completionPercent" />
+                <ProgressBar :progress="currentLessonPercent" />
               </div>
 
               <button
@@ -189,9 +189,9 @@
                   <span class="student-progress-icon"><IconGlyph name="learn" :size="18" /></span>
                   <strong>Current Lesson Progress</strong>
                 </div>
-                <strong>{{ formatPercent(lesson.completionPercent) }}</strong>
+                <strong>{{ formatPercent(currentLessonPercent) }}</strong>
               </div>
-              <ProgressBar :progress="lesson.completionPercent" tone="success" />
+              <ProgressBar :progress="currentLessonPercent" tone="success" />
               <span class="muted">{{ currentLessonProgressLabel }}</span>
             </div>
 
@@ -247,7 +247,7 @@ import { studentLessonPlayer, studentProgress as studentProgressDemo } from '@/d
 import { useAuthStore } from '@/stores/auth'
 import type { RecordedLessonVideoResponse, StudentLessonPlayerResponse, VideoProgressResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatPercent } from '@/utils/format'
+import { clampPercent, formatPercent, nonNegativeInteger, toFiniteNumber } from '@/utils/format'
 import { safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
@@ -330,25 +330,29 @@ const primaryVideo = computed(
 )
 
 const videoDurationLabel = computed(() => {
-  const durationSeconds = primaryVideo.value?.durationSeconds ?? 0
+  const durationSeconds = nonNegativeInteger(primaryVideo.value?.durationSeconds)
   if (durationSeconds > 0) return formatDuration(durationSeconds)
   return 'Duration unavailable'
 })
-const playableVideoUrl = computed(() =>
-  safeHttpUrl(primaryVideo.value.streamUrl || primaryVideo.value.externalVideoUrl),
-)
+const playableVideoUrl = computed(() => {
+  const streamUrl = safeHttpUrl(primaryVideo.value.streamUrl, { allowRelative: true, sameOriginOnly: true })
+  if (streamUrl) return streamUrl
+
+  return safeHttpUrl(primaryVideo.value.externalVideoUrl)
+})
 const hasPlayableVideo = computed(() => Boolean(primaryVideo.value.id && playableVideoUrl.value))
+const currentLessonPercent = computed(() => clampPercent(lesson.value.completionPercent))
 const videoProgressLabel = computed(() => {
   if (videoProgressLoading.value) return 'Loading progress'
   if (!primaryVideo.value.id) return 'No video'
   if (!videoProgress.value) return 'Not started'
   return videoProgress.value.completed
     ? '100% complete'
-    : `${Math.round(videoProgress.value.progressPercentage)}% watched`
+    : `${clampPercent(videoProgress.value.progressPercentage)}% watched`
 })
 const currentLessonProgressLabel = computed(() => {
-  if (lesson.value.completionPercent >= 100) return 'Completed'
-  if (lesson.value.completionPercent > 0) return 'In progress'
+  if (currentLessonPercent.value >= 100) return 'Completed'
+  if (currentLessonPercent.value > 0) return 'In progress'
   return 'Not started'
 })
 const hasActiveLesson = computed(() => lesson.value.lessonId > 0)
@@ -364,18 +368,18 @@ const courseLevels = computed(() => [
     id: 1,
     title: 'Started',
     subtitle: 'Lessons opened',
-    progress: String(progress.value.totalLessonsStarted),
+    progress: String(nonNegativeInteger(progress.value.totalLessonsStarted)),
     icon: 'learn',
-    active: progress.value.totalLessonsStarted > 0,
+    active: nonNegativeInteger(progress.value.totalLessonsStarted) > 0,
     locked: false,
   },
   {
     id: 2,
     title: 'Completed',
     subtitle: 'Lessons finished',
-    progress: String(progress.value.completedLessons),
+    progress: String(nonNegativeInteger(progress.value.completedLessons)),
     icon: 'status',
-    active: progress.value.completedLessons > 0,
+    active: nonNegativeInteger(progress.value.completedLessons) > 0,
     locked: false,
   },
   {
@@ -384,7 +388,7 @@ const courseLevels = computed(() => [
     subtitle: 'Assessment score',
     progress: formatPercent(progress.value.quizAverage),
     icon: 'star',
-    active: progress.value.quizAverage > 0,
+    active: clampPercent(progress.value.quizAverage) > 0,
     locked: false,
   },
   {
@@ -393,27 +397,28 @@ const courseLevels = computed(() => [
     subtitle: progress.value.lastActivitySummary || 'Course completion',
     progress: formatPercent(progress.value.overallCompletionPercent),
     icon: 'progress',
-    active: progress.value.overallCompletionPercent > 0,
+    active: clampPercent(progress.value.overallCompletionPercent) > 0,
     locked: false,
   },
 ])
 const learningModules = computed(() =>
   progress.value.recentLessons.map((recentLesson, index) => {
-    const complete = recentLesson.completionPercent >= 100
+    const completionPercent = clampPercent(recentLesson.completionPercent)
+    const complete = recentLesson.completed || completionPercent >= 100
     const current = recentLesson.lessonId === lesson.value.lessonId || (!complete && index === 0)
     return {
       id: recentLesson.lessonId,
       displayIndex: index + 1,
       title: recentLesson.lessonTitle,
-      icon: iconForProgress(recentLesson.completionPercent, recentLesson.completed),
-      statusLabel: progressLabel(recentLesson.completionPercent, recentLesson.completed),
-      progress: recentLesson.completionPercent,
-      count: progressLabel(recentLesson.completionPercent, recentLesson.completed),
+      icon: iconForProgress(completionPercent, complete),
+      statusLabel: progressLabel(completionPercent, complete),
+      progress: completionPercent,
+      count: progressLabel(completionPercent, complete),
       complete,
       current,
       locked: false,
       tone: complete ? ('success' as const) : ('primary' as const),
-      variant: variantForProgress(recentLesson.completionPercent, recentLesson.completed),
+      variant: variantForProgress(completionPercent, complete),
     }
   }),
 )
@@ -481,16 +486,18 @@ async function loadLessonPlayer() {
 }
 
 function formatDuration(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
+  const safeSeconds = nonNegativeInteger(totalSeconds)
+  const minutes = Math.floor(safeSeconds / 60)
+  const seconds = safeSeconds % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
 function startProgressPayload(video: RecordedLessonVideoResponse) {
-  const totalSeconds = video.durationSeconds ?? undefined
+  const safeDurationSeconds = nonNegativeInteger(video.durationSeconds)
+  const totalSeconds = safeDurationSeconds > 0 ? safeDurationSeconds : undefined
   const watchedSeconds = totalSeconds ? Math.max(1, Math.min(30, Math.floor(totalSeconds * 0.1))) : undefined
   const progressPercentage =
-    totalSeconds && watchedSeconds ? Math.min(95, Math.max(1, Math.round((watchedSeconds / totalSeconds) * 100))) : 1
+    totalSeconds && watchedSeconds ? Math.min(95, Math.max(1, clampPercent((watchedSeconds / totalSeconds) * 100))) : 1
 
   return {
     watchedSeconds,
@@ -572,14 +579,15 @@ async function markRecordedLessonComplete() {
 }
 
 function openLessonQuiz() {
-  if (!lesson.value.lessonId) {
+  const lessonId = toFiniteNumber(lesson.value.lessonId)
+  if (lessonId <= 0) {
     void router.push('/student/quiz')
     return
   }
 
   void router.push({
     name: 'student-quiz',
-    query: { lessonId: String(lesson.value.lessonId) },
+    query: { lessonId: String(lessonId) },
   })
 }
 

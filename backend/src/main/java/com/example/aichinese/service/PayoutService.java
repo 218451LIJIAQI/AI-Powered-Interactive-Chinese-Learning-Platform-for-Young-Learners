@@ -127,9 +127,14 @@ public class PayoutService {
 
     @Transactional
     public TeacherPayoutRequestResponse createPayoutRequest(SecurityUserDetails currentUser, PayoutRequestCreateRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Payout request is required.");
+        }
         TeacherProfile teacher = teacherProfileRepository.findLockedByUserId(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
-        BigDecimal normalizedAmount = commerceMoneyService.normalize(request.amount());
+        BigDecimal normalizedAmount = commerceMoneyService.normalizePersistableAmount(
+                request.amount(),
+                "Payout amount is too large.");
         if (normalizedAmount.signum() <= 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Payout amount must be greater than zero.");
         }
@@ -199,6 +204,9 @@ public class PayoutService {
 
     @Transactional
     public AdminPayoutRequestResponse rejectPayout(SecurityUserDetails currentUser, Long id, PayoutDecisionRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Payout decision request is required.");
+        }
         PayoutRequest payoutRequest = payoutRequestRepository.findLockedById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
         requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.PENDING, "rejected");

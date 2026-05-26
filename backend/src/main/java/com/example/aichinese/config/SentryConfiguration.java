@@ -1,21 +1,24 @@
 package com.example.aichinese.config;
 
-import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.example.aichinese.util.SensitiveDataRedactor;
+
+import io.sentry.Breadcrumb;
 import io.sentry.SentryEvent;
 import io.sentry.SentryOptions;
+import io.sentry.protocol.Message;
 import io.sentry.protocol.Request;
+import io.sentry.protocol.SentryException;
+import io.sentry.protocol.User;
 
 @Configuration
 public class SentryConfiguration {
 
-    private static final Pattern SENSITIVE_VALUE = Pattern.compile(
-            "(?i)(bearer\\s+[a-z0-9._-]+|mandarin_spark_refresh=[^;\\s]+|password[\"':=\\s]+[^\"',\\s}]+|token[\"':=\\s]+[^\"',\\s}]+)");
+    private static final String FILTERED = SensitiveDataRedactor.FILTERED;
 
     @Bean
     SentryOptions.BeforeSendCallback sentryBeforeSendCallback() {
@@ -23,48 +26,87 @@ public class SentryConfiguration {
     }
 
     private static SentryEvent sanitize(SentryEvent event) {
+        if (event == null) {
+            return null;
+        }
         Request request = event.getRequest();
         if (request != null) {
-            sanitizeMap(request.getHeaders());
-            request.setCookies(request.getCookies() == null ? null : "[Filtered]");
-            Object data = request.getData();
-            if (data instanceof String text) {
-                request.setData(mask(text));
-            }
+            request.setUrl(mask(request.getUrl()));
+            request.setQueryString(mask(request.getQueryString()));
+            request.setFragment(mask(request.getFragment()));
+            request.setApiTarget(mask(request.getApiTarget()));
+            request.setHeaders(SensitiveDataRedactor.redactStringMap(request.getHeaders(), FILTERED));
+            request.setEnvs(SensitiveDataRedactor.redactStringMap(request.getEnvs(), FILTERED));
+            request.setOthers(SensitiveDataRedactor.redactStringMap(request.getOthers(), FILTERED));
+            request.setUnknown(sanitizedMap(request.getUnknown()));
+            request.setCookies(request.getCookies() == null ? null : FILTERED);
+            request.setData(SensitiveDataRedactor.redactObject(request.getData(), FILTERED));
         }
-        sanitizeMap(event.getExtras());
+        event.setExtras(sanitizedMap(event.getExtras()));
+        event.setTags(SensitiveDataRedactor.redactStringMap(event.getTags(), FILTERED));
+        event.setTransaction(mask(event.getTransaction()));
+        event.setUnknown(sanitizedMap(event.getUnknown()));
+        sanitizeMessage(event.getMessage());
+        sanitizeBreadcrumbs(event);
+        sanitizeExceptions(event);
+        sanitizeUser(event);
         return event;
     }
 
-    private static void sanitizeMap(Map<String, ?> values) {
-        if (values == null) {
+    private static <T> Map<String, T> sanitizedMap(Map<String, T> values) {
+        return SensitiveDataRedactor.redactMap(values, FILTERED);
+    }
+
+    private static void sanitizeUser(SentryEvent event) {
+        User user = event.getUser();
+        if (user == null) {
             return;
         }
-        for (Map.Entry<String, ?> entry : values.entrySet()) {
-            if (isSensitiveKey(entry.getKey())) {
-                setMapValue(values, entry.getKey(), "[Filtered]");
-            } else if (entry.getValue() instanceof String text) {
-                setMapValue(values, entry.getKey(), mask(text));
+        User sanitizedUser = new User();
+        sanitizedUser.setData(SensitiveDataRedactor.redactStringMap(user.getData(), FILTERED));
+        sanitizedUser.setUnknown(sanitizedMap(user.getUnknown()));
+        event.setUser(sanitizedUser);
+    }
+
+    private static void sanitizeMessage(Message message) {
+        if (message == null) {
+            return;
+        }
+        message.setMessage(mask(message.getMessage()));
+        message.setFormatted(mask(message.getFormatted()));
+        if (message.getParams() != null) {
+            message.setParams(message.getParams().stream()
+                    .map(SentryConfiguration::mask)
+                    .toList());
+        }
+        message.setUnknown(sanitizedMap(message.getUnknown()));
+    }
+
+    private static void sanitizeBreadcrumbs(SentryEvent event) {
+        if (event.getBreadcrumbs() == null) {
+            return;
+        }
+        for (Breadcrumb breadcrumb : event.getBreadcrumbs()) {
+            breadcrumb.setMessage(mask(breadcrumb.getMessage()));
+            Map<String, Object> data = sanitizedMap(breadcrumb.getData());
+            if (data != null) {
+                data.forEach(breadcrumb::setData);
             }
+            breadcrumb.setUnknown(sanitizedMap(breadcrumb.getUnknown()));
         }
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private static void setMapValue(Map values, String key, String value) {
-        values.put(key, value);
-    }
-
-    private static boolean isSensitiveKey(String key) {
-        String lower = key == null ? "" : key.toLowerCase(Locale.ROOT);
-        return lower.contains("authorization")
-                || lower.contains("cookie")
-                || lower.contains("password")
-                || lower.contains("token")
-                || lower.contains("secret")
-                || lower.contains("api-key");
+    private static void sanitizeExceptions(SentryEvent event) {
+        if (event.getExceptions() == null) {
+            return;
+        }
+        for (SentryException exception : event.getExceptions()) {
+            exception.setValue(mask(exception.getValue()));
+            exception.setUnknown(sanitizedMap(exception.getUnknown()));
+        }
     }
 
     private static String mask(String value) {
-        return SENSITIVE_VALUE.matcher(value).replaceAll("[Filtered]");
+        return SensitiveDataRedactor.redactText(value, FILTERED);
     }
 }

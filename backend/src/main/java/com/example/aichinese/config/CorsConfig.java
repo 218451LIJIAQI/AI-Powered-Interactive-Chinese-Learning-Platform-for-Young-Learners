@@ -1,8 +1,11 @@
 package com.example.aichinese.config;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,9 +97,11 @@ public class CorsConfig {
         // Access-Control-Allow-Credentials: true, i.e. a CSRF/credential-leak
         // vulnerability. The exact-origin form below rejects '*' outright when
         // credentials are enabled, which is the behaviour we want.
-        List<String> exactOrigins = new ArrayList<>();
-        for (String rawOrigin : allowedOrigins.split(",")) {
-            String origin = rawOrigin.trim();
+        Set<String> exactOrigins = new LinkedHashSet<>();
+        boolean productionProfileActive = isProductionProfileActive();
+        String configuredOrigins = allowedOrigins == null ? "" : allowedOrigins;
+        for (String rawOrigin : configuredOrigins.split(",")) {
+            String origin = rawOrigin.strip();
             if (origin.isEmpty()) {
                 continue;
             }
@@ -108,11 +113,11 @@ public class CorsConfig {
                         + "Configure APP_CORS_ALLOWED_ORIGINS with explicit origins instead.");
                 continue;
             }
-            exactOrigins.add(origin);
+            exactOrigins.add(normalizeOrigin(origin, productionProfileActive));
         }
 
         if (exactOrigins.isEmpty()) {
-            if (isProductionProfileActive()) {
+            if (productionProfileActive) {
                 throw new IllegalStateException("APP_CORS_ALLOWED_ORIGINS must contain explicit origins when the prod profile is active.");
             }
             // Fall back to a small allow-list of loopback Vite origins. This
@@ -125,7 +130,7 @@ public class CorsConfig {
                     DEFAULT_LOCAL_DEV_ORIGINS);
         }
 
-        configuration.setAllowedOrigins(exactOrigins);
+        configuration.setAllowedOrigins(new ArrayList<>(exactOrigins));
         configuration.setAllowedHeaders(ALLOWED_HEADERS);
         configuration.setAllowedMethods(ALLOWED_METHODS);
         configuration.setAllowCredentials(true);
@@ -172,5 +177,24 @@ public class CorsConfig {
             origins.add("http://127.0.0.1:" + port);
         }
         return List.copyOf(origins);
+    }
+
+    private static String normalizeOrigin(String origin, boolean productionProfileActive) {
+        URI uri = HttpUrlValidation.requireAbsoluteHttpUrl(origin, "CORS allowed origin");
+        if (uri.getRawPath() != null && !uri.getRawPath().isBlank() && !"/".equals(uri.getRawPath())) {
+            throw new IllegalArgumentException("CORS allowed origin must not include a path.");
+        }
+        if (uri.getRawQuery() != null || uri.getRawFragment() != null) {
+            throw new IllegalArgumentException("CORS allowed origin must not include a query string or fragment.");
+        }
+        if (productionProfileActive) {
+            HttpUrlValidation.requirePublicHttpsUrl(origin, "APP_CORS_ALLOWED_ORIGINS", "when the prod profile is active");
+        }
+
+        String scheme = HttpUrlValidation.normalizeScheme(uri.getScheme());
+        String host = HttpUrlValidation.normalizeHost(uri.getHost());
+        String port = uri.getPort() >= 0 ? ":" + uri.getPort() : "";
+        String normalizedHost = host.contains(":") ? "[" + host + "]" : host;
+        return scheme + "://" + normalizedHost + port;
     }
 }

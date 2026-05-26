@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.content;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.math.BigDecimal;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -148,4 +151,11 @@ public record CreateLessonRequest(
         @Size(max = ContentDtoConstants.COVER_IMAGE_URL_MAX_LENGTH,
                 message = "Cover image reference must not exceed 255 characters.")
         String coverImageUrl) {
+
+    public CreateLessonRequest {
+        title = strip(title);
+        description = stripToNull(description);
+        basicContent = stripToNull(basicContent);
+        coverImageUrl = stripToNull(coverImageUrl);
+    }
 }

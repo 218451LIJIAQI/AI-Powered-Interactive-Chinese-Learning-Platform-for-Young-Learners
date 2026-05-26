@@ -72,6 +72,8 @@ const exactAppRoutes = new Set([
 
 const dynamicRoutePrefixes = ['/courses/', '/student/quiz/']
 
+const UNSAFE_PATH_SEGMENTS = new Set(['.', '..'])
+
 function splitPathAndSuffix(path: string) {
   const queryStart = path.indexOf('?')
   const hashStart = path.indexOf('#')
@@ -81,6 +83,24 @@ function splitPathAndSuffix(path: string) {
     basePath: path.slice(0, suffixStart),
     suffix: path.slice(suffixStart),
   }
+}
+
+function containsUnsafePathSegment(basePath: string) {
+  return basePath.split('/').some((segment) => {
+    if (UNSAFE_PATH_SEGMENTS.has(segment)) {
+      return true
+    }
+
+    try {
+      return UNSAFE_PATH_SEGMENTS.has(decodeURIComponent(segment))
+    } catch {
+      return true
+    }
+  })
+}
+
+function isSafeRedirectCandidate(path: string, basePath: string) {
+  return !path.includes('\\') && !/[\u0000-\u001f\u007f]/u.test(path) && !containsUnsafePathSegment(basePath)
 }
 
 function isKnownAppRoute(basePath: string) {
@@ -98,6 +118,9 @@ export function normalizeAppRoute(path: string | null | undefined) {
   }
 
   const { basePath, suffix } = splitPathAndSuffix(trimmed)
+  if (!isSafeRedirectCandidate(trimmed, basePath)) {
+    return null
+  }
 
   if (legacyRouteMap[basePath]) {
     return `${legacyRouteMap[basePath]}${suffix}`

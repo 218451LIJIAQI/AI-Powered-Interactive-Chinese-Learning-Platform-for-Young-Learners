@@ -1,6 +1,7 @@
 package com.example.aichinese.service;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import com.example.aichinese.dto.learning.RecordedLessonVideoResponse;
 import com.example.aichinese.dto.learning.VideoProgressResponse;
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.VideoProgress;
 
@@ -41,7 +43,7 @@ public class LiveLearningMapper {
             boolean showMeetingLink) {
         Integer durationMinutes = null;
         if (liveClass.getScheduledStartAt() != null && liveClass.getScheduledEndAt() != null) {
-            durationMinutes = Math.toIntExact(Duration.between(
+            durationMinutes = clampDurationMinutes(Duration.between(
                     liveClass.getScheduledStartAt(),
                     liveClass.getScheduledEndAt()).toMinutes());
         }
@@ -128,15 +130,64 @@ public class LiveLearningMapper {
     }
 
     public VideoProgressResponse toVideoProgressResponse(VideoProgress progress) {
+        Long progressId = requirePersistedId(progress, "Video progress must be persisted before it can be mapped.");
+        Long lessonId = requirePersistedId(
+                progress.getLesson(),
+                "Video progress must be attached to a persisted lesson before it can be mapped.");
+        Long recordedVideoId = progress.getRecordedVideo() == null
+                ? null
+                : requirePersistedId(
+                        progress.getRecordedVideo(),
+                        "Video progress must reference a persisted recorded video when the relation is present.");
+        LocalDateTime updatedAt = requireUpdatedAt(progress);
+
         return new VideoProgressResponse(
-                progress.getId(),
-                progress.getLesson().getId(),
-                progress.getRecordedVideo() == null ? null : progress.getRecordedVideo().getId(),
+                progressId,
+                lessonId,
+                recordedVideoId,
                 progress.getWatchedSeconds(),
                 progress.getTotalSeconds(),
                 progress.getProgressPercentage(),
                 progress.isCompleted(),
                 progress.getLastWatchedAt(),
-                progress.getUpdatedAt());
+                updatedAt);
+    }
+
+    private Integer clampDurationMinutes(long minutes) {
+        if (minutes > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        if (minutes < 0) {
+            return 0;
+        }
+        return (int) minutes;
+    }
+
+    private Long requirePersistedId(VideoProgress progress, String message) {
+        if (progress == null || progress.getId() == null) {
+            throw new IllegalStateException(message);
+        }
+        return progress.getId();
+    }
+
+    private Long requirePersistedId(Lesson lesson, String message) {
+        if (lesson == null || lesson.getId() == null) {
+            throw new IllegalStateException(message);
+        }
+        return lesson.getId();
+    }
+
+    private Long requirePersistedId(RecordedLessonVideo video, String message) {
+        if (video == null || video.getId() == null) {
+            throw new IllegalStateException(message);
+        }
+        return video.getId();
+    }
+
+    private LocalDateTime requireUpdatedAt(VideoProgress progress) {
+        if (progress.getUpdatedAt() == null) {
+            throw new IllegalStateException("Video progress must carry an updated timestamp before it can be mapped.");
+        }
+        return progress.getUpdatedAt();
     }
 }

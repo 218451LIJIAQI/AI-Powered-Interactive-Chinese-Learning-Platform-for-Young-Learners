@@ -1,6 +1,7 @@
 package com.example.aichinese.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
@@ -32,6 +33,7 @@ class FileDownloadResponseBuilderTests {
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_OCTET_STREAM);
         assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
         assertThat(response.getHeaders().getPragma()).isEqualTo("no-cache");
+        assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
         assertThat(response.getHeaders().getFirst("Content-Disposition")).contains("lesson.mp4");
         assertThat(response.getBody()).isSameAs(download.resource());
     }
@@ -66,5 +68,45 @@ class FileDownloadResponseBuilderTests {
                 .contains("verification-document.pdf");
         assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
         assertThat(response.getHeaders().getPragma()).isEqualTo("no-cache");
+    }
+
+    @Test
+    void unsafeFileNameCharactersAreSanitizedBeforeEnteringHeaders() {
+        StoredFileDownload download = new StoredFileDownload(
+                new ByteArrayResource("demo".getBytes()),
+                "..\\private/lesson\r\nX-Injected: yes.pdf",
+                "application/pdf");
+
+        ResponseEntity<Resource> response = FileDownloadResponseBuilder.buildAttachmentDownloadResponse(download);
+
+        String contentDisposition = response.getHeaders().getFirst("Content-Disposition");
+        assertThat(contentDisposition)
+                .doesNotContain("\r", "\n", "\\", "/", "X-Injected: yes")
+                .contains("filename*=UTF-8''_private_lesson_X-Injected_%20yes.pdf");
+        assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
+    }
+
+    @Test
+    void unsafeInlineMediaTypeFallsBackToAttachmentAndOctetStream() {
+        StoredFileDownload download = new StoredFileDownload(
+                new ByteArrayResource("<script>alert(1)</script>".getBytes()),
+                "preview.html",
+                "text/html");
+
+        ResponseEntity<Resource> response = FileDownloadResponseBuilder.buildInlineDownloadResponse(download);
+
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_OCTET_STREAM);
+        assertThat(response.getHeaders().getFirst("Content-Disposition"))
+                .startsWith("attachment;")
+                .contains("preview.html");
+        assertThat(response.getHeaders().getFirst("Cross-Origin-Resource-Policy")).isEqualTo("same-origin");
+        assertThat(response.getHeaders().getExpires()).isZero();
+    }
+
+    @Test
+    void storedFileDownloadRequiresResource() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new StoredFileDownload(null, "file.pdf", "application/pdf"))
+                .withMessage("resource");
     }
 }

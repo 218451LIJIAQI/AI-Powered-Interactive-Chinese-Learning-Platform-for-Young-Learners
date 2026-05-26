@@ -8,6 +8,7 @@ import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,6 +19,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -33,6 +36,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.validation.method.ParameterErrors;
+import org.springframework.validation.method.ParameterValidationResult;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.util.RequestIdHolder;
@@ -97,6 +102,11 @@ public class GlobalExceptionHandler {
      * would otherwise turn an exception handler into an infinite loop.
      */
     private static final int MAX_CAUSE_DEPTH = 20;
+
+    private static final String REQUEST_FIELD = "request";
+
+    private static final DefaultParameterNameDiscoverer PARAMETER_NAME_DISCOVERER =
+            new DefaultParameterNameDiscoverer();
 
     private static final Set<String> PUBLIC_AUTH_VALIDATION_PATHS = Set.of(
             "/api/v1/auth/login",
@@ -176,7 +186,7 @@ public class GlobalExceptionHandler {
         log.warn("Handler-method validation rejected request with HTTP 400 [requestId={}]: {} error(s)",
                 requestId(),
                 exception.getAllErrors().size());
-        return validationBadRequest(Map.of());
+        return validationBadRequest(extractFieldErrors(exception));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -299,10 +309,7 @@ public class GlobalExceptionHandler {
         exception.getBindingResult().getFieldErrors().forEach(error -> {
             String field = error.getField();
             String message = error.getDefaultMessage();
-            if (field != null && message != null && !message.isBlank()) {
-                fieldErrors.computeIfAbsent(field, ignored -> new java.util.ArrayList<>())
-                        .add(message.strip());
-            }
+            addFieldError(fieldErrors, field, message);
         });
         return copyFieldErrors(fieldErrors);
     }
@@ -316,12 +323,91 @@ public class GlobalExceptionHandler {
         exception.getConstraintViolations().forEach(violation -> {
             String field = lastPathSegment(violation.getPropertyPath());
             String message = violation.getMessage();
-            if (field != null && message != null && !message.isBlank()) {
-                fieldErrors.computeIfAbsent(field, ignored -> new java.util.ArrayList<>())
-                        .add(message.strip());
-            }
+            addFieldError(fieldErrors, field, message);
         });
         return copyFieldErrors(fieldErrors);
+    }
+
+    private static Map<String, List<String>> extractFieldErrors(HandlerMethodValidationException exception) {
+        if (exception.getParameterValidationResults().isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
+        for (ParameterValidationResult result : exception.getParameterValidationResults()) {
+            if (result instanceof ParameterErrors parameterErrors) {
+                for (FieldError error : parameterErrors.getFieldErrors()) {
+                    addFieldError(fieldErrors, error.getField(), error.getDefaultMessage());
+                }
+                parameterErrors.getGlobalErrors().forEach(error ->
+                        addFieldError(fieldErrors, parameterName(result), error.getDefaultMessage()));
+                continue;
+            }
+
+            String field = parameterName(result);
+            result.getResolvableErrors().forEach(error ->
+                    addFieldError(fieldErrors, fieldName(field, error), error.getDefaultMessage()));
+        }
+        return copyFieldErrors(fieldErrors);
+    }
+
+    private static void addFieldError(Map<String, List<String>> fieldErrors, String field, String message) {
+        String safeField = normalizeFieldKey(field);
+        if (safeField == null || message == null || message.isBlank()) {
+            return;
+        }
+        fieldErrors.computeIfAbsent(safeField, ignored -> new java.util.ArrayList<>())
+                .add(message.strip());
+    }
+
+    private static String parameterName(ParameterValidationResult result) {
+        if (result == null || result.getMethodParameter() == null) {
+            return REQUEST_FIELD;
+        }
+        result.getMethodParameter().initParameterNameDiscovery(PARAMETER_NAME_DISCOVERER);
+        String parameterName = result.getMethodParameter().getParameterName();
+        return parameterName == null || parameterName.isBlank() ? REQUEST_FIELD : parameterName;
+    }
+
+    private static String fieldName(String fallback, MessageSourceResolvable error) {
+        if (error != null && error.getCodes() != null) {
+            for (String code : error.getCodes()) {
+                String safeCode = normalizeFieldKey(code);
+                if (safeCode != null) {
+                    return safeCode;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    private static String normalizeFieldKey(String field) {
+        if (field == null || field.isBlank()) {
+            return null;
+        }
+
+        StringBuilder safe = new StringBuilder(field.length());
+        boolean previousWasSeparator = false;
+        for (int index = 0; index < field.length(); index++) {
+            char ch = field.charAt(index);
+            if (Character.isLetterOrDigit(ch) || ch == '_' || ch == '-') {
+                safe.append(ch);
+                previousWasSeparator = false;
+            } else if ((ch == '.' || ch == '[' || ch == ']') && !previousWasSeparator) {
+                safe.append('.');
+                previousWasSeparator = true;
+            }
+        }
+
+        int start = 0;
+        while (start < safe.length() && safe.charAt(start) == '.') {
+            start++;
+        }
+        int end = safe.length();
+        while (end > start && safe.charAt(end - 1) == '.') {
+            end--;
+        }
+        return start == end ? null : safe.substring(start, end);
     }
 
     private static String lastPathSegment(Path path) {
@@ -343,7 +429,7 @@ public class GlobalExceptionHandler {
         }
         Map<String, List<String>> copied = new LinkedHashMap<>();
         source.forEach((field, messages) -> copied.put(field, List.copyOf(messages)));
-        return Map.copyOf(copied);
+        return java.util.Collections.unmodifiableMap(copied);
     }
 
     private static boolean shouldExposeFieldErrors() {

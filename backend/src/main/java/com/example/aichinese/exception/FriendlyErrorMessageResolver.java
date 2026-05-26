@@ -6,6 +6,8 @@ import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
+import com.example.aichinese.util.TextUtils;
+
 /**
  * Translates raw exception messages into safe, user-facing strings.
  *
@@ -418,10 +420,11 @@ public final class FriendlyErrorMessageResolver {
      * above is case- and whitespace-insensitive.
      */
     private static String normalize(String rawMessage) {
-        if (rawMessage == null) {
+        String collapsed = TextUtils.collapseWhitespaceToNull(rawMessage);
+        if (collapsed == null) {
             return "";
         }
-        return rawMessage.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        return collapsed.toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -433,16 +436,14 @@ public final class FriendlyErrorMessageResolver {
      * the caller has already verified the normalised message is non-blank.
      */
     private static String passthrough(String rawMessage) {
-        if (rawMessage == null) {
-            return operationFailedMessage();
-        }
-        String collapsed = rawMessage.replaceAll("\\s+", " ").trim();
-        if (collapsed.isEmpty()) {
+        String collapsed = TextUtils.collapseWhitespaceToNull(rawMessage);
+        if (collapsed == null) {
             return operationFailedMessage();
         }
         if (collapsed.length() <= MAX_VERBATIM_LENGTH) {
             return collapsed;
         }
-        return collapsed.substring(0, MAX_VERBATIM_LENGTH).stripTrailing();
+        String truncated = TextUtils.safeTruncate(collapsed, MAX_VERBATIM_LENGTH).stripTrailing();
+        return truncated.isEmpty() ? operationFailedMessage() : truncated;
     }
 }

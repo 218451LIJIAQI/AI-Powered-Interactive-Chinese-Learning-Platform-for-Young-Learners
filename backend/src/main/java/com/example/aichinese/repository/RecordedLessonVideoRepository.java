@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.enums.AccessType;
@@ -76,6 +77,41 @@ public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLes
      * directly, or targets one of the supplied related package ids.
      * Used by the student lesson detail view to surface recorded
      * sessions without scanning the entire recorded video table.
+     *
+     * <p>The public wrapper owns the empty-package edge case so callers
+     * do not need to pass sentinel ids just to avoid JPQL
+     * {@code IN ()}. If the package collection is {@code null} or
+     * empty, the repository still returns lesson-scoped active videos
+     * through a direct-lesson query.</p>
+     */
+    default List<RecordedLessonVideo> findActiveRelatedToLessonOrPackages(
+            Long lessonId,
+            @Nullable Collection<Long> packageIds) {
+        if (packageIds == null || packageIds.isEmpty()) {
+            return findActiveRelatedToLesson(lessonId);
+        }
+        return findActiveRelatedToLessonOrPackagesInternal(lessonId, packageIds);
+    }
+
+    /**
+     * Direct-lesson branch of
+     * {@link #findActiveRelatedToLessonOrPackages(Long, Collection)}
+     * used when no related package ids exist.
+     */
+    @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
+    @Query("""
+            select v from RecordedLessonVideo v
+            where v.active = true
+              and v.lesson.id = :lessonId
+            order by v.sortOrder asc, v.createdAt asc
+            """)
+    List<RecordedLessonVideo> findActiveRelatedToLesson(@Param("lessonId") Long lessonId);
+
+    /**
+     * Package-aware branch of
+     * {@link #findActiveRelatedToLessonOrPackages(Long, Collection)}.
+     * Not intended to be invoked directly because callers should not
+     * have to handle the empty-collection SQL edge case themselves.
      */
     @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     @Query("""
@@ -84,8 +120,9 @@ public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLes
                 v.lesson.id = :lessonId
                 or v.coursePackage.id in :packageIds
             )
+            order by v.sortOrder asc, v.createdAt asc
             """)
-    List<RecordedLessonVideo> findActiveRelatedToLessonOrPackages(
+    List<RecordedLessonVideo> findActiveRelatedToLessonOrPackagesInternal(
             @Param("lessonId") Long lessonId,
             @Param("packageIds") Collection<Long> packageIds);
 

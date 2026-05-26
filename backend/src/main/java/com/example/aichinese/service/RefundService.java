@@ -90,6 +90,9 @@ public class RefundService {
 
     @Transactional
     public StudentRefundRequestResponse createRefundRequest(SecurityUserDetails currentUser, RefundRequestCreateRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Refund request is required.");
+        }
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Order order = orderRepository.findLockedByIdAndStudentUserId(request.orderId(), currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Order was not found."));
@@ -107,7 +110,9 @@ public class RefundService {
         RefundRequest refundRequest = new RefundRequest();
         refundRequest.setStudent(student);
         refundRequest.setOrder(order);
-        refundRequest.setAmount(commerceMoneyService.normalize(order.getTotalAmount()));
+        refundRequest.setAmount(commerceMoneyService.normalizePersistableAmount(
+                order.getTotalAmount(),
+                "Refund amount is too large."));
         refundRequest.setReason(request.reason() != null ? request.reason().trim() : null);
         refundRequest.setRefundStatus(RefundStatus.PENDING);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
@@ -163,6 +168,9 @@ public class RefundService {
 
     @Transactional
     public AdminRefundRequestResponse rejectRefund(SecurityUserDetails currentUser, Long id, RefundDecisionRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Refund decision request is required.");
+        }
         Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
         RefundRequest refundRequest = refundRequestRepository.findLockedById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));

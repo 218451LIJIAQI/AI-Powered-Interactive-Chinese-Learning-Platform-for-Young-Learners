@@ -12,6 +12,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.example.aichinese.config.AsyncConfig;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.util.ExceptionLogUtils;
 
 /**
  * Publishes outbound email work from transactional use cases and delivers it
@@ -60,7 +61,8 @@ public class TransactionalEmailDispatcher {
             }
         } catch (Exception exception) {
             Long recipientId = event.recipient() == null ? null : event.recipient().id();
-            log.warn("Asynchronous email delivery failed for user id {}.", recipientId, exception);
+            log.warn("Asynchronous email delivery failed for user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
+            log.debug("Asynchronous email delivery stack trace for user id {}.", recipientId, exception);
         }
     }
 

@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.communication;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -105,4 +107,9 @@ public record CreateModerationActionRequest(
      * via {@link com.example.aichinese.util.AiInputSanitizer}.
      */
     public static final int MAX_REASON_LENGTH = 1000;
+
+    public CreateModerationActionRequest {
+        targetType = strip(targetType);
+        reason = strip(reason);
+    }
 }

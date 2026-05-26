@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.system;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -38,11 +40,11 @@ import jakarta.validation.constraints.Size;
  * wire format and break consumers that pin on field positions.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #aiDisclaimerText} so Bean Validation operates on the
  * canonical form (a whitespace-only banner correctly fails
- * {@link NotBlank @NotBlank} after trimming) and the service
- * layer's existing {@code .trim()} pass becomes idempotent.
+ * {@link NotBlank @NotBlank} after stripping) and the service
+ * layer's normalisation pass becomes idempotent.
  * {@code null} is preserved so the {@link NotBlank @NotBlank}
  * validator renders its friendly user-facing message rather than
  * a low-level {@link NullPointerException}. The seven boxed
@@ -78,17 +80,15 @@ public record AdminPlatformSettingsUpdateRequest(
         Boolean aiSafetyCheck) {
 
     /**
-     * Defensive canonical constructor: trims
+     * Defensive canonical constructor: strips
      * {@link #aiDisclaimerText} so Bean Validation operates on the
-     * canonical form and the service layer's existing
-     * {@code .trim()} pass is idempotent. {@code null} is
+     * canonical form and the service layer's normalisation pass is
+     * idempotent. {@code null} is
      * preserved so {@link NotBlank @NotBlank} can render its
      * friendly user-facing message rather than a low-level
      * {@link NullPointerException}.
      */
     public AdminPlatformSettingsUpdateRequest {
-        if (aiDisclaimerText != null) {
-            aiDisclaimerText = aiDisclaimerText.trim();
-        }
+        aiDisclaimerText = strip(aiDisclaimerText);
     }
 }

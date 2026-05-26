@@ -22,12 +22,12 @@
               <span class="student-rewards-level-badge"><IconGlyph name="trophy" :size="44" /></span>
               <div class="student-rewards-level-copy">
                 <small>Your Level</small>
-                <strong>Level {{ rewards.currentLevelNumber }}</strong>
+                <strong>Level {{ currentLevelNumber }}</strong>
                 <span>{{ currentLevelTitle }}</span>
               </div>
               <div class="student-rewards-level-progress">
-                <ProgressBar :progress="rewards.progressToNextLevelPercent" />
-                <strong>{{ rewards.progressToNextLevelPercent }}% to next level</strong>
+                <ProgressBar :progress="levelProgressPercent" />
+                <strong>{{ levelProgressPercent }}% to next level</strong>
               </div>
             </div>
 
@@ -46,13 +46,10 @@
                 <span class="student-rewards-next-icon"><IconGlyph name="rewards" :size="26" /></span>
                 <div class="student-rewards-next-copy">
                   <strong>Next Milestone</strong>
-                  <p>
-                    Progress is {{ rewards.progressToNextLevelPercent }}% toward Level
-                    {{ rewards.currentLevelNumber + 1 }}.
-                  </p>
+                  <p>Progress is {{ levelProgressPercent }}% toward Level {{ nextLevelNumber }}.</p>
                   <div class="student-rewards-next-progress">
-                    <ProgressBar :progress="rewards.progressToNextLevelPercent" />
-                    <span>Level {{ rewards.currentLevelNumber + 1 }} target</span>
+                    <ProgressBar :progress="levelProgressPercent" />
+                    <span>Level {{ nextLevelNumber }} target</span>
                   </div>
                 </div>
               </div>
@@ -235,7 +232,7 @@
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.date }}</span>
                 </div>
-                <strong class="student-reward-history-points">+{{ item.points }} XP</strong>
+                <strong class="student-reward-history-points">{{ item.pointsLabel }} XP</strong>
               </article>
             </div>
             <div v-else class="student-reward-history-empty">
@@ -305,7 +302,7 @@ import {
   studentProgress as studentProgressDemo,
   studentRewards,
 } from '@/demo/data'
-import { formatDate, formatNumber } from '@/utils/format'
+import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent } from '@/utils/format'
 
 const router = useRouter()
 
@@ -409,21 +406,21 @@ function levelTitleFor(levelNumber: number) {
   return titles[levelNumber] ?? `Level ${levelNumber}`
 }
 
-const currentLevelTitle = computed(() => {
-  return levelTitleFor(rewards.value.currentLevelNumber)
-})
+const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
+const nextLevelNumber = computed(() => currentLevelNumber.value + 1)
+const levelProgressPercent = computed(() => clampPercent(rewards.value.progressToNextLevelPercent))
+const currentStreakCount = computed(() => nonNegativeInteger(rewards.value.streak.currentStreak))
+const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
+const currentLevelTitle = computed(() => levelTitleFor(currentLevelNumber.value))
 
 const heroStats = computed(() => [
   { label: 'Total Points', value: formatNumber(rewards.value.totalPoints), icon: 'star' },
-  { label: 'Current Streak', value: `${rewards.value.streak.currentStreak} days`, icon: 'streak' },
-  { label: 'Achievements', value: String(dashboard.value.badgeCount), icon: 'rewards' },
+  { label: 'Current Streak', value: `${currentStreakCount.value} days`, icon: 'streak' },
+  { label: 'Achievements', value: String(nonNegativeInteger(dashboard.value.badgeCount)), icon: 'rewards' },
 ])
 
 const quizzesAbove80 = computed(
-  () =>
-    dashboard.value.recentQuizResults.filter(
-      (item) => item.maxScore > 0 && Math.round((item.score / item.maxScore) * 100) >= 80,
-    ).length,
+  () => dashboard.value.recentQuizResults.filter((item) => ratioPercent(item.score, item.maxScore) >= 80).length,
 )
 
 const earnedBadgeCards = computed(() => {
@@ -466,7 +463,7 @@ const earnedBadgeCards = computed(() => {
   ]
 
   const filteredDerived = derived.filter((item) => {
-    if (item.id === 'earned-streak') return rewards.value.streak.currentStreak >= 7
+    if (item.id === 'earned-streak') return currentStreakCount.value >= 7
     if (item.id === 'earned-quiz') return quizzesAbove80.value > 0
     return true
   })
@@ -517,8 +514,8 @@ const achievementFeed = computed(() => [
     id: 'a-1',
     icon: 'star',
     title: '7-Day Streak!',
-    subtitle: `You have learned for ${rewards.value.streak.currentStreak} days in a row.`,
-    reward: `${rewards.value.streak.currentStreak} day streak`,
+    subtitle: `You have learned for ${currentStreakCount.value} days in a row.`,
+    reward: `${currentStreakCount.value} day streak`,
     date: formatDate(pointsHistory.value[0]?.createdAt ?? new Date().toISOString()),
     tone: 'purple',
   },
@@ -526,8 +523,8 @@ const achievementFeed = computed(() => [
     id: 'a-2',
     icon: 'quiz',
     title: 'Quiz Progress',
-    subtitle: `Average quiz score is now ${progress.value.quizAverage}%.`,
-    reward: `${progress.value.quizAverage}% average`,
+    subtitle: `Average quiz score is now ${quizAveragePercent.value}%.`,
+    reward: `${quizAveragePercent.value}% average`,
     date: formatDate(dashboard.value.recentQuizResults[0]?.completedAt ?? new Date().toISOString()),
     tone: 'green',
   },
@@ -547,8 +544,8 @@ const completedActivityCount = computed(() => activities.value.items.filter((ite
 const weeklyGoals = computed(() => [
   {
     title: 'Complete 8 lessons',
-    count: `${Math.min(8, progress.value.completedLessons)} / 8`,
-    progress: Math.round((Math.min(8, progress.value.completedLessons) / 8) * 100),
+    count: `${Math.min(8, nonNegativeInteger(progress.value.completedLessons))} / 8`,
+    progress: ratioPercent(Math.min(8, nonNegativeInteger(progress.value.completedLessons)), 8),
     statusLabel: 'Tracking lessons',
     icon: 'learn',
     tone: 'green',
@@ -556,7 +553,7 @@ const weeklyGoals = computed(() => [
   {
     title: 'Finish 5 practice activities',
     count: `${Math.min(5, completedActivityCount.value)} / 5`,
-    progress: Math.round((Math.min(5, completedActivityCount.value) / 5) * 100),
+    progress: ratioPercent(Math.min(5, completedActivityCount.value), 5),
     statusLabel: 'Tracking practice',
     icon: 'live',
     tone: 'purple',
@@ -564,7 +561,7 @@ const weeklyGoals = computed(() => [
   {
     title: 'Score 80%+ in 3 quizzes',
     count: `${Math.min(3, quizzesAbove80.value)} / 3`,
-    progress: Math.round((Math.min(3, quizzesAbove80.value) / 3) * 100),
+    progress: ratioPercent(Math.min(3, quizzesAbove80.value), 3),
     statusLabel: 'Tracking quizzes',
     icon: 'clip',
     tone: 'orange',
@@ -576,7 +573,7 @@ const rewardHistoryCards = computed(() =>
     id: item.id,
     title: item.reason,
     date: formatDate(item.createdAt),
-    points: item.pointsDelta,
+    pointsLabel: signedIntegerLabel(item.pointsDelta),
     icon: index === 0 ? 'rewards' : index === 1 ? 'learn' : 'status',
   })),
 )
@@ -585,11 +582,7 @@ const journeySteps = computed(() =>
   Array.from({ length: 5 }, (_, index) => {
     const level = index + 1
     const status =
-      level < rewards.value.currentLevelNumber
-        ? 'complete'
-        : level === rewards.value.currentLevelNumber
-          ? 'current'
-          : 'future'
+      level < currentLevelNumber.value ? 'complete' : level === currentLevelNumber.value ? 'current' : 'future'
     return {
       level,
       title: levelTitleFor(level),
@@ -597,8 +590,8 @@ const journeySteps = computed(() =>
         status === 'complete'
           ? 'Completed'
           : status === 'current'
-            ? `${rewards.value.progressToNextLevelPercent}% to next level`
-            : level === rewards.value.currentLevelNumber + 1
+            ? `${levelProgressPercent.value}% to next level`
+            : level === nextLevelNumber.value
               ? 'Next up'
               : 'Locked until more progress',
       status,
@@ -610,6 +603,11 @@ const journeySteps = computed(() =>
 function openRewardPractice() {
   actionSuccess.value = null
   void router.push('/student/practice')
+}
+
+function signedIntegerLabel(value: number) {
+  const rounded = Math.round(Number.isFinite(value) ? value : 0)
+  return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
 function reloadAll() {

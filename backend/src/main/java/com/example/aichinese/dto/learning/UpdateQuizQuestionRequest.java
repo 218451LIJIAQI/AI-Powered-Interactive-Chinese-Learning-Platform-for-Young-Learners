@@ -1,5 +1,9 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -26,8 +30,8 @@ import jakarta.validation.constraints.Size;
  * and field semantics.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
- * every string field, collapses optional blank-only strings to
+ * <p>The canonical constructor eagerly strips surrounding Unicode
+ * whitespace from every string field, collapses optional blank-only strings to
  * {@code null}, and defensively copies {@link #options} — mirroring
  * the normalisation contract of {@link CreateQuizQuestionRequest}
  * so the persistence-layer code can use the same applier method
@@ -37,10 +41,10 @@ import jakarta.validation.constraints.Size;
  *                          {@link com.example.aichinese.entity.enums.QuizQuestionType};
  *                          required, parsed server-side
  * @param questionText      stem of the question (max 2000 chars
- *                          after trim); required
+ *                          after stripping); required
  * @param correctAnswerText canonical correct answer for free-text /
  *                          structured types (max 1000 chars after
- *                          trim); blank collapses to {@code null}
+ *                          stripping); blank collapses to {@code null}
  * @param points            non-negative score the question
  *                          contributes; required; must be
  *                          {@code &gt; 0}
@@ -52,7 +56,7 @@ import jakarta.validation.constraints.Size;
  *                          treated as empty); each entry
  *                          {@link Valid cascaded-validated}
  * @param explanation       teacher rationale (max 2000 chars after
- *                          trim); blank collapses to {@code null}
+ *                          stripping); blank collapses to {@code null}
  */
 @JsonPropertyOrder({
         "questionType",
@@ -77,13 +81,14 @@ public record UpdateQuizQuestionRequest(
         Integer points,
         @PositiveOrZero(message = "Question display order must be greater than or equal to 0.")
         Integer displayOrder,
+        @Size(max = 200, message = "A quiz question cannot contain more than 200 options.")
         @Valid
-        List<QuizOptionRequest> options,
+        List<@NotNull(message = "Quiz option must not be null.") QuizOptionRequest> options,
         @Size(max = 2000, message = "Explanation must be 2000 characters or fewer.")
         String explanation) {
 
     /**
-     * Defensive canonical constructor: trims every string field so
+     * Defensive canonical constructor: strips every string field so
      * Bean Validation sees the canonical form, collapses optional
      * blank-only strings to {@code null}, and defensively copies
      * {@link #options} (with {@code null} → {@link List#of()}
@@ -92,22 +97,10 @@ public record UpdateQuizQuestionRequest(
      * preserved so {@link NotBlank @NotBlank} fires correctly.
      */
     public UpdateQuizQuestionRequest {
-        questionType = trimOrNull(questionType);
-        questionText = trimOrNull(questionText);
-        correctAnswerText = trimToNullIfBlank(correctAnswerText);
-        explanation = trimToNullIfBlank(explanation);
-        options = options == null ? List.of() : List.copyOf(options);
-    }
-
-    private static String trimOrNull(String value) {
-        return value == null ? null : value.trim();
-    }
-
-    private static String trimToNullIfBlank(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        questionType = strip(questionType);
+        questionText = strip(questionText);
+        correctAnswerText = stripToNull(correctAnswerText);
+        explanation = stripToNull(explanation);
+        options = immutableListOrEmpty(options);
     }
 }

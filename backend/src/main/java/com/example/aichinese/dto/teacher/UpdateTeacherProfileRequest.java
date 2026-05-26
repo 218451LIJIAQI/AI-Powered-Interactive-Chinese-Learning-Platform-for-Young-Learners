@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.teacher;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
+
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -51,18 +54,18 @@ import jakarta.validation.constraints.Size;
  * format and break consumers that pin on field positions.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
- * {@link #fullName}, {@link #bio} and {@link #shortIntroduction} so
+ * <p>The canonical constructor eagerly strips surrounding Unicode
+ * whitespace from {@link #fullName}, {@link #bio} and
+ * {@link #shortIntroduction} so
  * Bean Validation operates on the canonical form (a whitespace-only
- * {@code fullName} fails {@code @NotBlank} after trimming, the way
- * the user expects) and the service layer's
- * {@code .trim()} / {@code TextUtils.trimToNull} calls are
- * idempotent. {@link #teachingCategories} is handed off to the
- * mapper unchanged because {@code joinCategories} owns the
- * trim/dedup/cap pipeline for that field. {@code null} is preserved
- * for any field so the {@link NotBlank @NotBlank} validators render
- * their friendly user-facing messages rather than a low-level
- * {@link NullPointerException}.</p>
+ * {@code fullName} fails {@code @NotBlank} after stripping, the way
+ * the user expects) and the service layer's normalisation calls are
+ * idempotent. {@link #teachingCategories} is copied into an
+ * immutable list and each non-null entry is stripped before the
+ * mapper applies its deduplication and storage pipeline.
+ * {@code null} is preserved for required fields and list elements
+ * so Bean Validation renders friendly user-facing messages rather
+ * than a low-level {@link NullPointerException}.</p>
  */
 @JsonPropertyOrder({ "fullName", "bio", "shortIntroduction", "teachingCategories" })
 public record UpdateTeacherProfileRequest(
@@ -80,26 +83,19 @@ public record UpdateTeacherProfileRequest(
         List<@Size(max = 60, message = "Each teaching category must be 60 characters or fewer.") String> teachingCategories) {
 
     /**
-     * Defensive canonical constructor: trims the three free-text
+     * Defensive canonical constructor: strips the three free-text
      * fields so Bean Validation operates on the canonical form and the
      * service layer's normalisation calls are idempotent. {@code null}
      * is preserved so {@link NotBlank @NotBlank} can render the
      * friendly "is required" message rather than a low-level
-     * {@link NullPointerException}.
-     * {@link #teachingCategories} is intentionally <em>not</em>
-     * defensively copied or normalised here — the
-     * {@code TeacherManagementMapper.joinCategories} pipeline is the
-     * canonical owner of trim, dedup and storage cap for this field.
+     * {@link NullPointerException}. {@link #teachingCategories} is
+     * defensively copied and stripped entry-by-entry while preserving
+     * {@code null} list elements for Bean Validation.
      */
     public UpdateTeacherProfileRequest {
-        if (fullName != null) {
-            fullName = fullName.trim();
-        }
-        if (bio != null) {
-            bio = bio.trim();
-        }
-        if (shortIntroduction != null) {
-            shortIntroduction = shortIntroduction.trim();
-        }
+        fullName = strip(fullName);
+        bio = strip(bio);
+        shortIntroduction = strip(shortIntroduction);
+        teachingCategories = strippedStringListOrNull(teachingCategories);
     }
 }

@@ -275,7 +275,15 @@ import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { teacherAnalytics, teacherDashboard, teacherLiveClasses } from '@/demo/data'
 import type { AnalyticsBreakdownItem, LiveClassResponse, TeacherDashboardResponse } from '@/types/api'
-import { formatCurrency, formatDate, formatDateTime, formatNumber, formatPercent } from '@/utils/format'
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatNumber,
+  formatPercent,
+  ratioPercent,
+  toFiniteNumber,
+} from '@/utils/format'
 
 const router = useRouter()
 const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage } = useTeacherAccess()
@@ -412,14 +420,15 @@ const quickActions = [
 ]
 
 function withPercentages(items: AnalyticsBreakdownItem[]) {
-  const total = items.reduce((sum, item) => sum + (item.value ?? 0), 0)
+  const total = items.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item.value)), 0)
   const tones = ['purple', 'green', 'orange', 'blue'] as const
 
   return items.map((item, index) => {
-    const percentage = Math.round(total > 0 ? (item.value / total) * 100 : 0)
+    const value = Math.max(0, toFiniteNumber(item.value))
+    const percentage = ratioPercent(value, total)
     return {
       label: item.label,
-      displayValue: `${formatNumber(item.value)} (${percentage}%)`,
+      displayValue: `${formatNumber(value)} (${percentage}%)`,
       percentage,
       tone: tones[index % tones.length],
     }

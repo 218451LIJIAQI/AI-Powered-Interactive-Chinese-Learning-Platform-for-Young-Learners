@@ -282,7 +282,7 @@ public class TeacherStudentService {
                     student.getId(),
                     student.getUser() != null ? student.getUser().getId() : null,
                     student.getUser() != null ? student.getUser().getDisplayName() : student.getDisplayName(),
-                    student.getUser() != null ? student.getUser().getEmail() : null,
+                    null,
                     student.getDisplayName(),
                     student.getCurrentLevel() != null ? student.getCurrentLevel().getName() : null,
                     progressPercent,

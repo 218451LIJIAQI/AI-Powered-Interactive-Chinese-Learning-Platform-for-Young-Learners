@@ -1,16 +1,19 @@
 import * as Sentry from '@sentry/vue'
+import type { Event, User } from '@sentry/vue'
 import type { App } from 'vue'
 import type { Router } from 'vue-router'
 
 import { appEnv } from '@/config/env'
+import {
+  FILTERED,
+  isSensitiveKey,
+  scrubSensitiveRecord,
+  scrubSensitiveUnknown,
+  scrubSensitiveUrl,
+  scrubSensitiveValue,
+} from '@/utils/sensitiveData'
 
-const SENSITIVE_HEADER_NAMES = ['authorization', 'cookie', 'set-cookie', 'x-api-key']
-const SENSITIVE_VALUE_PATTERNS = [
-  /bearer\s+[a-z0-9._-]+/gi,
-  /mandarin_spark_refresh=[^;\s]+/gi,
-  /password["':=\s]+[^"',\s}]+/gi,
-  /token["':=\s]+[^"',\s}]+/gi,
-]
+type SentryQueryParams = NonNullable<NonNullable<Event['request']>['query_string']>
 
 export function initObservability(app: App, router: Router) {
   if (!appEnv.sentryDsn) {
@@ -24,55 +27,86 @@ export function initObservability(app: App, router: Router) {
     release: appEnv.release || undefined,
     integrations: [Sentry.browserTracingIntegration({ router })],
     tracesSampleRate: appEnv.environment === 'production' ? 0.05 : 0,
-    beforeSend(event) {
-      scrubHeaders(event.request?.headers)
-      if (event.request?.cookies) {
-        scrubHeaders(event.request.cookies)
-      }
-      if (typeof event.request?.data === 'string') {
-        event.request.data = scrubValue(event.request.data)
-      }
-      if (event.extra) {
-        for (const key of Object.keys(event.extra)) {
-          event.extra[key] = scrubUnknown(event.extra[key])
-        }
-      }
-      return event
-    },
+    beforeSend: sanitizeSentryEvent,
   })
 }
 
-function scrubHeaders(headers: Record<string, string> | undefined) {
-  if (!headers) {
-    return
+export function sanitizeSentryEvent<T extends Event>(event: T): T {
+  if (event.request) {
+    event.request.url = scrubSensitiveUrl(event.request.url)
+    event.request.headers = scrubSensitiveRecord(event.request.headers)
+    event.request.cookies = scrubSensitiveRecord(event.request.cookies)
+    event.request.env = scrubSensitiveRecord(event.request.env)
+    event.request.query_string = scrubQueryParams(event.request.query_string)
+    event.request.data = scrubSensitiveUnknown(event.request.data)
   }
-  for (const key of Object.keys(headers)) {
-    if (SENSITIVE_HEADER_NAMES.includes(key.toLowerCase())) {
-      headers[key] = '[Filtered]'
-    } else {
-      headers[key] = scrubValue(headers[key])
-    }
+
+  if (event.transaction) {
+    event.transaction = scrubSensitiveValue(event.transaction)
   }
+  if (event.message) {
+    event.message = scrubSensitiveValue(event.message)
+  }
+  if (event.logentry?.message) {
+    event.logentry.message = scrubSensitiveValue(event.logentry.message)
+  }
+  if (event.exception?.values) {
+    event.exception.values = event.exception.values.map((exception) => ({
+      ...exception,
+      value: exception.value ? scrubSensitiveValue(exception.value) : exception.value,
+    }))
+  }
+
+  event.extra = scrubSensitiveRecord(event.extra)
+  event.tags = scrubSensitiveRecord(event.tags)
+  event.contexts = scrubSensitiveUnknown(event.contexts) as Event['contexts']
+  event.user = scrubSentryUser(event.user)
+  event.spans = event.spans?.map((span) => ({
+    ...span,
+    description: span.description ? scrubSensitiveValue(span.description) : span.description,
+    data: scrubSensitiveRecord(span.data) as typeof span.data,
+  }))
+
+  if (event.breadcrumbs) {
+    event.breadcrumbs = event.breadcrumbs.map((breadcrumb) => ({
+      ...breadcrumb,
+      message: breadcrumb.message ? scrubSensitiveValue(breadcrumb.message) : breadcrumb.message,
+      data: scrubSensitiveUnknown(breadcrumb.data) as typeof breadcrumb.data,
+    }))
+  }
+
+  return event
 }
 
-function scrubUnknown(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return scrubValue(value)
+function scrubQueryParams(query: SentryQueryParams | undefined): SentryQueryParams | undefined {
+  if (typeof query === 'string') {
+    return scrubSensitiveValue(query)
   }
-  if (Array.isArray(value)) {
-    return value.map(scrubUnknown)
+
+  if (Array.isArray(query)) {
+    return query.map(([key, value]): [string, string] => [
+      key,
+      isSensitiveKey(key) ? FILTERED : scrubSensitiveValue(value),
+    ])
   }
-  if (value && typeof value === 'object') {
+
+  if (query) {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-        key,
-        SENSITIVE_HEADER_NAMES.includes(key.toLowerCase()) ? '[Filtered]' : scrubUnknown(nested),
-      ]),
+      Object.entries(query).map(([key, value]) => [key, isSensitiveKey(key) ? FILTERED : scrubSensitiveValue(value)]),
     )
   }
-  return value
+
+  return query
 }
 
-function scrubValue(value: string) {
-  return SENSITIVE_VALUE_PATTERNS.reduce((current, pattern) => current.replace(pattern, '[Filtered]'), value)
+function scrubSentryUser(user: User | undefined): User | undefined {
+  if (!user) return user
+
+  const scrubbed = scrubSensitiveRecord(user as Record<string, unknown>) as User
+  delete scrubbed.id
+  delete scrubbed.email
+  delete scrubbed.username
+  delete scrubbed.ip_address
+  delete scrubbed.geo
+  return scrubbed
 }

@@ -39,6 +39,10 @@ public record AiProviderResult(
                 throw new IllegalArgumentException(
                         "Successful provider result must carry non-blank text.");
             }
+            if (tokenCount != null && tokenCount < 0) {
+                throw new IllegalArgumentException(
+                        "Successful provider result token count must be non-negative.");
+            }
             if (errorSummary != null) {
                 throw new IllegalArgumentException(
                         "Successful provider result must not carry an error summary.");

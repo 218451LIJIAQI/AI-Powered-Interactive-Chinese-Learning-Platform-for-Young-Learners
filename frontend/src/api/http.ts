@@ -19,8 +19,10 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
 import { appEnv } from '@/config/env'
-import { safeRemoveItem, storageKeys } from '@/utils/storage'
+import { getSessionStorage, safeRemoveItem, storageKeys } from '@/utils/storage'
 import type { ApiResponse, AuthResponse } from '@/types/api'
+
+export const AUTH_INVALIDATED_EVENT = 'mandarin-spark:auth-invalidated'
 
 export const http = axios.create({
   baseURL: appEnv.apiBaseUrl,
@@ -28,6 +30,7 @@ export const http = axios.create({
   withCredentials: true,
 })
 
+const AUTH_SESSION_ENDPOINTS = new Set(['/auth/login', '/auth/refresh'])
 let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
 
@@ -38,11 +41,56 @@ interface RetriableRequestConfig extends InternalAxiosRequestConfig {
 export function setAccessToken(token: string | null) {
   accessToken = token
   safeRemoveItem(storageKeys.token)
-  safeRemoveItem(storageKeys.token, window.sessionStorage)
+  safeRemoveItem(storageKeys.token, getSessionStorage())
 }
 
 export function getAccessToken() {
   return accessToken
+}
+
+function normalizePath(value: string | undefined): string {
+  if (!value) {
+    return ''
+  }
+
+  try {
+    if (/^[a-z][a-z\d+.-]*:/i.test(value)) {
+      return new URL(value).pathname
+    }
+  } catch {
+    return ''
+  }
+
+  const path = value.split(/[?#]/, 1)[0] ?? ''
+  return path.startsWith('/') ? path : `/${path}`
+}
+
+function stripApiBasePath(path: string): string {
+  const basePath = normalizePath(appEnv.apiBaseUrl).replace(/\/+$/, '')
+  if (!basePath || basePath === '/') {
+    return path
+  }
+
+  if (path === basePath) {
+    return '/'
+  }
+
+  return path.startsWith(`${basePath}/`) ? path.slice(basePath.length) : path
+}
+
+function isAuthSessionEndpoint(config: RetriableRequestConfig | undefined): boolean {
+  return AUTH_SESSION_ENDPOINTS.has(stripApiBasePath(normalizePath(config?.url)))
+}
+
+function dispatchAuthInvalidated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(AUTH_INVALIDATED_EVENT))
+  }
+}
+
+export function invalidateAuthSession() {
+  setAccessToken(null)
+  dispatchAuthInvalidated()
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
@@ -79,9 +127,8 @@ http.interceptors.response.use(
   async (error: AxiosError) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       const originalRequest = error.config as RetriableRequestConfig | undefined
-      const isAuthSessionEndpoint =
-        originalRequest?.url?.includes('/auth/login') || originalRequest?.url?.includes('/auth/refresh')
-      const shouldAttemptRefresh = originalRequest && !originalRequest._refreshRetried && !isAuthSessionEndpoint
+      const isAuthEndpoint = isAuthSessionEndpoint(originalRequest)
+      const shouldAttemptRefresh = originalRequest && !originalRequest._refreshRetried && !isAuthEndpoint
 
       if (shouldAttemptRefresh) {
         const refreshedToken = await refreshAccessToken()
@@ -92,9 +139,10 @@ http.interceptors.response.use(
         }
       }
 
-      setAccessToken(null)
-      if (!isAuthSessionEndpoint) {
-        window.dispatchEvent(new CustomEvent('mandarin-spark:auth-invalidated'))
+      if (!isAuthEndpoint) {
+        invalidateAuthSession()
+      } else {
+        setAccessToken(null)
       }
     }
 

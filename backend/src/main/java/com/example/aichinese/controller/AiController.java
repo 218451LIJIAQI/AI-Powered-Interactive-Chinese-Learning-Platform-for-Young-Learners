@@ -3,6 +3,8 @@ package com.example.aichinese.controller;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -87,6 +89,8 @@ import jakarta.validation.constraints.Size;
 @RequestMapping("/api/v1/ai")
 public class AiController {
 
+    private static final Logger log = LoggerFactory.getLogger(AiController.class);
+
     private static final long CHAT_STREAM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
     private static final int STREAM_CHUNK_SIZE = 24;
 
@@ -148,6 +152,7 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiChatRequest request) {
         SseEmitter emitter = new SseEmitter(CHAT_STREAM_TIMEOUT_MS);
+        emitter.onTimeout(emitter::complete);
         Thread.startVirtualThread(() -> {
             try {
                 AiChatResponse response = aiService.chat(currentUser, request);
@@ -157,7 +162,10 @@ public class AiController {
                         .data(response, MediaType.APPLICATION_JSON));
                 emitter.complete();
             } catch (Exception exception) {
-                completeWithError(emitter, exception);
+                log.warn("AI chat stream failed for user id {} with exception type {}.",
+                        currentUser == null ? null : currentUser.getUserId(),
+                        exception.getClass().getSimpleName());
+                completeWithSafeError(emitter);
             }
         });
         return emitter;
@@ -269,22 +277,28 @@ public class AiController {
 
     private static void sendChunkedText(SseEmitter emitter, String text) throws IOException {
         String safeText = text == null ? "" : text;
-        for (int start = 0; start < safeText.length(); start += STREAM_CHUNK_SIZE) {
-            int end = Math.min(start + STREAM_CHUNK_SIZE, safeText.length());
+        for (int start = 0; start < safeText.length();) {
+            int end = start;
+            int emittedCodePoints = 0;
+            while (end < safeText.length() && emittedCodePoints < STREAM_CHUNK_SIZE) {
+                end += Character.charCount(safeText.codePointAt(end));
+                emittedCodePoints++;
+            }
             emitter.send(SseEmitter.event()
                     .name("delta")
                     .data(safeText.substring(start, end)));
+            start = end;
         }
     }
 
-    private static void completeWithError(SseEmitter emitter, Exception exception) {
+    private static void completeWithSafeError(SseEmitter emitter) {
         try {
             emitter.send(SseEmitter.event()
                     .name("error")
                     .data("AI chat stream failed. Please try again."));
         } catch (IOException ignored) {
-            // Client may have disconnected; completeWithError below records the failure.
+            // Client may have disconnected; the caller already logged a safe failure summary.
         }
-        emitter.completeWithError(exception);
+        emitter.complete();
     }
 }

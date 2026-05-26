@@ -42,7 +42,11 @@ services:
       # the platform's preferred replication settings.
       - --enforce-gtid-consistency=OFF
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-u${DB_USERNAME:-aichinese_app}", "-p${DB_PASSWORD:-replace-with-a-strong-application-db-password}", "-h", "127.0.0.1"]
+      test:
+        [
+          "CMD-SHELL",
+          'MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping -u"$${MYSQL_USER}" -h 127.0.0.1 --silent',
+        ]
       interval: 5s
       timeout: 5s
       retries: 20

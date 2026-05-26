@@ -43,7 +43,11 @@ const props = withDefaults(defineProps<Props>(), {
   tone: 'primary',
 })
 
-const progressValue = computed<number>(() => Math.round(Math.max(0, Math.min(100, props.progress))))
+function clampProgress(value: number): number {
+  return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : 0
+}
+
+const progressValue = computed<number>(() => clampProgress(props.progress))
 const label = computed<string>(() => `${progressValue.value}%`)
 const toneClass = computed<string>(() => (props.tone === 'success' ? 'success' : ''))
 </script>

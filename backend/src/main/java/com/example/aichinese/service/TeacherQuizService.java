@@ -123,6 +123,9 @@ public class TeacherQuizService {
 
     @Transactional
     public TeacherQuizResponse createQuiz(SecurityUserDetails currentUser, Long lessonId, CreateQuizRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Lesson lesson = requireEditableOwnedLesson(currentUser, lessonId);
 
@@ -143,6 +146,9 @@ public class TeacherQuizService {
 
     @Transactional
     public TeacherQuizResponse updateQuiz(SecurityUserDetails currentUser, Long quizId, UpdateQuizRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
@@ -173,6 +179,9 @@ public class TeacherQuizService {
     @Transactional
     public TeacherQuizResponse addQuizQuestion(
             SecurityUserDetails currentUser, Long quizId, CreateQuizQuestionRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz question request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
@@ -188,6 +197,9 @@ public class TeacherQuizService {
     @Transactional
     public TeacherQuizResponse updateQuizQuestion(
             SecurityUserDetails currentUser, Long questionId, UpdateQuizQuestionRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz question request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         QuizQuestion question = quizQuestionRepository.findByIdAndQuizTeacherUserId(questionId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested quiz question was not found."));
@@ -293,12 +305,25 @@ public class TeacherQuizService {
         QuizQuestionType questionType = QuizQuestionType.fromValue(questionTypeRaw);
         question.setQuestionType(questionType.name());
         question.setQuestionText(contentSafetyService.requireSafeText(questionText, MAX_QUESTION_TEXT_LENGTH, "Question text is required."));
+        if (points == null || points <= 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Question points must be greater than 0.");
+        }
         question.setPoints(points);
+        if (displayOrder != null && displayOrder < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Question display order must be greater than or equal to 0.");
+        }
         question.setSortOrder(displayOrder == null ? 0 : displayOrder);
         question.setExplanation(contentSafetyService.optionalSafeText(explanation, MAX_EXPLANATION_LENGTH));
 
         List<QuizOptionRequest> safeOptions = options == null ? List.of() : options;
-        if (questionType.isOptionBased()) {
+        if (safeOptions.size() > 200) {
+            throw new ResponseStatusException(BAD_REQUEST, "A quiz question cannot contain more than 200 options.");
+        }
+        if (safeOptions.stream().anyMatch(Objects::isNull)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz option must not be null.");
+        }
+        boolean optionBased = questionType.isOptionBased();
+        if (optionBased) {
             if (safeOptions.isEmpty()) {
                 throw new ResponseStatusException(BAD_REQUEST, "At least one answer option is required.");
             }
@@ -326,8 +351,11 @@ public class TeacherQuizService {
 
         QuizQuestion savedQuestion = quizQuestionRepository.save(question);
         quizOptionRepository.deleteByQuestionId(savedQuestion.getId());
-        if (!safeOptions.isEmpty()) {
+        if (optionBased && !safeOptions.isEmpty()) {
             safeOptions.forEach(option -> {
+                if (option.displayOrder() != null && option.displayOrder() < 0) {
+                    throw new ResponseStatusException(BAD_REQUEST, "Option display order must be greater than or equal to 0.");
+                }
                 QuizOption quizOption = new QuizOption();
                 quizOption.setQuestion(savedQuestion);
                 quizOption.setOptionText(contentSafetyService.requireSafeText(
@@ -342,12 +370,15 @@ public class TeacherQuizService {
     }
 
     private void recomputeQuizTotalPoints(Quiz quiz) {
-        int totalPoints = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId()).stream()
+        long totalPoints = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId()).stream()
                 .map(QuizQuestion::getPoints)
                 .filter(Objects::nonNull)
-                .mapToInt(Integer::intValue)
+                .mapToLong(Integer::longValue)
                 .sum();
-        quiz.setTotalPoints(totalPoints);
+        if (totalPoints > Integer.MAX_VALUE) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz total points are too large.");
+        }
+        quiz.setTotalPoints((int) totalPoints);
         quizRepository.save(quiz);
     }
 

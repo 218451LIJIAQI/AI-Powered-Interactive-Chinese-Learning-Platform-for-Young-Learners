@@ -26,6 +26,7 @@ import com.example.aichinese.entity.TeacherVerificationReview;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
+import com.example.aichinese.util.TextUtils;
 
 /**
  * Entity-to-DTO translation for the teacher and admin management
@@ -60,9 +61,6 @@ public class TeacherManagementMapper {
     /** Maximum length of the bio summary surfaced in admin teacher list rows. */
     private static final int BIO_SUMMARY_MAX_LENGTH = 140;
 
-    /** Length of the trailing "{@code ...}" ellipsis appended by {@link #summarize}. */
-    private static final int ELLIPSIS_LENGTH = 3;
-
     /** Delimiter used in the persisted comma-separated category column. */
     private static final String CATEGORY_DELIMITER = ", ";
 
@@ -70,6 +68,7 @@ public class TeacherManagementMapper {
             TeacherProfile profile,
             List<TeacherVerificationDocument> documents) {
         User user = profile.getUser();
+        List<TeacherVerificationDocument> safeDocuments = documents == null ? List.of() : documents;
         return new TeacherProfileResponse(
                 user.getId(),
                 user.getDisplayName(),
@@ -80,7 +79,7 @@ public class TeacherManagementMapper {
                 splitCategories(profile.getTeachingCategories()),
                 profile.getTeacherStatus(),
                 profile.getRejectionReason(),
-                documents.stream().map(this::toDocumentSummary).toList(),
+                safeDocuments.stream().map(this::toDocumentSummary).toList(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
@@ -133,6 +132,9 @@ public class TeacherManagementMapper {
             List<TeacherVerificationReview> reviews,
             List<AuditLog> auditLogs) {
         User user = profile.getUser();
+        List<TeacherVerificationDocument> safeDocuments = documents == null ? List.of() : documents;
+        List<TeacherVerificationReview> safeReviews = reviews == null ? List.of() : reviews;
+        List<AuditLog> safeAuditLogs = auditLogs == null ? List.of() : auditLogs;
         return new AdminTeacherDetailResponse(
                 profile.getId(),
                 user.getId(),
@@ -144,9 +146,9 @@ public class TeacherManagementMapper {
                 profile.getTeacherStatus(),
                 profile.getRejectionReason(),
                 profile.getVerifiedAt(),
-                documents.stream().map(this::toDocumentSummary).toList(),
-                reviews.stream().map(this::toReviewSummary).toList(),
-                auditLogs.stream().map(this::toAuditSummary).toList(),
+                safeDocuments.stream().map(this::toDocumentSummary).toList(),
+                safeReviews.stream().map(this::toReviewSummary).toList(),
+                safeAuditLogs.stream().map(this::toAuditSummary).toList(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
@@ -217,10 +219,11 @@ public class TeacherManagementMapper {
             return null;
         }
         String joined = categories.stream()
-                .filter(value -> value != null && !value.isBlank())
-                .map(String::trim)
+                .map(TextUtils::collapseWhitespaceToNull)
+                .filter(value -> value != null)
                 .map(value -> value.replace(",", ""))
-                .filter(value -> !value.isEmpty())
+                .map(TextUtils::trimToNull)
+                .filter(value -> value != null)
                 .distinct()
                 .limit(MAX_CATEGORIES)
                 .collect(Collectors.joining(CATEGORY_DELIMITER));
@@ -238,8 +241,8 @@ public class TeacherManagementMapper {
             return List.of();
         }
         return Arrays.stream(categories.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
+                .map(TextUtils::trimToNull)
+                .filter(value -> value != null)
                 .toList();
     }
 
@@ -251,14 +254,6 @@ public class TeacherManagementMapper {
      * rather than an empty string.
      */
     private String summarize(String value, int maxLength) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() <= maxLength) {
-            return trimmed;
-        }
-        int contentLength = Math.max(0, maxLength - ELLIPSIS_LENGTH);
-        return trimmed.substring(0, contentLength).trim() + "...";
+        return TextUtils.truncateWithEllipsis(value, maxLength);
     }
 }

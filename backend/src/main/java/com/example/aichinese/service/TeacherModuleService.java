@@ -1,6 +1,7 @@
 package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.util.List;
 import java.util.Objects;
@@ -74,6 +75,9 @@ public class TeacherModuleService {
 
     @Transactional
     public LearningModuleResponse createModule(SecurityUserDetails currentUser, CreateModuleRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Module request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
@@ -106,6 +110,9 @@ public class TeacherModuleService {
 
     @Transactional
     public LearningModuleResponse updateModule(SecurityUserDetails currentUser, Long moduleId, UpdateModuleRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Module request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         LearningModule module = findOwnedModule(currentUser, moduleId);
         teacherContentAccessService.validateEditableStatus(module.getContentStatus(), "Module");

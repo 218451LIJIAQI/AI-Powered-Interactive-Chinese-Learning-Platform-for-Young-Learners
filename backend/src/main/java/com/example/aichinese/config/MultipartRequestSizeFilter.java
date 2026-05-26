@@ -59,7 +59,7 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
         if (!isMultipart(request)) {
             return -1;
         }
-        String path = request.getRequestURI();
+        String path = normalizedApplicationPath(request);
         if (path == null) {
             return uploadProperties.getMaxFileSize().toBytes();
         }
@@ -82,5 +82,18 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
         String contentType = request.getHeader(HttpHeaders.CONTENT_TYPE);
         return contentType != null
                 && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
+    }
+
+    private static String normalizedApplicationPath(HttpServletRequest request) {
+        String requestUri = request.getRequestURI();
+        if (requestUri == null) {
+            return null;
+        }
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isBlank() && requestUri.startsWith(contextPath)) {
+            String path = requestUri.substring(contextPath.length());
+            return path.isBlank() ? "/" : path;
+        }
+        return requestUri;
     }
 }

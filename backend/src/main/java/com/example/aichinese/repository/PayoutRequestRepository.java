@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.PayoutRequest;
 import com.example.aichinese.entity.enums.PayoutStatus;
@@ -74,14 +75,29 @@ public interface PayoutRequestRepository extends JpaRepository<PayoutRequest, Lo
 
     /**
      * Sums payout amounts for a single teacher across the supplied
-     * statuses; the {@code coalesce(..., 0)} wrapper avoids null when
-     * no payouts yet match. Used by
+     * statuses; returns zero for {@code null} / empty status sets
+     * instead of forcing callers to protect JPQL {@code IN ()}. Used by
      * {@code PayoutService.requireCommittedPayoutCovered} to ensure a
      * teacher cannot have more disbursement committed than their
      * earned balance covers.
      */
+    default BigDecimal sumAmountByTeacherIdAndPayoutStatusIn(
+            Long teacherId,
+            @Nullable Set<PayoutStatus> statuses) {
+        if (teacherId == null || statuses == null || statuses.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return sumAmountByTeacherIdAndPayoutStatusInInternal(teacherId, statuses);
+    }
+
+    /**
+     * SQL-backed branch of
+     * {@link #sumAmountByTeacherIdAndPayoutStatusIn(Long, Set)}. Not
+     * intended to be invoked directly because the public wrapper owns
+     * the empty-status edge case.
+     */
     @Query("select coalesce(sum(pr.amount), 0) from PayoutRequest pr where pr.teacher.id = :teacherId and pr.payoutStatus in :statuses")
-    BigDecimal sumAmountByTeacherIdAndPayoutStatusIn(
+    BigDecimal sumAmountByTeacherIdAndPayoutStatusInInternal(
             @Param("teacherId") Long teacherId,
             @Param("statuses") Set<PayoutStatus> statuses);
 }

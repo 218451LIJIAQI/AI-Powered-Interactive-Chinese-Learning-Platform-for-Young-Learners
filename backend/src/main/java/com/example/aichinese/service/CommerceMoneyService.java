@@ -3,7 +3,9 @@ package com.example.aichinese.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Centralised currency arithmetic for every commerce path
@@ -33,6 +35,7 @@ public class CommerceMoneyService {
     public static final int RATE_SCALE = 4;
     public static final RoundingMode MONEY_ROUNDING = RoundingMode.HALF_UP;
 
+    private static final int MONEY_PRECISION = 10;
     private static final BigDecimal ZERO_MONEY = BigDecimal.ZERO.setScale(MONEY_SCALE, MONEY_ROUNDING);
     private static final BigDecimal ZERO_RATE = BigDecimal.ZERO.setScale(RATE_SCALE, MONEY_ROUNDING);
 
@@ -85,5 +88,20 @@ public class CommerceMoneyService {
      */
     public BigDecimal normalizeRate(BigDecimal value) {
         return value == null ? ZERO_RATE : value.setScale(RATE_SCALE, MONEY_ROUNDING);
+    }
+
+    /**
+     * Normalises an amount that will be inserted into one of the platform's
+     * DECIMAL(10,2) money columns and rejects values that would overflow the
+     * column. Aggregate read models may legitimately exceed a single column's
+     * precision, so this stricter guard is intentionally separate from
+     * {@link #normalize(BigDecimal)}.
+     */
+    public BigDecimal normalizePersistableAmount(BigDecimal value, String message) {
+        BigDecimal amount = normalize(value);
+        if (amount.precision() - amount.scale() > MONEY_PRECISION - MONEY_SCALE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return amount;
     }
 }

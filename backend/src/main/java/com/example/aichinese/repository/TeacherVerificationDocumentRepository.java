@@ -132,11 +132,25 @@ public interface TeacherVerificationDocumentRepository extends JpaRepository<Tea
     /**
      * Returns the document count per teacher for a batch of teacher
      * ids. Result rows are Object arrays: {@code [teacherId (Long),
-     * count (Long)]}. Hibernate's JPQL empty-{@code IN} rewrite handles
-     * the empty input case automatically here, so no wrapper guard is
-     * required.
+     * count (Long)]}. The public wrapper short-circuits the
+     * null/empty-input case so callers get the same defensive behavior
+     * as the native latest-document lookup above and never need to
+     * reason about provider-specific empty-{@code IN} rewriting.
+     */
+    default List<Object[]> countByTeacherIdIn(Collection<Long> teacherIds) {
+        if (teacherIds == null || teacherIds.isEmpty()) {
+            return List.of();
+        }
+        return countByTeacherIdInInternal(teacherIds);
+    }
+
+    /**
+     * JPQL backing query for
+     * {@link #countByTeacherIdIn(Collection)}. Not intended to be
+     * invoked directly because the public wrapper owns the empty-input
+     * edge case.
      */
     @Query("SELECT d.teacher.id, COUNT(d) FROM TeacherVerificationDocument d "
             + "WHERE d.teacher.id IN :teacherIds GROUP BY d.teacher.id")
-    List<Object[]> countByTeacherIdIn(@Param("teacherIds") Collection<Long> teacherIds);
+    List<Object[]> countByTeacherIdInInternal(@Param("teacherIds") Collection<Long> teacherIds);
 }

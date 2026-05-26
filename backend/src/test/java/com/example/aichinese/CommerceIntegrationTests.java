@@ -33,7 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.Support.TestUploadFixtures;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.Order;
 import com.example.aichinese.entity.OrderItem;
 import com.example.aichinese.entity.PaymentRecord;
@@ -656,6 +656,27 @@ class CommerceIntegrationTests {
         assertThat(entitlementCountAfterReplay)
                 .as("Stripe webhook replay must not duplicate entitlements for an already-paid payment")
                 .isEqualTo(1L);
+    }
+
+    @Test
+    void stripeWebhookRejectsUnsupportedContentTypeAndOversizedPayloadAtControllerBoundary() throws Exception {
+        String payload = """
+                {"id":"evt_boundary","type":"charge.succeeded","data":{"object":{"id":"ch_123"}}}
+                """.trim();
+
+        mockMvc.perform(post("/api/v1/payments/webhooks/stripe")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .header("Stripe-Signature", stripeSignature(payload))
+                .content(payload))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(post("/api/v1/payments/webhooks/stripe")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Stripe-Signature", stripeSignature(payload))
+                .content("x".repeat(262_145)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test

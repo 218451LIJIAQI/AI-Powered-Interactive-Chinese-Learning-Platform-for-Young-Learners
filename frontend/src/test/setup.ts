@@ -10,23 +10,23 @@ function createStorageMock(): Storage {
     clear() {
       values.clear()
     },
-    getItem(key: string) {
-      return values.has(key) ? values.get(key)! : null
-    },
     key(index: number) {
       return Array.from(values.keys())[index] ?? null
     },
     removeItem(key: string) {
-      values.delete(key)
+      values.delete(String(key))
     },
     setItem(key: string, value: string) {
-      values.set(key, value)
+      values.set(String(key), String(value))
+    },
+    getItem(key: string) {
+      return values.has(String(key)) ? values.get(String(key))! : null
     },
   }
 }
 
 function ensureStorage(name: 'localStorage' | 'sessionStorage') {
-  if (typeof window === 'undefined' || window[name]) {
+  if (typeof window === 'undefined') {
     return
   }
 

@@ -10,11 +10,36 @@ import type { AppLanguage } from '@/types/api'
  */
 export const storageKeys = {
   token: 'mandarin-spark.token',
+  recoveryEmail: 'mandarin-spark.recovery-email',
   language: 'mandarin-spark.language',
   previewRole: 'mandarin-spark.preview-role',
 } as const
 
-export function safeGetItem(key: string, storage: Storage = window.localStorage): string | null {
+function browserStorage(name: 'localStorage' | 'sessionStorage'): Storage | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return window[name]
+  } catch {
+    return null
+  }
+}
+
+export function getLocalStorage(): Storage | null {
+  return browserStorage('localStorage')
+}
+
+export function getSessionStorage(): Storage | null {
+  return browserStorage('sessionStorage')
+}
+
+export function safeGetItem(key: string, storage: Storage | null = getLocalStorage()): string | null {
+  if (!storage) {
+    return null
+  }
+
   try {
     return storage.getItem(key)
   } catch {
@@ -22,13 +47,21 @@ export function safeGetItem(key: string, storage: Storage = window.localStorage)
   }
 }
 
-export function safeSetItem(key: string, value: string, storage: Storage = window.localStorage) {
+export function safeSetItem(key: string, value: string, storage: Storage | null = getLocalStorage()) {
+  if (!storage) {
+    return
+  }
+
   try {
     storage.setItem(key, value)
   } catch {}
 }
 
-export function safeRemoveItem(key: string, storage: Storage = window.localStorage) {
+export function safeRemoveItem(key: string, storage: Storage | null = getLocalStorage()) {
+  if (!storage) {
+    return
+  }
+
   try {
     storage.removeItem(key)
   } catch {}

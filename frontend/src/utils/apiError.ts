@@ -29,17 +29,21 @@ type ApiErrorPayload = {
   message?: string
 }
 
+const MAX_USER_MESSAGE_LENGTH = 280
+const MAX_FIELD_ERROR_MESSAGES = 5
+const UNSAFE_MESSAGE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g
+
 function cleanServerMessage(value: unknown) {
   if (typeof value !== 'string') {
     return null
   }
 
-  const trimmed = value.trim()
+  const trimmed = value.replace(UNSAFE_MESSAGE_CHARACTERS, ' ').replace(/\s+/g, ' ').trim()
   if (!trimmed || trimmed === 'Request failed' || trimmed === 'Network Error') {
     return null
   }
 
-  return trimmed
+  return trimmed.length > MAX_USER_MESSAGE_LENGTH ? `${trimmed.slice(0, MAX_USER_MESSAGE_LENGTH - 3)}...` : trimmed
 }
 
 export function resolveApiError(reason: unknown, fallback = 'We could not complete that request. Please try again.') {
@@ -77,11 +81,15 @@ export function resolveFieldErrors(reason: unknown): Record<string, string[]> {
     return {}
   }
 
-  const result: Record<string, string[]> = {}
+  const result: Record<string, string[]> = Object.create(null) as Record<string, string[]>
   Object.entries(fieldErrors).forEach(([field, messages]) => {
+    if (!field || field === '__proto__' || field === 'constructor' || field === 'prototype') return
     if (!Array.isArray(messages)) return
 
-    const cleanMessages = messages.map(cleanServerMessage).filter((message): message is string => Boolean(message))
+    const cleanMessages = messages
+      .map(cleanServerMessage)
+      .filter((message): message is string => Boolean(message))
+      .slice(0, MAX_FIELD_ERROR_MESSAGES)
 
     if (cleanMessages.length > 0) {
       result[field] = cleanMessages

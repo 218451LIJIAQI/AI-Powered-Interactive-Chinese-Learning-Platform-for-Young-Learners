@@ -5,9 +5,11 @@ import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
@@ -16,10 +18,15 @@ import java.util.stream.Collectors;
 
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.UploadedFile;
+import com.example.aichinese.service.storage.StorageProvider;
+import com.example.aichinese.service.storage.StoredObject;
 
 /**
  * Package-private upload pipeline helpers shared by every storage
@@ -63,20 +70,11 @@ final class UploadStorageSupport {
             throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
         }
 
-        try {
-            String cleaned = Path.of(originalFileName)
-                    .getFileName()
-                    .toString()
-                    .replace('\r', '_')
-                    .replace('\n', '_')
-                    .trim();
-            if (cleaned.isBlank()) {
-                throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
-            }
-            return cleaned;
-        } catch (InvalidPathException exception) {
+        String cleaned = sanitizeOriginalFileName(extractLastPathSegment(originalFileName));
+        if (cleaned.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
         }
+        return cleaned;
     }
 
     static String getRequiredExtension(String fileName, String missingExtensionMessage) {
@@ -149,21 +147,46 @@ final class UploadStorageSupport {
         try {
             Files.createDirectories(baseDirectory);
 
-            Path targetPath = resolveManagedPath(baseDirectory, storedFileName, invalidTargetMessage);
-            Files.copy(multipartFile.getInputStream(), targetPath);
+            Path targetPath = resolveManagedPath(
+                    realDirectory(baseDirectory, INTERNAL_SERVER_ERROR, storageFailureMessage),
+                    storedFileName,
+                    invalidTargetMessage);
+            try (InputStream inputStream = multipartFile.getInputStream()) {
+                Files.copy(inputStream, targetPath);
+            }
             return targetPath;
         } catch (IOException exception) {
             throw new ResponseStatusException(INTERNAL_SERVER_ERROR, storageFailureMessage);
         }
     }
 
+    static void registerRollbackCleanup(StorageProvider storageProvider, StoredObject storedObject) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    storageProvider.deleteQuietly(storedObject);
+                }
+            }
+        });
+    }
+
     static StoredFileDownload loadManagedFile(
             String configuredDirectory,
             UploadedFile uploadedFile,
             String notFoundMessage) {
-        Path baseDirectory = resolveBaseDirectory(configuredDirectory);
-        Path filePath = resolveManagedPath(baseDirectory, uploadedFile.getStoredFileName(), notFoundMessage);
-        if (!Files.isRegularFile(filePath)) {
+        if (uploadedFile == null
+                || uploadedFile.getStoredFileName() == null
+                || uploadedFile.getStoredFileName().isBlank()) {
+            throw new ResponseStatusException(NOT_FOUND, notFoundMessage);
+        }
+
+        Path baseDirectory = realDirectory(resolveBaseDirectory(configuredDirectory), NOT_FOUND, notFoundMessage);
+        Path filePath = resolveManagedPath(baseDirectory, uploadedFile.getStoredFileName(), NOT_FOUND, notFoundMessage);
+        if (!Files.isRegularFile(filePath, LinkOption.NOFOLLOW_LINKS)) {
             throw new ResponseStatusException(NOT_FOUND, notFoundMessage);
         }
 
@@ -175,16 +198,88 @@ final class UploadStorageSupport {
     }
 
     private static Path resolveManagedPath(Path baseDirectory, String storedFileName, String invalidMessage) {
+        return resolveManagedPath(baseDirectory, storedFileName, BAD_REQUEST, invalidMessage);
+    }
+
+    private static Path resolveManagedPath(
+            Path baseDirectory,
+            String storedFileName,
+            HttpStatus invalidStatus,
+            String invalidMessage) {
         Path targetPath = baseDirectory.resolve(storedFileName).normalize();
         if (!targetPath.startsWith(baseDirectory)) {
-            throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
+            throw new ResponseStatusException(invalidStatus, invalidMessage);
         }
         return targetPath;
     }
 
-    private static byte[] readPrefix(MultipartFile multipartFile, String invalidTypeMessage) {
+    private static Path realDirectory(Path directory, HttpStatus failureStatus, String failureMessage) {
         try {
-            return multipartFile.getInputStream().readNBytes(SIGNATURE_PREFIX_BYTES);
+            return directory.toRealPath();
+        } catch (IOException exception) {
+            throw new ResponseStatusException(failureStatus, failureMessage);
+        }
+    }
+
+    private static String extractLastPathSegment(String originalFileName) {
+        String stripped = originalFileName.strip();
+        int lastUnixSeparator = stripped.lastIndexOf('/');
+        int lastWindowsSeparator = stripped.lastIndexOf('\\');
+        int lastSeparator = Math.max(lastUnixSeparator, lastWindowsSeparator);
+        return stripped.substring(lastSeparator + 1);
+    }
+
+    private static String sanitizeOriginalFileName(String fileName) {
+        StringBuilder sanitized = new StringBuilder(fileName.length());
+        boolean previousWasWhitespace = false;
+
+        for (int offset = 0; offset < fileName.length();) {
+            int codePoint = fileName.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+
+            if (isUnsafeOriginalFileNameCodePoint(codePoint)) {
+                appendReplacement(sanitized);
+                previousWasWhitespace = false;
+                continue;
+            }
+
+            if (Character.isWhitespace(codePoint)) {
+                if (!previousWasWhitespace && !sanitized.isEmpty()) {
+                    sanitized.append(' ');
+                    previousWasWhitespace = true;
+                }
+                continue;
+            }
+
+            sanitized.appendCodePoint(codePoint);
+            previousWasWhitespace = false;
+        }
+
+        String cleaned = sanitized.toString().trim();
+        while (cleaned.startsWith(".")) {
+            cleaned = cleaned.substring(1).trim();
+        }
+        return cleaned;
+    }
+
+    private static boolean isUnsafeOriginalFileNameCodePoint(int codePoint) {
+        return Character.isISOControl(codePoint)
+                || Character.getType(codePoint) == Character.FORMAT
+                || switch (codePoint) {
+                    case '"', '*', '/', ':', '<', '>', '?', '\\', '|' -> true;
+                    default -> false;
+                };
+    }
+
+    private static void appendReplacement(StringBuilder sanitized) {
+        if (sanitized.isEmpty() || sanitized.charAt(sanitized.length() - 1) != '_') {
+            sanitized.append('_');
+        }
+    }
+
+    private static byte[] readPrefix(MultipartFile multipartFile, String invalidTypeMessage) {
+        try (InputStream inputStream = multipartFile.getInputStream()) {
+            return inputStream.readNBytes(SIGNATURE_PREFIX_BYTES);
         } catch (IOException exception) {
             throw new ResponseStatusException(BAD_REQUEST, invalidTypeMessage);
         }

@@ -73,8 +73,11 @@ import com.example.aichinese.util.TextUtils;
  *       bumps the version, atomically invalidating every previously
  *       issued token for that user.</li>
  *   <li><b>Registration:</b> teacher accounts start in
- *       {@link TeacherStatus#PENDING_APPROVAL} and cannot log in until
- *       an admin approves them; student accounts go straight to
+ *       {@link TeacherStatus#PENDING}. They can sign in and complete
+ *       onboarding while teacher-only publishing and management flows
+ *       remain gated by
+ *       {@code TeacherContentAccessService.requireApprovedTeacher}
+ *       until an admin approves them. Student accounts go straight to
  *       active. Email is stored case-insensitively (lower-cased) so
  *       duplicate detection cannot be bypassed by changing letter
  *       case.</li>
@@ -441,7 +444,7 @@ public class AuthService {
                     "USER",
                     null,
                     "Login lockout engaged after repeated failed attempts.",
-                null);
+                    null);
         }
     }
 

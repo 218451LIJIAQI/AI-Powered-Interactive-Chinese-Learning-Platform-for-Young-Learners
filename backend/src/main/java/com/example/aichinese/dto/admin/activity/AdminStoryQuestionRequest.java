@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.admin.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -69,4 +72,10 @@ public record AdminStoryQuestionRequest(
         @PositiveOrZero(message = "Sort order must be non-negative.")
         @Max(value = 10_000, message = "Sort order must not exceed 10000.")
         Integer sortOrder) {
+
+    public AdminStoryQuestionRequest {
+        questionText = strip(questionText);
+        optionsPayload = strip(optionsPayload);
+        explanation = stripToNull(explanation);
+    }
 }

@@ -65,8 +65,11 @@ import com.example.aichinese.service.TeacherStudentService;
 import com.example.aichinese.service.VideoProgressService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -393,14 +396,18 @@ public class TeacherController {
             @RequestParam("title") String title,
             @Size(max = 1000, message = "Description must be 1000 characters or fewer.")
             @RequestParam(value = "description", required = false) String description,
+            @Positive(message = "Package id must be positive.")
             @RequestParam(value = "packageId", required = false) Long packageId,
             @NotBlank(message = "Source type is required.")
-            @Size(max = 40, message = "Source type must not exceed 40 characters.")
+            @Size(max = 30, message = "Source type must be 30 characters or fewer.")
             @RequestParam("sourceType") String sourceType,
-            @Size(max = 2048, message = "External video URL must not exceed 2048 characters.")
-            @Pattern(regexp = "^(https?://.+)?$", message = "External video URL must start with http:// or https://.")
+            @Size(max = 500, message = "External video URL must be 500 characters or fewer.")
+            @Pattern(regexp = "^(https?://\\S+)?$", message = "External video URL must start with http:// or https:// and contain no whitespace.")
             @RequestParam(value = "externalVideoUrl", required = false) String externalVideoUrl,
+            @PositiveOrZero(message = "Duration must not be negative.")
             @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+            @PositiveOrZero(message = "Display order must not be negative.")
+            @Max(value = 10_000, message = "Display order must not exceed 10000.")
             @RequestParam(value = "sortOrder", defaultValue = "0") Integer sortOrder,
             @RequestParam(value = "file", required = false) MultipartFile file) {
         return ApiResponse.success(
@@ -429,14 +436,18 @@ public class TeacherController {
             @RequestParam("title") String title,
             @Size(max = 1000, message = "Description must be 1000 characters or fewer.")
             @RequestParam(value = "description", required = false) String description,
+            @Positive(message = "Package id must be positive.")
             @RequestParam(value = "packageId", required = false) Long packageId,
             @NotBlank(message = "Source type is required.")
-            @Size(max = 40, message = "Source type must not exceed 40 characters.")
+            @Size(max = 30, message = "Source type must be 30 characters or fewer.")
             @RequestParam("sourceType") String sourceType,
-            @Size(max = 2048, message = "External video URL must not exceed 2048 characters.")
-            @Pattern(regexp = "^(https?://.+)?$", message = "External video URL must start with http:// or https://.")
+            @Size(max = 500, message = "External video URL must be 500 characters or fewer.")
+            @Pattern(regexp = "^(https?://\\S+)?$", message = "External video URL must start with http:// or https:// and contain no whitespace.")
             @RequestParam(value = "externalVideoUrl", required = false) String externalVideoUrl,
+            @PositiveOrZero(message = "Duration must not be negative.")
             @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
+            @PositiveOrZero(message = "Display order must not be negative.")
+            @Max(value = 10_000, message = "Display order must not exceed 10000.")
             @RequestParam(value = "sortOrder", defaultValue = "0") Integer sortOrder,
             @RequestParam(value = "file", required = false) MultipartFile file) {
         return ApiResponse.success(

@@ -57,6 +57,20 @@ class MultipartRequestSizeFilterTests {
     }
 
     @Test
+    void appliesRouteSpecificLimitsWhenApplicationRunsUnderContextPath() {
+        MockHttpServletRequest request = multipartRequest(
+                "/portal/api/v1/teachers/verification-documents",
+                uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1);
+        request.setContextPath("/portal");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        TrackingFilterChain chain = new TrackingFilterChain();
+
+        assertThatCode(() -> filter.doFilter(request, response, chain)).doesNotThrowAnyException();
+        assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(chain.invoked).isFalse();
+    }
+
+    @Test
     void ignoresNonMultipartRequests() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
         request.setContent(new byte[128]);

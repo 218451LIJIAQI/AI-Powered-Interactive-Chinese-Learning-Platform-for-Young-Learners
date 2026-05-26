@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.example.aichinese.util.TextUtils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -224,27 +225,11 @@ public class LoginAttemptLimiter {
         // strip() (vs trim()) is Unicode-aware, so a stray CJK fullwidth space
         // before the email cannot produce a different bucket than the
         // normalised form the login pipeline submits.
-        String normalisedEmail = truncate(
+        String normalisedEmail = TextUtils.safeTruncate(
                 email == null ? "" : email.strip().toLowerCase(Locale.ROOT), MAX_EMAIL_KEY_LENGTH);
-        String normalisedIp = truncate(
+        String normalisedIp = TextUtils.safeTruncate(
                 clientIp == null ? "" : clientIp.strip(), MAX_IP_KEY_LENGTH);
         return normalisedEmail + "|" + normalisedIp;
-    }
-
-    /**
-     * Truncates {@code value} to {@code maxLength} UTF-16 code units, taking
-     * care not to split a surrogate pair in half. Email / IP keys should
-     * never contain non-BMP characters, but we still guard against it so a
-     * malformed input cannot produce an invalid Java String.
-     */
-    private static String truncate(String value, int maxLength) {
-        if (value.length() <= maxLength) {
-            return value;
-        }
-        if (maxLength > 0 && Character.isHighSurrogate(value.charAt(maxLength - 1))) {
-            return value.substring(0, maxLength - 1);
-        }
-        return value.substring(0, maxLength);
     }
 
     private String anonymizedKey(String email, String clientIp) {

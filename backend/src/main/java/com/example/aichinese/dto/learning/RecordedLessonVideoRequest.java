@@ -1,7 +1,11 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -46,19 +50,19 @@ import jakarta.validation.constraints.Size;
  * the wire format.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * every string field so Bean Validation sees the canonical form
  * (a paste with stray whitespace cannot inflate the length past
  * the cap, sneak past the {@code http(s)://} regex, or fail enum
- * parsing) and so every downstream consumer sees the same trimmed
+ * parsing) and so every downstream consumer sees the same stripped
  * value. {@link #description} and {@link #externalVideoUrl}
  * collapse to {@code null} when blank so the service's
  * "is this set?" check is a single null-check.</p>
  *
  * @param title            short human-readable video title
- *                         (1–200 chars after trim); required
+ *                         (1–200 chars after stripping); required
  * @param description      optional long-form description (max 1000
- *                         chars after trim); {@code null} or blank
+ *                         chars after stripping); {@code null} or blank
  *                         collapses to {@code null}
  * @param packageId        optional denormalised
  *                         {@link com.example.aichinese.entity.CoursePackage}
@@ -76,7 +80,7 @@ import jakarta.validation.constraints.Size;
  *                         when present; the service extracts it
  *                         from file metadata when omitted
  * @param sortOrder        0-based render position in the lesson's
- *                         video list; required, non-negative
+ *                         video list; required, {@code 0..10000}
  */
 @JsonPropertyOrder({
         "title",
@@ -111,10 +115,11 @@ public record RecordedLessonVideoRequest(
 
         @NotNull(message = "Display order is required.")
         @PositiveOrZero(message = "Display order must not be negative.")
+        @Max(value = 10_000, message = "Display order must not exceed 10000.")
         Integer sortOrder) {
 
     /**
-     * Defensive canonical constructor: trims every string field so
+     * Defensive canonical constructor: strips every string field so
      * Bean Validation sees the canonical form (preventing length-cap
      * bypass via leading/trailing whitespace and ensuring the regex
      * evaluates against the canonical form) and collapses optional
@@ -122,21 +127,9 @@ public record RecordedLessonVideoRequest(
      * checks are a single null-check.
      */
     public RecordedLessonVideoRequest {
-        title = trimOrNull(title);
-        description = trimToNullIfBlank(description);
-        sourceType = trimOrNull(sourceType);
-        externalVideoUrl = trimToNullIfBlank(externalVideoUrl);
-    }
-
-    private static String trimOrNull(String value) {
-        return value == null ? null : value.trim();
-    }
-
-    private static String trimToNullIfBlank(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        title = strip(title);
+        description = stripToNull(description);
+        sourceType = strip(sourceType);
+        externalVideoUrl = stripToNull(externalVideoUrl);
     }
 }

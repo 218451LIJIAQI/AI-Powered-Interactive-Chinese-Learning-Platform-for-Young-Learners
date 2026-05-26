@@ -1,15 +1,20 @@
 package com.example.aichinese.entity.enums;
 
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Third-party video conferencing platform that hosts a {@code LiveClass}.
  *
  * <p>The teacher selects a platform when scheduling a live session; the
- * frontend uses this hint to render the correct branded "Join" button and
- * to apply platform-specific URL validation. {@link #OTHER} is a safe
- * default for platforms that are not yet first-class supported.</p>
+ * frontend uses this hint to render the correct branded "Join" button.
+ * Server-side scheduling additionally uses {@link #allowsHost(String)} to
+ * enforce platform-specific URL hosts before a meeting link is ever stored.
+ * {@link #OTHER} is a safe default for platforms that are not yet first-class
+ * supported and accepts any otherwise-safe HTTP(S) host.</p>
  *
  * <p>Persisted with {@code @Enumerated(EnumType.STRING)} on
  * {@code LiveClass}. The constant names are part of the database
@@ -19,20 +24,26 @@ import java.util.Optional;
 public enum MeetingPlatform {
 
     /** Zoom Meetings ({@code zoom.us}). */
-    ZOOM,
+    ZOOM(Set.of("zoom.us")),
 
     /** Google Meet ({@code meet.google.com}). */
-    GOOGLE_MEET,
+    GOOGLE_MEET(Set.of("meet.google.com")),
 
     /** Microsoft Teams ({@code teams.microsoft.com}). */
-    MICROSOFT_TEAMS,
+    MICROSOFT_TEAMS(Set.of("teams.microsoft.com", "teams.live.com")),
 
     /** Any other meeting platform with a generic join URL. */
-    OTHER;
+    OTHER(Set.of());
+
+    private final Set<String> allowedHostSuffixes;
+
+    MeetingPlatform(Set<String> allowedHostSuffixes) {
+        this.allowedHostSuffixes = allowedHostSuffixes;
+    }
 
     /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, MeetingPlatform> LOOKUP =
-            EnumLookups.indexByName(MeetingPlatform.class);
+            buildLookup();
 
     /**
      * Tolerant case- and whitespace-insensitive lookup.
@@ -42,7 +53,10 @@ public enum MeetingPlatform {
      *         is {@code null}, blank, or not a recognised platform
      */
     public static Optional<MeetingPlatform> tryFrom(String value) {
-        return EnumLookups.tryFrom(LOOKUP, value);
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(LOOKUP.get(normalizeLookupKey(value)));
     }
 
     /**
@@ -52,12 +66,13 @@ public enum MeetingPlatform {
      *         blank, or not a recognised platform
      */
     public static MeetingPlatform fromValue(String value) {
-        return EnumLookups.fromValue(
-                LOOKUP,
-                value,
-                "Meeting platform is required.",
-                () -> "Invalid meeting platform. Allowed values are ZOOM, GOOGLE_MEET, "
-                        + "MICROSOFT_TEAMS, or OTHER.");
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Meeting platform is required.");
+        }
+        return tryFrom(value)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Invalid meeting platform. Allowed values are ZOOM, GOOGLE_MEET, "
+                                + "MICROSOFT_TEAMS, or OTHER."));
     }
 
     /**
@@ -72,5 +87,42 @@ public enum MeetingPlatform {
     /** @return {@code true} when the platform is one of the natively supported brands. */
     public boolean isFirstParty() {
         return this != OTHER;
+    }
+
+    /**
+     * Checks whether a validated HTTP(S) meeting URL host belongs to this
+     * platform. Subdomains are accepted for providers that commonly issue
+     * tenant-specific hosts (for example {@code us02web.zoom.us}).
+     */
+    public boolean allowsHost(String host) {
+        if (this == OTHER) {
+            return true;
+        }
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        String normalizedHost = host.strip().toLowerCase(Locale.ROOT);
+        return allowedHostSuffixes.stream()
+                .anyMatch(suffix -> normalizedHost.equals(suffix) || normalizedHost.endsWith("." + suffix));
+    }
+
+    private static Map<String, MeetingPlatform> buildLookup() {
+        Map<String, MeetingPlatform> lookup = new HashMap<>();
+        for (MeetingPlatform platform : values()) {
+            lookup.put(normalizeLookupKey(platform.name()), platform);
+        }
+        lookup.put(normalizeLookupKey("Zoom"), ZOOM);
+        lookup.put(normalizeLookupKey("Google Meet"), GOOGLE_MEET);
+        lookup.put(normalizeLookupKey("Meet"), GOOGLE_MEET);
+        lookup.put(normalizeLookupKey("Microsoft Teams"), MICROSOFT_TEAMS);
+        lookup.put(normalizeLookupKey("MS Teams"), MICROSOFT_TEAMS);
+        lookup.put(normalizeLookupKey("Teams"), MICROSOFT_TEAMS);
+        return Map.copyOf(lookup);
+    }
+
+    private static String normalizeLookupKey(String value) {
+        return value.strip()
+                .replaceAll("[\\s-]+", "_")
+                .toUpperCase(Locale.ROOT);
     }
 }

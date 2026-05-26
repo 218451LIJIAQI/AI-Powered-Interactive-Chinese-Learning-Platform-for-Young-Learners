@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -48,11 +50,11 @@ import jakarta.validation.constraints.Size;
  * wire format and break consumers that pin on field positions.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #message}, {@link #languagePreference} and
  * {@link #context} so Bean Validation operates on the canonical
  * form (a whitespace-only {@code message} correctly fails
- * {@link NotBlank @NotBlank} after trimming, the way the user
+ * {@link NotBlank @NotBlank} after stripping, the way the user
  * expects) and the service layer's
  * {@code AiInputSanitizer.sanitizeLong} pass is idempotent.
  * {@code null} is preserved so the {@link NotBlank @NotBlank}
@@ -74,7 +76,7 @@ public record AiChatRequest(
         Long relatedLessonId) {
 
     /**
-     * Defensive canonical constructor: trims the three free-text
+     * Defensive canonical constructor: strips the three free-text
      * fields so Bean Validation operates on the canonical form and
      * the service layer's sanitisation calls are idempotent.
      * {@code null} is preserved so {@link NotBlank @NotBlank} can
@@ -83,14 +85,8 @@ public record AiChatRequest(
      * normalised here — {@link Positive @Positive} handles them.
      */
     public AiChatRequest {
-        if (message != null) {
-            message = message.trim();
-        }
-        if (languagePreference != null) {
-            languagePreference = languagePreference.trim();
-        }
-        if (context != null) {
-            context = context.trim();
-        }
+        message = strip(message);
+        languagePreference = strip(languagePreference);
+        context = strip(context);
     }
 }

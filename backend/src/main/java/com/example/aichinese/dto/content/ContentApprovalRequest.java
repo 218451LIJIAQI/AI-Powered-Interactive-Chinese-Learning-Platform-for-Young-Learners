@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.content;
 
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.Size;
@@ -33,10 +35,11 @@ import jakarta.validation.constraints.Size;
  * before being persisted on
  * {@link com.example.aichinese.entity.ContentModerationRecord}, so
  * any HTML/JS injection from the admin UI is neutralised at the
- * service boundary (the DTO is intentionally a pure carrier — no
- * compact-constructor trimming — to avoid double normalisation and
- * to keep {@link Size} validation operating on the raw client
- * input, matching the other request DTOs in this package). The
+ * service boundary. The canonical constructor strips surrounding
+ * Unicode whitespace and collapses blank notes to {@code null}
+ * before {@link Size} validation, matching the request-boundary
+ * normalisation used by the other polished request DTOs in this
+ * package. The
  * {@value ContentDtoConstants#MODERATION_NOTE_MAX_LENGTH}-char cap
  * mirrors both the {@code content_moderation_records.note} schema
  * column width and the
@@ -62,4 +65,8 @@ public record ContentApprovalRequest(
         @Size(max = ContentDtoConstants.MODERATION_NOTE_MAX_LENGTH,
                 message = "Approval note must not exceed 1000 characters.")
         String note) {
+
+    public ContentApprovalRequest {
+        note = stripToNull(note);
+    }
 }

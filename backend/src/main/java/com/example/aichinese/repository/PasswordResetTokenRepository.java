@@ -60,7 +60,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
      */
     @Modifying
     @Transactional
-    @Query("UPDATE PasswordResetToken t SET t.usedAt = :now "
+    @Query("UPDATE PasswordResetToken t SET t.usedAt = :now, t.updatedAt = :now "
             + "WHERE t.user.id = :userId AND t.usedAt IS NULL")
     int invalidateActiveTokensForUser(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
@@ -80,7 +80,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
      */
     @Modifying
     @Transactional
-    @Query("UPDATE PasswordResetToken t SET t.usedAt = :now "
+    @Query("UPDATE PasswordResetToken t SET t.usedAt = :now, t.updatedAt = :now "
             + "WHERE t.id = :id AND t.usedAt IS NULL AND t.expiresAt > :now")
     int consumeActiveToken(@Param("id") Long id, @Param("now") LocalDateTime now);
 }

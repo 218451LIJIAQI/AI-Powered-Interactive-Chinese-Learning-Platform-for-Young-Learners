@@ -7,8 +7,8 @@ export const options = {
     baseline: {
       executor: 'ramping-vus',
       stages: [
-        { duration: '1m', target: Number(__ENV.K6_TARGET_VUS || 10) },
-        { duration: '3m', target: Number(__ENV.K6_TARGET_VUS || 10) },
+        { duration: '1m', target: targetVus() },
+        { duration: '3m', target: targetVus() },
         { duration: '1m', target: 0 },
       ],
     },
@@ -20,12 +20,31 @@ export const options = {
   },
 }
 
-const baseUrl = __ENV.BASE_URL || 'http://localhost:8080'
+const baseUrl = normalizeBaseUrl(__ENV.BASE_URL || 'http://localhost:8080')
 const email = __ENV.TEST_STUDENT_EMAIL
 const password = __ENV.TEST_STUDENT_PASSWORD
 
 const aiLatency = new Trend('ai_chat_latency')
 const authFailures = new Rate('auth_failures')
+
+function targetVus() {
+  const parsed = Number(__ENV.K6_TARGET_VUS || 10)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 10
+}
+
+function normalizeBaseUrl(rawValue) {
+  const value = String(rawValue || '').trim().replace(/\/+$/, '')
+  if (!/^https?:\/\//i.test(value)) {
+    throw new Error('BASE_URL must be an absolute http or https URL.')
+  }
+  if (/^https?:\/\/[^/?#]*@/i.test(value)) {
+    throw new Error('BASE_URL must not include embedded credentials.')
+  }
+  if (/[?#]/.test(value)) {
+    throw new Error('BASE_URL must not include a query string or fragment.')
+  }
+  return value
+}
 
 function login() {
   if (!email || !password) {
@@ -43,7 +62,8 @@ function login() {
     return null
   }
 
-  return response.json('data.token')
+  const token = response.json('data.token')
+  return typeof token === 'string' && token.length > 0 ? token : null
 }
 
 export default function () {

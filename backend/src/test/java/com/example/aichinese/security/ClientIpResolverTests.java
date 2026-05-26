@@ -67,6 +67,13 @@ class ClientIpResolverTests {
     }
 
     @Test
+    void rejectsHostnameBasedTrustedProxyLiteralEntries() {
+        assertThatThrownBy(() -> new ClientIpResolver(new ForwardedHeaderProperties(List.of("proxy.internal"))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Trusted proxy entry contains an invalid address");
+    }
+
+    @Test
     void selectsRealClientWhenTrustedProxyAppendsAfterSpoofedForwardedValue() {
         ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.200")));
         MockHttpServletRequest request = new MockHttpServletRequest();

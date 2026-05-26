@@ -36,9 +36,8 @@ import lombok.Setter;
  * Stripe webhook retries from inserting duplicate entitlements when a
  * single payment is delivered twice.
  * {@link #featureKeyNormalized} is a generated column populated by the
- * database (lower-cased {@code feature_key}, defaulting to {@code ""})
- * so {@code NULL}/empty feature keys still participate in the unique
- * index — Hibernate sees it as read-only via
+ * database ({@code feature_key}, defaulting {@code NULL} to {@code ""})
+ * so null feature keys still participate in the unique index — Hibernate sees it as read-only via
  * {@code insertable = false, updatable = false}.</p>
  *
  * <p>{@link #version} guards against concurrent flips of {@link #active}

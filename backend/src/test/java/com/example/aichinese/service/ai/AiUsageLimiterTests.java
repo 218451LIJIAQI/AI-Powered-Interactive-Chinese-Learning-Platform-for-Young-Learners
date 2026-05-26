@@ -3,10 +3,14 @@ package com.example.aichinese.service.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -85,6 +89,36 @@ class AiUsageLimiterTests {
         User user = createUser("spring-managed-quota");
 
         assertThatCode(() -> springManagedLimiter.checkProviderCallAllowed(user.getId())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void repairsMissingWindowFieldsOnExistingCounter() {
+        UserRepository userRepository = mock(UserRepository.class);
+        AiUsageQuotaCounterRepository quotaCounterRepository = mock(AiUsageQuotaCounterRepository.class);
+        User user = new User();
+        user.setId(99L);
+        AiUsageQuotaCounter counter = new AiUsageQuotaCounter();
+        counter.setUser(user);
+        counter.setMinuteStartedAt(null);
+        counter.setMinuteCount(99);
+        counter.setUsageDay(null);
+        counter.setDayCount(99);
+        when(userRepository.findLockedById(99L)).thenReturn(Optional.of(user));
+        when(quotaCounterRepository.findLockedByUserId(99L)).thenReturn(Optional.of(counter));
+        when(quotaCounterRepository.save(any(AiUsageQuotaCounter.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        AiUsageLimiter limiter = new AiUsageLimiter(
+                Clock.fixed(Instant.parse("2026-05-25T01:00:00Z"), ZoneOffset.UTC),
+                10,
+                10,
+                userRepository,
+                quotaCounterRepository);
+
+        limiter.checkProviderCallAllowed(99L);
+
+        assertThat(counter.getMinuteStartedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 5, 25, 1, 0));
+        assertThat(counter.getMinuteCount()).isEqualTo(1);
+        assertThat(counter.getUsageDay()).isEqualTo(java.time.LocalDate.of(2026, 5, 25));
+        assertThat(counter.getDayCount()).isEqualTo(1);
     }
 
     private AiUsageLimiter limiterAt(String instant, int requestsPerMinute, int requestsPerDay) {

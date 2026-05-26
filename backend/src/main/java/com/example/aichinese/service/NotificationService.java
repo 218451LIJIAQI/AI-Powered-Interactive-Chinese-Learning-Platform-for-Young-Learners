@@ -34,6 +34,7 @@ import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherFeedbackRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.PaginationUtils;
 
 /**
@@ -108,15 +109,28 @@ public class NotificationService {
             Long targetId,
             String targetPath,
             User createdByUser) {
+        if (recipient == null) {
+            throw new IllegalArgumentException("Notification recipient must not be null.");
+        }
+        if (notificationType == null) {
+            throw new IllegalArgumentException("Notification type must not be null.");
+        }
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("Notification title must not be blank.");
+        }
+        if (message == null || message.isBlank()) {
+            throw new IllegalArgumentException("Notification message must not be blank.");
+        }
+
         Notification notification = new Notification();
         notification.setUser(recipient);
-        notification.setTitle(title);
-        notification.setMessage(message);
+        notification.setTitle(title.strip());
+        notification.setMessage(message.strip());
         notification.setNotificationType(notificationType);
         notification.setNotificationStatus(NotificationStatus.UNREAD);
-        notification.setTargetType(targetType);
+        notification.setTargetType(targetType == null || targetType.isBlank() ? null : targetType.strip());
         notification.setTargetId(targetId);
-        notification.setTargetPath(targetPath);
+        notification.setTargetPath(targetPath == null || targetPath.isBlank() ? null : targetPath.strip());
         notification.setCreatedByUser(createdByUser);
         notification.setReadAt(null);
         return notificationRepository.save(notification);
@@ -139,7 +153,9 @@ public class NotificationService {
             notificationTransactionTemplate.executeWithoutResult(status ->
                     createNotification(recipient, notificationType, title, message, targetType, targetId, targetPath, createdByUser));
         } catch (Exception exception) {
-            log.warn("Notification creation failed for recipient user id {}.", recipient != null ? recipient.getId() : null, exception);
+            Long recipientId = recipient != null ? recipient.getId() : null;
+            log.warn("Notification creation failed for recipient user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
+            log.debug("Notification creation stack trace for recipient user id {}.", recipientId, exception);
         }
     }
 

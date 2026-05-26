@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.aichinese.util.TextUtils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
@@ -154,27 +155,11 @@ public class PublicAuthRequestLimiter {
         // strip() (vs trim()) is Unicode-aware so a stray CJK fullwidth space
         // before the email cannot produce a different bucket than the
         // normalised form the auth pipeline submits.
-        String normalizedSubject = truncate(
+        String normalizedSubject = TextUtils.safeTruncate(
                 subject == null ? "" : subject.strip().toLowerCase(Locale.ROOT), MAX_SUBJECT_KEY_LENGTH);
-        String normalizedIp = truncate(
+        String normalizedIp = TextUtils.safeTruncate(
                 clientIp == null ? "" : clientIp.strip(), MAX_IP_KEY_LENGTH);
         return action + "|" + normalizedSubject + "|" + normalizedIp;
-    }
-
-    /**
-     * Truncates {@code value} to {@code maxLength} UTF-16 code units, taking
-     * care not to split a surrogate pair in half. Email / IP keys should
-     * never contain non-BMP characters, but we still guard against it so a
-     * malformed input cannot produce an invalid Java String.
-     */
-    private static String truncate(String value, int maxLength) {
-        if (value.length() <= maxLength) {
-            return value;
-        }
-        if (maxLength > 0 && Character.isHighSurrogate(value.charAt(maxLength - 1))) {
-            return value.substring(0, maxLength - 1);
-        }
-        return value.substring(0, maxLength);
     }
 
     private record RequestRecord(Instant windowStartedAt, int requestCount, Instant lastUpdatedAt) {

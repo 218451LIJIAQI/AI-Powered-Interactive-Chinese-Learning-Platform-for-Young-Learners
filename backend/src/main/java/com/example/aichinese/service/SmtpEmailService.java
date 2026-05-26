@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.util.ExceptionLogUtils;
 
 /**
  * SMTP-backed {@link EmailService} active when
@@ -60,7 +61,10 @@ public class SmtpEmailService implements EmailService {
             message.setText(body);
             mailSender.send(message);
         } catch (Exception exception) {
-            log.warn("Email sending failed for user id {}. Falling back to in-app notifications only.", recipient.getId(), exception);
+            log.warn("Email sending failed for user id {}; falling back to in-app notifications only: {}",
+                    recipient.getId(),
+                    ExceptionLogUtils.safeSummary(exception));
+            log.debug("Email sending stack trace for user id {}.", recipient.getId(), exception);
         }
     }
 }

@@ -122,6 +122,7 @@ public class AiFileStorageService {
                         storedFileName,
                         "Invalid upload target path.",
                         "Uploaded file could not be stored."));
+        UploadStorageSupport.registerRollbackCleanup(storageProvider, storedObject);
 
         UploadedFile uploadedFile = new UploadedFile();
         uploadedFile.setOwnerUser(ownerUser);
@@ -132,9 +133,14 @@ public class AiFileStorageService {
         uploadedFile.setFileSize(multipartFile.getSize());
         uploadedFile.setAccessLevel(accessLevel);
         uploadedFile.setActive(true);
-        return Objects.requireNonNull(
-                metadataWriteTransaction.execute(status -> uploadedFileRepository.save(uploadedFile)),
-                "uploaded file metadata");
+        try {
+            return Objects.requireNonNull(
+                    metadataWriteTransaction.execute(status -> uploadedFileRepository.save(uploadedFile)),
+                    "uploaded file metadata");
+        } catch (RuntimeException exception) {
+            storageProvider.deleteQuietly(storedObject);
+            throw exception;
+        }
     }
 
     /**

@@ -551,7 +551,27 @@ public class AiService {
             result = aiProviderRouter.resolveClient().generateText(prompt);
         } catch (RuntimeException exception) {
             recordProviderDuration(providerTimer, featureKey, "exception");
-            throw exception;
+            log.warn("AI provider execution failed for feature {} with exception type {}.",
+                    featureKey, exception.getClass().getSimpleName());
+            aiLogService.createUsageLog(
+                    user,
+                    primaryRole(user),
+                    featureKey,
+                    language,
+                    AiRequestStatus.FAILED,
+                    availability.provider(),
+                    availability.model(),
+                    null,
+                    summarize(userPrompt, 500),
+                    null,
+                    "Provider request failed or timed out.",
+                    relatedEntityType,
+                    relatedEntityId);
+            return AiExecutionResult.failed(
+                    availability.provider(),
+                    availability.model(),
+                    AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                    "Provider request failed or timed out.");
         }
         recordProviderDuration(providerTimer, featureKey, result.success() ? "success" : "failure");
         if (!result.success()) {

@@ -1,13 +1,17 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
@@ -22,6 +26,7 @@ import com.example.aichinese.service.CommunicationMapper;
  * browsing the audit history cannot accidentally lift sensitive values
  * from a description field.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class AuditLogServiceTests {
 
     @Test
@@ -49,5 +54,27 @@ class AuditLogServiceTests {
         assertThat(saved.getDescription()).doesNotContain("bearer-token");
         assertThat(saved.getDescription()).doesNotContain("reset-token");
         assertThat(saved.getDescription()).hasSizeLessThanOrEqualTo(1000);
+    }
+
+    @Test
+    void safeRecordLogsConciseFailureSummaryWithoutWarnStackTrace(CapturedOutput output) {
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        when(auditLogRepository.save(any(AuditLog.class)))
+                .thenThrow(new RuntimeException("audit store failed Authorization: Bearer secret-token"));
+        AuditLogService service = new AuditLogService(auditLogRepository, mock(CommunicationMapper.class));
+
+        assertThatCode(() -> service.safeRecord(
+                null,
+                "SECURITY_EVENT",
+                "USER",
+                10L,
+                "description",
+                "127.0.0.1"))
+                .doesNotThrowAnyException();
+
+        assertThat(output).contains("Audit log creation failed for action SECURITY_EVENT on USER:10: RuntimeException");
+        assertThat(output).contains("Authorization: [REDACTED]");
+        assertThat(output).doesNotContain("secret-token");
+        assertThat(output).doesNotContain("at com.example.aichinese");
     }
 }

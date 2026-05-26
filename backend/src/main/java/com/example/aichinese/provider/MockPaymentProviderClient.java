@@ -1,11 +1,10 @@
 package com.example.aichinese.provider;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.example.aichinese.config.PaymentProperties;
 import com.example.aichinese.dto.commerce.PaymentProviderCheckoutResult;
@@ -69,8 +68,7 @@ public class MockPaymentProviderClient implements PaymentProviderClient {
 
     @Override
     public PaymentProviderCheckoutResult createCheckoutSession(CommerceCheckout checkout) {
-        Objects.requireNonNull(checkout, "checkout");
-        if (!paymentProperties.mockSuccessEnabled()) {
+        if (!paymentProperties.mockSuccessEnabled() || checkout == null) {
             return PaymentProviderCheckoutResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
 
@@ -87,7 +85,7 @@ public class MockPaymentProviderClient implements PaymentProviderClient {
 
     @Override
     public PaymentProviderStatusResult getPaymentStatus(String providerReference) {
-        if (!paymentProperties.mockSuccessEnabled()) {
+        if (!paymentProperties.mockSuccessEnabled() || !isMockReference(providerReference)) {
             return PaymentProviderStatusResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
         }
 
@@ -107,16 +105,15 @@ public class MockPaymentProviderClient implements PaymentProviderClient {
      */
     private static String buildCheckoutUrl(String successUrl, String reference) {
         String baseUrl = successUrl == null || successUrl.isBlank() ? "/" : successUrl.strip();
-        int fragmentIndex = baseUrl.indexOf('#');
-        String fragment = fragmentIndex >= 0 ? baseUrl.substring(fragmentIndex) : "";
-        String urlWithoutFragment = fragmentIndex >= 0 ? baseUrl.substring(0, fragmentIndex) : baseUrl;
-        String separator = urlWithoutFragment.contains("?")
-                ? (urlWithoutFragment.endsWith("?") || urlWithoutFragment.endsWith("&") ? "" : "&")
-                : "?";
-        return urlWithoutFragment
-                + separator
-                + "paymentRef=" + URLEncoder.encode(reference, StandardCharsets.UTF_8)
-                + "&status=success"
-                + fragment;
+        return UriComponentsBuilder.fromUriString(baseUrl)
+                .queryParam("paymentRef", reference)
+                .queryParam("status", "success")
+                .build()
+                .encode()
+                .toUriString();
+    }
+
+    private static boolean isMockReference(String providerReference) {
+        return providerReference != null && providerReference.strip().startsWith(REFERENCE_PREFIX);
     }
 }

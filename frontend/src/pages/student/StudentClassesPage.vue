@@ -30,7 +30,7 @@
                   <div class="student-live-meta">
                     <span>{{ classTimeRange }}</span>
                     <span>{{ upcomingClass.durationMinutes || 45 }} min</span>
-                    <span>{{ upcomingClass.meetingPlatform }}</span>
+                    <span>{{ upcomingMeetingPlatformLabel }}</span>
                   </div>
 
                   <div class="student-live-teacher">
@@ -354,7 +354,7 @@ const watchAgainSubtitle = computed(() => {
 
 const watchAgainMeta = computed(() => {
   if (upcomingClass.value) {
-    return `${formatStatus(upcomingClass.value.liveClassStatus)} - ${upcomingClass.value.meetingPlatform}`
+    return `${formatStatus(upcomingClass.value.liveClassStatus)} - ${upcomingMeetingPlatformLabel.value}`
   }
 
   return 'Waiting for class scheduling data'
@@ -372,10 +372,12 @@ const reminders = computed(() => {
     {
       title: upcomingClass.value.canEnrol ? 'Enrolment available' : 'Class access depends on enrolment',
       copy: `Status: ${formatStatus(upcomingClass.value.liveClassStatus)}`,
-      time: upcomingClass.value.meetingPlatform,
+      time: upcomingMeetingPlatformLabel.value,
     },
   ]
 })
+
+const upcomingMeetingPlatformLabel = computed(() => formatStatus(upcomingClass.value?.meetingPlatform ?? 'OTHER'))
 
 function recordedRowsFromClass(item: LiveClassResponse) {
   if (item.lesson?.lessonTitle) {

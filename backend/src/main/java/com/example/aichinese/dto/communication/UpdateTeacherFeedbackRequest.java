@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.communication;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -94,4 +97,9 @@ public record UpdateTeacherFeedbackRequest(
      */
     public static final int MAX_MESSAGE_LENGTH =
             CreateTeacherFeedbackRequest.MAX_MESSAGE_LENGTH;
+
+    public UpdateTeacherFeedbackRequest {
+        feedbackType = stripToNull(feedbackType);
+        message = strip(message);
+    }
 }

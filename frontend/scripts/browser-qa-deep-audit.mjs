@@ -34,12 +34,20 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { resolveBrowserExecutablePath } from './lib/browser-runtime.mjs'
+import {
+  normalizeHttpBaseUrl,
+  parseTcpPort,
+  redactText,
+  resolveBrowserExecutablePath,
+  safeJsonStringify,
+  stopProcessTree,
+  tailTextForEvidence,
+} from './lib/browser-runtime.mjs'
 
-const baseUrl = process.env.QA_BASE_URL || 'http://127.0.0.1:5173'
-const frontendProbeUrl = process.env.QA_FRONTEND_PROBE_URL || baseUrl
+const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5173', 'QA_BASE_URL')
+const frontendProbeUrl = normalizeHttpBaseUrl(process.env.QA_FRONTEND_PROBE_URL || baseUrl, 'QA_FRONTEND_PROBE_URL')
 const chromePath = resolveBrowserExecutablePath()
-const debuggingPort = Number(process.env.QA_CHROME_PORT || 9228)
+const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9228', 'QA_CHROME_PORT')
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-deep-audit`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-deep-audit-${timestamp}`)
@@ -113,7 +121,7 @@ function summarizeValue(value) {
   if (typeof value === 'string') return value.replace(/\s+/g, ' ').trim().slice(0, 240)
 
   try {
-    return JSON.stringify(value).slice(0, 240)
+    return safeJsonStringify(value).slice(0, 240)
   } catch {
     return String(value).slice(0, 240)
   }
@@ -198,7 +206,7 @@ function createCdpClient(webSocketUrl) {
       const { resolve, reject } = pending.get(message.id)
       pending.delete(message.id)
       if (message.error) {
-        reject(new Error(`${message.error.message || 'CDP error'} ${JSON.stringify(message.error.data || '')}`))
+        reject(new Error(`${message.error.message || 'CDP error'} ${safeJsonStringify(message.error.data || '')}`))
       } else {
         resolve(message.result || {})
       }
@@ -666,8 +674,8 @@ async function main() {
       records,
     }
 
-    await writeFile(path.join(evidenceDir, 'deep-audit-report.json'), JSON.stringify(report, null, 2), 'utf8')
-    await writeFile(path.join(evidenceDir, 'chrome.log'), chromeLogs.join('\n'), 'utf8')
+    await writeFile(path.join(evidenceDir, 'deep-audit-report.json'), safeJsonStringify(report), 'utf8')
+    await writeFile(path.join(evidenceDir, 'chrome.log'), tailTextForEvidence(chromeLogs.join('\n')), 'utf8')
 
     for (const record of records) {
       const issues = []
@@ -695,13 +703,13 @@ async function main() {
     console.log(`DEEP_AUDIT_REPORT_JSON=${path.join(evidenceDir, 'deep-audit-report.json')}`)
   } finally {
     client?.close()
-    chrome.kill()
+    await stopProcessTree(chrome)
     await sleep(500)
     await rm(userDataDir, { recursive: true, force: true })
   }
 }
 
 main().catch((error) => {
-  console.error(error)
+  console.error(redactText(error?.stack || error?.message || String(error)))
   process.exitCode = 1
 })

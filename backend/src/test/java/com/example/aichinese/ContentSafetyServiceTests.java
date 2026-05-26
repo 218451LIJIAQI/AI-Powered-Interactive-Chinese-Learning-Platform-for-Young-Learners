@@ -37,6 +37,17 @@ class ContentSafetyServiceTests {
     }
 
     @Test
+    void sensitiveFilterRejectsChineseUnsafeTerms() {
+        SystemSettingRepository repository = mock(SystemSettingRepository.class);
+        when(repository.findBySettingKey(PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY)).thenReturn(Optional.empty());
+        ContentSafetyService service = new ContentSafetyService(new ContentSafetySettingsReader(repository));
+
+        assertThatThrownBy(() -> service.requireSafeText("这个故事包含毒品内容", 200, "Text is required."))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("not suitable for young learners");
+    }
+
+    @Test
     void disabledSensitiveFilterAllowsContentWithoutThrowing() {
         SystemSetting setting = new SystemSetting();
         setting.setSettingValue("false");

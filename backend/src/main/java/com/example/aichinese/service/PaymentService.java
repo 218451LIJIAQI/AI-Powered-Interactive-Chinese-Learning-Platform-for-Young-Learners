@@ -1,5 +1,6 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
@@ -117,13 +118,18 @@ public class PaymentService {
 
     @Transactional
     public PaymentRecord createPendingPayment(Order order, StudentProfile student) {
+        if (order == null || student == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Order and student are required to create a payment.");
+        }
         PaymentProviderClient providerClient = paymentProviderService.getClient();
 
         PaymentRecord paymentRecord = new PaymentRecord();
         paymentRecord.setOrder(order);
         paymentRecord.setStudent(student);
         paymentRecord.setProviderName(providerClient.providerName());
-        paymentRecord.setAmount(commerceMoneyService.normalize(order.getTotalAmount()));
+        paymentRecord.setAmount(commerceMoneyService.normalizePersistableAmount(
+                order.getTotalAmount(),
+                "Payment amount is too large."));
         paymentRecord.setCurrencyCode(order.getCurrencyCode());
         paymentRecord.setPaymentStatus(PaymentStatus.PENDING);
         paymentRecord.setProviderStatus("CREATED");
@@ -139,7 +145,20 @@ public class PaymentService {
             List<OrderItem> orderItems,
             String successUrl,
             String cancelUrl) {
+        if (currentUser == null || student == null || order == null || paymentRecord == null || orderItems == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout payment context is incomplete.");
+        }
+        if (order.getTotalAmount() == null
+                || order.getCurrencyCode() == null
+                || order.getCurrencyCode().isBlank()
+                || successUrl == null
+                || successUrl.isBlank()
+                || cancelUrl == null
+                || cancelUrl.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout payment context is incomplete.");
+        }
         PaymentProviderClient providerClient = paymentProviderService.getClient();
+        paymentRecord.setProviderName(providerClient.providerName());
         CommerceCheckout checkout = new CommerceCheckout(
                 student,
                 order,
@@ -151,11 +170,40 @@ public class PaymentService {
                 cancelUrl);
 
         PaymentProviderCheckoutResult result = providerClient.createCheckoutSession(checkout);
+        if (result == null) {
+            result = PaymentProviderCheckoutResult.unavailable(
+                    providerClient.providerName(),
+                    PaymentProviderClient.PAYMENT_UNAVAILABLE_MESSAGE);
+        }
         paymentRecord.setProviderReference(result.sessionReference());
         paymentRecord.setProviderStatus(result.providerStatus());
+
+        if (!result.available()) {
+            markCheckoutUnavailable(paymentRecord, result);
+            auditLogService.record(
+                    currentUser.getUser(),
+                    "PAYMENT_SESSION_UNAVAILABLE",
+                    "PAYMENT_RECORD",
+                    paymentRecord.getId(),
+                    "Payment session could not be created for order " + order.getOrderNumber());
+            return new CheckoutResponse(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    paymentRecord.getId(),
+                    paymentRecord.getPaymentStatus(),
+                    paymentRecord.getAmount(),
+                    paymentRecord.getCurrencyCode(),
+                    null,
+                    paymentRecord.getProviderName(),
+                    paymentRecord.getProviderStatus(),
+                    false,
+                    result.message(),
+                    mapOrderItems(orderItems));
+        }
+
         paymentRecordRepository.save(paymentRecord);
 
-        if (result.available() && "MOCK_CREATED".equals(result.providerStatus())) {
+        if ("MOCK_CREATED".equals(result.providerStatus())) {
             markPaymentPaid(paymentRecord, "MOCK", result.providerStatus());
         }
 
@@ -183,6 +231,9 @@ public class PaymentService {
 
     @Transactional
     public StudentPaymentRecordResponse verifyPaymentStatus(SecurityUserDetails currentUser, Long paymentId) {
+        if (currentUser == null || paymentId == null) {
+            throw new ResponseStatusException(NOT_FOUND, "Payment record was not found.");
+        }
         PaymentRecord paymentRecord = paymentRecordRepository.findByIdAndStudentUserId(paymentId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payment record was not found."));
 
@@ -192,6 +243,11 @@ public class PaymentService {
 
         PaymentProviderStatusResult providerStatus = paymentProviderService.getClient()
                 .getPaymentStatus(paymentRecord.getProviderReference());
+        if (providerStatus == null) {
+            providerStatus = PaymentProviderStatusResult.unavailable(
+                    paymentRecord.getProviderName(),
+                    PaymentProviderClient.PAYMENT_UNAVAILABLE_MESSAGE);
+        }
 
         PaymentRecord lockedPaymentRecord = paymentRecordRepository.findLockedByIdAndStudentUserId(paymentId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payment record was not found."));
@@ -346,6 +402,19 @@ public class PaymentService {
         }
         log.info("Payment terminal status applied: paymentId={}, status={}, providerStatus={}",
                 record.getId(), status.paymentStatus(), status.providerStatus());
+    }
+
+    private void markCheckoutUnavailable(PaymentRecord record, PaymentProviderCheckoutResult result) {
+        record.setPaymentStatus(PaymentStatus.FAILED);
+        record.setProviderStatus(result.providerStatus());
+        Order order = record.getOrder();
+        if (order != null) {
+            order.setPaymentStatus(PaymentStatus.FAILED);
+            orderRepository.save(order);
+        }
+        paymentRecordRepository.save(record);
+        log.warn("Payment checkout unavailable: paymentId={}, orderId={}, providerStatus={}",
+                record.getId(), order != null ? order.getId() : null, result.providerStatus());
     }
 
     private Pageable newestPageable(int page, int size) {

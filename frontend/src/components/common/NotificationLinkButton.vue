@@ -39,7 +39,7 @@ const emit = defineEmits<{
 const router = useRouter()
 
 function openTarget(): void {
-  const target = normalizeAppRoute(props.targetPath) ?? props.fallbackTo ?? '/'
+  const target = normalizeAppRoute(props.targetPath) ?? normalizeAppRoute(props.fallbackTo) ?? '/'
 
   if (props.notificationId) {
     const id = props.notificationId

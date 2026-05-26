@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -28,22 +31,22 @@ import jakarta.validation.constraints.Size;
  * the missing-field value during partial saves).</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #title} and {@link #description} so Bean Validation
  * evaluates the canonical form (a paste with stray whitespace
  * cannot inflate the length past the cap or sneak past
  * {@link NotBlank @NotBlank}) and so the persisted entity, the
- * audit log, and the catalogue search index see the same trimmed
+ * audit log, and the catalogue search index see the same stripped
  * value. {@link #description} collapses to {@code null} when
  * blank so the downstream "is this set?" check is a single
  * null-check.</p>
  *
  * @param title            short human-readable quiz title shown on
- *                         the lesson page (1–200 chars after trim);
+ *                         the lesson page (1–200 chars after stripping);
  *                         required
  * @param description      optional long-form description shown on
  *                         the quiz detail page (max 1000 chars after
- *                         trim); {@code null} or blank collapses to
+ *                         stripping); {@code null} or blank collapses to
  *                         {@code null}
  * @param timeLimitMinutes optional countdown duration in minutes;
  *                         {@code null} or {@code 0} both mean
@@ -60,7 +63,7 @@ public record CreateQuizRequest(
         Integer timeLimitMinutes) {
 
     /**
-     * Defensive canonical constructor: trims string fields so Bean
+     * Defensive canonical constructor: strips string fields so Bean
      * Validation sees the canonical form (preventing length-cap
      * bypass via leading/trailing whitespace) and collapses
      * {@link #description} to {@code null} when blank so the
@@ -69,10 +72,7 @@ public record CreateQuizRequest(
      * {@link NotBlank @NotBlank} fires correctly.
      */
     public CreateQuizRequest {
-        title = title == null ? null : title.trim();
-        if (description != null) {
-            String trimmed = description.trim();
-            description = trimmed.isEmpty() ? null : trimmed;
-        }
+        title = strip(title);
+        description = stripToNull(description);
     }
 }

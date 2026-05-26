@@ -95,6 +95,9 @@ public class TeacherManagementService {
     public TeacherProfileResponse updateCurrentTeacherProfile(
             SecurityUserDetails currentUser,
             UpdateTeacherProfileRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Teacher profile update request is required.");
+        }
         User user = getUserById(currentUser.getUserId());
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
 

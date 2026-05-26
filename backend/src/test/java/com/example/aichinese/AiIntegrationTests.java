@@ -33,7 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.Support.TestUploadFixtures;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.AiChatMessage;
 import com.example.aichinese.entity.AiFeedbackRecord;
 import com.example.aichinese.entity.AiResponseReport;
@@ -781,7 +781,7 @@ class AiIntegrationTests {
 
         mockMvc.perform(multipart("/api/v1/ai/pronunciation-feedback")
                 .file(audioFile)
-                .param("targetText", "浣犲ソ")
+                .param("targetText", "你好")
                 .param("pinyin", "ni hao")
                 .param("languagePreference", "en")
                 .with(csrf())

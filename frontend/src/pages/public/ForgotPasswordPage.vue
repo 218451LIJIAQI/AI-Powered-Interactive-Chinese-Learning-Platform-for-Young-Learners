@@ -130,21 +130,25 @@
  * before trying again" message via {@link resolveApiError}.</p>
  */
 import { computed, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter, type LocationQueryRaw, type LocationQueryValue } from 'vue-router'
 
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
 import { resolveApiError } from '@/utils/apiError'
+import { isSensitiveKey, scrubSensitiveValue } from '@/utils/sensitiveData'
+import { getSessionStorage, safeGetItem, safeRemoveItem, storageKeys } from '@/utils/storage'
 
 const route = useRoute()
-const initialEmail = typeof route.query.email === 'string' ? route.query.email.trim() : ''
+const router = useRouter()
 
-const email = ref(initialEmail)
+const email = ref(readInitialRecoveryEmail())
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 const submitting = ref(false)
+
+removeSensitiveQueryFromAddressBar()
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizedEmail = computed(() => email.value.trim().toLowerCase())
@@ -177,5 +181,54 @@ function requestAnotherEmail() {
   success.value = null
   error.value = null
   email.value = ''
+}
+
+function readInitialRecoveryEmail(): string {
+  const queryEmail = firstQueryText(route.query.email)
+  const storage = getSessionStorage()
+  const storedEmail = safeGetItem(storageKeys.recoveryEmail, storage)?.trim() ?? ''
+  safeRemoveItem(storageKeys.recoveryEmail, storage)
+  return queryEmail || storedEmail
+}
+
+function firstQueryText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  if (Array.isArray(value)) {
+    const firstText = value.find((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    return firstText?.trim() ?? ''
+  }
+  return ''
+}
+
+function removeSensitiveQueryFromAddressBar() {
+  const query: LocationQueryRaw = {}
+  let changed = false
+
+  for (const [key, value] of Object.entries(route.query)) {
+    if (isSensitiveKey(key)) {
+      changed = true
+      continue
+    }
+    if (queryValueContainsSensitiveData(value)) {
+      changed = true
+      continue
+    }
+    query[key] = value
+  }
+
+  const hash =
+    route.hash && (isSensitiveKey(route.hash) || scrubSensitiveValue(route.hash) !== route.hash) ? '' : route.hash
+  changed ||= hash !== route.hash
+
+  if (changed) {
+    void router.replace({ name: 'forgot-password', query, hash })
+  }
+}
+
+function queryValueContainsSensitiveData(value: LocationQueryValue | LocationQueryValue[]): boolean {
+  const values = Array.isArray(value) ? value : [value]
+  return values.some((entry) => typeof entry === 'string' && scrubSensitiveValue(entry) !== entry)
 }
 </script>

@@ -317,7 +317,7 @@ import { useResource } from '@/composables/useResource'
 import { teacherFeedback, teacherStudentSummaries } from '@/demo/data'
 import type { TeacherFeedbackResponse, TeacherStudentSummaryResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDate, formatDateTime } from '@/utils/format'
+import { clampPercent, formatDate, formatDateTime, formatPercent } from '@/utils/format'
 import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
 
 const router = useRouter()
@@ -350,7 +350,9 @@ const students = computed<StudentRecord[]>(() =>
     avatarKind: 'student',
     displayName: item.displayName?.trim() || item.fullName,
     levelLabel: item.currentLevel?.trim() || 'Level not set',
-    quizAverageLabel: item.quizAveragePercent == null ? 'No quiz data' : `${Math.round(item.quizAveragePercent)}%`,
+    progressPercent: clampPercent(item.progressPercent),
+    quizAveragePercent: item.quizAveragePercent == null ? null : clampPercent(item.quizAveragePercent),
+    quizAverageLabel: item.quizAveragePercent == null ? 'No quiz data' : formatPercent(item.quizAveragePercent),
   })),
 )
 
@@ -370,7 +372,7 @@ const filteredStudents = computed(() => {
     if (!keyword) return true
     return (
       item.displayName.toLowerCase().includes(keyword) ||
-      item.email.toLowerCase().includes(keyword) ||
+      (item.email ?? '').toLowerCase().includes(keyword) ||
       item.levelLabel.toLowerCase().includes(keyword) ||
       item.weakAreas.some((entry) => entry.toLowerCase().includes(keyword))
     )
@@ -398,15 +400,13 @@ const selectedStudent = computed(
 
 const summaryCards = computed(() => {
   const atRiskCount = students.value.filter((item) => item.atRisk).length
-  const averageProgress = Math.round(
-    students.value.reduce((sum, item) => sum + item.progressPercent, 0) / Math.max(students.value.length, 1),
-  )
-  const averageQuiz = Math.round(
-    students.value
-      .filter((item) => item.quizAveragePercent != null)
-      .reduce((sum, item) => sum + (item.quizAveragePercent ?? 0), 0) /
-      Math.max(students.value.filter((item) => item.quizAveragePercent != null).length, 1),
-  )
+  const quizStudents = students.value.filter((item) => item.quizAveragePercent != null)
+  const averageProgress = students.value.length
+    ? clampPercent(students.value.reduce((sum, item) => sum + item.progressPercent, 0) / students.value.length)
+    : 0
+  const averageQuiz = quizStudents.length
+    ? clampPercent(quizStudents.reduce((sum, item) => sum + (item.quizAveragePercent ?? 0), 0) / quizStudents.length)
+    : 0
 
   return [
     {
@@ -493,7 +493,7 @@ const selectedInsights = computed(() => {
   const quizAverage =
     selectedStudent.value.quizAveragePercent == null
       ? 'No quiz average is available yet.'
-      : `Quiz average is ${Math.round(selectedStudent.value.quizAveragePercent)}%.`
+      : `Quiz average is ${formatPercent(selectedStudent.value.quizAveragePercent)}.`
 
   return [
     {
@@ -551,7 +551,7 @@ const manualFollowupDraft = computed(() => {
   const quizLabel =
     selectedStudent.value.quizAveragePercent == null
       ? 'their recent activities'
-      : `their ${Math.round(selectedStudent.value.quizAveragePercent)}% quiz average`
+      : `their ${formatPercent(selectedStudent.value.quizAveragePercent)} quiz average`
   const toneLead =
     followUpTone.value === 'Corrective'
       ? 'Please take another careful look at'

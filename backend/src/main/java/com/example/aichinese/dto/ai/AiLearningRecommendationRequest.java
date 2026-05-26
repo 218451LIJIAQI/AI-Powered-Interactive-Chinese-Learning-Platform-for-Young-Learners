@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -48,14 +51,15 @@ import jakarta.validation.constraints.Size;
  * wire format and break consumers that pin on field positions.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
- * the two short string fields ({@link #currentLevel} and
- * {@link #languagePreference}) so Bean Validation operates on
+ * <p>The canonical constructor eagerly strips surrounding Unicode
+ * whitespace from the two short string fields ({@link #currentLevel}
+ * and {@link #languagePreference}) so Bean Validation operates on
  * the canonical form and the service layer's sanitisation calls
- * are idempotent. The four list fields are intentionally
- * <em>not</em> normalised here — the
+ * are idempotent. The four list fields are defensively copied while
+ * preserving {@code null} elements so Bean Validation can report
+ * element-level violations; the
  * {@code AiService.joinPromptList} pipeline is the canonical
- * owner of trim, dedup, and per-prompt-fragment sanitisation for
+ * owner of prompt-time trim, dedup, and per-fragment sanitisation for
  * those fields, mirroring the
  * {@code UpdateTeacherProfileRequest → TeacherManagementMapper.joinCategories}
  * convention. {@code null} is preserved on every field so
@@ -88,19 +92,19 @@ public record AiLearningRecommendationRequest(
         String languagePreference) {
 
     /**
-     * Defensive canonical constructor: trims the two short text
+     * Defensive canonical constructor: strips the two short text
      * fields so Bean Validation operates on the canonical form
-     * and downstream sanitisation is idempotent. {@code null} is
-     * preserved so downstream code can distinguish "absent" from
-     * "explicitly empty". The four list fields are deliberately
-     * left untouched — see class Javadoc.
+     * and downstream sanitisation is idempotent. The four list fields
+     * are defensively copied while preserving {@code null} as
+     * "not supplied" and preserving {@code null} elements for Bean
+     * Validation.
      */
     public AiLearningRecommendationRequest {
-        if (currentLevel != null) {
-            currentLevel = currentLevel.trim();
-        }
-        if (languagePreference != null) {
-            languagePreference = languagePreference.trim();
-        }
+        currentLevel = strip(currentLevel);
+        recentQuizResults = immutableListOrNull(recentQuizResults);
+        wrongAnswers = immutableListOrNull(wrongAnswers);
+        weakAreas = immutableListOrNull(weakAreas);
+        completedLessons = immutableListOrNull(completedLessons);
+        languagePreference = strip(languagePreference);
     }
 }

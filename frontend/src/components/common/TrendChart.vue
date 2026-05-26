@@ -58,19 +58,20 @@ const points = computed<ChartPoint[]>(() => {
   const vals = props.values
   if (vals.length === 0) return []
 
+  const numericValues = vals.map((item) => (Number.isFinite(item.value) ? item.value : 0))
   let max = -Infinity
   let min = Infinity
-  for (const item of vals) {
-    if (item.value > max) max = item.value
-    if (item.value < min) min = item.value
+  for (const value of numericValues) {
+    if (value > max) max = value
+    if (value < min) min = value
   }
   if (max < 1) max = 1
   const spread = Math.max(max - min, 1)
   const count = vals.length
 
-  return vals.map((item, index) => {
+  return vals.map((_, index) => {
     const x = count === 1 ? SVG_WIDTH / 2 : (SVG_WIDTH / (count - 1)) * index
-    const normalized = (item.value - min) / spread
+    const normalized = (numericValues[index] - min) / spread
     const y = SVG_PADDING_BOTTOM - normalized * (SVG_PADDING_BOTTOM - SVG_PADDING_TOP)
     return { x, y }
   })

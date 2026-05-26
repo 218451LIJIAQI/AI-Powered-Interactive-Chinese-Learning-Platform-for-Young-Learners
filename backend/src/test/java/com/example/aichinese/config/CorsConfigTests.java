@@ -65,6 +65,31 @@ class CorsConfigTests {
     }
 
     @Test
+    void rejectsOriginsWithPathsQueriesFragmentsOrCredentials() {
+        assertThatThrownBy(() -> config.corsConfigurationSource("https://example.test/app"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("path");
+        assertThatThrownBy(() -> config.corsConfigurationSource("https://example.test?debug=true"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("query string");
+        assertThatThrownBy(() -> config.corsConfigurationSource("https://example.test#fragment"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("fragment");
+        assertThatThrownBy(() -> config.corsConfigurationSource("https://user:secret@example.test"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("embedded credentials");
+    }
+
+    @Test
+    void normalizesOriginsAndRemovesDuplicatesInConfiguredOrder() {
+        CorsConfiguration api = apiCorsConfiguration(
+                "  HTTPS://Example.Test:443,https://example.test:443,http://LOCALHOST:5173 ");
+
+        assertThat(api.getAllowedOrigins())
+                .containsExactly("https://example.test:443", "http://localhost:5173");
+    }
+
+    @Test
     void defaultLocalDevOriginsCoverLoopbackAndViteFallbackPorts() {
         assertThat(CorsConfig.defaultLocalDevOrigins())
                 .containsExactly(
@@ -101,6 +126,20 @@ class CorsConfigTests {
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("  ,  *  ,"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("APP_CORS_ALLOWED_ORIGINS");
+    }
+
+    @Test
+    void prodProfileRequiresPublicHttpsCorsOrigins() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod");
+        CorsConfig prodConfig = new CorsConfig(environment);
+
+        assertThatThrownBy(() -> prodConfig.corsConfigurationSource("http://app.example.test"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("HTTPS");
+        assertThatThrownBy(() -> prodConfig.corsConfigurationSource("https://localhost:5173"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("non-loopback public host");
     }
 
     private CorsConfiguration apiCorsConfiguration(String allowedOrigins) {

@@ -2,6 +2,7 @@ package com.example.aichinese.mapper;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Component;
 
@@ -189,7 +190,10 @@ public class ContentManagementMapper {
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
                 toTeacherSummary(coursePackage.getTeacher()),
-                safeItems.stream().map(this::toPackageItemResponse).toList(),
+                safeItems.stream()
+                        .filter(Objects::nonNull)
+                        .map(this::toPackageItemResponse)
+                        .toList(),
                 coursePackage.getCreatedAt(),
                 coursePackage.getUpdatedAt());
     }
@@ -438,7 +442,10 @@ public class ContentManagementMapper {
                 locked,
                 coursePackage.getContentStatus(),
                 null,
-                safeItems.stream().map(this::toPublicCourseItemSummary).toList(),
+                safeItems.stream()
+                        .filter(Objects::nonNull)
+                        .map(this::toPublicCourseItemSummary)
+                        .toList(),
                 PACKAGE_CTA,
                 locked ? PAID_LOCKED_REASON : null);
     }
@@ -469,7 +476,10 @@ public class ContentManagementMapper {
         if (items == null || items.isEmpty()) {
             return List.of();
         }
-        return items.stream().map(this::toPackageItemResponse).toList();
+        return items.stream()
+                .filter(Objects::nonNull)
+                .map(this::toPackageItemResponse)
+                .toList();
     }
 
     private static ManagedContentType mapPackageItemType(PackageItem item) {

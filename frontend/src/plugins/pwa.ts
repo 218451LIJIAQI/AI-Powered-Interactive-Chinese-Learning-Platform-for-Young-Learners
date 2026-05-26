@@ -1,14 +1,16 @@
 import { registerSW } from 'virtual:pwa-register'
 
-registerSW({
-  immediate: true,
-  onRegisterError(error) {
-    console.warn('Service worker registration failed.', error)
-  },
-})
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  registerSW({
+    immediate: true,
+    onRegisterError(error) {
+      console.warn('Service worker registration failed.', error)
+    },
+  })
+}
 
 export async function clearOfflineCaches() {
-  if (!('caches' in window)) {
+  if (typeof window === 'undefined' || !('caches' in window)) {
     return
   }
 

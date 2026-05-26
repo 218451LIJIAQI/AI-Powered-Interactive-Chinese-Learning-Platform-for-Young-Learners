@@ -1051,7 +1051,7 @@
        on orders (payment_status);
 
     alter table orders 
-       add constraint UKnthkiu7pgmnqnu86i2jyoe2v7 unique (order_number);
+       add constraint idx_orders_order_number unique (order_number);
 
     create index idx_package_items_package_id 
        on package_items (course_package_id);
@@ -3281,7 +3281,7 @@ set @baseline_contract_invalid_count = (
       + (select count(*) from lesson_progress where completion_percent is not null and (completion_percent < 0 or completion_percent > 100))
       + (select count(*) from student_progress where completion_percent is not null and (completion_percent < 0 or completion_percent > 100))
       + (select count(*) from daily_streaks where current_streak < 0 or best_streak < 0 or best_streak < current_streak)
-      + (select count(*) from points_transactions where points_delta < 0 or (source_type is null and source_id is not null) or (source_type is not null and source_id is null))
+      + (select count(*) from points_transactions where (source_type is null and source_id is not null) or (source_type is not null and source_id is null))
       + (select count(*) from video_progress where recorded_video_id is null or watched_seconds < 0 or total_seconds < 0 or progress_percentage < 0 or progress_percentage > 100 or watched_seconds > total_seconds)
       + (select count(*) from live_classes where max_participants is not null and max_participants <= 0)
       + (select count(*) from uploaded_files where file_size < 0 or access_level not in ('PRIVATE'))
@@ -3413,15 +3413,6 @@ deallocate prepare baseline_contract_stmt;
 set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'uk_points_transactions_student_source') = 0,
     'alter table points_transactions add constraint uk_points_transactions_student_source unique (student_id, source_key)',
-    'select 1'
-);
-prepare baseline_contract_stmt from @baseline_contract_sql;
-execute baseline_contract_stmt;
-deallocate prepare baseline_contract_stmt;
-
-set @baseline_contract_sql = if(
-    (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'points_transactions' and constraint_name = 'chk_points_transactions_delta_non_negative') = 0,
-    'alter table points_transactions add constraint chk_points_transactions_delta_non_negative check (points_delta >= 0)',
     'select 1'
 );
 prepare baseline_contract_stmt from @baseline_contract_sql;

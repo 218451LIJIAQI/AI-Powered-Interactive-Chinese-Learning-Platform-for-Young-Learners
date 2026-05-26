@@ -63,7 +63,7 @@ public class ClientIpResolver {
         Objects.requireNonNull(forwardedHeaderProperties, "forwardedHeaderProperties");
         this.trustedProxyLiterals = forwardedHeaderProperties.trustedProxies().stream()
                 .filter(entry -> !entry.contains("/"))
-                .map(ClientIpResolver::canonicalNumericAddressOrLiteral)
+                .map(ClientIpResolver::parseTrustedProxyLiteral)
                 .toList();
         this.trustedProxyCidrs = forwardedHeaderProperties.trustedProxies().stream()
                 .filter(entry -> entry.contains("/"))
@@ -159,6 +159,18 @@ public class ClientIpResolver {
         return parsedAddress == null
                 ? normalized
                 : normalizeHostLiteral(parsedAddress.getHostAddress());
+    }
+
+    private static String parseTrustedProxyLiteral(String value) {
+        String normalized = normalizeHostLiteral(value);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        InetAddress parsedAddress = parseNumericAddress(normalized);
+        if (parsedAddress == null) {
+            throw new IllegalArgumentException("Trusted proxy entry contains an invalid address: " + value);
+        }
+        return normalizeHostLiteral(parsedAddress.getHostAddress());
     }
 
     /**

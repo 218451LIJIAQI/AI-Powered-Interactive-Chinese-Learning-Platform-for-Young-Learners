@@ -141,6 +141,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal SecurityUserDetails currentUser) {
         authService.logout(currentUser);
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
                 .body(ApiResponse.success("Logged out successfully.", null));
     }
@@ -170,6 +171,7 @@ public class AuthController {
             AuthResponse authResponse,
             com.example.aichinese.dto.auth.RefreshTokenIssue refreshToken) {
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie(refreshToken.rawToken(), refreshToken.ttl()).toString())
                 .body(ApiResponse.success(message, authResponse));
     }

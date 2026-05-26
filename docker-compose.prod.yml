@@ -19,7 +19,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "mysqladmin ping -u$$MYSQL_USER -p$$MYSQL_PASSWORD -h 127.0.0.1 --silent",
+          'MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping -u"$${MYSQL_USER}" -h 127.0.0.1 --silent',
         ]
       interval: 10s
       timeout: 5s
@@ -92,22 +92,40 @@ services:
       - uploads:/app/uploads
     networks:
       - application-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8080/actuator/health/readiness >/dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
 
   frontend:
     build:
       context: ./frontend
       args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
         VITE_APP_RELEASE: ${APP_RELEASE:-}
         VITE_GIT_SHA: ${VITE_GIT_SHA:-}
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-8080}:8080"
     networks:
       application-network:
         ipv4_address: ${FRONTEND_PROXY_IP:-172.28.0.10}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   mysql-data:

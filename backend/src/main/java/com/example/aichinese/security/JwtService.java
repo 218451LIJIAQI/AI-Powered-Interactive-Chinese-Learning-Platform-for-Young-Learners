@@ -14,6 +14,7 @@ import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.entity.User;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -101,9 +102,12 @@ public class JwtService {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Cannot mint a JWT for a user with no email address.");
         }
+        if (user.getId() == null) {
+            throw new IllegalArgumentException("Cannot mint a JWT for a user with no id.");
+        }
 
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + securityProperties.expiration());
+        Date expiry = new Date(Math.addExact(now.getTime(), securityProperties.expiration()));
         return Jwts.builder()
                 .subject(email)
                 .claims(Map.of(
@@ -136,14 +140,21 @@ public class JwtService {
      * the {@code sessionVersion} claim matches the caller-provided value.
      */
     public boolean isTokenValid(String token, String email, long sessionVersion) {
-        Objects.requireNonNull(token, "token");
-        Objects.requireNonNull(email, "email");
-        Claims claims = extractAllClaims(token);
-        Date expiration = claims.getExpiration();
-        return expiration != null
-                && email.equalsIgnoreCase(claims.getSubject())
-                && expiration.after(new Date())
-                && extractSessionVersion(claims) == sessionVersion;
+        if (token == null || token.isBlank() || email == null || email.isBlank()) {
+            return false;
+        }
+        try {
+            Claims claims = extractAllClaims(token);
+            Date expiration = claims.getExpiration();
+            String subject = claims.getSubject();
+            return expiration != null
+                    && subject != null
+                    && email.equalsIgnoreCase(subject)
+                    && expiration.after(new Date())
+                    && extractSessionVersion(claims) == sessionVersion;
+        } catch (JwtException | IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private Claims extractAllClaims(String token) {

@@ -481,7 +481,7 @@ import { useResource } from '@/composables/useResource'
 import { adminAnalytics, adminAuditLogs, commissionSetting } from '@/demo/data'
 import { useUiStore } from '@/stores/ui'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDate, formatDateTime, formatNumber } from '@/utils/format'
+import { clampNumber, formatDate, formatDateTime, formatNumber } from '@/utils/format'
 
 const router = useRouter()
 const ui = useUiStore()
@@ -609,7 +609,7 @@ watch(
   () => commissionResource.data.value,
   (value) => {
     if (value) {
-      commissionRate.value = value.commissionRate
+      commissionRate.value = clampCommissionRate(value.commissionRate)
     }
   },
   { immediate: true },
@@ -926,7 +926,9 @@ async function saveCommission() {
   actionSuccess.value = null
   savingCommission.value = true
   try {
-    await adminApi.updateCommissionSetting({ commissionRate: commissionRate.value })
+    const normalizedRate = clampCommissionRate(commissionRate.value)
+    commissionRate.value = normalizedRate
+    await adminApi.updateCommissionSetting({ commissionRate: normalizedRate })
     await commissionResource.reload()
     actionSuccess.value = 'Commission setting saved and refreshed.'
   } catch (reason) {
@@ -948,6 +950,10 @@ function cycleActorFilter() {
 
 function cycleSort() {
   sortOrder.value = sortOrder.value === 'NEWEST' ? 'OLDEST' : 'NEWEST'
+}
+
+function clampCommissionRate(value: number) {
+  return clampNumber(value, 0, 1)
 }
 
 function reloadAll() {

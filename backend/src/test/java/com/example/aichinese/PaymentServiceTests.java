@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import com.example.aichinese.dto.commerce.CheckoutResponse;
+import com.example.aichinese.dto.commerce.PaymentProviderCheckoutResult;
 import com.example.aichinese.dto.commerce.PaymentProviderStatusResult;
 import com.example.aichinese.dto.commerce.StripeWebhookResultResponse;
 import com.example.aichinese.dto.commerce.StudentPaymentRecordResponse;
@@ -88,6 +90,61 @@ class PaymentServiceTests {
         assertThat(paymentRecord.getAmount()).isEqualByComparingTo("30.00");
         assertThat(paymentRecord.getCurrencyCode()).isEqualTo("MYR");
         assertThat(paymentRecord.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void startCheckoutMarksPaymentFailedWhenProviderCannotCreateSession() {
+        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
+        OrderRepository orderRepository = mock(OrderRepository.class);
+        OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
+        PaymentProviderService paymentProviderService = mock(PaymentProviderService.class);
+        PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
+        EntitlementService entitlementService = mock(EntitlementService.class);
+        CartService cartService = mock(CartService.class);
+        TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+        NotificationService notificationService = mock(NotificationService.class);
+        AuditLogService auditLogService = mock(AuditLogService.class);
+        PaymentRecord paymentRecord = pendingPaymentRecord();
+        paymentRecord.setProviderName("stripe");
+        Order order = Objects.requireNonNull(paymentRecord.getOrder());
+        List<OrderItem> orderItems = List.of(orderItem(order, 1L));
+
+        when(paymentProviderService.getClient()).thenReturn(providerClient);
+        when(providerClient.createCheckoutSession(any()))
+                .thenReturn(PaymentProviderCheckoutResult.unavailable(
+                        "stripe",
+                        "Payment service is currently unavailable. Please try again later."));
+        when(paymentRecordRepository.save(any(PaymentRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentService paymentService = new PaymentService(
+                paymentRecordRepository,
+                orderRepository,
+                orderItemRepository,
+                paymentProviderService,
+                entitlementService,
+                cartService,
+                teacherEarningService,
+                notificationService,
+                auditLogService,
+                new com.example.aichinese.service.CommerceMoneyService());
+
+        CheckoutResponse response = paymentService.startCheckout(
+                currentUser(),
+                paymentRecord.getStudent(),
+                order,
+                paymentRecord,
+                orderItems,
+                "https://app.example.com/payment/success?paymentId=10",
+                "https://app.example.com/payment/cancel?paymentId=10&cancelled=true");
+
+        assertThat(response.paymentAvailable()).isFalse();
+        assertThat(response.checkoutUrl()).isNull();
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(response.providerStatus()).isEqualTo(PaymentProviderCheckoutResult.UNAVAILABLE_PROVIDER_STATUS);
+        assertThat(paymentRecord.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(orderRepository).save(order);
+        verifyNoInteractions(entitlementService, cartService, teacherEarningService, notificationService);
     }
 
     @Test
@@ -359,6 +416,8 @@ class PaymentServiceTests {
         order.setStudent(student);
         order.setOrderNumber("ORD-TEST");
         order.setPaymentStatus(paymentStatus);
+        order.setTotalAmount(new BigDecimal("29.90"));
+        order.setCurrencyCode("MYR");
 
         PaymentRecord paymentRecord = new PaymentRecord();
         paymentRecord.setId(10L);

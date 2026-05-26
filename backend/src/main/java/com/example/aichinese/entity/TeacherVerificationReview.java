@@ -78,4 +78,20 @@ public class TeacherVerificationReview extends BaseEntity {
 
     @Column(name = "reviewed_at", nullable = false, updatable = false)
     private LocalDateTime reviewedAt;
+
+    /**
+     * Stores only final admin decisions. {@link TeacherStatus#PENDING}
+     * belongs to {@link TeacherProfile}; a review row is append-only audit
+     * evidence and must represent a completed approval or rejection.
+     */
+    public void setDecisionStatus(TeacherStatus decisionStatus) {
+        if (decisionStatus == null) {
+            throw new IllegalArgumentException("Teacher verification review decision status is required.");
+        }
+        if (decisionStatus == TeacherStatus.PENDING) {
+            throw new IllegalArgumentException(
+                    "Teacher verification review decision status must be APPROVED or REJECTED.");
+        }
+        this.decisionStatus = decisionStatus;
+    }
 }

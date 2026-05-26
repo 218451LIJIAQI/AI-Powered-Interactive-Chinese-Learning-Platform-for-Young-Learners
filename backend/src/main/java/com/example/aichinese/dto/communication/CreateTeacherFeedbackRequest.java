@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.communication;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -146,4 +149,9 @@ public record CreateTeacherFeedbackRequest(
      * {@code ContentSafetyService.requireSafeText} before persistence.
      */
     public static final int MAX_MESSAGE_LENGTH = 2000;
+
+    public CreateTeacherFeedbackRequest {
+        feedbackType = stripToNull(feedbackType);
+        message = strip(message);
+    }
 }

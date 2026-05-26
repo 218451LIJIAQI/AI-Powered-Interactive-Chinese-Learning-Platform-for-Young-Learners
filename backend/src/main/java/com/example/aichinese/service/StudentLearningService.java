@@ -6,8 +6,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -200,6 +198,9 @@ public class StudentLearningService {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Quiz quiz = studentLearningAccessService.requirePublishedQuiz(quizId);
         studentLearningAccessService.ensureLessonAccess(student, quiz.getLesson());
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz submission request is required.");
+        }
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
         if (questions.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Quiz must contain at least one question.");
@@ -210,6 +211,9 @@ public class StudentLearningService {
                 .collect(Collectors.toSet());
         Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId = new LinkedHashMap<>();
         for (QuizSubmissionAnswerRequest answer : request.answers()) {
+            if (answer == null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Quiz answer must not be null.");
+            }
             Long questionId = answer.questionId();
             if (!quizQuestionIds.contains(questionId)) {
                 throw new ResponseStatusException(BAD_REQUEST, "Submitted answer does not belong to this quiz.");
@@ -244,6 +248,7 @@ public class StudentLearningService {
                 throw new ResponseStatusException(BAD_REQUEST, "Every quiz question requires an answer.");
             }
 
+            String submittedAnswer = answerRequest.answerText() == null ? "" : answerRequest.answerText().trim();
             boolean correct = isCorrectAnswer(question, answerRequest.answerText());
             if (correct) {
                 score += question.getPoints() == null ? 0 : question.getPoints();
@@ -253,7 +258,7 @@ public class StudentLearningService {
             QuizAttemptAnswer attemptAnswer = new QuizAttemptAnswer();
             attemptAnswer.setQuizAttempt(savedAttempt);
             attemptAnswer.setQuestion(question);
-            attemptAnswer.setAnswerText(answerRequest.answerText().trim());
+            attemptAnswer.setAnswerText(submittedAnswer);
             attemptAnswer.setCorrect(correct);
             quizAttemptAnswerRepository.save(attemptAnswer);
 
@@ -261,7 +266,7 @@ public class StudentLearningService {
                     question.getId(),
                     question.getQuestionType(),
                     question.getQuestionText(),
-                    answerRequest.answerText().trim(),
+                    submittedAnswer,
                     question.getCorrectAnswerText(),
                     correct,
                     question.getPoints(),
@@ -434,14 +439,9 @@ public class StudentLearningService {
 
         // Targeted query so we only pull live classes that target this lesson
         // or one of its related packages, instead of scanning every live class
-        // in the system and filtering in-memory. When the related package set
-        // is empty we still need to send a sentinel value because Hibernate
-        // rejects `IN ()` against an empty collection.
-        Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
-                ? Collections.singleton(-1L)
-                : relatedPackageIds;
-
-        return liveClassRepository.findRelatedToLessonOrPackages(lesson.getId(), packageIdsForQuery).stream()
+        // in the system and filtering in-memory. The repository owns the empty
+        // package-id branch so callers do not need sentinel ids.
+        return liveClassRepository.findRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
                 .filter(liveClass -> liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
                         && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
                 .map(liveClass -> {
@@ -473,12 +473,8 @@ public class StudentLearningService {
 
         // Same DB-side filtering pattern as live classes above: ask the
         // database for only the videos that target this lesson or one of its
-        // related packages. The sentinel id guards the `IN ()` edge case.
-        Collection<Long> packageIdsForQuery = relatedPackageIds.isEmpty()
-                ? Collections.singleton(-1L)
-                : relatedPackageIds;
-
-        return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), packageIdsForQuery).stream()
+        // related packages. The repository owns the empty package-id branch.
+        return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
                 .filter(video -> canAccessVideo(student, video))
                 .map(video -> liveLearningMapper.toRecordedVideoResponse(
                         video,

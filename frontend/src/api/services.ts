@@ -20,7 +20,7 @@
  */
 import type { AxiosResponse } from 'axios'
 
-import { getAccessToken, http, refreshAccessToken } from './http'
+import { getAccessToken, http, invalidateAuthSession, refreshAccessToken } from './http'
 import { appEnv } from '@/config/env'
 import type {
   AdminAnalyticsResponse,
@@ -127,20 +127,79 @@ import type {
 } from '@/types/api'
 import type { ApiResponse } from '@/types/api'
 
-class ApiEnvelopeError extends Error {
-  response: { data: { message: string; errors: string[]; fieldErrors: Record<string, string[]> } }
+const AI_STREAM_CONNECT_TIMEOUT_MS = 30000
 
-  constructor(message: string, errors: string[] = []) {
+class ApiEnvelopeError extends Error {
+  response: { status?: number; data: { message: string; errors: string[]; fieldErrors: Record<string, string[]> } }
+
+  constructor(message: string, errors: string[] = [], status?: number, fieldErrors: Record<string, string[]> = {}) {
     super(message)
     this.name = 'ApiEnvelopeError'
     this.response = {
+      status,
       data: {
         message,
         errors,
-        fieldErrors: {},
+        fieldErrors,
       },
     }
   }
+}
+
+function cleanErrorMessage(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function cleanErrorList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map(cleanErrorMessage).filter((message): message is string => Boolean(message))
+    : []
+}
+
+function cleanFieldErrors(value: unknown): Record<string, string[]> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([field, messages]) => [field, cleanErrorList(messages)] as const)
+      .filter(([, messages]) => messages.length > 0),
+  )
+}
+
+function fallbackSseHttpMessage(status: number): string {
+  if (status === 401) return 'Please sign in again to continue.'
+  if (status === 429) return 'You are doing that too often. Please wait a moment and try again.'
+  if (status >= 500) return 'The learning service is having trouble right now. Please try again shortly.'
+  return 'Unable to get an AI chat response.'
+}
+
+async function sseHttpError(response: Response): Promise<ApiEnvelopeError> {
+  const fallbackMessage = fallbackSseHttpMessage(response.status)
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (contentType.toLowerCase().includes('application/json')) {
+    try {
+      const payload = (await response.json()) as {
+        message?: unknown
+        errors?: unknown
+        fieldErrors?: unknown
+      } | null
+
+      const message = cleanErrorMessage(payload?.message) ?? fallbackMessage
+      return new ApiEnvelopeError(
+        message,
+        cleanErrorList(payload?.errors),
+        response.status,
+        cleanFieldErrors(payload?.fieldErrors),
+      )
+    } catch {
+      return new ApiEnvelopeError(fallbackMessage, [], response.status)
+    }
+  }
+
+  return new ApiEnvelopeError(fallbackMessage, [], response.status)
 }
 
 async function unwrap<T>(request: Promise<{ data: ApiResponse<T> }>): Promise<T> {
@@ -182,6 +241,14 @@ function parseSseEvent(rawEvent: string): { event: string; data: string } | null
   return { event, data: dataLines.join('\n') }
 }
 
+function parseSseCompletePayload(data: string): AiChatResponse {
+  try {
+    return JSON.parse(data) as AiChatResponse
+  } catch {
+    throw new ApiEnvelopeError('The AI stream returned a malformed final response.')
+  }
+}
+
 async function readSseStream(
   response: Response,
   handlers: {
@@ -198,26 +265,37 @@ async function readSseStream(
   let buffer = ''
   let finalPayload: AiChatResponse | null = null
 
-  while (true) {
-    const { value, done } = await reader.read()
-    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-    const events = buffer.split(/\r?\n\r?\n/)
-    buffer = events.pop() ?? ''
-
-    for (const rawEvent of events) {
-      const parsed = parseSseEvent(rawEvent)
-      if (!parsed) continue
-      if (parsed.event === 'delta') {
-        handlers.onDelta?.(parsed.data)
-      } else if (parsed.event === 'complete') {
-        finalPayload = JSON.parse(parsed.data) as AiChatResponse
-        handlers.onComplete?.(finalPayload)
-      } else if (parsed.event === 'error') {
-        throw new ApiEnvelopeError(parsed.data || 'The AI stream stopped unexpectedly.')
-      }
+  const processEvent = (rawEvent: string) => {
+    if (!rawEvent.trim()) return
+    const parsed = parseSseEvent(rawEvent)
+    if (!parsed) return
+    if (parsed.event === 'delta') {
+      handlers.onDelta?.(parsed.data)
+    } else if (parsed.event === 'complete') {
+      finalPayload = parseSseCompletePayload(parsed.data)
+      handlers.onComplete?.(finalPayload)
+    } else if (parsed.event === 'error') {
+      throw new ApiEnvelopeError(parsed.data || 'The AI stream stopped unexpectedly.')
     }
+  }
 
-    if (done) break
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+      const events = buffer.split(/\r?\n\r?\n/)
+      buffer = events.pop() ?? ''
+
+      events.forEach(processEvent)
+
+      if (done) break
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  if (buffer.trim()) {
+    processEvent(buffer)
   }
 
   if (!finalPayload) {
@@ -233,7 +311,9 @@ async function postSseChat(
     onComplete?: (payload: AiChatResponse) => void
   } = {},
 ) {
-  const sendRequest = () => {
+  const sendRequest = async () => {
+    const abortController = new AbortController()
+    const timeoutId = globalThis.setTimeout(() => abortController.abort(), AI_STREAM_CONNECT_TIMEOUT_MS)
     const headers = new Headers({
       Accept: 'text/event-stream',
       'Content-Type': 'application/json',
@@ -243,33 +323,41 @@ async function postSseChat(
       headers.set('Authorization', `Bearer ${token}`)
     }
 
-    return fetch(apiUrl('/ai/chat/stream'), {
-      method: 'POST',
-      credentials: 'include',
-      headers,
-      body: JSON.stringify(payload),
-    })
+    try {
+      return await fetch(apiUrl('/ai/chat/stream'), {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        signal: abortController.signal,
+        body: JSON.stringify(payload),
+      })
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        throw new ApiEnvelopeError('The AI stream took too long to respond. Please try again.')
+      }
+
+      throw error
+    } finally {
+      globalThis.clearTimeout(timeoutId)
+    }
   }
 
   let response = await sendRequest()
-  if (response.status === 401 && (await refreshAccessToken())) {
+  if (response.status === 401) {
+    const refreshedToken = await refreshAccessToken()
+    if (!refreshedToken) {
+      invalidateAuthSession()
+      throw await sseHttpError(response)
+    }
+
     response = await sendRequest()
+    if (response.status === 401) {
+      invalidateAuthSession()
+    }
   }
 
   if (!response.ok) {
-    throw {
-      response: {
-        status: response.status,
-        data: {
-          message:
-            response.status === 429
-              ? 'You are doing that too often. Please wait a moment and try again.'
-              : 'Unable to get an AI chat response.',
-          errors: [],
-          fieldErrors: {},
-        },
-      },
-    }
+    throw await sseHttpError(response)
   }
 
   return readSseStream(response, handlers)
@@ -369,7 +457,7 @@ export interface TeacherLiveClassPayload {
   startTime: string
   endTime: string
   meetingLink: string
-  meetingPlatform: string
+  meetingPlatform: 'ZOOM' | 'GOOGLE_MEET' | 'MICROSOFT_TEAMS' | 'OTHER'
   status?: LiveClassStatus | null
   maxParticipants?: number | null
 }

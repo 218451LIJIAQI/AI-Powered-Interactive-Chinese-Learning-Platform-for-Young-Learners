@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -55,10 +57,10 @@ import jakarta.validation.constraints.Size;
  * wire format and break consumers that pin on field positions.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * the five free-text fields so Bean Validation operates on the
  * canonical form (a whitespace-only {@code featureKey} correctly
- * fails {@link NotBlank @NotBlank} after trimming) and the
+ * fails {@link NotBlank @NotBlank} after stripping) and the
  * service layer's {@code AiInputSanitizer} pass is idempotent.
  * {@code null} is preserved on every field so
  * {@link NotBlank @NotBlank} renders its friendly user-facing
@@ -111,7 +113,7 @@ public record CreateAiResponseReportRequest(
         String aiResponseSnapshot) {
 
     /**
-     * Defensive canonical constructor: trims the five free-text
+     * Defensive canonical constructor: strips the five free-text
      * fields so Bean Validation operates on the canonical form
      * and downstream sanitisation is idempotent. {@code null} is
      * preserved on every field so {@link NotBlank @NotBlank} can
@@ -119,21 +121,11 @@ public record CreateAiResponseReportRequest(
      * low-level {@link NullPointerException}.
      */
     public CreateAiResponseReportRequest {
-        if (featureKey != null) {
-            featureKey = featureKey.trim();
-        }
-        if (reasonCategory != null) {
-            reasonCategory = reasonCategory.trim();
-        }
-        if (description != null) {
-            description = description.trim();
-        }
-        if (promptSnapshot != null) {
-            promptSnapshot = promptSnapshot.trim();
-        }
-        if (aiResponseSnapshot != null) {
-            aiResponseSnapshot = aiResponseSnapshot.trim();
-        }
+        featureKey = strip(featureKey);
+        reasonCategory = strip(reasonCategory);
+        description = strip(description);
+        promptSnapshot = strip(promptSnapshot);
+        aiResponseSnapshot = strip(aiResponseSnapshot);
     }
 
     /**

@@ -74,4 +74,25 @@ class TextUtilsTests {
     void defaultIfBlankReturnsValueWhenNonBlank() {
         assertThat(TextUtils.defaultIfBlank("abc", "fallback")).isEqualTo("abc");
     }
+
+    @Test
+    void collapseWhitespaceToNullHandlesUnicodeWhitespaceAndNewlines() {
+        assertThat(TextUtils.collapseWhitespaceToNull("\u3000Hello\n\tworld\u3000"))
+                .isEqualTo("Hello world");
+        assertThat(TextUtils.collapseWhitespaceToNull("\u3000\t\n")).isNull();
+    }
+
+    @Test
+    void safeTruncateDoesNotSplitSurrogatePair() {
+        assertThat(TextUtils.safeTruncate("ab😀cd", 3)).isEqualTo("ab");
+        assertThat(TextUtils.safeTruncate("ab😀cd", 4)).isEqualTo("ab😀");
+    }
+
+    @Test
+    void truncateWithEllipsisCollapsesWhitespaceAndKeepsLengthCap() {
+        String result = TextUtils.truncateWithEllipsis("  Hello\nworld 😀 again  ", 15);
+
+        assertThat(result).isEqualTo("Hello world...");
+        assertThat(result).hasSizeLessThanOrEqualTo(15);
+    }
 }

@@ -85,10 +85,9 @@ import lombok.Setter;
  *   <li>Subclasses MUST NOT override {@link #equals(Object)} or
  *       {@link #hashCode()} — both are declared {@code final} to
  *       enforce this. Lombok's {@code @Data} or
- *       {@code @EqualsAndHashCode} therefore MUST NOT be added; use
- *       {@code @Getter @Setter @NoArgsConstructor} instead, matching
- *       the existing convention across the 57 entities in this
- *       module.</li>
+     *       {@code @EqualsAndHashCode} therefore MUST NOT be added; use
+     *       {@code @Getter @Setter @NoArgsConstructor} instead, matching
+     *       the existing convention across the entities in this module.</li>
  *   <li>Subclasses MAY override {@link #toString()} when a richer
  *       diagnostic output is genuinely useful, but the override MUST
  *       NOT touch lazy associations.</li>

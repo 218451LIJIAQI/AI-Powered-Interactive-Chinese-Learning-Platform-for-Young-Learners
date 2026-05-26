@@ -58,6 +58,7 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
 public class CartService {
 
     private static final Logger log = LoggerFactory.getLogger(CartService.class);
+    static final int MAX_CART_ITEMS = 50;
 
     private final StudentLearningAccessService studentLearningAccessService;
     private final CartRepository cartRepository;
@@ -94,6 +95,9 @@ public class CartService {
 
     @Transactional
     public CartResponse addItem(SecurityUserDetails currentUser, CartItemRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Cart item request is required.");
+        }
         StudentProfile student = studentLearningAccessService.requireLockedStudent(currentUser);
         Cart cart = cartRepository.findLockedByStudentUserId(currentUser.getUserId())
                 .orElseGet(() -> createCart(student));
@@ -110,6 +114,7 @@ public class CartService {
                 .ifPresent(existing -> {
                     throw new ResponseStatusException(BAD_REQUEST, "This item is already in your cart.");
                 });
+        enforceCartCapacity(cart.getId());
 
         CartItem cartItem = new CartItem();
         cartItem.setCart(cart);
@@ -202,5 +207,13 @@ public class CartService {
                 commerceMoneyService.normalize(totalAmount),
                 currencyCode,
                 items.isEmpty());
+    }
+
+    private void enforceCartCapacity(Long cartId) {
+        if (cartItemRepository.countByCartId(cartId) >= MAX_CART_ITEMS) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Cart can contain at most " + MAX_CART_ITEMS + " items.");
+        }
     }
 }

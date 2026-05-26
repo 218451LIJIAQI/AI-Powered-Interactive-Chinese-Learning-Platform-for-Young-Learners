@@ -25,7 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.Support.TestUploadFixtures;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
@@ -33,6 +33,7 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
+import com.example.aichinese.repository.QuizOptionRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
@@ -77,6 +78,9 @@ class InteractiveLearningIntegrationTests {
 
     @Autowired
     private QuizAttemptAnswerRepository quizAttemptAnswerRepository;
+
+    @Autowired
+    private QuizOptionRepository quizOptionRepository;
 
     @Test
     void teacherCreatesQuizStudentLoadsWithoutAnswersAndSubmissionStoresWrongAnswersAndRewards() throws Exception {
@@ -371,6 +375,52 @@ class InteractiveLearningIntegrationTests {
                                 Map.of("optionText", "ma3", "correctOption", false, "displayOrder", 2))))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Exactly one correct answer option is required."));
+    }
+
+    @Test
+    void nonOptionBasedQuizQuestionsIgnoreClientSuppliedOptions() throws Exception {
+        String teacherEmail = uniqueEmail("quiz-free-text-teacher");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long lessonId = createLesson(teacherToken, "Free Text Quiz Lesson");
+
+        MvcResult quizResult = mockMvc.perform(post("/api/v1/teachers/lessons/" + lessonId + "/quizzes")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "title", "Free text quiz",
+                        "description", "Options should be ignored"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long quizId = extractId(quizResult);
+
+        Map<String, Object> freeTextQuestionPayload = Map.of(
+                "questionType", "FILL_BLANK",
+                "questionText", "Fill in the greeting: ni ____",
+                "correctAnswerText", "hao",
+                "points", 5,
+                "displayOrder", 1,
+                "options", List.of(
+                        Map.of("optionText", "malicious distractor", "correctOption", true, "displayOrder", 1)));
+
+        MvcResult questionResult = mockMvc.perform(post("/api/v1/teachers/quizzes/" + quizId + "/questions")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(freeTextQuestionPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions[0].options").isEmpty())
+                .andReturn();
+
+        Long questionId = objectMapper.readTree(questionResult.getResponse().getContentAsString())
+                .path("data")
+                .path("questions")
+                .get(0)
+                .path("id")
+                .asLong();
+
+        assertThat(quizOptionRepository.findByQuestionIdOrderBySortOrderAscCreatedAtAsc(questionId)).isEmpty();
     }
 
     @Test

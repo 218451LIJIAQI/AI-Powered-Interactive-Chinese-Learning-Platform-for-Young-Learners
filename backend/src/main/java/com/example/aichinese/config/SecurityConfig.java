@@ -2,6 +2,7 @@ package com.example.aichinese.config;
 
 import java.util.Objects;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,15 +27,12 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
  * Central Spring Security configuration.
  *
  * <h2>Filter chain order</h2>
- * <p>Filters are intentionally chained in this order:</p>
- * <ol>
- *   <li>{@link RequestIdFilter} (before
- *       {@link UsernamePasswordAuthenticationFilter}) — establishes the
- *       request-id correlation id so every later log line can reference
- *       it, even ones produced inside the JWT filter on a 401.</li>
- *   <li>{@link JwtAuthenticationFilter} (immediately after) — resolves
- *       the bearer token into an authenticated principal.</li>
- * </ol>
+ * <p>{@link RequestIdFilter} is a highest-precedence servlet filter,
+ * before Spring Security itself, so even early upload-size rejections
+ * carry a correlation id. {@link JwtAuthenticationFilter} is registered
+ * only inside the Spring Security chain, before
+ * {@link UsernamePasswordAuthenticationFilter}, where it resolves bearer
+ * tokens into authenticated principals.</p>
  *
  * <h2>Authorisation policy</h2>
  * <p>Routes are matched in declaration order; the first match wins. The
@@ -128,19 +126,16 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final CorsConfigurationSource corsConfigurationSource;
-    private final RequestIdFilter requestIdFilter;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
             JwtAccessDeniedHandler jwtAccessDeniedHandler,
-            CorsConfigurationSource corsConfigurationSource,
-            RequestIdFilter requestIdFilter) {
+            CorsConfigurationSource corsConfigurationSource) {
         this.jwtAuthenticationFilter = Objects.requireNonNull(jwtAuthenticationFilter, "jwtAuthenticationFilter");
         this.jwtAuthenticationEntryPoint = Objects.requireNonNull(jwtAuthenticationEntryPoint, "jwtAuthenticationEntryPoint");
         this.jwtAccessDeniedHandler = Objects.requireNonNull(jwtAccessDeniedHandler, "jwtAccessDeniedHandler");
         this.corsConfigurationSource = Objects.requireNonNull(corsConfigurationSource, "corsConfigurationSource");
-        this.requestIdFilter = Objects.requireNonNull(requestIdFilter, "requestIdFilter");
     }
 
     @Bean
@@ -212,10 +207,17 @@ public class SecurityConfig {
                         // a newly-added route as public when the developer forgets to
                         // configure an explicit rule.
                         .anyRequest().authenticated())
-                .addFilterBefore(requestIdFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(jwtAuthenticationFilter, RequestIdFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
+            JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

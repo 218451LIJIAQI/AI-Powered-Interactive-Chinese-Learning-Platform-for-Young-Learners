@@ -80,6 +80,7 @@ public class FileStorageService {
                         storedFileName,
                         "Invalid upload target path.",
                         "Uploaded file could not be stored."));
+        UploadStorageSupport.registerRollbackCleanup(storageProvider, storedObject);
 
         UploadedFile uploadedFile = new UploadedFile();
         uploadedFile.setOwnerUser(ownerUser);
@@ -90,7 +91,12 @@ public class FileStorageService {
         uploadedFile.setFileSize(multipartFile.getSize());
         uploadedFile.setAccessLevel("PRIVATE");
         uploadedFile.setActive(true);
-        return uploadedFileRepository.save(uploadedFile);
+        try {
+            return uploadedFileRepository.save(uploadedFile);
+        } catch (RuntimeException exception) {
+            storageProvider.deleteQuietly(storedObject);
+            throw exception;
+        }
     }
 
     public StoredFileDownload loadAsDownload(UploadedFile uploadedFile) {

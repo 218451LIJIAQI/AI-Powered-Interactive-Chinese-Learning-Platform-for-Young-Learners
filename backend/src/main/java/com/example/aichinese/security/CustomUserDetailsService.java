@@ -60,7 +60,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         if (username == null || username.isBlank()) {
             throw new UsernameNotFoundException("User not found");
         }
-        return userRepository.findByEmailWithRoles(username)
+        return userRepository.findByEmailWithRoles(username.strip())
                 .map(SecurityUserDetails::new)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }

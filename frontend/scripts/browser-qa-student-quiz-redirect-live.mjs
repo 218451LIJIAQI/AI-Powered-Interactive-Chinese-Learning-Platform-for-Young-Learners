@@ -35,17 +35,30 @@ import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 import path from 'node:path'
 
-import { resolveBrowserExecutablePath, waitForHttpOk } from './lib/browser-runtime.mjs'
+import {
+  normalizeHttpBaseUrl,
+  parseTcpPort,
+  redactText,
+  resolveBrowserExecutablePath,
+  safeJsonStringify,
+  sanitizeUrlForEvidence,
+  stopProcessTree,
+  tailTextForEvidence,
+  waitForHttpOk,
+} from './lib/browser-runtime.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendDir = path.resolve(scriptDir, '..')
 const viteBin = path.resolve(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js')
 const host = process.env.QA_FRONTEND_HOST || '127.0.0.1'
-const requestedFrontendPort = Number(process.env.QA_FRONTEND_PORT || '5173')
-const configuredBaseUrl = process.env.QA_BASE_URL || ''
-const apiBaseUrl = process.env.QA_API_BASE_URL || process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8081/api/v1'
+const requestedFrontendPort = parseTcpPort(process.env.QA_FRONTEND_PORT || '5173', 'QA_FRONTEND_PORT')
+const configuredBaseUrl = process.env.QA_BASE_URL ? normalizeHttpBaseUrl(process.env.QA_BASE_URL, 'QA_BASE_URL') : ''
+const apiBaseUrl = normalizeHttpBaseUrl(
+  process.env.QA_API_BASE_URL || process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8081/api/v1',
+  'QA_API_BASE_URL',
+)
 const chromePath = resolveBrowserExecutablePath()
-const debuggingPort = Number(process.env.QA_CHROME_PORT || 9231)
+const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9231', 'QA_CHROME_PORT')
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-student-quiz-redirect-live`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-student-quiz-live-${timestamp}`)
@@ -67,7 +80,7 @@ function summarizeValue(value) {
   if (typeof value === 'string') return value.replace(/\s+/g, ' ').trim().slice(0, 240)
 
   try {
-    return JSON.stringify(value).slice(0, 240)
+    return safeJsonStringify(value).slice(0, 240)
   } catch {
     return String(value).slice(0, 240)
   }
@@ -325,7 +338,7 @@ async function main() {
       const request = requestsById.get(params.requestId) || {}
       evidence.failedRequests.push({
         method: request.method || '',
-        url: request.url || '',
+        url: sanitizeUrlForEvidence(request.url || ''),
         errorText: params.errorText,
         type: params.type,
       })
@@ -335,13 +348,17 @@ async function main() {
       if (response.url?.startsWith(apiBaseUrl)) {
         evidence.apiResponses.push({
           status: response.status,
-          url: response.url,
+          url: sanitizeUrlForEvidence(response.url),
           type: params.type,
           method: requestsById.get(params.requestId)?.method || '',
         })
       }
       if (response.status >= 400)
-        evidence.httpErrors.push({ status: response.status, url: response.url, type: params.type })
+        evidence.httpErrors.push({
+          status: response.status,
+          url: sanitizeUrlForEvidence(response.url),
+          type: params.type,
+        })
     })
 
     await send('Page.enable')
@@ -435,16 +452,16 @@ async function main() {
       (evidence.finalState.text.includes('Question') || evidence.finalState.text.includes('No quiz ready'))
   } finally {
     client?.close()
-    chrome.kill()
+    await stopProcessTree(chrome)
     await sleep(500)
     await rm(userDataDir, { recursive: true, force: true })
     await frontend.stop()
     await writeFile(
       path.join(evidenceDir, 'student-quiz-redirect-live-report.json'),
-      JSON.stringify(evidence, null, 2),
+      safeJsonStringify(evidence),
       'utf8',
     )
-    await writeFile(path.join(evidenceDir, 'chrome.log'), chromeLogs.join('\n'), 'utf8')
+    await writeFile(path.join(evidenceDir, 'chrome.log'), tailTextForEvidence(chromeLogs.join('\n')), 'utf8')
   }
 
   console.log(
@@ -456,6 +473,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error)
+  console.error(redactText(error?.stack || error?.message || String(error)))
   process.exitCode = 1
 })

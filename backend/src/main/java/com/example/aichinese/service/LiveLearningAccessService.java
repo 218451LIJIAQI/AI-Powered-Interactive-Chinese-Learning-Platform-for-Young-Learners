@@ -129,6 +129,7 @@ public class LiveLearningAccessService {
 
     @Transactional(readOnly = true)
     public Lesson requireOwnedLesson(SecurityUserDetails currentUser, Long lessonId) {
+        requireApprovedTeacher(currentUser);
         return lessonRepository.findByIdAndTeacherUserId(lessonId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested lesson was not found."));
     }
@@ -141,8 +142,20 @@ public class LiveLearningAccessService {
 
     @Transactional(readOnly = true)
     public CoursePackage requireOwnedPackage(SecurityUserDetails currentUser, Long packageId) {
+        requireApprovedTeacher(currentUser);
         return coursePackageRepository.findByIdAndTeacherUserId(packageId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested package was not found."));
+    }
+
+    @Transactional(readOnly = true)
+    public CoursePackage requireOwnedPackageContainingLesson(SecurityUserDetails currentUser, Long packageId, Long lessonId) {
+        CoursePackage coursePackage = requireOwnedPackage(currentUser, packageId);
+        Lesson lesson = lessonRepository.findByIdAndTeacherUserId(lessonId, currentUser.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested lesson was not found."));
+        if (!isPackageRelatedToLesson(coursePackage.getId(), lesson)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Selected package must contain the requested lesson.");
+        }
+        return coursePackage;
     }
 
     @Transactional(readOnly = true)
@@ -290,13 +303,10 @@ public class LiveLearningAccessService {
     }
 
     public MeetingPlatform parseMeetingPlatform(String value) {
-        if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is required.");
-        }
         try {
-            return MeetingPlatform.valueOf(value.trim().toUpperCase(Locale.ROOT));
+            return MeetingPlatform.fromValue(value);
         } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is invalid.");
+            throw new ResponseStatusException(BAD_REQUEST, exception.getMessage());
         }
     }
 
@@ -323,26 +333,24 @@ public class LiveLearningAccessService {
         }
     }
 
-    public void validateMeetingLink(String meetingLink) {
-        try {
-            URI uri = new URI(meetingLink);
-            if (!isSupportedWebUri(uri)) {
-                throw new ResponseStatusException(BAD_REQUEST, "Meeting link must be a valid URL.");
-            }
-        } catch (URISyntaxException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Meeting link must be a valid URL.");
-        }
+    public String validateMeetingLink(String meetingLink) {
+        return normalizeSupportedWebUri(meetingLink, "Meeting link must be a valid URL.");
     }
 
-    private void validateExternalVideoUrl(String value) {
-        try {
-            URI uri = new URI(value);
-            if (!isSupportedWebUri(uri)) {
-                throw new ResponseStatusException(BAD_REQUEST, "External video URL must be valid.");
-            }
-        } catch (URISyntaxException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "External video URL must be valid.");
+    public String validateMeetingLink(String meetingLink, MeetingPlatform platform) {
+        if (platform == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Meeting platform is required.");
         }
+
+        URI uri = parseSupportedWebUri(meetingLink, "Meeting link must be a valid URL.");
+        if (!platform.allowsHost(uri.getHost())) {
+            throw new ResponseStatusException(BAD_REQUEST, "Meeting link host does not match the selected meeting platform.");
+        }
+        return uri.normalize().toASCIIString();
+    }
+
+    private String validateExternalVideoUrl(String value) {
+        return normalizeSupportedWebUri(value, "External video URL must be valid.");
     }
 
     public void validateLiveClassTiming(LocalDateTime startTime, LocalDateTime endTime) {
@@ -351,18 +359,21 @@ public class LiveLearningAccessService {
         }
     }
 
-    public void validateRecordedVideoSource(RecordedVideoSourceType sourceType, String externalVideoUrl, UploadedFile uploadedFile) {
+    public String validateRecordedVideoSource(
+            RecordedVideoSourceType sourceType,
+            String externalVideoUrl,
+            UploadedFile uploadedFile) {
         if (sourceType == RecordedVideoSourceType.EXTERNAL_URL) {
             if (externalVideoUrl == null || externalVideoUrl.isBlank()) {
                 throw new ResponseStatusException(BAD_REQUEST, "External video URL is required.");
             }
-            validateExternalVideoUrl(externalVideoUrl.trim());
-            return;
+            return validateExternalVideoUrl(externalVideoUrl);
         }
 
         if (uploadedFile == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Uploaded recorded video file is required.");
         }
+        return null;
     }
 
     public boolean isStudentEnrolled(Long liveClassId, Long studentId) {
@@ -373,13 +384,35 @@ public class LiveLearningAccessService {
     }
 
     public Set<Long> findPublishedPackageIdsContainingLesson(Lesson lesson) {
-        return packageItemRepository
-                .findByItemTypeAndItemId(PackageItemType.LESSON, lesson.getId())
-                .stream()
+        Set<Long> directPackageIds = packageItemRepository
+                .findByItemTypeAndItemId(PackageItemType.LESSON, lesson.getId()).stream()
                 .filter(item -> item.getCoursePackage() != null
                         && item.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED)
                 .map(item -> item.getCoursePackage().getId())
                 .collect(Collectors.toSet());
+        if (lesson.getModule() != null) {
+            packageItemRepository
+                    .findByItemTypeAndItemId(PackageItemType.MODULE, lesson.getModule().getId()).stream()
+                    .filter(item -> item.getCoursePackage() != null
+                            && item.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED)
+                    .map(item -> item.getCoursePackage().getId())
+                    .forEach(directPackageIds::add);
+        }
+        return directPackageIds;
+    }
+
+    private boolean isPackageRelatedToLesson(Long packageId, Lesson lesson) {
+        if (packageItemRepository.existsByCoursePackageIdAndItemTypeAndItemId(
+                packageId,
+                PackageItemType.LESSON,
+                lesson.getId())) {
+            return true;
+        }
+        return lesson.getModule() != null
+                && packageItemRepository.existsByCoursePackageIdAndItemTypeAndItemId(
+                        packageId,
+                        PackageItemType.MODULE,
+                        lesson.getModule().getId());
     }
 
     private void ensureLiveClassVisibleToStudents(LiveClass liveClass) {
@@ -408,11 +441,44 @@ public class LiveLearningAccessService {
         }
     }
 
+    private String normalizeSupportedWebUri(String value, String invalidMessage) {
+        return parseSupportedWebUri(value, invalidMessage).normalize().toASCIIString();
+    }
+
+    private URI parseSupportedWebUri(String value, String invalidMessage) {
+        if (value == null || value.isBlank() || containsUnsafeUrlCodePoint(value) || value.indexOf('\\') >= 0) {
+            throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
+        }
+
+        try {
+            URI uri = new URI(value.strip());
+            if (!isSupportedWebUri(uri)
+                    || uri.getUserInfo() != null
+                    || uri.getFragment() != null) {
+                throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
+            }
+            return uri;
+        } catch (URISyntaxException exception) {
+            throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
+        }
+    }
+
     private boolean isSupportedWebUri(URI uri) {
-        if (uri == null || uri.getScheme() == null || uri.getHost() == null) {
+        if (uri == null || uri.isOpaque() || uri.getScheme() == null || uri.getHost() == null) {
             return false;
         }
         String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
         return "http".equals(scheme) || "https".equals(scheme);
+    }
+
+    private boolean containsUnsafeUrlCodePoint(String value) {
+        for (int offset = 0; offset < value.length();) {
+            int codePoint = value.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            if (Character.isISOControl(codePoint) || Character.getType(codePoint) == Character.FORMAT) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -54,24 +57,24 @@ import jakarta.validation.constraints.Size;
  * </ul>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * every string field so Bean Validation evaluates the canonical
  * form (a paste with stray leading/trailing whitespace cannot
  * inflate the length past the cap or sneak past the http(s) regex)
  * and so every downstream consumer — the persisted entity, the
  * audit log, and the meeting-platform parser — sees the same
- * trimmed value rather than relying on each consumer to trim
+ * stripped value rather than relying on each consumer to normalise
  * independently. Optional fields ({@link #description},
  * {@link #status}) collapse to {@code null} when blank so the
  * downstream "is this set?" check is a single null-check rather
  * than {@code null || isEmpty()}.</p>
  *
  * @param title           short human-readable session title shown on
- *                        the calendar (1–200 chars after trim);
+ *                        the calendar (1–200 chars after stripping);
  *                        required
  * @param description     optional long-form description shown on the
  *                        live-class detail page (max 1000 chars after
- *                        trim); {@code null} or blank collapses to
+ *                        stripping); {@code null} or blank collapses to
  *                        {@code null}
  * @param lessonId        optional id of the
  *                        {@link com.example.aichinese.entity.Lesson}
@@ -150,7 +153,7 @@ public record CreateLiveClassRequest(
         Integer maxParticipants) {
 
     /**
-     * Defensive canonical constructor: trims every string field so
+     * Defensive canonical constructor: strips every string field so
      * Bean Validation sees the canonical form (preventing length-cap
      * bypass via leading/trailing whitespace) and collapses optional
      * blank-only strings to {@code null} so downstream "is this set?"
@@ -159,22 +162,10 @@ public record CreateLiveClassRequest(
      * still fires correctly.
      */
     public CreateLiveClassRequest {
-        title = trimOrNull(title);
-        description = trimToNullIfBlank(description);
-        meetingLink = trimOrNull(meetingLink);
-        meetingPlatform = trimOrNull(meetingPlatform);
-        status = trimToNullIfBlank(status);
-    }
-
-    private static String trimOrNull(String value) {
-        return value == null ? null : value.trim();
-    }
-
-    private static String trimToNullIfBlank(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        title = strip(title);
+        description = stripToNull(description);
+        meetingLink = strip(meetingLink);
+        meetingPlatform = strip(meetingPlatform);
+        status = stripToNull(status);
     }
 }

@@ -31,6 +31,7 @@ public class RefreshTokenService {
     private static final HexFormat HEX_FORMAT = HexFormat.of();
     private static final int MAX_USER_AGENT_LENGTH = 255;
     private static final int MAX_IP_LENGTH = 64;
+    private static final int MAX_RAW_TOKEN_LENGTH = 512;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -50,15 +51,16 @@ public class RefreshTokenService {
     public RefreshTokenIssue issue(User user, String clientIp, String userAgent) {
         Objects.requireNonNull(user, "user");
         String rawToken = generateUniqueRawToken();
+        Duration ttl = refreshTokenTtl();
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
         refreshToken.setTokenHash(hash(rawToken));
         refreshToken.setFamilyId(UUID.randomUUID().toString());
-        refreshToken.setExpiresAt(LocalDateTime.now().plus(refreshTokenTtl()));
+        refreshToken.setExpiresAt(LocalDateTime.now().plus(ttl));
         refreshToken.setCreatedByIp(truncate(clientIp, MAX_IP_LENGTH));
         refreshToken.setUserAgent(truncate(userAgent, MAX_USER_AGENT_LENGTH));
         refreshTokenRepository.save(refreshToken);
-        return new RefreshTokenIssue(rawToken, refreshTokenTtl());
+        return new RefreshTokenIssue(rawToken, ttl);
     }
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
@@ -67,9 +69,12 @@ public class RefreshTokenService {
         if (token == null) {
             throw unauthorizedRefresh();
         }
+        if (token.length() > MAX_RAW_TOKEN_LENGTH) {
+            throw unauthorizedRefresh();
+        }
 
         String currentHash = hash(token);
-        RefreshToken current = refreshTokenRepository.findByTokenHash(currentHash)
+        RefreshToken current = refreshTokenRepository.findLockedByTokenHash(currentHash)
                 .orElseThrow(RefreshTokenService::unauthorizedRefresh);
         LocalDateTime now = LocalDateTime.now();
 
@@ -85,11 +90,12 @@ public class RefreshTokenService {
         }
 
         String replacementRawToken = generateUniqueRawToken();
+        Duration ttl = refreshTokenTtl();
         RefreshToken replacement = new RefreshToken();
         replacement.setUser(user);
         replacement.setTokenHash(hash(replacementRawToken));
         replacement.setFamilyId(current.getFamilyId());
-        replacement.setExpiresAt(now.plus(refreshTokenTtl()));
+        replacement.setExpiresAt(now.plus(ttl));
         replacement.setCreatedByIp(truncate(clientIp, MAX_IP_LENGTH));
         replacement.setUserAgent(truncate(userAgent, MAX_USER_AGENT_LENGTH));
 
@@ -99,13 +105,16 @@ public class RefreshTokenService {
         refreshTokenRepository.save(current);
         refreshTokenRepository.save(replacement);
 
-        return new RefreshSession(user, new RefreshTokenIssue(replacementRawToken, refreshTokenTtl()));
+        return new RefreshSession(user, new RefreshTokenIssue(replacementRawToken, ttl));
     }
 
     @Transactional
     public void revokeRawToken(String rawToken) {
         String token = TextUtils.trimToNull(rawToken);
         if (token == null) {
+            return;
+        }
+        if (token.length() > MAX_RAW_TOKEN_LENGTH) {
             return;
         }
         refreshTokenRepository.findByTokenHash(hash(token)).ifPresent(refreshToken -> {
@@ -125,10 +134,12 @@ public class RefreshTokenService {
     }
 
     private void revokeFamilyAndSession(RefreshToken refreshToken, LocalDateTime now) {
-        refreshTokenRepository.revokeActiveTokenFamily(refreshToken.getFamilyId(), now);
+        if (refreshToken.getFamilyId() != null) {
+            refreshTokenRepository.revokeActiveTokenFamily(refreshToken.getFamilyId(), now);
+        }
         User user = refreshToken.getUser();
         if (user != null && user.getId() != null) {
-            userRepository.findById(user.getId()).ifPresent(lockedUser -> {
+            userRepository.findLockedById(user.getId()).ifPresent(lockedUser -> {
                 lockedUser.setSessionVersion(lockedUser.getSessionVersion() + 1);
                 userRepository.save(lockedUser);
             });
@@ -177,7 +188,16 @@ public class RefreshTokenService {
         if (stripped == null) {
             return null;
         }
-        return stripped.length() <= maxLength ? stripped : stripped.substring(0, maxLength);
+        if (stripped.length() <= maxLength) {
+            return stripped;
+        }
+        int endIndex = maxLength;
+        if (Character.isHighSurrogate(stripped.charAt(endIndex - 1))
+                && endIndex < stripped.length()
+                && Character.isLowSurrogate(stripped.charAt(endIndex))) {
+            endIndex--;
+        }
+        return stripped.substring(0, endIndex);
     }
 
     public record RefreshSession(User user, RefreshTokenIssue refreshToken) {

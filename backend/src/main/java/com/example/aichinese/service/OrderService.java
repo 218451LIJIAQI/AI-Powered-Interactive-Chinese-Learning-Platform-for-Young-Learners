@@ -72,10 +72,13 @@ public class OrderService {
         order.setPaymentStatus(PaymentStatus.PENDING);
         order.setCheckoutSource(source.name());
 
-        order.setTotalAmount(commerceMoneyService.normalize(
-                items.stream()
-                        .map(ResolvedPurchasableItem::unitPrice)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add)));
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (ResolvedPurchasableItem item : items) {
+            totalAmount = commerceMoneyService.add(totalAmount, item.unitPrice());
+        }
+        order.setTotalAmount(commerceMoneyService.normalizePersistableAmount(
+                totalAmount,
+                "Order total amount is too large."));
         Order saved = orderRepository.save(order);
         log.info("Order created: orderId={}, orderNumber={}, userId={}, amount={} {}",
                 saved.getId(), saved.getOrderNumber(),
@@ -94,10 +97,14 @@ public class OrderService {
             orderItem.setItemTitleSnapshot(item.title());
             orderItem.setFeatureKey(item.relatedFeatureKey());
             orderItem.setQuantity(1);
-            BigDecimal normalizedPrice = commerceMoneyService.normalize(item.unitPrice());
+            BigDecimal normalizedPrice = commerceMoneyService.normalizePersistableAmount(
+                    item.unitPrice(),
+                    "Order item price is too large.");
+            BigDecimal lineTotal = commerceMoneyService.normalizePersistableAmount(
+                    commerceMoneyService.multiply(normalizedPrice, BigDecimal.valueOf(orderItem.getQuantity())),
+                    "Order item line total is too large.");
             orderItem.setUnitPrice(normalizedPrice);
-            orderItem.setLineTotal(commerceMoneyService.multiply(
-                    normalizedPrice, BigDecimal.valueOf(orderItem.getQuantity())));
+            orderItem.setLineTotal(lineTotal);
             orderItem.setTeacher(item.teacher());
             pending.add(orderItem);
         }

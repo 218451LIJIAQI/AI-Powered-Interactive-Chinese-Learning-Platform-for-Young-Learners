@@ -79,6 +79,9 @@ public class TeacherLessonService {
 
     @Transactional
     public LessonResponse createLesson(SecurityUserDetails currentUser, CreateLessonRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Lesson request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
@@ -114,6 +117,9 @@ public class TeacherLessonService {
 
     @Transactional
     public LessonResponse updateLesson(SecurityUserDetails currentUser, Long lessonId, UpdateLessonRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Lesson request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Lesson lesson = findOwnedLesson(currentUser, lessonId);
         teacherContentAccessService.validateEditableStatus(lesson.getContentStatus(), "Lesson");

@@ -1,5 +1,9 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -51,12 +55,12 @@ import jakarta.validation.constraints.Size;
  * teacher's rationale during review.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
- * every string field so Bean Validation evaluates the canonical
+ * <p>The canonical constructor eagerly strips surrounding Unicode
+ * whitespace from every string field so Bean Validation evaluates the canonical
  * form (a paste with stray leading/trailing whitespace cannot
  * inflate the length past the cap or sneak past
  * {@code QuizQuestionType.fromValue}) and so every downstream
- * consumer sees the same trimmed value. Optional fields
+ * consumer sees the same stripped value. Optional fields
  * ({@link #correctAnswerText}, {@link #explanation}) collapse to
  * {@code null} when blank so the service's "free-text required"
  * branch is a single null-check. The {@link #options} list is
@@ -69,11 +73,11 @@ import jakarta.validation.constraints.Size;
  *                          (e.g. {@code MULTIPLE_CHOICE}); required;
  *                          parsed server-side
  * @param questionText      stem of the question rendered on the
- *                          quiz player (max 2000 chars after trim);
+ *                          quiz player (max 2000 chars after stripping);
  *                          required
  * @param correctAnswerText canonical correct answer for free-text /
  *                          structured types (max 1000 chars after
- *                          trim); ignored for option-based types;
+ *                          stripping); ignored for option-based types;
  *                          {@code null} or blank collapses to
  *                          {@code null}
  * @param points            non-negative score the question
@@ -88,7 +92,7 @@ import jakarta.validation.constraints.Size;
  *                          {@link Valid cascaded-validated}
  * @param explanation       optional teacher rationale shown on the
  *                          attempt-review screen (max 2000 chars
- *                          after trim); {@code null} or blank
+ *                          after stripping); {@code null} or blank
  *                          collapses to {@code null}
  */
 @JsonPropertyOrder({
@@ -114,13 +118,14 @@ public record CreateQuizQuestionRequest(
         Integer points,
         @PositiveOrZero(message = "Question display order must be greater than or equal to 0.")
         Integer displayOrder,
+        @Size(max = 200, message = "A quiz question cannot contain more than 200 options.")
         @Valid
-        List<QuizOptionRequest> options,
+        List<@NotNull(message = "Quiz option must not be null.") QuizOptionRequest> options,
         @Size(max = 2000, message = "Explanation must be 2000 characters or fewer.")
         String explanation) {
 
     /**
-     * Defensive canonical constructor: trims every string field so
+     * Defensive canonical constructor: strips every string field so
      * Bean Validation sees the canonical form, collapses optional
      * blank-only strings to {@code null} so the service's
      * free-text-required branch is a single null-check, and
@@ -131,22 +136,10 @@ public record CreateQuizQuestionRequest(
      * correctly.
      */
     public CreateQuizQuestionRequest {
-        questionType = trimOrNull(questionType);
-        questionText = trimOrNull(questionText);
-        correctAnswerText = trimToNullIfBlank(correctAnswerText);
-        explanation = trimToNullIfBlank(explanation);
-        options = options == null ? List.of() : List.copyOf(options);
-    }
-
-    private static String trimOrNull(String value) {
-        return value == null ? null : value.trim();
-    }
-
-    private static String trimToNullIfBlank(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        questionType = strip(questionType);
+        questionText = strip(questionText);
+        correctAnswerText = stripToNull(correctAnswerText);
+        explanation = stripToNull(explanation);
+        options = immutableListOrEmpty(options);
     }
 }

@@ -375,6 +375,7 @@ import type {
   AiWritingFeedbackResponse,
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
+import { clampPercent, nonNegativeInteger } from '@/utils/format'
 
 const auth = useAuthStore()
 const availabilityResource = useResource(() => aiApi.availability(), aiAvailability)
@@ -442,9 +443,10 @@ const platformSettings = computed(
 )
 const learnerLevelLabel = computed(() => {
   if (progress.value.lastActivitySummary) return progress.value.lastActivitySummary
-  if (progress.value.overallCompletionPercent >= 80) return 'Advanced learner'
-  if (progress.value.overallCompletionPercent >= 40) return 'Intermediate learner'
-  if (progress.value.totalLessonsStarted > 0) return 'Active beginner'
+  const overallCompletionPercent = clampPercent(progress.value.overallCompletionPercent)
+  if (overallCompletionPercent >= 80) return 'Advanced learner'
+  if (overallCompletionPercent >= 40) return 'Intermediate learner'
+  if (nonNegativeInteger(progress.value.totalLessonsStarted) > 0) return 'Active beginner'
   return 'New learner'
 })
 const audioUploadDisabled = computed(() => !previewFallbackEnabled.value && !availability.value.audioAnalysisAvailable)
@@ -512,6 +514,8 @@ const maxPronunciationFileSize = 10 * 1024 * 1024
 const maxWritingFileSize = 5 * 1024 * 1024
 const pronunciationExtensions = ['.webm', '.wav', '.mp3']
 const writingExtensions = ['.png', '.jpg', '.jpeg']
+const pronunciationMimeTypes = new Set(['audio/webm', 'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3'])
+const writingMimeTypes = new Set(['image/png', 'image/jpeg'])
 const reportForm = reactive<{
   reasonCategory: AiResponseReportReason
   description: string
@@ -543,6 +547,13 @@ function hasAllowedExtension(file: File, extensions: string[]) {
   return extensions.some((extension) => name.endsWith(extension))
 }
 
+function hasAllowedUploadType(file: File, extensions: string[], mimeTypes: ReadonlySet<string>) {
+  const mimeType = file.type.trim().toLowerCase()
+  if (mimeType) return mimeTypes.has(mimeType)
+
+  return hasAllowedExtension(file, extensions)
+}
+
 function showPreviewResponse(message: string) {
   actionError.value = null
   actionSuccess.value = `${message} Preview mode used a safe sample response and did not send a live AI request.`
@@ -551,6 +562,11 @@ function showPreviewResponse(message: string) {
 function selectedFile(event: Event) {
   const input = event.target as HTMLInputElement | null
   return input?.files?.[0] ?? null
+}
+
+function clearFileInput(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  if (input) input.value = ''
 }
 
 function selectPronunciationFile(event: Event) {
@@ -562,8 +578,12 @@ function selectPronunciationFile(event: Event) {
     return
   }
 
-  if (!hasAllowedExtension(file, pronunciationExtensions) || file.size > maxPronunciationFileSize) {
+  if (
+    !hasAllowedUploadType(file, pronunciationExtensions, pronunciationMimeTypes) ||
+    file.size > maxPronunciationFileSize
+  ) {
     pronunciationForm.file = null
+    clearFileInput(event)
     actionError.value = 'Upload a WEBM, WAV, or MP3 recording under 10 MB.'
     return
   }
@@ -580,8 +600,9 @@ function selectWritingFile(event: Event) {
     return
   }
 
-  if (!hasAllowedExtension(file, writingExtensions) || file.size > maxWritingFileSize) {
+  if (!hasAllowedUploadType(file, writingExtensions, writingMimeTypes) || file.size > maxWritingFileSize) {
     writingForm.file = null
+    clearFileInput(event)
     actionError.value = 'Upload a PNG or JPG writing image under 5 MB.'
     return
   }

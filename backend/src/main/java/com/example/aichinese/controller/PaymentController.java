@@ -1,5 +1,6 @@
 package com.example.aichinese.controller;
 
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +17,8 @@ import com.example.aichinese.dto.commerce.StripeWebhookResultResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.PaymentService;
 import com.example.aichinese.service.StripeWebhookService;
+
+import jakarta.validation.constraints.Size;
 
 /**
  * Public-facing payment-status read endpoint + the Stripe webhook
@@ -59,9 +62,10 @@ public class PaymentController {
                 paymentService.verifyPaymentStatus(currentUser, paymentId));
     }
 
-    @PostMapping("/webhooks/stripe")
+    @PostMapping(value = "/webhooks/stripe", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<StripeWebhookResultResponse> handleStripeWebhook(
             @RequestHeader(name = "Stripe-Signature", required = false) String signatureHeader,
+            @Size(max = 262_144, message = "Stripe webhook payload must not exceed 262144 characters.")
             @RequestBody String payload) {
         return ApiResponse.success(
                 "Stripe webhook processed.",

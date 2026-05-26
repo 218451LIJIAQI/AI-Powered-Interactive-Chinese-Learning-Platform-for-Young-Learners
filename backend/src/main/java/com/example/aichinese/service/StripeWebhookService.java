@@ -72,6 +72,9 @@ public class StripeWebhookService {
     private static final Logger log = LoggerFactory.getLogger(StripeWebhookService.class);
 
     private static final long SIGNATURE_TOLERANCE_SECONDS = 300;
+    private static final int MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
+    private static final int MAX_SIGNATURE_HEADER_LENGTH = 4096;
+    private static final int MAX_PROVIDER_STATUS_LENGTH = 100;
     private static final Set<String> SUPPORTED_CHECKOUT_SESSION_EVENTS = Set.of(
             "CHECKOUT.SESSION.COMPLETED",
             "CHECKOUT.SESSION.ASYNC_PAYMENT_SUCCEEDED",
@@ -92,6 +95,7 @@ public class StripeWebhookService {
     }
 
     public StripeWebhookResultResponse handleWebhook(String payload, String signatureHeader) {
+        requireReasonableWebhookInput(payload, signatureHeader);
         requireValidSignature(payload, signatureHeader);
 
         JsonNode root = parsePayload(payload);
@@ -146,6 +150,15 @@ public class StripeWebhookService {
         log.info("Stripe webhook processed: eventId={}, type={}, paymentId={}, status={}, applied={}",
                 eventId, eventType, finalResult.paymentId(), finalResult.paymentStatus(), finalResult.processed());
         return finalResult;
+    }
+
+    private void requireReasonableWebhookInput(String payload, String signatureHeader) {
+        if (payload == null || payload.getBytes(StandardCharsets.UTF_8).length > MAX_WEBHOOK_PAYLOAD_BYTES) {
+            throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook payload is invalid.");
+        }
+        if (signatureHeader != null && signatureHeader.length() > MAX_SIGNATURE_HEADER_LENGTH) {
+            throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook signature is invalid.");
+        }
     }
 
     private void requireValidSignature(String payload, String signatureHeader) {
@@ -253,7 +266,8 @@ public class StripeWebhookService {
     }
 
     private String statusSummary(String eventType, String sessionStatus, String paymentStatus) {
-        return normalize(eventType) + ":" + normalize(sessionStatus) + ":" + normalize(paymentStatus);
+        String summary = normalize(eventType) + ":" + normalize(sessionStatus) + ":" + normalize(paymentStatus);
+        return summary.length() <= MAX_PROVIDER_STATUS_LENGTH ? summary : summary.substring(0, MAX_PROVIDER_STATUS_LENGTH);
     }
 
     private String normalize(String value) {

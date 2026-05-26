@@ -2,6 +2,7 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,10 @@ import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -24,6 +29,7 @@ import com.example.aichinese.entity.TeacherFeedback;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.RoleName;
+import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
@@ -42,6 +48,7 @@ import com.example.aichinese.service.StudentLearningAccessService;
  * isolation (separate transaction so the badge updates promptly),
  * and the cross-user notification dispatch path.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class NotificationServiceTests {
 
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
@@ -50,9 +57,62 @@ class NotificationServiceTests {
     private final StudentLearningAccessService studentLearningAccessService = mock(StudentLearningAccessService.class);
 
     @Test
-    void safeCreateNotificationDoesNotPropagateNotificationFailures() {
+    void createNotificationRejectsInvalidRequiredFieldsBeforePersistence() {
+        NotificationService service = service();
+        User recipient = user(1L, RoleName.STUDENT);
+
+        assertThatThrownBy(() -> service.createNotification(null, "Title", "Message", "/student"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("recipient");
+        assertThatThrownBy(() -> service.createNotification(
+                recipient,
+                null,
+                "Title",
+                "Message",
+                null,
+                null,
+                "/student",
+                null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("type");
+        assertThatThrownBy(() -> service.createNotification(recipient, " ", "Message", "/student"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("title");
+        assertThatThrownBy(() -> service.createNotification(recipient, "Title", "\t", "/student"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message");
+    }
+
+    @Test
+    void createNotificationTrimsDisplayFieldsAndOptionalTargets() {
+        NotificationService service = service();
+        User recipient = user(1L, RoleName.STUDENT);
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.createNotification(
+                recipient,
+                NotificationType.SYSTEM,
+                "  Title  ",
+                "\nMessage\n",
+                " TARGET ",
+                42L,
+                " /student/profile ",
+                null);
+
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(captor.capture());
+        Notification saved = captor.getValue();
+        assertThat(saved.getTitle()).isEqualTo("Title");
+        assertThat(saved.getMessage()).isEqualTo("Message");
+        assertThat(saved.getTargetType()).isEqualTo("TARGET");
+        assertThat(saved.getTargetPath()).isEqualTo("/student/profile");
+    }
+
+    @Test
+    void safeCreateNotificationDoesNotPropagateNotificationFailures(CapturedOutput output) {
         NotificationRepository notificationRepository = mock(NotificationRepository.class);
-        when(notificationRepository.save(any(Notification.class))).thenThrow(new RuntimeException("notification store failed"));
+        when(notificationRepository.save(any(Notification.class)))
+                .thenThrow(new RuntimeException("notification store failed token=secret-token"));
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         TransactionStatus transactionStatus = mock(TransactionStatus.class);
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
@@ -68,6 +128,7 @@ class NotificationServiceTests {
                 mock(LiveLearningAccessService.class));
 
         User recipient = new User();
+        recipient.setId(77L);
         recipient.setEmail("student@example.com");
         recipient.setDisplayName("Student");
 
@@ -80,6 +141,10 @@ class NotificationServiceTests {
 
         verify(notificationRepository).save(any(Notification.class));
         verify(transactionManager).rollback(transactionStatus);
+        assertThat(output).contains("Notification creation failed for recipient user id 77: RuntimeException");
+        assertThat(output).contains("token=[REDACTED]");
+        assertThat(output).doesNotContain("secret-token");
+        assertThat(output).doesNotContain("at com.example.aichinese");
     }
 
     @Test

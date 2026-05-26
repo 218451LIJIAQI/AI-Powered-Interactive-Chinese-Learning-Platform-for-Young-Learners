@@ -61,9 +61,15 @@ public class TeacherEarningService {
             TeacherEarning earning = new TeacherEarning();
             earning.setTeacher(orderItem.getTeacher());
             earning.setOrderItem(orderItem);
-            earning.setGrossAmount(commerceMoneyService.normalize(orderItem.getLineTotal()));
-            earning.setCommissionAmount(commerceMoneyService.percentage(orderItem.getLineTotal(), commissionRate));
-            earning.setNetAmount(commerceMoneyService.subtract(earning.getGrossAmount(), earning.getCommissionAmount()));
+            earning.setGrossAmount(commerceMoneyService.normalizePersistableAmount(
+                    orderItem.getLineTotal(),
+                    "Order item amount is too large for teacher earning settlement."));
+            earning.setCommissionAmount(commerceMoneyService.normalizePersistableAmount(
+                    commerceMoneyService.percentage(orderItem.getLineTotal(), commissionRate),
+                    "Commission amount is too large for teacher earning settlement."));
+            earning.setNetAmount(commerceMoneyService.normalizePersistableAmount(
+                    commerceMoneyService.subtract(earning.getGrossAmount(), earning.getCommissionAmount()),
+                    "Net earning amount is too large for teacher earning settlement."));
             earning.setEarningStatus(TeacherEarningStatus.AVAILABLE);
             teacherEarningRepository.save(earning);
             created++;

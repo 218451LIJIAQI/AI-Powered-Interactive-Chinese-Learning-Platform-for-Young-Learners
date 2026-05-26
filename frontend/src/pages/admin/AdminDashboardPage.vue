@@ -317,7 +317,7 @@ import {
   adminNotifications,
   teacherApplicationsPending,
 } from '@/demo/data'
-import { formatCurrency, formatDate, formatDateTime, formatNumber } from '@/utils/format'
+import { formatCurrency, formatDate, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
 const router = useRouter()
 
@@ -540,12 +540,16 @@ const moderationItems = computed(() => {
 
 const registrationTrendRows = computed(() => {
   const points = analytics.value.userRegistrationTrend
-  const max = Math.max(...points.map((item) => item.value), 0)
-  return points.slice(0, 6).map((item) => ({
-    label: item.label,
-    value: item.value,
-    percentage: max > 0 ? Math.max(8, Math.round((item.value / max) * 100)) : 0,
-  }))
+  const max = Math.max(...points.map((item) => Math.max(0, toFiniteNumber(item.value))), 0)
+  return points.slice(0, 6).map((item) => {
+    const value = Math.max(0, toFiniteNumber(item.value))
+
+    return {
+      label: item.label,
+      value,
+      percentage: max > 0 ? Math.max(8, ratioPercent(value, max)) : 0,
+    }
+  })
 })
 
 const auditItems = computed(() =>

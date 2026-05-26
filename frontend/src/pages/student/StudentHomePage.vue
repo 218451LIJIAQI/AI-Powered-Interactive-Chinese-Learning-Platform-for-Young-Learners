@@ -301,6 +301,7 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { studentDashboard, studentProgress } from '@/demo/data'
 import type { StudentDashboardResponse, StudentProgressSummaryResponse } from '@/types/api'
+import { clampPercent, nonNegativeInteger, ratioPercent } from '@/utils/format'
 
 const router = useRouter()
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboard)
@@ -343,6 +344,7 @@ const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || 'Lea
 const overallProgress = computed(() =>
   safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
 )
+const quizAveragePercent = computed(() => safePercent(progress.value.quizAverage))
 const nextLesson = computed(() => {
   const unfinished = dashboard.value.unfinishedLessons[0]
   const recent = progress.value.recentLessons[0]
@@ -372,7 +374,7 @@ const heroWords = [
 ]
 const heroToneMarks = [1, 2, 3, 4]
 const heroFocusText = computed(() =>
-  progress.value.quizAverage >= 80 ? 'Keep the rhythm with one quick review.' : 'Review tones, then retry the quiz.',
+  quizAveragePercent.value >= 80 ? 'Keep the rhythm with one quick review.' : 'Review tones, then retry the quiz.',
 )
 
 const checklist = computed(() => [
@@ -381,8 +383,8 @@ const checklist = computed(() => [
     title: 'Review a practice set',
     done: progress.value.recentLessons.some((lesson) => lesson.completionPercent >= 50),
   },
-  { title: 'Build quiz accuracy', done: progress.value.quizAverage >= 80 },
-  { title: 'Keep your streak alive', done: dashboard.value.dailyStreak > 0 },
+  { title: 'Build quiz accuracy', done: quizAveragePercent.value >= 80 },
+  { title: 'Keep your streak alive', done: nonNegativeInteger(dashboard.value.dailyStreak) > 0 },
 ])
 
 const pathNodes = computed(() => {
@@ -404,8 +406,8 @@ const pathNodes = computed(() => {
     {
       lessonId: -1,
       lessonTitle: 'Review checkpoint',
-      completionPercent: safePercent(progress.value.quizAverage),
-      completed: progress.value.quizAverage >= 80,
+      completionPercent: quizAveragePercent.value,
+      completed: quizAveragePercent.value >= 80,
     },
     {
       lessonId: -2,
@@ -461,17 +463,18 @@ const practiceTools = [
 ]
 
 const goals = computed(() => {
-  const started = Math.max(progress.value.totalLessonsStarted, progress.value.completedLessons)
-  const completedPercent = started ? Math.round((progress.value.completedLessons / started) * 100) : 0
+  const completedLessons = nonNegativeInteger(progress.value.completedLessons)
+  const started = Math.max(nonNegativeInteger(progress.value.totalLessonsStarted), completedLessons)
+  const completedPercent = ratioPercent(completedLessons, started)
 
   return [
     {
       title: 'Complete started lessons',
-      count: started ? `${progress.value.completedLessons} / ${started}` : 'No lessons started',
+      count: started ? `${completedLessons} / ${started}` : 'No lessons started',
       progress: completedPercent,
       tone: 'success' as const,
       icon: 'learn',
-      done: started > 0 && progress.value.completedLessons >= started,
+      done: started > 0 && completedLessons >= started,
     },
     {
       title: 'Continue next lesson',
@@ -483,28 +486,28 @@ const goals = computed(() => {
     },
     {
       title: 'Build quiz accuracy',
-      count: `${Math.round(progress.value.quizAverage)}%`,
-      progress: safePercent(progress.value.quizAverage),
+      count: `${quizAveragePercent.value}%`,
+      progress: quizAveragePercent.value,
       tone: 'warning' as const,
       icon: 'clip',
-      done: progress.value.quizAverage >= 80,
+      done: quizAveragePercent.value >= 80,
     },
   ]
 })
 
 const POINTS_PER_GEM = 6.8
 const rewards = computed(() => [
-  { label: 'Stars', value: dashboard.value.points, icon: 'star' },
-  { label: 'Gems', value: Math.round(dashboard.value.points / POINTS_PER_GEM), icon: 'rewards' },
-  { label: 'Badges', value: dashboard.value.badgeCount, icon: 'shield' },
+  { label: 'Stars', value: nonNegativeInteger(dashboard.value.points), icon: 'star' },
+  { label: 'Gems', value: nonNegativeInteger(dashboard.value.points / POINTS_PER_GEM), icon: 'rewards' },
+  { label: 'Badges', value: nonNegativeInteger(dashboard.value.badgeCount), icon: 'shield' },
 ])
 
 function safePercent(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)))
+  return clampPercent(value)
 }
 
 function formatDayCount(value: number) {
-  const days = Math.max(0, Math.round(value || 0))
+  const days = nonNegativeInteger(value)
   return `${days} ${days === 1 ? 'day' : 'days'}`
 }
 

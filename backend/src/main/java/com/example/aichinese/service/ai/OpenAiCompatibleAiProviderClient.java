@@ -1,5 +1,7 @@
 package com.example.aichinese.service.ai;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,7 +19,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import com.example.aichinese.config.AiProperties;
@@ -137,7 +138,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
                     });
 
             return parseResponse(providerName, modelName, response.getBody());
-        } catch (RestClientException ex) {
+        } catch (RuntimeException ex) {
             log.warn("AI provider request failed for feature {} with exception type {}.",
                     featureKey, ex.getClass().getSimpleName());
             return AiProviderResult.failure(providerName, modelName,
@@ -194,8 +195,32 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             return null;
         }
         Object totalTokens = usageMap.get("total_tokens");
+        if (totalTokens instanceof Integer integer) {
+            return integer >= 0 ? integer : null;
+        }
+        if (totalTokens instanceof Long longValue) {
+            return longValue >= 0 && longValue <= Integer.MAX_VALUE
+                    ? Math.toIntExact(longValue)
+                    : null;
+        }
+        if (totalTokens instanceof BigInteger bigInteger) {
+            return bigInteger.signum() >= 0 && bigInteger.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0
+                    ? bigInteger.intValue()
+                    : null;
+        }
+        if (totalTokens instanceof BigDecimal bigDecimal) {
+            try {
+                BigInteger exact = bigDecimal.toBigIntegerExact();
+                return exact.signum() >= 0 && exact.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0
+                        ? exact.intValue()
+                        : null;
+            } catch (ArithmeticException exception) {
+                return null;
+            }
+        }
         if (totalTokens instanceof Number number) {
-            return number.intValue();
+            long tokenCount = number.longValue();
+            return tokenCount >= 0 && tokenCount <= Integer.MAX_VALUE ? (int) tokenCount : null;
         }
         return null;
     }

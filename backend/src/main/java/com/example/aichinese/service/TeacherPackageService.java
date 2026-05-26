@@ -94,6 +94,9 @@ public class TeacherPackageService {
 
     @Transactional
     public CoursePackageResponse createPackage(SecurityUserDetails currentUser, CreateCoursePackageRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Package request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
@@ -129,6 +132,9 @@ public class TeacherPackageService {
             SecurityUserDetails currentUser,
             Long packageId,
             UpdateCoursePackageRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Package request is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
         teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
@@ -175,9 +181,24 @@ public class TeacherPackageService {
 
     @Transactional
     public CoursePackageResponse addPackageItem(SecurityUserDetails currentUser, Long packageId, PackageItemRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Package item request is required.");
+        }
+        if (request.itemType() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Item type is required.");
+        }
+        if (request.itemId() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Item id is required.");
+        }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
         teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
+        if (packageItemRepository.existsByCoursePackageIdAndItemTypeAndItemId(
+                coursePackage.getId(),
+                request.itemType(),
+                request.itemId())) {
+            throw new ResponseStatusException(BAD_REQUEST, "This item is already included in the package.");
+        }
 
         PackageItem packageItem = new PackageItem();
         packageItem.setCoursePackage(coursePackage);

@@ -31,6 +31,13 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     List<CartItem> findByCartIdOrderByCreatedAtAsc(Long cartId);
 
     /**
+     * Cheap capacity check used before accepting another cart line. Counting
+     * in the database avoids materialising an entire cart just to enforce the
+     * service-level checkout-size cap.
+     */
+    long countByCartId(Long cartId);
+
+    /**
      * IDOR-safe single-row lookup that traverses
      * {@code CartItem \u2192 Cart \u2192 StudentProfile \u2192 User} so the
      * remove-item endpoint cannot be tricked into deleting another

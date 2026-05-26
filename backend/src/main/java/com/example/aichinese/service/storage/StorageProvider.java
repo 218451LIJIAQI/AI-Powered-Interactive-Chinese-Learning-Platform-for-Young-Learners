@@ -17,5 +17,7 @@ public interface StorageProvider {
 
     StoredObject store(MultipartFile multipartFile, StorageWriteRequest request);
 
+    void deleteQuietly(StoredObject storedObject);
+
     StoredFileDownload load(StorageReadRequest request);
 }

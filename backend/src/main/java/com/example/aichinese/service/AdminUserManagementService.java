@@ -145,6 +145,9 @@ public class AdminUserManagementService {
             SecurityUserDetails currentUser,
             Long userId,
             AdminUserStatusUpdateRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "User status update request is required.");
+        }
         User adminUser = userRepository.findById(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Admin user could not be found."));
         User targetUser = userRepository.findById(userId)

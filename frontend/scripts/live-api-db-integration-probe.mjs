@@ -42,6 +42,8 @@ import { createHash } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
 import { promisify } from 'node:util'
 
+import { normalizeHttpBaseUrl, redactText, safeJsonStringify, sanitizeForEvidence } from './lib/browser-runtime.mjs'
+
 const execFile = promisify(execFileCallback)
 
 const __filename = fileURLToPath(import.meta.url)
@@ -53,7 +55,10 @@ const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(frontendDir, 'browser-qa-evidence', `${timestamp}-live-api-db-probe`)
 await fs.mkdir(evidenceDir, { recursive: true })
 
-const apiBaseUrl = process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:8081/api/v1'
+const apiBaseUrl = normalizeHttpBaseUrl(
+  process.env.QA_API_BASE_URL ?? 'http://127.0.0.1:8081/api/v1',
+  'QA_API_BASE_URL',
+)
 const dbContainer = process.env.QA_DB_CONTAINER ?? 'ai-chinese-learning-mysql'
 const dbUser = process.env.QA_DB_USER ?? 'aichinese_app'
 const dbPassword = process.env.QA_DB_PASSWORD ?? 'replace-with-a-strong-application-db-password'
@@ -80,37 +85,19 @@ const state = {
   ids: {},
 }
 
-function redact(value) {
-  if (value == null) return value
-  if (typeof value === 'string') {
-    if (value.length > 24 && /^[A-Za-z0-9._~+/=-]+$/.test(value)) return `${value.slice(0, 8)}...redacted`
-    return value
-  }
-  if (Array.isArray(value)) return value.map(redact)
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => {
-        if (/password|token|authorization|secret/i.test(key)) return [key, 'redacted']
-        return [key, redact(entry)]
-      }),
-    )
-  }
-  return value
-}
-
 function addCheck(name, pass, details = {}) {
   state.checks.push({
     name,
     pass: Boolean(pass),
-    details: redact(details),
+    details: sanitizeForEvidence(details),
   })
   if (!pass) {
-    throw new Error(`${name} failed: ${JSON.stringify(redact(details))}`)
+    throw new Error(`${name} failed: ${safeJsonStringify(details)}`)
   }
 }
 
 async function writeProgress() {
-  await fs.writeFile(path.join(evidenceDir, 'live-api-db-probe-report.json'), JSON.stringify(state, null, 2))
+  await fs.writeFile(path.join(evidenceDir, 'live-api-db-probe-report.json'), safeJsonStringify(state))
 }
 
 async function http(method, urlPath, { token, body, headers = {}, formData, expected = [200] } = {}) {
@@ -134,12 +121,16 @@ async function http(method, urlPath, { token, body, headers = {}, formData, expe
     status: response.status,
     ok: response.ok,
     durationMs: Date.now() - startedAt,
-    request: redact({ body, headers: requestHeaders, formData: formData ? '[multipart/form-data]' : undefined }),
-    response: redact(responseBody),
+    request: sanitizeForEvidence({
+      body,
+      headers: requestHeaders,
+      formData: formData ? '[multipart/form-data]' : undefined,
+    }),
+    response: sanitizeForEvidence(responseBody),
   }
   state.requests.push(record)
   if (!expected.includes(response.status)) {
-    throw new Error(`${method} ${urlPath} returned ${response.status}: ${JSON.stringify(redact(responseBody))}`)
+    throw new Error(`${method} ${urlPath} returned ${response.status}: ${safeJsonStringify(responseBody)}`)
   }
   return responseBody
 }
@@ -147,20 +138,8 @@ async function http(method, urlPath, { token, body, headers = {}, formData, expe
 async function db(sql, label) {
   const { stdout, stderr } = await execFile(
     'docker',
-    [
-      'exec',
-      dbContainer,
-      'mysql',
-      `-u${dbUser}`,
-      `-p${dbPassword}`,
-      dbName,
-      '--batch',
-      '--raw',
-      '--skip-column-names',
-      '-e',
-      sql,
-    ],
-    { cwd: repoRoot, maxBuffer: 1024 * 1024 * 20 },
+    ['exec', dbContainer, 'mysql', `-u${dbUser}`, dbName, '--batch', '--raw', '--skip-column-names', '-e', sql],
+    { cwd: repoRoot, env: { ...process.env, MYSQL_PWD: dbPassword }, maxBuffer: 1024 * 1024 * 20 },
   )
   const rows = stdout.trim()
     ? stdout
@@ -168,7 +147,7 @@ async function db(sql, label) {
         .split(/\r?\n/)
         .map((line) => line.split('\t'))
     : []
-  state.db.push({ label, sql, rows: redact(rows), stderr: stderr.trim() })
+  state.db.push({ label, sql, rows: sanitizeForEvidence(rows), stderr: redactText(stderr.trim()) })
   return rows
 }
 
@@ -187,7 +166,7 @@ function sha256Hex(value) {
 
 function data(body) {
   if (!body || body.success !== true) {
-    throw new Error(`Expected success envelope, received ${JSON.stringify(redact(body))}`)
+    throw new Error(`Expected success envelope, received ${safeJsonStringify(body)}`)
   }
   return body.data
 }
@@ -711,13 +690,13 @@ try {
     totalDbQueries: state.db.length,
   }
   await writeProgress()
-  console.log(JSON.stringify(state.summary, null, 2))
+  console.log(safeJsonStringify(state.summary))
 } catch (error) {
   state.error = {
     message: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
+    stack: error instanceof Error ? redactText(error.stack) : undefined,
   }
   await writeProgress()
-  console.error(state.error.message)
+  console.error(redactText(state.error.message))
   process.exitCode = 1
 }

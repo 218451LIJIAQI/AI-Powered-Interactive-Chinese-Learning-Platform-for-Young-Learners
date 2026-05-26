@@ -1,5 +1,7 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
+
 import java.util.Objects;
 
 import org.slf4j.Logger;
@@ -17,6 +19,7 @@ import com.example.aichinese.dto.system.PublicPlatformSettingsResponse;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Reads and writes the admin-editable platform-wide settings backed
@@ -97,6 +100,9 @@ public class PlatformSettingsService {
     public AdminPlatformSettingsResponse updateAdminPlatformSettings(
             SecurityUserDetails currentUser,
             AdminPlatformSettingsUpdateRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Platform settings update request is required.");
+        }
         String platformName = stringSetting(PLATFORM_NAME_KEY);
         String normalizedDisclaimerText = request.aiDisclaimerText().trim();
 

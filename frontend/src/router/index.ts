@@ -29,6 +29,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { UserRole } from '@/types/api'
 
 import { useAuthStore } from '@/stores/auth'
+import { normalizeAppRoute } from '@/utils/routeCompat'
 import { defaultRouteForRole } from '@/utils/role'
 
 const PublicLayout = () => import('@/layouts/PublicLayout.vue')
@@ -309,14 +310,25 @@ const router = createRouter({
   ],
   scrollBehavior(to, _from, savedPosition) {
     if (savedPosition) return savedPosition
-    if (to.hash) return { el: to.hash, behavior: 'smooth' }
+    const hashSelector = safeHashSelector(to.hash)
+    if (hashSelector) return { el: hashSelector, behavior: 'smooth' }
     return { top: 0 }
   },
 })
 
 const AUTH_ROUTE_NAMES: ReadonlySet<string> = new Set(['auth', 'forgot-password', 'reset-password'])
+const SAFE_HASH_SELECTOR_PATTERN = /^#[A-Za-z][A-Za-z0-9_-]*$/
+
+function safeHashSelector(hash: string): string | null {
+  return SAFE_HASH_SELECTOR_PATTERN.test(hash) ? hash : null
+}
 
 router.beforeEach(async (to) => {
+  const normalizedRoute = normalizeAppRoute(to.fullPath)
+  if (normalizedRoute && normalizedRoute !== to.fullPath) {
+    return normalizedRoute
+  }
+
   const auth = useAuthStore()
   await auth.bootstrap()
 

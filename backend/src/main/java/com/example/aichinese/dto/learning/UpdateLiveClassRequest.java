@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -39,19 +42,19 @@ import jakarta.validation.constraints.Size;
  * (status-only PATCH).</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * every string field so Bean Validation sees the canonical form
  * (a paste with stray leading/trailing whitespace cannot inflate
  * the length past the cap or sneak past the http(s) regex) and so
- * every downstream consumer sees the same trimmed value. Optional
+ * every downstream consumer sees the same stripped value. Optional
  * fields ({@link #description}, {@link #status}) collapse to
  * {@code null} when blank so the downstream "is this set?" check
  * is a single null-check.</p>
  *
  * @param title           short human-readable session title (1–200
- *                        chars after trim); required
+ *                        chars after stripping); required
  * @param description     optional long-form description (max 1000
- *                        chars after trim); blank collapses to
+ *                        chars after stripping); blank collapses to
  *                        {@code null}
  * @param lessonId        optional lesson id; mutually exclusive
  *                        with {@link #packageId}
@@ -120,29 +123,17 @@ public record UpdateLiveClassRequest(
         Integer maxParticipants) {
 
     /**
-     * Defensive canonical constructor: trims every string field so
+     * Defensive canonical constructor: strips every string field so
      * Bean Validation sees the canonical form (preventing length-cap
      * bypass via leading/trailing whitespace) and collapses optional
      * blank-only strings to {@code null} so downstream "is this set?"
      * checks are a single null-check.
      */
     public UpdateLiveClassRequest {
-        title = trimOrNull(title);
-        description = trimToNullIfBlank(description);
-        meetingLink = trimOrNull(meetingLink);
-        meetingPlatform = trimOrNull(meetingPlatform);
-        status = trimToNullIfBlank(status);
-    }
-
-    private static String trimOrNull(String value) {
-        return value == null ? null : value.trim();
-    }
-
-    private static String trimToNullIfBlank(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        title = strip(title);
+        description = stripToNull(description);
+        meetingLink = strip(meetingLink);
+        meetingPlatform = strip(meetingPlatform);
+        status = stripToNull(status);
     }
 }

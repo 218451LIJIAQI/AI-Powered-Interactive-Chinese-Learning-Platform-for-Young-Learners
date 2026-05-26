@@ -186,15 +186,15 @@ public enum ActivityType {
     }
 
     /**
-     * Trim, kebab-to-snake-case, upper-case shared by both lenient
+     * Strip, kebab-to-snake-case, upper-case shared by both lenient
      * lookup paths. Returns {@code null} for blank input so callers can
      * collapse "missing" and "blank" into a single early-return branch.
      */
     private static String normalise(String value) {
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
+        String stripped = value.strip();
+        if (stripped.isEmpty()) {
             return null;
         }
-        return trimmed.replace('-', '_').toUpperCase(Locale.ROOT);
+        return stripped.replace('-', '_').toUpperCase(Locale.ROOT);
     }
 }

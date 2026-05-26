@@ -22,7 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.Support.TestUploadFixtures;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
@@ -102,7 +102,7 @@ class TeacherStudentsIntegrationTests {
                 .andExpect(jsonPath("$.data.items[0].studentId").value(studentProfile.getId()))
                 .andExpect(jsonPath("$.data.items[0].userId").value(studentUser.getId()))
                 .andExpect(jsonPath("$.data.items[0].fullName").value(studentUser.getDisplayName()))
-                .andExpect(jsonPath("$.data.items[0].email").value(studentEmail))
+                .andExpect(jsonPath("$.data.items[0].email").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].progressPercent").value(100))
                 .andExpect(jsonPath("$.data.items[0].quizAveragePercent").value(50.0))
                 .andExpect(jsonPath("$.data.items[0].atRisk").value(true))

@@ -379,7 +379,8 @@ public class LiveClassService {
             String statusValue,
             Integer maxParticipants) {
         liveLearningAccessService.validateLiveClassTiming(startTime, endTime);
-        liveLearningAccessService.validateMeetingLink(meetingLink);
+        var parsedMeetingPlatform = liveLearningAccessService.parseMeetingPlatform(meetingPlatform);
+        String normalizedMeetingLink = liveLearningAccessService.validateMeetingLink(meetingLink, parsedMeetingPlatform);
 
         Lesson lesson = lessonId == null ? null : liveLearningAccessService.requireOwnedLesson(currentUser, lessonId);
         CoursePackage coursePackage = packageId == null ? null : liveLearningAccessService.requireOwnedPackage(currentUser, packageId);
@@ -394,8 +395,8 @@ public class LiveClassService {
         liveClass.setDescription(contentSafetyService.optionalSafeText(description, MAX_LIVE_CLASS_DESCRIPTION_LENGTH));
         liveClass.setScheduledStartAt(startTime);
         liveClass.setScheduledEndAt(endTime);
-        liveClass.setMeetingLink(meetingLink.trim());
-        liveClass.setMeetingPlatform(liveLearningAccessService.parseMeetingPlatform(meetingPlatform));
+        liveClass.setMeetingLink(normalizedMeetingLink);
+        liveClass.setMeetingPlatform(parsedMeetingPlatform);
         LiveClassStatus requestedStatus = liveLearningAccessService.parseLiveClassStatus(statusValue, liveClass.getLiveClassStatus());
         if (liveClass.getId() == null) {
             validateInitialLiveClassStatus(requestedStatus);

@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -43,19 +45,19 @@ import jakarta.validation.constraints.Size;
  * than omit the row.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #answerText} so Bean Validation sees the canonical form
  * (a paste with stray leading/trailing whitespace cannot inflate
  * the length past the cap or sneak past {@link NotBlank @NotBlank})
  * and so the scorer, the persisted
  * {@link com.example.aichinese.entity.QuizAttemptAnswer} row, and
- * the result DTO all see the same trimmed value.</p>
+ * the result DTO all see the same stripped value.</p>
  *
  * @param questionId target
  *                   {@link com.example.aichinese.entity.QuizQuestion}
  *                   identifier; required, positive
  * @param answerText encoded answer payload (see encoding rules
- *                   above); required, 1–2000 chars after trim
+ *                   above); required, 1–2000 chars after stripping
  */
 @JsonPropertyOrder({ "questionId", "answerText" })
 public record QuizSubmissionAnswerRequest(
@@ -67,14 +69,14 @@ public record QuizSubmissionAnswerRequest(
         String answerText) {
 
     /**
-     * Defensive canonical constructor: trims {@link #answerText} so
+     * Defensive canonical constructor: strips {@link #answerText} so
      * Bean Validation sees the canonical form (preventing length-cap
      * bypass via leading/trailing whitespace) and matches the
-     * service's downstream {@code .trim()} when persisting the
+     * service's downstream normalisation when persisting the
      * answer. {@code null} input is preserved so
      * {@link NotBlank @NotBlank} fires correctly.
      */
     public QuizSubmissionAnswerRequest {
-        answerText = answerText == null ? null : answerText.trim();
+        answerText = strip(answerText);
     }
 }

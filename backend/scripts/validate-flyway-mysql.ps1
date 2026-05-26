@@ -74,12 +74,37 @@ function Get-CommandPath([string]$Name) {
 }
 
 function Invoke-Docker([string[]]$Arguments) {
-    $Output = & docker @Arguments 2>&1
-    $ExitCode = $LASTEXITCODE
-    if ($ExitCode -ne 0) {
-        throw "docker $($Arguments -join ' ') failed with exit code $ExitCode.`n$($Output -join "`n")"
+    return Invoke-DockerWithEnvironment @{} $Arguments
+}
+
+function Invoke-DockerWithEnvironment([hashtable]$Environment, [string[]]$Arguments) {
+    return Invoke-WithEnvironment $Environment {
+        $Output = & docker @Arguments 2>&1
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "docker $(Format-SafeCommandArguments $Arguments) failed with exit code $ExitCode.`n$(Format-SafeOutput $Output)"
+        }
+        return @($Output)
     }
-    return @($Output)
+}
+
+function Format-SafeCommandArguments([string[]]$Arguments) {
+    $Sanitized = foreach ($Argument in $Arguments) {
+        if ($Argument -match '^(MYSQL_(ROOT_)?PASSWORD|MYSQL_PWD|DB_PASSWORD|JWT_SECRET)=') {
+            $Argument -replace '=.*$', '=[hidden]'
+        } else {
+            $Argument
+        }
+    }
+    return ($Sanitized -join ' ')
+}
+
+function Format-SafeOutput($Output) {
+    $Text = ($Output -join "`n")
+    $Text = $Text -replace [regex]::Escape($RootPassword), "[hidden-root-password]"
+    $Text = $Text -replace [regex]::Escape($AppPassword), "[hidden-app-password]"
+    $Text = $Text -replace [regex]::Escape($JwtSecret), "[hidden-jwt-secret]"
+    return $Text
 }
 
 function Test-DockerDaemonReady {
@@ -147,9 +172,14 @@ function Wait-MySqlReady {
     Write-Host "Waiting for temporary MySQL" -NoNewline
     $Deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
     while ((Get-Date) -lt $Deadline) {
-        & docker exec -e "MYSQL_PWD=$RootPassword" $ContainerName mysqladmin ping -uroot --silent *> $null
+        Invoke-WithEnvironment @{ MYSQL_PWD = $RootPassword } {
+            & docker exec -e "MYSQL_PWD" $ContainerName mysqladmin ping -uroot --silent *> $null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host ""
+                return
+            }
+        }
         if ($LASTEXITCODE -eq 0) {
-            Write-Host ""
             return
         }
         Start-Sleep -Seconds 2
@@ -168,27 +198,35 @@ function Get-HostMySqlPort {
 }
 
 function Invoke-MySql([string]$Database, [string]$Sql) {
-    $Arguments = @("exec", "-i", "-e", "MYSQL_PWD=$RootPassword", $ContainerName, "mysql", "-uroot", "--batch", "--raw", "--skip-column-names")
+    $Arguments = @("exec", "-i", "-e", "MYSQL_PWD", $ContainerName, "mysql", "-uroot", "--batch", "--raw", "--skip-column-names")
     if ($Database) {
         $Arguments += $Database
     }
     $Arguments += @("-e", $Sql)
-    return Invoke-Docker $Arguments
+    return Invoke-DockerWithEnvironment @{ MYSQL_PWD = $RootPassword } $Arguments
 }
 
 function Invoke-MySqlFile([string]$Database, [string]$Path) {
-    $Output = Get-Content -LiteralPath $Path -Raw | & docker exec -i -e "MYSQL_PWD=$RootPassword" $ContainerName mysql -uroot $Database 2>&1
-    $ExitCode = $LASTEXITCODE
+    $Result = Invoke-WithEnvironment @{ MYSQL_PWD = $RootPassword } {
+        $Output = Get-Content -LiteralPath $Path -Raw | & docker exec -i -e "MYSQL_PWD" $ContainerName mysql -uroot $Database 2>&1
+        [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = @($Output) }
+    }
+    $Output = $Result.Output
+    $ExitCode = $Result.ExitCode
     if ($ExitCode -ne 0) {
-        throw "mysql file execution failed for $Path with exit code $ExitCode.`n$($Output -join "`n")"
+        throw "mysql file execution failed for $Path with exit code $ExitCode.`n$(Format-SafeOutput $Output)"
     }
 }
 
 function Invoke-MySqlSql([string]$Database, [string]$Sql) {
-    $Output = $Sql | & docker exec -i -e "MYSQL_PWD=$RootPassword" $ContainerName mysql -uroot $Database 2>&1
-    $ExitCode = $LASTEXITCODE
+    $Result = Invoke-WithEnvironment @{ MYSQL_PWD = $RootPassword } {
+        $Output = $Sql | & docker exec -i -e "MYSQL_PWD" $ContainerName mysql -uroot $Database 2>&1
+        [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = @($Output) }
+    }
+    $Output = $Result.Output
+    $ExitCode = $Result.ExitCode
     if ($ExitCode -ne 0) {
-        throw "mysql SQL execution failed with exit code $ExitCode.`n$($Output -join "`n")"
+        throw "mysql SQL execution failed with exit code $ExitCode.`n$(Format-SafeOutput $Output)"
     }
 }
 
@@ -472,7 +510,12 @@ try {
     Initialize-DockerDaemon
 
     Write-Section "Temporary MySQL"
-    Invoke-Docker @("run", "--name", $ContainerName, "-e", "MYSQL_ROOT_PASSWORD=$RootPassword", "-e", "MYSQL_DATABASE=$FreshDb", "-e", "MYSQL_USER=$AppUsername", "-e", "MYSQL_PASSWORD=$AppPassword", "-p", "127.0.0.1::3306", "-d", $Image) | Out-Null
+    Invoke-DockerWithEnvironment @{
+        MYSQL_ROOT_PASSWORD = $RootPassword
+        MYSQL_DATABASE = $FreshDb
+        MYSQL_USER = $AppUsername
+        MYSQL_PASSWORD = $AppPassword
+    } @("run", "--name", $ContainerName, "-e", "MYSQL_ROOT_PASSWORD", "-e", "MYSQL_DATABASE", "-e", "MYSQL_USER", "-e", "MYSQL_PASSWORD", "-p", "127.0.0.1::3306", "-d", $Image) | Out-Null
     $StartedContainer = $true
     Wait-MySqlReady
     $HostPort = Get-HostMySqlPort

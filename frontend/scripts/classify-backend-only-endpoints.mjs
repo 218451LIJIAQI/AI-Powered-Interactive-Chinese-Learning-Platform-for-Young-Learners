@@ -39,6 +39,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { safeJsonStringify } from './lib/browser-runtime.mjs'
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const frontendDir = path.resolve(__dirname, '..')
@@ -49,10 +51,19 @@ const servicesPath = path.resolve(frontendDir, 'src', 'api', 'services.ts')
 const routerPath = path.resolve(frontendDir, 'src', 'router', 'index.ts')
 const outputPath = path.resolve(repoRoot, 'backend', 'target', 'backend-only-endpoint-classification.json')
 
+await Promise.all([
+  assertReadable(openapiPathsPath, 'OpenAPI path dump'),
+  assertReadable(servicesPath, 'frontend API service source'),
+  assertReadable(routerPath, 'frontend router source'),
+  fs.mkdir(path.dirname(outputPath), { recursive: true }),
+])
+
 const openapiPaths = (await fs.readFile(openapiPathsPath, 'utf8'))
   .split(/\r?\n/)
   .map((line) => line.trim())
   .filter(Boolean)
+  .filter((line, index, all) => all.indexOf(line) === index)
+  .sort()
 
 const servicesSource = await fs.readFile(servicesPath, 'utf8')
 const routerSource = await fs.readFile(routerPath, 'utf8')
@@ -102,8 +113,16 @@ const summary = {
   }, {}),
 }
 
-await fs.writeFile(outputPath, JSON.stringify({ summary, classification }, null, 2))
-console.log(JSON.stringify(summary, null, 2))
+await fs.writeFile(outputPath, safeJsonStringify({ summary, classification }))
+console.log(safeJsonStringify(summary))
+
+async function assertReadable(filePath, label) {
+  try {
+    await fs.access(filePath)
+  } catch {
+    throw new Error(`${label} not found or not readable at ${filePath}. Generate it before running this classifier.`)
+  }
+}
 
 function normalizeFrontendPath(rawPath) {
   let normalized = rawPath

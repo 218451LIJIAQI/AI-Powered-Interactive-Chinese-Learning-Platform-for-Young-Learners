@@ -118,6 +118,9 @@ public class TeacherFeedbackService {
 
     @Transactional
     public TeacherFeedbackResponse createFeedback(SecurityUserDetails currentUser, CreateTeacherFeedbackRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Teacher feedback request is required.");
+        }
         TeacherProfile teacher = requireTeacher(currentUser.getUserId());
         StudentProfile student = requireStudent(request.studentId());
         Lesson lesson = request.lessonId() != null ? requireTeacherLesson(request.lessonId(), currentUser.getUserId()) : null;
@@ -206,6 +209,9 @@ public class TeacherFeedbackService {
 
     @Transactional
     public TeacherFeedbackResponse updateFeedback(SecurityUserDetails currentUser, Long feedbackId, UpdateTeacherFeedbackRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Teacher feedback update request is required.");
+        }
         TeacherFeedback feedback = teacherFeedbackRepository.findByIdAndTeacherUserId(feedbackId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Feedback was not found."));
         feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());

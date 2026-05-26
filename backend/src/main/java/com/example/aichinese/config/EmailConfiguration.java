@@ -1,9 +1,5 @@
 package com.example.aichinese.config;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Locale;
-
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +27,7 @@ import org.springframework.util.StringUtils;
 @Configuration(proxyBeanMethods = false)
 public class EmailConfiguration {
 
+    private static final String PROD_CONTEXT = "when app.email.enabled=true and the prod profile is active";
     @Bean
     InitializingBean emailConfigurationValidator(Environment environment, EmailProperties emailProperties) {
         return () -> {
@@ -58,7 +55,10 @@ public class EmailConfiguration {
         emailProperties.resolveFrom(username);
         String passwordResetBaseUrl = emailProperties.resolvePasswordResetBaseUrl();
         if (isProductionProfileActive(environment)) {
-            requireProductionPasswordResetBaseUrl(passwordResetBaseUrl);
+            HttpUrlValidation.requirePublicHttpsUrl(
+                    passwordResetBaseUrl,
+                    "app.email.password-reset-base-url",
+                    PROD_CONTEXT);
         }
     }
 
@@ -79,47 +79,4 @@ public class EmailConfiguration {
         return environment.acceptsProfiles(PROD_PROFILES);
     }
 
-    private static void requireProductionPasswordResetBaseUrl(String value) {
-        URI uri;
-        try {
-            // new URI(\u2026) is stricter than URI.create(\u2026); it rejects spaces
-            // and other malformed inputs which the latter happily accepts as
-            // opaque URIs (and which would then silently fail HTTPS validation).
-            uri = new URI(value == null ? "" : value.trim());
-        } catch (URISyntaxException | IllegalArgumentException exception) {
-            throw new IllegalStateException(
-                    "app.email.password-reset-base-url must be a valid HTTPS URL when app.email.enabled=true and the prod profile is active.",
-                    exception);
-        }
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().trim().toLowerCase(Locale.ROOT);
-        String host = uri.getHost() == null ? "" : uri.getHost().trim().toLowerCase(Locale.ROOT);
-        if (!"https".equals(scheme)) {
-            throw new IllegalStateException(
-                    "app.email.password-reset-base-url must use HTTPS when app.email.enabled=true and the prod profile is active.");
-        }
-        if (host.isBlank() || isLoopbackOrLinkLocalHost(host)) {
-            throw new IllegalStateException(
-                    "app.email.password-reset-base-url must target a non-loopback public host when app.email.enabled=true and the prod profile is active.");
-        }
-    }
-
-    /**
-     * Mirrors {@link AiProductionGuard}'s coverage: rejects IPv4 loopback
-     * ({@code 127/8}, {@code 0.0.0.0}), IPv4 link-local ({@code 169.254/16}),
-     * IPv6 loopback ({@code ::1}, {@code ::}), IPv6 link-local
-     * ({@code fe80::/10}), and IPv4-mapped IPv6 loopback ({@code ::ffff:127.x}).
-     * A typo of any of these would otherwise produce a "click here to reset"
-     * email pointing at infrastructure the recipient can never reach.
-     */
-    private static boolean isLoopbackOrLinkLocalHost(String host) {
-        return "localhost".equals(host)
-                || "0.0.0.0".equals(host)
-                || "::".equals(host)
-                || "::1".equals(host)
-                || host.startsWith("127.")
-                || host.startsWith("169.254.")
-                || host.startsWith("fe80:")
-                || host.startsWith("::ffff:127.")
-                || host.startsWith("::ffff:0.");
-    }
 }

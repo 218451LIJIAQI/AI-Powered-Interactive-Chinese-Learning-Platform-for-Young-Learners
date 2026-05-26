@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -29,18 +31,18 @@ import jakarta.validation.constraints.Size;
  * the correct flag.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #optionText} so Bean Validation evaluates the canonical
  * form (a paste with stray leading/trailing whitespace cannot
  * inflate the length past the cap or sneak past
  * {@link NotBlank @NotBlank}) and so the persisted option, the
  * audit log, and the
  * {@link CreateQuizQuestionRequest#correctAnswerText() denormalised
- * correct-answer text} all see the same trimmed value. {@code null}
+ * correct-answer text} all see the same stripped value. {@code null}
  * input is preserved so {@code @NotBlank} fires correctly.</p>
  *
  * @param optionText   text rendered on the option pill (1–1000
- *                     chars after trim); required
+ *                     chars after stripping); required
  * @param correctOption {@code true} when this option is the
  *                     correct answer for the parent question
  * @param displayOrder 0-based render position in the option list;
@@ -57,7 +59,7 @@ public record QuizOptionRequest(
         Integer displayOrder) {
 
     /**
-     * Defensive canonical constructor: trims {@link #optionText} so
+     * Defensive canonical constructor: strips {@link #optionText} so
      * Bean Validation sees the canonical form (preventing length-cap
      * bypass via leading/trailing whitespace) and matches the
      * service's downstream
@@ -66,6 +68,6 @@ public record QuizOptionRequest(
      * {@link NotBlank @NotBlank} fires correctly.
      */
     public QuizOptionRequest {
-        optionText = optionText == null ? null : optionText.trim();
+        optionText = strip(optionText);
     }
 }

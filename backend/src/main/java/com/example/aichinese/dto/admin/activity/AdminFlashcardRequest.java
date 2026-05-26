@@ -1,5 +1,9 @@
 package com.example.aichinese.dto.admin.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -161,6 +165,20 @@ public record AdminFlashcardRequest(
         @Min(value = 0, message = "Estimated seconds must be non-negative.")
         @Max(value = 86_400, message = "Estimated seconds must not exceed 86400 (24 hours).")
         Integer estimatedSeconds) {
+
+    public AdminFlashcardRequest {
+        title = stripToNull(title);
+        frontText = strip(frontText);
+        backText = strip(backText);
+        pinyin = stripToNull(pinyin);
+        englishMeaning = stripToNull(englishMeaning);
+        malayMeaning = stripToNull(malayMeaning);
+        imageUrl = stripToNull(imageUrl);
+        audioUrl = stripToNull(audioUrl);
+        extraPayload = stripToNull(extraPayload);
+        topic = stripToNull(topic);
+        tags = strippedStringListOrNull(tags);
+    }
 
     /**
      * Compile-time-constant regex used by the {@link Pattern} guards on

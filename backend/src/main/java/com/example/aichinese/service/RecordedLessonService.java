@@ -47,6 +47,7 @@ public class RecordedLessonService {
 
     private static final int MAX_VIDEO_TITLE_LENGTH = 200;
     private static final int MAX_VIDEO_DESCRIPTION_LENGTH = 1000;
+    private static final int MAX_VIDEO_SORT_ORDER = 10_000;
 
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LiveLearningAccessService liveLearningAccessService;
@@ -80,17 +81,21 @@ public class RecordedLessonService {
             RecordedLessonVideoRequest request,
             MultipartFile file) {
         Lesson lesson = liveLearningAccessService.requireOwnedLesson(currentUser, lessonId);
+        validateRequestInvariants(request);
         RecordedVideoSourceType sourceType = liveLearningAccessService.parseRecordedVideoSourceType(request.sourceType());
         CoursePackage coursePackage = request.packageId() == null
                 ? null
-                : liveLearningAccessService.requireOwnedPackage(currentUser, request.packageId());
+                : liveLearningAccessService.requireOwnedPackageContainingLesson(currentUser, request.packageId(), lesson.getId());
         UploadedFile uploadedFile = sourceType == RecordedVideoSourceType.UPLOADED_FILE
                 ? recordedVideoStorageService.storeRecordedVideo(file, lesson.getTeacher().getUser())
                 : null;
-        liveLearningAccessService.validateRecordedVideoSource(sourceType, request.externalVideoUrl(), uploadedFile);
+        String externalVideoUrl = liveLearningAccessService.validateRecordedVideoSource(
+                sourceType,
+                request.externalVideoUrl(),
+                uploadedFile);
 
         RecordedLessonVideo video = new RecordedLessonVideo();
-        applyVideoUpdate(video, lesson, coursePackage, request, sourceType, uploadedFile);
+        applyVideoUpdate(video, lesson, coursePackage, request, sourceType, uploadedFile, externalVideoUrl);
         RecordedLessonVideo saved = recordedLessonVideoRepository.save(video);
 
         notificationService.safeCreateNotification(
@@ -131,16 +136,20 @@ public class RecordedLessonService {
             RecordedLessonVideoRequest request,
             MultipartFile file) {
         RecordedLessonVideo video = liveLearningAccessService.requireTeacherOwnedRecordedVideo(currentUser, lessonId, videoId);
+        validateRequestInvariants(request);
         RecordedVideoSourceType sourceType = liveLearningAccessService.parseRecordedVideoSourceType(request.sourceType());
         CoursePackage coursePackage = request.packageId() == null
                 ? null
-                : liveLearningAccessService.requireOwnedPackage(currentUser, request.packageId());
+                : liveLearningAccessService.requireOwnedPackageContainingLesson(currentUser, request.packageId(), video.getLesson().getId());
         UploadedFile uploadedFile = video.getUploadedFile();
         if (sourceType == RecordedVideoSourceType.UPLOADED_FILE && file != null && !file.isEmpty()) {
             uploadedFile = recordedVideoStorageService.storeRecordedVideo(file, video.getLesson().getTeacher().getUser());
         }
-        liveLearningAccessService.validateRecordedVideoSource(sourceType, request.externalVideoUrl(), uploadedFile);
-        applyVideoUpdate(video, video.getLesson(), coursePackage, request, sourceType, uploadedFile);
+        String externalVideoUrl = liveLearningAccessService.validateRecordedVideoSource(
+                sourceType,
+                request.externalVideoUrl(),
+                uploadedFile);
+        applyVideoUpdate(video, video.getLesson(), coursePackage, request, sourceType, uploadedFile, externalVideoUrl);
         RecordedLessonVideo saved = recordedLessonVideoRepository.save(video);
 
         auditLogService.record(
@@ -223,7 +232,8 @@ public class RecordedLessonService {
             CoursePackage coursePackage,
             RecordedLessonVideoRequest request,
             RecordedVideoSourceType sourceType,
-            UploadedFile uploadedFile) {
+            UploadedFile uploadedFile,
+            String externalVideoUrl) {
         if (sourceType == RecordedVideoSourceType.UPLOADED_FILE && uploadedFile == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Uploaded file is required for recorded video.");
         }
@@ -233,13 +243,27 @@ public class RecordedLessonService {
         video.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_VIDEO_TITLE_LENGTH, "Title is required."));
         video.setDescription(contentSafetyService.optionalSafeText(request.description(), MAX_VIDEO_DESCRIPTION_LENGTH));
         video.setSourceType(sourceType);
-        video.setExternalVideoUrl(sourceType == RecordedVideoSourceType.EXTERNAL_URL && request.externalVideoUrl() != null
-                ? request.externalVideoUrl().trim()
-                : null);
+        video.setExternalVideoUrl(sourceType == RecordedVideoSourceType.EXTERNAL_URL ? externalVideoUrl : null);
         video.setUploadedFile(sourceType == RecordedVideoSourceType.UPLOADED_FILE ? uploadedFile : null);
         video.setDurationSeconds(request.durationSeconds());
         video.setSortOrder(request.sortOrder());
         video.setActive(true);
+    }
+
+    private void validateRequestInvariants(RecordedLessonVideoRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+        if (request.durationSeconds() != null && request.durationSeconds() < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Duration must not be negative.");
+        }
+        if (request.sortOrder() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Display order is required.");
+        }
+        if (request.sortOrder() < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Display order must not be negative.");
+        }
+        if (request.sortOrder() > MAX_VIDEO_SORT_ORDER) {
+            throw new ResponseStatusException(BAD_REQUEST, "Display order must not exceed 10000.");
+        }
     }
 
     private PageResponse<RecordedLessonVideoResponse> mapRecordedVideoPage(

@@ -82,6 +82,9 @@ class DatabaseMigrationConfigurationTests {
         assertThat(compose).contains("MYSQL_PASSWORD: ${DB_PASSWORD:-replace-with-a-strong-application-db-password}");
         assertThat(compose).contains("MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-replace-with-a-strong-root-db-password}");
         assertThat(compose).contains("--character-set-server=utf8mb4");
+        assertThat(compose).contains("MYSQL_PWD=\\\"$${MYSQL_PASSWORD}\\\" mysqladmin ping");
+        assertThat(compose).doesNotContain("-p${DB_PASSWORD");
+        assertThat(compose).doesNotContain("-p$${MYSQL_PASSWORD}");
         assertThat(compose).doesNotContain("MYSQL_ROOT_HOST");
         assertThat(compose).doesNotContain("MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}");
 
@@ -92,12 +95,64 @@ class DatabaseMigrationConfigurationTests {
         assertThat(validationScript).contains("$AppUsername = \"aichinese_app\"");
         assertThat(validationScript).contains("DB_USERNAME = $AppUsername");
         assertThat(validationScript).contains("DB_PASSWORD = $AppPassword");
-        assertThat(validationScript).contains("\"MYSQL_USER=$AppUsername\"");
-        assertThat(validationScript).contains("\"MYSQL_PASSWORD=$AppPassword\"");
+        assertThat(validationScript).contains("MYSQL_USER = $AppUsername");
+        assertThat(validationScript).contains("MYSQL_PASSWORD = $AppPassword");
+        assertThat(validationScript).doesNotContain("\"MYSQL_PASSWORD=$AppPassword\"");
+        assertThat(validationScript).doesNotContain("\"MYSQL_PWD=$RootPassword\"");
         assertThat(validationScript).contains("-DbUsername $AppUsername");
         assertThat(validationScript).contains("fresh consolidated V1 migration history");
         assertThat(validationScript).contains("fresh point-award source uniqueness");
         assertThat(validationScript).contains("fresh active reset token uniqueness");
+    }
+
+    @Test
+    void productionOperationalConfigPinsHealthChecksCachingAndCiQualityGates() throws IOException {
+        String productionCompose = readResource("../docker-compose.prod.yml");
+        String backendDockerfile = readResource("Dockerfile");
+        String frontendDockerfile = readResource("../frontend/Dockerfile");
+        String productionEnv = readResource("../.env.prod.example");
+        String nginx = readResource("../frontend/nginx.conf");
+        String qualityGate = readResource("../.github/workflows/repository-quality-gate.yml");
+
+        assertThat(productionCompose).contains("MYSQL_PWD=\\\"$${MYSQL_PASSWORD}\\\" mysqladmin ping");
+        assertThat(productionCompose).doesNotContain("-p${DB_PASSWORD");
+        assertThat(productionCompose).doesNotContain("-p$${MYSQL_PASSWORD}");
+        assertThat(productionCompose).contains("curl -fsS http://127.0.0.1:8080/actuator/health/readiness >/dev/null");
+        assertThat(productionCompose).contains("condition: service_healthy");
+        assertThat(productionCompose).contains("curl -fsS http://127.0.0.1:8080/ >/dev/null");
+        assertThat(productionCompose).contains("VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}");
+
+        assertThat(backendDockerfile).contains("apk add --no-cache curl");
+        assertThat(backendDockerfile).contains("HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3");
+        assertThat(backendDockerfile).contains("curl -fsS http://127.0.0.1:8080/actuator/health/readiness");
+        assertThat(frontendDockerfile).contains("ARG VITE_API_BASE_URL=/api/v1");
+        assertThat(frontendDockerfile).contains("ENV VITE_API_BASE_URL=$VITE_API_BASE_URL");
+        assertThat(frontendDockerfile).contains("apk add --no-cache curl");
+        assertThat(frontendDockerfile).contains("COPY --from=build --chown=nginx:nginx /workspace/dist /usr/share/nginx/html");
+        assertThat(frontendDockerfile).contains("HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3");
+        assertThat(frontendDockerfile).contains("curl -fsS http://127.0.0.1:8080/");
+        assertThat(productionEnv).contains("VITE_API_BASE_URL=/api/v1");
+
+        assertThat(nginx).contains("location = /index.html");
+        assertThat(nginx).contains("location ~ ^/(sw\\.js|registerSW\\.js|manifest\\.webmanifest)$");
+        assertThat(nginx).contains("Cache-Control \"no-cache, no-store, must-revalidate\"");
+        assertThat(nginx).contains("Cache-Control \"public, max-age=604800, immutable\"");
+
+        assertThat(qualityGate).contains("Frontend format check");
+        assertThat(qualityGate).contains("npm run format:check");
+        assertThat(qualityGate).contains("Validate Docker Compose configuration");
+        assertThat(qualityGate).contains("env_file=\"${RUNNER_TEMP}/quality-gate.prod.env\"");
+        assertThat(qualityGate).contains("trap 'rm -f \"${env_file}\"' EXIT");
+        assertThat(qualityGate).contains("docker compose --env-file \"${env_file}\" -f docker-compose.prod.yml config >/dev/null");
+        assertThat(qualityGate).contains("docker compose -f backend/docker-compose.yml config >/dev/null");
+        assertThat(qualityGate).contains("STRIPE_API_KEY=quality-gate-stripe-key-placeholder");
+        assertThat(qualityGate).contains("STRIPE_WEBHOOK_SECRET=quality-gate-stripe-webhook-placeholder");
+        assertThat(qualityGate).doesNotContain("sk_live_");
+        assertThat(qualityGate).doesNotContain("sk_test_");
+        assertThat(qualityGate).doesNotContain("whsec_");
+        assertThat(qualityGate).contains("Backend static analysis");
+        assertThat(qualityGate).contains("spotbugs:check");
+        assertThat(qualityGate).contains("-DskipOpenApiContract=false");
     }
 
     @Test
@@ -109,6 +164,8 @@ class DatabaseMigrationConfigurationTests {
         assertThat(migration).contains("Baseline blocked: duplicate payment entitlement tuples exist");
         assertThat(migration).contains("Baseline blocked: multiple active refund requests exist for an order");
         assertThat(migration).contains("Baseline blocked: duplicate teacher earning rows exist for an order item");
+        assertThat(migration).contains("add constraint idx_orders_order_number unique (order_number)");
+        assertThat(migration).doesNotContain("UKnthkiu7pgmnqnu86i2jyoe2v7");
         assertThat(migration).contains("add constraint chk_orders_total_amount_non_negative");
         assertThat(migration).contains("add constraint uk_payment_entitlements_order_item_feature");
         assertThat(migration).contains("add constraint uk_refund_requests_active_order");
@@ -138,6 +195,7 @@ class DatabaseMigrationConfigurationTests {
         assertThat(migration).contains("add constraint uk_student_progress_student");
         assertThat(migration).contains("add constraint uk_daily_streaks_student");
         assertThat(migration).contains("add constraint uk_points_transactions_student_source");
+        assertThat(migration).doesNotContain("chk_points_transactions_delta_non_negative");
         assertThat(migration).contains("add constraint uk_password_reset_tokens_active_user");
         assertThat(migration).contains("add constraint chk_video_progress_watched_within_total");
         assertThat(migration).contains("create index idx_audit_logs_target_created");
@@ -191,6 +249,38 @@ class DatabaseMigrationConfigurationTests {
         assertThat(validationScript).doesNotContain("$EscapedPassword");
         assertThat(validationScript).doesNotContain("ConvertTo-SecureString '$");
         assertThat(validationScript).contains("AICHINESE_FLYWAY_REPAIR_PASSWORD");
+    }
+
+    @Test
+    void databaseBackupAndRestoreScriptsVerifyArtifactsSafely() throws IOException {
+        String backupScript = readResource("../scripts/backup-db.sh");
+        String restoreScript = readResource("../scripts/restore-db.sh");
+
+        assertThat(backupScript).contains("umask 077");
+        assertThat(backupScript).contains("require_command mysqldump");
+        assertThat(backupScript).contains("require_command gzip");
+        assertThat(backupScript).contains("require_command sha256sum");
+        assertThat(backupScript).contains("require_command awk");
+        assertThat(backupScript).contains("--hex-blob");
+        assertThat(backupScript).contains("--default-character-set=utf8mb4");
+        assertThat(backupScript).contains("sha256sum \"$tmp_target\"");
+        assertThat(backupScript).contains("printf '%s  %s\\n' \"$checksum\"");
+        assertThat(backupScript).contains("must not start with a hyphen");
+        assertThat(backupScript).doesNotContain("sha256sum \"$target\" > \"$target.sha256\"");
+
+        assertThat(restoreScript).contains("read_checksum_digest()");
+        assertThat(restoreScript).contains("mapfile -t checksum_lines");
+        assertThat(restoreScript).contains("Checksum file must contain exactly one entry");
+        assertThat(restoreScript).contains("actual_checksum=\"$(sha256sum \"$backup_path\")\"");
+        assertThat(restoreScript).contains("Checksum verification failed");
+        assertThat(restoreScript).contains("gzip -t -- \"$backup_path\"");
+        assertThat(restoreScript).contains("RESTORE_ALLOW_UNVERIFIED");
+        assertThat(restoreScript).contains("--binary-mode=1");
+        assertThat(restoreScript).contains("--default-character-set=utf8mb4");
+        assertThat(restoreScript).contains("must not start with a hyphen");
+        assertThat(restoreScript).doesNotContain("sha256sum --check");
+        assertThat(restoreScript).doesNotContain("require_command wc");
+        assertThat(restoreScript).doesNotContain("require_command tr");
     }
 
     private String readResource(String path) throws IOException {

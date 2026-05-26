@@ -44,17 +44,30 @@ import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { resolveBrowserExecutablePath } from './lib/browser-runtime.mjs'
+import {
+  normalizeHttpBaseUrl,
+  parseTcpPort,
+  redactText,
+  resolveBrowserExecutablePath,
+  safeJsonStringify,
+  sanitizeForEvidence,
+  sanitizeUrlForEvidence,
+  stopProcessTree,
+  tailTextForEvidence,
+} from './lib/browser-runtime.mjs'
 
-const baseUrl = process.env.QA_BASE_URL || 'http://127.0.0.1:5176'
-const apiBaseUrl = process.env.QA_API_BASE_URL || 'http://127.0.0.1:8081/api/v1'
+const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5176', 'QA_BASE_URL')
+const apiBaseUrl = normalizeHttpBaseUrl(
+  process.env.QA_API_BASE_URL || 'http://127.0.0.1:8081/api/v1',
+  'QA_API_BASE_URL',
+)
 const adminEmail = process.env.QA_ADMIN_EMAIL || 'admin@example.com'
 const adminPassword = process.env.QA_ADMIN_PASSWORD || 'SuperSecure123!'
 const qaPassword = process.env.QA_PASSWORD || 'Password123!'
 const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
 let reportId = Number(process.env.QA_AI_REPORT_ID || 0)
 const chromePath = resolveBrowserExecutablePath()
-const debuggingPort = Number(process.env.QA_CHROME_PORT || 9231)
+const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9231', 'QA_CHROME_PORT')
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-ai-report-review-ui`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-ai-report-review-${timestamp}`)
@@ -80,7 +93,7 @@ async function fetchJson(url, options) {
   const response = await fetch(url, options)
   const json = await response.json()
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}: ${JSON.stringify(json)}`)
+    throw new Error(`${response.status} ${response.statusText}: ${safeJsonStringify(json)}`)
   }
   return json
 }
@@ -158,7 +171,7 @@ async function waitForReviewedReport(reportId, token, timeoutMs = 25000) {
     await sleep(250)
   }
 
-  throw new Error(`Timed out waiting for resolved report: ${JSON.stringify(lastValue)}`)
+  throw new Error(`Timed out waiting for resolved report: ${safeJsonStringify(lastValue)}`)
 }
 
 function createCdpClient(webSocketUrl) {
@@ -272,9 +285,9 @@ async function main() {
       if (params.response?.url?.includes('/api/v1/')) {
         report.network.push({
           method: request.method,
-          url: params.response.url,
+          url: sanitizeUrlForEvidence(params.response.url),
           status: params.response.status,
-          requestBody: request.postData,
+          requestBody: sanitizeForEvidence(request.postData),
         })
       }
     })
@@ -283,7 +296,7 @@ async function main() {
       if (request.url?.includes('/api/v1/')) {
         report.networkFailures.push({
           method: request.method,
-          url: request.url,
+          url: sanitizeUrlForEvidence(request.url),
           errorText: params.errorText,
           blockedReason: params.blockedReason,
           canceled: params.canceled,
@@ -310,7 +323,9 @@ async function main() {
         if (lastValue) return lastValue
         await sleep(250)
       }
-      throw new Error(`Timed out waiting for browser condition: ${predicateSource}; last=${JSON.stringify(lastValue)}`)
+      throw new Error(
+        `Timed out waiting for browser condition: ${predicateSource}; last=${safeJsonStringify(lastValue)}`,
+      )
     }
 
     async function submitReviewForm(selector) {
@@ -340,7 +355,7 @@ async function main() {
         })()
       `)
       if (!state || state.disabled) {
-        throw new Error(`Cannot submit ${selector}: ${JSON.stringify(state)}`)
+        throw new Error(`Cannot submit ${selector}: ${safeJsonStringify(state)}`)
       }
       return state
     }
@@ -417,7 +432,7 @@ async function main() {
       )
       report.submitButton = await submitReviewForm('.admin-moderation-page form button[type="submit"]')
       if (!report.submitButton || report.submitButton.disabled) {
-        throw new Error(`Cannot submit AI report review: ${JSON.stringify(report.submitButton)}`)
+        throw new Error(`Cannot submit AI report review: ${safeJsonStringify(report.submitButton)}`)
       }
       const reviewedSnapshot = await waitForReviewedReport(reportId, token)
       await waitFor(
@@ -432,7 +447,9 @@ async function main() {
         errors: [],
       }
     } else {
-      throw new Error(`Target AI report form was unexpectedly disabled before review: ${JSON.stringify(reportState)}`)
+      throw new Error(
+        `Target AI report form was unexpectedly disabled before review: ${safeJsonStringify(reportState)}`,
+      )
     }
 
     await sleep(1250)
@@ -466,19 +483,19 @@ async function main() {
     mainError = error
     report.error = {
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      stack: error instanceof Error ? redactText(error.stack) : undefined,
     }
   } finally {
     client?.close()
-    chrome.kill('SIGKILL')
+    await stopProcessTree(chrome)
     await sleep(750)
     try {
       await rm(userDataDir, { recursive: true, force: true })
     } catch (error) {
       report.cleanupWarning = error instanceof Error ? error.message : String(error)
     }
-    report.chromeLogs = chromeLogs.join('').slice(-4000)
-    await writeFile(path.join(evidenceDir, 'ai-report-review-ui-report.json'), JSON.stringify(report, null, 2))
+    report.chromeLogs = tailTextForEvidence(chromeLogs.join(''), 4000)
+    await writeFile(path.join(evidenceDir, 'ai-report-review-ui-report.json'), safeJsonStringify(report))
   }
 
   if (mainError) {
@@ -486,10 +503,10 @@ async function main() {
   }
 
   if (!report.pass) {
-    throw new Error(`AI report review UI verification failed: ${JSON.stringify(report, null, 2)}`)
+    throw new Error(`AI report review UI verification failed: ${safeJsonStringify(report)}`)
   }
   console.log(
-    JSON.stringify(
+    safeJsonStringify(
       {
         pass: report.pass,
         evidenceDir,

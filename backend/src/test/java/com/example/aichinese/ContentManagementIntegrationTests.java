@@ -22,7 +22,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.Support.TestUploadFixtures;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;

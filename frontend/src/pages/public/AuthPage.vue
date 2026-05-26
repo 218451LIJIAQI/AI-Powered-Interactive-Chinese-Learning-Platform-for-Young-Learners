@@ -396,6 +396,7 @@ import type { UserRole } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 import { defaultRouteForRole } from '@/utils/role'
+import { getSessionStorage, safeSetItem, storageKeys } from '@/utils/storage'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -619,8 +620,10 @@ function selectRegisterRole(role: 'STUDENT' | 'TEACHER') {
 }
 
 function openForgotPassword() {
-  const query = loginEmailValid.value ? { email: normalizedLoginEmail.value } : undefined
-  void router.push({ name: 'forgot-password', query })
+  if (loginEmailValid.value) {
+    safeSetItem(storageKeys.recoveryEmail, normalizedLoginEmail.value, getSessionStorage())
+  }
+  void router.push({ name: 'forgot-password' })
 }
 
 function previewRole(role: UserRole, destination: string) {

@@ -141,6 +141,9 @@ public class ContentModerationService {
             SecurityUserDetails currentUser,
             CreateModerationActionRequest request,
             ContentModerationAction action) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Moderation action request is required.");
+        }
         User admin = requireUser(currentUser.getUserId());
         CommunicationTargetResolver.ResolvedTarget target = communicationTargetResolver.resolveModerationTarget(
                 request.targetType(),

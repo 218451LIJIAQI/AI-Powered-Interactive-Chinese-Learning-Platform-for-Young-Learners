@@ -2,8 +2,11 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
+import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +57,7 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
 public class CheckoutService {
 
     private static final Logger log = LoggerFactory.getLogger(CheckoutService.class);
+    static final int MAX_CHECKOUT_ITEMS = CartService.MAX_CART_ITEMS;
 
     private final StudentLearningAccessService studentLearningAccessService;
     private final CartService cartService;
@@ -84,18 +88,26 @@ public class CheckoutService {
     public CheckoutResponse checkoutCart(SecurityUserDetails currentUser) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         List<CartItem> cartItems = cartService.getCartItems(currentUser);
-        if (cartItems.isEmpty()) {
+        if (cartItems == null || cartItems.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Cart is empty.");
+        }
+        if (cartItems.size() > MAX_CHECKOUT_ITEMS) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Checkout can contain at most " + MAX_CHECKOUT_ITEMS + " items.");
         }
 
         List<ResolvedPurchasableItem> resolvedItems = cartItems.stream()
-                .map(item -> purchasableItemService.resolve(item.getItemType(), item.getItemId(), null))
+                .map(this::resolveCartCheckoutItem)
                 .toList();
         return createCheckout(currentUser, student, CheckoutSource.CART, resolvedItems);
     }
 
     @Transactional
     public CheckoutResponse buyNow(SecurityUserDetails currentUser, CheckoutSessionItemRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout item request is required.");
+        }
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         ResolvedPurchasableItem resolvedItem = purchasableItemService.resolve(
                 request.itemType(),
@@ -109,10 +121,28 @@ public class CheckoutService {
             StudentProfile student,
             CheckoutSource source,
             List<ResolvedPurchasableItem> items) {
-        if (items.isEmpty()) {
+        if (items == null || items.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "At least one item is required for checkout.");
         }
+        if (items.size() > MAX_CHECKOUT_ITEMS) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Checkout can contain at most " + MAX_CHECKOUT_ITEMS + " items.");
+        }
+        Set<String> seenItems = new HashSet<>(items.size());
         for (ResolvedPurchasableItem item : items) {
+            if (item == null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Checkout item must not be null.");
+            }
+            if (item.itemType() == null || item.itemId() == null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Checkout item is missing its identity.");
+            }
+            if (!seenItems.add(item.itemType().name() + ":" + item.itemId())) {
+                throw new ResponseStatusException(BAD_REQUEST, "Checkout contains duplicate items.");
+            }
+            if (item.unitPrice() == null || item.unitPrice().signum() < 0) {
+                throw new ResponseStatusException(BAD_REQUEST, "Checkout item has an invalid price.");
+            }
             if (entitlementService.hasAccessToPurchasableItem(student, item)) {
                 throw new ResponseStatusException(BAD_REQUEST,
                         "You already have access to: " + item.title());
@@ -170,5 +200,27 @@ public class CheckoutService {
         return paymentService.startCheckout(
                 currentUser, student, order, paymentRecord, orderItems,
                 successUrl, cancelUrl);
+    }
+
+    private ResolvedPurchasableItem resolveCartCheckoutItem(CartItem cartItem) {
+        if (cartItem == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Cart contains an invalid item.");
+        }
+        ResolvedPurchasableItem currentItem = purchasableItemService.resolve(
+                cartItem.getItemType(), cartItem.getItemId(), null);
+        BigDecimal capturedPrice = cartItem.getUnitPrice();
+        if (currentItem.freeItem() || capturedPrice == null || capturedPrice.signum() <= 0) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "A cart item is no longer eligible for paid checkout. Please remove it and try again.");
+        }
+        return new ResolvedPurchasableItem(
+                currentItem.itemType(),
+                currentItem.itemId(),
+                currentItem.title(),
+                capturedPrice,
+                currentItem.currencyCode(),
+                currentItem.teacher(),
+                false,
+                currentItem.relatedFeatureKey());
     }
 }

@@ -45,6 +45,9 @@ jobs:
       - name: Frontend lint
         run: npm run lint
 
+      - name: Frontend format check
+        run: npm run format:check
+
       - name: Frontend unit tests
         run: npm run test:unit
 
@@ -103,6 +106,28 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate Docker Compose configuration
+        run: |
+          env_file="${RUNNER_TEMP}/quality-gate.prod.env"
+          trap 'rm -f "${env_file}"' EXIT
+          cat > "${env_file}" <<'EOF'
+          DB_ROOT_PASSWORD=quality-gate-root-password
+          DB_PASSWORD=quality-gate-application-password
+          JWT_SECRET=quality-gate-jwt-secret-with-more-than-32-characters
+          FRONTEND_BASE_URL=https://learn.example.com
+          APP_CORS_ALLOWED_ORIGINS=https://learn.example.com
+          AI_API_KEY=quality-gate-ai-key
+          STRIPE_API_KEY=quality-gate-stripe-key-placeholder
+          STRIPE_WEBHOOK_SECRET=quality-gate-stripe-webhook-placeholder
+          PAYMENT_SUCCESS_URL=https://learn.example.com/payment/success
+          PAYMENT_CANCEL_URL=https://learn.example.com/payment/cancel
+          SMTP_HOST=smtp.example.com
+          PASSWORD_RESET_BASE_URL=https://learn.example.com/reset-password
+          VITE_API_BASE_URL=/api/v1
+          EOF
+          docker compose --env-file "${env_file}" -f docker-compose.prod.yml config >/dev/null
+          docker compose -f backend/docker-compose.yml config >/dev/null
 
       - name: Dependency review
         if: github.event_name == 'pull_request'

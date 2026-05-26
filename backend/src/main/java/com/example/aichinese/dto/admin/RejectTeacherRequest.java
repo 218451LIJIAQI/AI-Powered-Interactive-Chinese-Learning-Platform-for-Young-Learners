@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.admin;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -29,7 +31,7 @@ import jakarta.validation.constraints.Size;
  * </ul>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #reason} so:</p>
  * <ul>
  *   <li>{@link Size @Size(max=1000)} is evaluated against the
@@ -43,14 +45,14 @@ import jakarta.validation.constraints.Size;
  *       the service's redundant guard.</li>
  *   <li>Every downstream consumer (profile field, review row, email
  *       body, notification) receives the same canonical string,
- *       eliminating the previous pattern of {@code reason.trim()}
+ *       eliminating repeated ad hoc normalisation
  *       being repeated at every persistence call site.</li>
  * </ul>
  * <p>{@code null} is preserved so {@link NotBlank @NotBlank} renders
  * the user-facing "Rejection reason is required." message rather than
  * a low-level {@link NullPointerException}.</p>
  *
- * @param reason explanation surfaced to the teacher; trimmed by the
+ * @param reason explanation surfaced to the teacher; stripped by the
  *               canonical constructor; required and capped at
  *               1000 characters
  */
@@ -61,7 +63,7 @@ public record RejectTeacherRequest(
         String reason) {
 
     /**
-     * Defensive canonical constructor: trims surrounding whitespace
+     * Defensive canonical constructor: strips surrounding Unicode whitespace
      * from {@link #reason} so every downstream consumer (profile
      * rejection-reason column, review row, email body, in-app
      * notification) receives the canonical form. {@code null} is
@@ -70,8 +72,6 @@ public record RejectTeacherRequest(
      * {@link NullPointerException}.
      */
     public RejectTeacherRequest {
-        if (reason != null) {
-            reason = reason.trim();
-        }
+        reason = strip(reason);
     }
 }

@@ -165,9 +165,10 @@
                   class="select"
                   :disabled="classComposerDisabled"
                 >
-                  <option value="Zoom">Zoom</option>
-                  <option value="Google Meet">Google Meet</option>
-                  <option value="Microsoft Teams">Microsoft Teams</option>
+                  <option value="ZOOM">Zoom</option>
+                  <option value="GOOGLE_MEET">Google Meet</option>
+                  <option value="MICROSOFT_TEAMS">Microsoft Teams</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
             </div>
@@ -515,8 +516,10 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import type { CoursePackageResponse, LessonResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDate } from '@/utils/format'
+import { clampPercent, formatDate, nonNegativeInteger, ratioPercent } from '@/utils/format'
 import { openSafeHttpUrl } from '@/utils/url'
+
+type MeetingPlatformValue = TeacherLiveClassPayload['meetingPlatform']
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -678,7 +681,7 @@ const classForm = reactive<TeacherLiveClassPayload>({
   startTime: '',
   endTime: '',
   meetingLink: '',
-  meetingPlatform: 'Zoom',
+  meetingPlatform: 'ZOOM',
   status: 'SCHEDULED',
   maxParticipants: 20,
 })
@@ -700,8 +703,10 @@ const selectedLiveClass = computed(() => liveClasses.value.find((item) => item.i
 const liveClassCards = computed(() =>
   liveClasses.value.slice(0, 3).map((item, index) => {
     const start = new Date(item.startTime)
+    const platform = normalizeMeetingPlatform(item.meetingPlatform)
+    const platformLabel = formatMeetingPlatform(platform)
     const platformMeta =
-      item.meetingPlatform === 'Google Meet'
+      platform === 'GOOGLE_MEET'
         ? `Meeting code: ${meetingCodeFromLink(item.meetingLink)}`
         : `Meeting ID: ${meetingCodeFromLink(item.meetingLink)}`
 
@@ -713,11 +718,11 @@ const liveClassCards = computed(() =>
       timeLabel: new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(start),
       dayLabel: formatClassDate(start),
       classCode: formatStatus(item.liveClassStatus),
-      platform: item.meetingPlatform,
+      platform: platformLabel,
       platformMeta,
       meetingLink: item.meetingLink,
-      platformGlyph: item.meetingPlatform.slice(0, 1).toUpperCase() || 'M',
-      platformTone: item.meetingPlatform.includes('Google') ? 'green' : 'blue',
+      platformGlyph: platformLabel.slice(0, 1).toUpperCase() || 'M',
+      platformTone: platform === 'GOOGLE_MEET' ? 'green' : 'blue',
       thumbLabel: thumbCopy(item),
       art: ['purple', 'orange', 'festival'][index % 3],
       tone: index === 0 ? 'purple' : index === 1 ? 'orange' : 'blue',
@@ -726,16 +731,19 @@ const liveClassCards = computed(() =>
 )
 
 const recordingCards = computed(() =>
-  recordedVideos.value.slice(0, 3).map((item, index) => ({
-    id: item.id,
-    title: item.title,
-    meta: `Lesson ${item.lessonId} - ${formatDate(item.createdAt)}`,
-    lengthLabel: item.durationSeconds
-      ? `${Math.max(1, Math.round(item.durationSeconds / 60))}m`
-      : 'Duration unavailable',
-    thumbLabel: item.title.slice(0, 6) || 'play',
-    art: ['purple', 'orange', 'festival'][index % 3],
-  })),
+  recordedVideos.value.slice(0, 3).map((item, index) => {
+    const durationSeconds = nonNegativeInteger(item.durationSeconds)
+
+    return {
+      id: item.id,
+      title: item.title,
+      meta: `Lesson ${item.lessonId} - ${formatDate(item.createdAt)}`,
+      lengthLabel:
+        durationSeconds > 0 ? `${Math.max(1, nonNegativeInteger(durationSeconds / 60))}m` : 'Duration unavailable',
+      thumbLabel: item.title.slice(0, 6) || 'play',
+      art: ['purple', 'orange', 'festival'][index % 3],
+    }
+  }),
 )
 
 const attendedCount = computed(() => enrolments.value.filter((item) => item.attendedAt).length)
@@ -745,7 +753,7 @@ const pendingCheckInCount = computed(
 const cancelledCount = computed(() => enrolments.value.filter((item) => item.enrolmentStatus === 'CANCELLED').length)
 const totalRosterCount = computed(() => enrolments.value.length)
 const presentCount = computed(() => attendedCount.value)
-const attendanceRate = computed(() => Math.round((presentCount.value / Math.max(totalRosterCount.value, 1)) * 100))
+const attendanceRate = computed(() => ratioPercent(presentCount.value, totalRosterCount.value))
 
 const attendanceLegend = computed(() => {
   const total = Math.max(totalRosterCount.value, 1)
@@ -754,19 +762,19 @@ const attendanceLegend = computed(() => {
     {
       label: 'Checked in',
       count: presentCount.value,
-      percent: Math.round((presentCount.value / total) * 100),
+      percent: ratioPercent(presentCount.value, total),
       tone: 'green',
     },
     {
       label: 'Pending',
       count: pendingCheckInCount.value,
-      percent: Math.round((pendingCheckInCount.value / total) * 100),
+      percent: ratioPercent(pendingCheckInCount.value, total),
       tone: 'yellow',
     },
     {
       label: 'Cancelled',
       count: cancelledCount.value,
-      percent: Math.round((cancelledCount.value / total) * 100),
+      percent: ratioPercent(cancelledCount.value, total),
       tone: 'red',
     },
   ]
@@ -800,8 +808,8 @@ const reminderCards = computed(() => {
 const assignmentCards = computed(() => {
   const totalVideos = Math.max(recordedVideos.value.length, 1)
   const completedVideoViews = videoProgress.value.filter((item) => item.completed).length
-  const progressAverage = Math.round(
-    videoProgress.value.reduce((sum, item) => sum + item.progressPercentage, 0) /
+  const progressAverage = clampPercent(
+    videoProgress.value.reduce((sum, item) => sum + clampPercent(item.progressPercentage), 0) /
       Math.max(videoProgress.value.length, 1),
   )
 
@@ -811,7 +819,7 @@ const assignmentCards = computed(() => {
       classCode: selectedLiveClass.value ? formatStatus(selectedLiveClass.value.liveClassStatus) : 'Recordings',
       deadline: `${recordedVideos.value.length} recording(s)`,
       progressLabel: `${completedVideoViews} completed video view(s) from loaded progress records`,
-      progress: Math.round((completedVideoViews / Math.max(videoProgress.value.length, 1)) * 100),
+      progress: ratioPercent(completedVideoViews, videoProgress.value.length),
       icon: 'play',
       tone: 'green',
     },
@@ -822,7 +830,7 @@ const assignmentCards = computed(() => {
       progressLabel: videoProgress.value.length
         ? `${videoProgress.value.length} learner progress record(s)`
         : 'No video progress records loaded yet',
-      progress: Math.max(0, Math.min(100, progressAverage)),
+      progress: progressAverage,
       icon: 'status',
       tone: 'orange',
     },
@@ -831,7 +839,7 @@ const assignmentCards = computed(() => {
       classCode: 'Roster context',
       deadline: `${analytics.value.overview.totalActiveStudents} total active`,
       progressLabel: `${enrolments.value.length} learner(s) in the selected roster`,
-      progress: Math.round((enrolments.value.length / Math.max(analytics.value.overview.totalActiveStudents, 1)) * 100),
+      progress: ratioPercent(enrolments.value.length, analytics.value.overview.totalActiveStudents),
       icon: 'students',
       tone: 'purple',
     },
@@ -911,6 +919,24 @@ function formatStatus(status: string) {
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
+function normalizeMeetingPlatform(value: string | null | undefined): MeetingPlatformValue {
+  const normalized = (value ?? '')
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase()
+
+  if (normalized === 'ZOOM') return 'ZOOM'
+  if (normalized === 'GOOGLE_MEET' || normalized === 'MEET') return 'GOOGLE_MEET'
+  if (normalized === 'MICROSOFT_TEAMS' || normalized === 'MS_TEAMS' || normalized === 'TEAMS') {
+    return 'MICROSOFT_TEAMS'
+  }
+  return 'OTHER'
+}
+
+function formatMeetingPlatform(value: string | null | undefined) {
+  return formatStatus(normalizeMeetingPlatform(value))
+}
+
 function thumbCopy(item: { title: string }) {
   return item.title.slice(0, 6) || 'class'
 }
@@ -924,7 +950,7 @@ function applyClassToForm(item: (typeof liveClasses.value)[number]) {
   classForm.startTime = toInputDateTime(item.startTime)
   classForm.endTime = toInputDateTime(item.endTime)
   classForm.meetingLink = item.meetingLink ?? ''
-  classForm.meetingPlatform = item.meetingPlatform || 'Zoom'
+  classForm.meetingPlatform = normalizeMeetingPlatform(item.meetingPlatform)
   classForm.status = item.liveClassStatus || 'SCHEDULED'
   classForm.maxParticipants = item.maxParticipants ?? 20
 }
@@ -945,7 +971,7 @@ function resetComposer() {
   classForm.startTime = toInputDateTime(tomorrow.toISOString())
   classForm.endTime = toInputDateTime(end.toISOString())
   classForm.meetingLink = ''
-  classForm.meetingPlatform = 'Zoom'
+  classForm.meetingPlatform = 'ZOOM'
   classForm.status = 'SCHEDULED'
   classForm.maxParticipants = 20
 }

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.temporal.ChronoUnit;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
@@ -221,6 +222,7 @@ class AuthControllerIntegrationTests {
                 .with(csrf())
                 .cookie(new MockCookie("mandarin_spark_refresh", initialRefreshToken)))
                 .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
                 .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=")))
                 .andExpect(jsonPath("$.data.token").isString())
                 .andReturn();
@@ -256,10 +258,12 @@ class AuthControllerIntegrationTests {
         String accessToken = extractToken(loginResult);
         String refreshToken = extractRefreshCookieValue(loginResult);
         User user = userRepository.findByEmailWithRoles(email).orElseThrow();
-        assertThat(refreshTokenRepository.findAll().stream()
+        var issuedRefreshToken = refreshTokenRepository.findAll().stream()
                 .filter(token -> token.getUser() != null && token.getUser().getId().equals(user.getId()))
                 .filter(token -> token.getRevokedAt() == null)
-                .count()).isEqualTo(1L);
+                .findFirst()
+                .orElseThrow();
+        assertThat(issuedRefreshToken.getUpdatedAt()).isNotNull();
 
         mockMvc.perform(post("/api/v1/auth/logout")
                 .with(csrf())
@@ -269,6 +273,10 @@ class AuthControllerIntegrationTests {
                 .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=;")))
                 .andExpect(header().string("Set-Cookie", containsString("Max-Age=0")));
 
+        var revokedRefreshToken = refreshTokenRepository.findById(Objects.requireNonNull(issuedRefreshToken.getId()))
+                .orElseThrow();
+        assertThat(revokedRefreshToken.getRevokedAt()).isNotNull();
+        assertThat(revokedRefreshToken.getUpdatedAt()).isEqualTo(revokedRefreshToken.getRevokedAt());
         assertThat(refreshTokenRepository.findAll().stream()
                 .filter(token -> token.getUser() != null && token.getUser().getId().equals(user.getId()))
                 .filter(token -> token.getRevokedAt() == null)
@@ -755,17 +763,21 @@ class AuthControllerIntegrationTests {
                 .findFirst()
                 .orElseThrow();
         Long tokenId = Objects.requireNonNull(token.getId());
+        LocalDateTime consumeAt = LocalDateTime.now();
 
         int firstConsume = passwordResetTokenRepository.consumeActiveToken(
                 tokenId,
-                LocalDateTime.now());
+                consumeAt);
         int replayConsume = passwordResetTokenRepository.consumeActiveToken(
                 tokenId,
                 LocalDateTime.now());
 
         assertThat(firstConsume).isEqualTo(1);
         assertThat(replayConsume).isZero();
-        assertThat(passwordResetTokenRepository.findById(tokenId).orElseThrow().getUsedAt()).isNotNull();
+        PasswordResetToken consumedToken = passwordResetTokenRepository.findById(tokenId).orElseThrow();
+        assertThat(consumedToken.getUsedAt()).isEqualTo(consumedToken.getUpdatedAt());
+        assertThat(Math.abs(ChronoUnit.MICROS.between(consumeAt, consumedToken.getUsedAt())))
+                .isLessThanOrEqualTo(1L);
     }
 
     @Test

@@ -31,21 +31,30 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-import { waitForHttpOk } from './lib/browser-runtime.mjs'
+import {
+  normalizeHttpBaseUrl,
+  parseTcpPort,
+  redactText,
+  stopProcessTree,
+  tailTextForEvidence,
+  waitForHttpOk,
+} from './lib/browser-runtime.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendDir = path.resolve(scriptDir, '..')
 const viteBin = path.resolve(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js')
 const flowScript = path.resolve(scriptDir, 'browser-qa-flows.mjs')
 const host = process.env.QA_FRONTEND_HOST || '127.0.0.1'
-const requestedPort = Number(process.env.QA_FRONTEND_PORT || '5174')
-const configuredApiHealthUrl = process.env.QA_API_HEALTH_URL || ''
+const requestedPort = parseTcpPort(process.env.QA_FRONTEND_PORT || '5174', 'QA_FRONTEND_PORT')
+const configuredApiHealthUrl = process.env.QA_API_HEALTH_URL
+  ? normalizeHttpBaseUrl(process.env.QA_API_HEALTH_URL, 'QA_API_HEALTH_URL')
+  : ''
 const defaultApiHealthUrls = [
   'http://localhost:8080/actuator/health',
   'http://127.0.0.1:8080/actuator/health',
@@ -77,38 +86,6 @@ function pipeToBuffer(stream, chunks, label) {
   })
 }
 
-async function stopProcessTree(processHandle) {
-  if (!processHandle || processHandle.killed || processHandle.exitCode !== null) return
-
-  if (process.platform === 'win32') {
-    await new Promise((resolve) => {
-      const killer = spawn('taskkill', ['/pid', String(processHandle.pid), '/t', '/f'], { stdio: 'ignore' })
-      const timeout = setTimeout(resolve, 5000)
-      killer.on('error', () => {
-        clearTimeout(timeout)
-        resolve()
-      })
-      killer.on('exit', () => {
-        clearTimeout(timeout)
-        resolve()
-      })
-    })
-    return
-  }
-
-  processHandle.kill('SIGTERM')
-  await new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      processHandle.kill('SIGKILL')
-      resolve()
-    }, 5000)
-    processHandle.once('exit', () => {
-      clearTimeout(timeout)
-      resolve()
-    })
-  })
-}
-
 async function canBindPort(hostname, port) {
   return new Promise((resolve) => {
     const server = net.createServer()
@@ -134,14 +111,13 @@ async function main() {
   if (!existsSync(viteBin)) {
     throw new Error(`Vite executable not found at ${viteBin}. Run \`cd frontend && npm install\` first.`)
   }
-  if (!Number.isInteger(requestedPort) || requestedPort <= 0) {
-    throw new Error(`QA_FRONTEND_PORT must be a positive integer. Received: ${process.env.QA_FRONTEND_PORT}`)
-  }
-
   await mkdir(logDir, { recursive: true })
 
   const apiHealthUrl = await resolveApiHealthUrl()
-  const apiBaseUrl = process.env.VITE_API_BASE_URL || process.env.QA_API_BASE_URL || deriveApiBaseUrl(apiHealthUrl)
+  const apiBaseUrl = normalizeHttpBaseUrl(
+    process.env.VITE_API_BASE_URL || process.env.QA_API_BASE_URL || deriveApiBaseUrl(apiHealthUrl),
+    'QA_API_BASE_URL',
+  )
 
   process.stdout.write(`Waiting for backend health at ${apiHealthUrl}\n`)
   await waitForHttpOk(apiHealthUrl, 30000, 1000)
@@ -198,7 +174,7 @@ async function main() {
   } finally {
     await stopProcessTree(vite)
     await sleep(1000)
-    await writeFile(viteLogPath, viteLogs.join(''), 'utf8')
+    await writeFile(viteLogPath, tailTextForEvidence(viteLogs.join(''), 100000), 'utf8')
     const latestRunnerMarker = path.join(logDir, 'runner-summary.txt')
     await writeFile(
       latestRunnerMarker,
@@ -227,6 +203,6 @@ async function resolveApiHealthUrl() {
 }
 
 main().catch((error) => {
-  console.error(error.message || error)
+  console.error(redactText(error?.stack || error?.message || String(error)))
   process.exitCode = 1
 })

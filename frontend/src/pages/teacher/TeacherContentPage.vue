@@ -424,7 +424,7 @@
             >
               <div class="row-between teacher-module-head">
                 <div class="row teacher-module-title-row">
-                  <span class="teacher-module-index">{{ Math.round(progressRow.progressPercentage) }}%</span>
+                  <span class="teacher-module-index">{{ clampPercent(progressRow.progressPercentage) }}%</span>
                   <strong>{{ progressRow.studentName }}</strong>
                 </div>
 
@@ -666,9 +666,7 @@
               <article v-for="attempt in quizAttempts" :key="attempt.attemptId" class="teacher-module-card">
                 <div class="row-between teacher-module-head">
                   <div class="row teacher-module-title-row">
-                    <span class="teacher-module-index"
-                      >{{ Math.round((attempt.score / Math.max(attempt.maxScore, 1)) * 100) }}%</span
-                    >
+                    <span class="teacher-module-index">{{ ratioPercent(attempt.score, attempt.maxScore) }}%</span>
                     <strong>{{ attempt.studentName }}</strong>
                   </div>
 
@@ -1464,7 +1462,7 @@ import type {
   TeacherQuizResponse,
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDate, formatNumber } from '@/utils/format'
+import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent } from '@/utils/format'
 
 type SurfaceTab = 'courses' | 'modules' | 'lessons' | 'categories' | 'levels' | 'resources' | 'activity-types'
 type BuilderTab = 'package' | 'module' | 'lesson' | 'resource' | 'quiz'
@@ -2017,10 +2015,11 @@ function formatPrice(value: number) {
 }
 
 function formatDuration(value: number | null | undefined) {
-  if (!value || value <= 0) return '0s'
-  const hours = Math.floor(value / 3600)
-  const minutes = Math.floor((value % 3600) / 60)
-  const seconds = value % 60
+  const safeSeconds = nonNegativeInteger(value)
+  if (safeSeconds <= 0) return '0s'
+  const hours = Math.floor(safeSeconds / 3600)
+  const minutes = Math.floor((safeSeconds % 3600) / 60)
+  const seconds = safeSeconds % 60
   if (hours > 0) return `${hours}h ${minutes}m`
   if (minutes > 0) return `${minutes}m ${seconds}s`
   return `${seconds}s`
@@ -2688,8 +2687,9 @@ async function submitRecordedResource() {
     if (resourceForm.packageId > 0) {
       formData.append('packageId', String(resourceForm.packageId))
     }
-    if (resourceForm.durationSeconds > 0) {
-      formData.append('durationSeconds', String(resourceForm.durationSeconds))
+    const durationSeconds = nonNegativeInteger(resourceForm.durationSeconds)
+    if (durationSeconds > 0) {
+      formData.append('durationSeconds', String(durationSeconds))
     }
     if (resourceForm.sourceType === 'EXTERNAL_URL') {
       formData.append('externalVideoUrl', resourceForm.externalVideoUrl.trim())

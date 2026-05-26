@@ -34,18 +34,18 @@
             <div class="student-profile-hero-stats">
               <article class="student-profile-stat-card">
                 <small>Level</small>
-                <strong>{{ rewards.currentLevelNumber }}</strong>
+                <strong>{{ currentLevelNumber }}</strong>
                 <span>{{ formatPercent(rewards.progressToNextLevelPercent) }} to next level</span>
               </article>
               <article class="student-profile-stat-card">
                 <small>Current Streak</small>
-                <strong>{{ rewards.streak.currentStreak }}</strong>
+                <strong>{{ currentStreakCount }}</strong>
                 <span>{{ streakDateLabel }}</span>
               </article>
               <article class="student-profile-stat-card">
                 <small>Overall Progress</small>
-                <strong>{{ formatPercent(progress.overallCompletionPercent) }}</strong>
-                <span>{{ progress.completedLessons }} completed lesson(s)</span>
+                <strong>{{ formatPercent(overallProgressPercent) }}</strong>
+                <span>{{ completedLessonCount }} completed lesson(s)</span>
               </article>
               <article class="student-profile-stat-card">
                 <small>Quiz Average</small>
@@ -173,16 +173,12 @@
               <strong>Learning Snapshot</strong>
             </div>
 
-            <ProgressRing
-              :progress="progress.overallCompletionPercent"
-              title="Keep going"
-              subtitle="Your student progress"
-            />
+            <ProgressRing :progress="overallProgressPercent" title="Keep going" subtitle="Your student progress" />
 
             <div class="student-profile-side-stats">
               <div>
                 <small>Lessons Started</small>
-                <strong>{{ progress.totalLessonsStarted }}</strong>
+                <strong>{{ startedLessonCount }}</strong>
               </div>
               <div>
                 <small>Activities Loaded</small>
@@ -406,7 +402,15 @@ import {
   studentRewards,
 } from '@/demo/data'
 import { resolveApiError } from '@/utils/apiError'
-import { formatCurrency, formatDate, formatDateTime, formatPercent } from '@/utils/format'
+import {
+  clampPercent,
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatPercent,
+  nonNegativeInteger,
+  toFiniteNumber,
+} from '@/utils/format'
 import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
 
 const router = useRouter()
@@ -536,8 +540,13 @@ const profileNoticeDetail = computed(() => {
 const displayName = computed(
   () => profile.value.studentProfile?.displayName || profile.value.fullName.split(' ')[0] || 'Student',
 )
+const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
+const currentStreakCount = computed(() => nonNegativeInteger(rewards.value.streak.currentStreak))
+const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
+const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
+const overallProgressPercent = computed(() => clampPercent(progress.value.overallCompletionPercent))
 const currentLevelTitle = computed(
-  () => profile.value.studentProfile?.currentLevel || `Level ${rewards.value.currentLevelNumber}`,
+  () => profile.value.studentProfile?.currentLevel || `Level ${currentLevelNumber.value}`,
 )
 const accountModeLabel = computed(() => (usingFallback.value ? 'Preview profile data' : 'Live student account'))
 const streakDateLabel = computed(() =>
@@ -588,22 +597,26 @@ const pointsFeed = computed(() =>
     title: item.reason,
     subtitle: item.sourceType,
     time: formatDateTime(item.createdAt),
-    value: `${item.pointsDelta > 0 ? '+' : ''}${item.pointsDelta}`,
+    value: signedIntegerLabel(item.pointsDelta),
   })),
 )
 
 const recentLessons = computed(() =>
-  progress.value.recentLessons.slice(0, 4).map((lesson) => ({
-    ...lesson,
-    progressLabel: formatPercent(lesson.completionPercent),
-    statusLabel:
-      lesson.completed || lesson.completionPercent >= 100
-        ? 'Completed'
-        : lesson.completionPercent > 0
-          ? 'In progress'
-          : 'Not started',
-    lastAccessedLabel: lesson.lastAccessedAt ? formatDateTime(lesson.lastAccessedAt) : 'No last access timestamp',
-  })),
+  progress.value.recentLessons.slice(0, 4).map((lesson) => {
+    const completionPercent = clampPercent(lesson.completionPercent)
+
+    return {
+      ...lesson,
+      progressLabel: formatPercent(completionPercent),
+      statusLabel:
+        lesson.completed || completionPercent >= 100
+          ? 'Completed'
+          : completionPercent > 0
+            ? 'In progress'
+            : 'Not started',
+      lastAccessedLabel: lesson.lastAccessedAt ? formatDateTime(lesson.lastAccessedAt) : 'No last access timestamp',
+    }
+  }),
 )
 
 const activityRows = computed(() =>
@@ -702,6 +715,11 @@ async function submitRefund() {
   } finally {
     submittingRefund.value = false
   }
+}
+
+function signedIntegerLabel(value: number) {
+  const rounded = Math.round(toFiniteNumber(value))
+  return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
 function reloadAll() {

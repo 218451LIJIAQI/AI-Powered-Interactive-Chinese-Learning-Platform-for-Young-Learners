@@ -1,4 +1,4 @@
-package com.example.aichinese.Support;
+package com.example.aichinese.support;
 
 import java.nio.charset.StandardCharsets;
 

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.config.PaymentProperties;
 import com.example.aichinese.dto.commerce.PaymentProviderCheckoutResult;
+import com.example.aichinese.dto.commerce.PaymentProviderStatusResult;
 import com.example.aichinese.provider.MockPaymentProviderClient;
 import com.example.aichinese.service.model.CommerceCheckout;
 
@@ -72,5 +73,49 @@ class MockPaymentProviderClientTests {
 
         assertThat(result.available()).isFalse();
         assertThat(result.checkoutUrl()).isNull();
+    }
+
+    @Test
+    void checkoutUrlPreservesFragmentsWhenAddingMockParameters() {
+        MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
+                "http://localhost:5173/payment/success",
+                "http://localhost:5173/payment/cancel",
+                true,
+                "mock",
+                "https://api.stripe.com",
+                "",
+                ""));
+
+        PaymentProviderCheckoutResult result = client.createCheckoutSession(new CommerceCheckout(
+                null,
+                null,
+                null,
+                List.of(),
+                BigDecimal.TEN,
+                "MYR",
+                "http://localhost:5173/payment/success?paymentId=123#receipt",
+                "http://localhost:5173/payment/cancel"));
+
+        assertThat(result.checkoutUrl())
+                .startsWith("http://localhost:5173/payment/success?paymentId=123&paymentRef=mock-checkout-")
+                .endsWith("&status=success#receipt");
+    }
+
+    @Test
+    void statusIsUnavailableForNonMockReferences() {
+        MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
+                "http://localhost:5173/payment/success",
+                "http://localhost:5173/payment/cancel",
+                true,
+                "mock",
+                "https://api.stripe.com",
+                "",
+                ""));
+
+        PaymentProviderStatusResult result = client.getPaymentStatus("cs_test_external");
+
+        assertThat(result.available()).isFalse();
+        assertThat(result.paymentStatus()).isEqualTo(com.example.aichinese.entity.enums.PaymentStatus.FAILED);
+        assertThat(result.providerStatus()).isEqualTo("UNAVAILABLE");
     }
 }

@@ -183,6 +183,7 @@ public class DashboardService {
 
         List<StudentDashboardResponse.LessonProgressSummary> unfinishedLessons = accessibleLessonProgress.stream()
                 .filter(progress -> !progress.isCompleted())
+                .filter(progress -> progress.getLesson() != null)
                 .limit(5)
                 .map(progress -> new StudentDashboardResponse.LessonProgressSummary(
                         progress.getLesson().getId(),
@@ -390,15 +391,32 @@ public class DashboardService {
     }
 
     private BigDecimal averageAttemptScore(List<QuizAttempt> attempts) {
-        List<BigDecimal> scores = attempts.stream()
-                .filter(attempt -> attempt.getScore() != null)
-                .map(attempt -> BigDecimal.valueOf(attempt.getScore()))
+        List<BigDecimal> percentages = attempts.stream()
+                .filter(this::hasValidPercentage)
+                .map(this::percentageForAttempt)
                 .toList();
-        if (scores.isEmpty()) {
+        if (percentages.isEmpty()) {
             return ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        BigDecimal total = scores.stream().reduce(ZERO, BigDecimal::add);
-        return total.divide(BigDecimal.valueOf(scores.size()), 2, RoundingMode.HALF_UP);
+        BigDecimal total = percentages.stream().reduce(ZERO, BigDecimal::add);
+        return total.divide(BigDecimal.valueOf(percentages.size()), 2, RoundingMode.HALF_UP);
+    }
+
+    private boolean hasValidPercentage(QuizAttempt attempt) {
+        return attempt.isSubmitted()
+                && attempt.getScore() != null
+                && attempt.getMaxScore() != null
+                && attempt.getMaxScore() > 0;
+    }
+
+    private BigDecimal percentageForAttempt(QuizAttempt attempt) {
+        if (!hasValidPercentage(attempt)) {
+            return ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return BigDecimal.valueOf(attempt.getScore())
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(attempt.getMaxScore()), 2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal defaultMoney(BigDecimal amount) {

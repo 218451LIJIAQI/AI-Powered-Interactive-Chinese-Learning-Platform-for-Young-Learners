@@ -19,26 +19,72 @@ describe('resolveApiError', () => {
     expect(resolveApiError({ request: {} })).toContain('cannot reach')
   })
 
+  it('does not expose transport internals as user-facing messages', () => {
+    expect(
+      resolveApiError({
+        response: {
+          status: 500,
+          data: { message: 'Network Error', errors: ['Request failed'] },
+        },
+      }),
+    ).toBe('The learning service is having trouble right now. Please try again shortly.')
+  })
+
+  it('cleans unsafe and oversized backend messages before display', () => {
+    const message = `  Please retry\u202e\n${'x'.repeat(400)}  `
+
+    const resolved = resolveApiError({
+      response: {
+        status: 400,
+        data: { message, errors: [] },
+      },
+    })
+
+    expect(resolved).toMatch(/^Please retry x+/)
+    expect(resolved).not.toContain('\u202e')
+    expect(resolved).not.toContain('\n')
+    expect(resolved).toHaveLength(280)
+    expect(resolved.endsWith('...')).toBe(true)
+  })
+
+  it('uses status-aware fallbacks for common authorization and server failures', () => {
+    expect(resolveApiError({ response: { status: 401, data: {} } })).toBe('Please sign in again to continue.')
+    expect(resolveApiError({ response: { status: 403, data: {} } })).toBe('You do not have permission to do that.')
+    expect(resolveApiError({ response: { status: 404, data: {} } }, 'Missing course.')).toBe('Missing course.')
+    expect(resolveApiError({ response: { status: 503, data: {} } })).toContain('having trouble')
+  })
+
   it('detects unauthorized responses', () => {
     expect(isUnauthorizedApiError({ response: { status: 401 } })).toBe(true)
     expect(isUnauthorizedApiError({ response: { status: 403 } })).toBe(false)
   })
 
   it('extracts clean server field errors', () => {
+    const fieldErrors: Record<string, unknown[]> = {
+      email: ['Email address is required.', '   ', null],
+      password: ['Password is required.', { unsafe: true }],
+      bio: ['one', 'two', 'three', 'four', 'five', 'six'],
+      constructor: ['should be ignored'],
+    }
+    Object.defineProperty(fieldErrors, '__proto__', {
+      value: ['should not pollute prototypes'],
+      enumerable: true,
+    })
+
     expect(
       resolveFieldErrors({
         response: {
           data: {
-            fieldErrors: {
-              email: ['Email address is required.', '   ', null],
-              password: ['Password is required.'],
-            },
+            fieldErrors,
           },
         },
       }),
-    ).toEqual({
+    ).toMatchObject({
       email: ['Email address is required.'],
       password: ['Password is required.'],
+      bio: ['one', 'two', 'three', 'four', 'five'],
     })
+    expect(resolveFieldErrors({ response: { data: { fieldErrors } } })).not.toHaveProperty('__proto__')
+    expect(resolveFieldErrors({ response: { data: { fieldErrors } } })).not.toHaveProperty('constructor')
   })
 })

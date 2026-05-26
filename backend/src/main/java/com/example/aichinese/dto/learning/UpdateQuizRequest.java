@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -20,9 +23,9 @@ import jakarta.validation.constraints.Size;
  * identical to {@link CreateQuizRequest}.</p>
  *
  * @param title            short quiz title (1–200 chars after
- *                         trim); required
+ *                         stripping); required
  * @param description      optional long-form description (max 1000
- *                         chars after trim); blank collapses to
+ *                         chars after stripping); blank collapses to
  *                         {@code null}
  * @param timeLimitMinutes countdown duration in minutes;
  *                         {@code null} or {@code 0} both mean
@@ -39,17 +42,14 @@ public record UpdateQuizRequest(
         Integer timeLimitMinutes) {
 
     /**
-     * Defensive canonical constructor: trims string fields so Bean
+     * Defensive canonical constructor: strips string fields so Bean
      * Validation sees the canonical form and collapses
      * {@link #description} to {@code null} when blank. {@code null}
      * {@link #title} is preserved so {@link NotBlank @NotBlank}
      * fires correctly.
      */
     public UpdateQuizRequest {
-        title = title == null ? null : title.trim();
-        if (description != null) {
-            String trimmed = description.trim();
-            description = trimmed.isEmpty() ? null : trimmed;
-        }
+        title = strip(title);
+        description = stripToNull(description);
     }
 }

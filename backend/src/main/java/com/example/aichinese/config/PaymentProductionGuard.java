@@ -1,8 +1,5 @@
 package com.example.aichinese.config;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Locale;
 import java.util.Objects;
 
 import org.springframework.core.env.Environment;
@@ -45,6 +42,7 @@ import org.springframework.stereotype.Component;
 public class PaymentProductionGuard {
 
     private static final String STRIPE_API_HOST = "api.stripe.com";
+    private static final String PROD_CONTEXT = "when the prod profile is active";
     private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
     private final Environment environment;
@@ -95,23 +93,12 @@ public class PaymentProductionGuard {
     }
 
     private static void requireProductionReadyUrl(String value, String label) {
-        URI uri = parseStrict(value, label);
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().trim().toLowerCase(Locale.ROOT);
-        String host = normalizeHost(uri.getHost());
-
-        if (!"https".equals(scheme)) {
-            throw new IllegalStateException(label + " must use HTTPS when the prod profile is active.");
-        }
-        if (host.isBlank() || isLoopbackOrLinkLocalHost(host)) {
-            throw new IllegalStateException(
-                    label + " must target a non-loopback public host when the prod profile is active.");
-        }
+        HttpUrlValidation.requirePublicHttpsUrl(value, label, PROD_CONTEXT);
     }
 
     private static void requireOfficialStripeApiBaseUrl(String value) {
-        requireProductionReadyUrl(value, "STRIPE_API_BASE_URL");
-        URI uri = parseStrict(value, "STRIPE_API_BASE_URL");
-        String host = normalizeHost(uri.getHost());
+        var uri = HttpUrlValidation.requirePublicHttpsUrl(value, "STRIPE_API_BASE_URL", PROD_CONTEXT);
+        String host = HttpUrlValidation.normalizeHost(uri.getHost());
         if (!STRIPE_API_HOST.equals(host)) {
             throw new IllegalStateException(
                     "STRIPE_API_BASE_URL must be https://api.stripe.com when the prod profile is active.");
@@ -137,48 +124,4 @@ public class PaymentProductionGuard {
         }
     }
 
-    /**
-     * Stricter than {@link URI#create(String)} so a malformed URL (e.g. one
-     * containing a space) fails with a clear label rather than silently
-     * becoming an opaque URI whose scheme is null.
-     */
-    private static URI parseStrict(String value, String label) {
-        try {
-            return new URI(value == null ? "" : value.trim());
-        } catch (URISyntaxException | IllegalArgumentException exception) {
-            throw new IllegalStateException(
-                    label + " must be a valid HTTPS URL when the prod profile is active.", exception);
-        }
-    }
-
-    private static String normalizeHost(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("[") && normalized.endsWith("]") && normalized.length() > 2) {
-            return normalized.substring(1, normalized.length() - 1);
-        }
-        return normalized;
-    }
-
-    /**
-     * Mirrors {@link AiProductionGuard} / {@link EmailConfiguration} coverage:
-     * rejects IPv4 loopback ({@code 127/8}, {@code 0.0.0.0}), IPv4 link-local
-     * ({@code 169.254/16}), IPv6 loopback ({@code ::1}, {@code ::}), IPv6
-     * link-local ({@code fe80::/10}), and IPv4-mapped IPv6 loopback. A typo
-     * of any of these in a payment URL would otherwise produce a "thank you"
-     * page that lives at a host the customer can never reach.
-     */
-    private static boolean isLoopbackOrLinkLocalHost(String host) {
-        return "localhost".equals(host)
-                || "0.0.0.0".equals(host)
-                || "::".equals(host)
-                || "::1".equals(host)
-                || host.startsWith("127.")
-                || host.startsWith("169.254.")
-                || host.startsWith("fe80:")
-                || host.startsWith("::ffff:127.")
-                || host.startsWith("::ffff:0.");
-    }
 }

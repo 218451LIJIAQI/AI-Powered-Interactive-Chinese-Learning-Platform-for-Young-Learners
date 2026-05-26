@@ -18,15 +18,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p>Several beans run validators that refuse to start when their
  * critical configuration is missing or unsafe:</p>
  * <ul>
- *   <li>{@link com.example.aichinese.config.AiProductionGuard} — AI
+ *   <li>{@link com.example.aichinese.config.AiProductionGuard} - AI
  *       provider settings in production.</li>
- *   <li>{@link com.example.aichinese.config.PaymentProductionGuard} —
+ *   <li>{@link com.example.aichinese.config.PaymentProductionGuard} -
  *       payment provider (Stripe live-mode) configuration.</li>
- *   <li>{@link com.example.aichinese.config.EmailConfiguration} —
+ *   <li>{@link com.example.aichinese.config.EmailConfiguration} -
  *       SMTP settings when email is enabled.</li>
- *   <li>{@link com.example.aichinese.security.JwtService} — JWT
+ *   <li>{@link com.example.aichinese.security.JwtService} - JWT
  *       signing secret length / format.</li>
- *   <li>{@link com.example.aichinese.config.CorsConfig} — wildcard +
+ *   <li>{@link com.example.aichinese.config.CorsConfig} - wildcard +
  *       credentials rejection in production.</li>
  * </ul>
  * <p>A misconfigured production deployment fails to boot rather than

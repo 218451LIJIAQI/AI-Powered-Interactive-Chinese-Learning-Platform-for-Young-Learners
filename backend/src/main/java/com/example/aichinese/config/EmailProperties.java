@@ -1,9 +1,5 @@
 package com.example.aichinese.config;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Locale;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -57,7 +53,7 @@ public record EmailProperties(
      */
     public String resolvePasswordResetBaseUrl() {
         if (passwordResetBaseUrl != null && !passwordResetBaseUrl.isBlank()) {
-            return validateHttpUrl(passwordResetBaseUrl.trim(), "Password reset base URL");
+            return validateHttpUrl(passwordResetBaseUrl.strip(), "Password reset base URL");
         }
         return DEFAULT_RESET_URL;
     }
@@ -101,15 +97,7 @@ public record EmailProperties(
             throw new IllegalArgumentException(
                     label + " must be at most " + MAX_URL_LENGTH + " characters.");
         }
-        try {
-            URI uri = new URI(value);
-            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-            if (!("http".equals(scheme) || "https".equals(scheme)) || uri.getHost() == null) {
-                throw new IllegalArgumentException(label + " must be an absolute HTTP(S) URL.");
-            }
-            return value;
-        } catch (URISyntaxException exception) {
-            throw new IllegalArgumentException(label + " must be a valid absolute HTTP(S) URL.", exception);
-        }
+        HttpUrlValidation.requireAbsoluteHttpUrl(value, label);
+        return value;
     }
 }

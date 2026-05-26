@@ -1,5 +1,10 @@
 package com.example.aichinese.dto.admin.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -9,6 +14,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -144,5 +150,17 @@ public record AdminStoryActivityRequest(
 
         @Valid
         @Size(max = 50, message = "A story activity cannot contain more than 50 questions.")
-        List<AdminStoryQuestionRequest> questions) {
+        List<@NotNull(message = "Story question must not be null.") AdminStoryQuestionRequest> questions) {
+
+    public AdminStoryActivityRequest {
+        title = strip(title);
+        instructions = stripToNull(instructions);
+        storyText = strip(storyText);
+        pinyin = stripToNull(pinyin);
+        translation = stripToNull(translation);
+        imageUrl = stripToNull(imageUrl);
+        topic = stripToNull(topic);
+        tags = strippedStringListOrNull(tags);
+        questions = immutableListOrEmpty(questions);
+    }
 }

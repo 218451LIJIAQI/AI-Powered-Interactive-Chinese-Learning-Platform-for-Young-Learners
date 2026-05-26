@@ -428,7 +428,7 @@ import type {
   TeacherStudentSummaryResponse,
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDateTime } from '@/utils/format'
+import { clampPercent, formatDateTime, formatPercent } from '@/utils/format'
 import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
 
 const router = useRouter()
@@ -504,6 +504,8 @@ const lessons = computed<LessonResponse[]>(
 const studentOptions = computed<StudentOption[]>(() =>
   (studentsResource.data.value ?? []).map((item: TeacherStudentSummaryResponse, index: number) => ({
     ...item,
+    progressPercent: clampPercent(item.progressPercent),
+    quizAveragePercent: item.quizAveragePercent == null ? null : clampPercent(item.quizAveragePercent),
     avatarKind: (['student', 'male', 'female', 'hijab'] as const)[index % 4],
     label: item.displayName?.trim() || item.fullName,
     meta: `${item.currentLevel?.trim() || 'Level not set'} • ${item.email}`,
@@ -549,8 +551,8 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
     const quizAverage =
       linkedStudent?.quizAveragePercent == null
         ? 'No quiz data'
-        : `${Math.round(linkedStudent.quizAveragePercent)}% quiz average`
-    const progress = linkedStudent ? `${linkedStudent.progressPercent}% progress` : 'Progress unavailable'
+        : `${formatPercent(linkedStudent.quizAveragePercent)} quiz average`
+    const progress = linkedStudent ? `${formatPercent(linkedStudent.progressPercent)} progress` : 'Progress unavailable'
 
     return {
       id: item.id,
@@ -615,12 +617,12 @@ const progressMetrics = computed(() => {
   return [
     {
       label: 'Overall Progress',
-      value: Math.round(student.progressPercent),
+      value: clampPercent(student.progressPercent),
       caption: 'From linked lesson progress',
     },
     {
       label: 'Quiz Average',
-      value: Math.round(student.quizAveragePercent ?? 0),
+      value: clampPercent(student.quizAveragePercent ?? 0),
       caption: student.quizAveragePercent == null ? 'No quiz attempts yet' : 'From submitted quiz attempts',
     },
     {

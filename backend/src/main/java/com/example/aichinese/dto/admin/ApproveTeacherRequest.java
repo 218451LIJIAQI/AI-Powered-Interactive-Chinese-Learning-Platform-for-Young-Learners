@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.admin;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.Size;
@@ -23,18 +25,18 @@ import jakarta.validation.constraints.Size;
  * teacher dashboard.</p>
  *
  * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly {@link String#trim() trims}
+ * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
  * {@link #note} so {@link Size @Size(max=1000)} is evaluated against
  * the canonical form (a paste with stray leading/trailing whitespace
  * cannot inflate the length past the cap) and so every downstream
  * consumer — the persisted review row, the audit log entry, and the
- * approval email — sees the same trimmed value rather than relying
- * on each consumer to trim independently. {@code null} is preserved
+ * approval email — sees the same stripped value rather than relying
+ * on each consumer to normalise independently. {@code null} is preserved
  * so the optionality semantics on the wire format are stable.</p>
  *
- * @param note optional internal review note (max 1000 chars); trimmed
+ * @param note optional internal review note (max 1000 chars); stripped
  *             by the canonical constructor; may be {@code null} or
- *             empty after trimming
+ *             empty after stripping
  */
 @JsonPropertyOrder({ "note" })
 public record ApproveTeacherRequest(
@@ -42,16 +44,14 @@ public record ApproveTeacherRequest(
         String note) {
 
     /**
-     * Defensive canonical constructor: trims surrounding whitespace
+     * Defensive canonical constructor: strips surrounding Unicode whitespace
      * from {@link #note} so every downstream consumer (persisted
      * review row, audit log, approval email) receives the canonical
-     * form regardless of whether they remember to trim independently.
+     * form regardless of whether they remember to normalise independently.
      * {@code null} is preserved so Bean Validation's
      * {@link Size @Size} treats the field as absent rather than empty.
      */
     public ApproveTeacherRequest {
-        if (note != null) {
-            note = note.trim();
-        }
+        note = strip(note);
     }
 }

@@ -1,5 +1,10 @@
 package com.example.aichinese.dto.admin.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -9,6 +14,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -95,5 +101,13 @@ public record AdminDragDropActivityRequest(
 
         @Valid
         @Size(max = 200, message = "A drag-drop activity cannot contain more than 200 items.")
-        List<AdminDragDropItemRequest> items) {
+        List<@NotNull(message = "Drag-drop item must not be null.") AdminDragDropItemRequest> items) {
+
+    public AdminDragDropActivityRequest {
+        title = strip(title);
+        instructions = stripToNull(instructions);
+        topic = stripToNull(topic);
+        tags = strippedStringListOrNull(tags);
+        items = immutableListOrEmpty(items);
+    }
 }

@@ -44,9 +44,9 @@ import com.example.aichinese.entity.enums.PaymentStatus;
  * unreachable at checkout time (see
  * {@link PaymentProviderCheckoutResult#available()}). In that case
  * {@link #checkoutUrl} is {@code null} and {@link #message} carries
- * a human-readable explanation; the order/payment rows still exist
- * in {@code PENDING} so the student can retry payment later via
- * {@code GET /payments/status/{paymentId}}.</p>
+ * a human-readable explanation; the order/payment rows are marked
+ * {@link PaymentStatus#FAILED} because no provider session exists for
+ * a later status poll or webhook to reconcile.</p>
  *
  * <p>{@link #items} snapshots what was purchased; the same items
  * are denormalised into the persisted order line items so the

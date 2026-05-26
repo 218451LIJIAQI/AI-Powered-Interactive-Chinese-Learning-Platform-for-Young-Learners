@@ -1,6 +1,7 @@
 package com.example.aichinese.security;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -11,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.RoleName;
 
 /**
  * Spring Security {@link UserDetails} adapter wrapping the platform's
@@ -62,12 +64,18 @@ public final class SecurityUserDetails implements UserDetails {
             this.authorities = List.of();
             this.roleNames = List.of();
         } else {
-            this.authorities = roles.stream()
-                    .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(ROLE_PREFIX + role.getName().name()))
+            List<RoleName> validRoleNames = roles.stream()
+                    .filter(Objects::nonNull)
+                    .map(Role::getName)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .sorted(Comparator.comparing(RoleName::name))
                     .toList();
-            this.roleNames = roles.stream()
-                    .map(role -> role.getName().name())
-                    .sorted()
+            this.authorities = validRoleNames.stream()
+                    .map(roleName -> (GrantedAuthority) new SimpleGrantedAuthority(ROLE_PREFIX + roleName.name()))
+                    .toList();
+            this.roleNames = validRoleNames.stream()
+                    .map(RoleName::name)
                     .toList();
         }
     }
@@ -127,12 +135,14 @@ public final class SecurityUserDetails implements UserDetails {
         if (!(other instanceof SecurityUserDetails that)) {
             return false;
         }
-        return Objects.equals(user.getId(), that.user.getId());
+        Long id = user.getId();
+        return id != null && id.equals(that.user.getId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(user.getId());
+        Long id = user.getId();
+        return id == null ? System.identityHashCode(this) : id.hashCode();
     }
 
     /**

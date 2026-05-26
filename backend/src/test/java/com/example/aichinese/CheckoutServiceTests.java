@@ -1,9 +1,11 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,11 +16,13 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.config.PaymentProperties;
 import com.example.aichinese.dto.commerce.CheckoutResponse;
 import com.example.aichinese.dto.commerce.CheckoutSessionItemRequest;
 import com.example.aichinese.dto.commerce.CheckoutSessionRequest;
+import com.example.aichinese.entity.CartItem;
 import com.example.aichinese.entity.Order;
 import com.example.aichinese.entity.OrderItem;
 import com.example.aichinese.entity.PaymentRecord;
@@ -98,6 +102,131 @@ class CheckoutServiceTests {
                 anyString());
     }
 
+    @Test
+    void cartCheckoutRejectsTooManyItemsBeforeCreatingOrder() {
+        Fixture fixture = fixture();
+        SecurityUserDetails currentUser = currentUser();
+        StudentProfile student = student();
+        List<CartItem> cartItems = java.util.stream.LongStream.rangeClosed(1, 51)
+                .mapToObj(id -> {
+                    CartItem item = new CartItem();
+                    item.setItemType("LESSON");
+                    item.setItemId(id);
+                    return item;
+                })
+                .toList();
+
+        when(fixture.studentLearningAccessService.requireStudent(currentUser)).thenReturn(student);
+        when(fixture.cartService.getCartItems(currentUser)).thenReturn(cartItems);
+        for (CartItem cartItem : cartItems) {
+            when(fixture.purchasableItemService.resolve(cartItem.getItemType(), cartItem.getItemId(), null))
+                    .thenReturn(new ResolvedPurchasableItem(
+                            PurchasableItemType.LESSON,
+                            cartItem.getItemId(),
+                            "Lesson " + cartItem.getItemId(),
+                            BigDecimal.TEN,
+                            "MYR",
+                            null,
+                            false,
+                            null));
+        }
+
+        assertThatThrownBy(() -> fixture.checkoutService.checkoutCart(currentUser))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Checkout can contain at most 50 items.");
+
+        verify(fixture.orderService, never()).createOrder(any(), any(), anyList());
+        verify(fixture.paymentService, never()).createPendingPayment(any(), any());
+    }
+
+    @Test
+    void cartCheckoutUsesCapturedCartPriceInsteadOfLivePrice() {
+        Fixture fixture = fixture();
+        SecurityUserDetails currentUser = currentUser();
+        StudentProfile student = student();
+        CartItem cartItem = new CartItem();
+        cartItem.setItemType("LESSON");
+        cartItem.setItemId(10L);
+        cartItem.setUnitPrice(new BigDecimal("25.00"));
+        ResolvedPurchasableItem liveItem = new ResolvedPurchasableItem(
+                PurchasableItemType.LESSON,
+                10L,
+                "Paid Lesson",
+                new BigDecimal("30.00"),
+                "MYR",
+                null,
+                false,
+                null);
+        Order order = order(student);
+        order.setCheckoutSource("CART");
+        order.setTotalAmount(new BigDecimal("25.00"));
+        OrderItem orderItem = orderItem(order);
+        orderItem.setUnitPrice(new BigDecimal("25.00"));
+        orderItem.setLineTotal(new BigDecimal("25.00"));
+        PaymentRecord paymentRecord = paymentRecord(order, student);
+        paymentRecord.setAmount(new BigDecimal("25.00"));
+
+        when(fixture.studentLearningAccessService.requireStudent(currentUser)).thenReturn(student);
+        when(fixture.cartService.getCartItems(currentUser)).thenReturn(List.of(cartItem));
+        when(fixture.purchasableItemService.resolve("LESSON", 10L, null)).thenReturn(liveItem);
+        when(fixture.entitlementService.hasAccessToPurchasableItem(eq(student), any(ResolvedPurchasableItem.class)))
+                .thenReturn(false);
+        when(fixture.orderService.createOrder(
+                eq(student),
+                eq(CheckoutSessionRequest.CheckoutSource.CART),
+                anyList()))
+                .thenAnswer(invocation -> {
+                    List<ResolvedPurchasableItem> items = invocation.getArgument(2);
+                    assertThat(items).singleElement().satisfies(item ->
+                            assertThat(item.unitPrice()).isEqualByComparingTo("25.00"));
+                    return order;
+                });
+        when(fixture.orderService.createOrderItems(eq(order), anyList())).thenReturn(List.of(orderItem));
+        when(fixture.paymentService.createPendingPayment(order, student)).thenReturn(paymentRecord);
+        when(fixture.paymentService.startCheckout(
+                eq(currentUser),
+                eq(student),
+                eq(order),
+                eq(paymentRecord),
+                eq(List.of(orderItem)),
+                anyString(),
+                anyString()))
+                .thenReturn(new CheckoutResponse(
+                        order.getId(),
+                        order.getOrderNumber(),
+                        paymentRecord.getId(),
+                        PaymentStatus.PENDING,
+                        new BigDecimal("25.00"),
+                        "MYR",
+                        "https://pay.example.test/session",
+                        "mock",
+                        "CREATED",
+                        true,
+                        "Created",
+                        List.of()));
+
+        CheckoutResponse response = fixture.checkoutService.checkoutCart(currentUser);
+
+        assertThat(response.totalAmount()).isEqualByComparingTo("25.00");
+        verify(fixture.orderService).createOrder(
+                eq(student),
+                eq(CheckoutSessionRequest.CheckoutSource.CART),
+                anyList());
+    }
+
+    @Test
+    void buyNowRejectsNullRequestBeforeResolvingItem() {
+        Fixture fixture = fixture();
+        SecurityUserDetails currentUser = currentUser();
+
+        assertThatThrownBy(() -> fixture.checkoutService.buyNow(currentUser, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Checkout item request is required.");
+
+        verify(fixture.studentLearningAccessService, never()).requireStudent(currentUser);
+        verify(fixture.purchasableItemService, never()).resolve(any(), any(), any());
+    }
+
     private Fixture fixture() {
         StudentLearningAccessService studentLearningAccessService = mock(StudentLearningAccessService.class);
         CartService cartService = mock(CartService.class);
@@ -123,6 +252,7 @@ class CheckoutServiceTests {
         return new Fixture(
                 checkoutService,
                 studentLearningAccessService,
+                cartService,
                 purchasableItemService,
                 entitlementService,
                 orderService,
@@ -191,6 +321,7 @@ class CheckoutServiceTests {
     private record Fixture(
             CheckoutService checkoutService,
             StudentLearningAccessService studentLearningAccessService,
+            CartService cartService,
             PurchasableItemService purchasableItemService,
             EntitlementService entitlementService,
             OrderService orderService,

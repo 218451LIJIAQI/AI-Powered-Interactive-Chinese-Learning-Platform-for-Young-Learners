@@ -39,17 +39,34 @@ import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { resolveBrowserExecutablePath } from './lib/browser-runtime.mjs'
+import {
+  normalizeHttpBaseUrl,
+  parseTcpPort,
+  redactText,
+  resolveBrowserExecutablePath,
+  safeJsonStringify,
+  stopProcessTree,
+  tailTextForEvidence,
+} from './lib/browser-runtime.mjs'
 
-const baseUrl = process.env.QA_BASE_URL || 'http://127.0.0.1:5173'
-const apiBaseUrl = process.env.QA_API_BASE_URL || 'http://localhost:8080/api/v1'
+const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5173', 'QA_BASE_URL')
+const apiBaseUrl = normalizeHttpBaseUrl(
+  process.env.QA_API_BASE_URL || 'http://localhost:8080/api/v1',
+  'QA_API_BASE_URL',
+)
 const chromePath = resolveBrowserExecutablePath()
-const debuggingPort = Number(process.env.QA_CHROME_PORT || 9227)
+const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9227', 'QA_CHROME_PORT')
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-auth-live`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-auth-live-${timestamp}`)
-const apiHealthUrl = process.env.QA_API_HEALTH_URL || new URL('/actuator/health', apiBaseUrl).toString()
-const publicCoursesUrl = process.env.QA_PUBLIC_COURSES_URL || new URL('/api/v1/public/courses', apiBaseUrl).toString()
+const apiHealthUrl = normalizeHttpBaseUrl(
+  process.env.QA_API_HEALTH_URL || new URL('/actuator/health', apiBaseUrl).toString(),
+  'QA_API_HEALTH_URL',
+)
+const publicCoursesUrl = normalizeHttpBaseUrl(
+  process.env.QA_PUBLIC_COURSES_URL || new URL('/api/v1/public/courses', apiBaseUrl).toString(),
+  'QA_PUBLIC_COURSES_URL',
+)
 
 const studentEmail = `qa.browser.student.${Date.now()}@example.com`
 const teacherEmail = `qa.browser.teacher.${Date.now()}@example.com`
@@ -71,7 +88,7 @@ function summarizeValue(value) {
   if (typeof value === 'string') return value.replace(/\s+/g, ' ').trim().slice(0, 240)
 
   try {
-    return JSON.stringify(value).slice(0, 240)
+    return safeJsonStringify(value).slice(0, 240)
   } catch {
     return String(value).slice(0, 240)
   }
@@ -425,7 +442,7 @@ async function main() {
         await fn(record)
       } catch (error) {
         record.status = 'FAIL'
-        record.error = error.message
+        record.error = redactText(error.message)
         try {
           record.snapshots.push(await snapshot(`${name}-failure`))
         } catch {}
@@ -589,18 +606,18 @@ async function main() {
       records,
     }
 
-    await writeFile(path.join(evidenceDir, 'auth-live-report.json'), JSON.stringify(report, null, 2), 'utf8')
-    await writeFile(path.join(evidenceDir, 'chrome.log'), chromeLogs.join('\n'), 'utf8')
+    await writeFile(path.join(evidenceDir, 'auth-live-report.json'), safeJsonStringify(report), 'utf8')
+    await writeFile(path.join(evidenceDir, 'chrome.log'), tailTextForEvidence(chromeLogs.join('\n')), 'utf8')
     console.log(`AUTH_LIVE_REPORT_JSON=${path.join(evidenceDir, 'auth-live-report.json')}`)
   } finally {
     client?.close()
-    chrome.kill()
+    await stopProcessTree(chrome)
     await sleep(500)
     await rm(userDataDir, { recursive: true, force: true })
   }
 }
 
 main().catch((error) => {
-  console.error(error)
+  console.error(redactText(error?.stack || error?.message || String(error)))
   process.exitCode = 1
 })

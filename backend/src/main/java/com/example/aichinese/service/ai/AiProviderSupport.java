@@ -132,7 +132,7 @@ final class AiProviderSupport {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
-        if (uri.getUserInfo() != null) {
+        if (uri.getUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             return null;
         }
         String scheme = uri.getScheme();

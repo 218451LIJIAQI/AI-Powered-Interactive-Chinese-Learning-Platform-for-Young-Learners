@@ -61,4 +61,15 @@ public interface PackageItemRepository extends JpaRepository<PackageItem, Long> 
      */
     @EntityGraph(attributePaths = { "coursePackage", "coursePackage.teacher", "coursePackage.teacher.user" })
     List<PackageItem> findByItemTypeAndItemId(PackageItemType itemType, Long itemId);
+
+    /**
+     * Constant-time package-item membership predicate used by live-learning
+     * write paths before attaching package-scoped resources to a lesson or
+     * module. Higher-level services decide whether a lesson matches by direct
+     * lesson membership, inherited module membership, or both.
+     */
+    boolean existsByCoursePackageIdAndItemTypeAndItemId(
+            Long coursePackageId,
+            PackageItemType itemType,
+            Long itemId);
 }

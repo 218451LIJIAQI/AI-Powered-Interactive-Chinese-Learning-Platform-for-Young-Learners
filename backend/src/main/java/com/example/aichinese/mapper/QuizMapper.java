@@ -1,6 +1,7 @@
 package com.example.aichinese.mapper;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -81,7 +82,7 @@ public class QuizMapper {
 
     public TeacherQuizQuestionResponse toTeacherQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
         Objects.requireNonNull(question, "question");
-        Objects.requireNonNull(options, "options");
+        List<QuizOption> safeOptions = options == null ? List.of() : options;
         return new TeacherQuizQuestionResponse(
                 question.getId(),
                 question.getQuestionType(),
@@ -90,7 +91,7 @@ public class QuizMapper {
                 question.getPoints(),
                 question.getSortOrder(),
                 question.getExplanation(),
-                options.stream().map(QuizMapper::toTeacherQuizOption).toList());
+                safeOptions.stream().map(QuizMapper::toTeacherQuizOption).toList());
     }
 
     public StudentQuizResponse toStudentQuizResponse(
@@ -118,14 +119,14 @@ public class QuizMapper {
 
     public StudentQuizQuestionResponse toStudentQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
         Objects.requireNonNull(question, "question");
-        Objects.requireNonNull(options, "options");
+        List<QuizOption> safeOptions = options == null ? List.of() : options;
         return new StudentQuizQuestionResponse(
                 question.getId(),
                 question.getQuestionType(),
                 question.getQuestionText(),
                 question.getPoints(),
                 question.getSortOrder(),
-                options.stream().map(QuizMapper::toStudentQuizOption).toList());
+                safeOptions.stream().map(QuizMapper::toStudentQuizOption).toList());
     }
 
     public StudentQuizSummaryResponse toStudentQuizSummaryResponse(Quiz quiz, int questionCount) {
@@ -154,10 +155,15 @@ public class QuizMapper {
      * grouped sizes if strict validation is required.</p>
      */
     public Map<Long, List<QuizOption>> groupOptionsByQuestionId(List<QuizOption> options) {
-        Objects.requireNonNull(options, "options");
+        if (options == null || options.isEmpty()) {
+            return Map.of();
+        }
         return options.stream()
                 .filter(option -> option.getQuestion() != null && option.getQuestion().getId() != null)
-                .collect(Collectors.groupingBy(option -> option.getQuestion().getId()));
+                .collect(Collectors.groupingBy(
+                        option -> option.getQuestion().getId(),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
     }
 
     private static TeacherQuizOptionResponse toTeacherQuizOption(QuizOption option) {

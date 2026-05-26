@@ -26,7 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.example.aichinese.Support.TestUploadFixtures;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.TeacherProfileRepository;
@@ -551,6 +551,98 @@ class LiveRecordedLearningIntegrationTests {
     }
 
     @Test
+    void recordedVideoMultipartParametersShouldRejectInvalidNumericBoundsAndExternalUrlLength() throws Exception {
+        String teacherEmail = uniqueEmail("recorded-invalid");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long lessonId = createPublishedLesson(teacherToken, "Recorded Invalid Parameter Lesson");
+
+        MockMultipartFile videoFile = new MockMultipartFile(
+                "file",
+                "lesson.mp4",
+                "video/mp4",
+                TestUploadFixtures.minimalMp4());
+
+        mockMvc.perform(multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
+                .file(videoFile)
+                .param("title", "Negative Duration")
+                .param("sourceType", "UPLOADED_FILE")
+                .param("durationSeconds", "-1")
+                .param("sortOrder", "1")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
+                .file(videoFile)
+                .param("title", "Negative Sort")
+                .param("sourceType", "UPLOADED_FILE")
+                .param("durationSeconds", "120")
+                .param("sortOrder", "-1")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
+                .param("title", "External URL Too Long")
+                .param("sourceType", "EXTERNAL_URL")
+                .param("externalVideoUrl", "https://video.example.com/" + "x".repeat(501))
+                .param("durationSeconds", "120")
+                .param("sortOrder", "1")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void recordedVideoShouldRejectPackageThatDoesNotContainLesson() throws Exception {
+        String teacherEmail = uniqueEmail("recorded-package");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long lessonId = createPublishedLesson(teacherToken, "Recorded Package Lesson");
+        Long unrelatedPackageId = createPackage(teacherToken, "Unrelated Package", "FREE", 0);
+
+        mockMvc.perform(multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
+                .param("title", "Wrong Package Video")
+                .param("sourceType", "EXTERNAL_URL")
+                .param("externalVideoUrl", "https://video.example.com/lesson.mp4")
+                .param("packageId", String.valueOf(unrelatedPackageId))
+                .param("durationSeconds", "120")
+                .param("sortOrder", "1")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Selected package must contain the requested lesson."));
+    }
+
+    @Test
+    void recordedVideoShouldAllowPackageThatContainsLessonThroughModule() throws Exception {
+        String teacherEmail = uniqueEmail("recorded-module-pkg");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long moduleId = createModule(teacherToken, "Recorded Module");
+        Long lessonId = createPublishedLessonInModule(teacherToken, moduleId, "Recorded Module Lesson");
+        Long packageId = createPackage(teacherToken, "Module Package", "FREE", 0);
+        addPackageItem(teacherToken, packageId, "MODULE", moduleId);
+
+        mockMvc.perform(multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
+                .param("title", "Module Package Video")
+                .param("sourceType", "EXTERNAL_URL")
+                .param("externalVideoUrl", "https://video.example.com/module-lesson.mp4")
+                .param("packageId", String.valueOf(packageId))
+                .param("durationSeconds", "120")
+                .param("sortOrder", "1")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.packageId").value(packageId))
+                .andExpect(jsonPath("$.data.externalVideoUrl").value("https://video.example.com/module-lesson.mp4"));
+    }
+
+    @Test
     void recordedVideoStreamKeepsInlineDisposition() throws Exception {
         String teacherEmail = uniqueEmail("recorded-inline-teacher");
         approveTeacherProfile(teacherEmail);
@@ -649,6 +741,77 @@ class LiveRecordedLearningIntegrationTests {
                 .andReturn();
 
         return extractDataId(lessonResult);
+    }
+
+    private Long createModule(String teacherToken, String title) throws Exception {
+        MvcResult moduleResult = mockMvc.perform(post("/api/v1/teachers/modules")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "title", title,
+                        "description", "Phase 10 module",
+                        "levelId", 1,
+                        "categoryId", 3,
+                        "accessType", "FREE",
+                        "price", 0))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return extractDataId(moduleResult);
+    }
+
+    private Long createPublishedLessonInModule(String teacherToken, Long moduleId, String title) throws Exception {
+        MvcResult lessonResult = mockMvc.perform(post("/api/v1/teachers/lessons")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "title", title,
+                        "description", "Phase 10 lesson in module",
+                        "moduleId", moduleId,
+                        "levelId", 1,
+                        "categoryId", 3,
+                        "learningType", "HYBRID",
+                        "accessType", "FREE",
+                        "price", 0,
+                        "estimatedDurationMinutes", 15,
+                        "basicContent", "Hybrid module lesson content"))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return extractDataId(lessonResult);
+    }
+
+    private Long createPackage(String teacherToken, String title, String accessType, double price) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/teachers/packages")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "title", title,
+                        "description", "Phase 10 package",
+                        "levelId", 1,
+                        "categoryId", 3,
+                        "learningType", "RECORDED",
+                        "accessType", accessType,
+                        "price", price))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return extractDataId(result);
+    }
+
+    private void addPackageItem(String teacherToken, Long packageId, String itemType, Long itemId) throws Exception {
+        mockMvc.perform(post("/api/v1/teachers/packages/" + packageId + "/items")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "itemType", itemType,
+                        "itemId", itemId,
+                        "displayOrder", 1))))
+                .andExpect(status().isOk());
     }
 
     private Long createLiveClass(String teacherToken, Long lessonId, String title, LocalDateTime start) throws Exception {

@@ -9,13 +9,10 @@
             <PandaIllustration :size="138" outfit="#7d56ff" accent="#f6d056" pose="wave" />
             <div class="student-achievements-level">
               <span>Your Level</span>
-              <strong>Level {{ rewards.currentLevelNumber }}</strong>
+              <strong>Level {{ currentLevelNumber }}</strong>
               <small>{{ levelTitle }}</small>
-              <ProgressBar :progress="rewards.progressToNextLevelPercent" />
-              <em
-                >{{ formatNumber(rewards.totalPoints) }} XP - {{ rewards.progressToNextLevelPercent }}% to next
-                level</em
-              >
+              <ProgressBar :progress="levelProgressPercent" />
+              <em>{{ formatNumber(rewards.totalPoints) }} XP - {{ levelProgressPercent }}% to next level</em>
             </div>
             <div class="student-achievements-stats">
               <div v-for="stat in achievementStats" :key="stat.label" class="student-achievements-stat">
@@ -135,15 +132,11 @@
             <div class="student-section-heading">
               <strong>Overall Progress</strong>
             </div>
-            <ProgressRing
-              :progress="progress.overallCompletionPercent"
-              title="Course Progress"
-              subtitle="You're doing great!"
-            />
+            <ProgressRing :progress="overallProgressPercent" title="Course Progress" subtitle="You're doing great!" />
             <div class="student-achievements-progress-mini">
-              <strong>{{ progress.completedLessons }} / {{ progress.totalLessonsStarted }}</strong>
+              <strong>{{ completedLessonCount }} / {{ startedLessonCount }}</strong>
               <span>Units Completed</span>
-              <ProgressBar :progress="progress.overallCompletionPercent" />
+              <ProgressBar :progress="overallProgressPercent" />
             </div>
           </article>
 
@@ -188,7 +181,7 @@ import {
   studentRewards,
   studentStreak,
 } from '@/demo/data'
-import { formatDate, formatNumber } from '@/utils/format'
+import { clampNumber, clampPercent, formatDate, formatNumber, nonNegativeInteger } from '@/utils/format'
 
 const router = useRouter()
 const badgesResource = useResource(() => studentApi.badges(), studentBadges)
@@ -259,17 +252,23 @@ const usingFallback = computed(
     progressResource.usingFallback.value ||
     pointsResource.usingFallback.value,
 )
+const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
 const levelTitle = computed(() => {
-  if (rewards.value.currentLevelNumber >= 10) return 'Mandarin Champion'
-  if (rewards.value.currentLevelNumber >= 5) return 'Confident Speaker'
-  if (rewards.value.currentLevelNumber >= 3) return 'Little Learner'
+  if (currentLevelNumber.value >= 10) return 'Mandarin Champion'
+  if (currentLevelNumber.value >= 5) return 'Confident Speaker'
+  if (currentLevelNumber.value >= 3) return 'Little Learner'
   return 'New Explorer'
 })
+const levelProgressPercent = computed(() => clampPercent(rewards.value.progressToNextLevelPercent))
+const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
+const overallProgressPercent = computed(() => clampPercent(progress.value.overallCompletionPercent))
+const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
+const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
 
 const achievementStats = computed(() => [
-  { icon: 'streak', value: String(streak.value.currentStreak), label: 'Day Streak' },
+  { icon: 'streak', value: String(nonNegativeInteger(streak.value.currentStreak)), label: 'Day Streak' },
   { icon: 'star', value: formatNumber(rewards.value.totalPoints), label: 'XP' },
-  { icon: 'rewards', value: `${progress.value.quizAverage}%`, label: 'Quiz Avg' },
+  { icon: 'rewards', value: `${quizAveragePercent.value}%`, label: 'Quiz Avg' },
   {
     icon: 'shield',
     value: String(badges.value.length > 0 ? badges.value.length : rewards.value.badges.length),
@@ -290,11 +289,11 @@ const badgeCards = computed(() =>
 const chartPoints = computed(() => {
   const lessons = progress.value.recentLessons.length
     ? progress.value.recentLessons
-    : [{ completionPercent: progress.value.overallCompletionPercent }]
+    : [{ completionPercent: overallProgressPercent.value }]
 
   return lessons.slice(0, 6).map((lesson, index, collection) => ({
     left: `${collection.length === 1 ? 50 : Math.round((index / Math.max(collection.length - 1, 1)) * 82 + 6)}%`,
-    bottom: `${Math.max(10, Math.min(78, lesson.completionPercent))}%`,
+    bottom: `${clampNumber(lesson.completionPercent, 10, 78)}%`,
   }))
 })
 
@@ -303,7 +302,7 @@ const milestoneCards = computed(() =>
     icon: iconForSource(item.sourceType),
     title: item.reason,
     subtitle: `${formatDate(item.createdAt)} - ${formatSource(item.sourceType)}`,
-    reward: `${item.pointsDelta >= 0 ? '+' : ''}${item.pointsDelta} XP`,
+    reward: `${signedIntegerLabel(item.pointsDelta)} XP`,
     tone: toneForSource(item.sourceType),
   })),
 )
@@ -319,13 +318,17 @@ const moduleProgress = computed<
     barTone: ProgressTone
   }>
 >(() =>
-  progress.value.recentLessons.slice(0, 5).map((lesson, index) => ({
-    id: lesson.lessonId ? `L${lesson.lessonId}` : String(index + 1),
-    title: lesson.lessonTitle || `Lesson ${index + 1}`,
-    progress: Math.round(lesson.completionPercent),
-    tone: lesson.completionPercent >= 80 ? 'green' : lesson.completionPercent >= 50 ? 'orange' : 'blue',
-    barTone: lesson.completionPercent >= 80 ? 'success' : lesson.completionPercent >= 50 ? 'warning' : 'info',
-  })),
+  progress.value.recentLessons.slice(0, 5).map((lesson, index) => {
+    const completionPercent = clampPercent(lesson.completionPercent)
+
+    return {
+      id: lesson.lessonId ? `L${lesson.lessonId}` : String(index + 1),
+      title: lesson.lessonTitle || `Lesson ${index + 1}`,
+      progress: completionPercent,
+      tone: completionPercent >= 80 ? 'green' : completionPercent >= 50 ? 'orange' : 'blue',
+      barTone: completionPercent >= 80 ? 'success' : completionPercent >= 50 ? 'warning' : 'info',
+    }
+  }),
 )
 
 function iconForSource(sourceType: string) {
@@ -368,6 +371,11 @@ function formatSource(sourceType: string) {
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+}
+
+function signedIntegerLabel(value: number) {
+  const rounded = Math.round(Number.isFinite(value) ? value : 0)
+  return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
 function reloadAll() {

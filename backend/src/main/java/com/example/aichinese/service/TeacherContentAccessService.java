@@ -5,6 +5,7 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 import java.util.Set;
 
@@ -73,6 +74,8 @@ public class TeacherContentAccessService {
     private static final int MAX_TITLE_LENGTH = 200;
     private static final int MAX_DESCRIPTION_LENGTH = 2000;
     private static final int MAX_LESSON_CONTENT_LENGTH = 10000;
+    private static final int PRICE_INTEGER_DIGITS = 8;
+    private static final int PRICE_FRACTION_DIGITS = 2;
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LearningLevelRepository learningLevelRepository;
@@ -129,6 +132,12 @@ public class TeacherContentAccessService {
     }
 
     public void validatePrice(AccessType accessType, BigDecimal price) {
+        if (accessType == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Access type is required.");
+        }
+        if (price != null) {
+            validateMoneyPrecision(price);
+        }
         if (accessType == AccessType.PAID) {
             if (price == null) {
                 throw new ResponseStatusException(BAD_REQUEST, "Price is required for paid content.");
@@ -146,10 +155,26 @@ public class TeacherContentAccessService {
 
     private BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
         if (accessType == AccessType.FREE) {
-            return BigDecimal.ZERO;
+            return BigDecimal.ZERO.setScale(PRICE_FRACTION_DIGITS);
         }
 
-        return price == null ? BigDecimal.ZERO : price;
+        if (price == null) {
+            return BigDecimal.ZERO.setScale(PRICE_FRACTION_DIGITS);
+        }
+        return price.setScale(PRICE_FRACTION_DIGITS, RoundingMode.UNNECESSARY);
+    }
+
+    private void validateMoneyPrecision(BigDecimal price) {
+        if (price.signum() < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Price must be greater than or equal to 0.");
+        }
+        BigDecimal normalized = price.stripTrailingZeros();
+        int scale = Math.max(0, normalized.scale());
+        int integerDigits = Math.max(1, normalized.precision() - normalized.scale());
+        if (scale > PRICE_FRACTION_DIGITS || integerDigits > PRICE_INTEGER_DIGITS) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "Price must fit within 8 integer digits and 2 decimal places.");
+        }
     }
 
     public void attachModuleMetadata(

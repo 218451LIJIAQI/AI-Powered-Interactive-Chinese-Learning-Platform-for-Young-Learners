@@ -170,6 +170,7 @@ public class AdminTeacherManagementService {
     public AdminTeacherDetailResponse approveTeacher(SecurityUserDetails currentUser, Long teacherId, String note) {
         User adminUser = findActor(currentUser);
         TeacherProfile teacherProfile = findTeacherProfile(teacherId);
+        String normalizedNote = TextUtils.trimToNull(note);
 
         // Idempotency guard. Without this, an admin double-clicking "Approve"
         // on an already-APPROVED teacher would write a duplicate
@@ -198,7 +199,7 @@ public class AdminTeacherManagementService {
         review.setDocument(teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(teacherId).orElse(null));
         review.setReviewerUser(adminUser);
         review.setDecisionStatus(TeacherStatus.APPROVED);
-        review.setReviewNote(TextUtils.trimToNull(note));
+        review.setReviewNote(normalizedNote);
         review.setReviewedAt(LocalDateTime.now());
         teacherVerificationReviewRepository.save(review);
 
@@ -210,7 +211,7 @@ public class AdminTeacherManagementService {
         log.info("Teacher approved: teacherId={}, adminUserId={}", teacherProfile.getId(), adminUser.getId());
         auditLogService.record(adminUser, "ADMIN_TEACHER_APPROVE", "TeacherProfile", teacherProfile.getId(),
                 "Admin approved teacher verification.");
-        transactionalEmailDispatcher.enqueueTeacherApproval(teacherProfile.getUser(), note);
+        transactionalEmailDispatcher.enqueueTeacherApproval(teacherProfile.getUser(), normalizedNote);
 
         return buildTeacherDetail(teacherProfile);
     }
@@ -232,7 +233,10 @@ public class AdminTeacherManagementService {
             return buildTeacherDetail(teacherProfile);
         }
 
-        String trimmedReason = reason.trim();
+        String trimmedReason = TextUtils.trimToNull(reason);
+        if (trimmedReason == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Rejection reason is required.");
+        }
         teacherProfile.setTeacherStatus(TeacherStatus.REJECTED);
         teacherProfile.setRejectionReason(trimmedReason);
         teacherProfile.setPublicVisible(false);
@@ -347,7 +351,7 @@ public class AdminTeacherManagementService {
         }
 
         try {
-            return TeacherStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+            return TeacherStatus.valueOf(status.strip().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid teacher status filter.");
         }
@@ -358,7 +362,7 @@ public class AdminTeacherManagementService {
             return Sort.by(Sort.Direction.DESC, "createdAt");
         }
 
-        String normalized = sort.trim().toLowerCase(Locale.ROOT);
+        String normalized = sort.strip().toLowerCase(Locale.ROOT);
         return switch (normalized) {
             case "name" -> Sort.by(Sort.Direction.ASC, "user.displayName");
             case "status" -> Sort.by(Sort.Direction.ASC, "teacherStatus");

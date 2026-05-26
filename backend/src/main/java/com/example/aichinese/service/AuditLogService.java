@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +23,10 @@ import com.example.aichinese.dto.communication.AuditLogResponse;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.AuditLogRepository;
-import com.example.aichinese.util.RequestIdHolder;
+import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.RequestIdHolder;
+import com.example.aichinese.util.SensitiveDataRedactor;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -37,9 +38,9 @@ import jakarta.persistence.criteria.Predicate;
  * <h2>What gets written</h2>
  * <p>Each call captures the actor, action, target type / id, and a
  * human-readable description. The description is run through
- * {@link #SENSITIVE_ASSIGNMENT_PATTERN} and
- * {@link #AUTHORIZATION_HEADER_PATTERN} to redact tokens, passwords,
- * reset links, API keys, and {@code Authorization: Bearer …} headers
+ * {@link SensitiveDataRedactor} to redact tokens, passwords, reset
+ * links, API keys, email addresses, and {@code Authorization: Bearer}
+ * headers
  * — so an admin browsing the audit history cannot lift secrets from
  * the description even if a developer accidentally passed one in.
  * Descriptions are capped at {@link #MAX_AUDIT_DESCRIPTION_LENGTH}
@@ -60,10 +61,6 @@ public class AuditLogService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);
     private static final int MAX_AUDIT_DESCRIPTION_LENGTH = 1000;
-    private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
-            "(?i)((?:(?:access|refresh|id|reset)[-_ ]?)?token|password|secret|api[-_ ]?key|reset[-_ ]?link)\\s*(?:[:=])\\s*\\S+");
-    private static final Pattern AUTHORIZATION_HEADER_PATTERN = Pattern.compile(
-            "(?i)(authorization\\s*(?:[:=])\\s*)(?:bearer\\s+)?\\S+");
 
     private final AuditLogRepository auditLogRepository;
     private final CommunicationMapper communicationMapper;
@@ -99,7 +96,12 @@ public class AuditLogService {
         try {
             record(actor, actionType, targetType, targetId, description, ipAddress);
         } catch (Exception exception) {
-            log.warn("Audit log creation failed for action {} on {}:{}.", actionType, targetType, targetId, exception);
+            log.warn("Audit log creation failed for action {} on {}:{}: {}",
+                    actionType,
+                    targetType,
+                    targetId,
+                    ExceptionLogUtils.safeSummary(exception));
+            log.debug("Audit log creation stack trace for action {} on {}:{}.", actionType, targetType, targetId, exception);
         }
     }
 
@@ -146,10 +148,7 @@ public class AuditLogService {
         if (description == null) {
             return null;
         }
-        String normalized = AUTHORIZATION_HEADER_PATTERN.matcher(description)
-                .replaceAll(match -> match.group(1) + "[REDACTED]");
-        normalized = SENSITIVE_ASSIGNMENT_PATTERN.matcher(normalized)
-                .replaceAll(match -> match.group(1) + "=[REDACTED]");
+        String normalized = SensitiveDataRedactor.redactText(description);
         return normalized.length() <= MAX_AUDIT_DESCRIPTION_LENGTH
                 ? normalized
                 : normalized.substring(0, MAX_AUDIT_DESCRIPTION_LENGTH);

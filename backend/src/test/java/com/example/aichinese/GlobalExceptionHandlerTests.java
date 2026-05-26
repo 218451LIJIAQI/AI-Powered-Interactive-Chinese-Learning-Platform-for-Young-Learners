@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpMethod;
@@ -27,6 +28,9 @@ import org.springframework.web.multipart.MultipartException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.validation.method.MethodValidationResult;
+import org.springframework.validation.method.ParameterValidationResult;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.exception.GlobalExceptionHandler;
@@ -180,13 +184,16 @@ class GlobalExceptionHandlerTests {
         bindRequestPath("/api/v1/teachers/profile");
         try {
             ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
-                    validationException("displayName", "Display name is required."));
+                    validationException(
+                            fieldError("displayName", "Display name is required."),
+                            fieldError("email", "Email is required.")));
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
             assertThat(body.message()).isEqualTo(
                     "The information you entered is incomplete or invalid. Please check it and try again.");
             assertThat(body.fieldErrors()).containsEntry("displayName", List.of("Display name is required."));
+            assertThat(body.fieldErrors().keySet()).containsExactly("displayName", "email");
         } finally {
             RequestContextHolder.resetRequestAttributes();
         }
@@ -197,11 +204,43 @@ class GlobalExceptionHandlerTests {
         bindRequestPath("/api/v1/auth/login");
         try {
             ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
-                    validationException("email", "Email address is required."));
+                    validationException(fieldError("email", "Email address is required.")));
 
             ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
             assertThat(body.fieldErrors()).isEmpty();
             assertThat(body.errors()).containsExactly(body.message());
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    @Test
+    void handlerMethodValidationReturnsParameterFieldErrors() throws Exception {
+        bindRequestPath("/api/v1/teachers/classes");
+        try {
+            MethodParameter parameter = new MethodParameter(
+                    GlobalExceptionHandlerTests.class.getDeclaredMethod("sampleQueryEndpoint", Long.class),
+                    0);
+            ParameterValidationResult parameterResult = new ParameterValidationResult(
+                    parameter,
+                    0L,
+                    List.of(new DefaultMessageSourceResolvable(
+                            new String[] { "teacherId" },
+                            "Teacher id must be positive.")),
+                    null,
+                    null,
+                    null,
+                    (error, sourceType) -> null);
+            MethodValidationResult validationResult = MethodValidationResult.create(
+                    this,
+                    GlobalExceptionHandlerTests.class.getDeclaredMethod("sampleQueryEndpoint", Long.class),
+                    List.of(parameterResult));
+
+            ResponseEntity<ApiResponse<Void>> response = handler.handleHandlerMethodValidationException(
+                    new HandlerMethodValidationException(validationResult));
+
+            ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+            assertThat(body.fieldErrors()).containsEntry("teacherId", List.of("Teacher id must be positive."));
         } finally {
             RequestContextHolder.resetRequestAttributes();
         }
@@ -213,18 +252,28 @@ class GlobalExceptionHandlerTests {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
-    private static MethodArgumentNotValidException validationException(String field, String message) throws Exception {
+    private static MethodArgumentNotValidException validationException(FieldError... errors) throws Exception {
         SampleRequest target = new SampleRequest("");
         BeanPropertyBindingResult bindingResult = new BeanPropertyBindingResult(target, "sampleRequest");
-        bindingResult.addError(new FieldError("sampleRequest", field, "", false, null, null, message));
+        for (FieldError error : errors) {
+            bindingResult.addError(error);
+        }
         MethodParameter parameter = new MethodParameter(
                 GlobalExceptionHandlerTests.class.getDeclaredMethod("sampleEndpoint", SampleRequest.class),
                 0);
         return new MethodArgumentNotValidException(parameter, bindingResult);
     }
 
+    private static FieldError fieldError(String field, String message) {
+        return new FieldError("sampleRequest", field, "", false, null, null, message);
+    }
+
     @SuppressWarnings("unused")
     private static void sampleEndpoint(@Valid SampleRequest request) {
+    }
+
+    @SuppressWarnings("unused")
+    private static void sampleQueryEndpoint(Long teacherId) {
     }
 
     private record SampleRequest(@NotBlank String displayName) {

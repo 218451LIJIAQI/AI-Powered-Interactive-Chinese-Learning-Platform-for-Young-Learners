@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.UUID;
 
 import org.slf4j.MDC;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -52,6 +54,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * triggered it.</p>
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestIdFilter extends OncePerRequestFilter {
 
     /**
@@ -103,6 +106,10 @@ public class RequestIdFilter extends OncePerRequestFilter {
         // (0x20\u20130x7E) with an underscore so the reflected value is always
         // safe to embed in a response header without further encoding.
         String sanitized = toPrintableAscii(stripped);
+
+        if (sanitized.isBlank()) {
+            return null;
+        }
 
         // Keep request ids log-friendly and bounded for response headers.
         if (sanitized.length() > MAX_REQUEST_ID_LENGTH) {

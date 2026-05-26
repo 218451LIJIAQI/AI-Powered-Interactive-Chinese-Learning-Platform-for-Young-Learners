@@ -129,19 +129,19 @@
               </button>
             </div>
             <div class="student-quiz-ring">
-              <span>{{ progress.quizAverage }}%</span>
+              <span>{{ quizAveragePercent }}%</span>
             </div>
             <div class="student-quiz-side-stats">
               <div>
                 <small>Lessons Started</small>
-                <strong>{{ progress.totalLessonsStarted }}</strong>
+                <strong>{{ startedLessonCount }}</strong>
               </div>
               <div>
                 <small>Completed</small>
-                <strong>{{ progress.completedLessons }}</strong>
+                <strong>{{ completedLessonCount }}</strong>
               </div>
             </div>
-            <ProgressBar :progress="progress.quizAverage" />
+            <ProgressBar :progress="quizAveragePercent" />
           </article>
 
           <article class="panel student-quiz-side-card">
@@ -203,7 +203,7 @@ import { useResource } from '@/composables/useResource'
 import { studentProgress as studentProgressDemo, studentQuiz } from '@/demo/data'
 import type { QuizAttemptResultResponse, StudentQuizResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatDate } from '@/utils/format'
+import { clampPercent, formatDate, nonNegativeInteger } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -259,6 +259,9 @@ const quiz = computed(() => quizResource.data.value ?? (quizResource.usingFallba
 const progress = computed(
   () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
 )
+const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
+const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
+const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
 const result = computed(() => resultData.value ?? emptyResult)
 const pageLoading = computed(() => quizResource.loading.value || progressResource.loading.value)
 const pageError = computed(() => quizResource.error.value || progressResource.error.value)
@@ -312,14 +315,18 @@ const quizEmptyMessage = computed(() => {
   return 'No published quiz is available to this student account yet. Continue lessons first, then return when a teacher has published a quiz.'
 })
 const performanceItems = computed(() =>
-  progress.value.recentLessons.slice(0, 3).map((lesson) => ({
-    icon: iconForLessonProgress(lesson.completionPercent, lesson.completed),
-    title: lesson.lessonTitle,
-    when: lesson.lastAccessedAt
-      ? formatDate(lesson.lastAccessedAt)
-      : progressStatusLabel(lesson.completionPercent, lesson.completed),
-    score: `${Math.round(lesson.completionPercent)}%`,
-  })),
+  progress.value.recentLessons.slice(0, 3).map((lesson) => {
+    const completionPercent = clampPercent(lesson.completionPercent)
+
+    return {
+      icon: iconForLessonProgress(completionPercent, lesson.completed),
+      title: lesson.lessonTitle,
+      when: lesson.lastAccessedAt
+        ? formatDate(lesson.lastAccessedAt)
+        : progressStatusLabel(completionPercent, lesson.completed),
+      score: `${completionPercent}%`,
+    }
+  }),
 )
 
 function iconForLessonProgress(completionPercent: number, completed: boolean) {
