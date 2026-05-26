@@ -203,6 +203,10 @@ function safeName(name) {
   )
 }
 
+function isExpectedHttpError(status, url) {
+  return status === 401 && typeof url === 'string' && url.includes('/api/v1/auth/refresh')
+}
+
 async function main() {
   if (!existsSync(chromePath)) throw new Error(`Chrome executable not found at ${chromePath}`)
   await mkdir(evidenceDir, { recursive: true })
@@ -278,7 +282,7 @@ async function main() {
     on('Network.responseReceived', (params) => {
       if (!activeFlow) return
       const response = params.response || {}
-      if (response.status >= 400)
+      if (response.status >= 400 && !isExpectedHttpError(response.status, response.url))
         activeFlow.httpErrors.push({ status: response.status, url: response.url, type: params.type })
     })
 
@@ -470,7 +474,12 @@ async function main() {
       await capture(record, '-landing')
       await clickByText('Explore Courses')
       await waitForPage('courses page after Explore Courses', (state) => state.path.startsWith('/courses'))
-      await capture(record, '-courses')
+      const coursesSnapshot = await capture(record, '-courses')
+      if (!coursesSnapshot.text.includes('View Details')) {
+        throw new BlockedError(
+          'Public catalog navigation to course detail requires at least one published course in the active backend dataset.',
+        )
+      }
       await clickByText('View Details', 'a,button')
       await waitForPage('course detail page after View Details', (state) => state.path.startsWith('/courses/'))
       await capture(record, '-detail')
@@ -522,13 +531,13 @@ async function main() {
       await capture(record, '-empty')
       await setValue('#reset-password', 'Password1')
       await setValue('#reset-confirm-password', 'Mismatch1')
-      await clickByText('Reset password')
-      await waitForPage('password mismatch validation', (state) =>
-        state.text.includes('Confirm password does not match'),
+      await waitForPage('password mismatch disabled state', (state) =>
+        state.buttons.some((button) => button.text.includes('Reset password') && button.disabled),
       )
       const snapshot = await capture(record, '-mismatch')
-      if (!snapshot.text.includes('Confirm password does not match'))
-        throw new Error('Password mismatch validation not shown')
+      const resetDisabled = snapshot.buttons.some((button) => button.text.includes('Reset password') && button.disabled)
+      if (!resetDisabled) throw new Error('Password mismatch should keep reset submit disabled')
+      if (!snapshot.text.includes('Passwords match')) throw new Error('Password readiness checklist was not shown')
     })
 
     await runFlow('Student learning navigation quiz and AI helper', async (record) => {
@@ -544,9 +553,31 @@ async function main() {
       snapshot = await capture(record, '-quiz-initial')
       if (!snapshot.text.includes('Answer') || !snapshot.text.includes('Feedback unlocks after you submit'))
         throw new Error('Quiz initial disabled/read-only state was not visible')
-      await clickByText('A')
-      await clickByText('Next')
-      await clickByText('A')
+      for (let step = 0; step < 30; step += 1) {
+        await evaluate(`(() => {
+          const options = Array.from(document.querySelectorAll('.student-quiz-option'));
+          if (!options.length) return false;
+          if (!options.some((button) => button.getAttribute('aria-pressed') === 'true')) {
+            options[0].click();
+          }
+          return true;
+        })()`)
+        await sleep(150)
+
+        const readyToSubmit = await evaluate(
+          `document.querySelector('.student-quiz-submit')?.innerText.includes('Submit quiz') === true`,
+        )
+        if (readyToSubmit) break
+
+        const movedNext = await evaluate(`(() => {
+          const next = Array.from(document.querySelectorAll('button')).find((button) => button.innerText.trim() === 'Next');
+          if (!next || next.disabled) return false;
+          next.click();
+          return true;
+        })()`)
+        await sleep(250)
+        if (!movedNext) break
+      }
       await waitForPage(
         'quiz preview readonly state',
         (state) => state.text.includes('Preview data mode') && state.text.includes('Submit quiz'),

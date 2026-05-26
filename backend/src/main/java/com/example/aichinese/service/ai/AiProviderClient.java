@@ -23,9 +23,9 @@ package com.example.aichinese.service.ai;
  *   <li><strong>Never throws.</strong> Every error path (missing
  *       credentials, network failure, provider 5xx, parse failure)
  *       must be encoded as an {@link AiProviderResult} with
- *       {@code success=false} so the service layer can fall back to
- *       the deterministic per-feature stub without unwinding the
- *       request.</li>
+ *       {@code success=false} so the service layer can return an
+ *       explicit unavailable response without unwinding the request
+ *       or presenting fake generated content.</li>
  *   <li><strong>Non-null in / non-null out.</strong> Callers always
  *       pass a non-null {@link AiProviderPrompt} and implementations
  *       always return a non-null {@link AiProviderResult}.</li>

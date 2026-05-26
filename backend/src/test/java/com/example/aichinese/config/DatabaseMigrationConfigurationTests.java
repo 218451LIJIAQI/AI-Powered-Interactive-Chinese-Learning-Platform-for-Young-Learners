@@ -82,7 +82,7 @@ class DatabaseMigrationConfigurationTests {
         assertThat(compose).contains("MYSQL_PASSWORD: ${DB_PASSWORD:-replace-with-a-strong-application-db-password}");
         assertThat(compose).contains("MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-replace-with-a-strong-root-db-password}");
         assertThat(compose).contains("--character-set-server=utf8mb4");
-        assertThat(compose).contains("MYSQL_PWD=\\\"$${MYSQL_PASSWORD}\\\" mysqladmin ping");
+        assertThat(compose).contains("MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysqladmin ping");
         assertThat(compose).doesNotContain("-p${DB_PASSWORD");
         assertThat(compose).doesNotContain("-p$${MYSQL_PASSWORD}");
         assertThat(compose).doesNotContain("MYSQL_ROOT_HOST");
@@ -113,8 +113,11 @@ class DatabaseMigrationConfigurationTests {
         String productionEnv = readResource("../.env.prod.example");
         String nginx = readResource("../frontend/nginx.conf");
         String qualityGate = readResource("../.github/workflows/repository-quality-gate.yml");
+        String rootPackage = readResource("../package.json");
+        String contributing = readResource("../CONTRIBUTING.md");
+        String releasePrecheck = readResource("../docs/RELEASE_PRECHECK_RUNBOOK.md");
 
-        assertThat(productionCompose).contains("MYSQL_PWD=\\\"$${MYSQL_PASSWORD}\\\" mysqladmin ping");
+        assertThat(productionCompose).contains("MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysqladmin ping");
         assertThat(productionCompose).doesNotContain("-p${DB_PASSWORD");
         assertThat(productionCompose).doesNotContain("-p$${MYSQL_PASSWORD}");
         assertThat(productionCompose).contains("curl -fsS http://127.0.0.1:8080/actuator/health/readiness >/dev/null");
@@ -153,6 +156,24 @@ class DatabaseMigrationConfigurationTests {
         assertThat(qualityGate).contains("Backend static analysis");
         assertThat(qualityGate).contains("spotbugs:check");
         assertThat(qualityGate).contains("-DskipOpenApiContract=false");
+        assertThat(qualityGate).contains("docs/RELEASE_PRECHECK_RUNBOOK.md");
+
+        assertThat(rootPackage).contains("\"quality\"");
+        assertThat(rootPackage).contains("\"quality:frontend\"");
+        assertThat(rootPackage).contains("\"quality:backend\"");
+        assertThat(rootPackage).contains("\"quality:release\"");
+        assertThat(rootPackage).contains("scripts/run-backend-quality-gate.mjs");
+
+        assertThat(contributing).contains("Run `npm run quality` from the repository root");
+        assertThat(contributing).contains("single consolidated V1 baseline");
+        assertThat(contributing).contains("After the baseline is frozen against production data");
+        assertThat(contributing).doesNotContain("V14__final_database_contract_hardening.sql");
+        assertThat(contributing).doesNotContain("starting at `V15`");
+
+        assertThat(releasePrecheck).contains("npm run quality");
+        assertThat(releasePrecheck).contains("validate-flyway-mysql.ps1");
+        assertThat(releasePrecheck).contains("docker compose --env-file .env.prod -f docker-compose.prod.yml config");
+        assertThat(releasePrecheck).contains("DAST ZAP Baseline");
     }
 
     @Test

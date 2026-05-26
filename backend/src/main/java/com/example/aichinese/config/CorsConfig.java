@@ -41,9 +41,10 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  *
  * <h2>Local-dev fallback</h2>
  * <p>Outside production, an empty allow-list falls back to a curated
- * set of Vite dev/preview ports ({@code http://localhost:5173..5183}
- * and the {@code 127.0.0.1} variants). Vite hot-restart sometimes
- * shifts to the next available port if the default is busy; the wider
+ * set of Vite dev/preview ports ({@code http://localhost:4173} plus
+ * {@code http://localhost:5173..5183} and the {@code 127.0.0.1}
+ * variants). The project e2e server uses 4173, while Vite hot-restart
+ * sometimes shifts from 5173 to the next available port; the wider
  * fallback set keeps local development working without manual
  * reconfiguration.</p>
  */
@@ -65,9 +66,10 @@ public class CorsConfig {
     /**
      * Single source of truth for the local-dev fallback. Sequenced as
      * {@code (localhost, 127.0.0.1) x ports} so callers can mentally
-     * pair them. Vite hot-restart sometimes shifts to the next available
-     * port if the default is busy; the wider fallback set keeps local
-     * development working without manual reconfiguration.
+     * pair them. Port 4173 is the Playwright preview/e2e default; Vite
+     * hot-restart sometimes shifts from 5173 to the next available port.
+     * The wider fallback set keeps local development working without
+     * manual reconfiguration.
      */
     private static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
     private static final String DEFAULT_LOCAL_DEV_ORIGINS_CSV = String.join(",", DEFAULT_LOCAL_DEV_ORIGINS);
@@ -172,6 +174,8 @@ public class CorsConfig {
 
     private static List<String> buildDefaultLocalDevOrigins() {
         List<String> origins = new ArrayList<>();
+        origins.add("http://localhost:4173");
+        origins.add("http://127.0.0.1:4173");
         for (int port = 5173; port <= 5183; port++) {
             origins.add("http://localhost:" + port);
             origins.add("http://127.0.0.1:" + port);

@@ -37,20 +37,20 @@ import com.example.aichinese.util.PaginationUtils;
  * Student-filed refund requests with admin-side review workflow.
  *
  * <h2>Lifecycle</h2>
- * <p>{@code PENDING → APPROVED → COMPLETED} or {@code REJECTED}.
- * Approval triggers the provider-side refund (via
- * {@link PaymentService} delegating to the payment provider) and
- * revokes the underlying {@link com.example.aichinese.entity.PaymentEntitlement}
- * so the student loses access to the previously purchased content.
- * Rejection writes an admin note explaining the reason for the
- * decision so the student sees something more helpful than a bare
- * "denied".</p>
+ * <p>{@code PENDING -> APPROVED -> REFUNDED} or {@code REJECTED}.
+ * Approval records the admin decision; the separate
+ * {@link #markRefunded(SecurityUserDetails, Long)} transition is used
+ * after the operator has completed the provider-side refund. That
+ * terminal transition revokes the underlying
+ * {@link com.example.aichinese.entity.PaymentEntitlement} so the
+ * student loses access to the previously purchased content. Rejection
+ * writes an admin note explaining the reason for the decision so the
+ * student sees something more helpful than a bare "denied".</p>
  *
  * <h2>Concurrency / idempotency</h2>
- * <p>Each refund request locks its parent {@link PaymentRecord} so
- * two admins acting on the same row cannot double-process; the
- * underlying provider refund call is idempotent on the provider's
- * own request key.</p>
+ * <p>Each refund request is pessimistically locked before every
+ * state transition so two admins acting on the same row cannot
+ * double-process the platform-side records.</p>
  */
 @Service
 public class RefundService {

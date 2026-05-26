@@ -302,6 +302,7 @@ import { useResource } from '@/composables/useResource'
 import { studentDashboard, studentProgress } from '@/demo/data'
 import type { StudentDashboardResponse, StudentProgressSummaryResponse } from '@/types/api'
 import { clampPercent, nonNegativeInteger, ratioPercent } from '@/utils/format'
+import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
 
 const router = useRouter()
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboard)
@@ -453,13 +454,13 @@ const pathNodes = computed(() => {
 })
 
 const practiceTools = [
-  { title: 'Flashcards', icon: 'file', color: '#6bc45c', to: '/student/practice' },
+  { title: 'Flashcards', icon: 'file', color: '#6bc45c', to: practiceRoute('FLASHCARD') },
   { title: 'Quiz', icon: 'quiz', color: '#9b6aff', to: '/student/quiz' },
-  { title: 'Listening', icon: 'live', color: '#2d8cff', to: '/student/practice' },
+  { title: 'Listening', icon: 'live', color: '#2d8cff', to: practiceRoute('LISTENING_EXERCISE') },
   { title: 'Speaking', icon: 'moderation', color: '#ff9c21', to: '/student/ai-helper' },
-  { title: 'Writing', icon: 'clip', color: '#8d59ff', to: '/student/practice' },
-  { title: 'Matching', icon: 'fun', color: '#ffc530', to: '/student/practice' },
-  { title: 'Drag & Drop', icon: 'practice', color: '#00b8d9', to: '/student/practice', wide: true },
+  { title: 'Writing', icon: 'clip', color: '#8d59ff', to: practiceRoute('TRACING_EXERCISE') },
+  { title: 'Matching', icon: 'fun', color: '#ffc530', to: practiceRoute('MATCHING_GAME') },
+  { title: 'Drag & Drop', icon: 'practice', color: '#00b8d9', to: practiceRoute('DRAG_DROP_ACTIVITY'), wide: true },
 ]
 
 const goals = computed(() => {
@@ -567,7 +568,7 @@ function clickNode(node: { lessonId: number | null; title: string }) {
     if (node.title.toLowerCase().includes('quiz')) {
       void router.push('/student/quiz')
     } else if (node.title.toLowerCase().includes('listening') || node.title.toLowerCase().includes('practice')) {
-      void router.push('/student/practice')
+      void router.push(practiceRoute(inferPracticeActivityFromText(node.title)))
     } else {
       void router.push('/student/learn')
     }

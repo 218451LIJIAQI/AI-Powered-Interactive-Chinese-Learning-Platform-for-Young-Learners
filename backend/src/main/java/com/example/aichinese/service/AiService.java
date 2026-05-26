@@ -106,10 +106,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *   <li>Logs every invocation through {@link AiLogService} (usage
  *       record + chat session/message rows where applicable) so the
  *       admin observability dashboard has a full audit trail.</li>
- *   <li>Falls back to deterministic stub responses when the provider
- *       is unavailable / failed, so learners never see a 500 — the
- *       friendly fallback text is composed per feature using the
- *       {@code fallback*} private helpers below.</li>
+ *   <li>Returns explicit unavailable responses when the provider is
+ *       unavailable or failed, so learners never see a raw 500 and
+ *       unavailable AI is not misrepresented as provider-generated
+ *       content.</li>
  * </ol>
  *
  * <h2>Authorization</h2>

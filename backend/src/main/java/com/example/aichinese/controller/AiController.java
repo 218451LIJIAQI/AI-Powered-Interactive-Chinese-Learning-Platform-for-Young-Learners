@@ -74,8 +74,8 @@ import jakarta.validation.constraints.Size;
  * <p>{@code GET /availability} reflects
  * {@link com.example.aichinese.service.ai.AiAvailabilityService};
  * when the provider is disabled or mis-configured, individual feature
- * endpoints still return a friendly deterministic fallback so
- * learners never see a 500.</p>
+ * endpoints return a friendly unavailable status so learners never
+ * see a raw 500 or fake generated content.</p>
  *
  * <h2>Uploads</h2>
  * <p>Pronunciation audio and writing image uploads go through

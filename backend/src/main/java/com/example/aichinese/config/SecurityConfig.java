@@ -63,9 +63,12 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
  *
  * <h2>Security headers</h2>
  * <ul>
- *   <li>CSRF: disabled — the platform is a stateless JWT API with no
- *       cookie-based session, so the CSRF threat model does not apply.</li>
- *   <li>Sessions: stateless — every request is authenticated via JWT.</li>
+ *   <li>CSRF: disabled — state-changing API requests are authenticated
+ *       by short-lived bearer access tokens, while the HttpOnly refresh
+ *       cookie is scoped to {@code /api/v1/auth}, uses SameSite by
+ *       default, and can only rotate sessions on the refresh endpoint.</li>
+ *   <li>Sessions: stateless — Spring Security never creates an HTTP
+ *       session; request authentication comes from the bearer access token.</li>
  *   <li>{@code X-Content-Type-Options: nosniff} — prevents MIME sniffing.</li>
  *   <li>{@code X-Frame-Options: DENY} — clickjacking defence.</li>
  *   <li>{@code Referrer-Policy: strict-origin-when-cross-origin} —

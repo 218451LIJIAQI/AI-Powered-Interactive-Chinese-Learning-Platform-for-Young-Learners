@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -154,11 +155,13 @@ class EntityLayerContractTests {
 
     private static List<Class<?>> concreteEntityClasses() throws Exception {
         try (Stream<Path> sources = concreteEntitySources()) {
-            return sources
+            List<Class<?>> classes = new ArrayList<>();
+            sources
                     .map(EntityLayerContractTests::sourceToClassName)
                     .map(EntityLayerContractTests::loadClass)
-                    .sorted(Comparator.comparing(Class::getName))
-                    .toList();
+                    .forEach(classes::add);
+            classes.sort(Comparator.comparing(Class::getName));
+            return List.copyOf(classes);
         }
     }
 
@@ -171,14 +174,16 @@ class EntityLayerContractTests {
 
     private static List<Class<?>> enumClasses() throws Exception {
         try (Stream<Path> sources = Files.list(ENUM_SOURCE_ROOT)) {
-            return sources
+            List<Class<?>> classes = new ArrayList<>();
+            sources
                     .filter(path -> path.getFileName().toString().endsWith(".java"))
                     .filter(path -> !"EnumLookups.java".equals(path.getFileName().toString()))
                     .map(EntityLayerContractTests::sourceToClassName)
                     .map(EntityLayerContractTests::loadClass)
                     .filter(Class::isEnum)
-                    .sorted(Comparator.comparing(Class::getName))
-                    .toList();
+                    .forEach(classes::add);
+            classes.sort(Comparator.comparing(Class::getName));
+            return List.copyOf(classes);
         }
     }
 

@@ -1422,9 +1422,9 @@
  *
  * <h2>AI assistance</h2>
  * <p>Quiz / story / vocabulary generators feed into the AI helper
- * service; the page falls back to deterministic stubs when the AI
- * provider is disabled or returns an error so the author UX never
- * hard-fails.</p>
+ * service; when the AI provider is disabled or returns an error, the
+ * helper returns an explicit unavailable status instead of pretending
+ * generated content exists, so the author UX can fail safely.</p>
  */
 import { computed, reactive, ref, watch } from 'vue'
 

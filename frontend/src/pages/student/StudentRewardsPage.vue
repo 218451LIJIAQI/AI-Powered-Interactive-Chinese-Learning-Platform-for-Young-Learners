@@ -102,7 +102,7 @@
                 <li><IconGlyph name="quiz" :size="14" /> Score 80%+ in a quiz to unlock Quiz Starter</li>
                 <li><IconGlyph name="streak" :size="14" /> Learn 7 days in a row to unlock 7-Day Streak</li>
               </ul>
-              <button type="button" class="student-badges-empty-cta" @click="router.push('/student/practice')">
+              <button type="button" class="student-badges-empty-cta" @click="openRewardPractice">
                 <IconGlyph name="practice" :size="16" />
                 Start practising
                 <IconGlyph name="chevronRight" :size="14" />
@@ -207,9 +207,7 @@
                 Reward tracking focuses on points, levels, streaks, and badges so every practice session shows visible
                 progress.
               </p>
-              <button type="button" class="btn btn-primary" @click="router.push('/student/practice')">
-                Continue Practice
-              </button>
+              <button type="button" class="btn btn-primary" @click="openRewardPractice">Continue Practice</button>
             </div>
             <div class="student-rewards-promo-chest"><IconGlyph name="rewards" :size="58" /></div>
           </article>
@@ -303,6 +301,7 @@ import {
   studentRewards,
 } from '@/demo/data'
 import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent } from '@/utils/format'
+import { inferPracticeActivityFromText, normalizePracticeActivity, practiceRoute } from '@/utils/practiceRoute'
 
 const router = useRouter()
 
@@ -368,6 +367,13 @@ const activities = computed(
   () => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : emptyActivities),
 )
 const actionSuccess = ref<string | null>(null)
+const recommendedPracticeActivity = computed(() => {
+  const nextIncomplete = activities.value.items.find((item) => !item.completed)
+  const fromLibrary = normalizePracticeActivity(nextIncomplete?.type)
+  if (fromLibrary) return fromLibrary
+
+  return inferPracticeActivityFromText(progress.value.weakAreas[0] ?? dashboard.value.recommendedNextStep)
+})
 
 const usingFallback = computed(
   () =>
@@ -602,7 +608,7 @@ const journeySteps = computed(() =>
 
 function openRewardPractice() {
   actionSuccess.value = null
-  void router.push('/student/practice')
+  void router.push(practiceRoute(recommendedPracticeActivity.value))
 }
 
 function signedIntegerLabel(value: number) {

@@ -313,7 +313,7 @@ async function main() {
     on('Network.responseReceived', (params) => {
       if (!activeFlow) return
       const response = params.response || {}
-      if (response.status >= 400)
+      if (response.status >= 400 && !isExpectedHttpError(response.status, response.url))
         activeFlow.httpErrors.push({ status: response.status, url: response.url, type: params.type })
     })
 
@@ -343,6 +343,24 @@ async function main() {
       await send('Page.navigate', { url: `${baseUrl}${route}` })
       await load
       await sleep(600)
+    }
+
+    function isExpectedHttpError(status, url) {
+      return status === 401 && typeof url === 'string' && url.includes('/api/v1/auth/refresh')
+    }
+
+    async function clearBrowserSession() {
+      await send('Network.clearBrowserCookies')
+      await evaluate(`(() => {
+        try {
+          sessionStorage.clear()
+          localStorage.removeItem('mandarin-spark.auth-token')
+          localStorage.removeItem('mandarin-spark.preview-role')
+        } catch {}
+        window.dispatchEvent(new CustomEvent('mandarin-spark:auth-invalidated'))
+        return true
+      })()`)
+      await sleep(300)
     }
 
     async function waitForPage(description, predicate, timeoutMs = 15000) {
@@ -534,6 +552,7 @@ async function main() {
     })
 
     await runFlow('Forgot password success message', async (record) => {
+      await clearBrowserSession()
       await navigate('/auth')
       await setValue('#login-email', studentEmail)
       await clickButtonByText('Forgot password?')
@@ -559,6 +578,7 @@ async function main() {
     })
 
     await runFlow('Teacher registration success', async (record) => {
+      await clearBrowserSession()
       await navigate('/auth?tab=register&role=teacher')
       await setValue('#register-full-name', 'Browser QA Teacher')
       await setValue('#register-email', teacherEmail)

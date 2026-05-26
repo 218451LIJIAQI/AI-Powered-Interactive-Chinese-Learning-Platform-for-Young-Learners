@@ -17,8 +17,8 @@ concurrency:
 
 # Hosted-safe CI only.
 # Deep browser QA and `backend/scripts/validate-flyway-mysql.ps1` remain explicit
-# release prechecks in RELEASE_PRECHECK_RUNBOOK.md until a hosted-runner path is
-# separately validated end-to-end.
+# release prechecks in docs/RELEASE_PRECHECK_RUNBOOK.md until a hosted-runner
+# path is separately validated end-to-end.
 
 jobs:
   frontend:

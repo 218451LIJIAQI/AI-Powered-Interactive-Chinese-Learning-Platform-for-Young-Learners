@@ -18,6 +18,8 @@
 		<flyway.version>12.6.2</flyway.version>
 		<mockito.agent.argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</mockito.agent.argLine>
 		<skipOpenApiContract>true</skipOpenApiContract>
+		<openApiContractPort>18080</openApiContractPort>
+		<openApiContractJmxPort>19001</openApiContractJmxPort>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -221,12 +223,13 @@
 						</goals>
 						<configuration>
 							<skip>${skipOpenApiContract}</skip>
+							<jmxPort>${openApiContractJmxPort}</jmxPort>
 							<useTestClasspath>true</useTestClasspath>
 							<profiles>
 								<profile>test</profile>
 							</profiles>
 							<arguments>
-								<argument>--server.port=18080</argument>
+								<argument>--server.port=${openApiContractPort}</argument>
 								<argument>--spring.main.lazy-initialization=true</argument>
 								<argument>--spring.datasource.url=jdbc:h2:mem:aichinese-openapi;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE</argument>
 								<argument>--spring.datasource.username=sa</argument>
@@ -250,6 +253,7 @@
 						</goals>
 						<configuration>
 							<skip>${skipOpenApiContract}</skip>
+							<jmxPort>${openApiContractJmxPort}</jmxPort>
 						</configuration>
 					</execution>
 				</executions>
@@ -267,7 +271,7 @@
 						</goals>
 						<configuration>
 							<skip>${skipOpenApiContract}</skip>
-							<apiDocsUrl>http://localhost:18080/v3/api-docs</apiDocsUrl>
+							<apiDocsUrl>http://localhost:${openApiContractPort}/v3/api-docs</apiDocsUrl>
 							<outputFileName>openapi.json</outputFileName>
 							<outputDir>${project.build.directory}</outputDir>
 						</configuration>

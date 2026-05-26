@@ -65,7 +65,7 @@
 
             <div class="teacher-classes-live-media">
               <div class="teacher-classes-live-thumb" :class="`is-${item.art}`">
-                <span>{{ item.thumbLabel }}</span>
+                <IconGlyph name="classes" :size="24" />
               </div>
               <div class="teacher-classes-live-copy">
                 <div class="row u-wrap">
@@ -78,9 +78,9 @@
             </div>
 
             <div class="teacher-classes-live-platform">
-              <span class="teacher-classes-platform-icon" :class="`is-${item.platformTone}`">{{
-                item.platformGlyph
-              }}</span>
+              <span class="teacher-classes-platform-icon" :class="`is-${item.platformTone}`">
+                <IconGlyph name="live" :size="18" />
+              </span>
               <div class="stack u-gap-2">
                 <strong>{{ item.platform }}</strong>
                 <span>{{ item.platformMeta }}</span>
@@ -113,7 +113,7 @@
 
         <div class="teacher-classes-support-strip">
           <div class="row">
-            <span class="teacher-classes-support-icon">i</span>
+            <span class="teacher-classes-support-icon"><IconGlyph name="help" :size="14" /></span>
             <span>
               Live support is provided through external tools such as Zoom or Google Meet. MandarinSpark does not
               include built-in video conferencing.
@@ -338,7 +338,7 @@
           <div class="teacher-classes-library-list">
             <article v-for="item in recordingCards" :key="item.id" class="teacher-classes-library-item">
               <div class="teacher-classes-library-thumb" :class="`is-${item.art}`">
-                <span>{{ item.thumbLabel }}</span>
+                <IconGlyph name="play" :size="24" />
               </div>
               <div class="teacher-classes-library-copy">
                 <strong>{{ item.title }}</strong>
@@ -721,9 +721,7 @@ const liveClassCards = computed(() =>
       platform: platformLabel,
       platformMeta,
       meetingLink: item.meetingLink,
-      platformGlyph: platformLabel.slice(0, 1).toUpperCase() || 'M',
       platformTone: platform === 'GOOGLE_MEET' ? 'green' : 'blue',
-      thumbLabel: thumbCopy(item),
       art: ['purple', 'orange', 'festival'][index % 3],
       tone: index === 0 ? 'purple' : index === 1 ? 'orange' : 'blue',
     }
@@ -740,7 +738,6 @@ const recordingCards = computed(() =>
       meta: `Lesson ${item.lessonId} - ${formatDate(item.createdAt)}`,
       lengthLabel:
         durationSeconds > 0 ? `${Math.max(1, nonNegativeInteger(durationSeconds / 60))}m` : 'Duration unavailable',
-      thumbLabel: item.title.slice(0, 6) || 'play',
       art: ['purple', 'orange', 'festival'][index % 3],
     }
   }),
@@ -935,10 +932,6 @@ function normalizeMeetingPlatform(value: string | null | undefined): MeetingPlat
 
 function formatMeetingPlatform(value: string | null | undefined) {
   return formatStatus(normalizeMeetingPlatform(value))
-}
-
-function thumbCopy(item: { title: string }) {
-  return item.title.slice(0, 6) || 'class'
 }
 
 function applyClassToForm(item: (typeof liveClasses.value)[number]) {

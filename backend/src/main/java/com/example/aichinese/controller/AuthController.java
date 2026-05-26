@@ -19,7 +19,6 @@ import com.example.aichinese.dto.auth.AuthSessionResponse;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
 import com.example.aichinese.dto.auth.ForgotPasswordRequest;
 import com.example.aichinese.dto.auth.LoginRequest;
-import com.example.aichinese.dto.auth.RefreshSessionResponse;
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
@@ -114,7 +113,7 @@ public class AuthController {
             @CookieValue(name = "${app.security.jwt.refresh-token-cookie-name:mandarin_spark_refresh}", required = false)
             String refreshToken,
             HttpServletRequest httpRequest) {
-        RefreshSessionResponse session = authService.refreshSession(
+        AuthSessionResponse session = authService.refreshSession(
                 refreshToken,
                 clientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader(HttpHeaders.USER_AGENT));

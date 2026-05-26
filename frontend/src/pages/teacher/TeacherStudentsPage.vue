@@ -227,7 +227,7 @@
             <div class="teacher-students-card-head">
               <div class="row-between teacher-students-followup-headline">
                 <strong>Draft Guidance</strong>
-                <span class="teacher-students-followup-info">i</span>
+                <span class="teacher-students-followup-info"><IconGlyph name="help" :size="14" /></span>
               </div>
               <p>Use this as a starting point, then review and send the final feedback yourself.</p>
             </div>

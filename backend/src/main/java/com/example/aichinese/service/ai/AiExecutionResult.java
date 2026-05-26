@@ -13,8 +13,8 @@ import com.example.aichinese.entity.enums.AiRequestStatus;
  * {@link AiRequestStatus#UNAVAILABLE} (provider disabled or
  * mis-configured), and {@link AiRequestStatus#FAILED} (provider
  * reachable but returned an error or timed out) — so the caller can
- * decide between "fall back to canned response" (UNAVAILABLE) and
- * "log + return error" (FAILED). Both non-success branches carry a
+ * decide between "show unavailable" (UNAVAILABLE) and "log + return
+ * safe failure" (FAILED). Both non-success branches carry a
  * learner-safe {@code userMessage} and a more detailed
  * {@code errorSummary} that goes only into the audit / usage log,
  * never the response body.</p>
@@ -104,8 +104,8 @@ public record AiExecutionResult(
     /**
      * Builds an {@link AiRequestStatus#UNAVAILABLE} result — provider
      * disabled, mis-configured, or otherwise unreachable before any
-     * request was issued. Callers should fall back to a deterministic
-     * canned response and surface {@code userMessage} to the learner.
+     * request was issued. Callers should surface {@code userMessage}
+     * to the learner instead of presenting generated content.
      */
     public static AiExecutionResult unavailable(
             String providerName,

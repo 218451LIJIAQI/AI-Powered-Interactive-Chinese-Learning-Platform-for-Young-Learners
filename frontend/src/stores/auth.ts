@@ -144,6 +144,14 @@ export const useAuthStore = defineStore('auth', {
           this.clearSession()
         }
       } else {
+        if (canUsePreviewMode()) {
+          persistToken(null)
+          this.currentUser = this.previewRole ? demoUsers[this.previewRole] : null
+          this.bootstrapped = true
+          this.loading = false
+          return
+        }
+
         try {
           const response = await authApi.refresh()
           this.token = response.token

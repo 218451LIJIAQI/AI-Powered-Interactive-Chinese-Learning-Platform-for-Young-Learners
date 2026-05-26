@@ -70,6 +70,7 @@ describe('auth store token storage', () => {
     window.localStorage.clear()
     window.sessionStorage.clear()
     mocks.setAccessToken.mockClear()
+    mocks.refresh.mockReset()
     mocks.refresh.mockRejectedValue(new Error('no refresh cookie'))
     mocks.me.mockReset()
     mocks.login.mockReset()
@@ -102,6 +103,19 @@ describe('auth store token storage', () => {
     expect(auth.currentUser).toBeNull()
     expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
+    expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
+  })
+
+  it('does not call refresh during anonymous preview bootstrap', async () => {
+    mocks.appEnv.useDemoData = true
+    mocks.appEnv.enablePreviewMode = true
+
+    const auth = useAuthStore()
+    await auth.bootstrap()
+
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(auth.token).toBeNull()
+    expect(auth.currentUser).toBeNull()
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
   })
 

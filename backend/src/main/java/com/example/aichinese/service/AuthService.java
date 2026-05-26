@@ -34,7 +34,6 @@ import com.example.aichinese.dto.auth.AuthSessionResponse;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
 import com.example.aichinese.dto.auth.ForgotPasswordRequest;
 import com.example.aichinese.dto.auth.LoginRequest;
-import com.example.aichinese.dto.auth.RefreshSessionResponse;
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
@@ -243,13 +242,13 @@ public class AuthService {
                 refreshTokenService.issue(user, clientIp, userAgent));
     }
 
-    public RefreshSessionResponse refreshSession(String rawRefreshToken, String clientIp, String userAgent) {
+    public AuthSessionResponse refreshSession(String rawRefreshToken, String clientIp, String userAgent) {
         RefreshTokenService.RefreshSession refreshed = refreshTokenService.rotate(rawRefreshToken, clientIp, userAgent);
         User user = refreshed.user();
         TeacherStatus teacherStatus = teacherProfileRepository.findByUserId(user.getId())
                 .map(TeacherProfile::getTeacherStatus)
                 .orElse(null);
-        return new RefreshSessionResponse(toAuthResponse(user, teacherStatus), refreshed.refreshToken());
+        return new AuthSessionResponse(toAuthResponse(user, teacherStatus), refreshed.refreshToken());
     }
 
     private AuthResponse toAuthResponse(User user, TeacherStatus teacherStatus) {

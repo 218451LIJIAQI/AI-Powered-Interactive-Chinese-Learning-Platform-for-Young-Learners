@@ -50,3 +50,27 @@ cd backend
 The generated schema is written to `backend/target/openapi.json`. DTO changes
 that affect frontend callers must be reflected in `frontend/src/types/api.ts`
 or in a future generated-client step before merge.
+
+## Frontend Synchronisation
+
+When an API shape changes, update consumers in this order:
+
+1. Backend DTO, validation, and service/controller tests.
+2. OpenAPI export or manual contract inspection.
+3. `frontend/src/types/api.ts`.
+4. `frontend/src/api/services.ts` wrapper method.
+5. Affected Pinia store, page, composable, or route helper.
+6. Unit/E2E coverage for the changed user flow.
+
+Do not leave frontend code relying on `unknown`, `any`, or ad hoc response
+shape checks when a stable DTO type can be represented in `types/api.ts`.
+
+## Error Envelope Expectations
+
+All public JSON API errors should stay compatible with the shared response
+envelope and global exception handler. User-facing messages must be concise,
+safe, and free of stack traces, SQL fragments, provider secrets, bearer tokens,
+reset tokens, file-system paths, and raw payment/AI provider payloads.
+
+Validation errors may expose field names and safe validation hints, but public
+auth routes should avoid account-enumeration signals.

@@ -1,7 +1,7 @@
 <template>
   <div class="page-stack student-quiz-page">
     <section class="student-quiz-header">
-      <button class="student-link-button" type="button" @click="router.push('/student/practice')">
+      <button class="student-link-button" type="button" @click="openRecommendedPractice">
         <IconGlyph name="chevronLeft" :size="16" />
         Back to Practice
       </button>
@@ -59,7 +59,7 @@
 
             <div class="row-between u-wrap u-gap-12">
               <button
-                class="teacher-outline-button"
+                class="student-quiz-nav-button"
                 type="button"
                 :disabled="activeQuestionIndex === 0"
                 @click="goToPreviousQuestion"
@@ -67,7 +67,12 @@
                 Previous
               </button>
               <span class="muted">{{ answeredCount }} / {{ totalQuestionCount }} answered</span>
-              <button class="teacher-outline-button" type="button" :disabled="isLastQuestion" @click="goToNextQuestion">
+              <button
+                class="student-quiz-nav-button"
+                type="button"
+                :disabled="isLastQuestion"
+                @click="goToNextQuestion"
+              >
                 Next
               </button>
             </div>
@@ -84,9 +89,7 @@
           <StatePanel v-else icon="quiz" title="No quiz ready" :message="quizEmptyMessage" tone="empty">
             <template #actions>
               <button class="btn btn-primary" type="button" @click="router.push('/student/learn')">Open Lessons</button>
-              <button class="btn btn-secondary" type="button" @click="router.push('/student/practice')">
-                Practice Instead
-              </button>
+              <button class="btn btn-secondary" type="button" @click="openRecommendedPractice">Practice Instead</button>
             </template>
           </StatePanel>
 
@@ -124,9 +127,7 @@
           <article class="panel student-quiz-side-card">
             <div class="row-between">
               <strong>Quiz Progress</strong>
-              <button class="student-link-button" type="button" @click="router.push('/student/practice')">
-                View All
-              </button>
+              <button class="student-link-button" type="button" @click="openRecommendedPractice">View All</button>
             </div>
             <div class="student-quiz-ring">
               <span>{{ quizAveragePercent }}%</span>
@@ -147,9 +148,7 @@
           <article class="panel student-quiz-side-card">
             <div class="row-between">
               <strong>Recent Lesson Progress</strong>
-              <button class="student-link-button" type="button" @click="router.push('/student/practice')">
-                Open Practice
-              </button>
+              <button class="student-link-button" type="button" @click="openRecommendedPractice">Open Practice</button>
             </div>
             <div v-if="performanceItems.length" class="student-quiz-performance-list">
               <div v-for="item in performanceItems" :key="item.title" class="student-quiz-performance-item">
@@ -204,6 +203,7 @@ import { studentProgress as studentProgressDemo, studentQuiz } from '@/demo/data
 import type { QuizAttemptResultResponse, StudentQuizResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, nonNegativeInteger } from '@/utils/format'
+import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
 
 const route = useRoute()
 const router = useRouter()
@@ -328,6 +328,16 @@ const performanceItems = computed(() =>
     }
   }),
 )
+const recommendedPracticeActivity = computed(() =>
+  inferPracticeActivityFromText(
+    [
+      result.value.answers.find((answer) => !answer.correct)?.questionText,
+      progress.value.weakAreas[0],
+      quiz.value.lessonTitle,
+      quiz.value.description,
+    ].find((item): item is string => Boolean(item?.trim())),
+  ),
+)
 
 function iconForLessonProgress(completionPercent: number, completed: boolean) {
   if (completed || completionPercent >= 100) return 'status'
@@ -401,6 +411,10 @@ async function loadQuiz() {
 function reloadAll() {
   void quizResource.reload()
   void progressResource.reload()
+}
+
+function openRecommendedPractice() {
+  void router.push(practiceRoute(recommendedPracticeActivity.value))
 }
 
 async function submitQuiz() {

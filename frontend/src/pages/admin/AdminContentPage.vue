@@ -182,6 +182,7 @@ import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminContentDetail, adminContentList } from '@/demo/data'
+import type { ContentSubmissionDetailResponse, ManagedContentType } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 
 const contentResource = useResource(() => adminApi.content(), adminContentList)
@@ -223,9 +224,21 @@ const submittingModeration = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 
-async function loadDetail(contentType: string, id: number) {
+async function loadDetail(contentType: ManagedContentType, id: number) {
   actionError.value = null
   actionSuccess.value = null
+
+  if (contentReadOnly.value) {
+    const previewDetail = previewContentDetail(contentType, id)
+    detailResource.data.value = previewDetail
+    if (previewDetail) {
+      actionSuccess.value = 'Preview content detail loaded for review.'
+    } else {
+      actionError.value = 'Preview detail is unavailable for this content item.'
+    }
+    return
+  }
+
   await adminApi
     .contentDetail(contentType, id)
     .then((data) => {
@@ -236,6 +249,26 @@ async function loadDetail(contentType: string, id: number) {
       actionError.value = resolveApiError(reason, 'Unable to load this content detail.')
       detailResource.data.value = null
     })
+}
+
+function previewContentDetail(contentType: ManagedContentType, id: number): ContentSubmissionDetailResponse | null {
+  if (adminContentDetail.contentType === contentType && adminContentDetail.id === id) {
+    return adminContentDetail
+  }
+
+  const listItem = adminContentList.items.find((item) => item.contentType === contentType && item.id === id)
+  if (!listItem) {
+    return null
+  }
+
+  return {
+    ...listItem,
+    basicContent: listItem.description ?? null,
+    moduleId: null,
+    moduleTitle: null,
+    coverImageUrl: null,
+    packageItems: [],
+  }
 }
 
 const archivingContentId = ref<number | null>(null)

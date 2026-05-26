@@ -10,10 +10,10 @@
           class="teacher-outline-button admin-activity-header-button"
           type="button"
           @click="reloadFeed('keep')"
-          :disabled="pageBusy"
+          :disabled="pageBusy || previewReadOnly"
         >
           <IconGlyph name="refresh" :size="16" />
-          <span>{{ pageBusy ? 'Refreshing...' : 'Refresh feed' }}</span>
+          <span>{{ previewReadOnly ? 'Preview feed' : pageBusy ? 'Refreshing...' : 'Refresh feed' }}</span>
         </button>
       </template>
     </PageHeaderBlock>
@@ -1033,11 +1033,13 @@ function startNewDraft(type: AdminActivityType = 'FLASHCARD') {
 }
 
 async function reloadFeed(selection: 'first' | 'keep' | { id: number; type: AdminActivityType } = 'keep') {
-  await feedResource.reload()
-
   if (previewReadOnly.value) {
+    actionError.value = null
+    actionSuccess.value = 'Preview mode is read-only. Sign in as an admin to refresh the live activity feed.'
     return
   }
+
+  await feedResource.reload()
 
   const items = feed.value.items
   if (!items.length) {

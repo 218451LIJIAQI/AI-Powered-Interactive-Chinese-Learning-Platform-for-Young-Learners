@@ -282,6 +282,14 @@ function pathMatches(actualPath, expectedPath) {
   return actualPath.startsWith(`${expectedPath}?`)
 }
 
+function isExpectedHttpError(status, url) {
+  return status === 401 && typeof url === 'string' && url.includes('/api/v1/auth/refresh')
+}
+
+function isExpectedConsoleError(message) {
+  return typeof message === 'string' && message.includes('the server responded with a status of 401')
+}
+
 function getCaseStatus(record) {
   if (record.navigationError || record.pageError) return 'FAIL'
   if (!record.ui?.rendered) return 'FAIL'
@@ -364,13 +372,14 @@ async function main() {
 
     on('Runtime.consoleAPICalled', (params) => {
       const message = params.args?.map(summarizeEventText).filter(Boolean).join(' ') || params.type
-      if (params.type === 'error') activeRecord?.consoleErrors.push(message)
+      if (params.type === 'error' && !isExpectedConsoleError(message)) activeRecord?.consoleErrors.push(message)
       if (params.type === 'warning' || params.type === 'warn') activeRecord?.consoleWarnings.push(message)
     })
 
     on('Log.entryAdded', (params) => {
       const entry = params.entry || {}
-      if (entry.level === 'error') activeRecord?.consoleErrors.push(entry.text || 'Log error')
+      if (entry.level === 'error' && !isExpectedConsoleError(entry.text || 'Log error'))
+        activeRecord?.consoleErrors.push(entry.text || 'Log error')
       if (entry.level === 'warning') activeRecord?.consoleWarnings.push(entry.text || 'Log warning')
     })
 
@@ -398,7 +407,10 @@ async function main() {
       if (response.status >= 400) {
         const item = { status: response.status, type: params.type, url: response.url }
         activeRecord?.httpErrors.push(item)
-        if (response.url.startsWith(baseUrl) || response.url.includes('/api/')) {
+        if (
+          (response.url.startsWith(baseUrl) || response.url.includes('/api/')) &&
+          !isExpectedHttpError(response.status, response.url)
+        ) {
           activeRecord?.appHttpErrors.push(item)
         }
       }

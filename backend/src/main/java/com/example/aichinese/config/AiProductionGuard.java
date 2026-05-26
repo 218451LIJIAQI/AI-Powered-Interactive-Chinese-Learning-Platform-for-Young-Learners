@@ -13,14 +13,14 @@ import org.springframework.stereotype.Component;
  * the {@code prod} (or {@code production}) profile is active and the AI
  * provider is mis-configured for live use.
  *
- * <p>The platform supports two AI provider modes: a deterministic
- * stub used in development / preview and a real OpenAI-compatible /
- * DeepSeek endpoint used in production. Without this guard, a
- * mis-configured production deploy would silently fall back to the
- * stub (because the real-provider toggle defaults to {@code false}) and
- * ship learners deterministic-but-fake AI responses without any
- * operational alarm. The guard turns that silent failure into a hard
- * startup error.</p>
+ * <p>The platform supports two AI provider modes: an explicit
+ * unavailable fail-safe used when no real provider is configured, and
+ * a real OpenAI-compatible / DeepSeek endpoint used in production.
+ * Without this guard, a mis-configured production deploy would start
+ * with AI disabled (because the real-provider toggle defaults to
+ * {@code false}) and ship learners a degraded AI experience without
+ * any operational alarm. The guard turns that silent failure into a
+ * hard startup error.</p>
  *
  * <p>The validation rules are deliberately strict:</p>
  * <ul>

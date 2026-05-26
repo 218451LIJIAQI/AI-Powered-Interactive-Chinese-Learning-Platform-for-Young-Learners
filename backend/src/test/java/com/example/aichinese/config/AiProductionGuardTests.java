@@ -10,7 +10,7 @@ import org.springframework.mock.env.MockEnvironment;
  * Unit coverage for {@code AiProductionGuard} — pins the fail-fast
  * behaviour: production requires the real-provider toggle, a configured
  * API key, a supported provider and an HTTPS base URL; any missing piece
- * aborts startup so production never silently serves stub AI responses.
+ * aborts startup so production never silently ships unavailable AI.
  */
 class AiProductionGuardTests {
 

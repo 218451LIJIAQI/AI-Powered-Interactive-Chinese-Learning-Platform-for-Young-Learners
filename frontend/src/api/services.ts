@@ -841,9 +841,6 @@ export const aiApi = {
   availability() {
     return unwrap<AiAvailabilityResponse>(http.get('/ai/availability'))
   },
-  chat(payload: AiChatPayload) {
-    return unwrap<AiChatResponse>(http.post('/ai/chat', payload))
-  },
   chatStream: postSseChat,
   vocabularyHelper(payload: {
     word: string

@@ -64,8 +64,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>Pins the safety / privacy boundary: input sanitisation cannot
  * be bypassed, child-facing feedback persists only metadata (no raw
  * uploads), chat-session lookups by id+userId reject cross-user
- * access, and disabled / mis-configured providers fall back to
- * deterministic stubs rather than 500s.</p>
+ * access, and disabled / mis-configured providers return explicit
+ * unavailable responses rather than 500s or fake generated content.</p>
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
