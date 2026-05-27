@@ -250,11 +250,12 @@ public record AdminDashboardResponse(
      *                           {@code null} (defaults to
      *                           {@link BigDecimal#ZERO})
      */
-    @JsonPropertyOrder({ "totalTransactions", "paidTransactions", "totalRevenue" })
+    @JsonPropertyOrder({ "totalTransactions", "paidTransactions", "totalRevenue", "currencyCode" })
     public record PaymentRevenueSummary(
             long totalTransactions,
             long paidTransactions,
-            BigDecimal totalRevenue) {
+            BigDecimal totalRevenue,
+            String currencyCode) {
 
         /**
          * Defensive canonical constructor: substitutes

@@ -11,6 +11,9 @@ spring:
       hibernate:
         format_sql: false
   flyway:
+    # A production database must already be owned by Flyway history. Never
+    # silently bless a non-empty, unversioned database as a valid baseline.
+    baseline-on-migrate: false
     # Explicit production guard: schema erasure must never be possible in prod.
     clean-disabled: true
 

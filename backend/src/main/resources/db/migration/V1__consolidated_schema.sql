@@ -22,8 +22,8 @@
 --   - Created/updated audit columns use `datetime(6)` for
 --     microsecond precision, populated by JPA `@PrePersist` /
 --     `@PreUpdate` callbacks.
---   - Enum columns use `varchar(N)` rather than MySQL ENUMs so we can
---     add / rename values without an `ALTER TABLE`.
+--   - Stable closed-set domain fields use MySQL ENUM columns; evolving
+--     discriminators use `varchar(N)` plus checks where appropriate.
 --   - Soft-delete uses `is_active`/`deleted_at` columns; the
 --     application never issues hard DELETEs on user-facing entities.
 --   - Foreign keys use the `xx_id` naming convention and are indexed
@@ -3994,3 +3994,221 @@ alter table course_packages
 
 alter table flashcards
     add fulltext index ft_flashcards_learning_text (title, front_text, back_text, pinyin, english_meaning, malay_meaning, tags);
+
+-- ===== Section: authored content and recorded media integrity =====
+-- Application validation is the first line of defence for authored content.
+-- These database constraints also protect imports, administrative SQL, and
+-- future write paths from persisting values that cannot be rendered or scored.
+
+set @baseline_authored_content_invalid_count = (
+    (select count(*) from order_items
+        where line_total <> unit_price * quantity)
+    + (select count(*) from recorded_lesson_videos
+        where (duration_seconds is not null and duration_seconds < 0)
+           or sort_order < 0
+           or sort_order > 10000
+           or not (
+                (source_type = 'UPLOADED_FILE'
+                    and uploaded_file_id is not null
+                    and external_video_url is null)
+                or (source_type = 'EXTERNAL_URL'
+                    and uploaded_file_id is null
+                    and external_video_url is not null
+                    and char_length(trim(external_video_url)) > 0)
+           ))
+    + (select count(*) from quizzes
+        where (time_limit_minutes is not null and time_limit_minutes < 0)
+           or (total_points is not null and total_points < 0))
+    + (select count(*) from quiz_questions
+        where points <= 0 or sort_order < 0)
+    + (select count(*) from quiz_options
+        where sort_order < 0)
+    + (select count(*) from quiz_attempts
+        where not (
+                (score is null and max_score is null)
+                or (score is not null and max_score is not null
+                    and score >= 0 and max_score >= 0 and score <= max_score)
+           )
+           or not (
+                (submitted = b'0' and completed_at is null)
+                or (submitted = b'1' and completed_at is not null)
+           ))
+    + (select count(*) from student_quiz_progress
+        where attempt_count < 0
+           or not (
+                (completed = b'0' and completed_at is null)
+                or (completed = b'1' and completed_at is not null)
+           ))
+    + (select count(*) from package_items
+        where sort_order < 0)
+    + (select count(*) from drag_drop_items
+        where sort_order < 0 or sort_order > 10000)
+    + (select count(*) from matching_game_items
+        where sort_order < 0 or sort_order > 10000)
+    + (select count(*) from story_questions
+        where sort_order < 0 or sort_order > 10000)
+    + (select count(*) from drag_drop_activities
+        where (hsk_level is not null and (hsk_level < 1 or hsk_level > 6))
+           or xp_reward < 0 or xp_reward > 1000
+           or (estimated_seconds is not null
+                and (estimated_seconds < 0 or estimated_seconds > 86400)))
+    + (select count(*) from flashcards
+        where (hsk_level is not null and (hsk_level < 1 or hsk_level > 6))
+           or xp_reward < 0 or xp_reward > 1000
+           or (estimated_seconds is not null
+                and (estimated_seconds < 0 or estimated_seconds > 86400))
+           or sort_order < 0 or sort_order > 10000)
+    + (select count(*) from listening_exercises
+        where (hsk_level is not null and (hsk_level < 1 or hsk_level > 6))
+           or xp_reward < 0 or xp_reward > 1000
+           or (estimated_seconds is not null
+                and (estimated_seconds < 0 or estimated_seconds > 86400)))
+    + (select count(*) from matching_games
+        where (hsk_level is not null and (hsk_level < 1 or hsk_level > 6))
+           or xp_reward < 0 or xp_reward > 1000
+           or (estimated_seconds is not null
+                and (estimated_seconds < 0 or estimated_seconds > 86400)))
+    + (select count(*) from story_activities
+        where (hsk_level is not null and (hsk_level < 1 or hsk_level > 6))
+           or xp_reward < 0 or xp_reward > 1000
+           or (estimated_seconds is not null
+                and (estimated_seconds < 0 or estimated_seconds > 86400)))
+    + (select count(*) from tracing_exercises
+        where (hsk_level is not null and (hsk_level < 1 or hsk_level > 6))
+           or xp_reward < 0 or xp_reward > 1000
+           or (estimated_seconds is not null
+                and (estimated_seconds < 0 or estimated_seconds > 86400)))
+);
+
+set @baseline_authored_content_sql = if(
+    @baseline_authored_content_invalid_count = 0,
+    'select 1',
+    'signal sqlstate ''45000'' set message_text = ''Baseline blocked: rows violate authored content or media integrity checks'''
+);
+prepare baseline_authored_content_stmt from @baseline_authored_content_sql;
+execute baseline_authored_content_stmt;
+deallocate prepare baseline_authored_content_stmt;
+
+alter table order_items
+    add constraint chk_order_items_total_matches_quantity
+        check (line_total = unit_price * quantity);
+
+alter table recorded_lesson_videos
+    add constraint chk_recorded_videos_duration_non_negative
+        check (duration_seconds is null or duration_seconds >= 0),
+    add constraint chk_recorded_videos_sort_order_range
+        check (sort_order between 0 and 10000),
+    add constraint chk_recorded_videos_source_reference
+        check (
+            (source_type = 'UPLOADED_FILE'
+                and uploaded_file_id is not null
+                and external_video_url is null)
+            or (source_type = 'EXTERNAL_URL'
+                and uploaded_file_id is null
+                and external_video_url is not null
+                and char_length(trim(external_video_url)) > 0)
+        );
+
+alter table quizzes
+    add constraint chk_quizzes_time_limit_non_negative
+        check (time_limit_minutes is null or time_limit_minutes >= 0),
+    add constraint chk_quizzes_total_points_non_negative
+        check (total_points is null or total_points >= 0);
+
+alter table quiz_questions
+    add constraint chk_quiz_questions_points_positive
+        check (points > 0),
+    add constraint chk_quiz_questions_sort_order_non_negative
+        check (sort_order >= 0);
+
+alter table quiz_options
+    add constraint chk_quiz_options_sort_order_non_negative
+        check (sort_order >= 0);
+
+alter table quiz_attempts
+    add constraint chk_quiz_attempts_score_bounds
+        check (
+            (score is null and max_score is null)
+            or (score is not null and max_score is not null
+                and score >= 0 and max_score >= 0 and score <= max_score)
+        ),
+    add constraint chk_quiz_attempts_completion_state
+        check (
+            (submitted = b'0' and completed_at is null)
+            or (submitted = b'1' and completed_at is not null)
+        );
+
+alter table student_quiz_progress
+    add constraint chk_student_quiz_progress_attempt_count_non_negative
+        check (attempt_count >= 0),
+    add constraint chk_student_quiz_progress_completion_state
+        check (
+            (completed = b'0' and completed_at is null)
+            or (completed = b'1' and completed_at is not null)
+        );
+
+alter table package_items
+    add constraint chk_package_items_sort_order_non_negative
+        check (sort_order >= 0);
+
+alter table drag_drop_items
+    add constraint chk_drag_drop_items_sort_order_range
+        check (sort_order between 0 and 10000);
+
+alter table matching_game_items
+    add constraint chk_matching_game_items_sort_order_range
+        check (sort_order between 0 and 10000);
+
+alter table story_questions
+    add constraint chk_story_questions_sort_order_range
+        check (sort_order between 0 and 10000);
+
+alter table drag_drop_activities
+    add constraint chk_drag_drop_activities_hsk_level_range
+        check (hsk_level is null or hsk_level between 1 and 6),
+    add constraint chk_drag_drop_activities_xp_reward_range
+        check (xp_reward between 0 and 1000),
+    add constraint chk_drag_drop_activities_estimated_seconds_range
+        check (estimated_seconds is null or estimated_seconds between 0 and 86400);
+
+alter table flashcards
+    add constraint chk_flashcards_hsk_level_range
+        check (hsk_level is null or hsk_level between 1 and 6),
+    add constraint chk_flashcards_xp_reward_range
+        check (xp_reward between 0 and 1000),
+    add constraint chk_flashcards_estimated_seconds_range
+        check (estimated_seconds is null or estimated_seconds between 0 and 86400),
+    add constraint chk_flashcards_sort_order_range
+        check (sort_order between 0 and 10000);
+
+alter table listening_exercises
+    add constraint chk_listening_exercises_hsk_level_range
+        check (hsk_level is null or hsk_level between 1 and 6),
+    add constraint chk_listening_exercises_xp_reward_range
+        check (xp_reward between 0 and 1000),
+    add constraint chk_listening_exercises_estimated_seconds_range
+        check (estimated_seconds is null or estimated_seconds between 0 and 86400);
+
+alter table matching_games
+    add constraint chk_matching_games_hsk_level_range
+        check (hsk_level is null or hsk_level between 1 and 6),
+    add constraint chk_matching_games_xp_reward_range
+        check (xp_reward between 0 and 1000),
+    add constraint chk_matching_games_estimated_seconds_range
+        check (estimated_seconds is null or estimated_seconds between 0 and 86400);
+
+alter table story_activities
+    add constraint chk_story_activities_hsk_level_range
+        check (hsk_level is null or hsk_level between 1 and 6),
+    add constraint chk_story_activities_xp_reward_range
+        check (xp_reward between 0 and 1000),
+    add constraint chk_story_activities_estimated_seconds_range
+        check (estimated_seconds is null or estimated_seconds between 0 and 86400);
+
+alter table tracing_exercises
+    add constraint chk_tracing_exercises_hsk_level_range
+        check (hsk_level is null or hsk_level between 1 and 6),
+    add constraint chk_tracing_exercises_xp_reward_range
+        check (xp_reward between 0 and 1000),
+    add constraint chk_tracing_exercises_estimated_seconds_range
+        check (estimated_seconds is null or estimated_seconds between 0 and 86400);

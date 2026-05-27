@@ -29,10 +29,9 @@ import jakarta.validation.constraints.Size;
  * create-vs-update DTO shapes symmetrical.</p>
  *
  * <h2>{@link #lessonId} / {@link #packageId} ownership</h2>
- * <p>A live class may be linked to <em>either</em> a lesson, a
- * course package, or neither (a stand-alone live class), but not
+ * <p>A live class must be linked to a lesson, a course package, or
  * both. The service ({@code LiveClassService}) raises a 400 when
- * both ids are populated. This linkage drives whether the live
+ * neither id is populated. This linkage drives whether the live
  * class appears under
  * {@link StudentLessonPlayerResponse#liveClasses()} (lesson-linked)
  * or under the student's "My subscribed packages" view

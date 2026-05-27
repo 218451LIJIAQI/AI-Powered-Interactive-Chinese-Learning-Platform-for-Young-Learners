@@ -48,7 +48,9 @@
               <StatusPill :label="course.teacher.verified ? 'Verified' : 'Public'" tone="success" />
             </div>
             <p>{{ course.teacher.displayName }}</p>
-            <strong>{{ course.accessType === 'FREE' ? 'Free' : formatCurrency(course.price) }}</strong>
+            <strong>{{
+              course.accessType === 'FREE' ? 'Free' : formatCurrency(course.price, course.currencyCode)
+            }}</strong>
             <span>{{
               course.accessType === 'FREE'
                 ? 'Start learning after signing in.'
@@ -97,7 +99,7 @@
       <aside class="stack public-course-detail-side">
         <div class="panel stack public-course-detail-cta-card">
           <strong>Course call to action</strong>
-          <p>{{ course.callToAction || 'Begin with one lesson, one activity, and one confident step at a time.' }}</p>
+          <p>{{ displayedCallToAction }}</p>
         </div>
         <div class="panel stack public-course-detail-alignment-card">
           <strong>Proposal alignment</strong>
@@ -111,7 +113,9 @@
         <div class="panel stack public-course-detail-support-card">
           <strong>Need more support?</strong>
           <p>AI helper suggestions are optional and student-facing only.</p>
-          <button class="btn btn-primary" type="button" @click="goToAiHelperSignIn">Open AI Helper</button>
+          <button class="btn btn-primary" type="button" :disabled="studentOnlyViewer" @click="goToAiHelperSignIn">
+            {{ studentOnlyViewer ? 'Student AI only' : 'Open AI Helper' }}
+          </button>
         </div>
       </aside>
     </section>
@@ -157,6 +161,8 @@ const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const submittingBuyNow = ref(false)
 const submittingCart = ref(false)
+const studentOnlyViewer = computed(() => auth.isAuthenticated && !auth.hasRole('STUDENT'))
+const canUseStudentActions = computed(() => auth.isAuthenticated && auth.hasRole('STUDENT'))
 
 function readDemoCourseDetail() {
   return publicCourseDetails[courseId.value] ?? null
@@ -186,6 +192,7 @@ const emptyCourse = computed<PublicCourseDetail>(() => ({
   learningType: 'RECORDED' as const,
   accessType: 'FREE' as const,
   price: 0,
+  currencyCode: 'MYR',
   locked: true,
   status: 'DRAFT' as const,
   basicContent: 'Course content is unavailable right now.',
@@ -206,6 +213,15 @@ const resource = useResource(
 )
 
 const course = computed(() => resource.data.value ?? emptyCourse.value)
+const displayedCallToAction = computed(() => {
+  if (canUseStudentActions.value) {
+    return course.value.accessType === 'FREE'
+      ? 'Start this lesson from your student learning dashboard.'
+      : 'Complete secure checkout to unlock this course in your student account.'
+  }
+  if (studentOnlyViewer.value) return 'Students can enrol and purchase through a student account.'
+  return course.value.callToAction || 'Begin with one lesson, one activity, and one confident step at a time.'
+})
 const courseSceneVariant = computed(() => {
   const title = course.value.title.toLowerCase()
   if (title.includes('family')) return 'family'
@@ -221,20 +237,23 @@ const summaryCards = computed(() => [
   { icon: 'teacher', label: 'Teacher', value: course.value.teacher.verified ? 'Verified' : 'Public' },
 ])
 const primaryActionLabel = computed(() => {
+  if (studentOnlyViewer.value)
+    return course.value.accessType === 'FREE' ? 'Student access only' : 'Student checkout only'
   if (!auth.isAuthenticated) return course.value.accessType === 'FREE' ? 'Sign in to start' : 'Sign in to purchase'
   if (course.value.accessType === 'FREE') return 'Start learning'
   return submittingBuyNow.value ? 'Starting checkout...' : 'Buy now'
 })
 const secondaryActionLabel = computed(() => {
+  if (studentOnlyViewer.value) return course.value.accessType === 'FREE' ? 'Student AI only' : 'Student checkout only'
   if (!auth.isAuthenticated) return 'Sign in and return'
   if (course.value.accessType === 'FREE') return 'Ask AI Helper'
   return submittingCart.value ? 'Adding...' : 'Add to cart'
 })
 const primaryActionDisabled = computed(
-  () => submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
+  () => studentOnlyViewer.value || submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
 )
 const secondaryActionDisabled = computed(
-  () => submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
+  () => studentOnlyViewer.value || submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
 )
 const courseReadOnly = computed(() => resource.usingFallback.value)
 
@@ -280,7 +299,8 @@ async function handlePrimaryAction() {
   actionError.value = null
   actionSuccess.value = null
 
-  if (!auth.isAuthenticated) {
+  if (!canUseStudentActions.value) {
+    if (studentOnlyViewer.value) return
     goToAuth()
     return
   }
@@ -312,7 +332,8 @@ async function handleSecondaryAction() {
   actionError.value = null
   actionSuccess.value = null
 
-  if (!auth.isAuthenticated) {
+  if (!canUseStudentActions.value) {
+    if (studentOnlyViewer.value) return
     goToAuth()
     return
   }
@@ -339,7 +360,9 @@ async function handleSecondaryAction() {
 }
 
 function goToAiHelperSignIn() {
-  if (auth.isAuthenticated) {
+  if (studentOnlyViewer.value) return
+
+  if (canUseStudentActions.value) {
     router.push('/student/ai-helper')
     return
   }

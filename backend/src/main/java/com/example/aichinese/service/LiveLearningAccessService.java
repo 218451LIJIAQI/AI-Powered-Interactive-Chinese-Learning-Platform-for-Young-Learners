@@ -75,6 +75,7 @@ public class LiveLearningAccessService {
     // underlying implementation is still an immutable EnumSet wrapper,
     // so contains() remains O(1).
     private static final Set<LiveClassStatus> JOINABLE_STATUSES = LiveClassStatus.JOINABLE;
+    private static final int JOIN_WINDOW_LEAD_MINUTES = 15;
 
     private final StudentProfileRepository studentProfileRepository;
     private final LessonRepository lessonRepository;
@@ -237,6 +238,31 @@ public class LiveLearningAccessService {
         return enrolment;
     }
 
+    /**
+     * Resolves a reservation that can still be withdrawn without rewriting
+     * attendance history or releasing a seat after the class has started.
+     */
+    @Transactional(readOnly = true)
+    public LiveClassEnrolment requireCancellableEnrolment(Long liveClassId, Long studentId) {
+        LiveClassEnrolment enrolment = requireActiveEnrolment(liveClassId, studentId);
+        LiveClass liveClass = enrolment.getLiveClass();
+        boolean isFutureClass = liveClass != null
+                && liveClass.getScheduledStartAt() != null
+                && LocalDateTime.now().isBefore(liveClass.getScheduledStartAt());
+        boolean isOpenForCancellation = liveClass != null
+                && (liveClass.getLiveClassStatus() == LiveClassStatus.SCHEDULED
+                        || liveClass.getLiveClassStatus() == LiveClassStatus.RESCHEDULED);
+
+        if (enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.ENROLLED
+                || !isFutureClass
+                || !isOpenForCancellation) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Only an enrolled future live class can be cancelled.");
+        }
+        return enrolment;
+    }
+
     @Transactional(readOnly = true)
     public void ensureStudentCanEnrol(StudentProfile student, LiveClass liveClass) {
         ensureLiveClassVisibleToStudents(liveClass);
@@ -257,8 +283,28 @@ public class LiveLearningAccessService {
         if (!JOINABLE_STATUSES.contains(liveClass.getLiveClassStatus())) {
             throw new ResponseStatusException(FORBIDDEN, "This live class is not available to join.");
         }
+        if (!isJoinWindowOpen(liveClass)) {
+            throw new ResponseStatusException(FORBIDDEN, "The live class join window is not open yet.");
+        }
         requireActiveEnrolment(liveClass.getId(), student.getId());
         ensureStudentHasLinkedAccess(student, liveClass);
+    }
+
+    /**
+     * Keeps meeting URLs private until shortly before a scheduled session.
+     * The same policy drives response flags and the protected join endpoint.
+     */
+    public boolean isJoinWindowOpen(LiveClass liveClass) {
+        if (liveClass == null
+                || !JOINABLE_STATUSES.contains(liveClass.getLiveClassStatus())
+                || liveClass.getScheduledStartAt() == null
+                || liveClass.getScheduledEndAt() == null) {
+            return false;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        return !now.isBefore(liveClass.getScheduledStartAt().minusMinutes(JOIN_WINDOW_LEAD_MINUTES))
+                && now.isBefore(liveClass.getScheduledEndAt());
     }
 
     @Transactional(readOnly = true)

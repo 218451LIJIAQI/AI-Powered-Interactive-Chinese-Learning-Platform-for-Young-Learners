@@ -58,6 +58,7 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
   const error = ref<string | null>(null)
   const loading = ref(immediate && !canUseFallback.value)
   const usingFallback = ref(canUseFallback.value)
+  let executionSequence = 0
 
   function shouldUseFailureFallback(reason: unknown) {
     if (!canUseFallback.value) return false
@@ -68,6 +69,8 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
   }
 
   async function execute() {
+    const sequence = ++executionSequence
+
     if (canUseFallback.value) {
       data.value = readFallback()
       usingFallback.value = true
@@ -80,9 +83,12 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
     error.value = null
 
     try {
-      data.value = await loader()
+      const result = await loader()
+      if (sequence !== executionSequence) return
+      data.value = result
       usingFallback.value = false
     } catch (reason) {
+      if (sequence !== executionSequence) return
       const message = resolveApiError(reason, 'Request failed')
       error.value = message
 
@@ -94,7 +100,9 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
         error.value = null
       }
     } finally {
-      loading.value = false
+      if (sequence === executionSequence) {
+        loading.value = false
+      }
     }
   }
 

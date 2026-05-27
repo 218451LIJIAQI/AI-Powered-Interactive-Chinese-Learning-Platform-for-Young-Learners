@@ -8,6 +8,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -199,10 +200,12 @@ class AiIntegrationTests {
                 .andReturn();
 
         pending.getAsyncResult(5_000);
-        assertThat(pending.getResponse().getStatus()).isEqualTo(200);
-        assertThat(pending.getResponse().getContentType()).contains(MediaType.TEXT_EVENT_STREAM_VALUE);
+        MvcResult completed = mockMvc.perform(asyncDispatch(pending))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(completed.getResponse().getContentType()).contains(MediaType.TEXT_EVENT_STREAM_VALUE);
 
-        String body = pending.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        String body = completed.getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(body).contains("event:delta");
         assertThat(body).contains("AI tutor is currently unavailable");
         assertThat(body).contains("event:complete");
@@ -552,6 +555,12 @@ class AiIntegrationTests {
                 .andExpect(jsonPath("$.data.status").value("RESOLVED"))
                 .andExpect(jsonPath("$.data.reviewerNote",
                         not(anyOf(containsString("<|im_start|>"), containsString("<|im_end|>")))));
+        Long reportingStudentUserId = userRepository.findByEmailWithRoles(studentEmail).orElseThrow().getId();
+        assertThat(notificationRepository.findAll())
+                .anyMatch(notification -> "AI report reviewed".equals(notification.getTitle())
+                        && "AI_RESPONSE_REPORT".equals(notification.getTargetType())
+                        && reportId.equals(notification.getTargetId())
+                        && reportingStudentUserId.equals(notification.getUser().getId()));
 
         mockMvc.perform(post("/api/v1/admin/ai-response-reports/" + reportId + "/review")
                 .with(csrf())

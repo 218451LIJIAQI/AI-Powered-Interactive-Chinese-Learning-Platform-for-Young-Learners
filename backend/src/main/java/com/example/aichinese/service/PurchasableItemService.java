@@ -66,7 +66,7 @@ public class PurchasableItemService {
         this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public ResolvedPurchasableItem resolve(String itemTypeValue, Long itemId, String featureKey) {
         PurchasableItemType itemType = PurchasableItemType.fromValue(itemTypeValue);
         log.debug("Resolving purchasable item: type={}, itemId={}", itemType, itemId);

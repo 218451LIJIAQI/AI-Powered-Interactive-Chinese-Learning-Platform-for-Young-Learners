@@ -370,6 +370,7 @@ const emptyAnalytics = {
     rejectedTeachers: 0,
     publishedContentItems: 0,
     totalRevenue: 0,
+    currencyCode: 'MYR',
     pendingRefunds: 0,
     pendingPayouts: 0,
     moderationActions: 0,
@@ -469,7 +470,7 @@ const kpiCards = computed(() => [
   },
   {
     label: 'Revenue',
-    value: formatCurrency(analytics.value.overview.totalRevenue),
+    value: formatCurrency(analytics.value.overview.totalRevenue, analytics.value.overview.currencyCode),
     copy: `${formatNumber(analytics.value.overview.pendingRefunds)} refund(s) pending`,
     icon: 'finance',
     tone: 'sky',

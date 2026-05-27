@@ -61,6 +61,7 @@ Do not promote if:
 
 - Hibernate validation fails against the migrated schema
 - Flyway reports pending, failed, or checksum-mismatched migrations
+- the production profile enables `baseline-on-migrate` or the target database lacks expected Flyway history
 - a production-applied migration was edited to force a checksum match
 - a destructive migration step has no backup/restore rehearsal
 
@@ -93,8 +94,8 @@ Also confirm:
   provider latency.
 - Run the manual `DAST ZAP Baseline` workflow against a pre-production HTTPS
   URL and review `.zap/rules.tsv` suppressions.
-- Confirm object storage, shared rate limiting, and durable email/outbox
-  strategy before horizontal backend scaling.
+- Confirm object storage, shared authentication throttling, AI quota-counter
+  capacity, and durable email/outbox strategy before horizontal backend scaling.
 
 ## Functional Smoke Checklist
 

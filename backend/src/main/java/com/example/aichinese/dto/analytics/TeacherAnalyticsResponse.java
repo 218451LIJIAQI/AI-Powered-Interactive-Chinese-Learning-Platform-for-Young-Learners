@@ -190,6 +190,7 @@ public record TeacherAnalyticsResponse(
             "averageQuizScore",
             "netEarnings",
             "availableBalance",
+            "currencyCode",
             "upcomingLiveClasses",
             "totalLiveEnrolments"
     })
@@ -203,6 +204,7 @@ public record TeacherAnalyticsResponse(
             BigDecimal averageQuizScore,
             BigDecimal netEarnings,
             BigDecimal availableBalance,
+            String currencyCode,
             long upcomingLiveClasses,
             long totalLiveEnrolments) {
 

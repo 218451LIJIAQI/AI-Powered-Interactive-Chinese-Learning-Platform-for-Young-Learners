@@ -132,6 +132,7 @@ public class AnalyticsService {
     private final StudentLearningAccessService studentLearningAccessService;
     private final LiveLearningAccessService liveLearningAccessService;
     private final NotificationService notificationService;
+    private final CommerceSettingsService commerceSettingsService;
 
     public AnalyticsService(
             StudentProfileRepository studentProfileRepository,
@@ -155,7 +156,8 @@ public class AnalyticsService {
             AiUsageLogRepository aiUsageLogRepository,
             StudentLearningAccessService studentLearningAccessService,
             LiveLearningAccessService liveLearningAccessService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            CommerceSettingsService commerceSettingsService) {
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
@@ -178,6 +180,7 @@ public class AnalyticsService {
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
     @Transactional(readOnly = true)
@@ -249,6 +252,7 @@ public class AnalyticsService {
                         averageAccessibleAttemptScore(accessibleAttempts),
                         defaultMoney(teacherEarningRepository.sumNetAmountByTeacherId(teacher.getId())),
                         defaultMoney(teacherEarningRepository.sumAvailableNetAmountByTeacherId(teacher.getId())),
+                        commerceSettingsService.getDefaultCurrency(),
                         countUpcomingTeacherLiveClasses(liveClasses),
                         teacherLiveEnrolmentsCount),
                 buildTeacherQuizTrend(accessibleAttempts),
@@ -293,6 +297,7 @@ public class AnalyticsService {
                                 + lessonRepository.countByContentStatus(ContentStatus.PUBLISHED)
                                 + coursePackageRepository.countByContentStatus(ContentStatus.PUBLISHED),
                         defaultMoney(paymentRecordRepository.sumAmountByPaymentStatus(PaymentStatus.PAID)),
+                        commerceSettingsService.getDefaultCurrency(),
                         refundRequestRepository.countByRefundStatus(RefundStatus.PENDING),
                         payoutRequestRepository.countByPayoutStatus(PayoutStatus.PENDING),
                         contentModerationRecordRepository.count(),

@@ -95,6 +95,7 @@ public class DashboardService {
     private final AuditLogRepository auditLogRepository;
     private final StudentLearningAccessService studentLearningAccessService;
     private final NotificationService notificationService;
+    private final CommerceSettingsService commerceSettingsService;
 
     public DashboardService(
             StudentProfileRepository studentProfileRepository,
@@ -120,7 +121,8 @@ public class DashboardService {
             PayoutRequestRepository payoutRequestRepository,
             AuditLogRepository auditLogRepository,
             StudentLearningAccessService studentLearningAccessService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            CommerceSettingsService commerceSettingsService) {
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.dailyStreakRepository = Objects.requireNonNull(dailyStreakRepository, "dailyStreakRepository");
@@ -145,6 +147,7 @@ public class DashboardService {
         this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
     @Transactional(readOnly = true)
@@ -255,7 +258,8 @@ public class DashboardService {
                         grossAmount,
                         netAmount,
                         netAmount,
-                        ZERO.setScale(2, RoundingMode.HALF_UP)),
+                        ZERO.setScale(2, RoundingMode.HALF_UP),
+                        commerceSettingsService.getDefaultCurrency()),
                 recentQuizResults,
                 notifications);
     }
@@ -306,7 +310,8 @@ public class DashboardService {
                 new AdminDashboardResponse.PaymentRevenueSummary(
                         paymentRecordRepository.count(),
                         paymentRecordRepository.countByPaymentStatus(PaymentStatus.PAID),
-                        defaultMoney(paymentRecordRepository.sumAmountByPaymentStatus(PaymentStatus.PAID))),
+                        defaultMoney(paymentRecordRepository.sumAmountByPaymentStatus(PaymentStatus.PAID)),
+                        commerceSettingsService.getDefaultCurrency()),
                 refundRequestRepository.countByRefundStatus(RefundStatus.PENDING),
                 payoutRequestRepository.countByPayoutStatus(PayoutStatus.PENDING),
                 recentAuditLogs);

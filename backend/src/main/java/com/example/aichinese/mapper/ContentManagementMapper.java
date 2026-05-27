@@ -1,6 +1,5 @@
 package com.example.aichinese.mapper;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -44,8 +43,8 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * gracefully to a missing field on the wire instead of a 500.</p>
  *
  * <p>The public-view mappers
- * ({@link #toPublicCourseSummary(Lesson)} /
- * {@link #toPublicCourseDetail(CoursePackage, List)}) deliberately keep
+ * ({@link #toPublicCourseSummary(Lesson, String)} /
+ * {@link #toPublicCourseDetail(CoursePackage, List, String)}) deliberately keep
  * the locked / unlocked decision inside this class so the controller
  * layer never has to repeat the
  * {@code accessType == PAID} check at every callsite — paid items get a
@@ -350,7 +349,7 @@ public class ContentManagementMapper {
                 teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED);
     }
 
-    public PublicCourseSummaryResponse toPublicCourseSummary(Lesson lesson) {
+    public PublicCourseSummaryResponse toPublicCourseSummary(Lesson lesson, String currencyCode) {
         if (lesson == null) {
             return null;
         }
@@ -366,13 +365,14 @@ public class ContentManagementMapper {
                 lesson.getLearningType(),
                 lesson.getAccessType(),
                 lesson.getPrice(),
-                BigDecimal.ZERO,
+                currencyCode,
+                null,
                 lesson.getCoverImageUrl(),
                 lesson.getAccessType() == AccessType.PAID,
                 lesson.getContentStatus());
     }
 
-    public PublicCourseSummaryResponse toPublicCourseSummary(CoursePackage coursePackage) {
+    public PublicCourseSummaryResponse toPublicCourseSummary(CoursePackage coursePackage, String currencyCode) {
         if (coursePackage == null) {
             return null;
         }
@@ -388,13 +388,14 @@ public class ContentManagementMapper {
                 coursePackage.getLearningType(),
                 coursePackage.getAccessType(),
                 coursePackage.getPrice(),
-                BigDecimal.ZERO,
+                currencyCode,
+                null,
                 coursePackage.getCoverImageUrl(),
                 coursePackage.getAccessType() == AccessType.PAID,
                 ContentStatus.PUBLISHED);
     }
 
-    public PublicCourseDetailResponse toPublicCourseDetail(Lesson lesson) {
+    public PublicCourseDetailResponse toPublicCourseDetail(Lesson lesson, String currencyCode) {
         if (lesson == null) {
             return null;
         }
@@ -411,6 +412,7 @@ public class ContentManagementMapper {
                 lesson.getLearningType(),
                 lesson.getAccessType(),
                 lesson.getPrice(),
+                currencyCode,
                 lesson.getCoverImageUrl(),
                 locked,
                 lesson.getContentStatus(),
@@ -420,7 +422,10 @@ public class ContentManagementMapper {
                 locked ? PAID_LOCKED_REASON : null);
     }
 
-    public PublicCourseDetailResponse toPublicCourseDetail(CoursePackage coursePackage, List<PackageItem> items) {
+    public PublicCourseDetailResponse toPublicCourseDetail(
+            CoursePackage coursePackage,
+            List<PackageItem> items,
+            String currencyCode) {
         if (coursePackage == null) {
             return null;
         }
@@ -438,6 +443,7 @@ public class ContentManagementMapper {
                 coursePackage.getLearningType(),
                 coursePackage.getAccessType(),
                 coursePackage.getPrice(),
+                currencyCode,
                 coursePackage.getCoverImageUrl(),
                 locked,
                 coursePackage.getContentStatus(),
@@ -454,7 +460,7 @@ public class ContentManagementMapper {
      * Maps a single {@link PackageItem} to the public-catalogue item
      * summary the discovery UI renders inside a course-package detail
      * card. Extracted from the inline lambda inside
-     * {@link #toPublicCourseDetail(CoursePackage, List)} so the
+     * {@link #toPublicCourseDetail(CoursePackage, List, String)} so the
      * mapping rule lives next to its sibling helpers and is unit-test
      * reachable.
      */

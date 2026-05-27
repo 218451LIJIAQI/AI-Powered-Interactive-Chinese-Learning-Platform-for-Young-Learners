@@ -135,7 +135,7 @@ When an operational incident is suspected:
 Before running multiple backend instances:
 
 - move uploads from local volume to shared object storage or a controlled shared file service
-- move AI/auth rate limiting to Redis or another shared store
+- move process-local authentication throttles to Redis or another shared store; AI quota counters are database-coordinated and must be load-tested for contention
 - confirm refresh-token/session invalidation semantics across nodes
 - replace in-process email dispatch with durable outbox/queue where required
 - ensure logs and metrics include instance identity

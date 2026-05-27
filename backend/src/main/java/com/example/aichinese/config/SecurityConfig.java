@@ -2,6 +2,8 @@ package com.example.aichinese.config;
 
 import java.util.Objects;
 
+import jakarta.servlet.DispatcherType;
+
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -165,6 +167,11 @@ public class SecurityConfig {
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                         .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
+                        // The initial controller request is still role protected below.
+                        // Permit framework redispatch after an authenticated SSE request
+                        // has started so the completed response is not rejected after
+                        // bytes have already been written to the client.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/v1/health").permitAll()
                         // Actuator probes for Docker / Kubernetes / load-balancer health checks.
                         // Only the curated subset configured under management.endpoints.web.exposure

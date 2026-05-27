@@ -117,7 +117,7 @@
           >
             <template #aside>
               <div class="list-value-stack">
-                <strong>{{ formatCurrency(payout.amount) }}</strong>
+                <strong>{{ formatCurrency(payout.amount, payout.currencyCode) }}</strong>
                 <div class="list-action-row">
                   <StatusPill :label="payout.payoutStatus" :tone="payoutTone(payout.payoutStatus)" />
                   <button
@@ -269,15 +269,24 @@ const payouts = computed(() => payoutsResource.data.value ?? (payoutsResource.us
 const commission = computed(
   () => commissionResource.data.value ?? (commissionResource.usingFallback.value ? commissionSetting : emptyCommission),
 )
-const totalRevenue = computed(() => payments.value.reduce((sum, payment) => sum + toFiniteNumber(payment.amount), 0))
+const settledPayments = computed(() => payments.value.filter((payment) => payment.paymentStatus === 'PAID'))
+const totalRevenue = computed(() =>
+  settledPayments.value.reduce((sum, payment) => sum + toFiniteNumber(payment.amount), 0),
+)
 const commissionRatePercent = computed(() => clampPercent(commission.value.commissionRate * 100))
 const pendingRefundCount = computed(() => refunds.value.filter((refund) => refund.refundStatus === 'PENDING').length)
 const pendingPayoutCount = computed(() => payouts.value.filter((payout) => payout.payoutStatus === 'PENDING').length)
 const financeHighlights = computed(() => [
   {
     icon: 'finance',
-    label: 'Verified revenue',
-    value: formatCurrency(totalRevenue.value, payments.value[0]?.currencyCode ?? 'USD'),
+    label: 'Visible paid amount',
+    value: formatCurrency(
+      totalRevenue.value,
+      settledPayments.value[0]?.currencyCode ??
+        payments.value[0]?.currencyCode ??
+        payouts.value[0]?.currencyCode ??
+        'MYR',
+    ),
   },
   { icon: 'chevronLeft', label: 'Refund queue', value: String(pendingRefundCount.value) },
   { icon: 'earnings', label: 'Payout queue', value: String(pendingPayoutCount.value) },

@@ -25,7 +25,7 @@
 
           <div class="public-catalog-header-meta">
             <article>
-              <strong>{{ filteredCourses.length }}</strong>
+              <strong>{{ matchedCourseCount }}</strong>
               <span>courses matched</span>
             </article>
             <article>
@@ -97,8 +97,7 @@
             <label class="public-filter-field">
               <span>Sort by</span>
               <select v-model="filters.sort">
-                <option value="popular">Popular</option>
-                <option value="newest">Newest</option>
+                <option value="newest">Recently added</option>
                 <option value="title">Title</option>
               </select>
             </label>
@@ -148,6 +147,26 @@
             @view="router.push(`/courses/${course.id}`)"
             @action="handleCourseAction(course)"
           />
+
+          <nav v-if="courseTotalPages > 1" class="public-catalog-pagination" aria-label="Course result pages">
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="currentPage <= 0 || coursesResource.loading.value"
+              @click="goToCoursePage(currentPage - 1)"
+            >
+              Previous
+            </button>
+            <span>Page {{ currentPage + 1 }} of {{ courseTotalPages }}</span>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="currentPage >= courseTotalPages - 1 || coursesResource.loading.value"
+              @click="goToCoursePage(currentPage + 1)"
+            >
+              Next
+            </button>
+          </nav>
         </section>
       </div>
 
@@ -184,11 +203,13 @@
           <div class="public-cart-summary">
             <div class="row-between">
               <span>Subtotal</span>
-              <strong>{{ formatCurrency(cart?.totalAmount ?? 0, cart?.currencyCode ?? 'USD') }}</strong>
+              <strong v-if="cart">{{ formatCurrency(cart.totalAmount, cart.currencyCode) }}</strong>
+              <span v-else class="muted">--</span>
             </div>
             <div class="row-between public-cart-total">
               <span>Total</span>
-              <strong>{{ formatCurrency(cart?.totalAmount ?? 0, cart?.currencyCode ?? 'USD') }}</strong>
+              <strong v-if="cart">{{ formatCurrency(cart.totalAmount, cart.currencyCode) }}</strong>
+              <span v-else class="muted">--</span>
             </div>
           </div>
 
@@ -208,11 +229,11 @@
         </div>
 
         <div v-else class="panel stack public-catalog-signin-card">
-          <strong>Use the live cart</strong>
+          <strong>{{ cartAccessTitle }}</strong>
           <p class="muted public-cart-empty">
-            Sign in as a student to save courses, manage checkout, and return to lessons after payment.
+            {{ cartAccessDescription }}
           </p>
-          <button class="btn btn-primary" type="button" @click="goToAuth">Sign in</button>
+          <button v-if="!auth.isAuthenticated" class="btn btn-primary" type="button" @click="goToAuth">Sign in</button>
         </div>
 
         <PublicInfoBanner
@@ -256,8 +277,8 @@
  * "Enroll" routes through the auth flow first if the visitor is
  * unauthenticated, then through checkout once signed in.</p>
  */
-import { computed, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { publicApi, studentApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -276,31 +297,49 @@ import { formatCurrency } from '@/utils/format'
 import { safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 const filters = reactive({
-  keyword: '',
-  sort: 'popular',
-  levelId: '',
-  categoryId: '',
-  learningType: '',
-  accessType: '',
+  keyword: queryText(route.query.keyword),
+  sort: validSort(queryText(route.query.sort)),
+  levelId: validPositiveIdQuery(route.query.levelId),
+  categoryId: validPositiveIdQuery(route.query.categoryId),
+  learningType: validEnumQuery(route.query.learningType, ['RECORDED', 'LIVE', 'HYBRID']),
+  accessType: validEnumQuery(route.query.accessType, ['FREE', 'PAID']),
 })
 const filtersOpen = ref(true)
 const cartSuccess = ref<string | null>(null)
 const cartBusy = ref(false)
+const currentPage = ref(validPageQuery(route.query.page))
+let courseReloadTimer: number | undefined
 
-const coursesResource = useResource(() => publicApi.listCourses({ size: 20 }), {
-  items: publicCourses,
-  page: 0,
-  size: 20,
-  totalItems: publicCourses.length,
-  totalPages: 1,
-})
+const coursesResource = useResource(
+  () =>
+    publicApi.listCourses({
+      keyword: filters.keyword.trim() || undefined,
+      sort: filters.sort,
+      levelId: optionalPositiveId(filters.levelId),
+      categoryId: optionalPositiveId(filters.categoryId),
+      learningType: filters.learningType || undefined,
+      accessType: filters.accessType || undefined,
+      page: currentPage.value,
+      size: 20,
+    }),
+  {
+    items: publicCourses,
+    page: 0,
+    size: 20,
+    totalItems: publicCourses.length,
+    totalPages: 1,
+  },
+)
 const levelsResource = useResource(() => publicApi.getLevels(), demoLevels)
 const categoriesResource = useResource(() => publicApi.getCategories(), demoCategories)
 
-const canUseCart = computed(() => auth.isAuthenticated || auth.isPreviewSession)
+const isStudentShopper = computed(() => auth.isAuthenticated && auth.hasRole('STUDENT'))
+const signedInWithoutStudentRole = computed(() => auth.isAuthenticated && !auth.hasRole('STUDENT'))
+const canUseCart = computed(() => isStudentShopper.value || (auth.isPreviewSession && auth.hasRole('STUDENT')))
 const cartResource = useResource(() => studentApi.cart(), cartDemo, false)
 watch(
   canUseCart,
@@ -323,6 +362,9 @@ const courses = computed<PublicCourseSummary[]>(
 )
 const cart = computed<CartResponse | null>(
   () => cartResource.data.value ?? (cartResource.usingFallback.value ? cartDemo : null),
+)
+const courseTotalPages = computed(() =>
+  coursesResource.usingFallback.value ? 1 : Math.max(1, coursesResource.data.value?.totalPages ?? 1),
 )
 
 const catalogUsingFallback = computed(
@@ -360,6 +402,8 @@ const catalogNoticeDetail = computed(() => {
 })
 
 const filteredCourses = computed(() => {
+  if (!coursesResource.usingFallback.value) return courses.value
+
   const keyword = filters.keyword.trim().toLowerCase()
 
   return courses.value
@@ -373,9 +417,33 @@ const filteredCourses = computed(() => {
     })
     .sort((left, right) => {
       if (filters.sort === 'title') return left.title.localeCompare(right.title)
-      if (filters.sort === 'newest') return right.contentId - left.contentId
-      return (right.rating ?? 0) - (left.rating ?? 0)
+      return right.contentId - left.contentId
     })
+})
+const matchedCourseCount = computed(() =>
+  coursesResource.usingFallback.value ? filteredCourses.value.length : (coursesResource.data.value?.totalItems ?? 0),
+)
+
+watch(
+  filters,
+  () => {
+    if (currentPage.value !== 0) {
+      currentPage.value = 0
+      return
+    }
+    syncCatalogQuery()
+    scheduleCourseReload()
+  },
+  { deep: true },
+)
+
+watch(currentPage, () => {
+  syncCatalogQuery()
+  void coursesResource.reload()
+})
+
+onBeforeUnmount(() => {
+  if (courseReloadTimer != null) window.clearTimeout(courseReloadTimer)
 })
 
 const cartCheckoutLabel = computed(() => {
@@ -388,7 +456,7 @@ const cartCheckoutLabel = computed(() => {
 
 const cartActionDisabled = computed(
   () =>
-    !auth.isAuthenticated ||
+    !isStudentShopper.value ||
     cartResource.loading.value ||
     cartResource.usingFallback.value ||
     !cart.value?.items.length ||
@@ -408,7 +476,17 @@ const cartActionHint = computed(() => {
   return 'Checkout redirects to the payment page and returns here on success.'
 })
 
+const cartAccessTitle = computed(() =>
+  signedInWithoutStudentRole.value ? 'Student checkout only' : 'Use the live cart',
+)
+const cartAccessDescription = computed(() =>
+  signedInWithoutStudentRole.value
+    ? 'You can browse public course information, but purchases and the live cart are available only to student accounts.'
+    : 'Sign in as a student to save courses, manage checkout, and return to lessons after payment.',
+)
+
 function courseActionLabel(course: PublicCourseSummary) {
+  if (signedInWithoutStudentRole.value) return 'View course'
   if (!canUseCart.value) return 'Sign in'
   if (auth.isPreviewSession && !auth.isAuthenticated) return 'Preview'
   if (course.accessType === 'FREE') return 'View course'
@@ -416,6 +494,11 @@ function courseActionLabel(course: PublicCourseSummary) {
 }
 
 function handleCourseAction(course: PublicCourseSummary) {
+  if (signedInWithoutStudentRole.value) {
+    router.push(`/courses/${course.id}`)
+    return
+  }
+
   if (!canUseCart.value) {
     goToAuth()
     return
@@ -435,7 +518,8 @@ function handleCourseAction(course: PublicCourseSummary) {
 }
 
 async function addCourseToCart(course: PublicCourseSummary) {
-  if (!auth.isAuthenticated) {
+  if (!isStudentShopper.value) {
+    if (signedInWithoutStudentRole.value) return
     goToAuth()
     return
   }
@@ -464,7 +548,8 @@ async function addCourseToCart(course: PublicCourseSummary) {
 }
 
 async function removeCartItem(cartItemId: number) {
-  if (!auth.isAuthenticated) {
+  if (!isStudentShopper.value) {
+    if (signedInWithoutStudentRole.value) return
     goToAuth()
     return
   }
@@ -493,7 +578,8 @@ async function removeCartItem(cartItemId: number) {
 }
 
 async function clearCart() {
-  if (!auth.isAuthenticated) {
+  if (!isStudentShopper.value) {
+    if (signedInWithoutStudentRole.value) return
     goToAuth()
     return
   }
@@ -522,7 +608,8 @@ async function clearCart() {
 }
 
 async function checkoutCart() {
-  if (!auth.isAuthenticated) {
+  if (!isStudentShopper.value) {
+    if (signedInWithoutStudentRole.value) return
     goToAuth()
     return
   }
@@ -572,11 +659,63 @@ async function checkoutCart() {
 function clearFilters() {
   cartSuccess.value = null
   filters.keyword = ''
-  filters.sort = 'popular'
+  filters.sort = 'newest'
   filters.levelId = ''
   filters.categoryId = ''
   filters.learningType = ''
   filters.accessType = ''
+}
+
+function goToCoursePage(page: number) {
+  const lastPage = Math.max(0, courseTotalPages.value - 1)
+  currentPage.value = Math.min(Math.max(page, 0), lastPage)
+}
+
+function scheduleCourseReload() {
+  if (courseReloadTimer != null) window.clearTimeout(courseReloadTimer)
+  courseReloadTimer = window.setTimeout(() => {
+    void coursesResource.reload()
+  }, 250)
+}
+
+function syncCatalogQuery() {
+  const query: Record<string, string> = {}
+  if (filters.keyword.trim()) query.keyword = filters.keyword.trim()
+  if (filters.sort !== 'newest') query.sort = filters.sort
+  if (filters.levelId) query.levelId = filters.levelId
+  if (filters.categoryId) query.categoryId = filters.categoryId
+  if (filters.learningType) query.learningType = filters.learningType
+  if (filters.accessType) query.accessType = filters.accessType
+  if (currentPage.value > 0) query.page = String(currentPage.value)
+  void router.replace({ query })
+}
+
+function queryText(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function validSort(value: string) {
+  return value === 'title' ? 'title' : 'newest'
+}
+
+function validPositiveIdQuery(value: unknown) {
+  const text = queryText(value)
+  return optionalPositiveId(text) == null ? '' : text
+}
+
+function optionalPositiveId(value: string) {
+  const numeric = Number(value)
+  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : undefined
+}
+
+function validEnumQuery(value: unknown, validValues: readonly string[]) {
+  const text = queryText(value)
+  return validValues.includes(text) ? text : ''
+}
+
+function validPageQuery(value: unknown) {
+  const numeric = Number(queryText(value))
+  return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0
 }
 
 function goToAuth() {

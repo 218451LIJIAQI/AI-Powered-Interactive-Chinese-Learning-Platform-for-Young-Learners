@@ -27,7 +27,7 @@ The frontend is a Vue 3 + Vite single-page application.
 ### Key Responsibilities
 
 - **Routing and role boundaries**: `frontend/src/router/index.ts` defines public, student, teacher, admin, and system routes with role metadata and preview-mode support.
-- **Session state**: `frontend/src/stores/auth.ts` keeps access tokens in session storage, supports HttpOnly-cookie refresh, and keeps preview role state session-scoped.
+- **Session state**: `frontend/src/stores/auth.ts` keeps access tokens in memory only, supports HttpOnly-cookie refresh, and keeps preview role state session-scoped.
 - **API access**: `frontend/src/api/http.ts` owns the Axios client, auth headers, refresh behavior, and unauthorized-session cleanup; `frontend/src/api/services.ts` exposes typed domain APIs.
 - **Type contracts**: `frontend/src/types/api.ts` mirrors backend DTOs and keeps the SPA aligned with `/api/v1` JSON envelopes.
 - **UX shells**: `frontend/src/layouts` and `frontend/src/pages` split public, student, teacher, and admin experiences into lazy-loaded route chunks.
@@ -124,7 +124,8 @@ CheckoutService
 Important payment invariants:
 
 - Stripe webhook signatures are verified before any state transition.
-- Unsupported or malformed webhook events are ignored safely.
+- Anonymous Stripe webhook bodies are capped at the Nginx edge and again before Spring request-body binding.
+- Unsupported webhook events are acknowledged without state changes; malformed or forged events are rejected safely.
 - Payment state transitions are idempotent and guarded by locks/versioning where needed.
 - Production payment callbacks must use HTTPS and real provider configuration.
 
@@ -134,6 +135,7 @@ The backend uses MySQL 8.4 with Flyway.
 
 - `V1__consolidated_schema.sql` is the current pre-production consolidated baseline.
 - Hibernate uses `ddl-auto=validate`, so schema drift fails startup instead of silently mutating tables.
+- Production sets `baseline-on-migrate=false`; an existing database must have valid Flyway history rather than being silently accepted as a baseline.
 - Clean destructive Flyway operations are disabled.
 - Before production freeze, accepted schema updates are folded into V1.
 - After production freeze, schema changes must be new forward-only migrations.
@@ -151,7 +153,7 @@ The production-style Compose stack includes:
 Scaling considerations before multi-instance deployment:
 
 - Move uploads to shared object storage.
-- Move AI/auth rate limits to Redis or another shared store.
+- Move process-local authentication throttles to Redis or another shared store; AI quota counters are already database-coordinated, but their database contention must be capacity-tested.
 - Use durable outbox/queue for email delivery.
 - Reconfirm refresh-token/session invalidation behavior under multiple backend nodes.
 - Put Prometheus/OpenAPI behind authenticated or internal-only access.

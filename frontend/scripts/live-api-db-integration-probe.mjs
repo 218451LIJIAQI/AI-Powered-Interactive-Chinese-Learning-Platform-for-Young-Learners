@@ -138,7 +138,20 @@ async function http(method, urlPath, { token, body, headers = {}, formData, expe
 async function db(sql, label) {
   const { stdout, stderr } = await execFile(
     'docker',
-    ['exec', dbContainer, 'mysql', `-u${dbUser}`, dbName, '--batch', '--raw', '--skip-column-names', '-e', sql],
+    [
+      'exec',
+      '-e',
+      `MYSQL_PWD=${dbPassword}`,
+      dbContainer,
+      'mysql',
+      `-u${dbUser}`,
+      dbName,
+      '--batch',
+      '--raw',
+      '--skip-column-names',
+      '-e',
+      sql,
+    ],
     { cwd: repoRoot, env: { ...process.env, MYSQL_PWD: dbPassword }, maxBuffer: 1024 * 1024 * 20 },
   )
   const rows = stdout.trim()
@@ -485,8 +498,8 @@ async function main() {
     )
   } else {
     addCheck(
-      'no-op checkout creates pending payment without fake success',
-      checkout.paymentAvailable === false && checkout.providerName === 'no-op' && checkout.paymentStatus === 'PENDING',
+      'no-op checkout fails closed without fake success',
+      checkout.paymentAvailable === false && checkout.providerName === 'no-op' && checkout.paymentStatus === 'FAILED',
       checkout,
     )
   }
@@ -512,10 +525,10 @@ async function main() {
     )
   } else {
     addCheck(
-      'checkout persisted order payment order item for no-op',
+      'checkout persisted failed order and payment for no-op',
       paymentRows.length === 1 &&
-        paymentRows[0][0] === 'PENDING' &&
-        paymentRows[0][2] === 'PENDING' &&
+        paymentRows[0][0] === 'FAILED' &&
+        paymentRows[0][2] === 'FAILED' &&
         paymentRows[0][3] === 'no-op' &&
         paymentRows[0][4] === 'UNAVAILABLE' &&
         Number(paymentRows[0][5]) === 1,
@@ -597,6 +610,17 @@ async function main() {
     reviewedReport.status === 'RESOLVED' && Boolean(reviewedReport.reviewedAt),
     reviewedReport,
   )
+  const aiReviewNotificationCount = await scalar(
+    `select count(*) from notifications
+     where user_id=${studentUserId}
+       and notification_type='AI_REPORT_REVIEW'
+       and target_type='AI_RESPONSE_REPORT'
+       and target_id=${aiReport.id}`,
+    'student AI report review notification',
+  )
+  addCheck('AI report review notification persisted for student', aiReviewNotificationCount === '1', {
+    aiReviewNotificationCount,
+  })
 
   const platformSettings = data(await http('GET', '/admin/system-settings/platform', { token: adminLogin.token }))
   const newDisclaimer = `QA disclaimer ${runId}`.slice(0, 190)

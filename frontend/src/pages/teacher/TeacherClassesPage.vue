@@ -267,8 +267,8 @@
 
             <div class="teacher-classes-form-footer">
               <div class="teacher-classes-form-note">
-                Teachers can publish courses directly. Live classes remain teacher-managed and use external meeting
-                links only.
+                Select at least one lesson or package for every live class. Live classes remain teacher-managed and use
+                external meeting links only.
               </div>
               <div class="row u-justify-end u-wrap">
                 <button
@@ -883,7 +883,9 @@ function toInputDateTime(value: string) {
 }
 
 function toApiDateTime(value: string) {
-  return new Date(value).toISOString().slice(0, 19)
+  // The live-class API stores a LocalDateTime wall-clock value. Converting
+  // datetime-local to UTC before removing the zone shifts the selected time.
+  return value.length === 16 ? `${value}:00` : value
 }
 
 function meetingCodeFromLink(link?: string | null) {
@@ -990,6 +992,10 @@ async function submitClass() {
     actionError.value = 'Live classes cannot be created or updated while preview data is active.'
     return
   }
+  if (!classForm.lessonId && !classForm.packageId) {
+    actionError.value = 'Select a lesson or package before creating a live class.'
+    return
+  }
 
   const payload = {
     title: classForm.title,
@@ -1055,20 +1061,23 @@ async function cancelSelectedClass() {
   }
 }
 
-async function loadEnrolments(classId: number) {
-  actionError.value = null
-  actionSuccess.value = null
+async function loadEnrolments(classId: number, announceSuccess = true) {
+  if (announceSuccess) {
+    actionError.value = null
+    actionSuccess.value = null
+  }
   if (previewFallbackEnabled.value) {
     enrolmentsResource.data.value = teacherEnrolments
     enrolmentsResource.usingFallback.value = true
-    actionSuccess.value = 'Class roster preview loaded.'
+    if (announceSuccess) actionSuccess.value = 'Class roster preview loaded.'
     return
   }
 
   try {
     enrolmentsResource.data.value = await teacherApi.enrolments(classId)
-    actionSuccess.value = 'Class roster loaded.'
+    if (announceSuccess) actionSuccess.value = 'Class roster loaded.'
   } catch (reason) {
+    actionSuccess.value = null
     actionError.value = resolveApiError(reason, 'Unable to load enrolments for this class.')
   }
 }
@@ -1104,7 +1113,7 @@ async function loadRecordedResources(lessonId: number | null) {
 }
 
 async function loadDependentResources(classId: number, lessonId: number | null) {
-  await loadEnrolments(classId)
+  await loadEnrolments(classId, false)
   await loadRecordedResources(lessonId)
 }
 

@@ -94,6 +94,8 @@ import com.example.aichinese.entity.enums.ManagedContentType;
  *                       {@code PAID}); never {@code null}
  * @param price          listed price; nullable for {@code FREE}
  *                       rows that never had a price set
+ * @param currencyCode   ISO 4217 code used by checkout for this
+ *                       listed price; never {@code null}
  * @param coverImageUrl  optional cover image reference; nullable
  * @param locked         server-derived access flag; primitive so
  *                       the wire format always emits a value
@@ -120,6 +122,7 @@ import com.example.aichinese.entity.enums.ManagedContentType;
         "learningType",
         "accessType",
         "price",
+        "currencyCode",
         "coverImageUrl",
         "locked",
         "status",
@@ -140,6 +143,7 @@ public record PublicCourseDetailResponse(
         LearningType learningType,
         AccessType accessType,
         BigDecimal price,
+        String currencyCode,
         String coverImageUrl,
         boolean locked,
         ContentStatus status,
@@ -163,6 +167,7 @@ public record PublicCourseDetailResponse(
         Objects.requireNonNull(type, "type must not be null");
         Objects.requireNonNull(title, "title must not be null");
         Objects.requireNonNull(accessType, "accessType must not be null");
+        Objects.requireNonNull(currencyCode, "currencyCode must not be null");
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(callToAction, "callToAction must not be null");
         packageItems = packageItems == null ? List.of() : List.copyOf(packageItems);

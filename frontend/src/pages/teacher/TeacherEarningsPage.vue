@@ -11,7 +11,7 @@
     <section class="teacher-earnings-hero">
       <div>
         <span>Teacher revenue</span>
-        <h2>{{ formatCurrency(summary.availableBalance) }} ready for payout</h2>
+        <h2>{{ formatCurrency(summary.availableBalance, summary.currencyCode) }} ready for payout</h2>
         <p>
           Review released earnings, pending balances, and payout requests with a parent-friendly platform finance flow.
         </p>
@@ -28,25 +28,25 @@
     <section class="stats-grid teacher-earnings-stats">
       <MetricCard
         label="Gross"
-        :value="formatCurrency(summary.grossAmount)"
+        :value="formatCurrency(summary.grossAmount, summary.currencyCode)"
         subtitle="Total teacher sales"
         icon="money"
       />
       <MetricCard
         label="Net"
-        :value="formatCurrency(summary.totalNetAmount)"
+        :value="formatCurrency(summary.totalNetAmount, summary.currencyCode)"
         subtitle="After commission"
         icon="earnings"
       />
       <MetricCard
         label="Available"
-        :value="formatCurrency(summary.availableBalance)"
+        :value="formatCurrency(summary.availableBalance, summary.currencyCode)"
         subtitle="Ready for payout request"
         icon="finance"
       />
       <MetricCard
         label="Pending"
-        :value="formatCurrency(summary.pendingBalance)"
+        :value="formatCurrency(summary.pendingBalance, summary.currencyCode)"
         subtitle="Awaiting release"
         icon="chart"
       />
@@ -67,8 +67,8 @@
             </template>
             <template #aside>
               <div class="list-value-stack">
-                <strong>{{ formatCurrency(item.netAmount) }}</strong>
-                <span class="muted">Commission {{ formatCurrency(item.commissionAmount) }}</span>
+                <strong>{{ formatCurrency(item.netAmount, item.currencyCode) }}</strong>
+                <span class="muted">Commission {{ formatCurrency(item.commissionAmount, item.currencyCode) }}</span>
               </div>
             </template>
           </ListInfoItem>
@@ -119,7 +119,7 @@
             <ListInfoItem
               v-for="item in payouts"
               :key="item.id"
-              :title="formatCurrency(item.amount)"
+              :title="formatCurrency(item.amount, item.currencyCode)"
               :description="payoutDescription(item)"
               icon="finance"
             >
@@ -170,6 +170,7 @@ const emptySummary = {
   totalNetAmount: 0,
   availableBalance: 0,
   pendingBalance: 0,
+  currencyCode: 'MYR',
 }
 const earnings = computed(
   () => earningsResource.data.value ?? (earningsResource.usingFallback.value ? teacherEarnings : []),
@@ -181,8 +182,16 @@ const payouts = computed(
   () => payoutsResource.data.value ?? (payoutsResource.usingFallback.value ? teacherPayouts : []),
 )
 const earningHighlights = computed(() => [
-  { icon: 'money', label: 'Net earned', value: formatCurrency(summary.value.totalNetAmount) },
-  { icon: 'history', label: 'Pending balance', value: formatCurrency(summary.value.pendingBalance) },
+  {
+    icon: 'money',
+    label: 'Net earned',
+    value: formatCurrency(summary.value.totalNetAmount, summary.value.currencyCode),
+  },
+  {
+    icon: 'history',
+    label: 'Pending balance',
+    value: formatCurrency(summary.value.pendingBalance, summary.value.currencyCode),
+  },
   { icon: 'finance', label: 'Payout requests', value: String(payouts.value.length) },
 ])
 const payoutUsingFallback = computed(() => summaryResource.usingFallback.value || payoutsResource.usingFallback.value)

@@ -49,10 +49,9 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
  * <h2>Stale item handling</h2>
  * <p>If a cart line references a purchasable item that is no longer
  * resolvable (e.g.&nbsp;the underlying lesson was unpublished or
- * deleted after the student added it), the cart display gracefully
- * omits the stale line and logs a warning. The stale row remains in
- * the database so it can be explicitly removed by the student or
- * garbage-collected by a future housekeeping job.</p>
+ * deleted after the student added it), the cart removes that hidden
+ * line and logs a warning. A student must never be trapped behind an
+ * invisible row that cannot be removed through the rendered cart.</p>
  */
 @Service
 public class CartService {
@@ -114,7 +113,7 @@ public class CartService {
                 .ifPresent(existing -> {
                     throw new ResponseStatusException(BAD_REQUEST, "This item is already in your cart.");
                 });
-        enforceCartCapacity(cart.getId());
+        enforceCartCapacity(cart);
 
         CartItem cartItem = new CartItem();
         cartItem.setCart(cart);
@@ -179,7 +178,8 @@ public class CartService {
                 resolved = purchasableItemService.resolve(
                         cartItem.getItemType(), cartItem.getItemId(), null);
             } catch (ResponseStatusException ex) {
-                log.warn("Skipping stale cart item id={} (type={}, itemId={}): {}",
+                cartItemRepository.delete(cartItem);
+                log.warn("Removing stale cart item id={} (type={}, itemId={}): {}",
                         cartItem.getId(), cartItem.getItemType(),
                         cartItem.getItemId(), ex.getReason());
                 continue;
@@ -209,8 +209,15 @@ public class CartService {
                 items.isEmpty());
     }
 
-    private void enforceCartCapacity(Long cartId) {
-        if (cartItemRepository.countByCartId(cartId) >= MAX_CART_ITEMS) {
+    private void enforceCartCapacity(Cart cart) {
+        if (cartItemRepository.countByCartId(cart.getId()) < MAX_CART_ITEMS) {
+            return;
+        }
+
+        // A hidden archived item must not make a full cart impossible to
+        // recover through the API; remove stale rows before enforcing capacity.
+        buildCartResponse(cart, cartItemRepository.findByCartIdOrderByCreatedAtAsc(cart.getId()));
+        if (cartItemRepository.countByCartId(cart.getId()) >= MAX_CART_ITEMS) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
                     "Cart can contain at most " + MAX_CART_ITEMS + " items.");

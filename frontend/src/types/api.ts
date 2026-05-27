@@ -169,6 +169,7 @@ export interface PublicCourseSummary {
   learningType: LearningType
   accessType: AccessType
   price: number
+  currencyCode: string
   rating?: number | null
   coverImageUrl?: string | null
   locked: boolean
@@ -194,6 +195,7 @@ export interface PublicCourseDetail {
   learningType: LearningType
   accessType: AccessType
   price: number
+  currencyCode: string
   coverImageUrl?: string | null
   locked: boolean
   status: ContentStatus
@@ -812,6 +814,7 @@ export interface TeacherDashboardResponse {
     netAmount: number
     availableBalance: number
     pendingBalance: number
+    currencyCode: string
   }
   recentQuizResults: Array<{
     attemptId: number
@@ -852,6 +855,7 @@ export interface TeacherAnalyticsResponse {
     averageQuizScore: number
     netEarnings: number
     availableBalance: number
+    currencyCode: string
     upcomingLiveClasses: number
     totalLiveEnrolments: number
   }
@@ -1074,6 +1078,7 @@ export interface TeacherEarningSummaryResponse {
   totalNetAmount: number
   availableBalance: number
   pendingBalance: number
+  currencyCode: string
 }
 
 export interface TeacherEarningResponse {
@@ -1083,6 +1088,7 @@ export interface TeacherEarningResponse {
   grossAmount: number
   commissionAmount: number
   netAmount: number
+  currencyCode: string
   earningStatus: string
   createdAt: string
 }
@@ -1090,6 +1096,7 @@ export interface TeacherEarningResponse {
 export interface TeacherPayoutRequestResponse {
   id: number
   amount: number
+  currencyCode: string
   requestedNote?: string | null
   decisionReason?: string | null
   payoutStatus: string
@@ -1126,6 +1133,7 @@ export interface AdminDashboardResponse {
     totalTransactions: number
     paidTransactions: number
     totalRevenue: number
+    currencyCode: string
   }
   pendingRefunds: number
   pendingPayouts: number
@@ -1147,6 +1155,7 @@ export interface AdminAnalyticsResponse {
     rejectedTeachers: number
     publishedContentItems: number
     totalRevenue: number
+    currencyCode: string
     pendingRefunds: number
     pendingPayouts: number
     moderationActions: number

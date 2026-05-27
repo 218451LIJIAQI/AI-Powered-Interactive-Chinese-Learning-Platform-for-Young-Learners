@@ -187,7 +187,12 @@
           <div class="admin-dashboard-finance-grid">
             <article class="admin-dashboard-mini-stat">
               <small>Total Revenue</small>
-              <strong>{{ formatCurrency(dashboard.paymentRevenueSummary.totalRevenue) }}</strong>
+              <strong>{{
+                formatCurrency(
+                  dashboard.paymentRevenueSummary.totalRevenue,
+                  dashboard.paymentRevenueSummary.currencyCode,
+                )
+              }}</strong>
               <span>{{ formatNumber(dashboard.paymentRevenueSummary.paidTransactions) }} paid transaction(s)</span>
             </article>
             <article class="admin-dashboard-mini-stat">
@@ -352,6 +357,7 @@ const emptyDashboard = {
     totalTransactions: 0,
     paidTransactions: 0,
     totalRevenue: 0,
+    currencyCode: 'MYR',
   },
   pendingRefunds: 0,
   pendingPayouts: 0,
@@ -366,6 +372,7 @@ const emptyAnalytics = {
     rejectedTeachers: 0,
     publishedContentItems: 0,
     totalRevenue: 0,
+    currencyCode: 'MYR',
     pendingRefunds: 0,
     pendingPayouts: 0,
     moderationActions: 0,
@@ -496,7 +503,10 @@ const statCards = computed(() => [
   },
   {
     label: 'Platform Revenue',
-    value: formatCurrency(dashboard.value.paymentRevenueSummary.totalRevenue),
+    value: formatCurrency(
+      dashboard.value.paymentRevenueSummary.totalRevenue,
+      dashboard.value.paymentRevenueSummary.currencyCode,
+    ),
     copy: `${formatNumber(dashboard.value.paymentRevenueSummary.totalTransactions)} recorded transaction(s)`,
     icon: 'money',
     tone: 'mint',

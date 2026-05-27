@@ -99,6 +99,8 @@ import com.example.aichinese.entity.enums.ManagedContentType;
  *                         {@code PAID}); never {@code null}
  * @param price            listed price; nullable for {@code FREE}
  *                         rows that never had a price set
+ * @param currencyCode     ISO 4217 code used by checkout for this
+ *                         listed price; never {@code null}
  * @param rating           future ratings feature placeholder;
  *                         {@code null} until ratings ship
  * @param coverImageUrl    optional cover image reference;
@@ -121,6 +123,7 @@ import com.example.aichinese.entity.enums.ManagedContentType;
         "learningType",
         "accessType",
         "price",
+        "currencyCode",
         "rating",
         "coverImageUrl",
         "locked",
@@ -138,6 +141,7 @@ public record PublicCourseSummaryResponse(
         LearningType learningType,
         AccessType accessType,
         BigDecimal price,
+        String currencyCode,
         BigDecimal rating,
         String coverImageUrl,
         boolean locked,
@@ -157,6 +161,7 @@ public record PublicCourseSummaryResponse(
         Objects.requireNonNull(type, "type must not be null");
         Objects.requireNonNull(title, "title must not be null");
         Objects.requireNonNull(accessType, "accessType must not be null");
+        Objects.requireNonNull(currencyCode, "currencyCode must not be null");
         Objects.requireNonNull(status, "status must not be null");
     }
 }

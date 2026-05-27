@@ -64,6 +64,8 @@ class DatabaseMigrationConfigurationTests {
         assertThat(prod).contains("mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}");
         assertThat(prod).contains("provider: ${PAYMENT_PROVIDER:stripe}");
         assertThat(prod).contains("Startup now fails fast");
+        assertThat(prod).contains("baseline-on-migrate: false");
+        assertThat(prod).contains("clean-disabled: true");
     }
 
     @Test
@@ -138,6 +140,8 @@ class DatabaseMigrationConfigurationTests {
 
         assertThat(nginx).contains("location = /index.html");
         assertThat(nginx).contains("location ~ ^/(sw\\.js|registerSW\\.js|manifest\\.webmanifest)$");
+        assertThat(nginx).contains("location = /api/v1/payments/webhooks/stripe");
+        assertThat(nginx).contains("client_max_body_size 256k;");
         assertThat(nginx).contains("Cache-Control \"no-cache, no-store, must-revalidate\"");
         assertThat(nginx).contains("Cache-Control \"public, max-age=604800, immutable\"");
 

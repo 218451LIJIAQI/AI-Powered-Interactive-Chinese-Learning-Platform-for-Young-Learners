@@ -123,6 +123,7 @@ export const publicCourses: PublicCourseSummary[] = [
     learningType: 'HYBRID',
     accessType: 'PAID',
     price: 49,
+    currencyCode: 'USD',
     rating: 4.8,
     coverImageUrl: null,
     locked: false,
@@ -140,6 +141,7 @@ export const publicCourses: PublicCourseSummary[] = [
     learningType: 'LIVE',
     accessType: 'PAID',
     price: 79,
+    currencyCode: 'USD',
     rating: 4.9,
     coverImageUrl: null,
     locked: false,
@@ -157,6 +159,7 @@ export const publicCourses: PublicCourseSummary[] = [
     learningType: 'RECORDED',
     accessType: 'PAID',
     price: 59,
+    currencyCode: 'USD',
     rating: 4.7,
     coverImageUrl: null,
     locked: false,
@@ -174,6 +177,7 @@ export const publicCourses: PublicCourseSummary[] = [
     learningType: 'RECORDED',
     accessType: 'PAID',
     price: 39,
+    currencyCode: 'USD',
     rating: 4.6,
     coverImageUrl: null,
     locked: false,
@@ -1887,6 +1891,7 @@ export const teacherDashboard: TeacherDashboardResponse = {
     netAmount: 3910,
     availableBalance: 1250,
     pendingBalance: 460,
+    currencyCode: 'USD',
   },
   recentQuizResults: [
     {
@@ -1927,6 +1932,7 @@ export const teacherAnalytics: TeacherAnalyticsResponse = {
     averageQuizScore: 72,
     netEarnings: 3910,
     availableBalance: 1250,
+    currencyCode: 'USD',
     upcomingLiveClasses: 4,
     totalLiveEnrolments: 85,
   },
@@ -2433,6 +2439,7 @@ export const teacherEarningsSummary: TeacherEarningSummaryResponse = {
   totalNetAmount: 3910,
   availableBalance: 1250,
   pendingBalance: 460,
+  currencyCode: 'USD',
 }
 
 export const teacherEarnings: TeacherEarningResponse[] = [
@@ -2443,6 +2450,7 @@ export const teacherEarnings: TeacherEarningResponse[] = [
     grossAmount: 49,
     commissionAmount: 9.8,
     netAmount: 39.2,
+    currencyCode: 'USD',
     earningStatus: 'SETTLED',
     createdAt: '2026-05-10T04:00:00Z',
   },
@@ -2452,6 +2460,7 @@ export const teacherPayouts: TeacherPayoutRequestResponse[] = [
   {
     id: 1,
     amount: 300,
+    currencyCode: 'USD',
     requestedNote: 'May payout batch',
     decisionReason: null,
     payoutStatus: 'PENDING',
@@ -2543,6 +2552,7 @@ export const adminDashboard: AdminDashboardResponse = {
     totalTransactions: 1102,
     paidTransactions: 1019,
     totalRevenue: 24560.8,
+    currencyCode: 'USD',
   },
   pendingRefunds: 6,
   pendingPayouts: 4,
@@ -2573,6 +2583,7 @@ export const adminAnalytics: AdminAnalyticsResponse = {
     rejectedTeachers: 14,
     publishedContentItems: 286,
     totalRevenue: 24560.8,
+    currencyCode: 'USD',
     pendingRefunds: 6,
     pendingPayouts: 4,
     moderationActions: 14,

@@ -65,7 +65,8 @@ public class PaymentController {
     @PostMapping(value = "/webhooks/stripe", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<StripeWebhookResultResponse> handleStripeWebhook(
             @RequestHeader(name = "Stripe-Signature", required = false) String signatureHeader,
-            @Size(max = 262_144, message = "Stripe webhook payload must not exceed 262144 characters.")
+            @Size(max = StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES,
+                    message = "Stripe webhook payload must not exceed 262144 characters.")
             @RequestBody String payload) {
         return ApiResponse.success(
                 "Stripe webhook processed.",

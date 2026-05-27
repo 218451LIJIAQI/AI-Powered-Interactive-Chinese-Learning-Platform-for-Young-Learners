@@ -72,6 +72,7 @@ class AnalyticsIntegrationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.totalLessons").isNumber())
                 .andExpect(jsonPath("$.data.overview.netEarnings").exists())
+                .andExpect(jsonPath("$.data.overview.currencyCode").value("MYR"))
                 .andExpect(jsonPath("$.data.contentStatusBreakdown").isArray());
     }
 
@@ -85,6 +86,7 @@ class AnalyticsIntegrationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.totalStudents").isNumber())
                 .andExpect(jsonPath("$.data.overview.totalTeachers").isNumber())
+                .andExpect(jsonPath("$.data.overview.currencyCode").value("MYR"))
                 .andExpect(jsonPath("$.data.userRegistrationTrend").isArray())
                 .andExpect(jsonPath("$.data.teacherApprovalBreakdown").isArray())
                 .andExpect(jsonPath("$.data.aiStatusBreakdown").isArray());

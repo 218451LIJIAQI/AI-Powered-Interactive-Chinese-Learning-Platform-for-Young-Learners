@@ -15,7 +15,6 @@
         </div>
         <div class="public-course-card-price">
           <strong>{{ priceValue }}</strong>
-          <span>{{ priceSuffix }}</span>
         </div>
       </div>
 
@@ -26,8 +25,8 @@
           <PortraitAvatar :size="30" kind="female" />
           {{ teacherName }}
         </span>
-        <span>{{ lessonCount }} Lessons</span>
-        <span>{{ ageRange }}</span>
+        <span>{{ contentTypeLabel }}</span>
+        <span>{{ categoryLabel }}</span>
       </div>
     </div>
 
@@ -50,7 +49,7 @@
 /**
  * Public-facing course card used on the landing page and the
  * catalogue grid. Shows the {@link CourseSceneThumb} cover, title,
- * teacher / age band, pricing, and a CTA chip. Routes to the
+ * teacher, content type, pricing, and a CTA chip. Routes to the
  * course detail page on click.
  *
  * Free vs. paid courses share the same layout — the price chip is
@@ -82,8 +81,11 @@ const descriptionText = computed<string>(
   () => props.course.shortDescription || 'Beginner-friendly Mandarin learning content.',
 )
 const teacherName = computed<string>(() => props.course.teacher.displayName)
-const priceValue = computed<string>(() => formatCurrency(props.course.price).replace(/\.00$/, ''))
-const priceSuffix = computed<string>(() => 'USD')
+const priceValue = computed<string>(() =>
+  formatCurrency(props.course.price, props.course.currencyCode).replace(/\.00$/, ''),
+)
+const contentTypeLabel = computed(() => (props.course.type === 'PACKAGE' ? 'Course package' : 'Single lesson'))
+const categoryLabel = computed(() => props.course.category.name)
 
 const levelLabel = computed(() => {
   if (props.course.level.id <= 2) return 'Beginner'
@@ -101,32 +103,6 @@ const modePillClass = computed(() => {
   if (props.course.learningType === 'LIVE') return 'public-mini-pill--violet'
   if (props.course.learningType === 'RECORDED') return 'public-mini-pill--purple'
   return 'public-mini-pill--gold'
-})
-
-const ageRange = computed(() => {
-  switch (props.course.id) {
-    case 'PACKAGE-1':
-      return 'Ages 5+'
-    case 'LESSON-2':
-      return 'Ages 7+'
-    case 'LESSON-3':
-      return 'Ages 8+'
-    default:
-      return 'Ages 5+'
-  }
-})
-
-const lessonCount = computed(() => {
-  switch (props.course.id) {
-    case 'PACKAGE-1':
-      return 18
-    case 'LESSON-2':
-      return 20
-    case 'LESSON-3':
-      return 16
-    default:
-      return 14
-  }
 })
 
 const thumbVariant = computed(() => {

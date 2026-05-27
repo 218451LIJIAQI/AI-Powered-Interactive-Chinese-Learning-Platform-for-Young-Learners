@@ -220,19 +220,6 @@
       </div>
 
       <div class="public-footer-meta">
-        <div class="public-footer-socials">
-          <a
-            v-for="social in socialLinks"
-            :key="social.name"
-            :href="social.href"
-            :aria-label="social.label"
-            class="public-footer-social-link"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <BrandSocialIcon :name="social.name" />
-          </a>
-        </div>
         <div class="public-footer-copy">
           <span>&copy; {{ copyrightYear }} MandarinSpark. All rights reserved.</span>
           <span>Made for young learners.</span>
@@ -260,7 +247,6 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { publicApi } from '@/api/services'
-import BrandSocialIcon from '@/components/common/BrandSocialIcon.vue'
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -278,7 +264,7 @@ const router = useRouter()
 const copyrightYear = new Date().getFullYear()
 
 const previewFeaturedCourses = publicCourses.slice(0, 3)
-const featuredCoursesResource = useResource(() => publicApi.listCourses({ size: 3, sort: 'popular' }), {
+const featuredCoursesResource = useResource(() => publicApi.listCourses({ size: 3, sort: 'newest' }), {
   items: previewFeaturedCourses,
   page: 0,
   size: 3,
@@ -331,13 +317,6 @@ const featureStrip = [
     description: 'Learn with verified teachers who care about you.',
     tone: 'pink' as const,
   },
-]
-
-const socialLinks = [
-  { name: 'linkedin' as const, label: 'MandarinSpark on LinkedIn', href: 'https://linkedin.com' },
-  { name: 'facebook' as const, label: 'MandarinSpark on Facebook', href: 'https://facebook.com' },
-  { name: 'youtube' as const, label: 'MandarinSpark on YouTube', href: 'https://youtube.com' },
-  { name: 'instagram' as const, label: 'MandarinSpark on Instagram', href: 'https://instagram.com' },
 ]
 
 const heroProof = [

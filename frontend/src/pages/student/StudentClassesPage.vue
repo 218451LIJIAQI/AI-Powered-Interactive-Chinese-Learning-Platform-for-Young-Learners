@@ -60,10 +60,29 @@
                 <button
                   class="btn btn-accent student-live-join"
                   type="button"
-                  :disabled="liveReadOnly"
+                  :disabled="liveReadOnly || classBusy || waitingForJoinWindow"
                   @click="join(upcomingClass.id)"
                 >
-                  {{ upcomingClass.canJoin ? 'Join Class' : upcomingClass.canEnrol ? 'Enrol First' : 'Class Locked' }}
+                  {{
+                    classBusy
+                      ? 'Updating...'
+                      : upcomingClass.canJoin
+                        ? 'Join Class'
+                        : upcomingClass.canEnrol
+                          ? 'Enrol First'
+                          : waitingForJoinWindow
+                            ? 'Starts Later'
+                            : 'Class Locked'
+                  }}
+                </button>
+                <button
+                  v-if="canCancelUpcomingEnrolment"
+                  class="btn btn-secondary"
+                  type="button"
+                  :disabled="liveReadOnly || classBusy"
+                  @click="cancelEnrolment(upcomingClass.id)"
+                >
+                  Cancel Enrolment
                 </button>
                 <button class="student-live-setup" type="button" @click="router.push('/student/profile')">
                   Open Profile
@@ -264,6 +283,15 @@ const pageError = computed(() => liveResource.error.value)
 const liveReadOnly = computed(() => liveResource.usingFallback.value)
 
 const upcomingClass = computed(() => liveClasses.value.find((item) => item.canJoin) ?? liveClasses.value[0] ?? null)
+const canCancelUpcomingEnrolment = computed(() => {
+  const liveClass = upcomingClass.value
+  if (!liveClass?.enrolled || !['SCHEDULED', 'RESCHEDULED'].includes(liveClass.liveClassStatus)) {
+    return false
+  }
+
+  return Boolean(liveClass.startTime) && new Date(liveClass.startTime).getTime() > Date.now()
+})
+const waitingForJoinWindow = computed(() => canCancelUpcomingEnrolment.value && !upcomingClass.value?.canJoin)
 const primaryTeacherName = computed(() => upcomingClass.value?.teacher?.displayName || 'Teacher unavailable')
 const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() => {
   const name = primaryTeacherName.value.toLowerCase()
@@ -511,6 +539,27 @@ async function enrol(id: number) {
     actionSuccess.value = 'You are enrolled. The live class schedule has been refreshed.'
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to enrol in this class.')
+  } finally {
+    classBusy.value = false
+  }
+}
+
+async function cancelEnrolment(id: number) {
+  if (classBusy.value) return
+  actionError.value = null
+  actionSuccess.value = null
+  if (liveReadOnly.value) {
+    actionError.value = 'Preview live classes cannot change enrolment. Use live class data to cancel an enrolment.'
+    return
+  }
+
+  classBusy.value = true
+  try {
+    await studentApi.cancelLiveClassEnrolment(id)
+    await liveResource.reload()
+    actionSuccess.value = 'Your live class enrolment was cancelled and the schedule has been refreshed.'
+  } catch (reason) {
+    actionError.value = resolveApiError(reason, 'Unable to cancel this enrolment.')
   } finally {
     classBusy.value = false
   }

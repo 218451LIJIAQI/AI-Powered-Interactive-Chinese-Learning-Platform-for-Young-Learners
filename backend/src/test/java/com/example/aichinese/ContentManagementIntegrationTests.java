@@ -630,16 +630,20 @@ class ContentManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.items[?(@.title=='Published free lesson')]").exists())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package')]").exists())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Archived hidden lesson')]").doesNotExist())
-                .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.locked==true)]").exists());
+                .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.locked==true)]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.currencyCode=='MYR')]").exists())
+                .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.rating!=null)]").doesNotExist());
 
         mockMvc.perform(get("/api/v1/public/courses/LESSON-" + publishedLessonId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("Published free lesson"))
+                .andExpect(jsonPath("$.data.currencyCode").value("MYR"))
                 .andExpect(jsonPath("$.data.locked").value(false));
 
         mockMvc.perform(get("/api/v1/public/courses/PACKAGE-" + publishedPackageId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("Published paid package"))
+                .andExpect(jsonPath("$.data.currencyCode").value("MYR"))
                 .andExpect(jsonPath("$.data.locked").value(true));
 
         Long publishedModuleId = createModule(teacherToken, "Published browse-hidden module");
@@ -695,6 +699,10 @@ class ContentManagementIntegrationTests {
         // Unknown accessType returns a 400 (preserves the previous parser
         // contract after the catch-block tightening pass).
         mockMvc.perform(get("/api/v1/public/courses").param("accessType", "NOT_A_REAL_TYPE"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/api/v1/public/courses").param("sort", "popular"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }

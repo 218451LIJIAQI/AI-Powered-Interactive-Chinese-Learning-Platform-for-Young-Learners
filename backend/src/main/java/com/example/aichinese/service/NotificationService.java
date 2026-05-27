@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -52,10 +54,10 @@ import com.example.aichinese.util.PaginationUtils;
  *
  * <h2>Consumer surface</h2>
  * <p>Paginated listing + mark-read / mark-all-read / unread-count
- * endpoints for the receiving persona. The mark-read flow uses a
- * separate transaction (via {@link TransactionTemplate}) so the
- * unread badge updates promptly without blocking on the surrounding
- * page-load transaction.</p>
+ * endpoints for the receiving persona. Producer notifications are
+ * persisted in an independent transaction after their source
+ * transaction commits, avoiding both phantom notices for rolled-back
+ * work and self-lock waits on related rows.</p>
  */
 @Service
 public class NotificationService {
@@ -141,6 +143,39 @@ public class NotificationService {
     }
 
     public void safeCreateNotification(
+            User recipient,
+            NotificationType notificationType,
+            String title,
+            String message,
+            String targetType,
+            Long targetId,
+            String targetPath,
+            User createdByUser) {
+        Runnable committedWrite = () -> createNotificationInIndependentTransaction(
+                recipient,
+                notificationType,
+                title,
+                message,
+                targetType,
+                targetId,
+                targetPath,
+                createdByUser);
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    committedWrite.run();
+                }
+            });
+            return;
+        }
+
+        committedWrite.run();
+    }
+
+    private void createNotificationInIndependentTransaction(
             User recipient,
             NotificationType notificationType,
             String title,

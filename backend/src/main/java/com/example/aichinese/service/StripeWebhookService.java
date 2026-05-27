@@ -72,7 +72,11 @@ public class StripeWebhookService {
     private static final Logger log = LoggerFactory.getLogger(StripeWebhookService.class);
 
     private static final long SIGNATURE_TOLERANCE_SECONDS = 300;
-    private static final int MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
+    /**
+     * Transport and parser cap shared with the pre-binding servlet filter.
+     * Keep Stripe callback memory use bounded before signature verification.
+     */
+    public static final int MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
     private static final int MAX_SIGNATURE_HEADER_LENGTH = 4096;
     private static final int MAX_PROVIDER_STATUS_LENGTH = 100;
     private static final Set<String> SUPPORTED_CHECKOUT_SESSION_EVENTS = Set.of(

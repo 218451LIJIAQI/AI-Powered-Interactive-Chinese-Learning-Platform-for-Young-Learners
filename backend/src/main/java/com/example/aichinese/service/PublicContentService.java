@@ -66,6 +66,7 @@ public class PublicContentService {
     private final CoursePackageRepository coursePackageRepository;
     private final PackageItemRepository packageItemRepository;
     private final ContentManagementMapper contentManagementMapper;
+    private final CommerceSettingsService commerceSettingsService;
     private final EntityManager entityManager;
 
     public PublicContentService(
@@ -73,11 +74,13 @@ public class PublicContentService {
             CoursePackageRepository coursePackageRepository,
             PackageItemRepository packageItemRepository,
             ContentManagementMapper contentManagementMapper,
+            CommerceSettingsService commerceSettingsService,
             EntityManager entityManager) {
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
         this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
         this.entityManager = Objects.requireNonNull(entityManager, "entityManager");
     }
 
@@ -103,6 +106,7 @@ public class PublicContentService {
 
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
+        String currencyCode = commerceSettingsService.getDefaultCurrency();
         long totalItems = countPublicCourses(levelId, categoryId, accessTypeFilter, learningTypeFilter, normalizedKeyword);
         long offset = (long) safePage * safeSize;
         List<PublicCourseSummaryResponse> items = offset >= totalItems
@@ -115,7 +119,8 @@ public class PublicContentService {
                         normalizedKeyword,
                         sort,
                         offset,
-                        safeSize));
+                        safeSize),
+                        currencyCode);
         int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
 
         return new PageResponse<>(items, safePage, safeSize, totalItems, totalPages);
@@ -125,6 +130,7 @@ public class PublicContentService {
     public PublicCourseDetailResponse getCourseDetail(String id) {
         ManagedContentType contentType = parseContentType(id);
         Long contentId = parseContentId(id);
+        String currencyCode = commerceSettingsService.getDefaultCurrency();
 
         return switch (contentType) {
             case LESSON -> {
@@ -134,7 +140,7 @@ public class PublicContentService {
                                 ContentStatus.PUBLISHED,
                                 TeacherStatus.APPROVED)
                         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published lesson was not found."));
-                yield contentManagementMapper.toPublicCourseDetail(lesson);
+                yield contentManagementMapper.toPublicCourseDetail(lesson, currencyCode);
             }
             case PACKAGE -> {
                 CoursePackage coursePackage = coursePackageRepository
@@ -147,7 +153,8 @@ public class PublicContentService {
                         coursePackage,
                         packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(
                                 coursePackage.getId(),
-                                PageRequest.of(0, PUBLIC_PACKAGE_ITEM_LIMIT)).getContent());
+                                PageRequest.of(0, PUBLIC_PACKAGE_ITEM_LIMIT)).getContent(),
+                        currencyCode);
             }
             case MODULE -> throw new ResponseStatusException(NOT_FOUND, "Published course was not found.");
         };
@@ -203,7 +210,7 @@ public class PublicContentService {
         return keys;
     }
 
-    private List<PublicCourseSummaryResponse> loadCourseSummaries(List<CourseKey> keys) {
+    private List<PublicCourseSummaryResponse> loadCourseSummaries(List<CourseKey> keys, String currencyCode) {
         if (keys.isEmpty()) {
             return List.of();
         }
@@ -237,12 +244,12 @@ public class PublicContentService {
             if (key.type() == ManagedContentType.LESSON) {
                 Lesson lesson = lessonsById.get(key.id());
                 if (lesson != null) {
-                    items.add(contentManagementMapper.toPublicCourseSummary(lesson));
+                    items.add(contentManagementMapper.toPublicCourseSummary(lesson, currencyCode));
                 }
             } else if (key.type() == ManagedContentType.PACKAGE) {
                 CoursePackage coursePackage = packagesById.get(key.id());
                 if (coursePackage != null) {
-                    items.add(contentManagementMapper.toPublicCourseSummary(coursePackage));
+                    items.add(contentManagementMapper.toPublicCourseSummary(coursePackage, currencyCode));
                 }
             }
         }
@@ -333,8 +340,8 @@ public class PublicContentService {
         String normalizedSort = sort == null || sort.isBlank() ? "newest" : sort.trim().toLowerCase(Locale.ROOT);
         return switch (normalizedSort) {
             case "title" -> " order by lower(title) asc, item_type asc, item_id asc";
-            case "rating", "popular", "newest" -> " order by item_id desc, item_type asc";
-            default -> " order by item_id desc, item_type asc";
+            case "newest" -> " order by item_id desc, item_type asc";
+            default -> throw new ResponseStatusException(BAD_REQUEST, "Supported course sort options are newest and title.");
         };
     }
 

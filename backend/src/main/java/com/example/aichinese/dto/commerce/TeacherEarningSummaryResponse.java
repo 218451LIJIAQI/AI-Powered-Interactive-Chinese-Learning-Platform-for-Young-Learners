@@ -62,11 +62,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "grossAmount",
         "totalNetAmount",
         "availableBalance",
-        "pendingBalance"
+        "pendingBalance",
+        "currencyCode"
 })
 public record TeacherEarningSummaryResponse(
         BigDecimal grossAmount,
         BigDecimal totalNetAmount,
         BigDecimal availableBalance,
-        BigDecimal pendingBalance) {
+        BigDecimal pendingBalance,
+        String currencyCode) {
 }

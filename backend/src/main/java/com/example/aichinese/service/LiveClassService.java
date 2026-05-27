@@ -310,7 +310,7 @@ public class LiveClassService {
     @Transactional
     public LiveClassResponse cancelEnrolment(SecurityUserDetails currentUser, Long liveClassId) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
-        LiveClassEnrolment enrolment = liveLearningAccessService.requireActiveEnrolment(liveClassId, student.getId());
+        LiveClassEnrolment enrolment = liveLearningAccessService.requireCancellableEnrolment(liveClassId, student.getId());
         enrolment.setEnrolmentStatus(LiveClassEnrolmentStatus.CANCELLED);
         enrolment.setCancelledAt(LocalDateTime.now());
         liveClassEnrolmentRepository.save(enrolment);
@@ -508,8 +508,7 @@ public class LiveClassService {
                 && STUDENT_VISIBLE_STATUSES.contains(liveClass.getLiveClassStatus());
         boolean canJoin = enrolled
                 && accessAllowed
-                && (liveClass.getLiveClassStatus() == LiveClassStatus.SCHEDULED
-                        || liveClass.getLiveClassStatus() == LiveClassStatus.ONGOING);
+                && liveLearningAccessService.isJoinWindowOpen(liveClass);
         return liveLearningMapper.toLiveClassResponse(liveClass, enrolledCount, enrolled, canEnrol, accessAllowed, canJoin, false);
     }
 

@@ -34,9 +34,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  *   <li>{@link #canEnrol} — {@code !enrolled && accessAllowed}; the
  *       front-end uses this to enable/disable the "Enrol" button.</li>
  *   <li>{@link #canJoin} — {@code enrolled && accessAllowed} AND
- *       the class is currently in
- *       {@link com.example.aichinese.entity.enums.LiveClassStatus#SCHEDULED}
- *       or {@code ONGOING}; drives the "Join meeting" button.</li>
+ *       the class is in its protected join window; drives the
+ *       "Join meeting" button.</li>
  *   <li>{@link #meetingLinkVisible} — controls whether
  *       {@link #meetingLink} is populated. The server redacts the
  *       link until the lobby window opens to prevent students from

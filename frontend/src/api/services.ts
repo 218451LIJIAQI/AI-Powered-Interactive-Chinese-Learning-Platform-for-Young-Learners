@@ -726,6 +726,9 @@ export const studentApi = {
   enrolLiveClass(id: number) {
     return unwrap<LiveClassResponse>(http.post(`/students/live-classes/${id}/enrol`))
   },
+  cancelLiveClassEnrolment(id: number) {
+    return unwrap<LiveClassResponse>(http.post(`/students/live-classes/${id}/cancel-enrolment`))
+  },
   videoProgress(videoId: number) {
     return unwrap<VideoProgressResponse>(http.get(`/students/video-progress/${videoId}`))
   },

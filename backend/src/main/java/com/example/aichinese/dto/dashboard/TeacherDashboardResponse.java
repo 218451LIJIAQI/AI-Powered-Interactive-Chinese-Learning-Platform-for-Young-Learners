@@ -181,13 +181,15 @@ public record TeacherDashboardResponse(
             "grossAmount",
             "netAmount",
             "availableBalance",
-            "pendingBalance"
+            "pendingBalance",
+            "currencyCode"
     })
     public record EarningsSummary(
             BigDecimal grossAmount,
             BigDecimal netAmount,
             BigDecimal availableBalance,
-            BigDecimal pendingBalance) {
+            BigDecimal pendingBalance,
+            String currencyCode) {
 
         /**
          * Defensive canonical constructor: substitutes

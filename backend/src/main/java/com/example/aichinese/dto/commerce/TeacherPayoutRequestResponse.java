@@ -66,6 +66,7 @@ import com.example.aichinese.entity.enums.PayoutStatus;
 @JsonPropertyOrder({
         "id",
         "amount",
+        "currencyCode",
         "requestedNote",
         "decisionReason",
         "payoutStatus",
@@ -74,6 +75,7 @@ import com.example.aichinese.entity.enums.PayoutStatus;
 public record TeacherPayoutRequestResponse(
         Long id,
         BigDecimal amount,
+        String currencyCode,
         String requestedNote,
         String decisionReason,
         PayoutStatus payoutStatus,

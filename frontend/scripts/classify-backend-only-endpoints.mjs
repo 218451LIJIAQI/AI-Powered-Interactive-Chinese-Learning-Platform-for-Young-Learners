@@ -89,6 +89,19 @@ for (const match of servicesSource.matchAll(serviceCallPattern)) {
   })
 }
 
+// Streaming APIs use native fetch rather than the Axios-style `http` wrapper.
+// Track those calls as frontend integrations so an active SSE path is not
+// reported as an orphaned backend endpoint.
+const fetchApiUrlPattern = /fetch\s*\(\s*apiUrl\((`[^`]+`|'[^']+'|"[^"]+")\)/g
+for (const match of servicesSource.matchAll(fetchApiUrlPattern)) {
+  const raw = match[1].slice(1, -1)
+  frontendCalls.push({
+    method: 'FETCH',
+    raw,
+    normalized: normalizeFrontendPath(raw),
+  })
+}
+
 const classification = openapiPaths.map((endpoint) => {
   const directCalls = frontendCalls.filter((call) => pathMatches(call.normalized, endpoint))
   const manual = manualClassification(endpoint)
@@ -220,8 +233,8 @@ function manualClassification(endpoint) {
       'Student live-class detail endpoint exists; classes page currently uses list/join/enrol actions.',
     ],
     '/api/v1/students/live-classes/{id}/cancel-enrolment': [
-      'BACKEND_ONLY_OPTIONAL_ACTION',
-      'Cancel-enrolment endpoint exists; current student class UI exposes enrol/join but no cancel button was found.',
+      'FRONTEND_CALLED_ACTION',
+      'Student classes UI now exposes the enrolment cancellation action and refreshes the live-class state afterward.',
     ],
     '/api/v1/students/payments/{paymentId}': [
       'BACKEND_ONLY_DETAIL_DRILLDOWN',
@@ -274,6 +287,10 @@ function manualClassification(endpoint) {
     '/api/v1/payments/webhooks/stripe': [
       'INTERNAL_PROVIDER_CALLBACK',
       'Stripe webhook endpoint is called by payment provider, not by frontend.',
+    ],
+    '/api/v1/ai/chat': [
+      'BACKEND_ONLY_OPTIONAL_ACTION',
+      'Synchronous AI chat endpoint is retained for API clients; the student UI intentionally consumes the SSE /ai/chat/stream endpoint.',
     ],
   }
 

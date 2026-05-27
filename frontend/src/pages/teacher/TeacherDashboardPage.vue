@@ -223,12 +223,14 @@
             </article>
             <article class="teacher-dashboard-mini-stat">
               <small>Available Balance</small>
-              <strong>{{ formatCurrency(analytics.overview.availableBalance) }}</strong>
+              <strong>{{
+                formatCurrency(analytics.overview.availableBalance, analytics.overview.currencyCode)
+              }}</strong>
               <span>Ready for payout request</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
               <small>Net Earnings</small>
-              <strong>{{ formatCurrency(analytics.overview.netEarnings) }}</strong>
+              <strong>{{ formatCurrency(analytics.overview.netEarnings, analytics.overview.currencyCode) }}</strong>
               <span>Across paid teacher content</span>
             </article>
           </div>
@@ -306,6 +308,7 @@ const emptyDashboard: TeacherDashboardResponse = {
     netAmount: 0,
     availableBalance: 0,
     pendingBalance: 0,
+    currencyCode: 'MYR',
   },
   recentQuizResults: [],
   recentNotifications: [],
@@ -321,6 +324,7 @@ const emptyAnalytics = {
     averageQuizScore: 0,
     netEarnings: 0,
     availableBalance: 0,
+    currencyCode: 'MYR',
     upcomingLiveClasses: 0,
     totalLiveEnrolments: 0,
   },
@@ -396,8 +400,11 @@ const statCards = computed(() => [
   },
   {
     label: 'Available Balance',
-    value: formatCurrency(dashboard.value.earningsSummary.availableBalance),
-    copy: `${formatCurrency(dashboard.value.earningsSummary.pendingBalance)} still pending`,
+    value: formatCurrency(
+      dashboard.value.earningsSummary.availableBalance,
+      dashboard.value.earningsSummary.currencyCode,
+    ),
+    copy: `${formatCurrency(dashboard.value.earningsSummary.pendingBalance, dashboard.value.earningsSummary.currencyCode)} still pending`,
     icon: 'earnings',
     tone: 'mint',
   },

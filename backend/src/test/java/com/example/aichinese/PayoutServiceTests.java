@@ -27,6 +27,7 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.CommerceMoneyService;
+import com.example.aichinese.service.CommerceSettingsService;
 import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.PayoutService;
 
@@ -132,11 +133,14 @@ class PayoutServiceTests {
         TeacherProfileRepository teacherProfileRepository = mock(TeacherProfileRepository.class);
         TeacherEarningRepository teacherEarningRepository = mock(TeacherEarningRepository.class);
         PayoutRequestRepository payoutRequestRepository = mock(PayoutRequestRepository.class);
+        CommerceSettingsService commerceSettingsService = mock(CommerceSettingsService.class);
+        when(commerceSettingsService.getDefaultCurrency()).thenReturn("MYR");
         PayoutService payoutService = new PayoutService(
                 teacherProfileRepository,
                 teacherEarningRepository,
                 payoutRequestRepository,
                 new CommerceMoneyService(),
+                commerceSettingsService,
                 mock(NotificationService.class),
                 mock(AuditLogService.class));
         return new Fixture(payoutService, teacherProfileRepository, teacherEarningRepository, payoutRequestRepository);

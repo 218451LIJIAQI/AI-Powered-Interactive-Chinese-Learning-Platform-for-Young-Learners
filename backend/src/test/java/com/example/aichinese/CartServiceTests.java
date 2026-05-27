@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -101,7 +102,8 @@ class CartServiceTests {
         when(purchasableItemService.resolve("LESSON", 10L, null)).thenReturn(item);
         when(entitlementService.hasAccessToPurchasableItem(student, item)).thenReturn(false);
         when(cartItemRepository.findByCartIdAndItemTypeAndItemId(123L, "LESSON", 10L)).thenReturn(Optional.empty());
-        when(cartItemRepository.countByCartId(123L)).thenReturn(50L);
+        when(cartItemRepository.countByCartId(123L)).thenReturn(50L, 50L);
+        when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(123L)).thenReturn(List.of());
 
         assertThatThrownBy(() -> cartService.addItem(currentUser, new CartItemRequest("LESSON", 10L, null)))
                 .isInstanceOf(ResponseStatusException.class)

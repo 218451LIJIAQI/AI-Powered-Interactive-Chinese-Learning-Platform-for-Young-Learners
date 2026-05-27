@@ -341,7 +341,7 @@
                 <span>Uptime</span><strong>{{ uptimeLabel }}</strong>
               </div>
               <div>
-                <span>Active Users (Today)</span><strong>{{ formatNumber(activeUsersToday) }}</strong>
+                <span>Registered Students</span><strong>{{ formatNumber(registeredStudents) }}</strong>
               </div>
               <div>
                 <span>Database Status</span>
@@ -799,7 +799,7 @@ const uptimeLabel = computed(() => {
   return `Heartbeat at ${formatDateTime(health.value.timestamp)}`
 })
 const lastHealthCheckLabel = computed(() => (health.value.timestamp ? formatDateTime(health.value.timestamp) : '--'))
-const activeUsersToday = computed(() => analytics.value.overview.totalStudents)
+const registeredStudents = computed(() => analytics.value.overview.totalStudents)
 const appName = computed(() => platformSettings.value.platformName || appEnv.appName)
 const hasUnreadNotifications = computed(() => adminNotifications.value.some((item) => item.status !== 'READ'))
 

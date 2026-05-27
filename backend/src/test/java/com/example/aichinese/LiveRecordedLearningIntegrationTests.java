@@ -230,7 +230,7 @@ class LiveRecordedLearningIntegrationTests {
         String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
         Long lessonId = createPublishedLesson(teacherToken, "Join Lesson");
 
-        LocalDateTime start = LocalDateTime.now().plusDays(3);
+        LocalDateTime start = LocalDateTime.now().plusMinutes(5);
         LocalDateTime end = start.plusMinutes(45);
 
         MvcResult createResult = mockMvc.perform(post("/api/v1/teachers/live-classes")
@@ -267,7 +267,8 @@ class LiveRecordedLearningIntegrationTests {
                 .with(csrf())
                 .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.enrolled").value(true));
+                .andExpect(jsonPath("$.data.enrolled").value(true))
+                .andExpect(jsonPath("$.data.canJoin").value(true));
 
         mockMvc.perform(get("/api/v1/teachers/live-classes/" + liveClassId + "/enrolments")
                 .param("size", "100000")

@@ -2161,10 +2161,10 @@ function resetQuestionForm() {
   questionForm.options = defaultQuestionOptions()
 }
 
-function openPackageBuilder(item?: CoursePackageResponse) {
+function openPackageBuilder(item?: CoursePackageResponse, preserveFeedback = false) {
   activeSurfaceTab.value = 'courses'
   activeBuilder.value = 'package'
-  clearActionFeedback()
+  if (!preserveFeedback) clearActionFeedback()
 
   if (!item) {
     resetPackageForm()
@@ -2182,10 +2182,10 @@ function openPackageBuilder(item?: CoursePackageResponse) {
   packageForm.coverImageUrl = item.coverImageUrl ?? ''
 }
 
-function openModuleBuilder(item?: LearningModuleResponse | null) {
+function openModuleBuilder(item?: LearningModuleResponse | null, preserveFeedback = false) {
   activeSurfaceTab.value = 'modules'
   activeBuilder.value = 'module'
-  clearActionFeedback()
+  if (!preserveFeedback) clearActionFeedback()
 
   if (!item) {
     resetModuleForm()
@@ -2202,10 +2202,10 @@ function openModuleBuilder(item?: LearningModuleResponse | null) {
   moduleForm.coverImageUrl = item.coverImageUrl ?? ''
 }
 
-function openLessonBuilder(item?: LessonResponse | null, moduleId = 0) {
+function openLessonBuilder(item?: LessonResponse | null, moduleId = 0, preserveFeedback = false) {
   activeSurfaceTab.value = 'lessons'
   activeBuilder.value = 'lesson'
-  clearActionFeedback()
+  if (!preserveFeedback) clearActionFeedback()
 
   if (!item) {
     resetLessonForm(moduleId)
@@ -2548,7 +2548,7 @@ async function submitPackage() {
       actionSuccess.value = 'Course updated successfully.'
     } else {
       actionSuccess.value = 'Course created successfully.'
-      openPackageBuilder(response)
+      openPackageBuilder(response, true)
     }
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to save this course.')
@@ -2590,7 +2590,7 @@ async function submitModule() {
     await modulesResource.reload()
     editingModuleId.value = response.id
     actionSuccess.value = isEditing ? 'Module saved successfully.' : 'Module created successfully.'
-    openModuleBuilder(response)
+    openModuleBuilder(response, true)
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to save this module.')
   } finally {
@@ -2642,7 +2642,7 @@ async function submitLesson() {
     await Promise.all([lessonsResource.reload(), modulesResource.reload()])
     editingLessonId.value = response.id
     actionSuccess.value = isEditing ? 'Lesson saved successfully.' : 'Lesson created successfully.'
-    openLessonBuilder(response, response.moduleId ?? 0)
+    openLessonBuilder(response, response.moduleId ?? 0, true)
   } catch (reason) {
     actionError.value = resolveApiError(reason, 'Unable to save this lesson.')
   } finally {

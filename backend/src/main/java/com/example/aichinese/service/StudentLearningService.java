@@ -452,8 +452,7 @@ public class StudentLearningService {
                     boolean accessAllowed = hasLiveClassAccess(student, liveClass);
                     boolean canEnrol = !enrolled && accessAllowed;
                     boolean canJoin = enrolled && accessAllowed
-                            && (liveClass.getLiveClassStatus() == LiveClassStatus.SCHEDULED
-                                    || liveClass.getLiveClassStatus() == LiveClassStatus.ONGOING);
+                            && liveLearningAccessService.isJoinWindowOpen(liveClass);
                     return liveLearningMapper.toLiveClassResponse(
                             liveClass,
                             enrolledCount,

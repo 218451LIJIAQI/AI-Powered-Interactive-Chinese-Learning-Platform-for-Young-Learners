@@ -41,6 +41,7 @@ import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.PaymentStatus;
 import com.example.aichinese.entity.enums.TeacherStatus;
+import com.example.aichinese.repository.CartItemRepository;
 import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.OrderRepository;
@@ -112,6 +113,9 @@ class CommerceIntegrationTests {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private CartItemRepository cartItemRepository;
 
     @Autowired
     private PaymentService paymentService;
@@ -251,6 +255,52 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.items").isEmpty())
                 .andExpect(jsonPath("$.data.empty").value(true));
+    }
+
+    @Test
+    void archivedCartContentIsRemovedWithoutBreakingTheLiveCart() throws Exception {
+        String teacherEmail = uniqueEmail("commerce-stale-cart-teacher");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        Long staleLessonId = createPaidLesson(teacherToken, "Archived Cart Lesson");
+
+        String studentToken = registerStudentAndLogin(uniqueEmail("commerce-stale-cart-student"));
+        MvcResult added = mockMvc.perform(post("/api/v1/students/cart/items")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "itemType", "LESSON",
+                        "itemId", staleLessonId))))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long cartId = objectMapper.readTree(added.getResponse().getContentAsString())
+                .path("data").path("cartId").asLong();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .patch("/api/v1/teachers/lessons/" + staleLessonId + "/archive")
+                .with(csrf())
+                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/students/cart")
+                .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty())
+                .andExpect(jsonPath("$.data.empty").value(true));
+
+        assertThat(cartItemRepository.findByCartIdOrderByCreatedAtAsc(cartId)).isEmpty();
+
+        Long replacementLessonId = createPaidLesson(teacherToken, "Replacement Cart Lesson");
+        mockMvc.perform(post("/api/v1/students/cart/items")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "itemType", "LESSON",
+                        "itemId", replacementLessonId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].title").value("Replacement Cart Lesson"));
     }
 
     @Test
@@ -659,7 +709,7 @@ class CommerceIntegrationTests {
     }
 
     @Test
-    void stripeWebhookRejectsUnsupportedContentTypeAndOversizedPayloadAtControllerBoundary() throws Exception {
+    void stripeWebhookRejectsUnsupportedContentTypeAndOversizedPayloadAtTransportBoundary() throws Exception {
         String payload = """
                 {"id":"evt_boundary","type":"charge.succeeded","data":{"object":{"id":"ch_123"}}}
                 """.trim();
@@ -675,8 +725,7 @@ class CommerceIntegrationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Stripe-Signature", stripeSignature(payload))
                 .content("x".repeat(262_145)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(status().isPayloadTooLarge());
     }
 
     @Test
@@ -1768,7 +1817,7 @@ class CommerceIntegrationTests {
     }
 
     private Long createLiveClass(String teacherToken, Long lessonId, String title) throws Exception {
-        LocalDateTime start = LocalDateTime.now().plusDays(2);
+        LocalDateTime start = LocalDateTime.now().plusMinutes(5);
         MvcResult result = mockMvc.perform(post("/api/v1/teachers/live-classes")
                 .with(csrf())
                 .header("Authorization", "Bearer " + teacherToken)

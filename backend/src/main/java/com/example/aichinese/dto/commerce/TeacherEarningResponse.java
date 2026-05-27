@@ -89,6 +89,7 @@ import com.example.aichinese.entity.enums.TeacherEarningStatus;
         "grossAmount",
         "commissionAmount",
         "netAmount",
+        "currencyCode",
         "earningStatus",
         "createdAt"
 })
@@ -99,6 +100,7 @@ public record TeacherEarningResponse(
         BigDecimal grossAmount,
         BigDecimal commissionAmount,
         BigDecimal netAmount,
+        String currencyCode,
         TeacherEarningStatus earningStatus,
         LocalDateTime createdAt) {
 }

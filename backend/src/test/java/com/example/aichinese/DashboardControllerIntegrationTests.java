@@ -69,7 +69,8 @@ class DashboardControllerIntegrationTests {
                         containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.teacherStatus").value("PENDING"))
-                .andExpect(jsonPath("$.data.totalLessons").isNumber());
+                .andExpect(jsonPath("$.data.totalLessons").isNumber())
+                .andExpect(jsonPath("$.data.earningsSummary.currencyCode").value("MYR"));
     }
 
     @Test
@@ -83,7 +84,8 @@ class DashboardControllerIntegrationTests {
                         containsString("no-store")))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.totalStudents").isNumber())
-                .andExpect(jsonPath("$.data.totalTeachers").isNumber());
+                .andExpect(jsonPath("$.data.totalTeachers").isNumber())
+                .andExpect(jsonPath("$.data.paymentRevenueSummary.currencyCode").value("MYR"));
     }
 
     @Test

@@ -70,6 +70,7 @@ public class PayoutService {
     private final TeacherEarningRepository teacherEarningRepository;
     private final PayoutRequestRepository payoutRequestRepository;
     private final CommerceMoneyService commerceMoneyService;
+    private final CommerceSettingsService commerceSettingsService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
 
@@ -78,12 +79,14 @@ public class PayoutService {
             TeacherEarningRepository teacherEarningRepository,
             PayoutRequestRepository payoutRequestRepository,
             CommerceMoneyService commerceMoneyService,
+            CommerceSettingsService commerceSettingsService,
             NotificationService notificationService,
             AuditLogService auditLogService) {
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.teacherEarningRepository = Objects.requireNonNull(teacherEarningRepository, "teacherEarningRepository");
         this.payoutRequestRepository = Objects.requireNonNull(payoutRequestRepository, "payoutRequestRepository");
         this.commerceMoneyService = Objects.requireNonNull(commerceMoneyService, "commerceMoneyService");
+        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
@@ -95,7 +98,7 @@ public class PayoutService {
         Page<TeacherEarning> earningPage = teacherEarningRepository.findByTeacherUserIdOrderByCreatedAtDesc(
                 currentUser.getUserId(),
                 PageRequest.of(safePage, safeSize));
-        return mapEarningPage(earningPage, safePage, safeSize);
+        return mapEarningPage(earningPage, safePage, safeSize, commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional(readOnly = true)
@@ -122,7 +125,8 @@ public class PayoutService {
                 grossAmount,
                 totalNetAmount,
                 commerceMoneyService.subtract(totalNetAmount, committedPayoutAmount),
-                pendingPayoutAmount);
+                pendingPayoutAmount,
+                commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional
@@ -162,7 +166,7 @@ public class PayoutService {
                 "PAYOUT_REQUEST",
                 saved.getId(),
                 "Teacher payout request submitted for " + normalizedAmount.toPlainString());
-        return mapTeacherPayout(saved);
+        return mapTeacherPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional(readOnly = true)
@@ -172,7 +176,7 @@ public class PayoutService {
         Page<PayoutRequest> payoutPage = payoutRequestRepository.findByTeacherUserIdOrderByCreatedAtDesc(
                 currentUser.getUserId(),
                 PageRequest.of(safePage, safeSize));
-        return mapTeacherPayoutPage(payoutPage, safePage, safeSize);
+        return mapTeacherPayoutPage(payoutPage, safePage, safeSize, commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional(readOnly = true)
@@ -180,7 +184,7 @@ public class PayoutService {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<PayoutRequest> payoutPage = payoutRequestRepository.findAll(newestPageable(safePage, safeSize));
-        return mapAdminPayoutPage(payoutPage, safePage, safeSize);
+        return mapAdminPayoutPage(payoutPage, safePage, safeSize, commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional
@@ -199,7 +203,7 @@ public class PayoutService {
         log.info("Payout approved: payoutId={}, amount={}", id, saved.getAmount());
         auditLogService.record(currentUser.getUser(), "PAYOUT_APPROVED", "PAYOUT_REQUEST", id,
                 "Payout approved for " + saved.getAmount().toPlainString());
-        return mapAdminPayout(saved);
+        return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional
@@ -218,7 +222,7 @@ public class PayoutService {
         auditLogService.record(currentUser.getUser(), "PAYOUT_REJECTED", "PAYOUT_REQUEST", id,
                 "Payout rejected for " + saved.getAmount().toPlainString()
                         + (request.reason() != null ? ". Reason: " + request.reason() : ""));
-        return mapAdminPayout(saved);
+        return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
 
     @Transactional
@@ -236,7 +240,7 @@ public class PayoutService {
         log.info("Payout marked paid: payoutId={}, amount={}", id, saved.getAmount());
         auditLogService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id,
                 "Payout marked paid for " + saved.getAmount().toPlainString());
-        return mapAdminPayout(saved);
+        return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
 
     private void requireTransition(PayoutStatus current, PayoutStatus expected, String action) {
@@ -272,10 +276,14 @@ public class PayoutService {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
-    private PageResponse<TeacherEarningResponse> mapEarningPage(Page<TeacherEarning> earningPage, int page, int size) {
+    private PageResponse<TeacherEarningResponse> mapEarningPage(
+            Page<TeacherEarning> earningPage,
+            int page,
+            int size,
+            String currencyCode) {
         return new PageResponse<>(
                 earningPage.getContent().stream()
-                        .map(this::mapEarning)
+                        .map(earning -> mapEarning(earning, currencyCode))
                         .toList(),
                 page,
                 size,
@@ -283,10 +291,14 @@ public class PayoutService {
                 PaginationUtils.totalPages(earningPage.getTotalElements(), size));
     }
 
-    private PageResponse<TeacherPayoutRequestResponse> mapTeacherPayoutPage(Page<PayoutRequest> payoutPage, int page, int size) {
+    private PageResponse<TeacherPayoutRequestResponse> mapTeacherPayoutPage(
+            Page<PayoutRequest> payoutPage,
+            int page,
+            int size,
+            String currencyCode) {
         return new PageResponse<>(
                 payoutPage.getContent().stream()
-                        .map(this::mapTeacherPayout)
+                        .map(payout -> mapTeacherPayout(payout, currencyCode))
                         .toList(),
                 page,
                 size,
@@ -294,10 +306,14 @@ public class PayoutService {
                 PaginationUtils.totalPages(payoutPage.getTotalElements(), size));
     }
 
-    private PageResponse<AdminPayoutRequestResponse> mapAdminPayoutPage(Page<PayoutRequest> payoutPage, int page, int size) {
+    private PageResponse<AdminPayoutRequestResponse> mapAdminPayoutPage(
+            Page<PayoutRequest> payoutPage,
+            int page,
+            int size,
+            String currencyCode) {
         return new PageResponse<>(
                 payoutPage.getContent().stream()
-                        .map(this::mapAdminPayout)
+                        .map(payout -> mapAdminPayout(payout, currencyCode))
                         .toList(),
                 page,
                 size,
@@ -305,7 +321,7 @@ public class PayoutService {
                 PaginationUtils.totalPages(payoutPage.getTotalElements(), size));
     }
 
-    private TeacherEarningResponse mapEarning(TeacherEarning earning) {
+    private TeacherEarningResponse mapEarning(TeacherEarning earning, String currencyCode) {
         return new TeacherEarningResponse(
                 earning.getId(),
                 earning.getOrderItem() != null ? earning.getOrderItem().getId() : null,
@@ -313,21 +329,23 @@ public class PayoutService {
                 commerceMoneyService.normalize(earning.getGrossAmount()),
                 commerceMoneyService.normalize(earning.getCommissionAmount()),
                 commerceMoneyService.normalize(earning.getNetAmount()),
+                currencyCode,
                 earning.getEarningStatus(),
                 earning.getCreatedAt());
     }
 
-    private TeacherPayoutRequestResponse mapTeacherPayout(PayoutRequest payoutRequest) {
+    private TeacherPayoutRequestResponse mapTeacherPayout(PayoutRequest payoutRequest, String currencyCode) {
         return new TeacherPayoutRequestResponse(
                 payoutRequest.getId(),
                 commerceMoneyService.normalize(payoutRequest.getAmount()),
+                currencyCode,
                 payoutRequest.getRequestedNote(),
                 payoutRequest.getDecisionReason(),
                 payoutRequest.getPayoutStatus(),
                 payoutRequest.getCreatedAt());
     }
 
-    private AdminPayoutRequestResponse mapAdminPayout(PayoutRequest payoutRequest) {
+    private AdminPayoutRequestResponse mapAdminPayout(PayoutRequest payoutRequest, String currencyCode) {
         return new AdminPayoutRequestResponse(
                 payoutRequest.getId(),
                 payoutRequest.getTeacher() != null ? payoutRequest.getTeacher().getId() : null,
@@ -338,6 +356,7 @@ public class PayoutService {
                         ? payoutRequest.getTeacher().getUser().getEmail()
                         : null,
                 commerceMoneyService.normalize(payoutRequest.getAmount()),
+                currencyCode,
                 payoutRequest.getRequestedNote(),
                 payoutRequest.getDecisionReason(),
                 payoutRequest.getPayoutStatus(),
