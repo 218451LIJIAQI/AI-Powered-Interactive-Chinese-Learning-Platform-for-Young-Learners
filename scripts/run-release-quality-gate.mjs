@@ -49,6 +49,10 @@ function writeComposeEnvFile(directory) {
     [
       "DB_ROOT_PASSWORD=quality-gate-root-password",
       "DB_PASSWORD=quality-gate-application-password",
+      "APP_DEFAULT_TIME_ZONE=Asia/Singapore",
+      "APP_DEPLOYMENT_MODE=single-instance",
+      "APP_SHARED_AUTH_RATE_LIMITING_ENABLED=false",
+      "APP_LOCAL_STORAGE_MULTI_INSTANCE_ACKNOWLEDGED=false",
       "JWT_SECRET=quality-gate-jwt-secret-with-more-than-32-characters",
       "FRONTEND_BASE_URL=https://learn.example.com",
       "APP_CORS_ALLOWED_ORIGINS=https://learn.example.com",

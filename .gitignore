@@ -24,3 +24,4 @@ backend/$tmp
 .env
 .env.*
 !.env.prod.example
+!.env.external-e2e.example

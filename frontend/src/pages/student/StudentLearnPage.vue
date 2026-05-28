@@ -248,7 +248,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { RecordedLessonVideoResponse, StudentLessonPlayerResponse, VideoProgressResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatPercent, nonNegativeInteger, toFiniteNumber } from '@/utils/format'
-import { safeHttpUrl } from '@/utils/url'
+import { openSafeHttpUrl, safeHttpUrl } from '@/utils/url'
 
 const router = useRouter()
 const route = useRoute()
@@ -526,8 +526,7 @@ async function openRecordedLesson() {
   actionError.value = null
   actionSuccess.value = null
   const url = playableVideoUrl.value
-  if (url) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+  if (openSafeHttpUrl(url, { allowRelative: true, sameOriginOnly: primaryVideo.value.sourceType === 'UPLOAD' })) {
     if (resource.usingFallback.value || !primaryVideo.value.id) {
       actionSuccess.value = 'Opening the recorded lesson in a new tab.'
       return

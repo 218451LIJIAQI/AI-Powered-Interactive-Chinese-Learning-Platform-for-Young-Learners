@@ -130,6 +130,7 @@ class RequestDtoValidationTests {
                 -2L,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(1).plusHours(1),
+                "X".repeat(65),
                 "javascript:alert(1)",
                 "M".repeat(81),
                 "S".repeat(31),
@@ -138,7 +139,7 @@ class RequestDtoValidationTests {
 
         assertThat(validator.validate(liveClassRequest))
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("lessonId", "packageId", "meetingLink", "meetingPlatform", "status");
+                .contains("lessonId", "packageId", "timeZone", "meetingLink", "meetingPlatform", "status");
         assertThat(validator.validate(answerRequest))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("questionId", "answerText");
@@ -240,6 +241,7 @@ class RequestDtoValidationTests {
                 null,
                 LocalDateTime.now().plusDays(2),
                 LocalDateTime.now().plusDays(2).plusHours(1),
+                "\u3000Asia/Singapore\u3000",
                 "\u3000https://example.com/class\u3000",
                 "\u3000zoom\u3000",
                 "\u3000",
@@ -290,6 +292,7 @@ class RequestDtoValidationTests {
         assertThat(reportReviewRequest.reviewerNote()).isEqualTo("Handled");
         assertThat(createLiveClassRequest.title()).isEqualTo("Tone practice");
         assertThat(createLiveClassRequest.description()).isNull();
+        assertThat(createLiveClassRequest.timeZone()).isEqualTo("Asia/Singapore");
         assertThat(createLiveClassRequest.meetingLink()).isEqualTo("https://example.com/class");
         assertThat(createLiveClassRequest.status()).isNull();
         assertThat(liveClassStatusRequest.status()).isEqualTo("ONGOING");

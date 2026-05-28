@@ -5,6 +5,8 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.zone.ZoneRulesException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.aichinese.config.PlatformProperties;
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.learning.CreateLiveClassRequest;
 import com.example.aichinese.dto.learning.JoinLiveClassResponse;
@@ -81,6 +84,7 @@ public class LiveClassService {
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final ContentSafetyService contentSafetyService;
+    private final PlatformProperties platformProperties;
 
     public LiveClassService(
             LiveClassRepository liveClassRepository,
@@ -89,7 +93,8 @@ public class LiveClassService {
             LiveLearningMapper liveLearningMapper,
             NotificationService notificationService,
             AuditLogService auditLogService,
-            ContentSafetyService contentSafetyService) {
+            ContentSafetyService contentSafetyService,
+            PlatformProperties platformProperties) {
         this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
         this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
         this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
@@ -97,6 +102,7 @@ public class LiveClassService {
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
         this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
+        this.platformProperties = Objects.requireNonNull(platformProperties, "platformProperties");
     }
 
     @Transactional
@@ -104,7 +110,7 @@ public class LiveClassService {
         TeacherProfile teacher = liveLearningAccessService.requireApprovedTeacher(currentUser);
         LiveClass liveClass = new LiveClass();
         applyLiveClassUpdate(currentUser, liveClass, request.title(), request.description(), request.lessonId(), request.packageId(),
-                request.startTime(), request.endTime(), request.meetingLink(), request.meetingPlatform(),
+                request.startTime(), request.endTime(), request.timeZone(), request.meetingLink(), request.meetingPlatform(),
                 request.status(), request.maxParticipants());
         liveClass.setTeacher(teacher);
         LiveClass saved = liveClassRepository.save(liveClass);
@@ -124,7 +130,7 @@ public class LiveClassService {
         LiveClass liveClass = liveLearningAccessService.requireTeacherOwnedLiveClass(currentUser, liveClassId);
         ensureLiveClassEditable(liveClass);
         applyLiveClassUpdate(currentUser, liveClass, request.title(), request.description(), request.lessonId(), request.packageId(),
-                request.startTime(), request.endTime(), request.meetingLink(), request.meetingPlatform(),
+                request.startTime(), request.endTime(), request.timeZone(), request.meetingLink(), request.meetingPlatform(),
                 request.status(), request.maxParticipants());
         LiveClass saved = liveClassRepository.save(liveClass);
 
@@ -185,6 +191,7 @@ public class LiveClassService {
         applyLiveClassStatusTransition(liveClass, LiveClassStatus.RESCHEDULED);
         liveClass.setScheduledStartAt(request.startTime());
         liveClass.setScheduledEndAt(request.endTime());
+        liveClass.setTimeZone(resolveTimeZone(request.timeZone()));
         LiveClass saved = liveClassRepository.save(liveClass);
         notifyEnrolledStudents(saved, "Live class rescheduled", saved.getTitle() + " has a new schedule.", "/student/classes");
 
@@ -374,6 +381,7 @@ public class LiveClassService {
             Long packageId,
             LocalDateTime startTime,
             LocalDateTime endTime,
+            String timeZone,
             String meetingLink,
             String meetingPlatform,
             String statusValue,
@@ -395,6 +403,7 @@ public class LiveClassService {
         liveClass.setDescription(contentSafetyService.optionalSafeText(description, MAX_LIVE_CLASS_DESCRIPTION_LENGTH));
         liveClass.setScheduledStartAt(startTime);
         liveClass.setScheduledEndAt(endTime);
+        liveClass.setTimeZone(resolveTimeZone(timeZone));
         liveClass.setMeetingLink(normalizedMeetingLink);
         liveClass.setMeetingPlatform(parsedMeetingPlatform);
         LiveClassStatus requestedStatus = liveLearningAccessService.parseLiveClassStatus(statusValue, liveClass.getLiveClassStatus());
@@ -460,6 +469,17 @@ public class LiveClassService {
 
     private boolean isTerminalStatus(LiveClassStatus status) {
         return status == LiveClassStatus.COMPLETED || status == LiveClassStatus.CANCELLED;
+    }
+
+    private String resolveTimeZone(String timeZone) {
+        if (timeZone == null || timeZone.isBlank()) {
+            return platformProperties.defaultTimeZone();
+        }
+        try {
+            return ZoneId.of(timeZone.strip()).getId();
+        } catch (ZoneRulesException exception) {
+            throw new ResponseStatusException(BAD_REQUEST, "Time zone must be a valid IANA time zone.");
+        }
     }
 
     private boolean isStudentVisibleClass(LiveClass liveClass) {

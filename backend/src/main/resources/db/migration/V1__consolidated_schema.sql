@@ -355,6 +355,7 @@
         teacher_id bigint,
         updated_at datetime(6) not null,
         title varchar(200) not null,
+        time_zone varchar(64) not null default 'Asia/Singapore',
         meeting_link varchar(500),
         description varchar(1000),
         live_class_status enum ('CANCELLED','COMPLETED','ONGOING','RESCHEDULED','SCHEDULED') not null,
@@ -3515,8 +3516,26 @@ execute baseline_contract_stmt;
 deallocate prepare baseline_contract_stmt;
 
 set @baseline_contract_sql = if(
+    (select count(*) from information_schema.columns where table_schema = database() and table_name = 'live_classes' and column_name = 'time_zone') = 0,
+    'alter table live_classes add column time_zone varchar(64) not null default ''Asia/Singapore''',
+    'select 1'
+);
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
+
+set @baseline_contract_sql = if(
     (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'live_classes' and constraint_name = 'chk_live_classes_max_participants_positive') = 0,
     'alter table live_classes add constraint chk_live_classes_max_participants_positive check (max_participants is null or max_participants > 0)',
+    'select 1'
+);
+prepare baseline_contract_stmt from @baseline_contract_sql;
+execute baseline_contract_stmt;
+deallocate prepare baseline_contract_stmt;
+
+set @baseline_contract_sql = if(
+    (select count(*) from information_schema.table_constraints where table_schema = database() and table_name = 'live_classes' and constraint_name = 'chk_live_classes_time_zone_not_blank') = 0,
+    'alter table live_classes add constraint chk_live_classes_time_zone_not_blank check (time_zone <> '''')',
     'select 1'
 );
 prepare baseline_contract_stmt from @baseline_contract_sql;

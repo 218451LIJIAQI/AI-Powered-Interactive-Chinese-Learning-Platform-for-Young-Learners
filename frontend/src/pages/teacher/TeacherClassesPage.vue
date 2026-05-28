@@ -680,6 +680,7 @@ const classForm = reactive<TeacherLiveClassPayload>({
   packageId: 0,
   startTime: '',
   endTime: '',
+  timeZone: 'Asia/Singapore',
   meetingLink: '',
   meetingPlatform: 'ZOOM',
   status: 'SCHEDULED',
@@ -944,6 +945,7 @@ function applyClassToForm(item: (typeof liveClasses.value)[number]) {
   selectedLessonId.value = item.lesson?.lessonId ?? null
   classForm.startTime = toInputDateTime(item.startTime)
   classForm.endTime = toInputDateTime(item.endTime)
+  classForm.timeZone = item.timeZone || 'Asia/Singapore'
   classForm.meetingLink = item.meetingLink ?? ''
   classForm.meetingPlatform = normalizeMeetingPlatform(item.meetingPlatform)
   classForm.status = item.liveClassStatus || 'SCHEDULED'
@@ -965,6 +967,7 @@ function resetComposer() {
   selectedLessonId.value = classForm.lessonId || null
   classForm.startTime = toInputDateTime(tomorrow.toISOString())
   classForm.endTime = toInputDateTime(end.toISOString())
+  classForm.timeZone = 'Asia/Singapore'
   classForm.meetingLink = ''
   classForm.meetingPlatform = 'ZOOM'
   classForm.status = 'SCHEDULED'
@@ -1004,6 +1007,7 @@ async function submitClass() {
     packageId: classForm.packageId || undefined,
     startTime: toApiDateTime(classForm.startTime),
     endTime: toApiDateTime(classForm.endTime),
+    timeZone: classForm.timeZone,
     meetingLink: classForm.meetingLink,
     meetingPlatform: classForm.meetingPlatform,
     status: classForm.status,

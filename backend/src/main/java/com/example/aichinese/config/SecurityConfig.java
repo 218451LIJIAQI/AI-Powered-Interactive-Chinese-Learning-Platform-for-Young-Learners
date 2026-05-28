@@ -93,6 +93,7 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
         SecurityProperties.class,
         ForwardedHeaderProperties.class,
         UploadProperties.class,
+        PlatformProperties.class,
         AiProperties.class,
         PaymentProperties.class,
         EmailProperties.class

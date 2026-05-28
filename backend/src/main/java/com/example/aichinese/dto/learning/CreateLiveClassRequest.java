@@ -111,6 +111,7 @@ import jakarta.validation.constraints.Size;
         "packageId",
         "startTime",
         "endTime",
+        "timeZone",
         "meetingLink",
         "meetingPlatform",
         "status",
@@ -135,6 +136,9 @@ public record CreateLiveClassRequest(
 
         @NotNull(message = "End time is required.")
         LocalDateTime endTime,
+
+        @Size(max = 64, message = "Time zone must be 64 characters or fewer.")
+        String timeZone,
 
         @NotBlank(message = "Meeting link is required.")
         @Pattern(regexp = "^https?://\\S+$", message = "Meeting link must start with http:// or https:// and contain no whitespace.")
@@ -163,6 +167,7 @@ public record CreateLiveClassRequest(
     public CreateLiveClassRequest {
         title = strip(title);
         description = stripToNull(description);
+        timeZone = stripToNull(timeZone);
         meetingLink = strip(meetingLink);
         meetingPlatform = strip(meetingPlatform);
         status = stripToNull(status);

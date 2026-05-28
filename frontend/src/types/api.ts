@@ -343,6 +343,7 @@ export interface LiveClassResponse {
   liveClassStatus: LiveClassStatus
   startTime: string
   endTime: string
+  timeZone: string
   durationMinutes?: number | null
   maxParticipants?: number | null
   enrolledCount: number

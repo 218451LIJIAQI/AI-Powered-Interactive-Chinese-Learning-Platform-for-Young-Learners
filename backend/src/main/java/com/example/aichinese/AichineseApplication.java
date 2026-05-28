@@ -28,6 +28,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  *       signing secret length / format.</li>
  *   <li>{@link com.example.aichinese.config.CorsConfig} - wildcard +
  *       credentials rejection in production.</li>
+ *   <li>{@link com.example.aichinese.config.DeploymentTopologyGuard} -
+ *       multi-instance deployment safety checks.</li>
  * </ul>
  * <p>A misconfigured production deployment fails to boot rather than
  * silently serving traffic in an unsafe state.</p>

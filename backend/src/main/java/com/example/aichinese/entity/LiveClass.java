@@ -121,6 +121,9 @@ public class LiveClass extends BaseEntity {
     @Column(name = "scheduled_end_at")
     private LocalDateTime scheduledEndAt;
 
+    @Column(name = "time_zone", nullable = false, length = 64)
+    private String timeZone = "Asia/Singapore";
+
     @Column(name = "max_participants")
     private Integer maxParticipants;
 

@@ -56,6 +56,7 @@ public class LiveLearningMapper {
                 liveClass.getLiveClassStatus() == null ? null : liveClass.getLiveClassStatus().name(),
                 liveClass.getScheduledStartAt(),
                 liveClass.getScheduledEndAt(),
+                liveClass.getTimeZone(),
                 durationMinutes,
                 liveClass.getMaxParticipants(),
                 enrolledCount,

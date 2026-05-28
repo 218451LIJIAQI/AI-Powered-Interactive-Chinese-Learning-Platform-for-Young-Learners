@@ -456,6 +456,7 @@ export interface TeacherLiveClassPayload {
   packageId?: number | null
   startTime: string
   endTime: string
+  timeZone?: string | null
   meetingLink: string
   meetingPlatform: 'ZOOM' | 'GOOGLE_MEET' | 'MICROSOFT_TEAMS' | 'OTHER'
   status?: LiveClassStatus | null
