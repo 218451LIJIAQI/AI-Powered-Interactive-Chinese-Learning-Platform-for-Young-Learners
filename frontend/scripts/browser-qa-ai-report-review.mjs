@@ -4,7 +4,7 @@
  * <h2>What it exercises</h2>
  * Drives a real Chromium instance through the end-to-end happy path
  * of the AI moderation queue:
- *   1. Authenticates as the seeded admin account via the live REST API.
+ *   1. Authenticates as the seeded admin account through the real sign-in UI.
  *   2. Loads the admin moderation page and opens an existing
  *      {@code AiResponseReport} (id supplied via `QA_AI_REPORT_ID` or
  *      created on the fly).
@@ -39,12 +39,13 @@
  * keeps the QA tree dependency-free.
  */
 import { spawn } from 'node:child_process'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 import {
+  cleanupUserDataDir,
   normalizeHttpBaseUrl,
   parseTcpPort,
   redactText,
@@ -185,7 +186,11 @@ function createCdpClient(webSocketUrl) {
     if (message.id && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id)
       pending.delete(message.id)
-      message.error ? reject(new Error(message.error.message || 'CDP error')) : resolve(message.result || {})
+      if (message.error) {
+        reject(new Error(message.error.message || 'CDP error'))
+      } else {
+        resolve(message.result || {})
+      }
       return
     }
     if (message.method && handlers.has(message.method)) {
@@ -264,8 +269,9 @@ async function main() {
     const requests = new Map()
 
     on('Runtime.consoleAPICalled', (params) => {
-      if (params.type === 'error') {
-        report.consoleErrors.push(params.args?.map((arg) => arg.value || arg.description || '').join(' '))
+      const message = params.args?.map((arg) => arg.value || arg.description || '').join(' ') || params.type
+      if (params.type === 'error' && !isExpectedConsoleError(message)) {
+        report.consoleErrors.push(message)
       }
     })
     on('Runtime.exceptionThrown', (params) => {
@@ -328,6 +334,37 @@ async function main() {
       )
     }
 
+    async function navigateTo(url) {
+      await send('Page.navigate', { url })
+      await waitFor('document.readyState === "complete"', 15000)
+      await sleep(400)
+    }
+
+    async function setValue(selector, value) {
+      const ok = await evaluate(`(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!element) return false;
+        element.focus();
+        element.value = ${JSON.stringify(value)};
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`)
+      if (!ok) throw new Error(`Could not set ${selector}`)
+      await sleep(120)
+    }
+
+    async function clickSelector(selector) {
+      const ok = await evaluate(`(() => {
+        const element = document.querySelector(${JSON.stringify(selector)});
+        if (!element || element.disabled) return false;
+        element.click();
+        return true;
+      })()`)
+      if (!ok) throw new Error(`Could not click ${selector}`)
+      await sleep(500)
+    }
+
     async function submitReviewForm(selector) {
       const state = await evaluate(`
         (() => {
@@ -360,14 +397,12 @@ async function main() {
       return state
     }
 
-    await send('Page.navigate', { url: `${baseUrl}/admin/moderation` })
-    await waitFor('document.readyState === "complete"')
-    await evaluate(`(() => {
-      window.localStorage.removeItem('mandarin-spark.token');
-      window.sessionStorage.setItem('mandarin-spark.token', ${JSON.stringify(token)});
-    })()`)
-    await send('Page.navigate', { url: `${baseUrl}/admin/moderation` })
-    await waitFor('document.readyState === "complete"')
+    await navigateTo(`${baseUrl}/auth?redirect=/admin/moderation`)
+    await waitFor(`Boolean(document.querySelector('#login-email') && document.querySelector('#login-password'))`, 15000)
+    await setValue('#login-email', adminEmail)
+    await setValue('#login-password', adminPassword)
+    await clickSelector('.auth-submit-button:not([disabled])')
+    await waitFor(`location.pathname === '/admin/moderation'`, 25000)
     await waitFor(
       `Array.from(document.querySelectorAll('option')).some((option) => option.value === '${reportId}')`,
       20000,
@@ -489,11 +524,8 @@ async function main() {
     client?.close()
     await stopProcessTree(chrome)
     await sleep(750)
-    try {
-      await rm(userDataDir, { recursive: true, force: true })
-    } catch (error) {
-      report.cleanupWarning = error instanceof Error ? error.message : String(error)
-    }
+    const cleanupWarning = await cleanupUserDataDir(userDataDir)
+    if (cleanupWarning) report.cleanupWarning = cleanupWarning
     report.chromeLogs = tailTextForEvidence(chromeLogs.join(''), 4000)
     await writeFile(path.join(evidenceDir, 'ai-report-review-ui-report.json'), safeJsonStringify(report))
   }
@@ -518,6 +550,10 @@ async function main() {
       2,
     ),
   )
+}
+
+function isExpectedConsoleError(message) {
+  return typeof message === 'string' && message.includes('the server responded with a status of 401')
 }
 
 await main()

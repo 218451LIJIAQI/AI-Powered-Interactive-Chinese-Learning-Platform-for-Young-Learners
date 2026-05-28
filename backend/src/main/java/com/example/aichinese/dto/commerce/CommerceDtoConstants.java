@@ -128,14 +128,6 @@ public final class CommerceDtoConstants {
     public static final int COMMISSION_RATE_FRACTION_DIGITS = 4;
 
     /**
-     * Length of an ISO 4217 currency code (always 3 uppercase
-     * letters, e.g. {@code "MYR"}). Matches the
-     * {@code currency_code VARCHAR(3)} schema column tightened in the
-     * V14 financial-integrity migration.
-     */
-    public static final int CURRENCY_CODE_LENGTH = 3;
-
-    /**
      * Regular expression that matches a valid ISO 4217 currency code.
      * Mirrors the schema-side {@code regexp '^[A-Z]{3}$'} CHECK
      * constraint so DTO validation rejects malformed currencies at

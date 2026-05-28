@@ -144,9 +144,9 @@ export const useAuthStore = defineStore('auth', {
           this.clearSession()
         }
       } else {
-        if (canUsePreviewMode()) {
+        if (canUsePreviewMode() && this.previewRole) {
           persistToken(null)
-          this.currentUser = this.previewRole ? demoUsers[this.previewRole] : null
+          this.currentUser = demoUsers[this.previewRole]
           this.bootstrapped = true
           this.loading = false
           return

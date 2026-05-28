@@ -34,12 +34,13 @@
  * `browser-qa-evidence/<timestamp>-auth-live/`.
  */
 import { spawn } from 'node:child_process'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 import {
+  cleanupUserDataDir,
   normalizeHttpBaseUrl,
   parseTcpPort,
   redactText,
@@ -170,7 +171,11 @@ function createCdpClient(webSocketUrl) {
     if (message.id && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id)
       pending.delete(message.id)
-      message.error ? reject(new Error(message.error.message || 'CDP error')) : resolve(message.result || {})
+      if (message.error) {
+        reject(new Error(message.error.message || 'CDP error'))
+      } else {
+        resolve(message.result || {})
+      }
       return
     }
 
@@ -379,20 +384,6 @@ async function main() {
       })()`)
 
       if (!ok) throw new Error(`Could not set ${selector}`)
-      await sleep(120)
-    }
-
-    async function setCheckbox(index, checked = true) {
-      const ok = await evaluate(`(() => {
-        const el = document.querySelectorAll('.auth-checkbox input')[${index}];
-        if (!el) return false;
-        el.checked = ${checked ? 'true' : 'false'};
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        return true;
-      })()`)
-
-      if (!ok) throw new Error(`Could not set checkbox index ${index}`)
       await sleep(120)
     }
 
@@ -633,7 +624,8 @@ async function main() {
     client?.close()
     await stopProcessTree(chrome)
     await sleep(500)
-    await rm(userDataDir, { recursive: true, force: true })
+    const cleanupWarning = await cleanupUserDataDir(userDataDir)
+    if (cleanupWarning) console.warn(`Browser profile cleanup warning: ${cleanupWarning}`)
   }
 }
 

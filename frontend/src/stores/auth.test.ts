@@ -106,17 +106,31 @@ describe('auth store token storage', () => {
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
   })
 
-  it('does not call refresh during anonymous preview bootstrap', async () => {
+  it('attempts cookie refresh during anonymous preview bootstrap before staying anonymous', async () => {
     mocks.appEnv.useDemoData = true
     mocks.appEnv.enablePreviewMode = true
 
     const auth = useAuthStore()
     await auth.bootstrap()
 
-    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(mocks.refresh).toHaveBeenCalledOnce()
     expect(auth.token).toBeNull()
     expect(auth.currentUser).toBeNull()
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
+  })
+
+  it('uses an explicit preview role without calling refresh', async () => {
+    mocks.appEnv.useDemoData = true
+    mocks.appEnv.enablePreviewMode = true
+    window.sessionStorage.setItem('mandarin-spark.preview-role', 'TEACHER')
+
+    const auth = useAuthStore()
+    await auth.bootstrap()
+
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(auth.token).toBeNull()
+    expect(auth.previewRole).toBe('TEACHER')
+    expect(auth.currentUser).toEqual(teacherPreviewUser)
   })
 
   it('keeps preview role in session storage only and never alongside a real token', async () => {

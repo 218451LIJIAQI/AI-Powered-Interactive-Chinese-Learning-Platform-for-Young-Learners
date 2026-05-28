@@ -3,6 +3,7 @@ package com.example.aichinese.config;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -99,38 +100,11 @@ public class CorsConfig {
         // Access-Control-Allow-Credentials: true, i.e. a CSRF/credential-leak
         // vulnerability. The exact-origin form below rejects '*' outright when
         // credentials are enabled, which is the behaviour we want.
-        Set<String> exactOrigins = new LinkedHashSet<>();
         boolean productionProfileActive = isProductionProfileActive();
-        String configuredOrigins = allowedOrigins == null ? "" : allowedOrigins;
-        for (String rawOrigin : configuredOrigins.split(",")) {
-            String origin = rawOrigin.strip();
-            if (origin.isEmpty()) {
-                continue;
-            }
-            if ("*".equals(origin)) {
-                // Refuse to silently combine wildcard origins with credentialed
-                // requests. Drop the wildcard entry, log a warning, and keep
-                // any other explicit origins so the app still starts.
-                log.warn("Ignoring wildcard CORS origin '*' because allowCredentials=true. "
-                        + "Configure APP_CORS_ALLOWED_ORIGINS with explicit origins instead.");
-                continue;
-            }
-            exactOrigins.add(normalizeOrigin(origin, productionProfileActive));
-        }
-
-        if (exactOrigins.isEmpty()) {
-            if (productionProfileActive) {
-                throw new IllegalStateException("APP_CORS_ALLOWED_ORIGINS must contain explicit origins when the prod profile is active.");
-            }
-            // Fall back to a small allow-list of loopback Vite origins. This
-            // keeps local development and preview QA working when Vite moves
-            // from the usual 5173/5174 ports to the next available port instead
-            // of silently breaking the browser with blocked credentialed
-            // requests.
-            exactOrigins.addAll(DEFAULT_LOCAL_DEV_ORIGINS);
-            log.warn("No explicit CORS origins were configured; falling back to local dev origins {}.",
-                    DEFAULT_LOCAL_DEV_ORIGINS);
-        }
+        Set<String> exactOrigins = resolveExactOrigins(
+                allowedOrigins,
+                productionProfileActive,
+                DEFAULT_LOCAL_DEV_ORIGINS);
 
         configuration.setAllowedOrigins(new ArrayList<>(exactOrigins));
         configuration.setAllowedHeaders(ALLOWED_HEADERS);
@@ -170,6 +144,45 @@ public class CorsConfig {
      */
     public static String defaultLocalDevOriginsCsv() {
         return DEFAULT_LOCAL_DEV_ORIGINS_CSV;
+    }
+
+    static Set<String> resolveExactOrigins(
+            String allowedOrigins,
+            boolean productionProfileActive,
+            Collection<String> fallbackOrigins) {
+        Set<String> exactOrigins = new LinkedHashSet<>();
+        String configuredOrigins = allowedOrigins == null ? "" : allowedOrigins;
+        for (String rawOrigin : configuredOrigins.split(",")) {
+            String origin = rawOrigin.strip();
+            if (origin.isEmpty()) {
+                continue;
+            }
+            if ("*".equals(origin)) {
+                // Refuse to silently combine wildcard origins with credentialed
+                // requests. Drop the wildcard entry, log a warning, and keep
+                // any other explicit origins so the app still starts.
+                log.warn("Ignoring wildcard CORS origin '*' because allowCredentials=true. "
+                        + "Configure APP_CORS_ALLOWED_ORIGINS with explicit origins instead.");
+                continue;
+            }
+            exactOrigins.add(normalizeOrigin(origin, productionProfileActive));
+        }
+
+        if (exactOrigins.isEmpty()) {
+            if (productionProfileActive) {
+                throw new IllegalStateException("APP_CORS_ALLOWED_ORIGINS must contain explicit origins when the prod profile is active.");
+            }
+            // Fall back to a small allow-list of loopback Vite origins. This
+            // keeps local development and preview QA working when Vite moves
+            // from the usual 5173/5174 ports to the next available port instead
+            // of silently breaking the browser with blocked credentialed
+            // requests.
+            exactOrigins.addAll(fallbackOrigins);
+            log.warn("No explicit CORS origins were configured; falling back to local dev origins {}.",
+                    fallbackOrigins);
+        }
+
+        return exactOrigins;
     }
 
     private static List<String> buildDefaultLocalDevOrigins() {

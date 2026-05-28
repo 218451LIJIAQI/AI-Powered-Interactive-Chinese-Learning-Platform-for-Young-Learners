@@ -54,8 +54,6 @@ public record SubmitQuizAttemptRequest(
         @NotEmpty(message = "At least one answer is required.")
         List<@NotNull(message = "Quiz answer must not be null.") QuizSubmissionAnswerRequest> answers) {
 
-    public static final int MAX_ANSWERS = 200;
-
     /**
      * Defensive canonical constructor: defensively copies
      * {@link #answers} (with {@code null} → {@link List#of()}

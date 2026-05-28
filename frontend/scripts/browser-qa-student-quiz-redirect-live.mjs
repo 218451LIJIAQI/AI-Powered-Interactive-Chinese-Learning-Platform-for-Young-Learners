@@ -30,12 +30,13 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 import path from 'node:path'
 
 import {
+  cleanupUserDataDir,
   normalizeHttpBaseUrl,
   parseTcpPort,
   redactText,
@@ -51,7 +52,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const frontendDir = path.resolve(scriptDir, '..')
 const viteBin = path.resolve(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js')
 const host = process.env.QA_FRONTEND_HOST || '127.0.0.1'
-const requestedFrontendPort = parseTcpPort(process.env.QA_FRONTEND_PORT || '5173', 'QA_FRONTEND_PORT')
+const requestedFrontendPort = parseTcpPort(process.env.QA_FRONTEND_PORT || '5177', 'QA_FRONTEND_PORT')
 const configuredBaseUrl = process.env.QA_BASE_URL ? normalizeHttpBaseUrl(process.env.QA_BASE_URL, 'QA_BASE_URL') : ''
 const apiBaseUrl = normalizeHttpBaseUrl(
   process.env.QA_API_BASE_URL || process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8081/api/v1',
@@ -86,6 +87,21 @@ function summarizeValue(value) {
   }
 }
 
+function isIgnorableFailedRequest(url, errorText, resourceType) {
+  if (resourceType !== 'Font' || errorText !== 'net::ERR_CACHE_READ_FAILURE') return false
+
+  try {
+    const origin = new URL(url).origin
+    return ['https://fonts.gstatic.com', 'https://fonts.googleapis.com'].includes(origin)
+  } catch {
+    return false
+  }
+}
+
+function isExpectedHttpError(status, url) {
+  return status === 401 && typeof url === 'string' && url.includes('/api/v1/auth/refresh')
+}
+
 async function poll(description, action, predicate, timeoutMs = 15000, intervalMs = 250) {
   const started = Date.now()
   let lastValue
@@ -111,7 +127,7 @@ async function requestApi(pathname, options = {}) {
   const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`
   const response = await fetch(`${normalizedBase}${normalizedPath}`, options)
   const text = await response.text()
-  let body = null
+  let body
   try {
     body = text ? JSON.parse(text) : null
   } catch {
@@ -145,23 +161,21 @@ async function resolveFrontend() {
     return { baseUrl: configuredBaseUrl, stop: async () => {} }
   }
 
-  const expectedBaseUrl = `http://${host}:${requestedFrontendPort}`
-  try {
-    await waitForHttpOk(expectedBaseUrl, 2000, 500)
-    return { baseUrl: expectedBaseUrl, stop: async () => {} }
-  } catch {}
-
   if (!existsSync(viteBin)) {
     throw new Error(`Vite executable not found at ${viteBin}. Run \`cd frontend && npm install\` first.`)
   }
 
   const frontendPort = await resolveAvailablePort(host, requestedFrontendPort)
   const baseUrl = `http://${host}:${frontendPort}`
-  const vite = spawn(process.execPath, [viteBin, '--host', host, '--port', String(frontendPort), '--strictPort'], {
-    cwd: frontendDir,
-    env: { ...process.env, VITE_API_BASE_URL: apiBaseUrl },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  const vite = spawn(
+    process.execPath,
+    [viteBin, '--mode', 'previewqa', '--host', host, '--port', String(frontendPort), '--strictPort'],
+    {
+      cwd: frontendDir,
+      env: { ...process.env, VITE_API_BASE_URL: apiBaseUrl },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  )
   vite.stdout.on('data', (data) => process.stdout.write(data.toString()))
   vite.stderr.on('data', (data) => process.stderr.write(data.toString()))
   await waitForHttpOk(baseUrl, 30000, 500)
@@ -209,7 +223,11 @@ function createCdpClient(webSocketUrl) {
     if (message.id && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id)
       pending.delete(message.id)
-      message.error ? reject(new Error(message.error.message || 'CDP error')) : resolve(message.result || {})
+      if (message.error) {
+        reject(new Error(message.error.message || 'CDP error'))
+      } else {
+        resolve(message.result || {})
+      }
       return
     }
     if (message.method && handlers.has(message.method)) {
@@ -308,6 +326,7 @@ async function main() {
     consoleWarnings: [],
     runtimeExceptions: [],
     failedRequests: [],
+    ignoredFailedRequests: [],
     httpErrors: [],
     apiResponses: [],
   }
@@ -336,12 +355,17 @@ async function main() {
     on('Network.loadingFailed', (params) => {
       if (params.canceled || params.errorText === 'net::ERR_ABORTED') return
       const request = requestsById.get(params.requestId) || {}
-      evidence.failedRequests.push({
+      const failure = {
         method: request.method || '',
         url: sanitizeUrlForEvidence(request.url || ''),
         errorText: params.errorText,
         type: params.type,
-      })
+      }
+      if (isIgnorableFailedRequest(request.url || '', params.errorText, params.type)) {
+        evidence.ignoredFailedRequests.push(failure)
+      } else {
+        evidence.failedRequests.push(failure)
+      }
     })
     on('Network.responseReceived', (params) => {
       const response = params.response || {}
@@ -353,7 +377,7 @@ async function main() {
           method: requestsById.get(params.requestId)?.method || '',
         })
       }
-      if (response.status >= 400)
+      if (response.status >= 400 && !isExpectedHttpError(response.status, response.url))
         evidence.httpErrors.push({
           status: response.status,
           url: sanitizeUrlForEvidence(response.url),
@@ -454,7 +478,8 @@ async function main() {
     client?.close()
     await stopProcessTree(chrome)
     await sleep(500)
-    await rm(userDataDir, { recursive: true, force: true })
+    const cleanupWarning = await cleanupUserDataDir(userDataDir)
+    if (cleanupWarning) evidence.cleanupWarning = cleanupWarning
     await frontend.stop()
     await writeFile(
       path.join(evidenceDir, 'student-quiz-redirect-live-report.json'),

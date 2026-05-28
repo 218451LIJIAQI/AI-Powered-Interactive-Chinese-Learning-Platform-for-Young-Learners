@@ -28,6 +28,7 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -251,6 +252,22 @@ export async function stopProcessTree(processHandle, timeoutMs = 5000) {
       resolve()
     })
   })
+}
+
+export async function cleanupUserDataDir(userDataDir, retries = 5, retryDelayMs = 250) {
+  if (!userDataDir) return ''
+
+  try {
+    await rm(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: retries,
+      retryDelay: retryDelayMs,
+    })
+    return ''
+  } catch (error) {
+    return redactText(error instanceof Error ? error.message : String(error))
+  }
 }
 
 export async function waitForHttpOk(url, timeoutMs = 30000, intervalMs = 500) {

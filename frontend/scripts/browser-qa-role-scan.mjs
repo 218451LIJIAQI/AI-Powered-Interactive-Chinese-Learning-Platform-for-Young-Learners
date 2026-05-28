@@ -12,11 +12,12 @@
  *   3. Verifies the final URL after Vue Router guards run.
  *   4. Captures console / network errors per route.
  *
- * <h2>Token wiring</h2>
- * Per-persona JWTs come from `QA_STUDENT_TOKEN` / `QA_TEACHER_TOKEN`
- * / `QA_ADMIN_TOKEN` and are injected via Chrome's DevTools
- * `Network.setExtraHTTPHeaders` so the SPA's axios layer attaches
- * them automatically. The guest scenario uses no token.
+ * <h2>Session wiring</h2>
+ * Per-persona sessions are established through the real sign-in form.
+ * This deliberately exercises the frontend's memory-only access token
+ * design plus the HttpOnly refresh-cookie bootstrap used after a full
+ * page navigation. The guest scenario clears browser storage/cookies and
+ * uses no session.
  *
  * <h2>Evidence layout</h2>
  * `browser-qa-evidence/<timestamp>-roles/` with one screenshot per
@@ -29,12 +30,13 @@
  * single-persona QA.
  */
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 import {
+  cleanupUserDataDir,
   normalizeHttpBaseUrl,
   parseTcpPort,
   redactText,
@@ -46,6 +48,10 @@ import {
 
 const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5173', 'QA_BASE_URL')
 const frontendProbeUrl = normalizeHttpBaseUrl(process.env.QA_FRONTEND_PROBE_URL || baseUrl, 'QA_FRONTEND_PROBE_URL')
+const apiBaseUrl = normalizeHttpBaseUrl(
+  process.env.QA_API_BASE_URL || process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api/v1',
+  'QA_API_BASE_URL',
+)
 const chromePath = resolveBrowserExecutablePath()
 const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9225', 'QA_CHROME_PORT')
 const quizId = process.env.QA_QUIZ_ID || ''
@@ -53,91 +59,26 @@ const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-roles`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-role-qa-${timestamp}`)
 
-const scenarios = [
-  {
-    role: 'guest',
-    token: null,
-    routes: [
-      '/',
-      '/auth',
-      '/reset-password?token=qa-demo-token',
-      '/terms',
-      '/privacy',
-      '/payment/success',
-      '/payment/cancel',
-      '/courses',
-      '/courses/LESSON-1',
-      '/courses/LESSON-2',
-      '/unauthorized',
-      '/not-a-real-route-for-browser-qa',
-    ],
-  },
-  {
+const personas = {
+  student: {
     role: 'student',
-    token: process.env.QA_STUDENT_TOKEN || '',
-    routes: [
-      '/student/home',
-      '/student/learn',
-      '/student/practice',
-      ...(quizId ? [`/student/quiz/${quizId}`] : []),
-      '/student/classes',
-      '/student/achievements',
-      '/student/rewards',
-      '/student/ai-helper',
-      '/student/profile',
-    ],
+    email: process.env.QA_STUDENT_EMAIL || '',
+    password: process.env.QA_STUDENT_PASSWORD || '',
+    landingPath: '/student/home',
   },
-  {
+  teacher: {
     role: 'teacher',
-    token: process.env.QA_TEACHER_TOKEN || '',
-    routes: [
-      '/teacher/dashboard',
-      '/teacher/content',
-      '/teacher/classes',
-      '/teacher/students',
-      '/teacher/feedback',
-      '/teacher/profile',
-      '/teacher/earnings',
-    ],
+    email: process.env.QA_TEACHER_EMAIL || '',
+    password: process.env.QA_TEACHER_PASSWORD || '',
+    landingPath: '/teacher/dashboard',
   },
-  {
+  admin: {
     role: 'admin',
-    token: process.env.QA_ADMIN_TOKEN || '',
-    routes: [
-      '/admin/dashboard',
-      '/admin/users',
-      '/admin/teacher-verification',
-      '/admin/content',
-      '/admin/activities',
-      '/admin/moderation',
-      '/admin/finance',
-      '/admin/analytics',
-      '/admin/settings',
-    ],
+    email: process.env.QA_ADMIN_EMAIL || 'admin@example.com',
+    password: process.env.QA_ADMIN_PASSWORD || '',
+    landingPath: '/admin/dashboard',
   },
-]
-
-const guardScenarios = [
-  {
-    role: 'student',
-    token: process.env.QA_STUDENT_TOKEN || '',
-    route: '/admin/dashboard',
-    expectedPath: '/unauthorized',
-  },
-  {
-    role: 'teacher',
-    token: process.env.QA_TEACHER_TOKEN || '',
-    route: '/admin/dashboard',
-    expectedPath: '/unauthorized',
-  },
-  {
-    role: 'student',
-    token: process.env.QA_STUDENT_TOKEN || '',
-    route: '/teacher/dashboard',
-    expectedPath: '/unauthorized',
-  },
-  { role: 'guest', token: null, route: '/student/home', expectedPath: '/auth' },
-]
+}
 
 const viewports = [
   { name: 'desktop', width: 1440, height: 1000, mobile: false },
@@ -334,11 +275,6 @@ function getCaseStatus(record) {
   return 'PASS'
 }
 
-function redactGuardScenario(scenario) {
-  const { token, ...rest } = scenario
-  return { ...rest, hasToken: Boolean(token) }
-}
-
 function pathMatches(actualPath, expectedPath) {
   if (!expectedPath) return true
   if (!actualPath) return false
@@ -347,16 +283,134 @@ function pathMatches(actualPath, expectedPath) {
   return actualPath.startsWith(`${expectedPath}?`)
 }
 
+function isExpectedHttpError(status, url) {
+  return status === 401 && typeof url === 'string' && url.includes('/api/v1/auth/refresh')
+}
+
+function isExpectedConsoleError(message) {
+  return typeof message === 'string' && message.includes('the server responded with a status of 401')
+}
+
+function requirePersonaCredentials() {
+  for (const persona of Object.values(personas)) {
+    if (!persona.email || !persona.password) {
+      throw new Error(
+        `Missing browser role-scan credentials for ${persona.role}. Set QA_${persona.role.toUpperCase()}_EMAIL and QA_${persona.role.toUpperCase()}_PASSWORD.`,
+      )
+    }
+  }
+}
+
+async function discoverPublicCourseRoutes() {
+  const configuredCourseId = String(process.env.QA_PUBLIC_COURSE_ID || '').trim()
+  if (configuredCourseId) {
+    return [`/courses/${configuredCourseId}`]
+  }
+
+  const response = await fetch(`${apiBaseUrl}/public/courses?size=3`)
+  if (!response.ok) {
+    throw new Error(`Could not discover public course route: ${response.status} ${response.statusText}`)
+  }
+  const body = await response.json()
+  const courseIds = (body?.data?.items || []).map((item) => item?.id).filter(Boolean)
+  if (!courseIds.length) {
+    throw new Error('Could not discover public course route: /public/courses returned no published courses.')
+  }
+  return courseIds.slice(0, 2).map((id) => `/courses/${id}`)
+}
+
+function buildRoleCases(publicCourseRoutes) {
+  const resetPasswordCase = {
+    route: '/reset-password?token=qa-demo-token',
+    expectedPath: '/reset-password',
+  }
+  const scenarios = [
+    {
+      role: 'guest',
+      routes: [
+        { route: '/', expectedPath: '/' },
+        { route: '/auth', expectedPath: '/auth' },
+        resetPasswordCase,
+        { route: '/terms', expectedPath: '/terms' },
+        { route: '/privacy', expectedPath: '/privacy' },
+        { route: '/payment/success', expectedPath: '/payment/success' },
+        { route: '/payment/cancel', expectedPath: '/payment/cancel' },
+        { route: '/courses', expectedPath: '/courses' },
+        ...publicCourseRoutes.map((route) => ({ route, expectedPath: route })),
+        { route: '/unauthorized', expectedPath: '/unauthorized' },
+        {
+          route: '/not-a-real-route-for-browser-qa',
+          expectedPath: '/not-a-real-route-for-browser-qa',
+        },
+      ],
+    },
+    {
+      role: 'student',
+      routes: [
+        '/student/home',
+        '/student/learn',
+        '/student/practice',
+        ...(quizId ? [`/student/quiz/${quizId}`] : []),
+        '/student/classes',
+        '/student/achievements',
+        '/student/rewards',
+        '/student/ai-helper',
+        '/student/profile',
+      ].map((route) => ({ route, expectedPath: route })),
+    },
+    {
+      role: 'teacher',
+      routes: [
+        '/teacher/dashboard',
+        '/teacher/content',
+        '/teacher/classes',
+        '/teacher/students',
+        '/teacher/feedback',
+        '/teacher/profile',
+        '/teacher/earnings',
+      ].map((route) => ({ route, expectedPath: route })),
+    },
+    {
+      role: 'admin',
+      routes: [
+        '/admin/dashboard',
+        '/admin/users',
+        '/admin/teacher-verification',
+        '/admin/content',
+        '/admin/activities',
+        '/admin/moderation',
+        '/admin/finance',
+        '/admin/analytics',
+        '/admin/settings',
+      ].map((route) => ({ route, expectedPath: route })),
+    },
+  ]
+
+  const guardScenarios = [
+    { role: 'student', route: '/admin/dashboard', expectedPath: '/unauthorized' },
+    { role: 'teacher', route: '/admin/dashboard', expectedPath: '/unauthorized' },
+    { role: 'student', route: '/teacher/dashboard', expectedPath: '/unauthorized' },
+    { role: 'guest', route: '/student/home', expectedPath: '/auth' },
+  ]
+
+  return {
+    scenarios,
+    guardScenarios,
+    allCases: [
+      ...scenarios.flatMap((scenario) => scenario.routes.map((item) => ({ role: scenario.role, ...item }))),
+      ...guardScenarios,
+    ],
+  }
+}
+
 async function main() {
   if (!existsSync(chromePath)) {
     throw new Error(`Chrome executable not found at ${chromePath}`)
   }
 
-  for (const scenario of scenarios) {
-    if (scenario.role !== 'guest' && !scenario.token) {
-      throw new Error(`Missing token for role scenario: ${scenario.role}`)
-    }
-  }
+  requirePersonaCredentials()
+  const publicCourseRoutes = await discoverPublicCourseRoutes()
+  const { scenarios, guardScenarios, allCases } = buildRoleCases(publicCourseRoutes)
 
   const preflight = {
     frontendProbeUrl,
@@ -366,6 +420,8 @@ async function main() {
       (result) => result.status >= 200 && result.status < 400,
       20000,
     ),
+    apiBaseUrl,
+    publicCourseRoutes,
   }
 
   await mkdir(evidenceDir, { recursive: true })
@@ -411,13 +467,14 @@ async function main() {
 
     on('Runtime.consoleAPICalled', (params) => {
       const message = params.args?.map(summarizeEventText).filter(Boolean).join(' ') || params.type
-      if (params.type === 'error') activeRecord?.consoleErrors.push(message)
+      if (params.type === 'error' && !isExpectedConsoleError(message)) activeRecord?.consoleErrors.push(message)
       if (params.type === 'warning' || params.type === 'warn') activeRecord?.consoleWarnings.push(message)
     })
 
     on('Log.entryAdded', (params) => {
       const entry = params.entry || {}
-      if (entry.level === 'error') activeRecord?.consoleErrors.push(entry.text || 'Log error')
+      if (entry.level === 'error' && !isExpectedConsoleError(entry.text || 'Log error'))
+        activeRecord?.consoleErrors.push(entry.text || 'Log error')
       if (entry.level === 'warning') activeRecord?.consoleWarnings.push(entry.text || 'Log warning')
     })
 
@@ -445,7 +502,10 @@ async function main() {
       if (response.status >= 400) {
         const item = { status: response.status, type: params.type, url: response.url }
         activeRecord?.httpErrors.push(item)
-        if (response.url.startsWith(baseUrl) || response.url.includes('/api/')) {
+        if (
+          (response.url.startsWith(baseUrl) || response.url.includes('/api/')) &&
+          !isExpectedHttpError(response.status, response.url)
+        ) {
           activeRecord?.appHttpErrors.push(item)
         }
       }
@@ -592,35 +652,74 @@ async function main() {
       )
     }
 
-    let activeSessionScriptId = null
-    async function prepareSessionToken(token) {
-      if (activeSessionScriptId) {
-        await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: activeSessionScriptId })
-      }
-
-      const result = await send('Page.addScriptToEvaluateOnNewDocument', {
-        source: `(() => {
-          const token = ${JSON.stringify(token)};
-          const key = 'mandarin-spark.token';
-          const previewKey = 'mandarin-spark.preview-role';
-          window.localStorage.removeItem(key);
-          window.sessionStorage.removeItem(key);
-          window.localStorage.removeItem(previewKey);
-          window.sessionStorage.removeItem(previewKey);
-          if (token) {
-            window.sessionStorage.setItem(key, token);
-          }
-        })();`,
-      })
-      activeSessionScriptId = result.identifier
+    async function evaluate(expression) {
+      const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+      return result.result?.value
     }
 
-    const allCases = [
-      ...scenarios.flatMap((scenario) =>
-        scenario.routes.map((route) => ({ role: scenario.role, token: scenario.token, route })),
-      ),
-      ...guardScenarios,
-    ]
+    async function clearBrowserSession() {
+      await send('Network.clearBrowserCookies')
+      await navigate(`${baseUrl}/auth`)
+      await evaluate(`(() => {
+        try {
+          window.sessionStorage.clear();
+          window.localStorage.removeItem('mandarin-spark.token');
+          window.localStorage.removeItem('mandarin-spark.auth-token');
+          window.localStorage.removeItem('mandarin-spark.preview-role');
+        } catch {}
+        window.dispatchEvent(new CustomEvent('mandarin-spark:auth-invalidated'));
+        return true;
+      })()`)
+      await sleep(300)
+    }
+
+    async function setValue(selector, value) {
+      const ok = await evaluate(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!el) return false;
+        el.focus();
+        el.value = ${JSON.stringify(value)};
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`)
+      if (!ok) throw new Error(`Could not set value for ${selector}`)
+      await sleep(120)
+    }
+
+    async function clickSelector(selector) {
+      const ok = await evaluate(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!el || el.disabled) return false;
+        el.click();
+        return true;
+      })()`)
+      if (!ok) throw new Error(`Could not click ${selector}`)
+      await sleep(250)
+    }
+
+    let currentSessionRole = ''
+    async function ensureSession(role) {
+      if (currentSessionRole === role) return
+
+      await clearBrowserSession()
+      if (role === 'guest') {
+        currentSessionRole = role
+        return
+      }
+
+      const persona = personas[role]
+      if (!persona) {
+        throw new Error(`Unknown role scenario ${role}`)
+      }
+
+      await navigate(`${baseUrl}${persona.landingPath}`)
+      await setValue('#login-email', persona.email)
+      await setValue('#login-password', persona.password)
+      await clickSelector('.auth-submit-button:not([disabled])')
+      await waitForExpectedPath(persona.landingPath, 25000)
+      currentSessionRole = role
+    }
 
     for (const viewport of viewports) {
       await send('Emulation.setDeviceMetricsOverride', {
@@ -656,10 +755,9 @@ async function main() {
           expectedPath: testCase.expectedPath || '',
         }
 
+        await ensureSession(testCase.role)
+
         activeRecord = record
-
-        await prepareSessionToken(testCase.token || null)
-
         const navigation = await navigate(url)
         if (navigation.errorText) {
           record.navigationError = navigation.errorText
@@ -705,7 +803,7 @@ async function main() {
       evidenceDir,
       quizId,
       scenarios: scenarios.map(({ role, routes }) => ({ role, routes })),
-      guardScenarios: guardScenarios.map(redactGuardScenario),
+      guardScenarios,
       viewports,
       totals: {
         cases: records.length,
@@ -741,11 +839,15 @@ async function main() {
     }
 
     console.log(`ROLE_REPORT_JSON=${path.join(evidenceDir, 'report.json')}`)
+    if (report.totals.fail > 0 || report.totals.needsFix > 0 || report.totals.needsReview > 0) {
+      throw new Error(`Browser role QA gate failed: ${safeJsonStringify(report.totals)}`)
+    }
   } finally {
     client?.close()
     await stopProcessTree(chrome)
     await sleep(500)
-    await rm(userDataDir, { recursive: true, force: true })
+    const cleanupWarning = await cleanupUserDataDir(userDataDir)
+    if (cleanupWarning) console.warn(`Browser profile cleanup warning: ${cleanupWarning}`)
   }
 }
 

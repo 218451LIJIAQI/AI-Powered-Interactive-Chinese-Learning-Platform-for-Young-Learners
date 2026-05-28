@@ -31,12 +31,13 @@
  * `{cases, pass, needsReview, needsFix, fail}` totals at the end.
  */
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 import {
+  cleanupUserDataDir,
   normalizeHttpBaseUrl,
   parseTcpPort,
   redactText,
@@ -53,6 +54,11 @@ const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9224', 'QA_CHR
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-flows`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-flow-${timestamp}`)
+const allowBlockedFlows = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.QA_ALLOW_BLOCKED_FLOWS || '')
+    .trim()
+    .toLowerCase(),
+)
 
 class BlockedError extends Error {}
 
@@ -150,7 +156,11 @@ function createCdpClient(webSocketUrl) {
     if (message.id && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id)
       pending.delete(message.id)
-      message.error ? reject(new Error(message.error.message || 'CDP error')) : resolve(message.result || {})
+      if (message.error) {
+        reject(new Error(message.error.message || 'CDP error'))
+      } else {
+        resolve(message.result || {})
+      }
       return
     }
     if (message.method && handlers.has(message.method)) {
@@ -513,14 +523,14 @@ async function main() {
         `Array.from(document.querySelectorAll('button')).find((button) => button.innerText.includes('Create Account') && button.className.includes('auth-submit-button'))?.disabled === true`,
       )
       if (!registerDisabled) throw new Error('Empty register submit should be disabled')
-      let snapshot = await enterPreviewRole('Preview Student', '/student/home')
-      snapshot = await capture(record, '-preview-student')
+      await enterPreviewRole('Preview Student', '/student/home')
+      let snapshot = await capture(record, '-preview-student')
       if (!snapshot.path.startsWith('/student/home')) throw new Error('Preview Student did not route to student home')
-      snapshot = await enterPreviewRole('Preview Teacher', '/teacher/dashboard')
+      await enterPreviewRole('Preview Teacher', '/teacher/dashboard')
       snapshot = await capture(record, '-preview-teacher')
       if (!snapshot.path.startsWith('/teacher/dashboard'))
         throw new Error('Preview Teacher did not route to teacher dashboard')
-      snapshot = await enterPreviewRole('Preview Admin', '/admin/dashboard')
+      await enterPreviewRole('Preview Admin', '/admin/dashboard')
       snapshot = await capture(record, '-preview-admin')
       if (!snapshot.path.startsWith('/admin/dashboard'))
         throw new Error('Preview Admin did not route to admin dashboard')
@@ -616,7 +626,7 @@ async function main() {
         (button) => button.text.includes('Create New Course') && button.disabled,
       )
       if (!createCourseDisabled) throw new Error('Teacher create action should be disabled in preview mode')
-      snapshot = await capture(record, '-teacher-create-readonly')
+      await capture(record, '-teacher-create-readonly')
       await enterPreviewRole('Preview Admin', '/admin/dashboard')
       await navigate('/admin/users')
       snapshot = await capture(record, '-admin-users')
@@ -660,7 +670,7 @@ async function main() {
           (button.innerText.includes('Create class') || button.innerText.includes('Save changes')) && button.disabled
         ),
       }))()`)
-      snapshot = await capture(record, '-classes-readonly')
+      await capture(record, '-classes-readonly')
       if (
         !classControlsReadOnly?.titleDisabled ||
         !classControlsReadOnly?.platformDisabled ||
@@ -691,7 +701,7 @@ async function main() {
         createNewDisabled: Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Create new feedback') && button.disabled),
         sendDisabled: Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Send Feedback') && button.disabled),
       }))()`)
-      snapshot = await capture(record, '-feedback-readonly')
+      await capture(record, '-feedback-readonly')
       if (
         !feedbackControlsReadOnly?.studentDisabled ||
         !feedbackControlsReadOnly?.typeDisabled ||
@@ -716,7 +726,7 @@ async function main() {
         resetDisabled: Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Reset Draft') && button.disabled),
         sendDisabled: Array.from(document.querySelectorAll('button')).some((button) => button.innerText.includes('Send Feedback Now') && button.disabled),
       }))()`)
-      snapshot = await capture(record, '-students-readonly')
+      await capture(record, '-students-readonly')
       if (
         !followupControlsReadOnly?.messageDisabled ||
         !followupControlsReadOnly?.toneDisabled ||
@@ -768,7 +778,7 @@ async function main() {
           allDisabled: buttons.length > 0 && buttons.every((button) => button.disabled),
         };
       })()`)
-      snapshot = await capture(record, '-download-readonly')
+      await capture(record, '-download-readonly')
       if (teacherDocumentDownloadsReadOnly?.count > 0 && !teacherDocumentDownloadsReadOnly?.allDisabled) {
         throw new Error('Teacher document download controls were not readonly in preview mode')
       }
@@ -793,7 +803,7 @@ async function main() {
           submitDisabled: Boolean(submit?.disabled),
         };
       })()`)
-      snapshot = await capture(record, '-refund-readonly')
+      await capture(record, '-refund-readonly')
       if (
         !refundControlsReadOnly?.orderDisabled ||
         !refundControlsReadOnly?.reasonDisabled ||
@@ -863,7 +873,7 @@ async function main() {
           moderationButtonsDisabled: moderationButtons.length > 0 && moderationButtons.every((button) => button.disabled),
         };
       })()`)
-      snapshot = await capture(record, '-moderation-readonly')
+      await capture(record, '-moderation-readonly')
       if (
         !moderationControlsReadOnly?.reasonDisabled ||
         !moderationControlsReadOnly?.requestRevisionDisabled ||
@@ -876,7 +886,7 @@ async function main() {
     await runFlow('Admin settings and verification decision readonly protection', async (record) => {
       await enterPreviewRole('Preview Admin', '/admin/dashboard')
       await navigate('/admin/settings')
-      let snapshot = await capture(record, '-settings')
+      await capture(record, '-settings')
       const settingsReadOnly = await evaluate(`(() => {
         const locale = document.querySelector('.admin-settings-select');
         const disclaimer = document.querySelector('.admin-settings-textarea');
@@ -907,7 +917,7 @@ async function main() {
       await clickByText('Mei Lin')
       await clickByText('Open Decision Tab')
       await waitForPage('teacher verification decision tab', (state) => state.text.includes('Decision Notes'))
-      snapshot = await capture(record, '-verification-decision')
+      const snapshot = await capture(record, '-verification-decision')
       if (!snapshot.text.includes('Decision Notes')) throw new Error('Teacher verification decision tab did not open')
       const verificationDecisionReadOnly = await evaluate(`(() => ({
         approvalDisabled: Boolean(document.querySelector('#admin-verification-approval-note')?.disabled),
@@ -946,7 +956,7 @@ async function main() {
           allDisabled: buttons.length > 0 && buttons.every((button) => button.disabled),
         };
       })()`)
-      snapshot = await capture(record, '-download-readonly')
+      await capture(record, '-download-readonly')
       if (adminTeacherDocumentDownloadsReadOnly?.count > 0 && !adminTeacherDocumentDownloadsReadOnly?.allDisabled) {
         throw new Error('Admin teacher document download controls were not readonly in preview mode')
       }
@@ -977,11 +987,22 @@ async function main() {
     await writeFile(path.join(evidenceDir, 'flow-report.json'), safeJsonStringify(report), 'utf8')
     await writeFile(path.join(evidenceDir, 'chrome.log'), tailTextForEvidence(chromeLogs.join('\n')), 'utf8')
     console.log(`FLOW_REPORT_JSON=${path.join(evidenceDir, 'flow-report.json')}`)
+    if (report.totals.fail > 0 || report.totals.needsFix > 0 || (!allowBlockedFlows && report.totals.blocked > 0)) {
+      throw new Error(
+        `Browser QA flow gate failed: ${safeJsonStringify({
+          fail: report.totals.fail,
+          needsFix: report.totals.needsFix,
+          blocked: report.totals.blocked,
+          allowBlockedFlows,
+        })}`,
+      )
+    }
   } finally {
     client?.close()
     await stopProcessTree(chrome)
     await sleep(500)
-    await rm(userDataDir, { recursive: true, force: true })
+    const cleanupWarning = await cleanupUserDataDir(userDataDir)
+    if (cleanupWarning) console.warn(`Browser profile cleanup warning: ${cleanupWarning}`)
   }
 }
 

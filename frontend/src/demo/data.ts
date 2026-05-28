@@ -3012,7 +3012,35 @@ export const adminAiReports: AdminAiResponseReportResponse[] = [
 ]
 
 export const studentAiReports: StudentAiResponseReportResponse[] = adminAiReports.map(
-  ({ studentUserId, studentName, studentEmail, reviewerUserId, reviewerName, reviewerNote, ...report }) => report,
+  ({
+    id,
+    aiUsageLogId,
+    chatSessionId,
+    chatMessageId,
+    featureKey,
+    reasonCategory,
+    description,
+    promptSnapshot,
+    aiResponseSnapshot,
+    status,
+    createdAt,
+    reviewedAt,
+    updatedAt,
+  }) => ({
+    id,
+    aiUsageLogId,
+    chatSessionId,
+    chatMessageId,
+    featureKey,
+    reasonCategory,
+    description,
+    promptSnapshot,
+    aiResponseSnapshot,
+    status,
+    createdAt,
+    reviewedAt,
+    updatedAt,
+  }),
 )
 
 export const adminNotifications: NotificationResponse[] = [
@@ -3071,10 +3099,45 @@ export const adminRefunds: AdminRefundRequestResponse[] = [
 // fallback contract role-accurate even when the sample rows currently happen
 // to share the same underlying values.
 export const studentPayments: StudentPaymentRecordResponse[] = adminPayments.map(
-  ({ studentId, studentName, studentEmail, ...payment }) => payment,
+  ({
+    paymentId,
+    orderId,
+    orderNumber,
+    providerName,
+    amount,
+    currencyCode,
+    paymentStatus,
+    paymentMethod,
+    providerStatus,
+    paidAt,
+    createdAt,
+    items,
+  }) => ({
+    paymentId,
+    orderId,
+    orderNumber,
+    providerName,
+    amount,
+    currencyCode,
+    paymentStatus,
+    paymentMethod,
+    providerStatus,
+    paidAt,
+    createdAt,
+    items,
+  }),
 )
 export const studentRefunds: StudentRefundRequestResponse[] = adminRefunds.map(
-  ({ studentId, studentName, studentEmail, ...refund }) => refund,
+  ({ id, orderId, orderNumber, amount, reason, decisionReason, refundStatus, createdAt }) => ({
+    id,
+    orderId,
+    orderNumber,
+    amount,
+    reason,
+    decisionReason,
+    refundStatus,
+    createdAt,
+  }),
 )
 
 export const adminPayouts: AdminPayoutRequestResponse[] = teacherPayouts.map((payout) => ({

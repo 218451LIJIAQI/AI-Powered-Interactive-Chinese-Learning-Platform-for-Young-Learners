@@ -24,14 +24,6 @@ public final class PaginationUtils {
      */
     public static final int DEFAULT_MAX_PAGE_SIZE = 100;
 
-    /**
-     * Zero-indexed first page. Mirrors the Spring Data {@link
-     * org.springframework.data.domain.Pageable#getPageNumber() Pageable}
-     * convention so callers can choose between this constant and a raw
-     * literal {@code 0} based on what reads best at the call site.
-     */
-    public static final int FIRST_PAGE = 0;
-
     private PaginationUtils() {
         throw new AssertionError("PaginationUtils is a utility class and must not be instantiated.");
     }

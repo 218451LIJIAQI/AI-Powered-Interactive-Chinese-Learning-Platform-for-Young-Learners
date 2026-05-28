@@ -250,6 +250,84 @@ class AuthControllerIntegrationTests {
     }
 
     @Test
+    void shouldRejectCrossSiteBrowserRefreshWithoutConsumingRefreshToken() throws Exception {
+        String email = uniqueEmail("refresh-origin");
+        registerStudent(email, "Password123!");
+
+        MvcResult loginResult = login(email, "Password123!");
+        String refreshToken = extractRefreshCookieValue(loginResult);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .header("Origin", "https://evil.example")
+                .header("Sec-Fetch-Site", "cross-site")
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").isString());
+    }
+
+    @Test
+    void shouldRejectSameSiteBrowserRefreshWithoutTrustedOriginMetadata() throws Exception {
+        String email = uniqueEmail("refresh-same-site");
+        registerStudent(email, "Password123!");
+
+        MvcResult loginResult = login(email, "Password123!");
+        String refreshToken = extractRefreshCookieValue(loginResult);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .header("Sec-Fetch-Site", "same-site")
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").isString());
+    }
+
+    @Test
+    void shouldAllowSameOriginBrowserRefreshWithoutOriginOrReferer() throws Exception {
+        String email = uniqueEmail("refresh-same-origin-fetch");
+        registerStudent(email, "Password123!");
+
+        MvcResult loginResult = login(email, "Password123!");
+        String refreshToken = extractRefreshCookieValue(loginResult);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .header("Sec-Fetch-Site", "same-origin")
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").isString());
+    }
+
+    @Test
+    void shouldAllowRefreshFromConfiguredFrontendOrigin() throws Exception {
+        String email = uniqueEmail("refresh-allowed-origin");
+        registerStudent(email, "Password123!");
+
+        MvcResult loginResult = login(email, "Password123!");
+        String refreshToken = extractRefreshCookieValue(loginResult);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                .with(csrf())
+                .header("Origin", "http://localhost:5173")
+                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").isString());
+    }
+
+    @Test
     void shouldClearRefreshCookieAndRevokeRefreshTokensOnLogout() throws Exception {
         String email = uniqueEmail("refresh-logout");
         registerStudent(email, "Password123!");

@@ -25,12 +25,13 @@
  *   - `QA_CHROME_PORT`        — DevTools port (default 9223)
  */
 import { spawn } from 'node:child_process'
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 import {
+  cleanupUserDataDir,
   normalizeHttpBaseUrl,
   parseTcpPort,
   redactText,
@@ -620,7 +621,8 @@ async function main() {
     client?.close()
     await stopProcessTree(chrome)
     await sleep(500)
-    await rm(userDataDir, { recursive: true, force: true })
+    const cleanupWarning = await cleanupUserDataDir(userDataDir)
+    if (cleanupWarning) console.warn(`Browser profile cleanup warning: ${cleanupWarning}`)
   }
 }
 

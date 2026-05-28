@@ -274,7 +274,7 @@ async function main() {
     resetRows,
   )
 
-  const loginBeforeReset = await login(studentEmail, qaPassword)
+  await login(studentEmail, qaPassword)
   await db(
     `update password_reset_tokens set token='${sha256Hex(`qa_live_reset_${runId}`)}' where id=${resetRows[0][0]}`,
     'set deterministic QA reset token',
