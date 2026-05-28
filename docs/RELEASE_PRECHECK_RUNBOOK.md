@@ -26,8 +26,9 @@ From the repository root:
 npm run quality
 ```
 
-This runs frontend linting, formatting, unit tests, type checking, production
-build, backend tests, SpotBugs, coverage verification, and OpenAPI export.
+This runs toolchain-version alignment, frontend linting, formatting, unit tests
+with V8 coverage thresholds, type checking, production build, backend tests,
+SpotBugs, JaCoCo coverage verification, and OpenAPI export.
 
 Run the browser smoke suite after installing Playwright browsers:
 

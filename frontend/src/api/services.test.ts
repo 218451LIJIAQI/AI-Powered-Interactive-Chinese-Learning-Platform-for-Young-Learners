@@ -186,4 +186,50 @@ describe('aiApi.chatStream', () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(1)
     expect(dispatchEvent.mock.calls[0]?.[0]).toMatchObject({ type: AUTH_INVALIDATED_EVENT })
   })
+
+  it('retries a stream once with the rotated access token after a 401', async () => {
+    const authorizations: Array<string | null> = []
+    const payload = {
+      sessionId: 8,
+      userMessage: 'hello',
+      aiResponse: '你好',
+      language: 'zh',
+      createdAt: '2026-05-26T00:00:00.000Z',
+      status: 'SUCCESS',
+    }
+
+    setAccessToken('stale-token')
+    window.fetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = init?.headers as Headers
+      authorizations.push(headers.get('Authorization'))
+      return Promise.resolve(
+        authorizations.length === 1
+          ? new Response('', { status: 401 })
+          : sseResponse(`event: complete\ndata: ${JSON.stringify(payload)}`),
+      )
+    })
+    http.defaults.adapter = (async (config) => {
+      if (config.url === '/auth/refresh') {
+        return apiResponse(config, 200, { success: true, data: { token: 'fresh-token' } })
+      }
+
+      throw new Error(`Unexpected request ${config.url}`)
+    }) satisfies AxiosAdapter
+
+    await expect(aiApi.chatStream({ message: 'hello' })).resolves.toEqual(payload)
+
+    expect(authorizations).toEqual(['Bearer stale-token', 'Bearer fresh-token'])
+  })
+
+  it('reports an incomplete stream when no final complete event arrives', async () => {
+    window.fetch = vi.fn().mockResolvedValue(sseResponse('event: delta\ndata: partial\n\n'))
+
+    await expect(aiApi.chatStream({ message: 'hello' })).rejects.toMatchObject({
+      response: {
+        data: {
+          message: 'The AI stream ended before the final response arrived.',
+        },
+      },
+    })
+  })
 })

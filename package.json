@@ -4,8 +4,9 @@
   "scripts": {
     "prepare": "husky",
     "lint-staged": "lint-staged",
-    "quality": "npm run quality:frontend && npm run quality:backend",
-    "quality:frontend": "npm --prefix frontend run lint && npm --prefix frontend run format:check && npm --prefix frontend run test:unit && npm --prefix frontend run typecheck && npm --prefix frontend run build",
+    "quality": "npm run quality:toolchain && npm run quality:frontend && npm run quality:backend",
+    "quality:toolchain": "node scripts/check-toolchain-versions.mjs",
+    "quality:frontend": "npm --prefix frontend run lint && npm --prefix frontend run format:check && npm --prefix frontend run test:unit:coverage && npm --prefix frontend run typecheck && npm --prefix frontend run build",
     "quality:frontend:e2e": "npm --prefix frontend run test:e2e",
     "quality:backend": "node scripts/run-backend-quality-gate.mjs",
     "quality:release": "npm run quality && npm run quality:frontend:e2e"

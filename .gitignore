@@ -11,6 +11,7 @@ PROJECT_FULL_SCOPE_TOP_TIER_AUDIT_PROMPT_ZH.md
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
 browser-qa-evidence/

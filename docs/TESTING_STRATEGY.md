@@ -16,9 +16,11 @@ The test strategy focuses on five submission-critical outcomes:
 
 | Layer                   | Scope                                                                | Command or location                                 |
 | ----------------------- | -------------------------------------------------------------------- | --------------------------------------------------- |
+| Toolchain alignment     | Java, Maven, Node versions match Maven wrapper, Docker, and CI       | `npm run quality:toolchain`                         |
 | Frontend lint           | ESLint rules for TypeScript/Vue quality                              | `npm --prefix frontend run lint`                    |
 | Frontend format         | Prettier consistency for source/config/docs                          | `npm --prefix frontend run format:check`            |
-| Frontend unit           | Pinia stores, utility helpers, route helpers, formatting helpers     | `npm --prefix frontend run test:unit`               |
+| Frontend unit           | Pinia stores, API helpers, route helpers, formatting helpers         | `npm --prefix frontend run test:unit`               |
+| Frontend coverage       | V8 coverage gate for API/config/plugins/stores/utils                 | `npm --prefix frontend run test:unit:coverage`      |
 | Frontend typecheck      | Vue + TypeScript compile-time contract check                         | `npm --prefix frontend run typecheck`               |
 | Frontend build          | Production Vite build and PWA generation                             | `npm --prefix frontend run build`                   |
 | Frontend E2E            | Playwright smoke flows for public, auth, preview, and learner routes | `npm --prefix frontend run test:e2e`                |
@@ -38,15 +40,16 @@ npm run quality
 
 This runs:
 
-1. Frontend lint.
-2. Frontend format check.
-3. Frontend unit tests.
-4. Frontend typecheck.
-5. Frontend production build.
-6. Backend tests.
-7. Backend SpotBugs.
-8. Backend coverage gate.
-9. Backend OpenAPI export.
+1. Toolchain-version alignment.
+2. Frontend lint.
+3. Frontend format check.
+4. Frontend unit tests with V8 thresholds: at least 68% statements, 70% branches, 43% functions, and 68% lines.
+5. Frontend typecheck.
+6. Frontend production build.
+7. Backend tests.
+8. Backend SpotBugs.
+9. Backend coverage gate: at least 75% instruction and 50% branch coverage.
+10. Backend OpenAPI export.
 
 For route, auth, preview-mode, or browser-only behavior changes, also run:
 
@@ -108,7 +111,7 @@ When changing any backend response shape:
 
 Before final submission or production promotion, keep evidence for:
 
-- `npm run quality` success.
+- `npm run quality` success, including toolchain alignment, frontend V8 coverage, and backend JaCoCo thresholds.
 - `npm run quality:frontend:e2e` success when browser flows changed.
 - `docker compose --env-file .env.prod -f docker-compose.prod.yml config` success with release-candidate values.
 - Flyway clean-install validation against disposable MySQL 8.4.
