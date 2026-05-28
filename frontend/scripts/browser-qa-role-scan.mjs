@@ -54,7 +54,7 @@ const apiBaseUrl = normalizeHttpBaseUrl(
 )
 const chromePath = resolveBrowserExecutablePath()
 const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9225', 'QA_CHROME_PORT')
-const quizId = process.env.QA_QUIZ_ID || ''
+const configuredQuizId = String(process.env.QA_QUIZ_ID || '').trim()
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const evidenceDir = path.resolve(process.cwd(), 'browser-qa-evidence', `${timestamp}-roles`)
 const userDataDir = path.join(os.tmpdir(), `mandarin-spark-role-qa-${timestamp}`)
@@ -151,6 +151,32 @@ async function fetchProbe(url) {
     contentType,
     body,
   }
+}
+
+async function apiRequest(pathname, { method = 'GET', token, body } = {}) {
+  const headers = {}
+  const options = { method, headers }
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    options.body = JSON.stringify(body)
+  }
+
+  const response = await fetch(
+    `${apiBaseUrl.replace(/\/+$/, '')}${pathname.startsWith('/') ? pathname : `/${pathname}`}`,
+    options,
+  )
+  const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
+  let payload = text
+
+  if (contentType.toLowerCase().includes('json')) {
+    try {
+      payload = JSON.parse(text)
+    } catch {}
+  }
+
+  return { status: response.status, ok: response.ok, body: payload }
 }
 
 async function waitForEndpoint(description, url, predicate, timeoutMs = 20000) {
@@ -319,7 +345,62 @@ async function discoverPublicCourseRoutes() {
   return courseIds.slice(0, 2).map((id) => `/courses/${id}`)
 }
 
-function buildRoleCases(publicCourseRoutes) {
+async function discoverStudentQuizRoute() {
+  if (configuredQuizId && !/^\d+$/.test(configuredQuizId)) {
+    throw new Error(`QA_QUIZ_ID must be a positive numeric id when provided. Received: ${configuredQuizId}`)
+  }
+
+  const result = {
+    configuredQuizId: configuredQuizId || null,
+    route: null,
+    source: 'none',
+    skippedConfiguredQuiz: null,
+    discoveredQuizId: null,
+  }
+
+  const login = await apiRequest('/auth/login', {
+    method: 'POST',
+    body: {
+      email: personas.student.email,
+      password: personas.student.password,
+    },
+  })
+  const token = login.body?.data?.token
+  if (login.status !== 200 || !token) {
+    throw new Error(`Could not authenticate student for quiz route discovery: ${login.status}`)
+  }
+
+  if (configuredQuizId) {
+    const configuredQuiz = await apiRequest(`/students/quizzes/${configuredQuizId}`, { token })
+    if (configuredQuiz.status === 200 && configuredQuiz.body?.success === true) {
+      result.route = `/student/quiz/${configuredQuizId}`
+      result.source = 'configured'
+      return result
+    }
+
+    result.skippedConfiguredQuiz = {
+      quizId: configuredQuizId,
+      status: configuredQuiz.status,
+      message: configuredQuiz.body?.message || summarizeValue(configuredQuiz.body),
+    }
+  }
+
+  const quizList = await apiRequest('/students/quizzes?size=1', { token })
+  if (quizList.status !== 200 || quizList.body?.success !== true) {
+    throw new Error(`Could not discover accessible student quiz route: ${quizList.status}`)
+  }
+
+  const discoveredQuizId = quizList.body?.data?.items?.[0]?.id
+  if (discoveredQuizId) {
+    result.discoveredQuizId = discoveredQuizId
+    result.route = `/student/quiz/${discoveredQuizId}`
+    result.source = 'student-list'
+  }
+
+  return result
+}
+
+function buildRoleCases(publicCourseRoutes, studentQuizRoute) {
   const resetPasswordCase = {
     route: '/reset-password?token=qa-demo-token',
     expectedPath: '/reset-password',
@@ -350,7 +431,8 @@ function buildRoleCases(publicCourseRoutes) {
         '/student/home',
         '/student/learn',
         '/student/practice',
-        ...(quizId ? [`/student/quiz/${quizId}`] : []),
+        '/student/quiz',
+        ...(studentQuizRoute.route ? [studentQuizRoute.route] : []),
         '/student/classes',
         '/student/achievements',
         '/student/rewards',
@@ -410,7 +492,8 @@ async function main() {
 
   requirePersonaCredentials()
   const publicCourseRoutes = await discoverPublicCourseRoutes()
-  const { scenarios, guardScenarios, allCases } = buildRoleCases(publicCourseRoutes)
+  const studentQuizRoute = await discoverStudentQuizRoute()
+  const { scenarios, guardScenarios, allCases } = buildRoleCases(publicCourseRoutes, studentQuizRoute)
 
   const preflight = {
     frontendProbeUrl,
@@ -422,6 +505,7 @@ async function main() {
     ),
     apiBaseUrl,
     publicCourseRoutes,
+    studentQuizRoute,
   }
 
   await mkdir(evidenceDir, { recursive: true })
@@ -801,7 +885,8 @@ async function main() {
       baseUrl,
       preflight,
       evidenceDir,
-      quizId,
+      configuredQuizId,
+      studentQuizRoute,
       scenarios: scenarios.map(({ role, routes }) => ({ role, routes })),
       guardScenarios,
       viewports,
