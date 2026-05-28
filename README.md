@@ -4,13 +4,27 @@
 
 MandarinSpark is locked to Node.js 22 for frontend/root tooling. The repository carries `.nvmrc`, `.node-version`, root `engines.node`, frontend `engines.node`, Docker, and CI checks that must agree on the Node 22 major line. Running the local quality gate on Node 26+ is expected to fail; switch to Node 22 or run the gate in CI/Docker rather than treating that as a pass.
 
+If the workstation has another Node major installed, use the reproducible Node 22 wrapper:
+
+```powershell
+npm run quality:node22
+```
+
 The release-grade local gate is:
 
 ```powershell
 npm run quality:release
 ```
 
-It requires Trivy to be installed locally and then runs the root quality gate, Playwright browser smoke, production dependency audits, Docker Compose config rendering, disposable MySQL 8.4 Flyway/Hibernate validation, and a HIGH/CRITICAL Trivy filesystem scan. If Trivy is unavailable, the script fails explicitly instead of silently skipping the scan.
+It runs the root quality gate, Playwright browser smoke, production dependency audits, Docker Compose config rendering, disposable MySQL 8.4 Flyway/Hibernate validation, and a HIGH/CRITICAL Trivy filesystem scan. The scan uses a local Trivy binary when available, otherwise it falls back to the official Trivy Docker image so the release gate does not silently skip vulnerability scanning. On a non-Node-22 workstation, run `npm run quality:release:node22`.
+
+Real AI, Stripe, and SMTP end-to-end checks require provider-owned test credentials and callback/forwarding URLs. Before claiming that live-provider smoke passed, export those values or create `.env.external-e2e`, then run:
+
+```powershell
+npm run quality:external:precheck
+```
+
+This precheck is intentionally not part of hosted CI because secrets should not be required for ordinary pull requests. Missing provider credentials are a real release blocker for external E2E evidence, not a substitute for passing with mocks.
 
 AI preview/demo behavior is intentionally separated from live authenticated behavior. Preview AI samples are allowed only when demo data and preview mode are enabled and a preview session is active; those UI paths keep "sample / no live AI request" copy visible. For live authenticated users, provider failures or unavailable AI return `UNAVAILABLE`/`FAILED` status through the existing DTOs and must not be disguised as generated success content.
 

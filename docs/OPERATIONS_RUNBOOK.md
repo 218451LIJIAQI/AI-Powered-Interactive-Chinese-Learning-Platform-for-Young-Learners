@@ -146,7 +146,7 @@ Before running multiple backend instances:
 Run periodically or before important demonstrations:
 
 - review `.env.prod.example` for outdated placeholder domains or missing variables
-- confirm dependency and container scans have no high/critical findings
+- confirm dependency, filesystem, and any image/container scans have no high/critical findings
 - confirm OpenAPI docs are not publicly exposed unless intentionally protected
 - verify backup retention and restore evidence are current
 - check that generated outputs such as `frontend/dist`, `backend/target`, and Playwright reports are not committed

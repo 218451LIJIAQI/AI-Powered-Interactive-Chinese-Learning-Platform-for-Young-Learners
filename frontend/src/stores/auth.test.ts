@@ -118,6 +118,57 @@ describe('auth store token storage', () => {
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
   })
 
+  it('clears the refreshed access token when current-user hydration fails', async () => {
+    const session: AuthResponse = {
+      token: 'rotated-access-token',
+      user: {
+        id: studentUser.id,
+        email: studentUser.email,
+        fullName: studentUser.fullName,
+        roles: studentUser.roles,
+      },
+    }
+    mocks.refresh.mockResolvedValue(session)
+    mocks.me.mockRejectedValue(new Error('me failed'))
+
+    const auth = useAuthStore()
+    await auth.bootstrap()
+
+    expect(auth.token).toBeNull()
+    expect(auth.currentUser).toBeNull()
+    expect(auth.previewRole).toBeNull()
+    expect(auth.isAuthenticated).toBe(false)
+    expect(mocks.setAccessToken).toHaveBeenCalledWith('rotated-access-token')
+    expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
+    expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
+    expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
+  })
+
+  it('hydrates the current user after a successful cookie refresh', async () => {
+    const session: AuthResponse = {
+      token: 'rotated-access-token',
+      user: {
+        id: studentUser.id,
+        email: studentUser.email,
+        fullName: studentUser.fullName,
+        roles: studentUser.roles,
+      },
+    }
+    mocks.refresh.mockResolvedValue(session)
+    mocks.me.mockResolvedValue(studentUser)
+
+    const auth = useAuthStore()
+    await auth.bootstrap()
+
+    expect(auth.token).toBe('rotated-access-token')
+    expect(auth.currentUser).toEqual(studentUser)
+    expect(auth.activeRole).toBe('STUDENT')
+    expect(auth.isAuthenticated).toBe(true)
+    expect(mocks.setAccessToken).toHaveBeenLastCalledWith('rotated-access-token')
+    expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
+    expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
+  })
+
   it('attempts cookie refresh during anonymous preview bootstrap before staying anonymous', async () => {
     mocks.appEnv.useDemoData = true
     mocks.appEnv.enablePreviewMode = true
@@ -202,5 +253,30 @@ describe('auth store token storage', () => {
     expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith('real-access-token')
+  })
+
+  it('clears preview state and local bearer token even when backend logout fails', async () => {
+    mocks.appEnv.useDemoData = true
+    mocks.appEnv.enablePreviewMode = true
+    mocks.logout.mockRejectedValue(new Error('logout endpoint unavailable'))
+    window.localStorage.setItem('mandarin-spark.token', 'legacy-local')
+    window.sessionStorage.setItem('mandarin-spark.token', 'legacy-session')
+
+    const auth = useAuthStore()
+    auth.setPreviewRole('ADMIN')
+    auth.token = 'real-access-token'
+    auth.currentUser = studentUser
+
+    await auth.logout()
+
+    expect(mocks.logout).toHaveBeenCalledOnce()
+    expect(auth.token).toBeNull()
+    expect(auth.currentUser).toBeNull()
+    expect(auth.previewRole).toBeNull()
+    expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
+    expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
+    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
+    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
+    expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
   })
 })

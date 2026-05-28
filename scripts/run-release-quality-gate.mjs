@@ -119,13 +119,41 @@ function validateFlywayMySql() {
   ]);
 }
 
-try {
-  if (!commandExists("trivy")) {
+function runTrivyFilesystemScan() {
+  const trivyArgs = [
+    "fs",
+    "--severity",
+    "HIGH,CRITICAL",
+    "--ignore-unfixed",
+    "--exit-code",
+    "1",
+    ".",
+  ];
+
+  if (commandExists("trivy")) {
+    run("Trivy filesystem scan", "trivy", trivyArgs);
+    return;
+  }
+
+  if (!commandExists("docker")) {
     throw new Error(
-      "Trivy is required for the release quality gate. Install Trivy or use CI, where aquasecurity/trivy-action runs the same HIGH/CRITICAL filesystem scan.",
+      "Trivy is required for the release quality gate. Install Trivy, install Docker so the gate can run the official Trivy container, or use CI where aquasecurity/trivy-action runs the same HIGH/CRITICAL filesystem scan.",
     );
   }
 
+  run("Trivy filesystem scan (Docker)", "docker", [
+    "run",
+    "--rm",
+    "-v",
+    `${repositoryRoot}:/workspace`,
+    "-w",
+    "/workspace",
+    "aquasec/trivy:0.67.2",
+    ...trivyArgs,
+  ]);
+}
+
+try {
   runNpm("Repository quality gate", ["run", "quality"]);
   runNpm("Frontend browser E2E smoke", ["run", "quality:frontend:e2e"]);
   runNpm("Root production dependency audit", [
@@ -142,15 +170,7 @@ try {
   ]);
   validateComposeConfig();
   validateFlywayMySql();
-  run("Trivy filesystem scan", "trivy", [
-    "fs",
-    "--severity",
-    "HIGH,CRITICAL",
-    "--ignore-unfixed",
-    "--exit-code",
-    "1",
-    ".",
-  ]);
+  runTrivyFilesystemScan();
 } catch (error) {
   console.error(`\n${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);

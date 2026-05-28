@@ -8,11 +8,14 @@
     "prepare": "husky",
     "lint-staged": "lint-staged",
     "quality": "npm run quality:toolchain && npm run quality:frontend && npm run quality:backend",
+    "quality:node22": "npx -y -p node@22 -p npm@10 npm run quality",
     "quality:toolchain": "node scripts/check-toolchain-versions.mjs",
     "quality:frontend": "npm --prefix frontend run lint && npm --prefix frontend run format:check && npm --prefix frontend run test:unit:coverage && npm --prefix frontend run typecheck && npm --prefix frontend run build && npm --prefix frontend run budget:check",
     "quality:frontend:e2e": "npm --prefix frontend run test:e2e",
     "quality:backend": "node scripts/run-backend-quality-gate.mjs",
-    "quality:release": "node scripts/run-release-quality-gate.mjs"
+    "quality:release": "node scripts/run-release-quality-gate.mjs",
+    "quality:release:node22": "npx -y -p node@22 -p npm@10 npm run quality:release",
+    "quality:external:precheck": "node scripts/check-external-e2e-readiness.mjs"
   },
   "lint-staged": {
     "frontend/**/*.{ts,vue,js,mjs}": "npm --prefix frontend exec eslint --fix --",

@@ -97,8 +97,8 @@ jobs:
       - name: Export OpenAPI contract
         run: bash ./mvnw -B -DskipTests -Djacoco.skip=true -DskipOpenApiContract=false verify
 
-  dependency-and-image-scan:
-    name: Dependency And Container Scan
+  dependency-and-filesystem-scan:
+    name: Dependency And Filesystem Scan
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

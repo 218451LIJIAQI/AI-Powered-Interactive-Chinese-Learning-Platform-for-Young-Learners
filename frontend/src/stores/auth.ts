@@ -159,7 +159,11 @@ export const useAuthStore = defineStore('auth', {
           persistToken(response.token)
           this.previewRole = null
           persistPreviewRole(null)
-          this.currentUser = await authApi.me()
+          try {
+            this.currentUser = await authApi.me()
+          } catch {
+            this.clearSession()
+          }
         } catch {
           persistToken(null)
           if (canUsePreviewMode() && this.previewRole) {

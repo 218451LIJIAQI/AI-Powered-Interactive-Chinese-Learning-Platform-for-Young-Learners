@@ -77,13 +77,15 @@ Resolution:
 - Node.js tooling is locked to major version 22 across `.nvmrc`, `.node-version`, root/frontend `engines`, Docker, and CI; the local toolchain gate fails on Node 26+ by design.
 - Frontend coverage gates are raised to 70% statements, 72% branches, 50% functions, and 70% lines.
 - Backend JaCoCo gates are raised to 78% instruction and 54% branch.
-- Release gate requires Trivy instead of silently skipping HIGH/CRITICAL filesystem scanning.
+- Release gate runs Trivy HIGH/CRITICAL filesystem scanning through a local Trivy binary or the official Trivy Docker image instead of silently skipping vulnerability scanning.
 - PWA runtime caching excludes `/api/**` traffic.
 - External URL opening and downloaded filenames are normalized/sanitized.
 - Production Nginx applies CSP and browser security headers.
 - Backend authorization is default-deny with role and ownership checks on protected surfaces.
 - Private file responses use centralized restrictive cache and content-disposition handling.
 - Payment settlement remains signature-verified and idempotency-oriented.
+- Workstations outside the required Node 22 line can run the reproducible `quality:node22` / `quality:release:node22` wrappers, so local Node 26 does not block evidence collection.
+- `quality:external:precheck` now fails closed when real AI, Stripe test-mode, or SMTP E2E credentials/callbacks are missing, preventing mock/no-op paths from being reported as live-provider validation.
 - `npm audit --audit-level=high` reported zero vulnerabilities for frontend production/dev dependencies and root production dependencies during this review.
 
 ## Residual Risks And Required Governance
@@ -112,12 +114,18 @@ The production build observed during this review generated a shared CSS asset of
 
 Live-class requests use `LocalDateTime` values without an offset or named timezone. Preserving a teacher-selected wall-clock time avoids an unintended UTC conversion, but it does not define behavior for teachers and learners in different timezones. Before multi-region or international production use, introduce an explicit canonical timezone or offset-bearing API contract, migrate persisted values deliberately, and add cross-timezone display/join tests.
 
+### BLOCK-001 External Provider E2E Requires Test Credentials
+
+The repository can structurally validate AI, Stripe test-mode, and SMTP readiness, but the current local environment does not expose `AI_API_KEY`, `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET`, SMTP credentials, or provider callback/forwarding values. Live-provider E2E must remain blocked until `npm run quality:external:precheck` passes and the corresponding smoke flows are executed against sandbox/test services.
+
 ## Validation Evidence
 
 - Baseline before changes: `npm run quality` succeeded, including frontend lint/format/unit/type/build and backend tests, SpotBugs, coverage, and OpenAPI export.
 - Targeted changed-path verification: backend tests for migration configuration, webhook pre-binding limits, and live-learning access rules passed (`22` tests, `0` failures).
 - Frontend verification after the UI invariant change: Prettier check and TypeScript typecheck passed.
-- Full post-change `npm run quality` passed: frontend lint/format/`71` unit tests/typecheck/build, backend tests (`501` tests, repeated for coverage), SpotBugs (`0` findings), JaCoCo verification, and OpenAPI contract export.
+- Full post-change release gate passed under Node 22: frontend lint/format/`102` unit tests/typecheck/build/bundle budget, backend tests (`512` tests), SpotBugs (`0` findings), JaCoCo verification, OpenAPI contract export, Playwright smoke (`6` tests), npm production audits (`0` vulnerabilities), Compose config rendering, Flyway MySQL validation, and Trivy filesystem scan (`0` findings).
 - A concurrent teacher-page update was normalized with the repository Prettier rule; the current frontend snapshot then passed lint/format/`71` unit tests/typecheck/build again.
 - Playwright browser smoke passed on the final formatted frontend snapshot (`4` tests, `0` failures).
 - Production and backend Docker Compose configuration parsed successfully using CI-equivalent non-secret placeholder values; unfilled required production variables fail closed during interpolation.
+- Auth-session regression tests now cover successful refresh hydration, failed `/auth/me` after refresh, failed logout cleanup, token-free preview sessions, and legacy storage cleanup.
+- External provider readiness check intentionally fails without sandbox/test credentials, making the remaining live AI/Stripe/SMTP E2E blocker explicit instead of allowing fake completion.

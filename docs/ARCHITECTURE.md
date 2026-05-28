@@ -47,6 +47,9 @@ Important frontend invariants:
 
 - Protected routes are default-deny and require explicit role metadata.
 - Preview mode must not persist bearer tokens or survive as a real authenticated session.
+- If refresh-cookie rotation succeeds but `/auth/me` cannot hydrate the user,
+  the frontend must clear the in-memory token and return to anonymous state
+  instead of showing an authenticated shell with no trusted user profile.
 - External URLs are normalized before opening, and downloaded filenames are sanitized.
 - `/api/**` responses must not be cached by the service worker.
 
@@ -168,4 +171,4 @@ Available operational surfaces:
 - Structured logs with sensitive data redaction.
 - Release precheck, operations, API-versioning, and testing documentation under `docs/`.
 
-Production releases should record quality-gate output, migration validation, Compose config validation, backup/restore rehearsal, browser smoke evidence, and dependency/container scan results.
+Production releases should record quality-gate output, migration validation, Compose config validation, backup/restore rehearsal, browser smoke evidence, and dependency/filesystem scan results. Record separate image/container scan evidence if container images are promoted outside the repository filesystem scan.

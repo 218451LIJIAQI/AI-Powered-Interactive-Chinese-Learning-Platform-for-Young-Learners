@@ -26,6 +26,12 @@ From the repository root:
 npm run quality
 ```
 
+If the workstation default Node.js is not the required Node 22 major, run:
+
+```bash
+npm run quality:node22
+```
+
 This runs toolchain-version alignment, frontend linting, formatting, unit tests
 with V8 coverage thresholds, type checking, production build, backend tests,
 SpotBugs, JaCoCo coverage verification, and OpenAPI export.
@@ -38,16 +44,23 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-For a release candidate on a machine with Docker, PowerShell, MySQL validation
-support, and Trivy installed, prefer the aggregated release gate:
+For a release candidate on a machine with Docker, PowerShell, and MySQL
+validation support, prefer the aggregated release gate:
 
 ```bash
 npm run quality:release
 ```
 
-This command fails if Trivy is unavailable. That failure is intentional: record
-CI Trivy evidence or install Trivy locally instead of marking the scan as
-skipped.
+Use the Node 22 wrapper on workstations whose default Node is outside the
+project range:
+
+```bash
+npm run quality:release:node22
+```
+
+The Trivy scan uses a local `trivy` binary when available and otherwise runs
+the official Trivy Docker image. If neither path is available, record CI Trivy
+evidence instead of marking the scan as skipped.
 
 Required evidence:
 
@@ -59,6 +72,30 @@ Required evidence:
 - frontend coverage threshold result: 70% statements, 72% branches, 50% functions, 70% lines
 - backend JaCoCo threshold result: 78% instruction, 54% branch
 - bundle budget result for entry JS, shared CSS, and largest route chunk
+
+## External Provider E2E Gate
+
+Real-provider AI, Stripe, and SMTP checks are not satisfied by mock, no-op, or
+preview paths. Prepare `.env.external-e2e` or exported process variables with
+test/sandbox values, then run:
+
+```bash
+npm run quality:external:precheck
+```
+
+Required values:
+
+- AI: `AI_ENABLE_REAL_PROVIDER=true`, `AI_PROVIDER`, `AI_API_BASE_URL`,
+  `AI_API_KEY`, `AI_MODEL_NAME`, and `EXTERNAL_E2E_AI_TEST_PROMPT`
+- Stripe test mode: `PAYMENT_PROVIDER=stripe`, a `sk_test_` or `rk_test_`
+  `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET`, checkout callback URLs, and
+  `EXTERNAL_E2E_STRIPE_WEBHOOK_FORWARDING`
+- SMTP: `SMTP_ENABLED=true`, host/port/from values, auth credentials when
+  `SMTP_AUTH_ENABLED` is not `false`, `PASSWORD_RESET_BASE_URL`, and
+  `EXTERNAL_E2E_SMTP_TEST_RECIPIENT`
+
+Do not promote if this precheck fails, unless the release explicitly excludes
+that provider and the exclusion is approved in the go/no-go record.
 
 ## Database Migration Gate
 
@@ -151,6 +188,7 @@ Record the result in the release notes:
 | Compose config render       | Pending | command output            |
 | npm production audits       | Pending | root + frontend output    |
 | Trivy/CI HIGH-CRITICAL scan | Pending | scan summary              |
+| External provider E2E       | Pending | precheck + smoke notes    |
 | Backup/restore rehearsal    | Pending | backup file + restore log |
 | DAST scan                   | Pending | scan summary              |
 | Manual high-risk smoke      | Pending | tester notes              |

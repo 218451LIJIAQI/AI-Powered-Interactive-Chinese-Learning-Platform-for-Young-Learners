@@ -17,6 +17,7 @@ The test strategy focuses on five submission-critical outcomes:
 | Layer                   | Scope                                                                | Command or location                                 |
 | ----------------------- | -------------------------------------------------------------------- | --------------------------------------------------- |
 | Toolchain alignment     | Java, Maven, Node versions match Maven wrapper, Docker, and CI       | `npm run quality:toolchain`                         |
+| Node 22 wrapper         | Reproducible quality gate on machines with another Node major        | `npm run quality:node22`                            |
 | Frontend lint           | ESLint rules for TypeScript/Vue quality                              | `npm --prefix frontend run lint`                    |
 | Frontend format         | Prettier consistency for source/config/docs                          | `npm --prefix frontend run format:check`            |
 | Frontend unit           | Pinia stores, API helpers, route helpers, formatting helpers         | `npm --prefix frontend run test:unit`               |
@@ -37,6 +38,12 @@ From the repository root, run:
 
 ```powershell
 npm run quality
+```
+
+If the local default `node` is not Node 22, use:
+
+```powershell
+npm run quality:node22
 ```
 
 This runs:
@@ -65,11 +72,28 @@ For a release-candidate check, run:
 npm run quality:release
 ```
 
-The release gate additionally requires Trivy, runs Playwright smoke, renders
-production and backend Compose configuration, validates Flyway/Hibernate against
-a disposable MySQL 8.4 database, and performs root/frontend production
-dependency audits. Missing Trivy is a real local blocker; use CI or install
-Trivy rather than recording a skipped scan as a pass.
+Use `npm run quality:release:node22` on a workstation whose default Node is
+not Node 22.
+
+The release gate additionally runs Playwright smoke, renders production and
+backend Compose configuration, validates Flyway/Hibernate against a disposable
+MySQL 8.4 database, performs root/frontend production dependency audits, and
+runs a Trivy HIGH/CRITICAL filesystem scan. It uses a local Trivy binary when
+available and otherwise falls back to the official Trivy Docker image; if both
+Trivy and Docker are unavailable, record CI scan evidence rather than marking a
+skipped scan as a pass.
+
+Real AI, Stripe, and SMTP end-to-end tests require external test credentials
+and callback infrastructure. Before recording live-provider E2E evidence, run:
+
+```powershell
+npm run quality:external:precheck
+```
+
+This command validates that AI, Stripe test-mode, and SMTP variables are present
+and structurally safe without printing secrets. A failure here means the live
+provider smoke is blocked by missing credentials or callback setup; do not
+replace that evidence with mock/no-op flows.
 
 ## Backend Validation Focus
 
