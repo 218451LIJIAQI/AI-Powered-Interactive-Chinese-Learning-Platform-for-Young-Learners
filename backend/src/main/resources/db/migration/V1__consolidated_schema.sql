@@ -2847,15 +2847,6 @@ prepare add_teacher_earnings_teacher_created_at_index_stmt from @add_teacher_ear
 execute add_teacher_earnings_teacher_created_at_index_stmt;
 deallocate prepare add_teacher_earnings_teacher_created_at_index_stmt;
 
-set @add_notifications_user_status_created_at_index = if(
-    (select count(*) from information_schema.statistics where table_schema = database() and table_name = 'notifications' and index_name = 'idx_notifications_user_status_created_at') = 0,
-    'create index idx_notifications_user_status_created_at on notifications (user_id, notification_status, created_at)',
-    'select 1'
-);
-prepare add_notifications_user_status_created_at_index_stmt from @add_notifications_user_status_created_at_index;
-execute add_notifications_user_status_created_at_index_stmt;
-deallocate prepare add_notifications_user_status_created_at_index_stmt;
-
 set @add_ai_response_reports_status_created_at_index = if(
     (select count(*) from information_schema.statistics where table_schema = database() and table_name = 'ai_response_reports' and index_name = 'idx_ai_response_reports_status_created_at') = 0,
     'create index idx_ai_response_reports_status_created_at on ai_response_reports (status, created_at)',
@@ -3901,6 +3892,9 @@ create index idx_teacher_verification_reviews_latest
 
 create index idx_audit_logs_actor_email_created
     on audit_logs (actor_email, created_at);
+
+create index idx_notifications_user_created_id
+    on notifications (user_id, created_at, id);
 
 create index idx_notifications_user_status_created_id
     on notifications (user_id, notification_status, created_at, id);

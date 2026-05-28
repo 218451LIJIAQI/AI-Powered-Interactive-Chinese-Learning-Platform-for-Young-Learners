@@ -34,9 +34,10 @@ import com.example.aichinese.service.PayoutService;
 /**
  * Unit coverage for {@code PayoutService} — pins the
  * lock-then-check-balance ordering so two concurrent payout requests
- * cannot overdraw the teacher's AVAILABLE earnings, and the one-way
- * state machine (PENDING → APPROVED → PAID / REJECTED) with earnings
- * status moving in lock-step.
+ * cannot overdraw the teacher's available balance, and the one-way
+ * payout state machine (PENDING -> APPROVED -> PAID / REJECTED) whose
+ * committed statuses reserve aggregate balance without rewriting
+ * immutable per-order-item earning rows.
  */
 class PayoutServiceTests {
 

@@ -46,7 +46,7 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'error',
       'vue/multi-word-component-names': 'off',
       'vue/attributes-order': 'off',
-      'vue/no-v-html': 'off',
+      'vue/no-v-html': 'error',
     },
   },
   {

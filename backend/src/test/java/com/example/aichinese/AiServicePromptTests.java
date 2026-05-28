@@ -43,7 +43,9 @@ import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.ai.AiAvailabilityService;
 import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderPrompt;
+import com.example.aichinese.service.ai.AiProviderResult;
 import com.example.aichinese.service.ai.AiProviderRouter;
+import com.example.aichinese.service.ai.OpenAiCompatibleAiProviderClient;
 import com.example.aichinese.service.ai.AiUsageLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -180,6 +182,68 @@ class AiServicePromptTests {
                 any(String.class),
                 eq(null),
                 eq("Provider request failed or timed out."),
+                eq(null),
+                eq(null));
+    }
+
+    @Test
+    void invalidJsonProviderResponseDoesNotBecomeFakeVocabularyFeedback() {
+        User student = studentUser();
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByIdIn(List.of(42L))).thenReturn(List.of(student));
+
+        AiAvailabilityService availabilityService = mock(AiAvailabilityService.class);
+        when(availabilityService.getAvailability()).thenReturn(
+                AiAvailabilityResponse.textGenerationAvailable("deepseek", "deepseek-chat", "AI provider is configured."));
+
+        OpenAiCompatibleAiProviderClient providerClient = mock(OpenAiCompatibleAiProviderClient.class);
+        when(providerClient.generateText(any(AiProviderPrompt.class))).thenReturn(
+                AiProviderResult.success("deepseek", "deepseek-chat", "not-json", 17));
+        AiProviderRouter providerRouter = mock(AiProviderRouter.class);
+        when(providerRouter.resolveClient()).thenReturn(providerClient);
+
+        AiPromptBuilder promptBuilder = mock(AiPromptBuilder.class);
+        when(promptBuilder.buildPrompt(
+                eq(AiFeatureKey.VOCABULARY_HELPER),
+                eq("en"),
+                any(String.class),
+                eq(true),
+                eq(List.of())))
+                .thenReturn(new AiProviderPrompt(
+                        AiFeatureKey.VOCABULARY_HELPER.name(),
+                        "System instruction",
+                        "Explain apple",
+                        "en",
+                        128,
+                        true,
+                        List.of()));
+
+        AiUsageLimiter usageLimiter = mock(AiUsageLimiter.class);
+        doNothing().when(usageLimiter).checkProviderCallAllowed(42L);
+        AiLogService aiLogService = mock(AiLogService.class);
+
+        AiService service = newService(userRepository, promptBuilder, providerRouter, availabilityService, aiLogService, usageLimiter);
+
+        AiVocabularyHelperResponse response = service.vocabularyHelper(
+                new SecurityUserDetails(student),
+                new AiVocabularyHelperRequest("apple", "en", "zh", "Beginner", "en"));
+
+        assertThat(response.status()).isEqualTo(AiRequestStatus.FAILED.name());
+        assertThat(response.simpleExplanation()).isEqualTo(AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE);
+        assertThat(response.chineseWord()).isNull();
+        assertThat(response.miniPracticeQuestion()).contains("Try again later");
+        verify(aiLogService).createUsageLog(
+                eq(student),
+                eq(RoleName.STUDENT.name()),
+                eq(AiFeatureKey.VOCABULARY_HELPER),
+                eq("en"),
+                eq(AiRequestStatus.FAILED),
+                eq("deepseek"),
+                eq("deepseek-chat"),
+                eq(17),
+                any(String.class),
+                eq(null),
+                eq("Provider response was not valid JSON."),
                 eq(null),
                 eq(null));
     }

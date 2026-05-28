@@ -69,8 +69,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *   <li>Webhook idempotency under retry storms.</li>
  *   <li>Stripe webhook HMAC verification with constant-time compare.</li>
  *   <li>Refund approval revokes the underlying entitlement.</li>
- *   <li>Teacher earnings move PENDING → AVAILABLE → RESERVED → PAID
- *       in lock-step with the order / payout state machine.</li>
+ *   <li>Teacher payout requests reserve aggregate withdrawable balance
+ *       through committed payout statuses without rewriting immutable
+ *       per-order-item earning rows.</li>
  * </ul>
  */
 @SpringBootTest(properties = {

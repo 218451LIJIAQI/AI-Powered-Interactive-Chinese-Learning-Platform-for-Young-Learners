@@ -369,7 +369,9 @@ function Invoke-FreshSpringBootValidation([string]$HostPort) {
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(*) from information_schema.columns where table_schema = database() and table_name = 'teacher_verification_documents' and column_name = 'current_document_key' and extra like '%STORED GENERATED%';") "fresh current teacher verification generated column"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'ai_chat_messages' and index_name = 'idx_ai_chat_messages_session_role_id';") "fresh AI chat role lookup index"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'teacher_verification_reviews' and index_name = 'idx_teacher_verification_reviews_latest';") "fresh teacher verification review latest index"
+    Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'notifications' and index_name = 'idx_notifications_user_created_id';") "fresh notification inbox hot-path index"
     Assert-Equal "1" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'notifications' and index_name = 'idx_notifications_user_status_created_id';") "fresh notification unread hot-path index"
+    Assert-Equal "0" (Get-MySqlScalar $FreshDb "select count(distinct index_name) from information_schema.statistics where table_schema = database() and table_name = 'notifications' and index_name = 'idx_notifications_user_status_created_at';") "fresh notification redundant unread index removed"
 }
 
 function Invoke-RepairScript([string]$HostPort, [switch]$Execute) {

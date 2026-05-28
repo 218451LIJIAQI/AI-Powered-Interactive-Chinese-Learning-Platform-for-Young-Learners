@@ -45,9 +45,9 @@ import lombok.Setter;
  * feedback, admin acting on a moderation case); nullable for system
  * notifications.</p>
  *
- * <p>The composite index
- * {@code (user_id, notification_status, created_at, id)} backs the
- * "unread bell" query that paginates by recency.</p>
+ * <p>The composite indexes {@code (user_id, created_at, id)} and
+ * {@code (user_id, notification_status, created_at, id)} back the
+ * recency-ordered inbox and unread-bell queries respectively.</p>
  *
  * <h3>Field mutability contract</h3>
  *
@@ -75,6 +75,7 @@ import lombok.Setter;
         @Index(name = "idx_notifications_user_id", columnList = "user_id"),
         @Index(name = "idx_notifications_status", columnList = "notification_status"),
         @Index(name = "idx_notifications_type", columnList = "notification_type"),
+        @Index(name = "idx_notifications_user_created_id", columnList = "user_id,created_at,id"),
         @Index(name = "idx_notifications_user_status_created_id", columnList = "user_id,notification_status,created_at,id")
 })
 public class Notification extends BaseEntity {

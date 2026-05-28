@@ -11,6 +11,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,9 +37,11 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
     private static final String AI_WRITING_PATH = "/api/v1/ai/writing-feedback";
 
     private final UploadProperties uploadProperties;
+    private final ObjectMapper objectMapper;
 
-    public MultipartRequestSizeFilter(UploadProperties uploadProperties) {
+    public MultipartRequestSizeFilter(UploadProperties uploadProperties, ObjectMapper objectMapper) {
         this.uploadProperties = Objects.requireNonNull(uploadProperties, "uploadProperties");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
     }
 
     @Override
@@ -47,9 +52,11 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
         long maxRequestBytes = maxRequestBytes(request);
         long contentLength = request.getContentLengthLong();
         if (maxRequestBytes > 0 && contentLength > maxRequestBytes) {
-            response.sendError(
-                    HttpStatus.PAYLOAD_TOO_LARGE.value(),
-                    "Uploaded file exceeds the maximum allowed file size.");
+            ApiErrorResponseWriter.write(
+                    objectMapper,
+                    response,
+                    HttpStatus.PAYLOAD_TOO_LARGE,
+                    FriendlyErrorMessageResolver.uploadTooLargeMessage());
             return;
         }
         filterChain.doFilter(request, response);

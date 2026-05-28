@@ -7,7 +7,9 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -263,7 +265,13 @@ public class AiService {
             return unavailableVocabularyResponse(execution);
         }
 
-        return parseVocabularyResponse(execution.responseText(), execution.status().name());
+        ParsedAiJson parsed = parseJsonMap(execution.responseText());
+        if (!parsed.valid()) {
+            return unavailableVocabularyResponse(unparseableProviderResponse(
+                    execution,
+                    "AI vocabulary helper response could not be parsed."));
+        }
+        return parseVocabularyResponse(parsed.values(), execution.status().name());
     }
 
     public AiSentencePracticeResponse sentencePractice(SecurityUserDetails currentUser, AiSentencePracticeRequest request) {
@@ -285,7 +293,13 @@ public class AiService {
             return unavailableSentenceResponse(sanitizedSentence, execution);
         }
 
-        return parseSentenceResponse(sanitizedSentence, execution.responseText(), execution.status().name());
+        ParsedAiJson parsed = parseJsonMap(execution.responseText());
+        if (!parsed.valid()) {
+            return unavailableSentenceResponse(
+                    sanitizedSentence,
+                    unparseableProviderResponse(execution, "AI sentence practice response could not be parsed."));
+        }
+        return parseSentenceResponse(sanitizedSentence, parsed.values(), execution.status().name());
     }
 
     public AiQuizGeneratorResponse quizGenerator(SecurityUserDetails currentUser, AiQuizGeneratorRequest request) {
@@ -315,7 +329,18 @@ public class AiService {
                     execution.status().name());
         }
 
-        return parseQuizResponse(request, usageMode, execution.responseText(), execution.status().name());
+        ParsedAiJson parsed = parseJsonMap(execution.responseText());
+        if (!parsed.valid()) {
+            return new AiQuizGeneratorResponse(
+                    "AI quiz unavailable",
+                    sanitizedTopic,
+                    sanitizePromptFragment(request.level()),
+                    sanitizePromptFragment(request.category()),
+                    usageMode,
+                    fallbackQuizQuestions(sanitizedTopic),
+                    AiRequestStatus.FAILED.name());
+        }
+        return parseQuizResponse(request, usageMode, parsed.values(), execution.status().name());
     }
 
     public AiStoryGeneratorResponse storyGenerator(SecurityUserDetails currentUser, AiStoryGeneratorRequest request) {
@@ -338,7 +363,11 @@ public class AiService {
             return fallbackStoryResponse(request, usageMode, execution.status().name());
         }
 
-        return parseStoryResponse(request, usageMode, execution.responseText(), execution.status().name());
+        ParsedAiJson parsed = parseJsonMap(execution.responseText());
+        if (!parsed.valid()) {
+            return fallbackStoryResponse(request, usageMode, AiRequestStatus.FAILED.name());
+        }
+        return parseStoryResponse(request, usageMode, parsed.values(), execution.status().name());
     }
 
     public AiLearningRecommendationResponse learningRecommendation(
@@ -363,7 +392,11 @@ public class AiService {
             return fallbackLearningRecommendation(context.level(), execution.status().name());
         }
 
-        return parseLearningRecommendation(execution.responseText(), execution.status().name());
+        ParsedAiJson parsed = parseJsonMap(execution.responseText());
+        if (!parsed.valid()) {
+            return fallbackLearningRecommendation(context.level(), AiRequestStatus.FAILED.name());
+        }
+        return parseLearningRecommendation(parsed.values(), execution.status().name());
     }
 
     public AiPronunciationFeedbackResponse pronunciationFeedback(
@@ -594,6 +627,28 @@ public class AiService {
                     result.modelName(),
                     AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
                     result.errorSummary());
+        }
+
+        if (expectJson && !parseJsonMap(result.text()).valid()) {
+            aiLogService.createUsageLog(
+                    user,
+                    primaryRole(user),
+                    featureKey,
+                    language,
+                    AiRequestStatus.FAILED,
+                    result.providerName(),
+                    result.modelName(),
+                    result.tokenCount(),
+                    summarize(userPrompt, 500),
+                    null,
+                    "Provider response was not valid JSON.",
+                    relatedEntityType,
+                    relatedEntityId);
+            return AiExecutionResult.failed(
+                    result.providerName(),
+                    result.modelName(),
+                    AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                    "Provider response was not valid JSON.");
         }
 
         aiLogService.createUsageLog(
@@ -879,7 +934,7 @@ public class AiService {
             String status) {
         return new AiStoryGeneratorResponse(
                 requireSanitizedShort(request.topic(), "Topic is required."),
-                "AI tutor is currently unavailable. Please try again later.",
+                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
                 null,
                 null,
                 null,
@@ -892,17 +947,24 @@ public class AiService {
 
     private AiLearningRecommendationResponse fallbackLearningRecommendation(String level, String status) {
         return new AiLearningRecommendationResponse(
-                "Continue with one short " + level + " lesson and review one vocabulary activity.",
-                "Beginner vocabulary practice",
-                "Not enough AI insight is available right now.",
-                "Review your recent wrong answers and repeat one quiz.",
+                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                null,
+                "AI insight is not available right now, so no personalized recommendation was generated.",
+                "Please try again later when AI helper is available.",
                 "Keep going. Small steps help you improve every day!",
-                List.of("flashcards", "short quiz", "reading"),
+                List.of(),
                 status);
     }
 
-    private AiVocabularyHelperResponse parseVocabularyResponse(String responseText, String status) {
-        Map<String, Object> map = parseJsonMap(responseText);
+    private AiExecutionResult unparseableProviderResponse(AiExecutionResult execution, String errorSummary) {
+        return AiExecutionResult.failed(
+                execution.providerName(),
+                execution.modelName(),
+                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                errorSummary);
+    }
+
+    private AiVocabularyHelperResponse parseVocabularyResponse(Map<String, Object> map, String status) {
         return new AiVocabularyHelperResponse(
                 text(map, "chineseWord"),
                 text(map, "pinyin"),
@@ -918,8 +980,7 @@ public class AiService {
                 status);
     }
 
-    private AiSentencePracticeResponse parseSentenceResponse(String originalSentence, String responseText, String status) {
-        Map<String, Object> map = parseJsonMap(responseText);
+    private AiSentencePracticeResponse parseSentenceResponse(String originalSentence, Map<String, Object> map, String status) {
         return new AiSentencePracticeResponse(
                 originalSentence,
                 TextUtils.defaultIfBlank(text(map, "correctedSentence"), originalSentence),
@@ -936,9 +997,8 @@ public class AiService {
     private AiQuizGeneratorResponse parseQuizResponse(
             AiQuizGeneratorRequest request,
             String usageMode,
-            String responseText,
+            Map<String, Object> map,
             String status) {
-        Map<String, Object> map = parseJsonMap(responseText);
         List<AiGeneratedQuizQuestionResponse> questions = new ArrayList<>();
         Object questionsObject = map.get("questions");
         if (questionsObject instanceof List<?> list) {
@@ -975,10 +1035,8 @@ public class AiService {
     private AiStoryGeneratorResponse parseStoryResponse(
             AiStoryGeneratorRequest request,
             String usageMode,
-            String responseText,
+            Map<String, Object> map,
             String status) {
-        Map<String, Object> map = parseJsonMap(responseText);
-
         List<AiStoryVocabularyItemResponse> vocabularyList = new ArrayList<>();
         Object vocabObject = map.get("vocabularyList");
         if (vocabObject instanceof List<?> list) {
@@ -1027,9 +1085,8 @@ public class AiService {
     }
 
     private AiLearningRecommendationResponse parseLearningRecommendation(
-            String responseText,
+            Map<String, Object> map,
             String status) {
-        Map<String, Object> map = parseJsonMap(responseText);
         List<String> practiceTypes = boundedStringList(map.get("suggestedPracticeTypes"), MAX_RECOMMENDATION_PRACTICE_TYPES);
         return new AiLearningRecommendationResponse(
                 TextUtils.defaultIfBlank(text(map, "recommendedNextStep"), "Continue with a short lesson and one revision activity."),
@@ -1043,13 +1100,14 @@ public class AiService {
                 status);
     }
 
-    private Map<String, Object> parseJsonMap(String responseText) {
+    private ParsedAiJson parseJsonMap(String responseText) {
         try {
-            return objectMapper.readValue(responseText, new TypeReference<Map<String, Object>>() {
+            Map<String, Object> values = objectMapper.readValue(responseText, new TypeReference<Map<String, Object>>() {
             });
+            return values.isEmpty() ? ParsedAiJson.invalid() : ParsedAiJson.valid(values);
         } catch (JsonProcessingException exception) {
             log.warn("AI JSON parsing fallback triggered for invalid provider response.");
-            return Map.of();
+            return ParsedAiJson.invalid();
         }
     }
 
@@ -1159,6 +1217,17 @@ public class AiService {
             String language,
             String summary,
             String level) {
+    }
+
+    private record ParsedAiJson(boolean valid, Map<String, Object> values) {
+
+        private static ParsedAiJson valid(Map<String, Object> values) {
+            return new ParsedAiJson(true, Collections.unmodifiableMap(new LinkedHashMap<>(values)));
+        }
+
+        private static ParsedAiJson invalid() {
+            return new ParsedAiJson(false, Map.of());
+        }
     }
 
     private void recordProviderDuration(Timer.Sample sample, AiFeatureKey featureKey, String outcome) {

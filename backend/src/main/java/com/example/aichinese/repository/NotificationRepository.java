@@ -26,8 +26,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     /**
      * Returns every notification for a user ordered newest-first.
-     * Backed by the implicit composite index on
-     * {@code (user_id, created_at)} \u2014 the bell icon's drop-down
+     * Backed by the explicit composite index on
+     * {@code (user_id, created_at, id)} \u2014 the bell icon's drop-down
      * uses this for the unbounded "all notifications" view.
      */
     @EntityGraph(attributePaths = { "user", "createdByUser" })

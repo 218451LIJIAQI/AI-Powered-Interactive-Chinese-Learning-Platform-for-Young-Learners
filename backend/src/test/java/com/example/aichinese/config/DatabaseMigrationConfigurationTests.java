@@ -245,7 +245,9 @@ class DatabaseMigrationConfigurationTests {
         assertThat(migration).contains("create index idx_ai_chat_messages_session_role_id");
         assertThat(migration).contains("create index idx_ai_response_reports_student_created");
         assertThat(migration).contains("create index idx_teacher_verification_reviews_latest");
+        assertThat(migration).contains("create index idx_notifications_user_created_id");
         assertThat(migration).contains("create index idx_notifications_user_status_created_id");
+        assertThat(migration).doesNotContain("idx_notifications_user_status_created_at");
         assertThat(migration).contains("create table refresh_tokens");
         assertThat(migration).contains("add constraint uk_refresh_tokens_token_hash");
         assertThat(migration).contains("create table ai_usage_quota_counters");
@@ -262,6 +264,8 @@ class DatabaseMigrationConfigurationTests {
         assertThat(validationScript).contains("fresh AI chat sender role check");
         assertThat(validationScript).contains("fresh lesson access price check");
         assertThat(validationScript).contains("fresh current teacher verification document uniqueness");
+        assertThat(validationScript).contains("fresh notification inbox hot-path index");
+        assertThat(validationScript).contains("fresh notification redundant unread index removed");
     }
 
     @Test

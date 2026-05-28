@@ -5,6 +5,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -13,7 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.service.StripeWebhookService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -33,6 +36,12 @@ import jakarta.servlet.http.HttpServletResponse;
 public class StripeWebhookPayloadSizeFilter extends OncePerRequestFilter {
 
     private static final String STRIPE_WEBHOOK_PATH = "/api/v1/payments/webhooks/stripe";
+
+    private final ObjectMapper objectMapper;
+
+    public StripeWebhookPayloadSizeFilter(ObjectMapper objectMapper) {
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+    }
 
     @Override
     protected void doFilterInternal(
@@ -77,10 +86,12 @@ public class StripeWebhookPayloadSizeFilter extends OncePerRequestFilter {
         return requestUri;
     }
 
-    private static void rejectOversizedPayload(HttpServletResponse response) throws IOException {
-        response.sendError(
-                HttpStatus.PAYLOAD_TOO_LARGE.value(),
-                "Stripe webhook payload exceeds the maximum allowed size.");
+    private void rejectOversizedPayload(HttpServletResponse response) throws IOException {
+        ApiErrorResponseWriter.write(
+                objectMapper,
+                response,
+                HttpStatus.PAYLOAD_TOO_LARGE,
+                FriendlyErrorMessageResolver.uploadTooLargeMessage());
     }
 
     private static final class CachedPayloadRequest extends HttpServletRequestWrapper {

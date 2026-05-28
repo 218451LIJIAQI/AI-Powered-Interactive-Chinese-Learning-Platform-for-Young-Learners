@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -385,6 +386,28 @@ class AiIntegrationTests {
                                 "extra")))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void learningRecommendationDoesNotDisguiseUnavailableProviderAsPersonalizedAdvice() throws Exception {
+        String studentToken = registerStudentAndLogin(uniqueEmail("ai-rec-unavailable"));
+
+        mockMvc.perform(post("/api/v1/ai/learning-recommendation")
+                .with(csrf())
+                .header("Authorization", "Bearer " + studentToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "currentLevel", "Beginner",
+                        "weakAreas", List.of("tones"),
+                        "languagePreference", "en"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.data.recommendedNextStep")
+                        .value("AI tutor is currently unavailable. Please try again later."))
+                .andExpect(jsonPath("$.data.weakAreaSummary")
+                        .value("AI insight is not available right now, so no personalized recommendation was generated."))
+                .andExpect(jsonPath("$.data.recommendedLessonOrActivity").value(nullValue()))
+                .andExpect(jsonPath("$.data.suggestedPracticeTypes").isEmpty());
     }
 
     @Test

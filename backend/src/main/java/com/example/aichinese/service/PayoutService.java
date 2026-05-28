@@ -49,11 +49,12 @@ import com.example.aichinese.util.PaginationUtils;
  *
  * <h2>Payout requests</h2>
  * <p>Teachers file a {@link PayoutRequest} for some / all of their
- * available balance. The request goes {@code PENDING → APPROVED →
- * PAID} (or {@code REJECTED}) via admin decisions made through
- * {@link PayoutDecisionRequest}. Approval freezes the earmarked
- * earnings (status {@code RESERVED}); payment marks them
- * {@code PAID}; rejection rolls them back to {@code AVAILABLE}.</p>
+ * available balance. The request goes {@code PENDING -> APPROVED -> PAID}
+ * (or {@code REJECTED}) via admin decisions made through
+ * {@link PayoutDecisionRequest}. The payout request amount itself is
+ * the committed balance reservation: {@link PayoutStatus#COMMITTED}
+ * requests are deducted from the teacher's withdrawable balance without
+ * rewriting the immutable per-order-item earning rows.</p>
  *
  * <h2>Reconciliation</h2>
  * <p>All money math goes through {@link CommerceMoneyService} so
