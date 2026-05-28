@@ -337,7 +337,7 @@ public class AiService {
                     sanitizePromptFragment(request.level()),
                     sanitizePromptFragment(request.category()),
                     usageMode,
-                    fallbackQuizQuestions(sanitizedTopic),
+                    List.of(),
                     AiRequestStatus.FAILED.name());
         }
         return parseQuizResponse(request, usageMode, parsed.values(), execution.status().name());
@@ -916,18 +916,6 @@ public class AiService {
                 execution.status().name());
     }
 
-    private List<AiGeneratedQuizQuestionResponse> fallbackQuizQuestions(String topic) {
-        return List.of(
-                new AiGeneratedQuizQuestionResponse(
-                        "AI response could not be parsed. Please try this topic again later.",
-                        "MULTIPLE_CHOICE",
-                        List.of(),
-                        null,
-                        "No AI-generated quiz question is available for this request.",
-                        null,
-                        null));
-    }
-
     private AiStoryGeneratorResponse fallbackStoryResponse(
             AiStoryGeneratorRequest request,
             String usageMode,
@@ -1019,7 +1007,14 @@ public class AiService {
             }
         }
         if (questions.isEmpty()) {
-            questions = fallbackQuizQuestions(request.topic());
+            return new AiQuizGeneratorResponse(
+                    "AI quiz unavailable",
+                    requireSanitizedShort(request.topic(), "Topic is required."),
+                    sanitizePromptFragment(request.level()),
+                    sanitizePromptFragment(request.category()),
+                    usageMode,
+                    List.of(),
+                    AiRequestStatus.FAILED.name());
         }
 
         return new AiQuizGeneratorResponse(

@@ -65,6 +65,7 @@ function readPersistedPreviewRole() {
   // legacy localStorage value so preview access does not silently survive a
   // browser restart after the session-only hardening pass.
   safeRemoveItem(storageKeys.previewRole)
+  safeRemoveItem(storageKeys.previewRole, getSessionStorage())
   return null
 }
 

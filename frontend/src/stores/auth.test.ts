@@ -45,7 +45,19 @@ vi.mock('@/config/env', () => ({
 
 vi.mock('@/demo/data', () => ({
   demoUsers: {
+    STUDENT: {
+      id: 1,
+      email: 'preview.student@example.com',
+      fullName: 'Preview Student',
+      roles: ['STUDENT'] as const,
+    },
     TEACHER: mocks.teacherPreviewUser,
+    ADMIN: {
+      id: 3,
+      email: 'preview.admin@example.com',
+      fullName: 'Preview Admin',
+      roles: ['ADMIN'] as const,
+    },
   },
 }))
 
@@ -131,6 +143,30 @@ describe('auth store token storage', () => {
     expect(auth.token).toBeNull()
     expect(auth.previewRole).toBe('TEACHER')
     expect(auth.currentUser).toEqual(teacherPreviewUser)
+  })
+
+  it('refuses preview role selection when preview mode is not explicitly enabled', () => {
+    const auth = useAuthStore()
+
+    auth.setPreviewRole('TEACHER')
+
+    expect(auth.previewRole).toBeNull()
+    expect(auth.currentUser).toBeNull()
+    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
+    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
+  })
+
+  it('removes invalid persisted preview roles from every browser storage area', () => {
+    mocks.appEnv.useDemoData = true
+    mocks.appEnv.enablePreviewMode = true
+    window.localStorage.setItem('mandarin-spark.preview-role', 'ADMIN')
+    window.sessionStorage.setItem('mandarin-spark.preview-role', 'OWNER')
+
+    const auth = useAuthStore()
+
+    expect(auth.previewRole).toBeNull()
+    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
+    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
   })
 
   it('keeps preview role in session storage only and never alongside a real token', async () => {

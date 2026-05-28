@@ -71,9 +71,8 @@ const openApiContractJmxPort = await findAvailablePort(
 );
 
 const steps = [
-  ["Backend tests", ["test"]],
-  ["Backend static analysis", ["spotbugs:check"]],
   ["Backend coverage gate", ["verify"]],
+  ["Backend static analysis", ["spotbugs:check"]],
   [
     "Backend OpenAPI contract export",
     [

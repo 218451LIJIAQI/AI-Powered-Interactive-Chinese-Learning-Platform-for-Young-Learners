@@ -61,6 +61,9 @@ jobs:
       - name: Frontend production build
         run: npm run build
 
+      - name: Frontend bundle budget
+        run: npm run budget:check
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
@@ -85,20 +88,14 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Backend tests
-        run: bash ./mvnw -B test
+      - name: Backend tests and coverage gate
+        run: bash ./mvnw -B verify
 
       - name: Backend static analysis
         run: bash ./mvnw -B spotbugs:check
 
-      - name: Backend coverage gate
-        run: bash ./mvnw -B verify
-
       - name: Export OpenAPI contract
         run: bash ./mvnw -B -DskipTests -Djacoco.skip=true -DskipOpenApiContract=false verify
-
-      - name: Backend package
-        run: bash ./mvnw -B -DskipTests package
 
   dependency-and-image-scan:
     name: Dependency And Container Scan

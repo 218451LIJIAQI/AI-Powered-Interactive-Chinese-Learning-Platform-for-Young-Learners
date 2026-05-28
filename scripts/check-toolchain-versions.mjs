@@ -27,13 +27,37 @@ function assertEqual(label, actual, expected) {
   }
 }
 
+function parseJson(label, text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Could not parse ${label}.`, { cause: error });
+  }
+}
+
+function assertNodeMajor(label, version, expectedMajor) {
+  const normalized = String(version).trim().replace(/^v/, "");
+  const major = normalized.split(".", 1)[0];
+  assertEqual(label, major, expectedMajor);
+}
+
 const backendPom = readRelative("backend/pom.xml");
 const backendDockerfile = readRelative("backend/Dockerfile");
+const rootPackageJson = parseJson(
+  "root package.json",
+  readRelative("package.json"),
+);
+const frontendPackageJson = parseJson(
+  "frontend package.json",
+  readRelative("frontend/package.json"),
+);
 const mavenWrapperProperties = readRelative(
   "backend/.mvn/wrapper/maven-wrapper.properties",
 );
 const frontendDockerfile = readRelative("frontend/Dockerfile");
 const workflow = readRelative(".github/workflows/repository-quality-gate.yml");
+const nvmrc = readRelative(".nvmrc").trim();
+const nodeVersionFile = readRelative(".node-version").trim();
 
 const javaVersion = requireMatch(
   "backend pom java.version",
@@ -103,7 +127,24 @@ assertEqual(
   workflowNodeVersion,
   frontendNodeVersion,
 );
+assertEqual(
+  "root package engines.node",
+  rootPackageJson.engines?.node,
+  ">=22 <23",
+);
+assertEqual(
+  "frontend package engines.node",
+  frontendPackageJson.engines?.node,
+  ">=22 <23",
+);
+assertEqual(".nvmrc Node version", nvmrc, frontendNodeVersion);
+assertEqual(".node-version Node version", nodeVersionFile, frontendNodeVersion);
+assertNodeMajor(
+  "current Node.js runtime major",
+  process.versions.node,
+  frontendNodeVersion,
+);
 
 console.log(
-  `Toolchain versions aligned: Java ${javaVersion}, Maven ${mavenVersion}, Node ${frontendNodeVersion}.`,
+  `Toolchain versions aligned: Java ${javaVersion}, Maven ${mavenVersion}, Node ${frontendNodeVersion} (current ${process.versions.node}).`,
 );

@@ -23,6 +23,7 @@ The test strategy focuses on five submission-critical outcomes:
 | Frontend coverage       | V8 coverage gate for API/config/plugins/stores/utils                 | `npm --prefix frontend run test:unit:coverage`      |
 | Frontend typecheck      | Vue + TypeScript compile-time contract check                         | `npm --prefix frontend run typecheck`               |
 | Frontend build          | Production Vite build and PWA generation                             | `npm --prefix frontend run build`                   |
+| Frontend bundle budget  | Gzip-size guard for entry JS, shared CSS, and largest route chunk    | `npm --prefix frontend run budget:check`            |
 | Frontend E2E            | Playwright smoke flows for public, auth, preview, and learner routes | `npm --prefix frontend run test:e2e`                |
 | Backend tests           | Unit and integration tests for services/controllers/config/security  | `npm run quality:backend` or backend Maven commands |
 | Backend static analysis | SpotBugs high-confidence static checks                               | backend `spotbugs:check`                            |
@@ -43,13 +44,14 @@ This runs:
 1. Toolchain-version alignment.
 2. Frontend lint.
 3. Frontend format check.
-4. Frontend unit tests with V8 thresholds: at least 68% statements, 70% branches, 43% functions, and 68% lines.
+4. Frontend unit tests with V8 thresholds: at least 70% statements, 72% branches, 50% functions, and 70% lines.
 5. Frontend typecheck.
 6. Frontend production build.
-7. Backend tests.
-8. Backend SpotBugs.
-9. Backend coverage gate: at least 75% instruction and 50% branch coverage.
-10. Backend OpenAPI export.
+7. Frontend bundle budget check.
+8. Backend `verify`, which runs tests once and enforces JaCoCo.
+9. Backend SpotBugs.
+10. Backend coverage gate: at least 78% instruction and 54% branch coverage.
+11. Backend OpenAPI export.
 
 For route, auth, preview-mode, or browser-only behavior changes, also run:
 
@@ -63,6 +65,12 @@ For a release-candidate check, run:
 npm run quality:release
 ```
 
+The release gate additionally requires Trivy, runs Playwright smoke, renders
+production and backend Compose configuration, validates Flyway/Hibernate against
+a disposable MySQL 8.4 database, and performs root/frontend production
+dependency audits. Missing Trivy is a real local blocker; use CI or install
+Trivy rather than recording a skipped scan as a pass.
+
 ## Backend Validation Focus
 
 Backend tests should cover:
@@ -71,6 +79,7 @@ Backend tests should cover:
 - IDOR-sensitive student/teacher/admin access paths.
 - DTO normalization and validation, including password byte-length and safe validation error exposure.
 - AI availability, quota, provider failure, input sanitization, usage logging, and report workflows.
+- AI provider failures must preserve `UNAVAILABLE`/`FAILED` status and must not return fake generated content as a successful live response.
 - Stripe webhook signature verification, supported event filtering, idempotent payment settlement, entitlements, refunds, and teacher earnings.
 - File upload validation for documents, AI audio/image, and recorded videos.
 - Flyway/JPA schema contract assumptions.
@@ -82,6 +91,8 @@ Frontend tests and smoke checks should cover:
 
 - Route guards for public, student, teacher, admin, unauthorized, and not-found routes.
 - Session storage behavior for real login and preview login.
+- Preview fallbacks only render when demo data, preview mode, and a preview session are all active.
+- Preview AI samples must display sample/no-live-request copy and must not write live data.
 - API error display and session-expiry cleanup.
 - Student learning, practice, quiz, achievements, rewards, classes, profile, and AI helper flows.
 - Teacher content, class, student progress, feedback, profile, and earnings flows.
@@ -111,13 +122,14 @@ When changing any backend response shape:
 
 Before final submission or production promotion, keep evidence for:
 
-- `npm run quality` success, including toolchain alignment, frontend V8 coverage, and backend JaCoCo thresholds.
+- `npm run quality` success, including Node 22 toolchain alignment, frontend V8 coverage, bundle budget, and backend JaCoCo thresholds.
 - `npm run quality:frontend:e2e` success when browser flows changed.
+- root and frontend `npm audit --audit-level=high --omit=dev` success.
 - `docker compose --env-file .env.prod -f docker-compose.prod.yml config` success with release-candidate values.
 - Flyway clean-install validation against disposable MySQL 8.4.
 - Backup and restore rehearsal output.
 - DAST ZAP baseline review.
-- Dependency/container scan output.
+- Trivy/CI HIGH/CRITICAL dependency and filesystem scan output.
 - Manual smoke evidence for student, teacher, admin, AI, checkout, and password reset paths.
 
 ## High-Risk Change Rules

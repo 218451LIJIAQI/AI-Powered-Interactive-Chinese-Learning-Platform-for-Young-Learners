@@ -24,6 +24,7 @@ import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperResponse;
 import com.example.aichinese.dto.ai.AiAvailabilityResponse;
+import com.example.aichinese.dto.ai.AiQuizGeneratorResponse;
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiFeatureKey;
@@ -236,6 +237,67 @@ class AiServicePromptTests {
                 eq(student),
                 eq(RoleName.STUDENT.name()),
                 eq(AiFeatureKey.VOCABULARY_HELPER),
+                eq("en"),
+                eq(AiRequestStatus.FAILED),
+                eq("deepseek"),
+                eq("deepseek-chat"),
+                eq(17),
+                any(String.class),
+                eq(null),
+                eq("Provider response was not valid JSON."),
+                eq(null),
+                eq(null));
+    }
+
+    @Test
+    void invalidJsonProviderResponseDoesNotBecomeFakeQuizQuestions() {
+        User student = studentUser();
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByIdIn(List.of(42L))).thenReturn(List.of(student));
+
+        AiAvailabilityService availabilityService = mock(AiAvailabilityService.class);
+        when(availabilityService.getAvailability()).thenReturn(
+                AiAvailabilityResponse.textGenerationAvailable("deepseek", "deepseek-chat", "AI provider is configured."));
+
+        OpenAiCompatibleAiProviderClient providerClient = mock(OpenAiCompatibleAiProviderClient.class);
+        when(providerClient.generateText(any(AiProviderPrompt.class))).thenReturn(
+                AiProviderResult.success("deepseek", "deepseek-chat", "not-json", 17));
+        AiProviderRouter providerRouter = mock(AiProviderRouter.class);
+        when(providerRouter.resolveClient()).thenReturn(providerClient);
+
+        AiPromptBuilder promptBuilder = mock(AiPromptBuilder.class);
+        when(promptBuilder.buildPrompt(
+                eq(AiFeatureKey.QUIZ_GENERATOR),
+                eq("en"),
+                any(String.class),
+                eq(true),
+                eq(List.of())))
+                .thenReturn(new AiProviderPrompt(
+                        AiFeatureKey.QUIZ_GENERATOR.name(),
+                        "System instruction",
+                        "Generate a quiz about animals",
+                        "en",
+                        128,
+                        true,
+                        List.of()));
+
+        AiUsageLimiter usageLimiter = mock(AiUsageLimiter.class);
+        doNothing().when(usageLimiter).checkProviderCallAllowed(42L);
+        AiLogService aiLogService = mock(AiLogService.class);
+
+        AiService service = newService(userRepository, promptBuilder, providerRouter, availabilityService, aiLogService, usageLimiter);
+
+        AiQuizGeneratorResponse response = service.quizGenerator(
+                new SecurityUserDetails(student),
+                new AiQuizGeneratorRequest("animals", "Beginner", "Vocabulary", 3, List.of("MULTIPLE_CHOICE"), null, "en"));
+
+        assertThat(response.status()).isEqualTo(AiRequestStatus.FAILED.name());
+        assertThat(response.title()).isEqualTo("AI quiz unavailable");
+        assertThat(response.questions()).isEmpty();
+        verify(aiLogService).createUsageLog(
+                eq(student),
+                eq(RoleName.STUDENT.name()),
+                eq(AiFeatureKey.QUIZ_GENERATOR),
                 eq("en"),
                 eq(AiRequestStatus.FAILED),
                 eq("deepseek"),

@@ -38,12 +38,27 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+For a release candidate on a machine with Docker, PowerShell, MySQL validation
+support, and Trivy installed, prefer the aggregated release gate:
+
+```bash
+npm run quality:release
+```
+
+This command fails if Trivy is unavailable. That failure is intentional: record
+CI Trivy evidence or install Trivy locally instead of marking the scan as
+skipped.
+
 Required evidence:
 
 - command exit code
 - test summary
 - target commit SHA
 - any skipped tests and reason
+- Node.js major version (`22` required by `.nvmrc`, `.node-version`, root/frontend `engines`, Docker, and CI)
+- frontend coverage threshold result: 70% statements, 72% branches, 50% functions, 70% lines
+- backend JaCoCo threshold result: 78% instruction, 54% branch
+- bundle budget result for entry JS, shared CSS, and largest route chunk
 
 ## Database Migration Gate
 
@@ -107,6 +122,8 @@ Run at least one happy-path smoke for each area:
 - teacher dashboard, content editing, class management, student progress, feedback, profile, and earnings
 - admin dashboard, users, teacher verification, content review, moderation, finance, analytics, activity library, and settings
 - AI availability, one text-generation flow, and one AI report submission
+- AI provider unavailable/failure path returns `UNAVAILABLE` or `FAILED` status without fake generated live content
+- preview AI sample path displays sample/no-live-request copy and does not write live data
 - checkout redirect creation, webhook settlement in test mode, entitlement visibility, and refund request
 - uploaded document/media validation for accepted and rejected files
 
@@ -126,13 +143,15 @@ Before promotion, document:
 
 Record the result in the release notes:
 
-| Gate                           | Result  | Evidence                  |
-| ------------------------------ | ------- | ------------------------- |
-| Root quality gate              | Pending | command output            |
-| Browser E2E smoke              | Pending | Playwright output         |
-| Flyway/MySQL validation        | Pending | validation log            |
-| Compose config render          | Pending | command output            |
-| Backup/restore rehearsal       | Pending | backup file + restore log |
-| DAST/dependency/container scan | Pending | scan summary              |
-| Manual high-risk smoke         | Pending | tester notes              |
-| Rollback plan                  | Pending | owner + timestamp         |
+| Gate                        | Result  | Evidence                  |
+| --------------------------- | ------- | ------------------------- |
+| Root quality gate           | Pending | command output            |
+| Browser E2E smoke           | Pending | Playwright output         |
+| Flyway/MySQL validation     | Pending | validation log            |
+| Compose config render       | Pending | command output            |
+| npm production audits       | Pending | root + frontend output    |
+| Trivy/CI HIGH-CRITICAL scan | Pending | scan summary              |
+| Backup/restore rehearsal    | Pending | backup file + restore log |
+| DAST scan                   | Pending | scan summary              |
+| Manual high-risk smoke      | Pending | tester notes              |
+| Rollback plan               | Pending | owner + timestamp         |

@@ -1,5 +1,19 @@
 # AI-Powered Interactive Chinese Learning Platform
 
+## Production Quality Baseline
+
+MandarinSpark is locked to Node.js 22 for frontend/root tooling. The repository carries `.nvmrc`, `.node-version`, root `engines.node`, frontend `engines.node`, Docker, and CI checks that must agree on the Node 22 major line. Running the local quality gate on Node 26+ is expected to fail; switch to Node 22 or run the gate in CI/Docker rather than treating that as a pass.
+
+The release-grade local gate is:
+
+```powershell
+npm run quality:release
+```
+
+It requires Trivy to be installed locally and then runs the root quality gate, Playwright browser smoke, production dependency audits, Docker Compose config rendering, disposable MySQL 8.4 Flyway/Hibernate validation, and a HIGH/CRITICAL Trivy filesystem scan. If Trivy is unavailable, the script fails explicitly instead of silently skipping the scan.
+
+AI preview/demo behavior is intentionally separated from live authenticated behavior. Preview AI samples are allowed only when demo data and preview mode are enabled and a preview session is active; those UI paths keep "sample / no live AI request" copy visible. For live authenticated users, provider failures or unavailable AI return `UNAVAILABLE`/`FAILED` status through the existing DTOs and must not be disguised as generated success content.
+
 MandarinSpark 是一个面向年轻学习者的 AI 辅助中文学习平台，覆盖学生学习、教师内容与班级管理、管理员审核与运营配置，以及可配置的 AI、支付、邮件和发布安全流程。项目目标是把中文入门学习中的词汇、听力、书写、故事阅读、课堂互动和即时反馈整合到一个可演示、可测试、可部署的全栈系统中。
 
 ## 核心能力

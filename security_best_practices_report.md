@@ -1,13 +1,13 @@
 # Security Best Practices Review
 
-Date: 2026-05-27  
+Date: 2026-05-28
 Scope: Vue/Vite frontend, Spring Boot API, Nginx production edge, Flyway production configuration, payment and live-learning state flows.
 
 ## Executive Summary
 
 The repository already has meaningful security foundations: bearer access tokens are memory-only, refresh tokens are HttpOnly cookies, API responses are excluded from PWA runtime caching, sensitive downloads are served with restrictive headers, Stripe signatures are verified before settlement, and production startup guards cover several unsafe configurations.
 
-This review fixed two production-boundary vulnerabilities and one business-integrity defect. Remaining risks are deployment and maintainability constraints that require planned architecture work rather than an unsafe broad rewrite.
+This review fixed two production-boundary vulnerabilities, one business-integrity defect, and the follow-up quality-hardening pass tightened toolchain, AI fallback, preview-mode, and release-gate controls. Remaining risks are deployment and maintainability constraints that require planned architecture work rather than an unsafe broad rewrite.
 
 ## Fixed Findings
 
@@ -48,9 +48,36 @@ Resolution:
 - Aligned the student UI control with that backend invariant.
 - Added tests for allowed future cancellation and rejected attended/started cases.
 
+### AI-001 Medium: Live AI Failures Could Resemble Successful Generated Quiz Content
+
+Location: `backend/src/main/java/com/example/aichinese/service/AiService.java`, `backend/src/test/java/com/example/aichinese/AiServicePromptTests.java`
+
+Invalid provider JSON in quiz generation previously fell back to sample quiz questions. That was acceptable only for explicit preview/demo surfaces; for authenticated live users it risked making provider failure look like successful AI generation.
+
+Resolution:
+
+- Quiz provider parse failures now return `FAILED` with an empty question list and the existing `status` field rather than fake generated quiz content.
+- Added a changed-path backend test proving invalid provider JSON is logged as failed usage and does not produce sample questions.
+- Frontend preview samples remain allowed only in demo/preview sessions and keep no-live-request copy visible.
+
+### SEC-003 Medium: Preview Role Cleanup Was Session-Incomplete
+
+Location: `frontend/src/stores/auth.ts`, `frontend/src/stores/auth.test.ts`
+
+Invalid preview roles were removed from legacy local storage but could remain in session storage until overwritten. Although they did not grant access because role validation failed, stale synthetic session state could confuse QA and weaken the "preview is explicit and ephemeral" contract.
+
+Resolution:
+
+- Invalid preview roles are now removed from both local and session storage.
+- Added store tests for disabled preview mode, invalid persisted roles, and token-free preview sessions.
+
 ## Verified Controls
 
 - Frontend auth stores access tokens in memory and uses scoped HttpOnly refresh cookies.
+- Node.js tooling is locked to major version 22 across `.nvmrc`, `.node-version`, root/frontend `engines`, Docker, and CI; the local toolchain gate fails on Node 26+ by design.
+- Frontend coverage gates are raised to 70% statements, 72% branches, 50% functions, and 70% lines.
+- Backend JaCoCo gates are raised to 78% instruction and 54% branch.
+- Release gate requires Trivy instead of silently skipping HIGH/CRITICAL filesystem scanning.
 - PWA runtime caching excludes `/api/**` traffic.
 - External URL opening and downloaded filenames are normalized/sanitized.
 - Production Nginx applies CSP and browser security headers.
