@@ -19,10 +19,11 @@
  * </ul>
  *
  * <h2>Why guarded fallbacks</h2>
- * <p>{@code canUseFallback} requires both a configured fallback AND
- * an active preview session. This prevents a real backend outage
- * during a normal anonymous session from silently rendering the
- * demo data and masking a real production incident.</p>
+ * <p>{@code canUseFallback} requires a configured fallback and the
+ * explicit demo-preview build flags or an active preview session.
+ * This prevents a real backend outage during a normal production
+ * session from silently rendering demo data and masking an incident,
+ * while keeping QA preview pages fast and network-clean.</p>
  */
 import { computed, onMounted, ref } from 'vue'
 
@@ -50,10 +51,11 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
   }
 
   const hasFallback = computed(() => fallback !== undefined)
-  const canUseFallback = computed(() => hasFallback.value && appEnv.useDemoData && auth.isPreviewSession)
-  // Preview data is an explicit user-visible mode. We should never silently
-  // swap live API failures for demo data during a normal anonymous session,
-  // otherwise real backend outages look like working product surfaces.
+  const canUseFallback = computed(
+    () => hasFallback.value && appEnv.useDemoData && (appEnv.enablePreviewMode || auth.isPreviewSession),
+  )
+  // Demo data remains gated behind explicit preview configuration. Normal
+  // builds still surface backend outages instead of silently masking them.
   const data = ref<T | null>(canUseFallback.value ? readFallback() : null)
   const error = ref<string | null>(null)
   const loading = ref(immediate && !canUseFallback.value)

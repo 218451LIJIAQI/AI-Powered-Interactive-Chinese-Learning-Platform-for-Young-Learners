@@ -4,6 +4,7 @@ import { normalizeAppRoute } from './routeCompat'
 
 describe('normalizeAppRoute', () => {
   it('rewrites legacy deep links while preserving suffixes', () => {
+    expect(normalizeAppRoute('/catalog?level=beginner')).toBe('/courses?level=beginner')
     expect(normalizeAppRoute('/student/payments?tab=history')).toBe('/student/profile?tab=history')
     expect(normalizeAppRoute('/admin/ai-response-reports/42#review')).toBe('/admin/moderation#review')
   })

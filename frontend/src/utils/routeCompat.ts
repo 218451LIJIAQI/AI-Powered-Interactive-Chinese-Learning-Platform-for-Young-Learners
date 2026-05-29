@@ -18,6 +18,7 @@
  * older email notifications.</p>
  */
 const legacyRouteMap: Record<string, string> = {
+  '/catalog': '/courses',
   '/student/payments': '/student/profile',
   '/student/refunds': '/student/profile',
   '/student/feedback': '/student/profile',

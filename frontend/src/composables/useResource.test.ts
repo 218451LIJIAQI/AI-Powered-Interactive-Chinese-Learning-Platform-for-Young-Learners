@@ -7,6 +7,7 @@ import { useResource } from './useResource'
 const mocks = vi.hoisted(() => ({
   appEnv: {
     useDemoData: false,
+    enablePreviewMode: false,
   },
   auth: {
     isPreviewSession: false,
@@ -42,6 +43,7 @@ function mountResource<T>(loader: () => Promise<T>, fallback?: (() => T) | T, im
 describe('useResource guarded fallback behavior', () => {
   beforeEach(() => {
     mocks.appEnv.useDemoData = false
+    mocks.appEnv.enablePreviewMode = false
     mocks.auth.isPreviewSession = false
   })
 
@@ -62,8 +64,26 @@ describe('useResource guarded fallback behavior', () => {
 
   it('uses preview fixtures without issuing a live request when preview mode is active', async () => {
     mocks.appEnv.useDemoData = true
+    mocks.appEnv.enablePreviewMode = true
     mocks.auth.isPreviewSession = true
     const fallback = { message: 'safe preview fixture' }
+    const loader = vi.fn().mockResolvedValue({ message: 'live data' })
+    const { resource } = mountResource(loader, () => fallback)
+
+    await flushPromises()
+
+    expect(loader).not.toHaveBeenCalled()
+    expect(resource.data.value).toEqual(fallback)
+    expect(resource.usingFallback.value).toBe(true)
+    expect(resource.error.value).toBeNull()
+    expect(resource.loading.value).toBe(false)
+  })
+
+  it('uses preview fixtures for anonymous public preview pages without issuing a live request', async () => {
+    mocks.appEnv.useDemoData = true
+    mocks.appEnv.enablePreviewMode = true
+    mocks.auth.isPreviewSession = false
+    const fallback = { message: 'anonymous preview fixture' }
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
     const { resource } = mountResource(loader, () => fallback)
 

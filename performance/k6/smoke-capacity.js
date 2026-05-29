@@ -33,7 +33,9 @@ function targetVus() {
 }
 
 function normalizeBaseUrl(rawValue) {
-  const value = String(rawValue || '').trim().replace(/\/+$/, '')
+  const value = String(rawValue || '')
+    .trim()
+    .replace(/\/+$/, '')
   if (!/^https?:\/\//i.test(value)) {
     throw new Error('BASE_URL must be an absolute http or https URL.')
   }
@@ -51,11 +53,9 @@ function login() {
     return null
   }
 
-  const response = http.post(
-    `${baseUrl}/api/v1/auth/login`,
-    JSON.stringify({ email, password }),
-    { headers: { 'Content-Type': 'application/json' } },
-  )
+  const response = http.post(`${baseUrl}/api/v1/auth/login`, JSON.stringify({ email, password }), {
+    headers: { 'Content-Type': 'application/json' },
+  })
 
   authFailures.add(response.status !== 200)
   if (response.status !== 200) {

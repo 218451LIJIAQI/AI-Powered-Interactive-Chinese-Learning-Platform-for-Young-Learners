@@ -169,14 +169,14 @@ describe('auth store token storage', () => {
     expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
   })
 
-  it('attempts cookie refresh during anonymous preview bootstrap before staying anonymous', async () => {
+  it('skips cookie refresh during anonymous preview bootstrap to avoid preview startup network failures', async () => {
     mocks.appEnv.useDemoData = true
     mocks.appEnv.enablePreviewMode = true
 
     const auth = useAuthStore()
     await auth.bootstrap()
 
-    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.refresh).not.toHaveBeenCalled()
     expect(auth.token).toBeNull()
     expect(auth.currentUser).toBeNull()
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)

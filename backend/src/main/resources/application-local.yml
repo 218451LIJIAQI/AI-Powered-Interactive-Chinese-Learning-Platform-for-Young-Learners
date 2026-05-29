@@ -22,4 +22,3 @@ app:
   payment:
     provider: ${PAYMENT_PROVIDER:no-op}
     stripe-api-key: ${STRIPE_API_KEY:}
-

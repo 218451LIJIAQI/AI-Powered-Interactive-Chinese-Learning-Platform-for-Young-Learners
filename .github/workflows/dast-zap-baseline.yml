@@ -26,4 +26,4 @@ jobs:
         with:
           target: ${{ inputs.target_url }}
           rules_file_name: .zap/rules.tsv
-          cmd_options: "-a"
+          cmd_options: '-a'

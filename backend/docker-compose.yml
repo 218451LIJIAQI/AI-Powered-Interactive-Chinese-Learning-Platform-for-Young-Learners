@@ -28,7 +28,7 @@ services:
       # Host port 3307 keeps it out of the way of any locally-installed MySQL
       # on the conventional port 3306. The backend application.yml defaults
       # to 3307 to match this mapping.
-      - "${DB_PORT:-3307}:3306"
+      - '${DB_PORT:-3307}:3306'
     volumes:
       - mysql-data:/var/lib/mysql
     command:
@@ -42,11 +42,7 @@ services:
       # the platform's preferred replication settings.
       - --enforce-gtid-consistency=OFF
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping -u"$${MYSQL_USER}" -h 127.0.0.1 --silent',
-        ]
+      test: ['CMD-SHELL', 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping -u"$${MYSQL_USER}" -h 127.0.0.1 --silent']
       interval: 5s
       timeout: 5s
       retries: 20

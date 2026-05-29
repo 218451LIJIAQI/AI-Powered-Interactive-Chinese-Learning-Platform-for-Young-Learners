@@ -28,11 +28,19 @@ async function stubApiAsSignedOut(page: Page) {
 
 test.describe('public smoke flow', () => {
   test('loads the landing page and auth surface', async ({ page }) => {
+    const clientErrors = collectClientErrors(page)
+
     await page.goto('/')
     await expect(page).toHaveTitle(/MandarinSpark/)
+    await expect(page.getByRole('heading', { name: /spark a love for mandarin/i })).toBeVisible()
+
+    await page.goto('/catalog')
+    await expect(page).toHaveURL(/\/courses$/)
+    await expect(page.getByRole('heading', { name: 'Explore Courses' })).toBeVisible()
 
     await page.goto('/auth')
     await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
+    expect(clientErrors).toEqual([])
   })
 
   test('redirects protected guest routes through auth safely', async ({ page }) => {
