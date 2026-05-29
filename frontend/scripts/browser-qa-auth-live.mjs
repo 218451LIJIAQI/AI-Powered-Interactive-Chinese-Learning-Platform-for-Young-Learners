@@ -23,7 +23,7 @@
  * the mocked flows cannot.
  *
  * <h2>Configuration</h2>
- *   - `QA_BASE_URL`        — frontend origin (default 127.0.0.1:5173)
+ *   - `QA_BASE_URL`        — frontend origin (default 127.0.0.1:5174)
  *   - `QA_API_BASE_URL`    — backend `/api/v1` base
  *   - `QA_API_HEALTH_URL`  — actuator override
  *   - `QA_PUBLIC_COURSES_URL` — public catalogue smoke-test URL
@@ -50,7 +50,7 @@ import {
   tailTextForEvidence,
 } from './lib/browser-runtime.mjs'
 
-const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5173', 'QA_BASE_URL')
+const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5174', 'QA_BASE_URL')
 const apiBaseUrl = normalizeHttpBaseUrl(
   process.env.QA_API_BASE_URL || 'http://localhost:8080/api/v1',
   'QA_API_BASE_URL',

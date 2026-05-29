@@ -128,7 +128,7 @@ npm run dev
 
 常用本地地址：
 
-- 前端：`http://localhost:5173`
+- 前端：`http://localhost:5174`
 - 后端 API：`http://localhost:8080/api/v1`
 - OpenAPI JSON：`http://localhost:8080/v3/api-docs`
 - Swagger UI：`http://localhost:8080/swagger-ui.html`

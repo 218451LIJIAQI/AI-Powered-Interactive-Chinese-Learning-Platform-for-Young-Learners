@@ -46,7 +46,7 @@ import {
   tailTextForEvidence,
 } from './lib/browser-runtime.mjs'
 
-const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5173', 'QA_BASE_URL')
+const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5174', 'QA_BASE_URL')
 const frontendProbeUrl = normalizeHttpBaseUrl(process.env.QA_FRONTEND_PROBE_URL || baseUrl, 'QA_FRONTEND_PROBE_URL')
 const apiBaseUrl = normalizeHttpBaseUrl(
   process.env.QA_API_BASE_URL || process.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api/v1',

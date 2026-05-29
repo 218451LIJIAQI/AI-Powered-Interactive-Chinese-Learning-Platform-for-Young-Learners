@@ -7,7 +7,7 @@
  *      of which the developer is running.
  *   2. Finds an available frontend port — starts at
  *      `QA_FRONTEND_PORT` (default 5174 to avoid clashing with the
- *      developer's dev server on 5173) and walks forward up to 10
+ *      developer's dev server on 5174) and walks forward up to 10
  *      ports until one binds.
  *   3. Spawns Vite in `previewqa` mode pointing at the resolved API
  *      base URL.

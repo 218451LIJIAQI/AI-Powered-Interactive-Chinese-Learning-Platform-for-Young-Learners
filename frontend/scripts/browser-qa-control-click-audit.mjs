@@ -31,7 +31,7 @@ import {
   tailTextForEvidence,
 } from './lib/browser-runtime.mjs'
 
-const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5173', 'QA_BASE_URL')
+const baseUrl = normalizeHttpBaseUrl(process.env.QA_BASE_URL || 'http://127.0.0.1:5174', 'QA_BASE_URL')
 const frontendProbeUrl = normalizeHttpBaseUrl(process.env.QA_FRONTEND_PROBE_URL || baseUrl, 'QA_FRONTEND_PROBE_URL')
 const chromePath = resolveBrowserExecutablePath()
 const debuggingPort = parseTcpPort(process.env.QA_CHROME_PORT || '9232', 'QA_CHROME_PORT')
