@@ -56,9 +56,9 @@ import jakarta.validation.constraints.Size;
  * insight endpoints.
  *
  * <h2>Authorization</h2>
- * <p>Most endpoints require {@code hasRole("STUDENT")}; the AI
- * usage-log and report-management endpoints additionally require
- * {@code hasRole("ADMIN")}. Per-call ownership is re-checked in
+ * <p>Endpoints in this controller require {@code hasRole("STUDENT")};
+ * administrative AI usage-log and report-management surfaces live under
+ * the admin controllers. Per-call ownership is re-checked in
  * {@link com.example.aichinese.service.AiService} so chat-session
  * lookups via {@code findByIdAndUserId} fail with 404 if a learner
  * forges another user's session id.</p>

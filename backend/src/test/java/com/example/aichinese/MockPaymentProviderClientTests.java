@@ -25,8 +25,8 @@ class MockPaymentProviderClientTests {
     @Test
     void checkoutUrlAppendsParametersWithAmpersandWhenSuccessUrlAlreadyHasQueryString() {
         MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "mock",
                 "https://api.stripe.com",
@@ -40,11 +40,11 @@ class MockPaymentProviderClientTests {
                 List.of(),
                 BigDecimal.TEN,
                 "MYR",
-                "http://localhost:5173/payment/success?paymentId=123",
-                "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                "http://localhost:5174/payment/success?paymentId=123",
+                "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
         assertThat(result.available()).isTrue();
-        assertThat(result.checkoutUrl()).startsWith("http://localhost:5173/payment/success?paymentId=123&paymentRef=mock-checkout-");
+        assertThat(result.checkoutUrl()).startsWith("http://localhost:5174/payment/success?paymentId=123&paymentRef=mock-checkout-");
         assertThat(result.checkoutUrl()).contains("&status=success");
         assertThat(result.checkoutUrl()).doesNotContain("??");
         assertThat(result.checkoutUrl()).doesNotContain("?paymentId=123?paymentRef=");
@@ -53,8 +53,8 @@ class MockPaymentProviderClientTests {
     @Test
     void unavailableWhenMockSuccessIsDisabled() {
         MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 false,
                 "mock",
                 "https://api.stripe.com",
@@ -68,8 +68,8 @@ class MockPaymentProviderClientTests {
                 List.of(),
                 BigDecimal.TEN,
                 "MYR",
-                "http://localhost:5173/payment/success?paymentId=123",
-                "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                "http://localhost:5174/payment/success?paymentId=123",
+                "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
         assertThat(result.available()).isFalse();
         assertThat(result.checkoutUrl()).isNull();
@@ -78,8 +78,8 @@ class MockPaymentProviderClientTests {
     @Test
     void checkoutUrlPreservesFragmentsWhenAddingMockParameters() {
         MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "mock",
                 "https://api.stripe.com",
@@ -93,19 +93,19 @@ class MockPaymentProviderClientTests {
                 List.of(),
                 BigDecimal.TEN,
                 "MYR",
-                "http://localhost:5173/payment/success?paymentId=123#receipt",
-                "http://localhost:5173/payment/cancel"));
+                "http://localhost:5174/payment/success?paymentId=123#receipt",
+                "http://localhost:5174/payment/cancel"));
 
         assertThat(result.checkoutUrl())
-                .startsWith("http://localhost:5173/payment/success?paymentId=123&paymentRef=mock-checkout-")
+                .startsWith("http://localhost:5174/payment/success?paymentId=123&paymentRef=mock-checkout-")
                 .endsWith("&status=success#receipt");
     }
 
     @Test
     void statusIsUnavailableForNonMockReferences() {
         MockPaymentProviderClient client = new MockPaymentProviderClient(new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "mock",
                 "https://api.stripe.com",

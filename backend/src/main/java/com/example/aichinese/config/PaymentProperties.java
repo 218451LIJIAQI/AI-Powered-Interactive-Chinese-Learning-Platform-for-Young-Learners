@@ -39,8 +39,8 @@ public record PaymentProperties(
 
     private static final Set<String> ALLOWED_PROVIDERS = Set.of("mock", "no-op", "stripe");
     private static final int MAX_URL_LENGTH = 2048;
-    private static final String DEFAULT_SUCCESS_URL = "http://localhost:5173/payment/success";
-    private static final String DEFAULT_CANCEL_URL = "http://localhost:5173/payment/cancel";
+    private static final String DEFAULT_SUCCESS_URL = "http://localhost:5174/payment/success";
+    private static final String DEFAULT_CANCEL_URL = "http://localhost:5174/payment/cancel";
     private static final String DEFAULT_STRIPE_API_BASE_URL = "https://api.stripe.com";
     private static final String DEFAULT_PROVIDER = "no-op";
 

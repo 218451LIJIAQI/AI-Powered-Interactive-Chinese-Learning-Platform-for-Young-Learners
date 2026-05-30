@@ -6,9 +6,8 @@
  *      ports (8080 / 8081) so the harness "just works" regardless
  *      of which the developer is running.
  *   2. Finds an available frontend port — starts at
- *      `QA_FRONTEND_PORT` (default 5174 to avoid clashing with the
- *      developer's dev server on 5174) and walks forward up to 10
- *      ports until one binds.
+ *      `QA_FRONTEND_PORT` (default 5174, matching local Vite) and
+ *      walks forward up to 10 ports if the preferred port is busy.
  *   3. Spawns Vite in `previewqa` mode pointing at the resolved API
  *      base URL.
  *   4. Waits for the SPA to start serving `/auth` (signals

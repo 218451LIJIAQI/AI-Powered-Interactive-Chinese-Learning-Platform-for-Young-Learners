@@ -24,8 +24,8 @@ class PaymentProviderServiceTests {
     @Test
     void selectsNoOpProviderWhenMockSuccessIsDisabled() {
         PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 false,
                 "mock",
                 "https://api.stripe.com",
@@ -45,8 +45,8 @@ class PaymentProviderServiceTests {
     @Test
     void defaultsToNoOpProviderWhenProviderIsBlank() {
         PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "",
                 "https://api.stripe.com",
@@ -66,8 +66,8 @@ class PaymentProviderServiceTests {
     @Test
     void selectsMockProviderOnlyWhenMockSuccessIsEnabled() {
         PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "mock",
                 "https://api.stripe.com",
@@ -87,8 +87,8 @@ class PaymentProviderServiceTests {
     @Test
     void selectsStripeProviderWhenConfiguredEvenIfMockIsEnabled() {
         PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "stripe",
                 "https://api.stripe.com",
@@ -109,7 +109,7 @@ class PaymentProviderServiceTests {
     void rejectsNonHttpPaymentRedirectUrls() {
         assertThatThrownBy(() -> new PaymentProperties(
                 "javascript:alert(1)",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "mock",
                 "https://api.stripe.com",
@@ -119,7 +119,7 @@ class PaymentProviderServiceTests {
                 .hasMessageContaining("Payment success URL");
 
         assertThatThrownBy(() -> new PaymentProperties(
-                "http://localhost:5173/payment/success",
+                "http://localhost:5174/payment/success",
                 "ftp://localhost/cancel",
                 true,
                 "mock",
@@ -133,8 +133,8 @@ class PaymentProviderServiceTests {
     @Test
     void rejectsUnknownPaymentProvider() {
         assertThatThrownBy(() -> new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 true,
                 "stripee",
                 "https://api.stripe.com",

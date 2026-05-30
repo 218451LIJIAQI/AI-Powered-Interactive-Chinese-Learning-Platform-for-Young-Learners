@@ -50,8 +50,8 @@ class StripePaymentProviderClientTests {
         server.start();
         try {
             PaymentProperties properties = new PaymentProperties(
-                    "http://localhost:5173/payment/success",
-                    "http://localhost:5173/payment/cancel",
+                    "http://localhost:5174/payment/success",
+                    "http://localhost:5174/payment/cancel",
                     false,
                     "stripe",
                     loopbackBaseUrl(server),
@@ -66,8 +66,8 @@ class StripePaymentProviderClientTests {
                     List.of(orderItem()),
                     new BigDecimal("29.90"),
                     "MYR",
-                    "http://localhost:5173/payment/success?paymentId=123",
-                    "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                    "http://localhost:5174/payment/success?paymentId=123",
+                    "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
             PaymentProviderStatusResult statusResult = client.getPaymentStatus("cs_test_123");
 
             String decodedBody = URLDecoder.decode(requestBody.get(), StandardCharsets.UTF_8);
@@ -78,7 +78,7 @@ class StripePaymentProviderClientTests {
             assertThat(statusResult.providerStatus()).isEqualTo("COMPLETE:PAID");
             assertThat(authorizationHeader.get()).isEqualTo("Bearer sk_test_local");
             assertThat(decodedBody).contains("mode=payment");
-            assertThat(decodedBody).contains("success_url=http://localhost:5173/payment/success?paymentId=123");
+            assertThat(decodedBody).contains("success_url=http://localhost:5174/payment/success?paymentId=123");
             assertThat(decodedBody).contains("line_items[0][price_data][currency]=myr");
             assertThat(decodedBody).contains("line_items[0][price_data][unit_amount]=2990");
             assertThat(decodedBody).contains("line_items[0][quantity]=2");
@@ -90,8 +90,8 @@ class StripePaymentProviderClientTests {
     @Test
     void unavailableWhenStripeApiKeyIsMissing() {
         PaymentProperties properties = new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 false,
                 "stripe",
                 "https://api.stripe.com",
@@ -106,8 +106,8 @@ class StripePaymentProviderClientTests {
                 List.of(),
                 BigDecimal.TEN,
                 "MYR",
-                "http://localhost:5173/payment/success?paymentId=123",
-                "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                "http://localhost:5174/payment/success?paymentId=123",
+                "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
         assertThat(result.available()).isFalse();
         assertThat(result.checkoutUrl()).isNull();
@@ -125,8 +125,8 @@ class StripePaymentProviderClientTests {
                 List.of(),
                 new BigDecimal("999999999999999999999999999.99"),
                 "MYR",
-                "http://localhost:5173/payment/success?paymentId=123",
-                "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                "http://localhost:5174/payment/success?paymentId=123",
+                "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
         assertThat(result.available()).isFalse();
         assertThat(result.providerStatus()).isEqualTo("UNAVAILABLE");
@@ -198,8 +198,8 @@ class StripePaymentProviderClientTests {
                     List.of(orderItem("Starter\nLesson\tOne", new BigDecimal("1200"), 1)),
                     new BigDecimal("1200"),
                     "JPY",
-                    "http://localhost:5173/payment/success?paymentId=123",
-                    "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                    "http://localhost:5174/payment/success?paymentId=123",
+                    "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
             String decodedBody = URLDecoder.decode(requestBody.get(), StandardCharsets.UTF_8);
             assertThat(result.available()).isTrue();
@@ -232,8 +232,8 @@ class StripePaymentProviderClientTests {
                     manyOrderItems(101),
                     new BigDecimal("123.45"),
                     "MYR",
-                    "http://localhost:5173/payment/success?paymentId=123",
-                    "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                    "http://localhost:5174/payment/success?paymentId=123",
+                    "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
             String decodedBody = URLDecoder.decode(requestBody.get(), StandardCharsets.UTF_8);
             assertThat(result.available()).isTrue();
@@ -262,8 +262,8 @@ class StripePaymentProviderClientTests {
                     List.of(orderItem()),
                     new BigDecimal("29.90"),
                     "MYR",
-                    "http://localhost:5173/payment/success?paymentId=123",
-                    "http://localhost:5173/payment/cancel?paymentId=123&cancelled=true"));
+                    "http://localhost:5174/payment/success?paymentId=123",
+                    "http://localhost:5174/payment/cancel?paymentId=123&cancelled=true"));
 
             assertThat(result.available()).isFalse();
             assertThat(result.message()).isEqualTo("Payment service is currently unavailable. Please try again later.");
@@ -298,8 +298,8 @@ class StripePaymentProviderClientTests {
 
     private PaymentProperties stripeProperties(String baseUrl) {
         return new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 false,
                 "stripe",
                 baseUrl,

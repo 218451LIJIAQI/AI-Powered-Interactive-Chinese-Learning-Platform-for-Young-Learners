@@ -7,8 +7,8 @@
  * {@code http.post('/auth/login', payload)} so:</p>
  * <ul>
  *   <li>URLs are typed and refactor-safe.</li>
- *   <li>Request / response shapes line up with the generated
- *       {@code types/api.ts} types.</li>
+ *   <li>Request / response shapes line up with the shared
+ *       {@code types/api.ts} contract types.</li>
  *   <li>Cross-cutting behaviour (e.g. unwrapping {@code ApiResponse<T>})
  *       happens in one place.</li>
  * </ul>
@@ -1233,7 +1233,18 @@ export const adminApi = {
     action: 'hide' | 'unpublish' | 'archive' | 'request-revision' | 'restore',
     payload: { targetType: string; targetId: number; reason: string },
   ) {
-    return unwrap<ModerationRecordResponse>(http.post(`/admin/moderation/${action}`, payload))
+    switch (action) {
+      case 'hide':
+        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/hide', payload))
+      case 'unpublish':
+        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/unpublish', payload))
+      case 'archive':
+        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/archive', payload))
+      case 'request-revision':
+        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/request-revision', payload))
+      case 'restore':
+        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/restore', payload))
+    }
   },
   notifications(params: Record<string, unknown> = {}) {
     return unwrapPageItems<NotificationResponse>(http.get('/admin/notifications', { params }))

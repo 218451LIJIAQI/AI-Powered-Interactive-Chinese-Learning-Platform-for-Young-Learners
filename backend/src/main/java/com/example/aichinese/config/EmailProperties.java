@@ -25,7 +25,7 @@ public record EmailProperties(
         String passwordResetBaseUrl) {
 
     private static final String DEFAULT_FROM = "no-reply@example.com";
-    private static final String DEFAULT_RESET_URL = "http://localhost:5173/reset-password";
+    private static final String DEFAULT_RESET_URL = "http://localhost:5174/reset-password";
 
     /**
      * Practical caps so a degenerate config string cannot inflate the SMTP

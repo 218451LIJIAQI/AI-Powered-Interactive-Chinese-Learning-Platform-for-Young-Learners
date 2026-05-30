@@ -242,8 +242,8 @@ class CheckoutServiceTests {
                 orderService,
                 paymentService,
                 new PaymentProperties(
-                        "http://localhost:5173/payment/success",
-                        "http://localhost:5173/payment/cancel",
+                        "http://localhost:5174/payment/success",
+                        "http://localhost:5174/payment/cancel",
                         false,
                         "no-op",
                         "https://api.stripe.com",

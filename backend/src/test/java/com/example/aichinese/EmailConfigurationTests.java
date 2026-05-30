@@ -112,7 +112,7 @@ class EmailConfigurationTests {
         contextRunner.withPropertyValues(
                 "spring.profiles.active=prod",
                 "app.email.enabled=true",
-                "app.email.password-reset-base-url=http://localhost:5173/reset-password",
+                "app.email.password-reset-base-url=http://localhost:5174/reset-password",
                 "spring.mail.host=smtp.example.com",
                 "spring.mail.username=mailer@example.com",
                 "spring.mail.password=secret",

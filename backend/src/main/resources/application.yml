@@ -170,8 +170,8 @@ app:
       requests-per-minute: ${AI_REQUESTS_PER_MINUTE:10}
       requests-per-day: ${AI_REQUESTS_PER_DAY:100}
   payment:
-    success-url: ${PAYMENT_SUCCESS_URL:${FRONTEND_BASE_URL:http://localhost:5173}/payment/success}
-    cancel-url: ${PAYMENT_CANCEL_URL:${FRONTEND_BASE_URL:http://localhost:5173}/payment/cancel}
+    success-url: ${PAYMENT_SUCCESS_URL:${FRONTEND_BASE_URL:http://localhost:5174}/payment/success}
+    cancel-url: ${PAYMENT_CANCEL_URL:${FRONTEND_BASE_URL:http://localhost:5174}/payment/cancel}
     mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}
     provider: ${PAYMENT_PROVIDER:no-op}
     stripe-api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com}
@@ -180,4 +180,4 @@ app:
   email:
     enabled: ${SMTP_ENABLED:false}
     from: ${SMTP_FROM:}
-    password-reset-base-url: ${PASSWORD_RESET_BASE_URL:${FRONTEND_BASE_URL:http://localhost:5173}/reset-password}
+    password-reset-base-url: ${PASSWORD_RESET_BASE_URL:${FRONTEND_BASE_URL:http://localhost:5174}/reset-password}

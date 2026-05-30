@@ -377,7 +377,7 @@ function Invoke-FreshSpringBootValidation([string]$HostPort) {
 function Invoke-RepairScript([string]$HostPort, [switch]$Execute) {
     $RepairScript = Join-Path $ScriptDir "repair-flyway-checksums.ps1"
     $EscapedRepairScript = $RepairScript.Replace("'", "''")
-    $Command = "`$pwd = ConvertTo-SecureString `$env:AICHINESE_FLYWAY_REPAIR_PASSWORD -AsPlainText -Force; & '$EscapedRepairScript' -DbHost 127.0.0.1 -DbPort $HostPort -DbName $FreshDb -DbUsername $AppUsername -DbPassword `$pwd"
+    $Command = "`$pwd = [System.Security.SecureString]::new(); foreach (`$ch in `$env:AICHINESE_FLYWAY_REPAIR_PASSWORD.ToCharArray()) { `$pwd.AppendChar(`$ch) }; `$pwd.MakeReadOnly(); & '$EscapedRepairScript' -DbHost 127.0.0.1 -DbPort $HostPort -DbName $FreshDb -DbUsername $AppUsername -DbPassword `$pwd"
     if ($Execute) {
         $Command += " -Execute -ConfirmDatabaseName $FreshDb"
     }

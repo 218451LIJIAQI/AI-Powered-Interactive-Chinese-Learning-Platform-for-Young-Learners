@@ -19,8 +19,8 @@ class PaymentProductionGuardTests {
     @Test
     void allowsDevProfileToUseNoOpProvider() {
         PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5173/payment/success",
-                "http://localhost:5173/payment/cancel",
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
                 false,
                 "no-op",
                 "https://api.stripe.com",
@@ -157,7 +157,7 @@ class PaymentProductionGuardTests {
         environment.setActiveProfiles("prod");
 
         PaymentProperties localhostUrls = new PaymentProperties(
-                "https://localhost:5173/payment/success",
+                "https://localhost:5174/payment/success",
                 "https://app.example.com/payment/cancel",
                 false,
                 "stripe",

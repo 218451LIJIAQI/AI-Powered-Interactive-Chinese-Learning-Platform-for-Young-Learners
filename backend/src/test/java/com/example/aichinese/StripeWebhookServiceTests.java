@@ -215,8 +215,8 @@ class StripeWebhookServiceTests {
     private StripeWebhookService service(PaymentService paymentService) {
         return new StripeWebhookService(
                 new PaymentProperties(
-                        "http://localhost:5173/payment/success",
-                        "http://localhost:5173/payment/cancel",
+                        "http://localhost:5174/payment/success",
+                        "http://localhost:5174/payment/cancel",
                         false,
                         "stripe",
                         "https://api.stripe.com",

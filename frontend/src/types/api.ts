@@ -3,10 +3,10 @@
  *
  * <h2>What lives here</h2>
  * <p>Every request payload, response shape, and enum the frontend
- * sends or receives. The names match the Java DTO and enum types in
- * {@code com.example.aichinese.dto.*} and
- * {@code com.example.aichinese.entity.enums.*} so a backend rename
- * is caught at compile time.</p>
+ * sends or receives. The names intentionally mirror the Java DTO and
+ * enum types in {@code com.example.aichinese.dto.*} and
+ * {@code com.example.aichinese.entity.enums.*} so backend contract
+ * changes have an explicit frontend review surface.</p>
  *
  * <h2>Why hand-maintained</h2>
  * <p>We deliberately avoid OpenAPI-generated types because:</p>
