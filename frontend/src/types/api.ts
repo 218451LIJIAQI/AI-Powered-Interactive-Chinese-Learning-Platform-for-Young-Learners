@@ -170,7 +170,6 @@ export interface PublicCourseSummary {
   accessType: AccessType
   price: number
   currencyCode: string
-  rating?: number | null
   coverImageUrl?: string | null
   locked: boolean
   status: ContentStatus

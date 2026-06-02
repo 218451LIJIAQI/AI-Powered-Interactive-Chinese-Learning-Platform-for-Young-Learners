@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   inferPracticeActivityFromText,
   normalizePracticeActivity,
-  practiceActivityQueryValue,
   practiceRoute,
 } from './practiceRoute'
 
@@ -17,7 +16,6 @@ describe('practiceRoute helpers', () => {
   })
 
   it('builds stable student practice route targets', () => {
-    expect(practiceActivityQueryValue('MATCHING_GAME')).toBe('matching-game')
     expect(practiceRoute('MATCHING_GAME')).toEqual({
       name: 'student-practice',
       query: { activity: 'matching-game' },

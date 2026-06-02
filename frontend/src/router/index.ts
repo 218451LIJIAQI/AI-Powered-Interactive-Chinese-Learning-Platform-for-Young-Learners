@@ -14,8 +14,8 @@
  *   <li>`roles` — required user roles; the router guard redirects
  *       to `/auth` when the role doesn't match and `/unauthorized`
  *       when the role IS authenticated but for the wrong persona.</li>
- *   <li>`previewRole` — synthetic role used by the QA preview
- *       deployment to render a persona without a real session.</li>
+ *   <li>`previewRole` — synthetic role used by FYP demo mode to
+ *       render a persona without a real session.</li>
  * </ul>
  *
  * <h2>Auth flow</h2>

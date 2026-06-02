@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+coverage
 *.local
 
 # Editor directories and files
@@ -22,10 +23,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-tmp-ui-captures/
-visual-regression/
-UI SAMPLE/
-FRONTEND_COMPREHENSIVE_AUDIT_PROMPT.md
-FRONTEND_COMPREHENSIVE_AUDIT_PROMPT_ZH.md
-UI_UX_AUDIT_LEDGER_*.md

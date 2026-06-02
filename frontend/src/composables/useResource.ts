@@ -10,7 +10,7 @@
  * <ul>
  *   <li>The {@code resolveApiError} translation so error messaging
  *       is consistent across the app.</li>
- *   <li>Preview-mode fallbacks: when the QA preview deployment is
+ *   <li>Preview-mode fallbacks: when FYP demo mode is
  *       active and the API is unreachable or returns 404, the
  *       supplied {@code fallback} fixture is shown instead of an
  *       error so the demo flow stays usable.</li>
@@ -22,8 +22,8 @@
  * <p>{@code canUseFallback} requires a configured fallback and the
  * explicit demo-preview build flags or an active preview session.
  * This prevents a real backend outage during a normal production
- * session from silently rendering demo data and masking an incident,
- * while keeping QA preview pages fast and network-clean.</p>
+ * session from silently rendering demo data and hiding a real problem,
+ * while keeping FYP preview pages fast and network-clean.</p>
  */
 import { computed, onMounted, ref } from 'vue'
 

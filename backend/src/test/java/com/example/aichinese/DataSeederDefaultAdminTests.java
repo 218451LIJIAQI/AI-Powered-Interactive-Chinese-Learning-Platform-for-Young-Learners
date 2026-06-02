@@ -21,7 +21,7 @@ import com.example.aichinese.repository.UserRepository;
         "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"
 })
 @ActiveProfiles("test")
-class DefaultAdminSeederTests {
+class DataSeederDefaultAdminTests {
 
     @Autowired
     private UserRepository userRepository;

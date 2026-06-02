@@ -140,8 +140,6 @@ const iconMap: Readonly<Record<string, Component>> = {
   flash: Zap,
 } as const
 
-export type IconName = keyof typeof iconMap
-
 interface Props {
   name: string
   size?: number

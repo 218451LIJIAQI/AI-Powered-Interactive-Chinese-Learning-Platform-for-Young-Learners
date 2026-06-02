@@ -366,7 +366,6 @@ public class ContentManagementMapper {
                 lesson.getAccessType(),
                 lesson.getPrice(),
                 currencyCode,
-                null,
                 lesson.getCoverImageUrl(),
                 lesson.getAccessType() == AccessType.PAID,
                 lesson.getContentStatus());
@@ -389,7 +388,6 @@ public class ContentManagementMapper {
                 coursePackage.getAccessType(),
                 coursePackage.getPrice(),
                 currencyCode,
-                null,
                 coursePackage.getCoverImageUrl(),
                 coursePackage.getAccessType() == AccessType.PAID,
                 ContentStatus.PUBLISHED);

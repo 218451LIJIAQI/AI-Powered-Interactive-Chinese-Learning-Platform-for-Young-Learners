@@ -44,10 +44,10 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * <p>Outside production, an empty allow-list falls back to a curated
  * set of Vite dev/preview ports ({@code http://localhost:4173} plus
  * {@code http://localhost:5173..5183} and the {@code 127.0.0.1}
- * variants). The project e2e server uses 4173, while Vite hot-restart
+ * variants). Vite preview commonly uses 4173, while Vite hot-restart
  * sometimes shifts from 5173 to the next available port; the wider
- * fallback set keeps local development working without manual
- * reconfiguration.</p>
+ * fallback set keeps local development and FYP demos working without
+ * manual reconfiguration.</p>
  */
 @Configuration
 public class CorsConfig {
@@ -67,9 +67,9 @@ public class CorsConfig {
     /**
      * Single source of truth for the local-dev fallback. Sequenced as
      * {@code (localhost, 127.0.0.1) x ports} so callers can mentally
-     * pair them. Port 4173 is the Playwright preview/e2e default; Vite
-     * hot-restart sometimes shifts from 5173 to the next available port.
-     * The wider fallback set keeps local development working without
+     * pair them. Port 4173 is Vite's preview default; Vite hot-restart
+     * sometimes shifts from 5173 to the next available port. The wider
+     * fallback set keeps local development and FYP demos working without
      * manual reconfiguration.
      */
     private static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();

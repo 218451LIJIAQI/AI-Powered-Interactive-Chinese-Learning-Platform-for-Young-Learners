@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isUnauthorizedApiError, resolveApiError, resolveFieldErrors } from './apiError'
+import { isUnauthorizedApiError, resolveApiError } from './apiError'
 
 describe('resolveApiError', () => {
   it('uses sanitized backend messages before generic fallbacks', () => {
@@ -59,32 +59,4 @@ describe('resolveApiError', () => {
     expect(isUnauthorizedApiError({ response: { status: 403 } })).toBe(false)
   })
 
-  it('extracts clean server field errors', () => {
-    const fieldErrors: Record<string, unknown[]> = {
-      email: ['Email address is required.', '   ', null],
-      password: ['Password is required.', { unsafe: true }],
-      bio: ['one', 'two', 'three', 'four', 'five', 'six'],
-      constructor: ['should be ignored'],
-    }
-    Object.defineProperty(fieldErrors, '__proto__', {
-      value: ['should not pollute prototypes'],
-      enumerable: true,
-    })
-
-    expect(
-      resolveFieldErrors({
-        response: {
-          data: {
-            fieldErrors,
-          },
-        },
-      }),
-    ).toMatchObject({
-      email: ['Email address is required.'],
-      password: ['Password is required.'],
-      bio: ['one', 'two', 'three', 'four', 'five'],
-    })
-    expect(resolveFieldErrors({ response: { data: { fieldErrors } } })).not.toHaveProperty('__proto__')
-    expect(resolveFieldErrors({ response: { data: { fieldErrors } } })).not.toHaveProperty('constructor')
-  })
 })

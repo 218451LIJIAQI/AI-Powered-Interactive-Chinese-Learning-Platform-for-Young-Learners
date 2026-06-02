@@ -625,14 +625,15 @@ class ContentManagementIntegrationTests {
         assertThat(lessonRepository.findById(archivedLessonId).orElseThrow().getContentStatus())
                 .isEqualTo(ContentStatus.ARCHIVED);
 
-        mockMvc.perform(get("/api/v1/public/courses"))
+        MvcResult publicCoursesResult = mockMvc.perform(get("/api/v1/public/courses"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Published free lesson')]").exists())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package')]").exists())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Archived hidden lesson')]").doesNotExist())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.locked==true)]").exists())
                 .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.currencyCode=='MYR')]").exists())
-                .andExpect(jsonPath("$.data.items[?(@.title=='Published paid package' && @.rating!=null)]").doesNotExist());
+                .andReturn();
+        assertThat(publicCoursesResult.getResponse().getContentAsString()).doesNotContain("\"rating\"");
 
         mockMvc.perform(get("/api/v1/public/courses/LESSON-" + publishedLessonId))
                 .andExpect(status().isOk())

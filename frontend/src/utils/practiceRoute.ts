@@ -43,7 +43,7 @@ function normalizeAliasKey(value: string) {
   return value.trim().toLowerCase().replaceAll('_', '-').replace(/\s+/g, '-')
 }
 
-export function practiceActivityQueryValue(type: StudentPracticeActivityType) {
+function practiceActivityQueryValue(type: StudentPracticeActivityType) {
   return type.toLowerCase().replaceAll('_', '-')
 }
 

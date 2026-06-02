@@ -55,9 +55,7 @@ import com.example.aichinese.entity.enums.ManagedContentType;
  * {@code boolean} so the JSON wire format always emits a value.</p>
  *
  * <p>{@link #shortDescription} is the front-end teaser line — the
- * service truncates the underlying long description if needed.
- * {@link #rating} is reserved for the future ratings feature; may
- * be {@code null} until ratings ship.</p>
+ * service truncates the underlying long description if needed.</p>
  *
  * <h2>Wire format</h2>
  * <p>The component order is locked via {@link JsonPropertyOrder} so
@@ -71,7 +69,7 @@ import com.example.aichinese.entity.enums.ManagedContentType;
  * {@link #accessType}, {@link #status}). Contextual fields
  * ({@link #shortDescription}, {@link #teacher}, {@link #level},
  * {@link #category}, {@link #learningType}, {@link #price},
- * {@link #rating}, {@link #coverImageUrl}) remain nullable per the
+ * {@link #coverImageUrl}) remain nullable per the
  * documented contextual rules.</p>
  *
  * @param id               composite identifier in the form
@@ -101,8 +99,6 @@ import com.example.aichinese.entity.enums.ManagedContentType;
  *                         rows that never had a price set
  * @param currencyCode     ISO 4217 code used by checkout for this
  *                         listed price; never {@code null}
- * @param rating           future ratings feature placeholder;
- *                         {@code null} until ratings ship
  * @param coverImageUrl    optional cover image reference;
  *                         nullable
  * @param locked           server-derived access flag; primitive so
@@ -124,7 +120,6 @@ import com.example.aichinese.entity.enums.ManagedContentType;
         "accessType",
         "price",
         "currencyCode",
-        "rating",
         "coverImageUrl",
         "locked",
         "status"
@@ -142,7 +137,6 @@ public record PublicCourseSummaryResponse(
         AccessType accessType,
         BigDecimal price,
         String currencyCode,
-        BigDecimal rating,
         String coverImageUrl,
         boolean locked,
         ContentStatus status) {

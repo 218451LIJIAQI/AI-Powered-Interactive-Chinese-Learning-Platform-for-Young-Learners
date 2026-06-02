@@ -21,7 +21,6 @@ type ApiErrorPayload = {
     data?: {
       message?: unknown
       errors?: unknown[]
-      fieldErrors?: Record<string, unknown[]>
     }
   }
   request?: unknown
@@ -30,7 +29,6 @@ type ApiErrorPayload = {
 }
 
 const MAX_USER_MESSAGE_LENGTH = 280
-const MAX_FIELD_ERROR_MESSAGES = 5
 const UNSAFE_MESSAGE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g
 
 function cleanServerMessage(value: unknown) {
@@ -73,28 +71,4 @@ export function resolveApiError(reason: unknown, fallback = 'We could not comple
 
 export function isUnauthorizedApiError(reason: unknown) {
   return (reason as ApiErrorPayload | null)?.response?.status === 401
-}
-
-export function resolveFieldErrors(reason: unknown): Record<string, string[]> {
-  const fieldErrors = (reason as ApiErrorPayload | null)?.response?.data?.fieldErrors
-  if (!fieldErrors || typeof fieldErrors !== 'object') {
-    return {}
-  }
-
-  const result: Record<string, string[]> = Object.create(null) as Record<string, string[]>
-  Object.entries(fieldErrors).forEach(([field, messages]) => {
-    if (!field || field === '__proto__' || field === 'constructor' || field === 'prototype') return
-    if (!Array.isArray(messages)) return
-
-    const cleanMessages = messages
-      .map(cleanServerMessage)
-      .filter((message): message is string => Boolean(message))
-      .slice(0, MAX_FIELD_ERROR_MESSAGES)
-
-    if (cleanMessages.length > 0) {
-      result[field] = cleanMessages
-    }
-  })
-
-  return result
 }

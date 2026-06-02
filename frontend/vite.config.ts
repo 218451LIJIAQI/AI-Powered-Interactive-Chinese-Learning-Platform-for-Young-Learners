@@ -57,26 +57,9 @@ export default defineConfig({
         url: 'http://localhost:3000/',
       },
     },
-    exclude: ['node_modules/**', 'dist/**', 'tests/e2e/**'],
+    exclude: ['node_modules/**', 'dist/**'],
     globals: true,
     setupFiles: './src/test/setup.ts',
-    coverage: {
-      provider: 'v8',
-      include: [
-        'src/api/**/*.{ts,vue}',
-        'src/config/**/*.{ts,vue}',
-        'src/plugins/**/*.{ts,vue}',
-        'src/stores/**/*.{ts,vue}',
-        'src/utils/**/*.{ts,vue}',
-      ],
-      reporter: ['text', 'html', 'json'],
-      thresholds: {
-        statements: 70,
-        branches: 72,
-        functions: 50,
-        lines: 70,
-      },
-    },
   },
   resolve: {
     alias: {

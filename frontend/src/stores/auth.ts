@@ -1,7 +1,6 @@
 /**
  * Pinia store for authentication state — token, current user profile,
- * and the optional read-only "preview role" used by the QA preview
- * deployment.
+ * and the optional read-only "preview role" used for FYP demos.
  *
  * <h2>Three session modes</h2>
  * <ul>

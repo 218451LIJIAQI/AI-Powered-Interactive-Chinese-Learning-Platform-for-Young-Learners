@@ -1,2 +1,0 @@
-# ZAP rule overrides for accepted findings.
-# Format: rule_id<TAB>WARN|IGNORE<TAB>reason

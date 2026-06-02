@@ -7,14 +7,6 @@ $tmp
 uploads/
 *.log
 .env*.local
-!.env.smtp.local.example
-!.env.ai.local.example
-BACKEND_AUDIT_LEDGER_*.md
-BACKEND_COMPREHENSIVE_AUDIT_PROMPT.md
-BACKEND_COMPREHENSIVE_AUDIT_PROMPT_ZH.md
-BACKEND_RISK_MARKER_REPORT_*.txt
-DATABASE_COMPREHENSIVE_AUDIT_PROMPT.md
-DATABASE_COMPREHENSIVE_AUDIT_PROMPT_ZH.md
 
 ### STS ###
 .apt_generated

@@ -52,23 +52,15 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
-  # Allow Spring Boot to drain in-flight HTTP requests instead of severing them
-  # when the JVM receives SIGTERM. Critical when the deployment platform is
-  # rolling instances (Docker stop, Kubernetes rolling update) so that no
-  # request returns half-written or with a connection-reset error.
+  # Let Spring Boot finish in-flight requests when the local app is stopped.
   shutdown: graceful
 
-# Spring Boot Actuator: only expose health (liveness/readiness probes for
-# Docker/K8s/load balancers) and info (build metadata). Everything else stays
-# closed by default to avoid leaking internal information through unauthenticated
-# endpoints. The detailed health view (DB connectivity, disk space, etc.) is
-# kept off the wire because /api/v1/health already serves the public
-# liveness response and the management port is not separately firewalled.
+# Spring Boot Actuator: keep only a tiny health/info surface for local
+# development checks. The public FYP health endpoint remains /api/v1/health.
 management:
   endpoints:
     web:
       exposure:
-        # Add prometheus explicitly after configuring an internal/authenticated scraper.
         include: ${MANAGEMENT_EXPOSED_ENDPOINTS:health,info}
   endpoint:
     health:
@@ -80,22 +72,14 @@ management:
       enabled: true
     readinessstate:
       enabled: true
-    # Spring Boot auto-registers a MailHealthIndicator whenever
-    # spring-boot-starter-mail is on the classpath, and it actively opens an
-    # SMTP connection on every health check. SMTP is optional for local/test
-    # use: when SMTP_ENABLED=false NoOpEmailService takes over and no mail is
-    # sent. Production startup requires SMTP_ENABLED=true. An unreachable host should NOT
-    # cause /actuator/health to flap to DOWN and fail the deployment platform's
-    # liveness probe. We therefore disable the mail indicator outright; if a
-    # real SMTP relay is wired up later, the application's own EmailService
-    # will surface failures through structured logs.
+    # SMTP is optional for FYP/local use. Disable the framework mail health
+    # probe so a blank SMTP setup does not make local health checks fail.
     mail:
       enabled: false
 
 # SpringDoc OpenAPI: customise the docs path so it matches the API prefix
 # convention. The Swagger UI lives at /swagger-ui.html (default) and reads
-# the JSON description from /v3/api-docs. The frontend can point its
-# OpenAPI client generator at /v3/api-docs to scaffold typed API clients.
+# the JSON description from /v3/api-docs.
 springdoc:
   api-docs:
     path: /v3/api-docs

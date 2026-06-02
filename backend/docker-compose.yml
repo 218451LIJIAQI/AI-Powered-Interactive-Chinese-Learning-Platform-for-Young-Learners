@@ -37,9 +37,8 @@ services:
       # MySQL 8.4 made caching_sha2_password the only built-in default and
       # removed the --default-authentication-plugin option, so we no longer
       # set it explicitly here.
-      # Disable strict GTID consistency checks that complicate Flyway repair
-      # operations during development; production deployments should re-enable
-      # the platform's preferred replication settings.
+      # Keep the local FYP database simple; this avoids GTID restrictions
+      # during repeated demo resets and Flyway validation.
       - --enforce-gtid-consistency=OFF
     healthcheck:
       test: ['CMD-SHELL', 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping -u"$${MYSQL_USER}" -h 127.0.0.1 --silent']

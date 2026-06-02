@@ -5248,16 +5248,6 @@ img {
   font-weight: 700;
 }
 
-.student-teacher-rating {
-  display: grid;
-  gap: 6px;
-  margin-top: 14px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid rgba(237, 234, 247, 0.96);
-  background: linear-gradient(135deg, rgba(255, 250, 239, 0.92), rgba(255, 255, 255, 0.98));
-}
-
 .student-library-list,
 .student-schedule-list,
 .student-reminder-list,

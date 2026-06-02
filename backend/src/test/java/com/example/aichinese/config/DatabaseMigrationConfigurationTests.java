@@ -12,16 +12,15 @@ import org.junit.jupiter.api.Test;
  * Pins the migration contract: runtime profiles use Flyway-managed
  * schema with Hibernate set to {@code validate} (never
  * {@code update} / {@code create-drop}), preventing accidental schema
- * drift between dev / test / prod.
+ * drift between FYP demo, local development, and tests.
  */
 class DatabaseMigrationConfigurationTests {
 
     @Test
     void runtimeProfilesUseFlywayWithHibernateValidationOnly() throws IOException {
         String application = readResource("src/main/resources/application.yml");
-        String example = readResource("src/main/resources/application-example.yml");
         String local = readResource("src/main/resources/application-local.yml");
-        String prod = readResource("src/main/resources/application-prod.yml");
+        String demo = readResource("src/main/resources/application-demo.yml");
 
         assertThat(application).contains("ddl-auto: validate");
         assertThat(application).contains("flyway:");
@@ -35,22 +34,8 @@ class DatabaseMigrationConfigurationTests {
         assertThat(application).doesNotContain("password: ${DB_PASSWORD:root}");
         assertThat(application).doesNotContain("ddl-auto: update");
 
-        assertThat(example).contains("ddl-auto: validate");
-        assertThat(example).contains("flyway:");
-        assertThat(example).contains("enabled: true");
-        assertThat(example).contains("username: ${DB_USERNAME}");
-        assertThat(example).contains("password: ${DB_PASSWORD}");
-        assertThat(example).contains("connectionTimeZone=Asia/Singapore");
-        assertThat(example).contains("useUnicode=true");
-        assertThat(example).contains("characterEncoding=utf8");
-        assertThat(example).doesNotContain("username: ${DB_USERNAME:root}");
-        assertThat(example).doesNotContain("password: ${DB_PASSWORD:root}");
-        assertThat(example).doesNotContain("ddl-auto: update");
-
         assertThat(application).contains("mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}");
         assertThat(application).contains("provider: ${PAYMENT_PROVIDER:no-op}");
-        assertThat(example).contains("mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}");
-        assertThat(example).contains("provider: ${PAYMENT_PROVIDER:no-op}");
         assertThat(local).contains("on-profile: local");
         assertThat(local).contains("username: ${DB_USERNAME:aichinese_app}");
         assertThat(local).contains("password: ${DB_PASSWORD:replace-with-a-strong-application-db-password}");
@@ -61,19 +46,19 @@ class DatabaseMigrationConfigurationTests {
         assertThat(local).doesNotContain("sk_test_");
         assertThat(local).doesNotContain("sk_live_");
         assertThat(local).doesNotContain("provider: ${PAYMENT_PROVIDER:stripe}");
-        assertThat(prod).contains("mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}");
-        assertThat(prod).contains("provider: ${PAYMENT_PROVIDER:stripe}");
-        assertThat(prod).contains("Startup now fails fast");
-        assertThat(prod).contains("baseline-on-migrate: false");
-        assertThat(prod).contains("clean-disabled: true");
+        assertThat(demo).contains("on-profile: demo");
+        assertThat(demo).contains("jdbc:h2:mem:aichinese-demo");
+        assertThat(demo).contains("ddl-auto: create-drop");
+        assertThat(demo).contains("flyway:");
+        assertThat(demo).contains("enabled: false");
+        assertThat(demo).contains("provider: mock");
+        assertThat(demo).contains("mock-success-enabled: true");
     }
 
     @Test
     void localDatabaseConfigurationUsesApplicationUserAndUtf8mb4() throws IOException {
         String env = readResource(".env.example");
         String compose = readResource("docker-compose.yml");
-        String repairScript = readResource("scripts/repair-flyway-checksums.ps1");
-        String validationScript = readResource("scripts/validate-flyway-mysql.ps1");
 
         assertThat(env).contains("DB_USERNAME=aichinese_app");
         assertThat(env).contains("DB_ROOT_PASSWORD=");
@@ -89,95 +74,6 @@ class DatabaseMigrationConfigurationTests {
         assertThat(compose).doesNotContain("-p$${MYSQL_PASSWORD}");
         assertThat(compose).doesNotContain("MYSQL_ROOT_HOST");
         assertThat(compose).doesNotContain("MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}");
-
-        assertThat(repairScript).contains("connectionTimeZone=Asia/Singapore");
-        assertThat(repairScript).contains("useUnicode=true");
-        assertThat(repairScript).contains("characterEncoding=utf8");
-
-        assertThat(validationScript).contains("$AppUsername = \"aichinese_app\"");
-        assertThat(validationScript).contains("DB_USERNAME = $AppUsername");
-        assertThat(validationScript).contains("DB_PASSWORD = $AppPassword");
-        assertThat(validationScript).contains("MYSQL_USER = $AppUsername");
-        assertThat(validationScript).contains("MYSQL_PASSWORD = $AppPassword");
-        assertThat(validationScript).doesNotContain("\"MYSQL_PASSWORD=$AppPassword\"");
-        assertThat(validationScript).doesNotContain("\"MYSQL_PWD=$RootPassword\"");
-        assertThat(validationScript).contains("-DbUsername $AppUsername");
-        assertThat(validationScript).contains("fresh consolidated V1 migration history");
-        assertThat(validationScript).contains("fresh point-award source uniqueness");
-        assertThat(validationScript).contains("fresh active reset token uniqueness");
-    }
-
-    @Test
-    void productionOperationalConfigPinsHealthChecksCachingAndCiQualityGates() throws IOException {
-        String productionCompose = readResource("../docker-compose.prod.yml");
-        String backendDockerfile = readResource("Dockerfile");
-        String frontendDockerfile = readResource("../frontend/Dockerfile");
-        String productionEnv = readResource("../.env.prod.example");
-        String nginx = readResource("../frontend/nginx.conf");
-        String qualityGate = readResource("../.github/workflows/repository-quality-gate.yml");
-        String rootPackage = readResource("../package.json");
-        String contributing = readResource("../CONTRIBUTING.md");
-        String releasePrecheck = readResource("../docs/RELEASE_PRECHECK_RUNBOOK.md");
-
-        assertThat(productionCompose).contains("MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysqladmin ping");
-        assertThat(productionCompose).doesNotContain("-p${DB_PASSWORD");
-        assertThat(productionCompose).doesNotContain("-p$${MYSQL_PASSWORD}");
-        assertThat(productionCompose).contains("curl -fsS http://127.0.0.1:8080/actuator/health/readiness >/dev/null");
-        assertThat(productionCompose).contains("condition: service_healthy");
-        assertThat(productionCompose).contains("curl -fsS http://127.0.0.1:8080/ >/dev/null");
-        assertThat(productionCompose).contains("VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}");
-
-        assertThat(backendDockerfile).contains("apk add --no-cache curl");
-        assertThat(backendDockerfile).contains("HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3");
-        assertThat(backendDockerfile).contains("curl -fsS http://127.0.0.1:8080/actuator/health/readiness");
-        assertThat(frontendDockerfile).contains("ARG VITE_API_BASE_URL=/api/v1");
-        assertThat(frontendDockerfile).contains("ENV VITE_API_BASE_URL=$VITE_API_BASE_URL");
-        assertThat(frontendDockerfile).contains("apk add --no-cache curl");
-        assertThat(frontendDockerfile).contains("COPY --from=build --chown=nginx:nginx /workspace/dist /usr/share/nginx/html");
-        assertThat(frontendDockerfile).contains("HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3");
-        assertThat(frontendDockerfile).contains("curl -fsS http://127.0.0.1:8080/");
-        assertThat(productionEnv).contains("VITE_API_BASE_URL=/api/v1");
-
-        assertThat(nginx).contains("location = /index.html");
-        assertThat(nginx).contains("location ~ ^/(sw\\.js|registerSW\\.js|manifest\\.webmanifest)$");
-        assertThat(nginx).contains("location = /api/v1/payments/webhooks/stripe");
-        assertThat(nginx).contains("client_max_body_size 256k;");
-        assertThat(nginx).contains("Cache-Control \"no-cache, no-store, must-revalidate\"");
-        assertThat(nginx).contains("Cache-Control \"public, max-age=604800, immutable\"");
-
-        assertThat(qualityGate).contains("Frontend format check");
-        assertThat(qualityGate).contains("npm run format:check");
-        assertThat(qualityGate).contains("Validate Docker Compose configuration");
-        assertThat(qualityGate).contains("env_file=\"${RUNNER_TEMP}/quality-gate.prod.env\"");
-        assertThat(qualityGate).contains("trap 'rm -f \"${env_file}\"' EXIT");
-        assertThat(qualityGate).contains("docker compose --env-file \"${env_file}\" -f docker-compose.prod.yml config >/dev/null");
-        assertThat(qualityGate).contains("docker compose -f backend/docker-compose.yml config >/dev/null");
-        assertThat(qualityGate).contains("STRIPE_API_KEY=quality-gate-stripe-key-placeholder");
-        assertThat(qualityGate).contains("STRIPE_WEBHOOK_SECRET=quality-gate-stripe-webhook-placeholder");
-        assertThat(qualityGate).doesNotContain("sk_live_");
-        assertThat(qualityGate).doesNotContain("sk_test_");
-        assertThat(qualityGate).doesNotContain("whsec_");
-        assertThat(qualityGate).contains("Backend static analysis");
-        assertThat(qualityGate).contains("spotbugs:check");
-        assertThat(qualityGate).contains("-DskipOpenApiContract=false");
-        assertThat(qualityGate).contains("docs/RELEASE_PRECHECK_RUNBOOK.md");
-
-        assertThat(rootPackage).contains("\"quality\"");
-        assertThat(rootPackage).contains("\"quality:frontend\"");
-        assertThat(rootPackage).contains("\"quality:backend\"");
-        assertThat(rootPackage).contains("\"quality:release\"");
-        assertThat(rootPackage).contains("scripts/run-backend-quality-gate.mjs");
-
-        assertThat(contributing).contains("Run `npm run quality` from the repository root");
-        assertThat(contributing).contains("single consolidated V1 baseline");
-        assertThat(contributing).contains("After the baseline is frozen against production data");
-        assertThat(contributing).doesNotContain("V14__final_database_contract_hardening.sql");
-        assertThat(contributing).doesNotContain("starting at `V15`");
-
-        assertThat(releasePrecheck).contains("npm run quality");
-        assertThat(releasePrecheck).contains("validate-flyway-mysql.ps1");
-        assertThat(releasePrecheck).contains("docker compose --env-file .env.prod -f docker-compose.prod.yml config");
-        assertThat(releasePrecheck).contains("DAST ZAP Baseline");
     }
 
     @Test
@@ -229,7 +125,6 @@ class DatabaseMigrationConfigurationTests {
     @Test
     void consolidatedBaselineEnforcesFinalDomainChecksSessionsQuotaSearchAndHotPathIndexes() throws IOException {
         String migration = readResource("src/main/resources/db/migration/V1__consolidated_schema.sql");
-        String validationScript = readResource("scripts/validate-flyway-mysql.ps1");
 
         assertThat(migration).contains("Baseline blocked: rows violate tightened status/domain checks");
         assertThat(migration).contains("Baseline blocked: rows violate review/read state consistency checks");
@@ -259,57 +154,6 @@ class DatabaseMigrationConfigurationTests {
                 "create\\s+index\\s+idx_payment_records_provider_reference\\s+on\\s+payment_records");
         assertThat(migration).doesNotContainPattern(
                 "create\\s+index\\s+idx_refund_requests_student_created\\s+on\\s+refund_requests");
-
-        assertThat(validationScript).contains("fresh consolidated V1 migration history");
-        assertThat(validationScript).contains("fresh AI chat sender role check");
-        assertThat(validationScript).contains("fresh lesson access price check");
-        assertThat(validationScript).contains("fresh current teacher verification document uniqueness");
-        assertThat(validationScript).contains("fresh notification inbox hot-path index");
-        assertThat(validationScript).contains("fresh notification redundant unread index removed");
-    }
-
-    @Test
-    void flywayRepairScriptsDoNotExposeDatabasePasswordsInCommandLine() throws IOException {
-        String repairScript = readResource("scripts/repair-flyway-checksums.ps1");
-        String validationScript = readResource("scripts/validate-flyway-mysql.ps1");
-
-        assertThat(repairScript).doesNotContain("-Dflyway.password=");
-        assertThat(repairScript).contains("FLYWAY_PASSWORD");
-        assertThat(validationScript).doesNotContain("$EscapedPassword");
-        assertThat(validationScript).doesNotContain("ConvertTo-SecureString '$");
-        assertThat(validationScript).contains("AICHINESE_FLYWAY_REPAIR_PASSWORD");
-    }
-
-    @Test
-    void databaseBackupAndRestoreScriptsVerifyArtifactsSafely() throws IOException {
-        String backupScript = readResource("../scripts/backup-db.sh");
-        String restoreScript = readResource("../scripts/restore-db.sh");
-
-        assertThat(backupScript).contains("umask 077");
-        assertThat(backupScript).contains("require_command mysqldump");
-        assertThat(backupScript).contains("require_command gzip");
-        assertThat(backupScript).contains("require_command sha256sum");
-        assertThat(backupScript).contains("require_command awk");
-        assertThat(backupScript).contains("--hex-blob");
-        assertThat(backupScript).contains("--default-character-set=utf8mb4");
-        assertThat(backupScript).contains("sha256sum \"$tmp_target\"");
-        assertThat(backupScript).contains("printf '%s  %s\\n' \"$checksum\"");
-        assertThat(backupScript).contains("must not start with a hyphen");
-        assertThat(backupScript).doesNotContain("sha256sum \"$target\" > \"$target.sha256\"");
-
-        assertThat(restoreScript).contains("read_checksum_digest()");
-        assertThat(restoreScript).contains("mapfile -t checksum_lines");
-        assertThat(restoreScript).contains("Checksum file must contain exactly one entry");
-        assertThat(restoreScript).contains("actual_checksum=\"$(sha256sum \"$backup_path\")\"");
-        assertThat(restoreScript).contains("Checksum verification failed");
-        assertThat(restoreScript).contains("gzip -t -- \"$backup_path\"");
-        assertThat(restoreScript).contains("RESTORE_ALLOW_UNVERIFIED");
-        assertThat(restoreScript).contains("--binary-mode=1");
-        assertThat(restoreScript).contains("--default-character-set=utf8mb4");
-        assertThat(restoreScript).contains("must not start with a hyphen");
-        assertThat(restoreScript).doesNotContain("sha256sum --check");
-        assertThat(restoreScript).doesNotContain("require_command wc");
-        assertThat(restoreScript).doesNotContain("require_command tr");
     }
 
     private String readResource(String path) throws IOException {

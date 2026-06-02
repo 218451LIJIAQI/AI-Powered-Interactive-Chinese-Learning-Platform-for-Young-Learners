@@ -13,8 +13,8 @@ spring:
     open-in-view: false
     show-sql: false
   flyway:
-    # MySQL production migrations are validated in runtime profiles; H2 tests
-    # use create-drop schema generation to keep each test context isolated.
+    # MySQL migrations are validated in runtime profiles; H2 tests use
+    # create-drop schema generation to keep each test context isolated.
     enabled: false
   sql:
     init:
@@ -28,7 +28,9 @@ app:
   security:
     jwt:
       secret: RuntimeStyleJwtSecretForTests1234567890AB
-      expiration: 900000
+      # Keep test tokens long-lived so slow local verification or a paused
+      # laptop cannot expire a token in the middle of one MockMvc test.
+      expiration: 86400000
       refresh-token-expiration: 604800000
       refresh-token-cookie-name: mandarin_spark_refresh
       refresh-token-cookie-secure: false

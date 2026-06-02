@@ -27,7 +27,7 @@ function browserStorage(name: 'localStorage' | 'sessionStorage'): Storage | null
   }
 }
 
-export function getLocalStorage(): Storage | null {
+function getLocalStorage(): Storage | null {
   return browserStorage('localStorage')
 }
 

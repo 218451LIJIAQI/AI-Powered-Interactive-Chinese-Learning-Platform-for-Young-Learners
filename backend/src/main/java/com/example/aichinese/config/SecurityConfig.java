@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -46,11 +47,9 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
  * <p>Public surfaces are kept tightly scoped:</p>
  * <ul>
  *   <li>{@code /api/v1/health} and {@code /actuator/health(/**)} —
- *       container / load-balancer health probes.</li>
+ *       simple local health checks.</li>
  *   <li>{@code /v3/api-docs(/**)} and {@code /swagger-ui(/**)} — OpenAPI
- *       discovery; production has these turned off via
- *       {@code springdoc.api-docs.enabled=false} so the permit-all rule
- *       only kicks in for dev / preview-QA.</li>
+ *       discovery for local development and FYP demonstration.</li>
  *   <li>Auth bootstrap routes ({@code register}, {@code login},
  *       {@code forgot-password}, {@code reset-password}) and the public
  *       Stripe webhook endpoint.</li>
@@ -151,7 +150,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers
-                        .contentTypeOptions(opts -> { })
+                        .contentTypeOptions(Customizer.withDefaults())
                         .frameOptions(frame -> frame.deny())
                         .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
                         .referrerPolicy(ref -> ref.policy(
@@ -174,21 +173,15 @@ public class SecurityConfig {
                         // bytes have already been written to the client.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/v1/health").permitAll()
-                        // Actuator probes for Docker / Kubernetes / load-balancer health checks.
+                        // Minimal local health checks.
                         // Only the curated subset configured under management.endpoints.web.exposure
                         // (health + info) is mounted; everything else is gone from the runtime.
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                         .permitAll()
                         // SpringDoc surfaces: machine-readable OpenAPI JSON and the Swagger UI
                         // bundle. Both are read-only and intentionally accessible without auth so
-                        // that the frontend (and any partner integration) can discover the API
-                        // contract during development.
-                        // PRODUCTION GATE: springdoc.api-docs.enabled and
-                        // springdoc.swagger-ui.enabled are both set to false in
-                        // application-prod.yml, so these routes return 404 on a prod
-                        // deployment and this permit-all rule never applies in practice.
-                        // Override via SPRINGDOC_API_DOCS_ENABLED=true if a trusted internal
-                        // portal needs schema access in prod.
+                        // the FYP demo and local development workflow can inspect the API
+                        // contract without extra tooling.
                         .requestMatchers(
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",

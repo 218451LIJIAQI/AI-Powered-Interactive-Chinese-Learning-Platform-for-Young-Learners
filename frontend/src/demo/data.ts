@@ -1,25 +1,24 @@
 /**
- * Static fixture data the preview deployment uses when
+ * Static fixture data the FYP preview mode uses when
  * {@code VITE_USE_DEMO_DATA=true} and {@code VITE_ENABLE_PREVIEW_MODE=true}.
  *
  * <h2>What it covers</h2>
  * <p>One fixture per response shape used by every page on every
- * persona — enough for the QA / sales demo to navigate the full
+ * persona — enough for an FYP demonstration to navigate the full
  * product without a backend.</p>
  *
  * <h2>Strict typing</h2>
  * <p>Each export is typed against the corresponding
  * {@code types/api.ts} interface so a backend contract change
  * trips a compile error in this file. Without that, demo data
- * silently drifts and the preview deployment renders broken UI
- * months before anyone notices.</p>
+ * silently drifts and demo pages render broken UI.</p>
  *
  * <h2>Never bundled in production</h2>
  * <p>The composables that read this file
  * ({@code useResource}, {@code stores/auth}) gate the fallback on
  * {@code appEnv.useDemoData}. Vite tree-shaking still includes the
  * data in the bundle, but the runtime never references it for a
- * production build, so there is no leaked-fixture risk.</p>
+ * normal build, so there is no accidental demo-fixture behaviour.</p>
  */
 import type {
   AdminAnalyticsResponse,
@@ -124,7 +123,6 @@ export const publicCourses: PublicCourseSummary[] = [
     accessType: 'PAID',
     price: 49,
     currencyCode: 'USD',
-    rating: 4.8,
     coverImageUrl: null,
     locked: false,
     status: 'PUBLISHED',
@@ -142,7 +140,6 @@ export const publicCourses: PublicCourseSummary[] = [
     accessType: 'PAID',
     price: 79,
     currencyCode: 'USD',
-    rating: 4.9,
     coverImageUrl: null,
     locked: false,
     status: 'PUBLISHED',
@@ -160,7 +157,6 @@ export const publicCourses: PublicCourseSummary[] = [
     accessType: 'PAID',
     price: 59,
     currencyCode: 'USD',
-    rating: 4.7,
     coverImageUrl: null,
     locked: false,
     status: 'PUBLISHED',
@@ -178,7 +174,6 @@ export const publicCourses: PublicCourseSummary[] = [
     accessType: 'PAID',
     price: 39,
     currencyCode: 'USD',
-    rating: 4.6,
     coverImageUrl: null,
     locked: false,
     status: 'PUBLISHED',

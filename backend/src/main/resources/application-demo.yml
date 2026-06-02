@@ -1,0 +1,34 @@
+spring:
+  config:
+    activate:
+      on-profile: demo
+  datasource:
+    url: jdbc:h2:mem:aichinese-demo;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+  flyway:
+    enabled: false
+  sql:
+    init:
+      mode: never
+
+server:
+  address: 127.0.0.1
+
+app:
+  security:
+    jwt:
+      secret: DemoProfileJwtSecretForFypLocalRun1234567890AB
+  payment:
+    provider: mock
+    mock-success-enabled: true
+  ai:
+    enable-real-provider: false
+  email:
+    enabled: false
