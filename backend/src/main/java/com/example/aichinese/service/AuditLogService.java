@@ -127,9 +127,8 @@ public class AuditLogService {
     }
 
     /**
-     * Look up a single audit log by its identifier. Uses the repository's
-     * primary-key index instead of streaming the entire table the way the
-     * controller previously did.
+     * Look up a single audit log by its identifier via the repository's
+     * primary-key index.
      */
     @Transactional(readOnly = true)
     public AuditLogResponse getAuditLog(Long id) {

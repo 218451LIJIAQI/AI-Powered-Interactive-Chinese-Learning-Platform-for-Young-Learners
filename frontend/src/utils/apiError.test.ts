@@ -58,5 +58,4 @@ describe('resolveApiError', () => {
     expect(isUnauthorizedApiError({ response: { status: 401 } })).toBe(true)
     expect(isUnauthorizedApiError({ response: { status: 403 } })).toBe(false)
   })
-
 })

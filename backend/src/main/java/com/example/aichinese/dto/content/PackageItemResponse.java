@@ -48,9 +48,8 @@ import com.example.aichinese.entity.enums.PackageItemType;
  * mapper guarantees from any persisted {@code package_items} row
  * ({@link #id}, {@link #itemType}, {@link #itemId},
  * {@link #displayOrder}). {@link #packageId} is nullable to
- * accommodate the rare orphaned row (the mapper drops the FK when
- * the parent association failed to hydrate; see
- * {@link com.example.aichinese.mapper.ContentManagementMapper#toPackageItemResponse}).
+ * accommodate the rare orphaned row (the content mapper drops the FK
+ * when the parent association failed to hydrate).
  * {@link #titleSnapshot} may legitimately be {@code null} on legacy
  * rows authored before the snapshot feature shipped.</p>
  *

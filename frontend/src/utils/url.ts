@@ -10,7 +10,7 @@
  * `noopener,noreferrer` so the new tab cannot reverse-tabnab the
  * opener via `window.opener`.
  */
-export interface SafeHttpUrlOptions {
+interface SafeHttpUrlOptions {
   allowRelative?: boolean
   baseOrigin?: string
   sameOriginOnly?: boolean

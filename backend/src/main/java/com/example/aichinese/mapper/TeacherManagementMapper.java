@@ -197,7 +197,7 @@ public class TeacherManagementMapper {
                 courseCount);
     }
 
-    public AdminAuditSummaryResponse toAuditSummary(AuditLog auditLog) {
+    private AdminAuditSummaryResponse toAuditSummary(AuditLog auditLog) {
         return new AdminAuditSummaryResponse(
                 auditLog.getId(),
                 auditLog.getActionType(),

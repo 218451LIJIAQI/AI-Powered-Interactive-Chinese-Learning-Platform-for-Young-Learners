@@ -248,11 +248,8 @@ public class LiveClassService {
     @Transactional(readOnly = true)
     public PageResponse<LiveClassResponse> getStudentLiveClasses(SecurityUserDetails currentUser, int page, int size) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
-        // Previously this method called liveClassRepository.findAll() and
-        // filtered every row in JVM via isStudentVisibleClass(). That scaled
-        // with the *total* live class count (including private/draft/archived
-        // ones the student should never see). The new query pushes the
-        // visibility predicate + ordering down to SQL.
+        // Push the student visibility predicate and ordering down to SQL
+        // instead of paginating across private or unpublished classes.
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<LiveClass> liveClassPage = liveClassRepository.findStudentVisibleClasses(

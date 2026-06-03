@@ -41,7 +41,7 @@ public final class SensitiveDataRedactor {
         throw new AssertionError("SensitiveDataRedactor is a utility class and must not be instantiated.");
     }
 
-    public static boolean isSensitiveKey(String key) {
+    private static boolean isSensitiveKey(String key) {
         String lower = key == null ? "" : key.toLowerCase(Locale.ROOT);
         return lower.contains("authorization")
                 || lower.contains("cookie")

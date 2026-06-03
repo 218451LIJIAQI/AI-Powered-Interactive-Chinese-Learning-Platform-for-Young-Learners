@@ -54,7 +54,6 @@ class RefreshTokenServiceTests {
         assertThat(current.getRevokedAt()).isNotNull();
         assertThat(current.getReplacedByTokenHash()).isNotBlank();
         verify(refreshTokenRepository).findLockedByTokenHash(anyString());
-        verify(refreshTokenRepository, never()).findByTokenHash(anyString());
     }
 
     @Test

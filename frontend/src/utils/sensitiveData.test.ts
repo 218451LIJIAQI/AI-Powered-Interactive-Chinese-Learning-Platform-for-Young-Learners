@@ -6,6 +6,8 @@ import {
   scrubSensitiveUnknown,
   scrubSensitiveUrl,
   scrubSensitiveValue,
+  firstQueryText,
+  removeSensitiveRouteState,
 } from './sensitiveData'
 
 describe('sensitive data scrubbing', () => {
@@ -46,6 +48,29 @@ describe('sensitive data scrubbing', () => {
       '/reset-password?token=[Filtered]&tab=account',
     )
     expect(scrubSensitiveUrl('?token=raw-token&tab=account')).toBe('?token=[Filtered]&tab=account')
+  })
+
+  it('extracts the first non-empty query text from scalar or array query values', () => {
+    expect(firstQueryText(' Parent@Example.com ')).toBe('Parent@Example.com')
+    expect(firstQueryText(['', null, ' reset-token '])).toBe('reset-token')
+    expect(firstQueryText(null)).toBe('')
+  })
+
+  it('removes sensitive router state while preserving safe query context', () => {
+    expect(
+      removeSensitiveRouteState(
+        {
+          tab: 'account',
+          token: 'raw-reset-token',
+          redirect: '/auth?token=nested-token',
+        },
+        '#email=parent@example.com',
+      ),
+    ).toEqual({
+      query: { tab: 'account' },
+      hash: '',
+      changed: true,
+    })
   })
 
   it('redacts nested objects and sensitive record keys', () => {

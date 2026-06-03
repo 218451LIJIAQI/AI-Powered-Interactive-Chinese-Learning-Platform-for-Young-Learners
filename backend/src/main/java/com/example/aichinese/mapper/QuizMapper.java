@@ -80,7 +80,7 @@ public class QuizMapper {
                 quiz.getUpdatedAt());
     }
 
-    public TeacherQuizQuestionResponse toTeacherQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
+    private TeacherQuizQuestionResponse toTeacherQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
         Objects.requireNonNull(question, "question");
         List<QuizOption> safeOptions = options == null ? List.of() : options;
         return new TeacherQuizQuestionResponse(

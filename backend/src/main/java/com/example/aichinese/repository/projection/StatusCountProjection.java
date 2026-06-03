@@ -1,9 +1,5 @@
 package com.example.aichinese.repository.projection;
 
-import java.util.Objects;
-import java.util.Optional;
-
-import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 /**
@@ -27,11 +23,8 @@ import org.springframework.lang.Nullable;
  * {@link Enum#name() name()} when the column is mapped
  * {@code @Enumerated(EnumType.STRING)} (which every status column in this
  * platform is — see entity definitions). Callers should prefer
- * {@link #asEnum(Class)} over a hand-written
- * {@code Enum.valueOf(EnumClass.class, projection.getStatus())} call so
- * that a stale value left behind by a renamed enum constant degrades to
- * {@link Optional#empty()} instead of throwing
- * {@link IllegalArgumentException} into the analytics pipeline.</p>
+ * {@code projection.getStatus()} and normalise it according to the
+ * response contract for that particular breakdown.</p>
  *
  * <h2>Null &amp; wire-format contract</h2>
  * <ul>
@@ -51,8 +44,9 @@ import org.springframework.lang.Nullable;
  * (rather than {@code dto}) because it is a persistence-layer concern:
  * Spring Data JPA materialises rows directly into a dynamic proxy that
  * implements this interface — there is no separate DTO mapping step.
- * Default methods on the interface are dispatched to the proxy by Spring
- * Data and remain safe to invoke on every materialised row.</p>
+ * The interface deliberately stays projection-only: conversion and
+ * response-shaping logic belong in the service layer that owns the
+ * resulting analytics contract.</p>
  */
 public interface StatusCountProjection {
 
@@ -71,37 +65,4 @@ public interface StatusCountProjection {
      */
     long getCount();
 
-    /**
-     * Safely converts {@link #getStatus()} into the strongly-typed enum
-     * it was persisted as, returning {@link Optional#empty()} for
-     * {@code null}, blank, or unknown values rather than propagating
-     * {@link IllegalArgumentException} up the analytics pipeline.
-     *
-     * <p>This centralises the {@code Enum.valueOf(...)} pattern that was
-     * previously written by every caller and removes the latent bug where
-     * a renamed-or-removed enum constant in a deployed JVM would crash
-     * the whole admin analytics breakdown instead of degrading the single
-     * stale row.</p>
-     *
-     * @param enumType the enum class whose {@link Enum#name() name()}
-     *                 should match {@link #getStatus()}; must not be
-     *                 {@code null}
-     * @param <E>      the enum type
-     * @return the typed enum value, or {@link Optional#empty()} when
-     *         {@link #getStatus()} is {@code null}, blank, or not a
-     *         declared constant of {@code enumType}
-     * @throws NullPointerException if {@code enumType} is {@code null}
-     */
-    default <E extends Enum<E>> Optional<E> asEnum(@NonNull Class<E> enumType) {
-        Objects.requireNonNull(enumType, "enumType must not be null");
-        String value = getStatus();
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(Enum.valueOf(enumType, value));
-        } catch (IllegalArgumentException ex) {
-            return Optional.empty();
-        }
-    }
 }

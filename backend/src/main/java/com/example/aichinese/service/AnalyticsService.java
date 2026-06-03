@@ -262,25 +262,8 @@ public class AnalyticsService {
 
     @Transactional(readOnly = true)
     public AdminAnalyticsResponse getAdminAnalytics(SecurityUserDetails currentUser) {
-        // PREVIOUSLY: this method loaded multiple entire tables
-        // (moderation records, AI logs, modules, lessons, packages,
-        // payments, users) just to compute summary statistics and per-status
-        // breakdowns. That worked at demo scale but scaled linearly with the
-        // entire platform's history on every admin dashboard load.
-        //
-        // The new implementation pays exactly:
-        //   * 14 small aggregate queries for the overview (13 COUNTs + 1 SUM)
-        //   * 5 GROUP BY queries for the breakdowns (3 for content status —
-        //     module/lesson/package — plus 1 each for payment and AI status),
-        //     each returning at most |enum values| rows
-        //   * 3 indexed COUNT queries for the teacher approval breakdown
-        //   * 1 windowed SELECT for the 7-day registration trend
-        // Memory footprint per request is therefore bounded by the number of
-        // *enum values* rather than the table sizes.
-
-        // Trend window is exactly RECENT_ACTIVITY_DAYS days — the previous
-        // implementation loaded every user row and dropped all but the most
-        // recent week in JVM, paying for IO it would immediately discard.
+        // Keep the dashboard bounded to aggregate queries, enum-sized
+        // breakdowns, and the recent registration window.
         LocalDateTime trendWindowStart =
                 LocalDate.now().minusDays(RECENT_ACTIVITY_DAYS - 1L).atStartOfDay();
         List<User> recentUsers = userRepository

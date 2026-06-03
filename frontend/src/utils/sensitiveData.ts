@@ -1,3 +1,5 @@
+import type { LocationQueryRaw, LocationQueryValue } from 'vue-router'
+
 export const FILTERED = '[Filtered]'
 
 const MAX_SCRUB_DEPTH = 8
@@ -62,6 +64,42 @@ export function scrubSensitiveValue(value: string): string {
     }
     return current.replace(pattern, replacement)
   }, value)
+}
+
+export function firstQueryText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  if (Array.isArray(value)) {
+    const firstText = value.find((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    return firstText?.trim() ?? ''
+  }
+  return ''
+}
+
+export function removeSensitiveRouteState(
+  queryState: Record<string, LocationQueryValue | LocationQueryValue[]>,
+  hash = '',
+): { query: LocationQueryRaw; hash: string; changed: boolean } {
+  const query: LocationQueryRaw = {}
+  let changed = false
+
+  for (const [key, value] of Object.entries(queryState)) {
+    if (isSensitiveKey(key) || queryValueContainsSensitiveData(value)) {
+      changed = true
+      continue
+    }
+    query[key] = value
+  }
+
+  const safeHash = hash && (isSensitiveKey(hash) || scrubSensitiveValue(hash) !== hash) ? '' : hash
+  changed ||= safeHash !== hash
+
+  return {
+    query,
+    hash: safeHash,
+    changed,
+  }
 }
 
 export function scrubSensitiveUrl(value: string | null | undefined): string | undefined {
@@ -149,4 +187,9 @@ export function scrubSensitiveRecord<T extends Record<string, unknown> | undefin
   return Object.fromEntries(
     Object.entries(record).map(([key, value]) => [key, isSensitiveKey(key) ? FILTERED : scrubSensitiveUnknown(value)]),
   ) as T
+}
+
+function queryValueContainsSensitiveData(value: LocationQueryValue | LocationQueryValue[]): boolean {
+  const values = Array.isArray(value) ? value : [value]
+  return values.some((entry) => typeof entry === 'string' && scrubSensitiveValue(entry) !== entry)
 }

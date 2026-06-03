@@ -40,8 +40,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * <p>The canonical constructor enforces non-null on {@link #teacherId}
  * because the mapper only emits this DTO when the underlying
  * {@code TeacherProfile} and its {@code user} association both
- * hydrated (see
- * {@link com.example.aichinese.mapper.ContentManagementMapper#toPublicTeacherSummary}).
+ * hydrated.
  * {@link #displayName} may legitimately be {@code null} when the
  * teacher has not yet set a display name on their user row — the
  * front-end falls back to a generic "Teacher" label in that case.</p>

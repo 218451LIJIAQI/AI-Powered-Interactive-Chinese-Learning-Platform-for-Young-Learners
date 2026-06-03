@@ -21,7 +21,7 @@ public final class ExceptionLogUtils {
         return exception == null ? "UnknownException" : exception.getClass().getSimpleName();
     }
 
-    public static String safeMessage(Throwable exception) {
+    private static String safeMessage(Throwable exception) {
         if (exception == null) {
             return null;
         }

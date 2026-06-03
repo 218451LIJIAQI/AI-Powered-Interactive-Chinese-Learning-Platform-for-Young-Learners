@@ -12,6 +12,7 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -104,20 +105,8 @@ public class AdminContentReviewService {
             String keyword,
             int page,
             int size) {
-        // PREVIOUSLY: this method called {@code learningModuleRepository.findAll()},
-        // {@code lessonRepository.findAll()} and {@code coursePackageRepository.findAll()}
-        // unconditionally, then filtered by status / teacher / keyword in JVM.
-        // The IO cost scaled linearly with the global content catalogue on
-        // every admin search request, regardless of how narrow the filter was.
-        //
-        // The new implementation builds three JPA {@link org.springframework.data.jpa.domain.Specification}
-        // predicates (one per entity, since the keyword field name differs:
-        // module=description / lesson=summary / package=description) and lets
-        // the database execute the {@code WHERE status = ? AND teacher_id = ?
-        // AND (LOWER(title) LIKE ? OR LOWER(description) LIKE ?)} clause
-        // against the appropriate column indexes. The eager-fetch joins
-        // (teacher/level/category) are preserved via the repositories' own
-        // {@code @EntityGraph} overrides of {@code findAll(Specification)}.
+        // Build one DB-side predicate per content table; each repository's
+        // @EntityGraph keeps the response mapper off lazy-loading hot paths.
         ManagedContentType filterType = contentType == null || contentType.isBlank()
                 ? null
                 : ManagedContentType.fromValue(contentType);
@@ -154,10 +143,8 @@ public class AdminContentReviewService {
                     .toList());
         }
 
-        // The in-memory sort + paginate is unavoidable here because the
-        // result spans three tables; however it now operates on
-        // already-filtered rows (typically tens at most) rather than the
-        // entire content catalogue.
+        // The final sort spans three tables, so it happens after the DB-side
+        // filters have narrowed each table independently.
         List<ContentSubmissionResponse> sorted = submissions.stream()
                 .sorted(Comparator.comparing(ContentSubmissionResponse::updatedAt).reversed())
                 .toList();
@@ -172,58 +159,26 @@ public class AdminContentReviewService {
         return new PageResponse<>(items, safePage, safeSize, sorted.size(), totalPages);
     }
 
-    /**
-     * Builds a {@link org.springframework.data.jpa.domain.Specification} for
-     * the admin module search. Predicate composition uses
-     * {@link jakarta.persistence.criteria.Predicate} so JPA emits one
-     * compound {@code WHERE} clause with all three filters in a single
-     * statement.
-     */
-    private static org.springframework.data.jpa.domain.Specification<LearningModule> buildModuleSpecification(
+    private static Specification<LearningModule> buildModuleSpecification(
             ContentStatus status, Long teacherId, String normalizedKeyword) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (status != null) {
-                predicates.add(cb.equal(root.get("contentStatus"), status));
-            }
-            if (teacherId != null) {
-                predicates.add(cb.equal(root.get("teacher").get("id"), teacherId));
-            }
-            if (normalizedKeyword != null) {
-                String like = "%" + normalizedKeyword + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("title")), like),
-                        cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
-            }
-            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new Predicate[0]));
-        };
+        return buildContentSpecification(status, teacherId, normalizedKeyword, "description");
     }
 
-    private static org.springframework.data.jpa.domain.Specification<Lesson> buildLessonSpecification(
+    private static Specification<Lesson> buildLessonSpecification(
             ContentStatus status, Long teacherId, String normalizedKeyword) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (status != null) {
-                predicates.add(cb.equal(root.get("contentStatus"), status));
-            }
-            if (teacherId != null) {
-                predicates.add(cb.equal(root.get("teacher").get("id"), teacherId));
-            }
-            if (normalizedKeyword != null) {
-                String like = "%" + normalizedKeyword + "%";
-                // Lesson uses {@code summary} (not {@code description}) for
-                // the searchable secondary text field — matches the legacy
-                // JVM-side filter exactly so the search contract is preserved.
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("title")), like),
-                        cb.like(cb.lower(cb.coalesce(root.get("summary"), "")), like)));
-            }
-            return predicates.isEmpty() ? null : cb.and(predicates.toArray(new Predicate[0]));
-        };
+        return buildContentSpecification(status, teacherId, normalizedKeyword, "summary");
     }
 
-    private static org.springframework.data.jpa.domain.Specification<CoursePackage> buildPackageSpecification(
+    private static Specification<CoursePackage> buildPackageSpecification(
             ContentStatus status, Long teacherId, String normalizedKeyword) {
+        return buildContentSpecification(status, teacherId, normalizedKeyword, "description");
+    }
+
+    private static <T> Specification<T> buildContentSpecification(
+            ContentStatus status,
+            Long teacherId,
+            String normalizedKeyword,
+            String secondaryTextField) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (status != null) {
@@ -236,7 +191,7 @@ public class AdminContentReviewService {
                 String like = "%" + normalizedKeyword + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("title")), like),
-                        cb.like(cb.lower(cb.coalesce(root.get("description"), "")), like)));
+                        cb.like(cb.lower(cb.coalesce(root.<String>get(secondaryTextField), "")), like)));
             }
             return predicates.isEmpty() ? null : cb.and(predicates.toArray(new Predicate[0]));
         };

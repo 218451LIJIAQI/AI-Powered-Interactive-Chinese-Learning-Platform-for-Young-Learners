@@ -228,7 +228,7 @@ public class LiveLearningAccessService {
     }
 
     @Transactional(readOnly = true)
-    public LiveClassEnrolment requireActiveEnrolment(Long liveClassId, Long studentId) {
+    private LiveClassEnrolment requireActiveEnrolment(Long liveClassId, Long studentId) {
         LiveClassEnrolment enrolment = liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(liveClassId, studentId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Live class enrolment was not found."));
         if (enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.ENROLLED

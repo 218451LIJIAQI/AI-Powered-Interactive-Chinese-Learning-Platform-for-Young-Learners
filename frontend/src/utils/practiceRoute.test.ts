@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  inferPracticeActivityFromText,
-  normalizePracticeActivity,
-  practiceRoute,
-} from './practiceRoute'
+import { inferPracticeActivityFromText, normalizePracticeActivity, practiceRoute } from './practiceRoute'
 
 describe('practiceRoute helpers', () => {
   it('normalizes activity query aliases from route params and human labels', () => {

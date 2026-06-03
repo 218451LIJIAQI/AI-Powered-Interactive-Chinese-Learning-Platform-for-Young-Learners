@@ -34,7 +34,7 @@ import { defaultRouteForRole } from '@/utils/role'
 
 const PublicLayout = () => import('@/layouts/PublicLayout.vue')
 const DashboardLayout = () => import('@/layouts/DashboardLayout.vue')
-const PublicLandingPage = () => import('@/pages/public/PublicLandingPage.vue')
+const LandingPage = () => import('@/pages/public/LandingPage.vue')
 const AuthPage = () => import('@/pages/public/AuthPage.vue')
 const ForgotPasswordPage = () => import('@/pages/public/ForgotPasswordPage.vue')
 const ResetPasswordPage = () => import('@/pages/public/ResetPasswordPage.vue')
@@ -82,11 +82,11 @@ declare module 'vue-router' {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'landing', component: PublicLandingPage, meta: { title: 'MandarinSpark' } },
     {
       path: '/',
       component: PublicLayout,
       children: [
+        { path: '', name: 'landing', component: LandingPage, meta: { title: 'MandarinSpark' } },
         { path: 'auth', name: 'auth', component: AuthPage, meta: { title: 'Sign in' } },
         {
           path: 'forgot-password',

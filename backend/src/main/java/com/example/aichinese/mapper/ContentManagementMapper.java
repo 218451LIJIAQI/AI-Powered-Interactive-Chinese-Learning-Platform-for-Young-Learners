@@ -83,7 +83,7 @@ public class ContentManagementMapper {
     /** Call-to-action shown to anonymous visitors viewing a course package. */
     private static final String PACKAGE_CTA = "Register to start learning";
 
-    public LearningLevelResponse toLevelResponse(LearningLevel level) {
+    private LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
             return null;
         }
@@ -91,7 +91,7 @@ public class ContentManagementMapper {
         return new LearningLevelResponse(level.getId(), level.getName(), level.getDescription());
     }
 
-    public LearningCategoryResponse toCategoryResponse(LearningCategory category) {
+    private LearningCategoryResponse toCategoryResponse(LearningCategory category) {
         if (category == null) {
             return null;
         }
@@ -99,7 +99,7 @@ public class ContentManagementMapper {
         return new LearningCategoryResponse(category.getId(), category.getName(), category.getDescription());
     }
 
-    public TeacherOwnerSummaryResponse toTeacherSummary(TeacherProfile teacherProfile) {
+    private TeacherOwnerSummaryResponse toTeacherSummary(TeacherProfile teacherProfile) {
         if (teacherProfile == null || teacherProfile.getUser() == null) {
             return null;
         }
@@ -157,7 +157,7 @@ public class ContentManagementMapper {
                 lesson.getUpdatedAt());
     }
 
-    public PackageItemResponse toPackageItemResponse(PackageItem item) {
+    private PackageItemResponse toPackageItemResponse(PackageItem item) {
         if (item == null) {
             return null;
         }
@@ -339,7 +339,7 @@ public class ContentManagementMapper {
                 coursePackage.getUpdatedAt());
     }
 
-    public PublicTeacherSummaryResponse toPublicTeacherSummary(TeacherProfile teacherProfile) {
+    private PublicTeacherSummaryResponse toPublicTeacherSummary(TeacherProfile teacherProfile) {
         if (teacherProfile == null || teacherProfile.getUser() == null) {
             return null;
         }

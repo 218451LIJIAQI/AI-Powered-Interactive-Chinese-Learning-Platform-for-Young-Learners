@@ -27,14 +27,14 @@
  */
 export type AppLanguage = 'en' | 'ms' | 'zh'
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
-export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 export type AccessType = 'FREE' | 'PAID'
 export type LearningType = 'LIVE' | 'RECORDED' | 'HYBRID'
 export type AgeBand = 'KINDERGARTEN' | 'LOWER_PRIMARY' | 'UPPER_PRIMARY' | 'ALL_AGES'
 export type ActivityDifficulty = 'EASY' | 'MEDIUM' | 'HARD'
 export type ContentStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PUBLISHED' | 'ARCHIVED'
 export type LiveClassStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED'
-export type AiResponseReportStatus = 'PENDING_REVIEW' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED'
+type AiResponseReportStatus = 'PENDING_REVIEW' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED'
 export type AiResponseReportReviewStatus = Exclude<AiResponseReportStatus, 'PENDING_REVIEW'>
 export type AiResponseReportReason =
   | 'INCORRECT_CONTENT'
@@ -93,13 +93,13 @@ export interface LearningCategory {
   description: string
 }
 
-export interface PublicTeacherSummary {
+interface PublicTeacherSummary {
   teacherId: number
   displayName: string
   verified: boolean
 }
 
-export interface TeacherOwnerSummary {
+interface TeacherOwnerSummary {
   teacherId: number
   userId: number
   fullName: string
@@ -115,7 +115,7 @@ export interface PackageItemResponse {
   titleSnapshot: string
 }
 
-export interface AuthUserSummary {
+interface AuthUserSummary {
   id: number
   fullName: string
   email: string
@@ -175,7 +175,7 @@ export interface PublicCourseSummary {
   status: ContentStatus
 }
 
-export interface PublicCourseItemSummary {
+interface PublicCourseItemSummary {
   type: PackageItemType
   contentId: number
   title: string
@@ -264,7 +264,7 @@ export interface StudentDashboardResponse {
   recommendedNextStep?: string | null
 }
 
-export interface StudentProgressLessonResponse {
+interface StudentProgressLessonResponse {
   lessonId: number
   lessonTitle: string
   completionPercent: number
@@ -314,20 +314,20 @@ export interface RewardSummaryResponse {
   recentPoints: PointsTransactionResponse[]
 }
 
-export interface LiveClassTeacherSummaryResponse {
+interface LiveClassTeacherSummaryResponse {
   teacherId: number
   userId: number
   displayName: string
 }
 
-export interface LiveClassLessonSummaryResponse {
+interface LiveClassLessonSummaryResponse {
   lessonId: number
   lessonTitle: string
   learningType: string
   accessType: string
 }
 
-export interface LiveClassPackageSummaryResponse {
+interface LiveClassPackageSummaryResponse {
   packageId: number
   packageTitle: string
   learningType: string
@@ -446,7 +446,7 @@ export interface StudentFlashcardResponse {
   completed: boolean
 }
 
-export interface StudentMatchingGameItemResponse {
+interface StudentMatchingGameItemResponse {
   id: number
   leftText: string
   rightText: string
@@ -503,7 +503,7 @@ export interface StudentTracingExerciseResponse {
   completed: boolean
 }
 
-export interface StudentDragDropItemResponse {
+interface StudentDragDropItemResponse {
   id: number
   dragText: string
   targetZone: string
@@ -527,7 +527,7 @@ export interface StudentDragDropActivityResponse {
   items: StudentDragDropItemResponse[]
 }
 
-export interface StudentStoryQuestionResponse {
+interface StudentStoryQuestionResponse {
   id: number
   questionText: string
   optionsPayload: string
@@ -572,7 +572,7 @@ export interface AdminActivitySummaryResponse {
   updatedAt: string
 }
 
-export interface AdminMatchingGameItemResponse {
+interface AdminMatchingGameItemResponse {
   id: number
   leftText: string
   rightText: string
@@ -582,7 +582,7 @@ export interface AdminMatchingGameItemResponse {
   sortOrder?: number | null
 }
 
-export interface AdminDragDropItemResponse {
+interface AdminDragDropItemResponse {
   id: number
   dragText: string
   targetZone: string
@@ -591,7 +591,7 @@ export interface AdminDragDropItemResponse {
   sortOrder?: number | null
 }
 
-export interface AdminStoryQuestionResponse {
+interface AdminStoryQuestionResponse {
   id: number
   questionText: string
   optionsPayload: string
@@ -726,13 +726,13 @@ export interface AdminStoryActivityResponse {
   questions: AdminStoryQuestionResponse[]
 }
 
-export interface QuizOptionResponse {
+interface QuizOptionResponse {
   id: number
   optionText: string
   displayOrder: number
 }
 
-export interface StudentQuizQuestionResponse {
+interface StudentQuizQuestionResponse {
   id: number
   questionType: QuizQuestionType
   questionText: string
@@ -763,7 +763,7 @@ export interface StudentQuizSummaryResponse {
   questionCount: number
 }
 
-export interface QuizAttemptResultQuestionResponse {
+interface QuizAttemptResultQuestionResponse {
   questionId: number
   questionType: string
   questionText: string
@@ -864,7 +864,7 @@ export interface TeacherAnalyticsResponse {
   contentStatusBreakdown: AnalyticsBreakdownItem[]
 }
 
-export interface TeacherVerificationDocumentSummaryResponse {
+interface TeacherVerificationDocumentSummaryResponse {
   id: number
   documentType: TeacherVerificationDocumentType
   description?: string | null
@@ -875,7 +875,7 @@ export interface TeacherVerificationDocumentSummaryResponse {
   currentVersion: boolean
 }
 
-export interface TeacherVerificationReviewSummaryResponse {
+interface TeacherVerificationReviewSummaryResponse {
   id: number
   decisionStatus: TeacherStatus
   note?: string | null
@@ -978,7 +978,7 @@ export interface CoursePackageResponse {
   updatedAt: string
 }
 
-export interface TeacherQuizOptionResponse {
+interface TeacherQuizOptionResponse {
   id: number
   optionText: string
   correctOption?: boolean | null
@@ -1194,7 +1194,7 @@ export interface AdminTeacherListItemResponse {
   createdAt: string
 }
 
-export interface AdminAuditSummaryResponse {
+interface AdminAuditSummaryResponse {
   auditLogId: number
   actionType: string
   targetType: string
@@ -1343,14 +1343,14 @@ export interface AiSentencePracticeResponse {
   status: string
 }
 
-export interface AiStoryVocabularyItemResponse {
+interface AiStoryVocabularyItemResponse {
   chineseWord: string
   pinyin?: string | null
   englishMeaning?: string | null
   bahasaMelayuMeaning?: string | null
 }
 
-export interface AiStoryComprehensionQuestionResponse {
+interface AiStoryComprehensionQuestionResponse {
   question: string
   options: string[]
   answer: string
@@ -1370,7 +1370,7 @@ export interface AiStoryGeneratorResponse {
   status: string
 }
 
-export interface AiGeneratedQuizQuestionResponse {
+interface AiGeneratedQuizQuestionResponse {
   questionText?: string | null
   questionType?: string | null
   options: string[]

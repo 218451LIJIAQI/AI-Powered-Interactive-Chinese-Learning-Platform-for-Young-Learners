@@ -79,33 +79,4 @@ public final class RequestIdHolder {
         CURRENT_REQUEST_ID.remove();
     }
 
-    /**
-     * Runs {@code task} with the current thread bound to {@code requestId}
-     * and unconditionally restores the previous binding (or removes the
-     * binding when none was present) afterwards.
-     *
-     * <p>Background workers, scheduled jobs and {@code @Async} executors
-     * should prefer this helper over a hand-rolled {@code try/finally}
-     * pair so the lifecycle contract documented on the class Javadoc
-     * cannot be silently violated by a forgotten {@code finally} block
-     * \u2014 a leaked id is the most common bug we have encountered with
-     * the previous direct-{@code set} idiom.</p>
-     *
-     * @param requestId id to bind for the duration of {@code task}; may
-     *                  be {@code null} to mean "explicitly run with no
-     *                  id" (the previous binding is still restored)
-     * @param task      action to execute; must not be {@code null}
-     */
-    public static void runWith(String requestId, Runnable task) {
-        if (task == null) {
-            throw new IllegalArgumentException("task must not be null.");
-        }
-        String previous = CURRENT_REQUEST_ID.get();
-        set(requestId);
-        try {
-            task.run();
-        } finally {
-            set(previous);
-        }
-    }
 }

@@ -17,9 +17,6 @@ import jakarta.persistence.LockModeType;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
-    @EntityGraph(attributePaths = { "user", "user.roles" })
-    Optional<RefreshToken> findByTokenHash(String tokenHash);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = { "user", "user.roles" })
     @Query("select t from RefreshToken t where t.tokenHash = :tokenHash")

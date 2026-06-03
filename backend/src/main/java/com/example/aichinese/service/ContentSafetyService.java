@@ -106,7 +106,7 @@ public class ContentSafetyService {
         return sanitized;
     }
 
-    public void requireSafeContent(String value) {
+    private void requireSafeContent(String value) {
         if (value == null || !contentSafetySettingsReader.sensitiveWordFilterEnabled()) {
             return;
         }

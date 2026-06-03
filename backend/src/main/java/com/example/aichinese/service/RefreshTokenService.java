@@ -109,23 +109,6 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public void revokeRawToken(String rawToken) {
-        String token = TextUtils.trimToNull(rawToken);
-        if (token == null) {
-            return;
-        }
-        if (token.length() > MAX_RAW_TOKEN_LENGTH) {
-            return;
-        }
-        refreshTokenRepository.findByTokenHash(hash(token)).ifPresent(refreshToken -> {
-            if (refreshToken.getRevokedAt() == null) {
-                refreshToken.setRevokedAt(LocalDateTime.now());
-                refreshTokenRepository.save(refreshToken);
-            }
-        });
-    }
-
-    @Transactional
     public void revokeActiveTokensForUser(Long userId) {
         if (userId == null) {
             return;

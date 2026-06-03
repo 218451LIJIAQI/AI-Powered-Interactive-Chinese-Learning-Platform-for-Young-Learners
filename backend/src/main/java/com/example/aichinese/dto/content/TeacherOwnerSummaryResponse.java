@@ -51,8 +51,7 @@ import com.example.aichinese.entity.enums.TeacherStatus;
  * fields the mapper guarantees from any persisted teacher row
  * ({@link #teacherId}, {@link #userId}, {@link #teacherStatus}) —
  * the mapper only emits this DTO once it has verified both the
- * teacher profile and its user association hydrated (see
- * {@link com.example.aichinese.mapper.ContentManagementMapper#toTeacherSummary}).
+ * teacher profile and its user association hydrated.
  * {@link #fullName} may legitimately be {@code null} when the
  * teacher has not yet set a display name on their user row.</p>
  *
