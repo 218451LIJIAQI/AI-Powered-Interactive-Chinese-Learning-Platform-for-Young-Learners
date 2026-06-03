@@ -227,11 +227,9 @@
  * approval, revenue summary.
  *
  * <h2>Money-handling safety</h2>
- * <p>Refund and payout approval show the target amount + recipient
- * name in the confirmation dialog and require an admin note. The
- * backend logs each decision through {@code AdminAuditLogService}
- * with the approving admin id, so a paper trail exists for every
- * money-moving action.</p>
+ * <p>Live finance mutations are guarded behind preview-data checks,
+ * explicit browser confirmations, and required rejection reasons.
+ * The backend records finance decisions for auditability.</p>
  */
 import { computed, ref, watch } from 'vue'
 

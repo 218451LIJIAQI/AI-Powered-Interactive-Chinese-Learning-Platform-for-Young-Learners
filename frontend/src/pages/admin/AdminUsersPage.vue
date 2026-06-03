@@ -429,10 +429,9 @@
  * Admin users index — search, filter, manage all users across roles.
  *
  * <h2>Destructive-action safety</h2>
- * <p>Soft-delete (deactivate), force password reset, and role
- * promotion all show a confirmation dialog with the target user's
- * email so admins cannot mis-click. The backend keeps a hard
- * boundary on self-modifying or self-demoting actions.</p>
+ * <p>Live account access changes are blocked while preview data is
+ * active, then refresh the user, teacher, and student directories
+ * after the backend accepts the update.</p>
  *
  * <h2>Audit trail</h2>
  * <p>Every write here is logged via
@@ -1371,21 +1370,6 @@ function reloadAll() {
   align-items: center;
 }
 
-.admin-users-progress-ring {
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  margin: 0 auto;
-}
-
-.admin-users-progress-ring strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.6rem;
-  color: #6f52ff;
-}
-
 .admin-users-progress-copy {
   display: grid;
   gap: 10px;
@@ -1817,15 +1801,6 @@ function reloadAll() {
   .admin-users-progress-wrap {
     grid-template-columns: 86px minmax(0, 1fr);
     gap: 12px;
-  }
-
-  .admin-users-progress-ring {
-    width: 78px;
-    height: 78px;
-  }
-
-  .admin-users-progress-ring strong {
-    font-size: 1.28rem;
   }
 
   .admin-users-activity-item {

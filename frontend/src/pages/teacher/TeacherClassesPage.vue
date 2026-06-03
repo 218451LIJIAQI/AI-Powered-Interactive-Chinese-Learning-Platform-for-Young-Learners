@@ -475,8 +475,9 @@
 
 <script setup lang="ts">
 /**
- * Teacher classes hub — create / edit / publish / list classes,
- * schedule live sessions, and manage class enrolments.
+ * Teacher live classes hub — create, edit, cancel, list, and
+ * schedule live sessions while reviewing rosters, recordings, and
+ * attendance context.
  *
  * <h2>Gating</h2>
  * <p>All write actions are blocked by {@code useTeacherAccess()}
@@ -485,10 +486,9 @@
  * panel so the teacher still sees their existing classes.</p>
  *
  * <h2>Live session times</h2>
- * <p>Live sessions are stored as UTC instants on the backend; the
- * page lets the teacher pick a local datetime and converts to UTC
- * before sending. The display always shows the teacher's local
- * timezone so the round-trip is invisible.</p>
+ * <p>The live-class API stores a LocalDateTime wall-clock value; the
+ * page keeps the teacher's datetime-local selection stable instead
+ * of shifting it through UTC.</p>
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'

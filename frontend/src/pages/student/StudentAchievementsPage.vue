@@ -155,12 +155,10 @@
 /**
  * Student achievement / badge / streak surface.
  *
- * <p>Aggregates badge progress, milestones, lesson completion
- * markers, and the streak builder into a single dense layout.
- * Readiness lists are computed from the same dashboard payload so
- * the page stays single-fetch, and empty states use custom
- * achievement-tone cards rather than the generic StatePanel for
- * morale-positive copy.</p>
+ * <p>Aggregates badge progress, point milestones, lesson completion
+ * markers, streak data, rewards, and recent progress into a dense
+ * dashboard. Each resource keeps its own fallback/error state, while
+ * empty learning sections use StatePanel for morale-positive copy.</p>
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'

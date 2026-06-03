@@ -161,13 +161,12 @@
 
 <script setup lang="ts">
 /**
- * Admin content-review queue — approve / reject / request changes
- * on teacher-submitted courses, modules, lessons.
+ * Admin content-management surface — inspect published teacher content,
+ * archive stale items, and submit moderation actions after publication.
  *
- * <p>The page calls into {@code AdminContentReviewService} which
- * publishes the content only after admin approval. A rejection
- * sends the content back to draft state with a note visible to the
- * teacher in {@link TeacherContentPage}.</p>
+ * <p>The page calls the live admin content and moderation endpoints.
+ * Preview data is read-only so fallback records cannot trigger backend
+ * moderation side effects.</p>
  */
 import { computed, ref } from 'vue'
 
@@ -271,10 +270,7 @@ function previewContentDetail(contentType: ManagedContentType, id: number): Cont
   }
 }
 
-const archivingContentId = ref<number | null>(null)
-
 async function archiveContent(contentType: string, id: number) {
-  if (archivingContentId.value) return
   if (!ensureLiveContent('Content cannot be archived while preview data is active.')) return
   actionError.value = null
   actionSuccess.value = null

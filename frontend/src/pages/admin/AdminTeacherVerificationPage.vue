@@ -332,15 +332,14 @@
 
 <script setup lang="ts">
 /**
- * Admin teacher-verification queue — approve / reject / request
- * resubmission for teachers in PENDING_APPROVAL or REVIEWING state.
+ * Admin teacher-verification queue — inspect pending teacher
+ * applications, download verification documents, and approve or
+ * reject applications.
  *
- * <p>Shows the teacher's submitted credentials, the document URLs
- * (rendered through {@link safeHttpUrl} for XSS defence), and an
- * admin-only note field that is preserved on the teacher's profile
- * so they know what to fix. Decisions are append-only — once an
- * approval / rejection is recorded, the page no longer lets the
- * admin toggle it without going through {@link AdminUsersPage}.</p>
+ * <p>Shows the teacher's submitted credentials, review history,
+ * recent audit logs, and server-owned document downloads. Writes are
+ * disabled while preview data is active, and decisions refresh both
+ * the pending queue and teacher directory after success.</p>
  */
 import { computed, ref, watch } from 'vue'
 

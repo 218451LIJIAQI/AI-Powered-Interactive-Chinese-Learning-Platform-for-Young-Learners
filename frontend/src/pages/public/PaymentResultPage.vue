@@ -86,8 +86,8 @@
 
 <script setup lang="ts">
 /**
- * Post-checkout landing page that Stripe (or the mock provider)
- * redirects to with `?status=success|cancel` plus the payment id.
+ * Post-checkout landing page for `/payment/success` and
+ * `/payment/cancel` redirects with an optional payment id.
  *
  * <h2>Why server verification</h2>
  * <p>The query string alone is untrusted — a user can edit the URL

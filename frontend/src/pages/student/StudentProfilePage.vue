@@ -372,9 +372,9 @@
 /**
  * Student profile + commerce hub.
  *
- * <p>Combines self-service profile editing, payment history (read-only
- * from {@code paymentApi.history()}), refund requests, and saved AI
- * report status. The page used to be split into multiple routes
+ * <p>Combines self-service profile viewing, payment history (read-only
+ * from {@code studentApi.payments()}), refund requests, and learning
+ * activity. The page used to be split into multiple routes
  * (payments / refunds / feedback) — those redirect here via
  * {@link normalizeAppRoute} so legacy notification deep-links still
  * land somewhere useful.</p>

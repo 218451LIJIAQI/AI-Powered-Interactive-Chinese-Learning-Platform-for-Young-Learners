@@ -23,8 +23,8 @@
 <script setup lang="ts">
 /**
  * Static terms-of-service page. Same authoring approach as
- * {@link PrivacyPage} — copy lives in the template so legal can
- * diff per release without touching any tooling.
+ * {@link PrivacyPage} — copy lives in this route component so legal
+ * can diff per release without touching any tooling.
  */
 import { useRouter } from 'vue-router'
 

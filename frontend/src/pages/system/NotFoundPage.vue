@@ -44,9 +44,8 @@
 
 <script setup lang="ts">
 /**
- * 404 — final catch-all route. Friendly copy + cross-links into the
- * three persona dashboards so a deep-linked URL that fails route
- * normalisation does not strand the user.
+ * 404 — final catch-all route. Friendly copy plus home, catalog,
+ * and sign-in links keep a failed deep link from stranding the user.
  */
 import { RouterLink } from 'vue-router'
 

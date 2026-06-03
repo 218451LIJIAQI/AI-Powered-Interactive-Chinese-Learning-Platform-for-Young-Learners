@@ -605,10 +605,6 @@
  * learner demographic. Teachers see activities from this library
  * surfaced in the student practice page based on age-band match.</p>
  *
- * <h2>Bulk upload</h2>
- * <p>The page supports CSV import for each activity type — the
- * upload is parsed client-side then validated server-side via the
- * activity ingest API.</p>
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 

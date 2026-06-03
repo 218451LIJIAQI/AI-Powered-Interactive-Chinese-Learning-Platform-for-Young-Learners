@@ -257,10 +257,10 @@
 /**
  * Teacher dashboard — verification + classroom + earnings hero.
  *
- * <p>Combines verification status, today's class lineup, and the
- * earnings snapshot into a single read-only landing. Single-fetch
- * design via {@code teacherApi.dashboard()} keeps the page fast
- * even when the underlying teacher has dozens of classes.</p>
+ * <p>Combines verification status, class lineup, analytics, quiz
+ * results, notifications, and earnings into a read-only landing
+ * backed by the teacher dashboard, analytics, and live-class
+ * resources.</p>
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'

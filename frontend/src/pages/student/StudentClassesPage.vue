@@ -247,9 +247,9 @@
 /**
  * Student live-class + recorded-video hub.
  *
- * <p>Lists enrolments, upcoming live sessions, and recorded
- * playback. The join button only appears within the join window —
- * the gate is enforced server-side by
+ * <p>Lists enrolments, upcoming live sessions, and linked lesson
+ * access. The primary class action is disabled outside the join
+ * window — the gate is enforced server-side by
  * {@code LiveLearningAccessService} so a leaked meeting URL cannot
  * be reused outside the window.</p>
  */

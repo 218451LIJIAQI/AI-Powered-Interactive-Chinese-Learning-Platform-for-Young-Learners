@@ -1406,7 +1406,7 @@
 <script setup lang="ts">
 /**
  * Teacher content authoring hub — courses, modules, lessons,
- * quizzes, materials, video uploads, AI-assisted draft generation.
+ * quizzes, recorded resources, package items, and learner progress.
  *
  * <h2>Why one page</h2>
  * <p>The author workflow benefits from in-place context (the lesson
@@ -1415,16 +1415,10 @@
  * than separate routes so authors can switch without losing draft
  * state.</p>
  *
- * <h2>Publish gating</h2>
- * <p>Publish actions are denied when verification != APPROVED, when
- * any required lesson field is missing, and when the course
- * already has a pending admin review.</p>
- *
- * <h2>AI assistance</h2>
- * <p>Quiz / story / vocabulary generators feed into the AI helper
- * service; when the AI provider is disabled or returns an error, the
- * helper returns an explicit unavailable status instead of pretending
- * generated content exists, so the author UX can fail safely.</p>
+ * <h2>Write gating</h2>
+ * <p>Write actions are denied when the teacher is not approved, when
+ * preview/fallback data is active, or when the required form fields
+ * for the selected content type are missing.</p>
  */
 import { computed, reactive, ref, watch } from 'vue'
 
@@ -1951,11 +1945,8 @@ watch(
     if (!items.some((item) => item.id === quizLessonId.value)) {
       quizLessonId.value = firstId
     }
-    if (!items.some((item) => item.id === lessonForm.moduleId)) {
-      lessonForm.moduleId =
-        lessonForm.moduleId && liveModuleOptions.value.some((module) => module.id === lessonForm.moduleId)
-          ? lessonForm.moduleId
-          : 0
+    if (lessonForm.moduleId && !liveModuleOptions.value.some((module) => module.id === lessonForm.moduleId)) {
+      lessonForm.moduleId = 0
     }
   },
   { immediate: true },

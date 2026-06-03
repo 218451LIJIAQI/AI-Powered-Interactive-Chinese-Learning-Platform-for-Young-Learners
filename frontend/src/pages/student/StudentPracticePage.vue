@@ -323,9 +323,9 @@
  * pipeline without advancing lesson progress (platform-library
  * decoupling).
  *
- * <p>The page intentionally re-uses the {@link StatePanel} empty
- * / loading components so the UI stays consistent with other
- * student dashboards.</p>
+ * <p>The page intentionally re-uses the shared resource and notice
+ * components so loading, retry, fallback, and error states stay
+ * consistent with other student dashboards.</p>
  */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -893,7 +893,7 @@ function handleFlashcardPrimaryAction() {
       return
     }
 
-    void markFlashcardDone(true).then(() => {
+    void markFlashcardDone().then(() => {
       if (!actionError.value) {
         goToNextActivityLevel({ preserveNotice: true })
       }
@@ -901,7 +901,7 @@ function handleFlashcardPrimaryAction() {
     return
   }
 
-  void markFlashcardDone(true)
+  void markFlashcardDone()
 }
 
 async function completeActivity(type: PracticeActivityType, id: number): Promise<StudentActivityCompletionResponse> {
@@ -958,7 +958,7 @@ async function completeSelectedActivity() {
   }
 }
 
-async function markFlashcardDone(known: boolean) {
+async function markFlashcardDone() {
   if (submittingActivity.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -967,28 +967,21 @@ async function markFlashcardDone(known: boolean) {
     return
   }
 
-  if (known && flashcardResource.usingFallback.value) {
+  if (flashcardResource.usingFallback.value) {
     actionError.value =
       'Preview flashcards cannot be submitted to the backend. Use a live student account to save progress.'
     return
   }
 
-  if (known) {
-    try {
-      await studentApi.completeFlashcard(flashcard.value.id)
-      await refreshPracticeProgress()
-    } catch (reason) {
-      actionError.value = resolveApiError(reason, 'Unable to save this flashcard progress.')
-      return
-    }
+  try {
+    await studentApi.completeFlashcard(flashcard.value.id)
+    await refreshPracticeProgress()
+  } catch (reason) {
+    actionError.value = resolveApiError(reason, 'Unable to save this flashcard progress.')
+    return
   }
 
-  if (!known) {
-    showMalayMeaning.value = true
-    actionSuccess.value = 'No problem. Translation is shown so you can review this card.'
-  } else {
-    actionSuccess.value = 'Flashcard progress saved. Keep going!'
-  }
+  actionSuccess.value = 'Flashcard progress saved. Keep going!'
 }
 
 function openQuizAttempt(quizId: number | null) {

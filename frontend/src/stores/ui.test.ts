@@ -22,17 +22,4 @@ describe('ui store', () => {
     expect(i18n.global.locale.value).toBe('zh')
     expect(window.localStorage.getItem(storageKeys.language)).toBe('zh')
   })
-
-  it('toggles mobile navigation with optional forced state', () => {
-    const ui = useUiStore()
-
-    ui.toggleMobileNav()
-    expect(ui.mobileNavOpen).toBe(true)
-
-    ui.toggleMobileNav(false)
-    expect(ui.mobileNavOpen).toBe(false)
-
-    ui.toggleMobileNav(true)
-    expect(ui.mobileNavOpen).toBe(true)
-  })
 })

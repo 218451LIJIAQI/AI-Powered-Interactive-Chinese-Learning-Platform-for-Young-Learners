@@ -320,8 +320,8 @@
 
 <script setup lang="ts">
 /**
- * Admin analytics surface — platform-wide metrics, trend charts,
- * conversion / retention funnels.
+ * Admin analytics surface — platform-wide backend metrics, trend charts,
+ * operational breakdowns, audit signals, and service health.
  *
  * <p>Aggregates {@code adminApi.analytics()} into stacked trend
  * cards using {@link TrendChart} — pure SVG sparklines, no external

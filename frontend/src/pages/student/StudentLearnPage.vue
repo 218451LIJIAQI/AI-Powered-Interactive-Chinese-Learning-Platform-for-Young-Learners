@@ -227,11 +227,10 @@
 /**
  * Student curriculum / lesson player surface.
  *
- * <p>Renders module / lesson navigation, the lesson body, and the
- * "next best step" recommendations. Paid content stays gated by the
- * backend entitlement check — the page never tries to render
- * locked lesson body text, so a malicious user cannot inspect the
- * DOM to bypass the paywall.</p>
+ * <p>Renders lesson progress, recent lesson navigation, recorded
+ * video access, and completion controls. Paid or locked content stays
+ * gated by the backend entitlement check; the page only opens safe
+ * video URLs returned by the student lesson-player endpoint.</p>
  */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

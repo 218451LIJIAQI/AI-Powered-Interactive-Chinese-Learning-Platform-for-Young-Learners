@@ -326,13 +326,11 @@
  * and writing feedback.
  *
  * <h2>Availability gate</h2>
- * <p>The page calls {@code aiApi.availability()} on mount; when the
- * provider is disabled or mis-configured the UI swaps the chat
- * input for friendly "AI tutor unavailable" copy and disables upload
- * tools the active provider cannot support. Text-generation endpoints
- * return explicit unavailable responses when the provider is disabled
- * or fails, so a learner sees a safe status instead of a fake success
- * or a raw 500.</p>
+ * <p>The page calls {@code aiApi.availability()} on mount and shows
+ * the provider status while disabling upload tools the active
+ * provider cannot support. Text-generation endpoints return explicit
+ * unavailable responses when the provider is disabled or fails, so a
+ * learner sees a safe status instead of a fake success or a raw 500.</p>
  *
  * <h2>Audio / image uploads</h2>
  * <p>Pronunciation + writing feedback include client-side mime +

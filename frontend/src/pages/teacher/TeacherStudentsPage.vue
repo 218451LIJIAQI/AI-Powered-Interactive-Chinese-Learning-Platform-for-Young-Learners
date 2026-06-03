@@ -298,10 +298,10 @@
  * which jumps to {@link TeacherFeedbackPage}.</p>
  *
  * <h2>PII boundary</h2>
- * <p>The teacher sees display name and class membership only —
- * email and other contact details remain hidden, by mapper, so
- * the teacher can never accidentally leak a learner's contact info
- * through a screenshot or shared CSV.</p>
+ * <p>The teacher sees the learner profile fields returned by the
+ * roster mapper, including email when available, so this page treats
+ * student details as classroom-scoped data and avoids export or bulk
+ * sharing controls.</p>
  */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -1061,7 +1061,6 @@ function reloadAll() {
   gap: 12px;
 }
 
-.teacher-students-followup-note,
 .teacher-students-empty-copy {
   color: #838eaa;
   line-height: 1.5;

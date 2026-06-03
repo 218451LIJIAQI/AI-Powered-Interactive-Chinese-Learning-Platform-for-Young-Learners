@@ -451,21 +451,20 @@
 
 <script setup lang="ts">
 /**
- * Admin platform settings — feature flags, AI provider, reward
- * policy, leaderboard window, content moderation rules, SMTP
- * status, and other system-wide toggles.
+ * Admin platform settings — interface locale, AI disclaimer,
+ * notification preferences, safety toggles, commission settings,
+ * audit logs, notifications, and system health.
  *
  * <h2>Why one page</h2>
- * <p>Most settings flow through the same {@code adminApi.settings}
- * pattern (load → edit → save). Grouping them into tabs on a
- * single page reduces navigation churn for admins who routinely
- * adjust multiple settings during incident response.</p>
+ * <p>Settings flow through the same load-edit-save pattern via
+ * {@code adminApi.platformSettings()} and related admin endpoints.
+ * Keeping the operational controls with audit context reduces
+ * navigation churn for admins who routinely verify related changes.</p>
  *
  * <h2>Side effects</h2>
- * <p>Some settings have immediate runtime impact — e.g. flipping
- * the AI provider to disabled stops new chat requests within the
- * next polling tick. The page surfaces a warning for such fields
- * so the admin knows the change is not just stored but live.</p>
+ * <p>Writes are blocked while preview data is active, and successful
+ * saves reload the server-owned resource so the UI reflects persisted
+ * backend state.</p>
  */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -740,12 +739,7 @@ const normalizedAuditLogs = computed(() =>
 )
 
 const filteredAuditLogs = computed(() => {
-  const result = normalizedAuditLogs.value.filter((item) => {
-    if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
-    if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
-    if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
-    return true
-  })
+  const result = normalizedAuditLogs.value.filter(auditMatchesActiveFilters)
 
   result.sort((a, b) => {
     if (sortOrder.value === 'NEWEST') {
@@ -758,15 +752,7 @@ const filteredAuditLogs = computed(() => {
   return result.slice(start, start + pageSize)
 })
 
-const totalAuditCount = computed(
-  () =>
-    normalizedAuditLogs.value.filter((item) => {
-      if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
-      if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
-      if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
-      return true
-    }).length,
-)
+const totalAuditCount = computed(() => normalizedAuditLogs.value.filter(auditMatchesActiveFilters).length)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalAuditCount.value / pageSize)))
 const paginationLabel = computed(() => {
@@ -950,6 +936,13 @@ function cycleActorFilter() {
 
 function cycleSort() {
   sortOrder.value = sortOrder.value === 'NEWEST' ? 'OLDEST' : 'NEWEST'
+}
+
+function auditMatchesActiveFilters(item: { type: string; actor: string }) {
+  if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
+  if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
+  if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
+  return true
 }
 
 function clampCommissionRate(value: number) {

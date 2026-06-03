@@ -172,13 +172,12 @@
 
 <script setup lang="ts">
 /**
- * Admin moderation queue — handle reported AI responses, reported
- * teacher feedback, and reported public content.
+ * Admin moderation queue — inspect recorded moderation actions and
+ * review flagged student AI responses.
  *
- * <p>Decision actions (dismiss / take-down / warn) all require an
- * admin note. Take-down hides the reported entity from public view
- * and notifies the original author; dismiss closes the report with
- * no action. Both decisions are append-only and audited.</p>
+ * <p>AI report reviews require a reviewer note, block writes while
+ * preview data is active, and reload the server-owned report queue
+ * after each successful update.</p>
  */
 import { computed, reactive, ref, watch } from 'vue'
 

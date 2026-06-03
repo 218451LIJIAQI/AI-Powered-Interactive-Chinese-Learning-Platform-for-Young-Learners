@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 /**
- * Pure-CSS illustrated thumbnail used as the placeholder course
+ * Pure-CSS illustrated thumbnail used as the fallback course
  * cover when a teacher has not uploaded a real image. Five
  * variants render different scenes (panda, family, pagoda,
  * travel, classic-book) so a row of course cards looks

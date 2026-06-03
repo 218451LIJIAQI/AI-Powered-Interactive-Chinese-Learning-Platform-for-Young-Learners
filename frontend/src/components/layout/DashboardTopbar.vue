@@ -68,17 +68,17 @@
 
 <script setup lang="ts">
 /**
- * Authenticated topbar — page title, breadcrumb, notification
- * bell, mobile-nav toggle, language switcher, and the user menu.
+ * Authenticated topbar — page context, notification bell,
+ * learning streak, language switcher, sign-out action, and the
+ * profile link.
  *
  * Polls the unread-notification count and listens for the
  * `mandarin-spark:notification-read` custom event so the badge
  * decrements in real time when the user opens an item, without
  * a full refresh.
  *
- * Click-outside is handled by a document listener wired in
- * onMounted / detached in onBeforeUnmount so the dropdown closes
- * cleanly without leaking handlers across navigations.
+ * The notification listener is wired in onMounted / detached in
+ * onBeforeUnmount so route changes do not leak handlers.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'

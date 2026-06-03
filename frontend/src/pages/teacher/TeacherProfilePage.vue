@@ -229,12 +229,10 @@
 /**
  * Teacher self-service profile surface.
  *
- * <p>Edits display name, headline, biography, contact, banking,
- * certifications, and (re-)submits the teacher verification packet
- * after rejection. The verification snapshot is included so the
- * teacher always sees their current state (PENDING / APPROVED /
- * REJECTED) and the admin note inline rather than via a separate
- * notifications page.</p>
+ * <p>Edits display name, biography, short introduction, and teaching
+ * categories, while handling verification document upload/download,
+ * resubmission, and recent notifications from the same profile
+ * surface.</p>
  */
 import { computed, reactive, ref, watch } from 'vue'
 

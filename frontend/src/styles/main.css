@@ -21,22 +21,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --bg: #f8f9ff;
-  --bg-soft: #f4f7ff;
   --surface: rgba(255, 255, 255, 0.985);
-  --surface-strong: #ffffff;
-  --surface-muted: #fbfbff;
   --text: #152042;
   --text-soft: #66718d;
   --border: rgba(210, 216, 236, 0.9);
-  --border-soft: rgba(224, 229, 244, 0.92);
   --shadow: 0 18px 44px rgba(137, 146, 193, 0.12);
   --shadow-soft: 0 10px 24px rgba(137, 146, 193, 0.08);
   --primary: #6f4cff;
-  --primary-strong: #5837ef;
   --primary-soft: #f1ecff;
   --accent: #ffcc2f;
-  --accent-strong: #f7b921;
   --success: #46b851;
   --success-soft: #ebf9ed;
   --danger: #ff6363;
@@ -46,9 +39,6 @@
   --info: #2f8fff;
   --info-soft: #eef6ff;
   --radius-xl: 28px;
-  --radius-lg: 22px;
-  --radius-md: 16px;
-  --radius-sm: 12px;
   --max-page: 1600px;
 }
 
@@ -4875,11 +4865,6 @@ img {
 
 .student-module-icon.is-numbers {
   color: #4ab852;
-}
-
-.student-module-stars {
-  color: #ffbf2f;
-  letter-spacing: 2px;
 }
 
 .student-module-progress {
@@ -19130,11 +19115,6 @@ body {
 .student-learn-page .student-module-card.is-locked .student-module-status {
   background: rgba(204, 210, 226, 0.32);
   color: #7a849e;
-}
-
-/* AI Helper: hide remnant chinese pseudo-icon container if any */
-.student-ai-helper-tool-card > span > .icon-glyph {
-  display: block;
 }
 
 /* Practice page: info chip with IconGlyph */

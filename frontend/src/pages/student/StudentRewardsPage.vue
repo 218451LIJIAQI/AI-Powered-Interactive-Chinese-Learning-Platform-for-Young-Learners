@@ -275,13 +275,12 @@
 
 <script setup lang="ts">
 /**
- * Student rewards / XP / point shop surface.
+ * Student rewards, XP, badge, and milestone surface.
  *
- * <p>Visualises points balance, recent reward transactions, the
- * monthly leaderboard placement, and themed reward targets. Like
- * the other student dashboards, single-fetch through the
- * studentApi reward summary so the bottom cards derive from one
- * response.</p>
+ * <p>Visualises points balance, recent reward transactions, badge
+ * progress, the level journey, and practice goals from the student
+ * rewards, points history, dashboard, progress, and activity
+ * resources.</p>
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -869,12 +868,6 @@ function reloadAll() {
   justify-self: center;
 }
 
-.student-rewards-middle {
-  display: grid;
-  grid-template-columns: minmax(0, 1.42fr) minmax(320px, 0.88fr);
-  gap: 18px;
-}
-
 .student-badge-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1031,20 +1024,6 @@ function reloadAll() {
   color: var(--text-soft);
   font-size: 0.84rem;
   line-height: 1.4;
-}
-
-.student-achievement-side {
-  display: grid;
-  justify-items: end;
-  gap: 4px;
-}
-
-.student-achievement-side strong {
-  color: var(--primary);
-}
-
-.student-achievement-side small {
-  color: var(--text-soft);
 }
 
 .student-rewards-journey-card p {
@@ -1235,8 +1214,7 @@ function reloadAll() {
 }
 
 @media (max-width: 1180px) {
-  .student-rewards-hero,
-  .student-rewards-middle {
+  .student-rewards-hero {
     grid-template-columns: 1fr;
   }
 
@@ -1271,7 +1249,6 @@ function reloadAll() {
     justify-items: start;
   }
 
-  .student-achievement-side,
   .student-weekly-goal-side {
     justify-items: start;
   }
@@ -1365,11 +1342,6 @@ function reloadAll() {
     transform-origin: bottom center;
   }
 
-  .student-rewards-middle {
-    grid-template-columns: minmax(0, 1.26fr) minmax(280px, 0.9fr);
-    gap: 18px;
-  }
-
   .student-rewards-badges-card,
   .student-rewards-achievements-card,
   .student-rewards-journey-card,
@@ -1402,11 +1374,6 @@ function reloadAll() {
   .student-badge-card span {
     font-size: 0.76rem;
     line-height: 1.3;
-  }
-
-  .student-badge-stars {
-    font-size: 0.82rem;
-    letter-spacing: 1.5px;
   }
 
   .student-achievement-item,

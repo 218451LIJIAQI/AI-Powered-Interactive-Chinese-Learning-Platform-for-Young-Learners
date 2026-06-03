@@ -167,9 +167,6 @@ export const useAuthStore = defineStore('auth', {
           }
         } catch {
           persistToken(null)
-          if (canUsePreviewMode() && this.previewRole) {
-            this.currentUser = demoUsers[this.previewRole]
-          }
         }
       }
 

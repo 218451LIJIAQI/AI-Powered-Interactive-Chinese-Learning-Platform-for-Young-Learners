@@ -282,11 +282,11 @@
 /**
  * Student dashboard hero — the first page a learner sees after sign-in.
  *
- * <p>Aggregates the learner's "what's next" picture: today's mission,
- * smart review queue, quiz snapshot, study rhythm. Single-fetch
- * design through {@code studentApi.dashboard()} so the page renders
- * in one round-trip; the bottom-grid cards derive their content
- * from that one response rather than firing parallel queries.</p>
+ * <p>Aggregates the learner's "what's next" picture: current lesson,
+ * progress, practice tools, rewards, quiz snapshot, and study rhythm.
+ * Dashboard and progress resources load independently so the page can
+ * show precise progress while still falling back safely in preview
+ * mode.</p>
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'

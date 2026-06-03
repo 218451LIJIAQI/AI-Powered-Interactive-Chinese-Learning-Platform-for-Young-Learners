@@ -17,8 +17,7 @@
 /**
  * Larger informational banner used on the landing page for
  * trust / safety / parent-controls callouts. Optional `badge`
- * slot in the corner advertises an associated status ("Verified",
- * "Coming soon", etc.).
+ * text in the corner advertises an associated status.
  */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 

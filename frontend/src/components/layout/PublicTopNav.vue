@@ -34,8 +34,8 @@
 /**
  * Sticky top navigation for unauthenticated routes (landing,
  * catalogue, course detail, terms / privacy). Shows the brand,
- * the four public nav items, a language switcher, and a
- * "Sign in" CTA.
+ * the public nav items, a language switcher, and sign-in /
+ * account-creation CTAs.
  *
  * Hidden by the parent {@link PublicLayout} for the auth pages
  * themselves so the auth chrome has the full viewport.

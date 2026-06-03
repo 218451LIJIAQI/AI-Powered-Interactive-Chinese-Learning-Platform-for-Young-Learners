@@ -133,9 +133,10 @@
  * draft or hidden material via URL guessing.</p>
  *
  * <h2>Paid vs. free</h2>
- * <p>Paid course pages display only price + teaser; the lesson body
- * is locked behind the checkout flow. The action button routes
- * through {@link AuthPage} when the visitor is not signed in.</p>
+ * <p>The frontend renders the public detail payload returned by the
+ * API, then routes unauthenticated paid actions through
+ * {@link AuthPage} and authenticated student purchases through the
+ * checkout flow.</p>
  */
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

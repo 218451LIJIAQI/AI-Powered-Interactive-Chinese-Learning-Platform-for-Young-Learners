@@ -298,7 +298,8 @@
  * <p>Aggregates platform-wide KPIs (users, courses, content review
  * queue depth, finance health, moderation backlog) into a single
  * read-only overview. Heavy drill-downs live in their own sibling
- * pages so this dashboard stays a single-fetch summary.</p>
+ * pages, while this dashboard composes the lightweight summary
+ * endpoints needed for the landing view.</p>
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -536,8 +537,8 @@ const moderationItems = computed(() => {
   }))
   const aiItems = aiReports.value.slice(0, 2).map((item) => ({
     id: `ai-${item.id}`,
-    title: formatReportReason(item.reasonCategory),
-    copy: item.description || formatFeatureKey(item.featureKey),
+    title: formatStatus(item.reasonCategory),
+    copy: item.description || formatStatus(item.featureKey),
     meta: formatDateTime(item.createdAt),
     label: formatStatus(item.status),
     tone: 'purple',
@@ -602,14 +603,6 @@ function formatStatus(status: string) {
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
-}
-
-function formatFeatureKey(featureKey: string) {
-  return formatStatus(featureKey)
-}
-
-function formatReportReason(reason: string) {
-  return formatStatus(reason)
 }
 
 function reportStatusTone(status: string) {

@@ -391,9 +391,9 @@
 
 <script setup lang="ts">
 /**
- * Teacher feedback surface — review student attempts, leave
- * narrative comments, attach rubric scores, and broadcast
- * announcements to a class.
+ * Teacher feedback surface — review saved feedback, create or edit
+ * narrative comments, and optionally attach lesson or quiz-attempt
+ * context for linked learners.
  *
  * <p>Scopes student lookups to the teacher's own classroom — the
  * backend further enforces this in

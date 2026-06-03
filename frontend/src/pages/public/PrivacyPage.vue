@@ -22,9 +22,9 @@
 
 <script setup lang="ts">
 /**
- * Static privacy policy page. Authored copy lives directly in the
- * template so legal review can diff it cleanly per release — no
- * CMS, no markdown loader, no dynamic data.
+ * Static privacy policy page. Authored copy lives in this route
+ * component so legal review can diff it cleanly per release — no
+ * CMS, no markdown loader, no remote data.
  */
 import { useRouter } from 'vue-router'
 

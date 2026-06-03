@@ -13,12 +13,12 @@
  * trips a compile error in this file. Without that, demo data
  * silently drifts and demo pages render broken UI.</p>
  *
- * <h2>Never bundled in production</h2>
+ * <h2>Normal-build behaviour</h2>
  * <p>The composables that read this file
  * ({@code useResource}, {@code stores/auth}) gate the fallback on
- * {@code appEnv.useDemoData}. Vite tree-shaking still includes the
- * data in the bundle, but the runtime never references it for a
- * normal build, so there is no accidental demo-fixture behaviour.</p>
+ * {@code appEnv.useDemoData}. The data may still be present in the
+ * bundle, but a normal build never selects it at runtime, so there is
+ * no accidental demo-fixture behaviour.</p>
  */
 import type {
   AdminAnalyticsResponse,
