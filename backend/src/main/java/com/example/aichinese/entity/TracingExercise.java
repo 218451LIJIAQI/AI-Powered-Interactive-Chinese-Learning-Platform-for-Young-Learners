@@ -18,24 +18,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Character-tracing handwriting exercise in the platform practice
- * library.
- *
- * <p>The learner traces over {@link #targetCharacter}; the front-end
- * uses {@link #worksheetUrl} (typically an SVG of stroke guides) to
- * render the practice surface. {@link #pinyin} and {@link #meaning}
- * scaffold beginners.</p>
- *
- * <p>Shares the activity metadata vocabulary with the other practice
- * library entities for uniform filtering.</p>
- *
- * <p>{@link #createdByUser} is mapped {@code updatable = false}:
- * authorship is captured once at insert time by
- * {@code AdminActivityMapper#toEntity} and intentionally not touched
- * again by the matching {@code applyTo} update method. All other
- * domain fields remain mutable through the admin moderation workflow.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

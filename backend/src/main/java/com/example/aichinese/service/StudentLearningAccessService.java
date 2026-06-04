@@ -19,17 +19,6 @@ import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
-/**
- * Read-side access checks used by student-facing services. Verifies the
- * caller has a {@link StudentProfile}, that the lesson / quiz the student
- * is trying to reach is {@link ContentStatus#PUBLISHED}, and that any paid
- * content is actually unlocked through an entitlement.
- *
- * <p>The interactive activity types (flashcard, matching, listening,
- * tracing, drag-drop, story) used to have their own {@code requirePublished*}
- * lookups here. They have moved to {@link StudentActivityLibraryService}
- * because activities are now platform-managed and decoupled from lessons.
- */
 @Service
 public class StudentLearningAccessService {
 

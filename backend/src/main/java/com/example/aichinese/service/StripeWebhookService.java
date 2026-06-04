@@ -32,50 +32,12 @@ import com.example.aichinese.entity.enums.PaymentStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * Verifies and parses {@code POST /api/v1/payments/webhook/stripe}
- * callbacks from Stripe, then hands the parsed event off to
- * {@link PaymentService} for settlement.
- *
- * <h2>Signature verification</h2>
- * <p>Stripe signs every webhook with HMAC-SHA-256 over
- * {@code "{timestamp}.{payload}"}. This service:</p>
- * <ol>
- *   <li>Parses the {@code Stripe-Signature} header into its
- *       {@code t} (timestamp) and {@code v1} (signature) components.</li>
- *   <li>Rejects payloads older than
- *       {@link #SIGNATURE_TOLERANCE_SECONDS} (5 minutes) to defeat
- *       replay attacks.</li>
- *   <li>Recomputes the HMAC with the configured signing secret and
- *       compares using a constant-time XOR loop to defeat
- *       timing-side-channel attacks.</li>
- * </ol>
- *
- * <h2>Event filtering</h2>
- * <p>Only {@link #SUPPORTED_CHECKOUT_SESSION_EVENTS} are processed;
- * other event types (e.g. subscription, dispute) are acknowledged
- * with HTTP 200 so Stripe does not retry, but ignored business-wise.
- * The session metadata is parsed via Jackson into a
- * {@link PaymentProviderStatusResult} that {@link PaymentService}
- * can settle idempotently.</p>
- *
- * <h2>Failure mode</h2>
- * <p>Configuration problems (missing secret, wrong provider) raise
- * {@link HttpStatus#SERVICE_UNAVAILABLE} so Stripe retries instead of
- * dead-lettering the event; signature / payload problems raise
- * {@link HttpStatus#BAD_REQUEST} so Stripe stops retrying obviously
- * forged or corrupted callbacks.</p>
- */
 @Service
 public class StripeWebhookService {
 
     private static final Logger log = LoggerFactory.getLogger(StripeWebhookService.class);
 
     private static final long SIGNATURE_TOLERANCE_SECONDS = 300;
-    /**
-     * Transport and parser cap shared with the pre-binding servlet filter.
-     * Keep Stripe callback memory use bounded before signature verification.
-     */
     public static final int MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
     private static final int MAX_SIGNATURE_HEADER_LENGTH = 4096;
     private static final int MAX_PROVIDER_STATUS_LENGTH = 100;

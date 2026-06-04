@@ -15,7 +15,7 @@ import io.sentry.protocol.Request;
 import io.sentry.protocol.SentryException;
 import io.sentry.protocol.User;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class SentryConfiguration {
 
     private static final String FILTERED = SensitiveDataRedactor.FILTERED;

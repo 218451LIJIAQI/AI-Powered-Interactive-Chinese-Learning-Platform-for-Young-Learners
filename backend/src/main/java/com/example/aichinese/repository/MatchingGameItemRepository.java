@@ -10,40 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.entity.MatchingGameItem;
 
-/**
- * Persistence operations for {@link MatchingGameItem} — the left/right
- * pairs that make up a {@link com.example.aichinese.entity.MatchingGame}.
- *
- * <p>The admin authoring flow rebuilds the full child set on every save
- * ({@code AdminActivityService.saveMatchingGameItems}), so the predominant
- * traffic pattern is "delete-all-then-insert-many" rather than per-row
- * mutation; the bulk delete defined here keeps that workflow O(1) round
- * trips instead of O(items).</p>
- */
 public interface MatchingGameItemRepository extends JpaRepository<MatchingGameItem, Long> {
 
-    /**
-     * Returns every pair belonging to {@code matchingGameId} in the
-     * order the activity author intended. Sorts primarily by
-     * {@code sortOrder} (the explicit reorderable position the admin
-     * picks in the editor) with {@code createdAt} as a deterministic
-     * tie-breaker so two pairs sharing the same {@code sortOrder} still
-     * render in insertion order rather than in arbitrary database
-     * order.
-     */
     List<MatchingGameItem> findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(Long matchingGameId);
 
-    /**
-     * Bulk-removes every pair attached to the given matching game in a
-     * single SQL {@code DELETE}.
-     *
-     * <p>Implemented as an explicit {@link Modifying} JPQL query rather
-     * than a derived {@code deleteBy*} method so Hibernate emits one
-     * statement instead of the default "fetch-then-remove-per-row" path.
-     * {@link MatchingGameItem} declares no {@code @PreRemove} lifecycle
-     * callbacks and no cascading children, so the bulk DELETE is
-     * semantically identical.</p>
-     */
     @Modifying
     @Transactional
     @Query("delete from MatchingGameItem i where i.matchingGame.id = :gameId")

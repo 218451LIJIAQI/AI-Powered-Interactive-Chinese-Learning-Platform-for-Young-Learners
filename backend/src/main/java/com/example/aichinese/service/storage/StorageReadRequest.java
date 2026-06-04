@@ -4,9 +4,6 @@ import java.util.Objects;
 
 import com.example.aichinese.entity.UploadedFile;
 
-/**
- * Storage-provider read request for a managed uploaded file.
- */
 public record StorageReadRequest(
         String configuredDirectory,
         UploadedFile uploadedFile,

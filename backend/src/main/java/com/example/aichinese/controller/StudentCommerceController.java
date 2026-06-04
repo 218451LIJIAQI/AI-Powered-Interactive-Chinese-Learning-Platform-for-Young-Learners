@@ -28,28 +28,6 @@ import com.example.aichinese.service.RefundService;
 
 import jakarta.validation.Valid;
 
-/**
- * Student-side commerce REST surface: cart, checkout, payment
- * history, and refund-request workflow.
- *
- * <h2>Entitlement re-checks</h2>
- * <p>Both add-to-cart and checkout funnel through
- * {@link com.example.aichinese.service.EntitlementService} so a
- * student cannot accidentally re-purchase content they already own
- * — see {@code CartService} / {@code CheckoutService}.</p>
- *
- * <h2>Currency precision</h2>
- * <p>All numeric handling is delegated to the service layer where
- * {@link com.example.aichinese.service.CommerceMoneyService} is the
- * single source of truth for rounding and scale — the controller
- * never touches {@code BigDecimal} math directly.</p>
- *
- * <h2>Refund workflow</h2>
- * <p>Refund creation is rate-limited per student via the service
- * layer; admin decisions on those requests live on
- * {@link AdminCommerceController}. The student-side history endpoint
- * is paginated and strictly filtered to the calling student.</p>
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/students")

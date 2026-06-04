@@ -40,23 +40,6 @@ import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.StudentQuizProgressRepository;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Tracks per-student progress, point/badge rewards, and the daily streak.
- *
- * <p>Two completion entry points are exposed:
- * <ul>
- *   <li>{@link #completeQuiz(StudentProfile, Quiz, int)} — for the
- *       teacher-owned, lesson-attached quiz flow. Updates lesson progress,
- *       awards quiz / lesson XP, fires streak + badge logic.</li>
- *   <li>{@link #completePlatformActivity(StudentProfile, String, Long, int, String)}
- *       — for admin-managed activities in the platform library
- *       (flashcards, matching, listening, tracing, drag-drop, story).
- *       These are decoupled from lessons; they only affect XP / streak.</li>
- * </ul>
- *
- * <p>Reward / progress / badge / streak read endpoints used by the student
- * dashboard are also implemented here.
- */
 @Service
 public class StudentLearningProgressService {
 
@@ -225,11 +208,6 @@ public class StudentLearningProgressService {
     }
 
     @Transactional(readOnly = true)
-    public List<BadgeSummaryResponse> getBadges(StudentProfile student) {
-        return getBadges(student, 0, 20).items();
-    }
-
-    @Transactional(readOnly = true)
     public PageResponse<BadgeSummaryResponse> getBadges(StudentProfile student, int page, int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
@@ -240,11 +218,6 @@ public class StudentLearningProgressService {
                 .map(this::toBadgeSummaryResponse)
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, badgePage.getTotalElements(), badgePage.getTotalPages());
-    }
-
-    @Transactional(readOnly = true)
-    public List<PointsTransactionResponse> getPointsHistory(StudentProfile student) {
-        return getPointsHistory(student, 0, 20).items();
     }
 
     @Transactional(readOnly = true)
@@ -268,10 +241,6 @@ public class StudentLearningProgressService {
                 streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,
                 streak != null ? streak.getLastLearningDate() : null);
     }
-
-    // ===================================================================
-    // Internal helpers
-    // ===================================================================
 
     private boolean markQuizCompleted(StudentProfile student, Quiz quiz, String summary) {
         return recordQuizProgress(student, quiz, true, summary);
@@ -522,12 +491,6 @@ public class StudentLearningProgressService {
             int lessonCompletionPercent) {
     }
 
-    /**
-     * Outcome of {@link #completePlatformActivity}. Distinct from
-     * {@link CompletionOutcome} because platform-managed activities are
-     * decoupled from lessons, so {@code lessonCompletionPercent} has no
-     * meaning here.
-     */
     public record PlatformActivityOutcome(
             boolean firstCompletion,
             int earnedPoints,

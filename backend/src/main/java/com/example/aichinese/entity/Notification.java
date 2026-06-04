@@ -20,53 +20,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * In-app notification delivered to a single recipient {@link User}.
- *
- * <p>Notifications are produced by every cross-cutting flow in the
- * platform — quiz grading, payment status changes, teacher feedback,
- * AI safety reports, admin escalations — and rendered in the bell
- * dropdown of the recipient's role-specific dashboard.</p>
- *
- * <p>{@link #notificationType} categorises the notification (drives
- * icon, colour and routing); see
- * {@link com.example.aichinese.entity.enums.NotificationType}.
- * {@link #notificationStatus} tracks read/unread; {@link #readAt} is
- * stamped the first time the recipient acknowledges it.</p>
- *
- * <p>{@link #targetType}, {@link #targetId} and {@link #targetPath}
- * point at the artefact the notification refers to — the front-end
- * uses {@code targetPath} to deep-link the click action without needing
- * to know per-type routing rules. Both target columns are denormalised
- * (no FK) so deleting the target does not cascade-purge historic
- * notifications.</p>
- *
- * <p>{@link #createdByUser} attributes the source actor (teacher posting
- * feedback, admin acting on a moderation case); nullable for system
- * notifications.</p>
- *
- * <p>The composite indexes {@code (user_id, created_at, id)} and
- * {@code (user_id, notification_status, created_at, id)} back the
- * recency-ordered inbox and unread-bell queries respectively.</p>
- *
- * <h3>Field mutability contract</h3>
- *
- * <p>Every field except the read-state pair is mapped
- * {@code updatable = false}: once a notification is dispatched, its
- * recipient, content, type and target metadata cannot be rewritten
- * through the application layer.</p>
- *
- * <ul>
- *   <li><b>Immutable</b>: {@link #user}, {@link #title},
- *       {@link #message}, {@link #notificationType},
- *       {@link #targetType}, {@link #targetId}, {@link #targetPath},
- *       {@link #createdByUser}. The single legitimate write path is
- *       {@code NotificationService#send}.</li>
- *   <li><b>Mutable</b>: {@link #notificationStatus} and
- *       {@link #readAt}, both touched only by
- *       {@code NotificationService#markAsRead} / bulk equivalents.</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

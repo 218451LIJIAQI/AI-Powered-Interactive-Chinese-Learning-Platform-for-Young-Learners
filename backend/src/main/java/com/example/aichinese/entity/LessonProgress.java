@@ -17,43 +17,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Tracks a single student's progress through a single {@link Lesson}.
- *
- * <p>Exactly one row per {@code (student_id, lesson_id)} pair is
- * enforced by the unique constraint, so the dashboard can compute
- * "lessons completed / total" with a single index lookup.</p>
- *
- * <p>{@link #completionPercent} is updated incrementally as the
- * student watches videos, completes activities, or marks sections
- * done; it can be {@code null} for very early access where no
- * progress has been recorded yet (distinct from explicit
- * {@code 0%}).</p>
- *
- * <p>{@link #completed} is a hard boolean flipped to {@code true}
- * the first time {@link #completionPercent} reaches 100 — staying
- * {@code true} thereafter even if the student replays — so the
- * dashboard "lessons completed" count never decreases.</p>
- *
- * <p>{@link #version} prevents two concurrent progress writes (e.g.
- * the auto-saver and an explicit "mark complete" click) from
- * overwriting each other's increments.</p>
- *
- * <h3>Field mutability contract</h3>
- * <ul>
- *   <li>{@link #student} and {@link #lesson} are mapped
- *       {@code updatable = false}: the row's identity is the
- *       {@code (student, lesson)} pair and re-targeting either field
- *       would additionally collide with
- *       {@code uk_lesson_progress_student_lesson}. The ORM-layer
- *       guard simply makes that contract explicit.</li>
- *   <li>{@link #completionPercent}, {@link #completed},
- *       {@link #lastAccessedAt} are mutated on every learning event
- *       by {@code StudentLearningProgressService}; the
- *       {@link Version @Version} field above protects those writes
- *       against lost-update races.</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

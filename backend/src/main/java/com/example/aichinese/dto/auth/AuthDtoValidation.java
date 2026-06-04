@@ -7,7 +7,7 @@ final class AuthDtoValidation {
     static final int BCRYPT_MAX_PASSWORD_BYTES = 72;
 
     private AuthDtoValidation() {
-        throw new AssertionError("AuthDtoValidation is a utility class and must not be instantiated.");
+        throw new AssertionError("No instances");
     }
 
     static boolean isWithinBcryptByteLimit(String value) {

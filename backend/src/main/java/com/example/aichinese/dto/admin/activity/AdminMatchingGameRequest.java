@@ -17,49 +17,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/**
- * Body for {@code POST /api/v1/admin/activities/matching-games}
- * (create) and {@code PUT /api/v1/admin/activities/matching-games/{id}}
- * (update).
- *
- * <p>Aggregate-root payload: a single request encapsulates both the
- * matching-game header (title, metadata) and its full set of
- * {@link AdminMatchingGameItemRequest} child pairs. The
- * {@link jakarta.validation.Valid} on {@link #items} cascades Bean
- * Validation into each pair so a single atomic 400 response surfaces
- * every parent <em>and</em> child violation — the admin never sees a
- * "header saved, items rejected" partial-failure state.</p>
- *
- * <p>{@link #items} may be {@code null} or empty during initial
- * authoring (admin saves the header first, then adds pairs); the
- * student-facing publication gate ({@code AdminActivityService}'s
- * status-change validator) refuses to flip a game to
- * {@link com.example.aichinese.entity.enums.ContentStatus#PUBLISHED}
- * until at least two pairs exist. The upper {@code @Size(max=200)}
- * is a defensive bound preventing a single request from creating
- * unbounded child rows: realistic admin-authored games carry under 20
- * pairs, so 200 is more than ample while still protecting the server
- * from runaway payloads.</p>
- *
- * <p>See {@link AdminActivitySummaryResponse} for the shared metadata
- * vocabulary and {@link AdminFlashcardRequest} for the rationale
- * behind the tag-list cap and the {@code estimatedSeconds} upper bound.</p>
- *
- * @param title            game title; required; max 200 chars
- *                         ({@code matching_games.title VARCHAR(200)})
- * @param hskLevel         optional HSK band, {@code 1..6}
- * @param ageBand          optional target age cohort
- * @param difficulty       optional easy/medium/hard tier
- * @param topic            optional short topic label; max 100 chars
- * @param tags             optional list of free-form tags; up to 8
- *                         non-blank entries, each max 50 chars
- * @param xpReward         optional base XP, {@code 0..1000}
- * @param estimatedSeconds optional time-to-complete hint,
- *                         {@code 0..86400} (24 hours)
- * @param items            child left/right pairs; nullable or empty
- *                         during drafting; at most 200 entries; each
- *                         element validated via {@link Valid}
- */
 public record AdminMatchingGameRequest(
         @NotBlank(message = "Title is required.")
         @Size(max = 200, message = "Title must not exceed 200 characters.")

@@ -41,38 +41,9 @@ import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Teacher-side scheduling and student-side enrolment for synchronous
- * {@link LiveClass} sessions (Zoom / Meet / Teams).
- *
- * <h2>Lifecycle</h2>
- * <p>Scheduled → Ongoing → Completed (or Cancelled / Rescheduled).
- * Only {@link #STUDENT_VISIBLE_STATUSES} are surfaced to students;
- * other states are restricted to the owning teacher and admins.
- * Reschedule writes a new audit record and re-notifies enrolled
- * students so calendar reminders stay in sync.</p>
- *
- * <h2>Enrolment</h2>
- * <p>Students enrol via {@link LiveClassEnrolment}; capacity is
- * enforced against {@code maxParticipants} with optimistic locking
- * on the live-class row so two simultaneous enrolments cannot push
- * the count over the limit. Cancellation re-opens the slot.</p>
- *
- * <h2>Join URL gating</h2>
- * <p>The actual meeting URL is only exposed via
- * {@link LiveLearningAccessService} when the class is within the
- * join window and the student has both an active enrolment and a
- * valid entitlement — guarding against URL-leak attacks where a
- * link is shared outside the enrolled cohort.</p>
- */
 @Service
 public class LiveClassService {
 
-    // Delegate to the canonical set on the enum so the Javadoc contract
-    // ("Mirrors LiveClassService.STUDENT_VISIBLE_STATUSES") is enforced by
-    // the type system rather than by parallel literal lists.  The
-    // underlying implementation is still an immutable EnumSet wrapper,
-    // so contains() remains O(1).
     private static final Set<LiveClassStatus> STUDENT_VISIBLE_STATUSES = LiveClassStatus.STUDENT_VISIBLE;
     private static final int MAX_LIVE_CLASS_TITLE_LENGTH = 200;
     private static final int MAX_LIVE_CLASS_DESCRIPTION_LENGTH = 1000;
@@ -248,8 +219,6 @@ public class LiveClassService {
     @Transactional(readOnly = true)
     public PageResponse<LiveClassResponse> getStudentLiveClasses(SecurityUserDetails currentUser, int page, int size) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
-        // Push the student visibility predicate and ordering down to SQL
-        // instead of paginating across private or unpublished classes.
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<LiveClass> liveClassPage = liveClassRepository.findStudentVisibleClasses(
@@ -354,10 +323,6 @@ public class LiveClassService {
 
     @Transactional(readOnly = true)
     public PageResponse<LiveClassResponse> getAdminLiveClasses(SecurityUserDetails currentUser, int page, int size) {
-        // Use the repository's DB-ordered query rather than findAll() so the
-        // admin schedule view returns classes in chronological order without
-        // a second JVM sort pass. The EntityGraph on the query already
-        // eagerly fetches teacher/lesson/package to avoid mapper-level N+1.
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<LiveClass> liveClassPage = liveClassRepository.findAllByOrderByScheduledStartAtAsc(PageRequest.of(safePage, safeSize));

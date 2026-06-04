@@ -15,31 +15,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.util.AiInputSanitizer;
 
-/**
- * Static-pattern safety check applied to every learner-visible field
- * (lesson title / description / body, quiz text, activity captions,
- * teacher bio, etc.) before the content is persisted.
- *
- * <h2>Approach</h2>
- * <p>A small built-in pattern list ({@link #SENSITIVE_PATTERNS})
- * covers explicit profanity, sexual content, self-harm, hard drugs,
- * and Bahasa Melayu equivalents. Matches are tolerant of separator
- * insertion (e.g. {@code f.u.c.k}, {@code "kill   yourself"}) using
- * the {@link #SEPARATORS} regex, and Unicode-normalised so accented
- * variants do not bypass.</p>
- *
- * <h2>Extensibility</h2>
- * <p>Admins can extend the deny-list via {@link SystemSetting} —
- * runtime additions are merged with the built-in list. This keeps
- * the platform able to react to abuse patterns without a redeploy
- * while keeping the irreducible baseline in code.</p>
- *
- * <h2>Why not an LLM filter</h2>
- * <p>Cheap, deterministic, no-network — this layer runs on every
- * write regardless of AI availability or budget. The LLM-based
- * safety system instructions in {@link com.example.aichinese.service.ai.AiPromptBuilder}
- * are the second layer; this one is the always-on guardrail.</p>
- */
 @Service
 public class ContentSafetyService {
 

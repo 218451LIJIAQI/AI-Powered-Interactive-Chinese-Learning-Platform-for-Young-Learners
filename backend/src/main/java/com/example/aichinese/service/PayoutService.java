@@ -34,34 +34,6 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Teacher earnings ledger and payout request workflow.
- *
- * <h2>Earnings</h2>
- * <p>A {@link TeacherEarning} row is created when a learner completes
- * a purchase that contains a teacher-owned item; the amount is the
- * sale price minus the {@code platform_commission_rate} from
- * {@link CommerceSettingsService}. Earnings start in
- * {@link TeacherEarningStatus#PENDING} and become {@code AVAILABLE}
- * once the underlying payment clears the refund window, so a
- * payout request can never draw against earnings that could still
- * be refunded.</p>
- *
- * <h2>Payout requests</h2>
- * <p>Teachers file a {@link PayoutRequest} for some / all of their
- * available balance. The request goes {@code PENDING -> APPROVED -> PAID}
- * (or {@code REJECTED}) via admin decisions made through
- * {@link PayoutDecisionRequest}. The payout request amount itself is
- * the committed balance reservation: {@link PayoutStatus#COMMITTED}
- * requests are deducted from the teacher's withdrawable balance without
- * rewriting the immutable per-order-item earning rows.</p>
- *
- * <h2>Reconciliation</h2>
- * <p>All money math goes through {@link CommerceMoneyService} so
- * teacher payouts are reconciled to the same scale and rounding
- * rules as the rest of the commerce stack — preventing one-cent
- * drift across the ledger.</p>
- */
 @Service
 public class PayoutService {
 
@@ -110,10 +82,6 @@ public class PayoutService {
                 teacherEarningRepository.sumGrossAmountByTeacherIdAndEarningStatusNot(teacher.getId(), TeacherEarningStatus.REFUNDED));
         BigDecimal totalNetAmount = commerceMoneyService.normalize(
                 teacherEarningRepository.sumNetAmountByTeacherIdAndEarningStatusNot(teacher.getId(), TeacherEarningStatus.REFUNDED));
-        // In-flight payouts = COMMITTED \ TERMINAL: amounts the admin has
-        // committed against the balance but not yet disbursed.  The enum's
-        // class-load guard enforces PayoutStatus.IN_FLIGHT == COMMITTED \
-        // TERMINAL so this set cannot drift if a new status is introduced.
         BigDecimal pendingPayoutAmount = commerceMoneyService.normalize(
                 payoutRequestRepository.sumAmountByTeacherIdAndPayoutStatusIn(
                         teacher.getId(),
@@ -192,10 +160,6 @@ public class PayoutService {
     public AdminPayoutRequestResponse approvePayout(SecurityUserDetails currentUser, Long id) {
         PayoutRequest payoutRequest = payoutRequestRepository.findLockedById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
-        // Mirrors the RefundService state-machine guard: only PENDING payouts
-        // may be approved. Prevents duplicate notifications and audit-log rows
-        // from a double-clicked admin button, and forbids rewinding a REJECTED
-        // or already-PAID request back into APPROVED.
         requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.PENDING, "approved");
         requireCommittedPayoutCovered(payoutRequest, "approved");
         payoutRequest.setPayoutStatus(PayoutStatus.APPROVED);
@@ -230,9 +194,6 @@ public class PayoutService {
     public AdminPayoutRequestResponse markPayoutPaid(SecurityUserDetails currentUser, Long id) {
         PayoutRequest payoutRequest = payoutRequestRepository.findLockedById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
-        // Payout must transition APPROVED → PAID. Blocking the PENDING → PAID
-        // shortcut ensures every disbursement has a documented approval step
-        // in the audit trail, which is important for financial reviews.
         requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.APPROVED, "marked as paid");
         requireCommittedPayoutCovered(payoutRequest, "marked as paid");
         payoutRequest.setPayoutStatus(PayoutStatus.PAID);

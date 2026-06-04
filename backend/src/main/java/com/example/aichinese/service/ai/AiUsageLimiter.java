@@ -3,7 +3,6 @@ package com.example.aichinese.service.ai;
 import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -68,7 +67,7 @@ public class AiUsageLimiter {
         User user = userRepository.findLockedById(userId)
                 .orElseThrow(() -> new ResponseStatusException(TOO_MANY_REQUESTS, "AI usage quota could not be verified."));
         LocalDateTime now = LocalDateTime.now(clock);
-        LocalDate today = LocalDate.now(clock);
+        LocalDate today = now.toLocalDate();
         AiUsageQuotaCounter counter = quotaCounterRepository.findLockedByUserId(userId)
                 .orElseGet(() -> createCounter(user, now, today));
 
@@ -101,7 +100,7 @@ public class AiUsageLimiter {
 
     private static void rollForward(AiUsageQuotaCounter counter, LocalDateTime now, LocalDate today) {
         if (counter.getMinuteStartedAt() == null
-                || !counter.getMinuteStartedAt().plus(Duration.ofMinutes(1)).isAfter(now)) {
+                || !counter.getMinuteStartedAt().plusMinutes(1).isAfter(now)) {
             counter.setMinuteStartedAt(now);
             counter.setMinuteCount(0);
         }

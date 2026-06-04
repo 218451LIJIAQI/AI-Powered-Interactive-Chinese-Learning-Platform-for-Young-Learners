@@ -12,39 +12,13 @@ import org.springframework.data.repository.query.Param;
 import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.enums.ContentStatus;
 
-/**
- * Persistence operations for {@link Quiz} \u2014 the assessment header
- * attached to a {@code Lesson}, parent to a list of {@code QuizQuestion}s.
- *
- * <p>Each read eager-fetches the parent lesson and teacher chain so the
- * teacher quiz editor and the student attempt page can render the quiz
- * with its parent context in a single round trip. The flagship read is
- * {@link #findAccessiblePublishedForStudent} which pushes the lesson
- * visibility AND entitlement check down into SQL: the student quiz
- * listing must never surface a quiz attached to a lesson the learner
- * has lost access to (e.g. after a refund) or that was archived.</p>
- */
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
-    /**
-     * Paged teacher quiz list for a given lesson, excluding the supplied
-     * status (typically {@code ARCHIVED} so the editor shows draft +
-     * published variants).
-     */
     @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "teacher", "teacher.user" })
     Page<Quiz> findByLessonIdAndContentStatusNotOrderByCreatedAtAsc(Long lessonId, ContentStatus contentStatus, Pageable pageable);
 
-    /**
-     * Counts every quiz attached to a lesson regardless of status \u2014
-     * used by the teacher dashboard and the lesson detail tile.
-     */
     long countByLessonId(Long lessonId);
 
-    /**
-     * IDOR-safe single-row lookup that traverses
-     * {@code Quiz \u2192 TeacherProfile \u2192 User} so a teacher cannot
-     * mutate another teacher's quiz by guessing its id.
-     */
     @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "teacher", "teacher.user" })
     Optional<Quiz> findByIdAndTeacherUserId(Long id, Long teacherUserId);
 

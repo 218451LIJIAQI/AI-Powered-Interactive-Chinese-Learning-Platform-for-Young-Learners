@@ -18,8 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,37 +71,8 @@ import com.example.aichinese.repository.VideoProgressRepository;
 import com.example.aichinese.repository.projection.StatusCountProjection;
 import com.example.aichinese.security.SecurityUserDetails;
 
-/**
- * Time-series + breakdown analytics for the three personas: student
- * (personal progress trends), teacher (sales / engagement / earnings),
- * and admin (platform-wide KPIs).
- *
- * <h2>Data shape</h2>
- * <p>All responses follow the same
- * {@link AnalyticsTrendPointResponse} (time-bucketed) +
- * {@link AnalyticsBreakdownItemResponse} (categorical) pair so the
- * front-end charting code is uniform across personas. Time buckets
- * are capped at {@link #MAX_TREND_POINTS} so an admin can't request a
- * five-year daily trend that would melt the DB.</p>
- *
- * <h2>Authorization</h2>
- * <p>Per-persona entry points filter the underlying queries by the
- * caller's identity — a teacher only sees their own classes, a
- * student only their own progress. Admin endpoints have no row-level
- * filter but are gated by {@link RoleName#ADMIN} at the security
- * layer.</p>
- *
- * <h2>Performance</h2>
- * <p>Numeric aggregates are computed in the database via repository
- * count / sum projections; the service only post-processes into the
- * shape required by the response DTO. Currency aggregates use
- * {@link RoundingMode#HALF_UP} so they match the {@link CommerceMoneyService}
- * convention.</p>
- */
 @Service
 public class AnalyticsService {
-
-    private static final Logger log = LoggerFactory.getLogger(AnalyticsService.class);
 
     private static final int MAX_TREND_POINTS = 6;
     private static final int RECENT_ACTIVITY_DAYS = 7;
@@ -262,8 +231,6 @@ public class AnalyticsService {
 
     @Transactional(readOnly = true)
     public AdminAnalyticsResponse getAdminAnalytics(SecurityUserDetails currentUser) {
-        // Keep the dashboard bounded to aggregate queries, enum-sized
-        // breakdowns, and the recent registration window.
         LocalDateTime trendWindowStart =
                 LocalDate.now().minusDays(RECENT_ACTIVITY_DAYS - 1L).atStartOfDay();
         List<User> recentUsers = userRepository
@@ -300,11 +267,6 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsTrendPointResponse> buildQuizTrend(List<QuizAttempt> attempts) {
-        // Materialise the filtered+sorted list once so we can compute the
-        // skip offset without re-streaming. The previous implementation
-        // re-evaluated {@code attempts.stream().filter(this::hasValidPercentage).count()}
-        // inside the same pipeline that was already filtering, which doubled
-        // the per-row cost on dashboards with many attempts.
         List<QuizAttempt> validSortedAttempts = attempts.stream()
                 .filter(this::hasValidPercentage)
                 .sorted(Comparator.comparing(this::resolveAttemptTime))
@@ -337,9 +299,6 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsBreakdownItemResponse> buildStudentLessonStatusBreakdown(List<LessonProgress> lessonProgressList) {
-        // Single-pass partition. The previous version streamed the list twice
-        // — once with isCompleted, once with the inverse predicate — paying
-        // O(2N) for what is naturally O(N) work.
         long completed = lessonProgressList.stream().filter(LessonProgress::isCompleted).count();
         long inProgress = lessonProgressList.size() - completed;
         return buildBreakdownFromMap(Map.of(
@@ -493,13 +452,6 @@ public class AnalyticsService {
         return buildBreakdownFromMap(counts);
     }
 
-    /**
-     * Builds a breakdown that always exposes every enum constant (including
-     * the ones with zero rows), then overlays the actual counts returned by
-     * a {@code GROUP BY status} repository projection. Keeps the JSON
-     * contract identical to the previous JVM-side helpers so the frontend
-     * chart cards do not need to change.
-     */
     private List<AnalyticsBreakdownItemResponse> buildBreakdownFromProjections(
             List<StatusCountProjection> projections,
             String[] expectedStatuses) {
@@ -515,13 +467,6 @@ public class AnalyticsService {
         return buildBreakdownFromMap(counts);
     }
 
-    /**
-     * Specialised content-status breakdown that merges three repositories'
-     * {@code groupByContentStatus()} results into a single ContentStatus
-     * breakdown — modules + lessons + packages are reported as a unified
-     * pipeline (mirrors the previous {@link #buildAdminContentStatusBreakdown}
-     * behaviour while avoiding three full table loads).
-     */
     private List<AnalyticsBreakdownItemResponse> buildContentStatusBreakdownFromProjections(
             List<StatusCountProjection> moduleCounts,
             List<StatusCountProjection> lessonCounts,
@@ -541,11 +486,6 @@ public class AnalyticsService {
         return buildBreakdownFromMap(counts);
     }
 
-    /**
-     * AI status breakdown follows the same projection pattern but normalises
-     * status strings the same way the legacy in-JVM helper did, so blank or
-     * miscased statuses still aggregate cleanly under "UNKNOWN".
-     */
     private List<AnalyticsBreakdownItemResponse> buildAiStatusBreakdownFromProjections(
             List<StatusCountProjection> projections) {
         Map<String, Long> counts = new LinkedHashMap<>();

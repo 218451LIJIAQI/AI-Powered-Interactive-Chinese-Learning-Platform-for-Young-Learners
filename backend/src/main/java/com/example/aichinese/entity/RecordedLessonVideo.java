@@ -19,29 +19,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Playable video asset attached to a {@link Lesson}.
- *
- * <p>A lesson may carry several videos (intro, main lecture, summary,
- * supplementary) ordered by {@link #sortOrder}. The asset itself comes
- * from one of two sources, captured by {@link #sourceType}:</p>
- * <ul>
- *   <li>{@link com.example.aichinese.entity.enums.RecordedVideoSourceType#UPLOADED_FILE}
- *       — points at a platform-managed {@link UploadedFile}; playback
- *       is served via signed URLs.</li>
- *   <li>{@link com.example.aichinese.entity.enums.RecordedVideoSourceType#EXTERNAL_URL}
- *       — points at a third-party hosted video via {@link #externalVideoUrl};
- *       treated as untrusted external content for safety filtering.</li>
- * </ul>
- *
- * <p>{@link #coursePackage} is an optional denormalized back-reference
- * useful for "package-only" supplementary clips that aren't anchored to
- * a single lesson.</p>
- *
- * <p>{@link #active} provides soft-deletion semantics: setting to
- * {@code false} removes the video from public listings without
- * destroying the {@code VideoProgress} rows that reference it.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -53,15 +30,6 @@ import lombok.Setter;
         @Index(name = "idx_recorded_videos_active", columnList = "active")
 })
 @NamedEntityGraph(
-        // Single source of truth for the eager-fetch attribute set used
-        // by every read in RecordedLessonVideoRepository: teacher and
-        // student video lists, the IDOR-safe single-row reads, and the
-        // student-visible paywall-aware query all need lesson +
-        // lesson.teacher + lesson.teacher.user + coursePackage +
-        // uploadedFile hydrated in one round trip. The
-        // lesson.teacher.user nested fetch is declared as a sub-graph
-        // so the response mapper can render the teacher's display name
-        // without an N+1 lazy load.
         name = RecordedLessonVideo.GRAPH_DETAIL,
         attributeNodes = {
                 @NamedAttributeNode(value = "lesson", subgraph = "RecordedLessonVideo.lessonWithTeacher"),
@@ -79,13 +47,6 @@ import lombok.Setter;
 )
 public class RecordedLessonVideo extends BaseEntity {
 
-    /**
-     * Name of the {@link NamedEntityGraph} that eagerly fetches the
-     * standard attribute set required by every read endpoint that
-     * surfaces a {@code RecordedLessonVideo}: {@code lesson} (with
-     * nested {@code lesson.teacher} and {@code lesson.teacher.user}),
-     * {@code coursePackage} and {@code uploadedFile}.
-     */
     public static final String GRAPH_DETAIL = "RecordedLessonVideo.detail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

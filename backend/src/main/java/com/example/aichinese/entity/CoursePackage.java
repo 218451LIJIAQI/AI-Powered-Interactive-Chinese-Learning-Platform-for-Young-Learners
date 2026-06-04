@@ -23,32 +23,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Top-level commerce bundle that aggregates {@link Lesson}s and
- * {@link LearningModule}s under one purchase point.
- *
- * <p>The composition is materialised through {@link PackageItem} rows
- * (rather than a JPA collection) so that adding a lesson to a package
- * does not require re-saving the package aggregate, and so that the
- * order of items inside the package is independent of the lesson's
- * position inside its module.</p>
- *
- * <p>{@link #accessType} is the platform's primary access tier:</p>
- * <ul>
- *   <li>{@link com.example.aichinese.entity.enums.AccessType#FREE} — visible
- *       to every authenticated student without a {@link PaymentEntitlement}.</li>
- *   <li>{@link com.example.aichinese.entity.enums.AccessType#PAID} — gated
- *       on an active entitlement; {@link #price} must be set.</li>
- * </ul>
- *
- * <p>{@link #learningType} hints at the delivery model (live, recorded,
- * hybrid) and is surfaced in the catalogue UI; the actual delivery is
- * driven by the per-lesson learning type.</p>
- *
- * <p>{@link #contentStatus} drives both author-side editing rules and
- * public-catalogue visibility; teacher-owned packages bypass the legacy
- * admin-review flow and go directly to {@code PUBLISHED}.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -58,14 +32,6 @@ import lombok.Setter;
         @Index(name = "idx_course_packages_status", columnList = "content_status")
 })
 @NamedEntityGraph(
-        // Single source of truth for the eager-fetch attribute set used by
-        // every read in CoursePackageRepository: catalogue listings,
-        // teacher dashboards and admin moderation all need the joined
-        // teacher / teacher.user / level / category rows in one round trip.
-        // Centralising the graph avoids the previous eight-fold
-        // duplication of attributePaths arrays across the repository.
-        // The teacher.user path is declared as a sub-graph so the mapper
-        // can render the teacher's display name without an N+1 lazy load.
         name = CoursePackage.GRAPH_DETAIL,
         attributeNodes = {
                 @NamedAttributeNode(value = "teacher", subgraph = "CoursePackage.teacherWithUser"),
@@ -79,13 +45,6 @@ import lombok.Setter;
 )
 public class CoursePackage extends BaseEntity {
 
-    /**
-     * Name of the {@link NamedEntityGraph} that eagerly fetches the
-     * standard attribute set required by every read endpoint that
-     * surfaces a {@code CoursePackage}: {@code teacher} (with the nested
-     * {@code teacher.user} sub-graph), {@code level} and
-     * {@code category}.
-     */
     public static final String GRAPH_DETAIL = "CoursePackage.detail";
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -8,8 +8,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,22 +22,8 @@ import com.example.aichinese.service.storage.StorageReadRequest;
 import com.example.aichinese.service.storage.StorageWriteRequest;
 import com.example.aichinese.service.storage.StoredObject;
 
-/**
- * Generic upload pipeline for the teacher verification document
- * surface: PDF / JPEG / PNG with the same defence-in-depth checks
- * (extension whitelist, content-type whitelist, magic-byte sniff)
- * used by every multipart endpoint.
- *
- * <p>Distinct from {@link AiFileStorageService} (audio / image for AI
- * feedback) and {@link RecordedVideoStorageService} (lesson video)
- * by accepted file types and destination directory; sharing the same
- * {@link UploadStorageSupport} ensures all three surfaces apply
- * identical security checks.</p>
- */
 @Service
 public class FileStorageService {
-
-    private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
 
     private static final Set<UploadStorageSupport.FileSignature> ALLOWED_SIGNATURES = Set.of(
             UploadStorageSupport.FileSignature.PDF,

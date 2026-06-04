@@ -12,16 +12,6 @@ import com.example.aichinese.provider.NoOpPaymentProviderClient;
 import com.example.aichinese.provider.PaymentProviderClient;
 import com.example.aichinese.provider.StripePaymentProviderClient;
 
-/**
- * Selects the active {@link PaymentProviderClient} at runtime based
- * on {@link PaymentProperties#provider()}.
- *
- * <p>Resolution order: {@code stripe} → Stripe live/test, {@code mock}
- * with {@code mockSuccessEnabled=true} → in-memory mock, otherwise
- * the {@link NoOpPaymentProviderClient} fail-safe (always returns
- * "unavailable"). Provider selection is per-call rather than
- * cached so a configuration flip propagates without restart.</p>
- */
 @Service
 public class PaymentProviderService {
 

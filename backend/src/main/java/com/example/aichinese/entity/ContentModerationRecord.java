@@ -14,35 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Audit row capturing one administrator moderation action against a
- * piece of platform content.
- *
- * <p>Pointers to the affected content are stored polymorphically via
- * {@link #targetType} ({@link com.example.aichinese.entity.enums.ContentModerationTargetType})
- * and {@link #targetId} so the same table tracks decisions on lessons,
- * packages, teacher profiles, etc. {@link #targetTitleSnapshot}
- * preserves the readable name at the time of the action so historic
- * audit trails remain interpretable even after rename or deletion.</p>
- *
- * <p>{@link #actionTaken} captures the verb (HIDE, UNPUBLISH, ARCHIVE,
- * REQUEST_REVISION, RESTORE) — see
- * {@link com.example.aichinese.entity.enums.ContentModerationAction}
- * — as a free-form string so future actions can be added without a
- * Flyway migration. The application layer parses through
- * {@code ContentModerationAction#tryFrom}.</p>
- *
- * <p>{@link #relatedTeacher} attributes the affected teacher (when the
- * action targets teacher-owned content), enabling per-teacher
- * compliance dashboards.</p>
- *
- * <p>The audit row is append-only: every domain field is mapped
- * {@code updatable = false}, so any subsequent {@code save()} on a
- * managed instance silently drops attempted mutations at flush time.
- * The legitimate write paths are {@code ContentModerationService}
- * and {@code AdminContentReviewService#recordModeration}, both of
- * which insert a fresh row per moderation action and never amend it.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

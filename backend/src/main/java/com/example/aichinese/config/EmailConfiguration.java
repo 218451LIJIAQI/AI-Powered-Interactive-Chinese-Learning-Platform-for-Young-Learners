@@ -9,25 +9,13 @@ import org.springframework.util.StringUtils;
 
 /**
  * SMTP / outbound-email startup validation.
- *
- * <p>Registers an {@link InitializingBean} that runs after configuration
- * binding but before any application bean opens an SMTP connection. Non-production
- * environments may intentionally use the no-op sender; production must enable
- * SMTP because password reset otherwise issues an unusable reset flow.</p>
- *
- * <p>Production-specific gates additionally require the
- * {@code app.email.password-reset-base-url} to be HTTPS and target a
- * non-loopback host - preventing a stray {@code localhost} URL in a
- * password-reset email from ever being sent to a real user.</p>
- *
- * <p>{@code proxyBeanMethods = false} is intentional: this class
- * defines no inter-bean references, so disabling proxying eliminates
- * the CGLIB subclass at startup.</p>
  */
 @Configuration(proxyBeanMethods = false)
 public class EmailConfiguration {
 
     private static final String PROD_CONTEXT = "when app.email.enabled=true and the prod profile is active";
+    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
+
     @Bean
     InitializingBean emailConfigurationValidator(Environment environment, EmailProperties emailProperties) {
         return () -> {
@@ -67,13 +55,6 @@ public class EmailConfiguration {
             throw new IllegalStateException(propertyName + " must be configured when app.email.enabled=true.");
         }
     }
-
-    /**
-     * {@code prod}/{@code production} resolved via Spring's profile API
-     * so {@code spring.profiles.default=prod} (the common Kubernetes
-     * pattern) also triggers the fail-fast guard.
-     */
-    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
     private static boolean isProductionProfileActive(Environment environment) {
         return environment.acceptsProfiles(PROD_PROFILES);

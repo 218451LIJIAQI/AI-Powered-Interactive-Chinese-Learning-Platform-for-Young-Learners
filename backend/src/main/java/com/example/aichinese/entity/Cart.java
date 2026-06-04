@@ -13,30 +13,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Shopping cart owned by a single {@link StudentProfile}.
- *
- * <p>Modelled as a {@link jakarta.persistence.OneToOne} with a unique
- * constraint on {@code student_id}: every student has at most one cart
- * row at any time. {@code CartService.getOrCreateCart} lazily
- * provisions the row on first add-to-cart.</p>
- *
- * <p>{@link #active} is reserved for future "saved-for-later" baskets;
- * the current checkout flow simply deletes a cart's
- * {@link CartItem CartItems} after successful payment rather than
- * toggling this flag.</p>
- *
- * <p>Uniqueness of {@code student_id} is enforced by a single named
- * constraint ({@code idx_carts_student_id}) declared via
- * {@link UniqueConstraint} on the {@link Table @Table} annotation,
- * matching the {@code alter table carts add constraint
- * idx_carts_student_id unique (student_id)} statement in the Flyway
- * baseline. The {@link #student} association is mapped
- * {@code updatable = false}: a cart is bound to a single student for
- * its entire lifetime, and retargeting is logically impossible because
- * the unique constraint would reject any insert that collided with an
- * existing cart.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

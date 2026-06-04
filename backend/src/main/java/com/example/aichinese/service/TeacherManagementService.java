@@ -33,23 +33,6 @@ import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * Teacher self-service profile management and verification document
- * upload.
- *
- * <p>Teachers can update their own bio / teaching categories / display
- * name, view their current verification status
- * ({@link TeacherStatus}), and upload verification documents
- * ({@link TeacherVerificationDocumentType#ID_PROOF} /
- * {@code TEACHING_CERTIFICATE} / etc.) which {@link AdminTeacherManagementService}
- * later reviews. Document storage uses the same defence-in-depth
- * upload pipeline as the other multipart endpoints.</p>
- *
- * <p>The {@link UploadedFile} record is referenced — not duplicated —
- * by the verification document row so a stored blob is never owned
- * by more than one entity, and admin review can re-display the
- * original upload without copying.</p>
- */
 @Service
 public class TeacherManagementService {
 

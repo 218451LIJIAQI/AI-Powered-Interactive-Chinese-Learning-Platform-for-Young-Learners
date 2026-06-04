@@ -15,36 +15,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Single line of an {@link Order}, polymorphically referencing the
- * purchased artefact via {@link #itemType} and {@link #itemId}.
- *
- * <p>{@link #itemTitleSnapshot} captures the artefact's title at the
- * time of checkout so that historical receipts and refund forms keep
- * working even after the underlying lesson / package is renamed or
- * archived. The same pattern applies to {@link #unitPrice} and
- * {@link #lineTotal}: financial fields are immutable once written so
- * that audit trails and accounting reports remain stable.</p>
- *
- * <p>{@link #teacher} is the teacher who is entitled to commission for
- * this line, captured here (rather than chasing the FK on the lesson)
- * so that re-assigning a lesson to a new teacher does not retroactively
- * change historical earnings. The companion {@link TeacherEarning} row
- * is created from this attribution when the order moves to
- * {@link com.example.aichinese.entity.enums.PaymentStatus#PAID}.</p>
- *
- * <p>{@link #featureKey} is populated when {@link #itemType} is
- * {@code PREMIUM_AI} so the entitlement flow knows which AI feature
- * the subscription unlocks.</p>
- *
- * <p>The Javadoc contract above ("financial fields are immutable
- * once written") is enforced at the ORM layer: every domain field is
- * mapped {@code updatable = false}. The single legitimate write path
- * is {@code OrderService#createOrder}, which inserts each row exactly
- * once. Any later {@code entity.setX(\u2026)} + {@code save()} attempt is
- * silently dropped by Hibernate at flush time \u2014 receipts, refunds and
- * accounting exports therefore remain bit-for-bit reproducible.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

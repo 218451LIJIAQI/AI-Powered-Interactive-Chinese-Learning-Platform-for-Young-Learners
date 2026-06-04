@@ -24,27 +24,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Single attempt by a payment provider (Stripe, manual, no-op mock) to
- * settle an {@link Order}.
- *
- * <p>An order may have several payment records over its lifetime — for
- * example a {@link com.example.aichinese.entity.enums.PaymentStatus#FAILED}
- * card decline followed by a successful {@link com.example.aichinese.entity.enums.PaymentStatus#PAID}
- * retry. The {@link Order#paymentStatus} mirrors only the most recent
- * <em>terminal</em> outcome and is updated by {@code PaymentService} as
- * webhook events flow in.</p>
- *
- * <p>The uniqueness pair {@code (provider_name, provider_reference)}
- * makes Stripe webhook delivery idempotent: re-receiving the same
- * {@code checkout.session.id} (or equivalent) is a no-op rather than
- * duplicating the row, and the cross-provider product-of-references
- * collision is avoided.</p>
- *
- * <p>{@link #version} is incremented on every state transition so that
- * the webhook handler and the synchronous polling fallback never both
- * succeed in writing inconsistent statuses.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -57,11 +36,6 @@ import lombok.Setter;
         @UniqueConstraint(name = "uk_payment_records_provider_reference", columnNames = { "provider_name", "provider_reference" })
 })
 @NamedEntityGraph(
-        // Single source of truth for the eager-fetch attribute set used
-        // by every read in PaymentRecordRepository: the student / admin
-        // payment history views and the refund flow all need order +
-        // student + student.user hydrated in one round trip so the
-        // response mapper does not regress into per-row lazy lookups.
         name = PaymentRecord.GRAPH_DETAIL,
         attributeNodes = {
                 @NamedAttributeNode("order"),
@@ -74,54 +48,22 @@ import lombok.Setter;
 )
 public class PaymentRecord extends BaseEntity {
 
-    /**
-     * Name of the {@link NamedEntityGraph} that eagerly fetches the
-     * standard attribute set required by every read endpoint that
-     * surfaces a {@code PaymentRecord}: {@code order} and {@code student}
-     * with its nested {@code student.user} sub-graph.
-     */
     public static final String GRAPH_DETAIL = "PaymentRecord.detail";
 
-    /**
-     * Owning order. Mapped {@code updatable = false}: a payment record
-     * is bound to the order it was issued for and cannot be re-targeted.
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false, updatable = false)
     private Order order;
 
-    /**
-     * Buyer. Mapped {@code updatable = false}: a payment record always
-     * settles against the original buyer, never a different one.
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "student_id", nullable = false, updatable = false)
     private StudentProfile student;
 
-    /**
-     * Provider identifier (e.g. {@code "stripe"}, {@code "mock"},
-     * {@code "no-op"}). Mapped {@code updatable = false}: switching the
-     * provider on an existing record would break webhook routing.
-     */
     @Column(name = "provider_name", nullable = false, updatable = false, length = 100)
     private String providerName;
 
-    /**
-     * Provider-side session/payment reference (e.g. Stripe
-     * {@code checkout.session.id}). Filled by
-     * {@code PaymentService.startCheckout} <em>after</em> the initial
-     * insert, so this field MUST remain mutable; it then settles as the
-     * effective idempotency key together with {@link #providerName}.
-     */
     @Column(name = "provider_reference", length = 150)
     private String providerReference;
 
-    /**
-     * Amount captured at provider-session creation time. Mapped
-     * {@code updatable = false}: refunds are tracked as separate
-     * {@code RefundRequest} rows rather than rewriting historical
-     * payment amounts; accounting exports therefore stay reproducible.
-     */
     @Column(name = "amount", nullable = false, updatable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
@@ -129,11 +71,6 @@ public class PaymentRecord extends BaseEntity {
     @Column(name = "version", nullable = false)
     private Long version = 0L;
 
-    /**
-     * ISO-4217 currency code captured at payment-creation time.
-     * Mapped {@code updatable = false} for the same reproducibility
-     * reason as {@link #amount}.
-     */
     @Column(name = "currency_code", nullable = false, updatable = false, length = 3)
     private String currencyCode = "MYR";
 

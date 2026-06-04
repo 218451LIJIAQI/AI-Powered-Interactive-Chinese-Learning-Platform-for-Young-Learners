@@ -20,37 +20,6 @@ import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
 
-/**
- * Entity-to-DTO translation for quiz objects.
- *
- * <p>The mapper emits two distinct response shapes from the same
- * underlying entity graph:</p>
- * <ul>
- *   <li><b>Teacher view</b> ({@link TeacherQuizResponse},
- *       {@link TeacherQuizQuestionResponse},
- *       {@link TeacherQuizOptionResponse}) includes the correct-answer
- *       text, the per-option correctness flag and the explanation — all
- *       fields a teacher needs to author or grade questions.</li>
- *   <li><b>Student view</b> ({@link StudentQuizResponse},
- *       {@link StudentQuizQuestionResponse},
- *       {@link QuizOptionResponse}) deliberately omits every
- *       correctness-leak field, so a student cannot inspect the
- *       network response to skip the assessment. This is a security
- *       boundary: the student-facing service path must always invoke
- *       the {@code toStudent*} methods on this class, never the
- *       teacher-facing ones.</li>
- * </ul>
- *
- * <p>Options are joined to questions via a pre-computed
- * {@code Map<questionId, List<QuizOption>>} (see
- * {@link #groupOptionsByQuestionId(List)}) so a single batched fetch
- * feeds N questions instead of triggering one option SELECT per
- * question. The service layer queries options through repository
- * methods that already {@code ORDER BY sort_order, created_at}, so
- * {@link Collectors#groupingBy(java.util.function.Function)} — which
- * preserves encounter order within each value list — yields
- * stably-sorted option lists without an extra in-memory sort.</p>
- */
 @Component
 public class QuizMapper {
 
@@ -143,17 +112,6 @@ public class QuizMapper {
                 questionCount);
     }
 
-    /**
-     * Indexes a flat list of {@link QuizOption} rows by their owning
-     * question id so subsequent question-level mapping calls can fetch
-     * their options in O(1) without re-scanning the list.
-     *
-     * <p>Options whose owning {@link QuizQuestion} is unexpectedly
-     * {@code null} (e.g. partial test fixtures) are skipped rather than
-     * triggering a {@link NullPointerException} from the grouping key
-     * extractor — the caller can detect orphans by comparing input and
-     * grouped sizes if strict validation is required.</p>
-     */
     public Map<Long, List<QuizOption>> groupOptionsByQuestionId(List<QuizOption> options) {
         if (options == null || options.isEmpty()) {
             return Map.of();

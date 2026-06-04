@@ -29,46 +29,9 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * Centralises the access-control checks every teacher-facing content
- * service shares: approved-teacher gating, ownership verification,
- * status / archival state enforcement, level / category lookup, and
- * the standard title / description / price validation.
- *
- * <h2>Why one service</h2>
- * <p>Modules, lessons, course packages, and quizzes all need the same
- * "is this caller an approved teacher who owns this row?" guard.
- * Concentrating that logic here keeps the per-resource services
- * ({@link TeacherModuleService}, {@link TeacherLessonService},
- * {@link TeacherPackageService}, {@link TeacherQuizService}) tightly
- * focused and ensures a single source of truth for ownership rules.</p>
- *
- * <h2>Status policy</h2>
- * <p>The platform now publishes teacher-authored content immediately
- * (no admin review queue), so the editable status set is
- * {@code DRAFT}, {@code PUBLISHED}, and the legacy {@code REJECTED}
- * state. Historic {@code REJECTED} rows remain editable so teachers
- * can keep their archives accessible while we migrate older content
- * forward.</p>
- *
- * <h2>Content safety</h2>
- * <p>All free-text fields (title, description, lesson body) are
- * validated for safety / length via {@link ContentSafetyService} and
- * the per-field caps below; price values flow through
- * {@code BigDecimal} so currency rounding errors cannot cross
- * boundaries.</p>
- */
 @Service
 public class TeacherContentAccessService {
 
-    // Teachers create content as PUBLISHED immediately (no admin review flow).
-    // They may continue to edit / archive their own PUBLISHED content; legacy
-    // DRAFT / REJECTED rows from the previous review flow are also editable so
-    // historic data remains accessible.
-    //
-    // Delegate to the canonical sets on the enum so the Javadoc contract on
-    // ContentStatus ("Single source of truth mirrored by ...") is enforced by
-    // the type system rather than by parallel literal lists.
     private static final Set<ContentStatus> TEACHER_EDITABLE_STATUSES = ContentStatus.TEACHER_EDITABLE;
     private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES = ContentStatus.TEACHER_ARCHIVABLE;
     private static final int MAX_TITLE_LENGTH = 200;

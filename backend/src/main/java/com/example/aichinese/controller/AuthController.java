@@ -32,30 +32,6 @@ import com.example.aichinese.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
-/**
- * REST entry points for the authentication surface:
- * registration (student / teacher), login, current-user lookup,
- * logout, forgot-password, and reset-password.
- *
- * <h2>Rate limiting</h2>
- * <p>Public-write endpoints (register, forgot-password) go through
- * {@link PublicAuthRequestLimiter} keyed on the resolved client IP
- * (via {@link ClientIpResolver}) so credential-stuffing and
- * enumeration probes hit the 429 before they reach the persistence
- * layer. Login attempts are limited inside
- * {@link AuthService#login}.</p>
- *
- * <h2>Cache hygiene</h2>
- * <p>{@code GET /me} returns {@code Cache-Control: no-store} so the
- * authenticated JSON profile (email, role list, teacher-status flag)
- * never lands in browser disk or back-forward cache — defence in
- * depth against post-logout replay.</p>
- *
- * <h2>Forgot-password user enumeration</h2>
- * <p>The {@code forgot-password} response is identical whether or
- * not the supplied email exists (rate-limit + uniform message), so an
- * attacker cannot probe for valid accounts via the endpoint.</p>
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -123,13 +99,6 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<CurrentUserResponse>> getCurrentUser(
             @AuthenticationPrincipal SecurityUserDetails currentUser) {
-        // Cache-Control: no-store keeps the JSON profile out of the browser
-        // disk and bfcache so a logged-out user pressing the back button
-        // cannot replay an authenticated /me response (which contains the
-        // user's email, role list, and teacher-status flag) from a stale
-        // cache entry. The complementary frontend behaviour clears the
-        // token and reloads on the back-forward navigation, but defense
-        // in depth at the response layer is cheap and worthwhile.
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(ApiResponse.success("Current user retrieved successfully.",
@@ -159,9 +128,6 @@ public class AuthController {
     @PostMapping("/reset-password")
     public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
-        // When the token is valid the service updates the password and consumes
-        // the reset token; invalid or expired tokens have already surfaced as
-        // structured 4xx responses through the exception handler.
         return ApiResponse.success("Password reset request processed successfully.", null);
     }
 
@@ -176,22 +142,18 @@ public class AuthController {
     }
 
     private ResponseCookie refreshCookie(String rawToken, java.time.Duration maxAge) {
-        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), rawToken)
-                .httpOnly(true)
-                .secure(securityProperties.refreshTokenCookieSecure())
-                .sameSite(securityProperties.refreshTokenSameSite())
-                .path("/api/v1/auth")
-                .maxAge(maxAge)
-                .build();
+        return refreshCookieBuilder(rawToken).maxAge(maxAge).build();
     }
 
     private ResponseCookie clearRefreshCookie() {
-        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), "")
+        return refreshCookieBuilder("").maxAge(0).build();
+    }
+
+    private ResponseCookie.ResponseCookieBuilder refreshCookieBuilder(String value) {
+        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), value)
                 .httpOnly(true)
                 .secure(securityProperties.refreshTokenCookieSecure())
                 .sameSite(securityProperties.refreshTokenSameSite())
-                .path("/api/v1/auth")
-                .maxAge(0)
-                .build();
+                .path("/api/v1/auth");
     }
 }

@@ -19,39 +19,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Teacher-initiated request to withdraw accumulated commission earnings.
- *
- * <p>Created by the teacher portal when their available balance — the
- * sum of {@link TeacherEarning#getNetAmount()} across all
- * {@link com.example.aichinese.entity.enums.TeacherEarningStatus#AVAILABLE}
- * earnings minus already-committed payouts — is non-zero. The lifecycle
- * follows {@link com.example.aichinese.entity.enums.PayoutStatus}:
- * {@code PENDING → APPROVED → PAID} or {@code PENDING → REJECTED}.</p>
- *
- * <p>{@link #requestedNote} is a free-text note the teacher attaches
- * (e.g. preferred payment method); {@link #decisionReason} is filled by
- * the admin when the request is approved or rejected and is surfaced
- * back to the teacher through {@code Notification}.</p>
- *
- * <p>{@link #version} prevents two admins from approving the same
- * request concurrently, which would otherwise double-count the amount
- * against the teacher's available balance.</p>
- *
- * <h3>Field mutability contract</h3>
- * <ul>
- *   <li><b>Immutable</b>: {@link #teacher}, {@link #amount},
- *       {@link #requestedNote} — the request identity (who, how much,
- *       teacher rationale) is fixed at submission time. Re-targeting
- *       any of these would silently let an admin re-bid a different
- *       amount or transfer the request to a different teacher.</li>
- *   <li><b>Mutable</b>: {@link #payoutStatus} (state machine driven by
- *       {@code PayoutService} approve/reject/markPaid actions) and
- *       {@link #decisionReason} (filled by admin at the rejection or
- *       payment step). Both are guarded by the {@link Version @Version}
- *       column above.</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

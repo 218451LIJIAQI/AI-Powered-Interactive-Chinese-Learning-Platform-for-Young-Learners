@@ -15,17 +15,6 @@ import com.example.aichinese.entity.enums.TeacherEarningStatus;
 import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.TeacherEarningRepository;
 
-/**
- * Creates {@link TeacherEarning} ledger rows when an order is paid
- * and marks them refunded when a refund is processed.
- *
- * <p>Earnings are computed line-by-line: gross = line total, commission
- * = gross × {@code platform_commission_rate}, net = gross − commission.
- * Currency arithmetic flows through {@link CommerceMoneyService} so
- * the math matches the rest of the commerce stack. Idempotent: an
- * earning row is only created once per {@link OrderItem}; subsequent
- * webhook retries see the existing row and skip.</p>
- */
 @Service
 public class TeacherEarningService {
 

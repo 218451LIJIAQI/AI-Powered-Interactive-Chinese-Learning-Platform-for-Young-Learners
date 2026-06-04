@@ -3,11 +3,6 @@ package com.example.aichinese.service.storage;
 import java.nio.file.Path;
 import java.util.Objects;
 
-/**
- * Storage-provider write request. The local provider interprets
- * {@link #baseDirectory} as a filesystem root; object-store providers can map it
- * to a bucket prefix while preserving the same service contract.
- */
 public record StorageWriteRequest(
         Path baseDirectory,
         String storedFileName,

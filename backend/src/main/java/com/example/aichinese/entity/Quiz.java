@@ -16,32 +16,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Teacher-authored quiz attached to a {@link Lesson}.
- *
- * <p>A quiz is a thin header that owns one or more {@link QuizQuestion}
- * children (each potentially with {@link QuizOption} alternatives).
- * Student attempts are recorded in {@link QuizAttempt} rows, with
- * per-question answers captured in {@link QuizAttemptAnswer}.</p>
- *
- * <p>{@link #lesson} is nullable to support standalone practice quizzes
- * that don't belong to any specific lesson; {@link #teacher} records
- * the author for revenue attribution and access control.</p>
- *
- * <p>{@link #timeLimitMinutes} when non-null enables a countdown timer
- * on the student side; {@link #totalPoints} is denormalized from the
- * sum of {@link QuizQuestion#getPoints()} values for fast catalogue
- * rendering — kept in sync by {@code TeacherQuizService} on every
- * question save.</p>
- *
- * <p>{@link #lesson} and {@link #teacher} are mapped
- * {@code updatable = false}: the quiz's anchor lesson and authorship
- * are fixed at creation time. Verified against
- * {@code TeacherQuizService#updateQuiz}, which only mutates title,
- * description and {@code timeLimitMinutes}. Re-targeting either field
- * would silently transfer authorship or split a quiz from its lesson's
- * access-control gate, so the ORM-layer guard rules it out.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

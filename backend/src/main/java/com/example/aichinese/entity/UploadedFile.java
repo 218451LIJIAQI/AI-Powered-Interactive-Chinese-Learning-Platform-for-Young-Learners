@@ -14,58 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Metadata row for any file the platform stores on its own object
- * storage — verification documents, recorded lesson videos, AI-feedback
- * audio uploads, etc.
- *
- * <p>{@link #fileName} is the original name as supplied by the
- * uploader (kept for download UX) while {@link #storedFileName} is the
- * platform-assigned UUID-based name used as the storage key. The
- * unique constraint on {@code stored_file_name} prevents key
- * collisions and is the natural primary lookup index for file-serving
- * endpoints.</p>
- *
- * <p>{@link #accessLevel} drives the file-serving authorisation
- * (currently free-form short codes like {@code "PUBLIC"},
- * {@code "TEACHER_VERIFICATION"}, {@code "STUDENT_AI_INPUT"}). Values
- * are interpreted by {@code FileStorageService} when generating signed
- * URLs.</p>
- *
- * <p>{@link #active} provides soft-deletion: serving the file checks
- * the flag in addition to the ACL, so a takedown can be staged before
- * the bytes are physically purged.</p>
- *
- * <p>{@link #ownerUser} is nullable because system-uploaded files
- * (seed data, automated exports) have no human owner.</p>
- *
- * <h3>Field mutability contract</h3>
- *
- * <p>Once an upload lands on object storage, the bytes-and-metadata
- * pairing is fundamentally immutable: rewriting the metadata in place
- * would either orphan the storage key or contradict references already
- * captured by downstream entities ({@link TeacherVerificationDocument},
- * {@link RecordedLessonVideo}, AI feedback turns).</p>
- *
- * <ul>
- *   <li><b>Immutable</b>: {@link #ownerUser}, {@link #fileName},
- *       {@link #storedFileName}, {@link #filePath},
- *       {@link #contentType}, {@link #fileSize},
- *       {@link #accessLevel}. The single legitimate write path is at
- *       upload time inside {@code FileStorageService},
- *       {@code AiFileStorageService} or
- *       {@code RecordedVideoStorageService}.</li>
- *   <li><b>Mutable</b>: {@link #active} only — reserved for the
- *       documented soft-delete flow above; flipping the flag stages a
- *       takedown without erasing the metadata row.</li>
- * </ul>
- *
- * <p>Uniqueness of {@link #storedFileName} is enforced by the single
- * named {@link UniqueConstraint} on the {@link Table @Table}
- * annotation; the historical {@code @Column(unique = true)} duplicate
- * was removed to avoid Hibernate emitting an extra unnamed unique
- * declaration that the Flyway baseline does not own.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

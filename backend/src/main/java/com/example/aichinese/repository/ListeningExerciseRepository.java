@@ -5,18 +5,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import com.example.aichinese.entity.ListeningExercise;
 
-/**
- * Persistence operations for {@link ListeningExercise} \u2014 the
- * platform's audio-clip + question listening practice activity.
- *
- * <p>The repository deliberately exposes only the inherited
- * {@link JpaRepository} + {@link JpaSpecificationExecutor} surface:
- * both the admin authoring tool and the public student library compose
- * status / level / category / keyword predicates through a shared
- * {@link org.springframework.data.jpa.domain.Specification}, so a
- * single dynamic-filter API serves both reads without per-combination
- * derived methods.</p>
- */
 public interface ListeningExerciseRepository
         extends JpaRepository<ListeningExercise, Long>, JpaSpecificationExecutor<ListeningExercise> {
 }

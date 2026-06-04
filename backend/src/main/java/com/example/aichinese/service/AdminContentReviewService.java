@@ -41,26 +41,6 @@ import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * Admin-side content moderation surface for the legacy review queue
- * across the three teacher-managed content types
- * ({@link ManagedContentType#LESSON} / {@code LEARNING_MODULE} /
- * {@code COURSE_PACKAGE}).
- *
- * <h2>Status note</h2>
- * <p>The platform now publishes teacher-authored content immediately
- * (see {@link TeacherContentAccessService}), so this surface is
- * read-mostly: admins use it to inspect a teacher's recent
- * submissions and, if needed, take corrective moderation action via
- * {@link ContentModerationService} (warn / archive / hide).</p>
- *
- * <h2>Listing</h2>
- * <p>Pagination + filtering by status / type is paginated at the DB
- * level through Spring Data; full text search is intentionally limited
- * to title prefix matches to keep listing cheap. Every fetch eagerly
- * joins the moderation history so the detail panel renders in one
- * round-trip.</p>
- */
 @Service
 public class AdminContentReviewService {
 
@@ -105,14 +85,10 @@ public class AdminContentReviewService {
             String keyword,
             int page,
             int size) {
-        // Build one DB-side predicate per content table; each repository's
-        // @EntityGraph keeps the response mapper off lazy-loading hot paths.
         ManagedContentType filterType = contentType == null || contentType.isBlank()
                 ? null
                 : ManagedContentType.fromValue(contentType);
         ContentStatus filterStatus = parseStatus(status);
-        // Shared normalisation via TextUtils mirrors the same pattern in
-        // PublicContentService / AdminTeacherManagementService.
         String normalizedKeyword = TextUtils.trimToOptional(keyword)
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElse(null);
@@ -143,8 +119,6 @@ public class AdminContentReviewService {
                     .toList());
         }
 
-        // The final sort spans three tables, so it happens after the DB-side
-        // filters have narrowed each table independently.
         List<ContentSubmissionResponse> sorted = submissions.stream()
                 .sorted(Comparator.comparing(ContentSubmissionResponse::updatedAt).reversed())
                 .toList();
@@ -230,14 +204,6 @@ public class AdminContentReviewService {
         ContentSubmissionDetailResponse response = switch (contentType) {
             case MODULE -> {
                 LearningModule module = findModule(id);
-                // Refuse double-archive — without this guard a second click on
-                // the Archive button would write a fresh ContentModerationRecord
-                // and a fresh AuditLog row even though the entity is already
-                // ARCHIVED, polluting the moderation history. Archive is
-                // intentionally permissive about the *prior* status (any
-                // state → ARCHIVED is allowed) but the no-op case must be
-                // refused, mirroring the refund/payout state-machine guards
-                // added in earlier waves.
                 requireNotAlreadyArchived(module.getContentStatus(), "module");
                 module.setContentStatus(ContentStatus.ARCHIVED);
                 learningModuleRepository.save(module);

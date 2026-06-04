@@ -24,33 +24,6 @@ import org.springframework.web.client.RestTemplate;
 import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * {@link AiProviderClient} that talks to any OpenAI-compatible
- * {@code /chat/completions} endpoint (DeepSeek, OpenAI, Together,
- * etc.).
- *
- * <p>Picked at runtime by {@link AiProviderRouter} when
- * {@code app.ai.enable-real-provider=true} and the configured
- * provider is one of {@code deepseek} / {@code openai-compatible}.
- * Configuration that is missing or invalid (no model, no API key,
- * non-HTTPS base URL, etc.) is detected before any network call so
- * the caller gets an immediate {@link AiProviderResult#failure}
- * rather than a delayed timeout.</p>
- *
- * <h2>Endpoint integrity</h2>
- * <p>URL validation is delegated to
- * {@link AiProviderSupport#validateAndNormalizeBaseUrl(String)} which
- * accepts only HTTPS URLs in production; HTTP is allowed only when
- * the host is loopback (integration tests / local LLM servers).
- * This is defence-in-depth on top of
- * {@link com.example.aichinese.config.AiProductionGuard}.</p>
- *
- * <h2>Failure handling</h2>
- * <p>Every {@link RestClientException} is caught and translated into a
- * generic failure result; the underlying message is logged at
- * {@code WARN} but never propagated to the response — so a provider
- * 5xx body cannot leak prompt fragments back to the front-end.</p>
- */
 @Component
 public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
 
@@ -117,10 +90,6 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
 
         return executeRequest(providerName, modelName, endpoint, headers, body, prompt.featureKey());
     }
-
-    // ------------------------------------------------------------------
-    // Internal helpers
-    // ------------------------------------------------------------------
 
     private AiProviderResult executeRequest(
             String providerName,

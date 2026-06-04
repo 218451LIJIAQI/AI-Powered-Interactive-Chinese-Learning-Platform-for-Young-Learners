@@ -18,45 +18,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Single document a {@link TeacherProfile} has submitted as evidence
- * during the verification flow.
- *
- * <p>{@link #documentType} categorises the upload (certificate,
- * qualification, identity, other; see
- * {@link com.example.aichinese.entity.enums.TeacherVerificationDocumentType}).
- * The actual file bytes live in the linked {@link UploadedFile} —
- * this entity is the verification-specific metadata wrapper.</p>
- *
- * <p>{@link #currentVersion} marks rows that are part of the latest
- * submission; superseded documents from prior verification rounds
- * are preserved (for audit) but flipped to {@code false}. The
- * generated column {@link #currentDocumentKey} (populated by the
- * database to a non-null value only when {@code currentVersion} is
- * true) backs the index that the admin tooling uses to fetch "latest
- * round per teacher" without scanning history.</p>
- *
- * <p>The associated {@link TeacherVerificationReview} captures the
- * admin decision on the submission as a whole.</p>
- *
- * <h3>Field mutability contract</h3>
- * <ul>
- *   <li><b>Immutable</b>: {@link #teacher}, {@link #uploadedFile},
- *       {@link #documentType}, {@link #documentNote},
- *       {@link #submittedAt} — the document's identity (who submitted
- *       which file, under which category, with what note, at what
- *       instant) is fixed at submission time. Editing any of these
- *       after the fact would corrupt the audit trail; instead the
- *       teacher uploads a new document and the prior round is
- *       superseded.</li>
- *   <li><b>Mutable</b>: {@link #currentVersion} — flipped to
- *       {@code false} by the supersession path in
- *       {@code TeacherManagementService} when a fresh document is
- *       uploaded for the same {@link TeacherProfile}.</li>
- *   <li><b>DB-generated, read-only</b>: {@link #currentDocumentKey}
- *       (already mapped {@code insertable = false, updatable = false}).</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

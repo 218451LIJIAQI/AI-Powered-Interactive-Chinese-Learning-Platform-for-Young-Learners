@@ -15,49 +15,6 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/**
- * Body for {@code PUT /api/v1/teachers/quiz-questions/{questionId}}
- * — the teacher edits one existing question.
- *
- * <p>Mirrors {@link CreateQuizQuestionRequest} field-for-field. When
- * the request includes {@link #options}, the service replaces the
- * entire option set in a single transaction (delete-and-reinsert
- * semantics) so the front-end can re-order, add or remove options
- * with one round-trip.</p>
- *
- * <p>See {@link CreateQuizQuestionRequest} for the full discussion
- * of {@link #questionType} branching, options-vs-text validation,
- * and field semantics.</p>
- *
- * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly strips surrounding Unicode
- * whitespace from every string field, collapses optional blank-only strings to
- * {@code null}, and defensively copies {@link #options} — mirroring
- * the normalisation contract of {@link CreateQuizQuestionRequest}
- * so the persistence-layer code can use the same applier method
- * for both create and update paths.</p>
- *
- * @param questionType      enum-name string from
- *                          {@link com.example.aichinese.entity.enums.QuizQuestionType};
- *                          required, parsed server-side
- * @param questionText      stem of the question (max 2000 chars
- *                          after stripping); required
- * @param correctAnswerText canonical correct answer for free-text /
- *                          structured types (max 1000 chars after
- *                          stripping); blank collapses to {@code null}
- * @param points            non-negative score the question
- *                          contributes; required; must be
- *                          {@code &gt; 0}
- * @param displayOrder      0-based render position; non-negative;
- *                          defaults server-side to {@code 0} when
- *                          {@code null}
- * @param options           multiple-choice options for option-based
- *                          types (defensively copied; {@code null}
- *                          treated as empty); each entry
- *                          {@link Valid cascaded-validated}
- * @param explanation       teacher rationale (max 2000 chars after
- *                          stripping); blank collapses to {@code null}
- */
 @JsonPropertyOrder({
         "questionType",
         "questionText",
@@ -87,15 +44,6 @@ public record UpdateQuizQuestionRequest(
         @Size(max = 2000, message = "Explanation must be 2000 characters or fewer.")
         String explanation) {
 
-    /**
-     * Defensive canonical constructor: strips every string field so
-     * Bean Validation sees the canonical form, collapses optional
-     * blank-only strings to {@code null}, and defensively copies
-     * {@link #options} (with {@code null} → {@link List#of()}
-     * normalisation) so external mutation cannot leak into the
-     * bound payload. {@code null} inputs on required fields are
-     * preserved so {@link NotBlank @NotBlank} fires correctly.
-     */
     public UpdateQuizQuestionRequest {
         questionType = strip(questionType);
         questionText = strip(questionText);

@@ -14,41 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Tamper-evident audit log entry for security- and compliance-relevant
- * events across the platform.
- *
- * <p>Written by {@code AuditLogService} from auth (login, logout,
- * password reset), commerce (refund, payout decision), moderation,
- * and admin-action paths. Rows are append-only — the service offers no
- * update or delete API.</p>
- *
- * <p>{@link #actorEmail} is denormalised alongside {@link #actorUser}
- * so the audit trail keeps an interpretable identifier even after the
- * actor is deleted or renamed.</p>
- *
- * <p>{@link #targetType} / {@link #targetId} polymorphically reference
- * the affected resource without forcing a JPA association — entity
- * deletes do not cascade and do not weaken the audit trail.</p>
- *
- * <p>{@link #ipAddress} and {@link #requestId} (the per-request
- * correlation id sourced from {@code RequestIdHolder}) capture the
- * network and trace context for forensic analysis. The
- * {@code AuditLogService} pre-redacts authorisation tokens and bearer
- * values from {@link #description} before persisting.</p>
- *
- * <p>The compound indexes back the typical "search by actor and time
- * window" admin queries plus the "all events on this resource"
- * forensic query.</p>
- *
- * <p>The append-only contract is enforced at the ORM layer: every
- * domain field is mapped {@code updatable = false}, so even an
- * accidental {@code entity.setX(…)} + {@code save()} on a managed
- * instance is silently dropped at flush time. The only legitimate
- * write path is {@code AuditLogService#record}; bulk JPQL/native
- * updates can still bypass this guard and must never be issued against
- * this table outside controlled migrations.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

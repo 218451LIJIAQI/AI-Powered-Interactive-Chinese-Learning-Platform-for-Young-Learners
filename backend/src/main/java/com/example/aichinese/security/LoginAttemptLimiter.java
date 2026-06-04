@@ -17,45 +17,15 @@ import com.example.aichinese.util.TextUtils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
-/**
- * Lightweight, in-memory rate limiter for the login endpoint.
- *
- * <p>The platform is deployed as a single-node application rather than a multi-replica service in
- * production, so we deliberately use a process-local map instead of pulling in
- * Redis or Bucket4j. The goal is to make trivial credential-stuffing /
- * brute-force attempts noticeably slower without introducing an external
- * dependency or a dedicated infrastructure service.
- *
- * <h2>Behaviour</h2>
- * <ul>
- *   <li>Each (email, client-IP) pair has an independent counter so a single
- *       compromised IP cannot lock out every user account.</li>
- *   <li>Failed login attempts increment the counter. Once a threshold is
- *       reached, the slot is locked for a fixed cool-down window and any
- *       further login attempts on that pair short-circuit with HTTP 429
- *       before the password is even checked.</li>
- *   <li>A successful login clears the counter for the offending pair so the
- *       legitimate owner is not punished for past mistakes.</li>
- * </ul>
- *
- * <p>Failure counters and active lockouts are held in separate bounded Caffeine
- * caches. Keeping active lockouts separate prevents a spray of fresh, one-off
- * failure keys from evicting an already locked slot, while avoiding repeated
- * full-map capacity scans.
- */
 @Component
 public class LoginAttemptLimiter {
 
     private static final Logger log = LoggerFactory.getLogger(LoginAttemptLimiter.class);
-    private static final HexFormat HEX_FORMAT = HexFormat.of();
 
-    /** Maximum failed attempts before the slot is locked. */
     static final int MAX_FAILED_ATTEMPTS = 5;
 
-    /** Sliding window in which failed attempts accumulate. */
     static final Duration ATTEMPT_WINDOW = Duration.ofMinutes(15);
 
-    /** How long a slot stays locked once the threshold is breached. */
     static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
     static final int MAX_TRACKED_ATTEMPT_RECORDS = 10_000;
@@ -121,11 +91,6 @@ public class LoginAttemptLimiter {
                 .build();
     }
 
-    /**
-     * Returns {@code true} if the supplied (email, IP) pair is currently
-     * allowed to attempt a login. The record is GC'd if its window has
-     * expired, so callers do not need a separate cleanup task.
-     */
     public boolean isAllowed(String email, String clientIp) {
         String key = key(email, clientIp);
         Instant now = clock.instant();
@@ -143,18 +108,12 @@ public class LoginAttemptLimiter {
             return true;
         }
 
-        // Drop stale records whose window has elapsed without ever locking;
-        // keeps the map size bounded in long-running deployments.
         if (!record.firstFailureAt.plus(attemptWindow).isAfter(now)) {
             attempts.asMap().remove(key, record);
         }
         return true;
     }
 
-    /**
-     * Returns how long the caller must wait before the slot is allowed again.
-     * Returns {@link Duration#ZERO} when the slot is not locked.
-     */
     public Duration retryAfter(String email, String clientIp) {
         String key = key(email, clientIp);
         Instant lockedUntil = lockouts.getIfPresent(key);
@@ -169,11 +128,6 @@ public class LoginAttemptLimiter {
         return remaining;
     }
 
-    /**
-     * Records a failed attempt and locks the slot if the threshold is reached.
-     * Returns {@code true} if the slot is now locked (i.e. the caller has been
-     * locked out as a result of this exact failure).
-     */
     public boolean recordFailure(String email, String clientIp) {
         String key = key(email, clientIp);
         Instant now = clock.instant();
@@ -204,11 +158,6 @@ public class LoginAttemptLimiter {
         return nowLocked;
     }
 
-    /**
-     * Clears any failure record for the supplied pair. Called after a
-     * successful login so legitimate users are not penalised for past
-     * mistyped passwords once they get the credentials right.
-     */
     public void recordSuccess(String email, String clientIp) {
         String key = key(email, clientIp);
         attempts.invalidate(key);
@@ -222,9 +171,6 @@ public class LoginAttemptLimiter {
     }
 
     private String key(String email, String clientIp) {
-        // strip() (vs trim()) is Unicode-aware, so a stray CJK fullwidth space
-        // before the email cannot produce a different bucket than the
-        // normalised form the login pipeline submits.
         String normalisedEmail = TextUtils.safeTruncate(
                 email == null ? "" : email.strip().toLowerCase(Locale.ROOT), MAX_EMAIL_KEY_LENGTH);
         String normalisedIp = TextUtils.safeTruncate(
@@ -233,7 +179,7 @@ public class LoginAttemptLimiter {
     }
 
     private String anonymizedKey(String email, String clientIp) {
-        return HEX_FORMAT.toHexDigits(key(email, clientIp).hashCode());
+        return HexFormat.of().toHexDigits(key(email, clientIp).hashCode());
     }
 
     private record AttemptRecord(Instant firstFailureAt, int failedAttempts) {

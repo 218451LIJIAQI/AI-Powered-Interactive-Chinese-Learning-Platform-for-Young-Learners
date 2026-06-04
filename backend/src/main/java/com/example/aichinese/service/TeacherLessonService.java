@@ -25,16 +25,6 @@ import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Teacher-side CRUD for lessons inside a module the teacher owns.
- *
- * <p>Every state-changing call funnels through
- * {@link TeacherContentAccessService} for approved-teacher checks and
- * ownership verification; module-level ownership is delegated to
- * {@link TeacherModuleService} so a teacher cannot attach a lesson to
- * a module that does not belong to them. Audit trail is written via
- * {@link AuditLogService} on every create / update / archive.</p>
- */
 @Service
 public class TeacherLessonService {
 
@@ -100,8 +90,6 @@ public class TeacherLessonService {
                 request.learningType(),
                 request.estimatedDurationMinutes(),
                 request.coverImageUrl());
-        // No admin review flow: teacher-created lessons are immediately visible
-        // to enrolled students.
         lesson.setContentStatus(ContentStatus.PUBLISHED);
         lesson.setRejectionReason(null);
 

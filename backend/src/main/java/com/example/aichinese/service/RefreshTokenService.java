@@ -2,6 +2,7 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -28,7 +29,6 @@ import com.example.aichinese.util.TextUtils;
 public class RefreshTokenService {
 
     private static final int TOKEN_BYTES = 32;
-    private static final HexFormat HEX_FORMAT = HexFormat.of();
     private static final int MAX_USER_AGENT_LENGTH = 255;
     private static final int MAX_IP_LENGTH = 64;
     private static final int MAX_RAW_TOKEN_LENGTH = 512;
@@ -160,7 +160,7 @@ public class RefreshTokenService {
     private static String hash(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HEX_FORMAT.formatHex(digest.digest(rawToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(digest.digest(rawToken.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable for refresh-token hashing.", exception);
         }

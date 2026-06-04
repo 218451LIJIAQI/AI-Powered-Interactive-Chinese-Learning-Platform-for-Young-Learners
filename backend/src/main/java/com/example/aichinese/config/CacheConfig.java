@@ -15,7 +15,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
  * This deployment is currently single-instance; a multi-instance deployment
  * should replace this with a shared cache or event-driven invalidation.
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableCaching
 public class CacheConfig {
 

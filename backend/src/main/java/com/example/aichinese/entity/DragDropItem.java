@@ -13,25 +13,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Single draggable card belonging to a {@link DragDropActivity}.
- *
- * <p>Each row pairs a draggable label ({@link #dragText}) with the
- * target zone label it should land in ({@link #targetZone}); multiple
- * items may share the same target zone when the front-end UX presents
- * a multi-slot drop area.</p>
- *
- * <p>{@link #sortOrder} controls the initial render order so authors
- * can stage the activity (e.g. show the easier targets first); the
- * front-end is free to randomise the deck on each play, but the
- * authoritative order is preserved here for the catalogue preview.</p>
- *
- * <p>{@link #dragDropActivity} is mapped {@code updatable = false}:
- * an item belongs to exactly one parent activity for its entire
- * lifetime. The admin workflow deletes and recreates rather than
- * re-parenting, so the ORM-layer guard simply makes that contract
- * explicit. All other domain fields remain mutable.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -45,30 +26,15 @@ public class DragDropItem extends BaseEntity {
     @JoinColumn(name = "drag_drop_activity_id", nullable = false, updatable = false)
     private DragDropActivity dragDropActivity;
 
-    /**
-     * The text the learner drags (e.g. a Chinese word "苹果"). Required.
-     */
     @Column(name = "drag_text", nullable = false, length = 500)
     private String dragText;
 
-    /**
-     * The label of the drop zone the dragText must end up in for a correct
-     * placement (e.g. "Fruit"). Required. Several items may share the same
-     * target zone label, in which case the zone visually accepts multiple
-     * draggables in the front-end.
-     */
     @Column(name = "target_zone", nullable = false, length = 200)
     private String targetZone;
 
-    /**
-     * Optional pinyin shown under the dragged text to support beginners.
-     */
     @Column(name = "pinyin", length = 255)
     private String pinyin;
 
-    /**
-     * Optional image URL displayed inside the draggable card.
-     */
     @Column(name = "image_url", length = 255)
     private String imageUrl;
 

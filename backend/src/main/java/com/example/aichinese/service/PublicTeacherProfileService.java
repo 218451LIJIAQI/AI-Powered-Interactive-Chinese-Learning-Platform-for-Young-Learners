@@ -4,8 +4,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.Objects;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,21 +17,8 @@ import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 
-/**
- * Unauthenticated read endpoint for an APPROVED teacher's public
- * profile page (bio, teaching categories, published course count).
- *
- * <p>Strictly filtered: the teacher must be both
- * {@link TeacherStatus#APPROVED} and have the {@code publicVisible}
- * flag set — so a teacher who opts out (or who is suspended) does
- * not appear in the public surface. Course count is computed as the
- * sum of {@link ContentStatus#PUBLISHED} lessons + course packages,
- * matching what the public catalogue actually surfaces.</p>
- */
 @Service
 public class PublicTeacherProfileService {
-
-    private static final Logger log = LoggerFactory.getLogger(PublicTeacherProfileService.class);
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LessonRepository lessonRepository;

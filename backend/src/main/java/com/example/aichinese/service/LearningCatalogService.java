@@ -15,17 +15,6 @@ import com.example.aichinese.entity.LearningLevel;
 import com.example.aichinese.repository.LearningCategoryRepository;
 import com.example.aichinese.repository.LearningLevelRepository;
 
-/**
- * Read-only catalog lookups for the publicly visible learning taxonomy:
- * {@link LearningLevel}s (beginner / intermediate / advanced bands)
- * and {@link LearningCategory}s (vocabulary / grammar / culture etc.).
- *
- * <p>Exposed by unauthenticated catalog endpoints to populate filter
- * dropdowns in the public course-browser. Always sorted by
- * {@code sortOrder} then {@code name} so the front-end ordering is
- * deterministic and admins can control the rendering by editing
- * {@code sort_order}.</p>
- */
 @Service
 public class LearningCatalogService {
 

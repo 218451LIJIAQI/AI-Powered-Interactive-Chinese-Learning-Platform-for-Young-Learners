@@ -19,25 +19,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Admin-curated flashcard in the platform-managed practice library.
- *
- * <p>Front side ({@link #frontText}) typically holds a Chinese word or
- * character; back side ({@link #backText}) holds the explanation,
- * usage examples and mnemonic notes. {@link #pinyin}, {@link #englishMeaning}
- * and {@link #malayMeaning} are scaffolding fields shown alongside the
- * card to support multilingual learners.</p>
- *
- * <p>{@link #extraPayload} is a free-form JSON document for forward
- * compatibility — currently holds optional fields like {@code radicals},
- * {@code strokeOrder}, and {@code exampleSentences} without requiring
- * a Flyway migration each time a new field is introduced.</p>
- *
- * <p>Shares the activity metadata vocabulary
- * ({@link #ageBand}, {@link #difficulty}, {@link #hskLevel},
- * {@link #topic}, {@link #tags}, {@link #xpReward}) with the other
- * platform activity entities for uniform filtering.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -51,16 +32,6 @@ import lombok.Setter;
 })
 public class Flashcard extends BaseEntity {
 
-    /**
-     * Admin user who authored this card. Nullable to preserve legacy
-     * rows that pre-date the platform library.
-     *
-     * <p>Mapped {@code updatable = false}: authorship is captured once
-     * at insert time by {@code AdminActivityMapper#toEntity} and is
-     * intentionally not touched again by the matching {@code applyTo}
-     * update method, so the original author remains attributable for
-     * audit purposes even after later edits.</p>
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id", updatable = false)
     private User createdByUser;

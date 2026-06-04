@@ -10,63 +10,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-/**
- * Body for {@code PUT /api/v1/teachers/me/profile} — the
- * self-service "edit my profile" endpoint that any authenticated
- * teacher can use to update the four user-editable fields on their
- * {@code TeacherProfile}.
- *
- * <p>Note that this is intentionally <em>not</em> the full set of
- * teacher profile fields:
- * {@link com.example.aichinese.entity.enums.TeacherStatus},
- * {@code rejectionReason}, verification documents and audit timestamps
- * are managed by the verification pipeline (admin reviews + the
- * dedicated multipart upload endpoint) and are deliberately omitted
- * from this DTO so a teacher cannot self-approve.</p>
- *
- * <h2>Field-level constraints</h2>
- * <ul>
- *   <li>{@link #fullName} — required. The record field is named
- *       "full name" for historical reasons, but the service writes it
- *       to {@code users.display_name} (the {@code users} table has no
- *       {@code full_name} column). Cap of 120 chars matches the
- *       {@code users.display_name} schema column; {@code @NotBlank}
- *       prevents the teacher from blanking out their identity.</li>
- *   <li>{@link #bio} — optional long-form description (2000 chars).
- *       Rendered on the public teacher profile page; cap matches the
- *       {@code teacher_profiles.bio} {@code TEXT} column.</li>
- *   <li>{@link #shortIntroduction} — optional one-paragraph hook
- *       (1000 chars). Used as the teaser line on directory cards
- *       where the full {@link #bio} would be too long.</li>
- *   <li>{@link #teachingCategories} — free-form tag list with each
- *       entry capped at 60 chars and the list itself capped at 12
- *       entries (matches the silent server-side cap inside
- *       {@code TeacherManagementMapper.joinCategories} — surfacing it
- *       as a Bean Validation error replaces silent truncation with a
- *       clear 400-level rejection). Persisted as a normalised
- *       {@code teaching_categories} join table; an empty/{@code null}
- *       list clears the existing entries.</li>
- * </ul>
- *
- * <h2>Wire format</h2>
- * <p>The component order is locked via {@link JsonPropertyOrder} so
- * upstream Jackson upgrades cannot accidentally reshuffle the wire
- * format and break consumers that pin on field positions.</p>
- *
- * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly strips surrounding Unicode
- * whitespace from {@link #fullName}, {@link #bio} and
- * {@link #shortIntroduction} so
- * Bean Validation operates on the canonical form (a whitespace-only
- * {@code fullName} fails {@code @NotBlank} after stripping, the way
- * the user expects) and the service layer's normalisation calls are
- * idempotent. {@link #teachingCategories} is copied into an
- * immutable list and each non-null entry is stripped before the
- * mapper applies its deduplication and storage pipeline.
- * {@code null} is preserved for required fields and list elements
- * so Bean Validation renders friendly user-facing messages rather
- * than a low-level {@link NullPointerException}.</p>
- */
 @JsonPropertyOrder({ "fullName", "bio", "shortIntroduction", "teachingCategories" })
 public record UpdateTeacherProfileRequest(
         @NotBlank(message = "Full name is required.")
@@ -82,16 +25,6 @@ public record UpdateTeacherProfileRequest(
         @Size(max = 12, message = "Teaching categories must not exceed 12 entries.")
         List<@Size(max = 60, message = "Each teaching category must be 60 characters or fewer.") String> teachingCategories) {
 
-    /**
-     * Defensive canonical constructor: strips the three free-text
-     * fields so Bean Validation operates on the canonical form and the
-     * service layer's normalisation calls are idempotent. {@code null}
-     * is preserved so {@link NotBlank @NotBlank} can render the
-     * friendly "is required" message rather than a low-level
-     * {@link NullPointerException}. {@link #teachingCategories} is
-     * defensively copied and stripped entry-by-entry while preserving
-     * {@code null} list elements for Bean Validation.
-     */
     public UpdateTeacherProfileRequest {
         fullName = strip(fullName);
         bio = strip(bio);

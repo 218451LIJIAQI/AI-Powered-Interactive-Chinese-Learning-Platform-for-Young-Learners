@@ -14,23 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Single comprehension prompt attached to a {@link StoryActivity}.
- *
- * <p>The set of multiple-choice options is stored inline as a JSON
- * payload (see {@link #optionsPayload}) rather than as separate child
- * rows because story prompts are intentionally short (typically 3-4
- * options each) and a single column avoids an extra join in the
- * student practice loop.</p>
- *
- * <p>{@link #sortOrder} preserves the author's preferred order; the
- * front-end may optionally shuffle per attempt.</p>
- *
- * <p>{@link #storyActivity} is mapped {@code updatable = false}: a
- * question belongs to a single parent activity for its entire lifetime.
- * The admin workflow deletes and recreates rather than re-parenting,
- * so the ORM-layer guard simply makes that contract explicit.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -47,14 +30,6 @@ public class StoryQuestion extends BaseEntity {
     @Column(name = "question_text", nullable = false, length = 500)
     private String questionText;
 
-    /**
-     * JSON array of options, e.g.
-     * <pre>[{"text":"option A","correct":false},{"text":"option B","correct":true}]</pre>
-     * Persisted as a single JSON document to mirror the
-     * {@link ListeningExercise#getQuestionPayload()} approach and avoid
-     * an extra child table for what is intentionally a small set of
-     * comprehension prompts.
-     */
     @Lob
     @Column(name = "options_payload", columnDefinition = "TEXT", nullable = false)
     private String optionsPayload;

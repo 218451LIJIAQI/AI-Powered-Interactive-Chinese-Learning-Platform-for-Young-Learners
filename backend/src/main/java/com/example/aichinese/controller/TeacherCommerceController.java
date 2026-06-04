@@ -20,20 +20,6 @@ import com.example.aichinese.service.PayoutService;
 
 import jakarta.validation.Valid;
 
-/**
- * Teacher-side commerce REST surface: earnings ledger, available
- * balance, and payout-request lifecycle (file → view → cancel).
- *
- * <p>Earnings are only readable by their owning teacher; the
- * service layer applies the row-level filter so a forged path id
- * cannot expose another teacher's ledger. Payout creation is
- * gated against the teacher's currently AVAILABLE earnings
- * (see {@link com.example.aichinese.service.PayoutService}) so a
- * teacher cannot request more than the platform has reconciled.</p>
- *
- * <p>The admin-side approval / rejection surface for payout
- * requests lives on {@link AdminCommerceController}.</p>
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/teachers")

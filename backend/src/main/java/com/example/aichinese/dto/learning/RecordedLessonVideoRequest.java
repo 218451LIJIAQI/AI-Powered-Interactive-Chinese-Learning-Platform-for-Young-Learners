@@ -13,75 +13,6 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/**
- * Internal payload assembled by the multipart endpoints under
- * {@code /api/v1/teachers/lessons/{lessonId}/recorded-videos}:
- * <ul>
- *   <li>{@code POST} (multipart) — upload a new recorded video</li>
- *   <li>{@code PUT /{videoId}} (multipart) — replace metadata
- *       and/or the file</li>
- * </ul>
- *
- * <p>Note: this DTO is <em>not</em> deserialised from JSON. The
- * controller binds individual {@code @RequestParam}s and the
- * uploaded {@code MultipartFile}, then constructs an instance of
- * this record via the canonical constructor and passes it into
- * {@code RecordedLessonService}. The validation annotations apply
- * to the bound request params.</p>
- *
- * <h2>{@link #sourceType}</h2>
- * <p>Enum-string discriminator from
- * {@link com.example.aichinese.entity.enums.RecordedVideoSourceType}
- * (currently {@code "UPLOADED_FILE"} or {@code "EXTERNAL_URL"}).
- * When {@code "EXTERNAL_URL"}, the file is not stored server-side
- * and the client is expected to set {@link #externalVideoUrl} (an
- * {@code http(s)://} link). When {@code "UPLOADED_FILE"}, the
- * multipart file is persisted via {@code StoredFileService} and
- * {@link #externalVideoUrl} is ignored.</p>
- *
- * <p>{@link #durationSeconds} is optional at upload time —
- * {@code RecordedLessonService} extracts it from the file metadata
- * when omitted. {@link #sortOrder} controls the position in the
- * lesson's video list and is required (no implicit append).</p>
- *
- * <p>{@link #packageId} is captured but ignored when the lesson is
- * already attached to a package — it is included to support the
- * future "promote to package-level video" workflow without changing
- * the wire format.</p>
- *
- * <h2>Normalisation</h2>
- * <p>The canonical constructor eagerly strips surrounding Unicode whitespace from
- * every string field so Bean Validation sees the canonical form
- * (a paste with stray whitespace cannot inflate the length past
- * the cap, sneak past the {@code http(s)://} regex, or fail enum
- * parsing) and so every downstream consumer sees the same stripped
- * value. {@link #description} and {@link #externalVideoUrl}
- * collapse to {@code null} when blank so the service's
- * "is this set?" check is a single null-check.</p>
- *
- * @param title            short human-readable video title
- *                         (1–200 chars after stripping); required
- * @param description      optional long-form description (max 1000
- *                         chars after stripping); {@code null} or blank
- *                         collapses to {@code null}
- * @param packageId        optional denormalised
- *                         {@link com.example.aichinese.entity.CoursePackage}
- *                         id (ignored when the lesson is already
- *                         package-attached)
- * @param sourceType       enum-name string from
- *                         {@link com.example.aichinese.entity.enums.RecordedVideoSourceType};
- *                         required, parsed server-side
- * @param externalVideoUrl {@code http(s)://} link when
- *                         {@link #sourceType} is
- *                         {@code "EXTERNAL_URL"}; max 500 chars; no
- *                         embedded whitespace; {@code null} or
- *                         blank collapses to {@code null}
- * @param durationSeconds  optional video duration; non-negative
- *                         when present; the service extracts it
- *                         from file metadata when omitted
- * @param sortOrder        0-based render position in the lesson's
- *                         video list; required, {@code 0..10000}
- */
 @JsonPropertyOrder({
         "title",
         "description",
@@ -118,14 +49,6 @@ public record RecordedLessonVideoRequest(
         @Max(value = 10_000, message = "Display order must not exceed 10000.")
         Integer sortOrder) {
 
-    /**
-     * Defensive canonical constructor: strips every string field so
-     * Bean Validation sees the canonical form (preventing length-cap
-     * bypass via leading/trailing whitespace and ensuring the regex
-     * evaluates against the canonical form) and collapses optional
-     * blank-only strings to {@code null} so downstream "is this set?"
-     * checks are a single null-check.
-     */
     public RecordedLessonVideoRequest {
         title = strip(title);
         description = stripToNull(description);

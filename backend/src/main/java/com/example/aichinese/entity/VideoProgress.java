@@ -17,37 +17,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Resume-position bookmark for a single student watching a single
- * {@link RecordedLessonVideo}.
- *
- * <p>The unique constraint on {@code (student_id, recorded_video_id)}
- * means each student keeps exactly one bookmark per video — re-opening
- * the same video resumes from {@link #watchedSeconds} rather than the
- * start.</p>
- *
- * <p>{@link #completed} is set {@code true} the first time the watched
- * percentage crosses a threshold (typically 95% to tolerate trailing
- * credits), and stays {@code true} on subsequent rewatches so the
- * lesson's overall completion roll-up does not regress.</p>
- *
- * <p>{@link #version} prevents the lossy interleaving of frequent
- * progress pings during active playback.</p>
- *
- * <h3>Field mutability contract</h3>
- * <ul>
- *   <li><b>Immutable</b>: {@link #student}, {@link #lesson},
- *       {@link #recordedVideo} — the bookmark's identity (which
- *       learner, which lesson, which recorded video) is fixed at
- *       creation and additionally protected by
- *       {@code uk_video_progress_student_video}.</li>
- *   <li><b>Mutable</b>: {@link #watchedSeconds}, {@link #totalSeconds},
- *       {@link #progressPercentage}, {@link #completed},
- *       {@link #lastWatchedAt} — the playback-state fields the
- *       {@code VideoProgressService} ping handler rewrites on every
- *       update, guarded by {@link Version @Version} above.</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

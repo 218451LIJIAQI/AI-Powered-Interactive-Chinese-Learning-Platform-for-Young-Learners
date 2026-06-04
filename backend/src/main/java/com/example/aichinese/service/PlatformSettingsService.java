@@ -21,24 +21,6 @@ import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Reads and writes the admin-editable platform-wide settings backed
- * by {@link SystemSetting}: platform name, AI disclaimer text,
- * admin-notification toggles, and the content-filtering switches.
- *
- * <h2>Two response shapes</h2>
- * <p>Admins see the full {@link AdminPlatformSettingsResponse} with
- * every editable key; the public-facing
- * {@link PublicPlatformSettingsResponse} only exposes display-tier
- * values (platform name, AI disclaimer) so the front-end can render
- * branding / disclaimers without leaking operational toggles to
- * unauthenticated visitors.</p>
- *
- * <h2>Defaults</h2>
- * <p>Missing rows fall back to the {@code DEFAULT_*} constants so a
- * fresh deployment renders coherent text from day one. Updates audit
- * via {@link AuditLogService}.</p>
- */
 @Service
 public class PlatformSettingsService {
 

@@ -17,56 +17,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-/**
- * Body for {@code PUT /api/v1/teachers/packages/{id}} — the
- * teacher edits an existing course-package's <em>header</em>
- * (title, description, taxonomy, price, cover image).
- *
- * <p>Item membership ({@link com.example.aichinese.entity.PackageItem})
- * is managed via the dedicated item endpoints
- * ({@code POST /packages/{id}/items} and
- * {@code DELETE /packages/{id}/items/{itemId}}); changing
- * {@link #title} / {@link #description} / etc. does not affect the
- * item list.</p>
- *
- * <p>Mirrors {@link CreateCoursePackageRequest} field-for-field.
- * The service refuses edits in non-editable states (see
- * {@link com.example.aichinese.service.TeacherContentAccessService});
- * see {@link CreateModuleRequest} for the full discussion of
- * shared validation rules.</p>
- *
- * <p>For archive (soft delete) use the dedicated
- * {@code PATCH /api/v1/teachers/packages/{id}/archive} endpoint
- * (no body) instead of this one.</p>
- *
- * <h2>Wire format</h2>
- * <p>The component order is locked via {@link JsonPropertyOrder} so
- * upstream Jackson upgrades cannot accidentally reshuffle the wire
- * format and break consumers that pin on field positions.</p>
- *
- * @param title          editorial title shown on cards; required,
- *                       1–{@value ContentDtoConstants#TITLE_MAX_LENGTH}
- *                       chars
- * @param description    long-form description (max
- *                       {@value ContentDtoConstants#LONG_DESCRIPTION_MAX_LENGTH}
- *                       chars); nullable
- * @param levelId        required FK into
- *                       {@link LearningLevelResponse}; must be
- *                       positive
- * @param categoryId     required FK into
- *                       {@link LearningCategoryResponse}; must be
- *                       positive
- * @param learningType   headline delivery model surfaced on the
- *                       catalogue card; required
- * @param accessType     commercial access tier ({@code FREE} /
- *                       {@code PAID}); required
- * @param price          listed price; matches {@code DECIMAL(10,2)};
- *                       must be {@code >= 0}; may be {@code null}
- *                       for free packages
- * @param coverImageUrl  optional cover image reference; max
- *                       {@value ContentDtoConstants#COVER_IMAGE_URL_MAX_LENGTH}
- *                       chars
- */
 @JsonPropertyOrder({
         "title",
         "description",

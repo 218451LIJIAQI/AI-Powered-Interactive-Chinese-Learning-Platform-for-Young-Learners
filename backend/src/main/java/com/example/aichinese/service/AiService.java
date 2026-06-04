@@ -90,44 +90,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * Orchestrator for every learner-facing AI feature: chat tutor, quiz
- * generator, story generator, vocabulary helper, sentence practice,
- * pronunciation feedback, writing feedback, and the AI-driven
- * learning-recommendation / progress-insight surfaces.
- *
- * <h2>Architecture</h2>
- * <p>This service is the single entry point that:</p>
- * <ol>
- *   <li>Sanitises user input via {@link AiInputSanitizer} so prompt
- *       injection / control-token spoofing cannot reach the LLM.</li>
- *   <li>Builds a provider-agnostic {@link AiProviderPrompt} via
- *       {@link AiPromptBuilder}.</li>
- *   <li>Routes to the active client through {@link AiProviderRouter}
- *       (real provider or no-op fallback).</li>
- *   <li>Logs every invocation through {@link AiLogService} (usage
- *       record + chat session/message rows where applicable) so the
- *       admin observability dashboard has a full audit trail.</li>
- *   <li>Returns explicit unavailable responses when the provider is
- *       unavailable or failed, so learners never see a raw 500 and
- *       unavailable AI is not misrepresented as provider-generated
- *       content.</li>
- * </ol>
- *
- * <h2>Authorization</h2>
- * <p>Endpoints are scoped by role in {@link com.example.aichinese.config.SecurityConfig}
- * and re-checked here for cross-tenant access (e.g. only the owning
- * student can see their progress insight). The chat-session lookups
- * use {@code findByIdAndUserId} so direct-object reference attacks on
- * other learners' chat history fail with 404.</p>
- *
- * <h2>Token cost discipline</h2>
- * <p>Every prompt has its {@code maxOutputTokens} capped via
- * {@link com.example.aichinese.config.AiProperties#getMaxOutputTokens()};
- * input strings have feature-appropriate length caps applied at
- * {@code AiInputSanitizer} time. This bounds worst-case provider cost
- * even under abusive prompts.</p>
- */
 @Service
 public class AiService {
 
@@ -200,11 +162,6 @@ public class AiService {
         this.aiUsageLimiter = Objects.requireNonNull(aiUsageLimiter, "aiUsageLimiter");
     }
 
-    /**
-     * Text-provider methods intentionally have no enclosing transaction. Repository and
-     * logging calls use their own short transactions, so the blocking provider request
-     * never reserves a JDBC connection while waiting for an AI response.
-     */
     public AiChatResponse chat(SecurityUserDetails currentUser, AiChatRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
@@ -389,12 +346,12 @@ public class AiService {
                 context.studentProfileId());
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
-            return fallbackLearningRecommendation(context.level(), execution.status().name());
+            return fallbackLearningRecommendation(execution.status().name());
         }
 
         ParsedAiJson parsed = parseJsonMap(execution.responseText());
         if (!parsed.valid()) {
-            return fallbackLearningRecommendation(context.level(), AiRequestStatus.FAILED.name());
+            return fallbackLearningRecommendation(AiRequestStatus.FAILED.name());
         }
         return parseLearningRecommendation(parsed.values(), execution.status().name());
     }
@@ -713,19 +670,11 @@ public class AiService {
         String role = message.getSenderRole() == AiChatSenderRole.USER
                 ? "user"
                 : "assistant";
-        // Replayed history must go through the same sanitisation pass as the
-        // current-turn prompt. Otherwise a learner could plant a ChatML
-        // sentinel (e.g. <|im_start|>system\n...) in turn 1, which is
-        // sanitised when sent as the current message but stored raw, and
-        // then replayed verbatim in turn 2+ as part of the history array.
         String sanitized = AiInputSanitizer.sanitizeLong(message.getMessageText());
         return new AiProviderPrompt.AiMessage(role, sanitized == null ? "" : sanitized);
     }
 
     private String buildChatPrompt(AiChatRequest request, String sanitizedUserMessage) {
-        // Sanitise user-supplied prompt fragments before concatenating them
-        // into the AI prompt. See {@link AiInputSanitizer} for the rules
-        // (length cap, ChatML sentinel-token strip, control-char strip).
         StringBuilder builder = new StringBuilder();
         builder.append("Help the learner with this message: ")
                 .append(sanitizedUserMessage)
@@ -757,11 +706,6 @@ public class AiService {
     }
 
     private String buildSentencePrompt(AiSentencePracticeRequest request, String language) {
-        // Student-supplied sentence flows directly into the AI prompt — apply
-        // the same sanitisation pass as the other prompt builders (length
-        // cap + ChatML sentinel-token strip + control-char strip) so a
-        // malicious or oversized sentence cannot poison the prompt or burn
-        // token quota. See AiInputSanitizer + AiInputSanitizerTests.
         return "Check this beginner Chinese learning sentence and return structured JSON: \""
                 + AiInputSanitizer.sanitizeLong(request.sentence())
                 + "\". Learner level: " + defaultLevel(request.learnerLevel())
@@ -825,8 +769,7 @@ public class AiService {
         }
 
         String summary = buildStudentContextSummary(studentProfile);
-        String level = studentProfile.getCurrentLevel() != null ? studentProfile.getCurrentLevel().getName() : "Beginner";
-        return new LearningRecommendationContext(user, studentProfile.getId(), language, summary, level);
+        return new LearningRecommendationContext(user, studentProfile.getId(), language, summary);
     }
 
     private void requireRole(SecurityUserDetails currentUser, RoleName roleName, String message) {
@@ -933,7 +876,7 @@ public class AiService {
                 status);
     }
 
-    private AiLearningRecommendationResponse fallbackLearningRecommendation(String level, String status) {
+    private AiLearningRecommendationResponse fallbackLearningRecommendation(String status) {
         return new AiLearningRecommendationResponse(
                 AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
                 null,
@@ -1210,8 +1153,7 @@ public class AiService {
             User user,
             Long studentProfileId,
             String language,
-            String summary,
-            String level) {
+            String summary) {
     }
 
     private record ParsedAiJson(boolean valid, Map<String, Object> values) {

@@ -55,51 +55,9 @@ import com.example.aichinese.security.LoginAttemptLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * Account lifecycle: registration, login, current-user lookup,
- * password reset, and logout.
- *
- * <h2>Security model</h2>
- * <ul>
- *   <li><b>Login:</b> delegates to Spring's {@link AuthenticationManager}
- *       so the configured {@code PasswordEncoder} and account-status
- *       checks are honoured. Rate limited via {@link LoginAttemptLimiter}
- *       (per-IP + per-email keys) — after the lockout threshold the
- *       caller is rejected with 429 before the credentials are even
- *       checked, preventing online password guessing.</li>
- *   <li><b>JWT issuance:</b> {@link JwtService#generateToken} bakes
- *       in a per-user {@code sessionVersion}. Logout / password change
- *       bumps the version, atomically invalidating every previously
- *       issued token for that user.</li>
- *   <li><b>Registration:</b> teacher accounts start in
- *       {@link TeacherStatus#PENDING}. They can sign in and complete
- *       onboarding while teacher-only publishing and management flows
- *       remain gated by
- *       {@code TeacherContentAccessService.requireApprovedTeacher}
- *       until an admin approves them. Student accounts go straight to
- *       active. Email is stored case-insensitively (lower-cased) so
- *       duplicate detection cannot be bypassed by changing letter
- *       case.</li>
- *   <li><b>Password reset:</b> tokens are 256-bit random values; only
- *       the SHA-256 hash is stored ({@link MessageDigest}), so a DB
- *       read cannot redeem a reset link. Tokens live for
- *       {@link #RESET_TOKEN_TTL} (60 minutes) and are single-use —
- *       redemption consumes them atomically inside the password
- *       update transaction.</li>
- *   <li><b>Enumeration protection:</b> {@code forgot-password} always
- *       returns the same response whether or not the email exists, so
- *       an attacker cannot probe for valid accounts.</li>
- * </ul>
- *
- * <p>All sensitive state changes write to {@code AuditLog} so security
- * incidents can be reconstructed.</p>
- */
 @Service
 public class AuthService {
 
-    private static final HexFormat HEX_FORMAT = HexFormat.of();
-
-    /** Reset tokens are short-lived to limit the window during which a leaked link can be redeemed. */
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(60);
 
     private final UserRepository userRepository;
@@ -197,11 +155,6 @@ public class AuthService {
         return toRegistrationResponse(savedUser, profile.getTeacherStatus());
     }
 
-    /**
-     * Authenticates a user. The {@code clientIp} is used to scope the
-     * brute-force rate limiter so a misbehaving network does not lock out
-     * every user account behind the same gateway.
-     */
     public AuthSessionResponse login(LoginRequest request, String clientIp, String userAgent) {
         String email = normalizeEmail(request.email());
 
@@ -307,23 +260,9 @@ public class AuthService {
                 null);
     }
 
-    /**
-     * Issues a password-reset token for the supplied email address and dispatches a reset email.
-     *
-     * <p>The public controller response is intentionally the same whether or not the email is
-     * registered, so this method does not surface enumeration information through exceptions.
-     * If the email belongs to a real account we invalidate any still-active reset tokens, persist
-     * a fresh one with a 60-minute TTL, and enqueue delivery after this transaction commits. When
-     * SMTP is not configured the {@code NoOpEmailService} simply logs the attempt so that local
-     * development can still demonstrate the flow.</p>
-     */
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
         String email = normalizeEmail(request.email());
-        // Silently no-op when the email is unknown so the endpoint never reveals
-        // whether an address is registered. The forgot-password flow is one of
-        // the rare endpoints that prefers an enumeration-resistant 200 OK over
-        // a precise error response.
         Optional<User> userLookup = userRepository.findLockedByEmail(email);
         if (userLookup.isEmpty()) {
             return;
@@ -354,12 +293,6 @@ public class AuthService {
                 null);
     }
 
-    /**
-     * Validates a reset token and, on success, updates the underlying user's password.
-     *
-     * <p>Tokens are single-use: the {@code usedAt} timestamp is stamped before the password is
-     * persisted so that a leaked link cannot be redeemed twice even if a request is retried.</p>
-     */
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
         validatePasswords(request.password(), request.confirmPassword());
@@ -404,9 +337,6 @@ public class AuthService {
     }
 
     private String generateUniqueToken() {
-        // Two UUIDs concatenated provide ~256 bits of entropy without adding a new
-        // dependency. The token column is unique-indexed so even an astronomically
-        // unlikely collision is caught by the database, but we re-roll once for safety.
         for (int attempt = 0; attempt < 3; attempt++) {
             String candidate = (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "");
             if (passwordResetTokenRepository.findByTokenHash(hashResetToken(candidate)).isEmpty()) {
@@ -420,20 +350,12 @@ public class AuthService {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hashed = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
-            return HEX_FORMAT.formatHex(hashed);
+            return HexFormat.of().formatHex(hashed);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable for password-reset token hashing.", exception);
         }
     }
 
-    /**
-     * Records a login failure against the rate limiter and, when that failure
-     * is the one that trips the lockout threshold, emits a structured audit
-     * log entry so admins viewing {@code /admin/audit-logs} can see brute
-     * force / credential-stuffing attempts. Uses {@code safeRecord} so a
-     * transient audit-log persistence failure never hides the 401 we owe
-     * the caller.
-     */
     private void recordLoginFailure(String email, String clientIp) {
         boolean nowLocked = loginAttemptLimiter.recordFailure(email, clientIp);
         if (nowLocked) {

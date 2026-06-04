@@ -16,52 +16,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-/**
- * Body for {@code PUT /api/v1/teachers/modules/{id}} — the
- * teacher edits an existing module.
- *
- * <p>Mirrors {@link CreateModuleRequest} field-for-field. The
- * service rejects the edit when the module is in a non-editable
- * state (e.g.
- * {@link com.example.aichinese.entity.enums.ContentStatus#ARCHIVED})
- * — see
- * {@link com.example.aichinese.service.TeacherContentAccessService}
- * for the full editable-state predicate.</p>
- *
- * <p>For archiving (soft delete), use
- * {@code PATCH /api/v1/teachers/modules/{id}/archive} (no body) —
- * not this endpoint.</p>
- *
- * <p>See {@link CreateModuleRequest} for the full discussion of
- * shared content metadata vocabulary and validation rules.</p>
- *
- * <h2>Wire format</h2>
- * <p>The component order is locked via {@link JsonPropertyOrder} so
- * upstream Jackson upgrades cannot accidentally reshuffle the wire
- * format and break consumers that pin on field positions.</p>
- *
- * @param title         editorial title shown on cards; required,
- *                      max
- *                      {@value ContentDtoConstants#TITLE_MAX_LENGTH}
- *                      characters
- * @param description   long-form description (max
- *                      {@value ContentDtoConstants#LONG_DESCRIPTION_MAX_LENGTH}
- *                      chars); nullable
- * @param levelId       required FK into
- *                      {@link LearningLevelResponse}; must be
- *                      positive
- * @param categoryId    required FK into
- *                      {@link LearningCategoryResponse}; must be
- *                      positive
- * @param accessType    commercial access tier ({@code FREE} /
- *                      {@code PAID}); required
- * @param price         listed price; matches {@code DECIMAL(10,2)};
- *                      must be {@code >= 0}; may be {@code null}
- *                      for free modules
- * @param coverImageUrl optional cover image reference; max
- *                      {@value ContentDtoConstants#COVER_IMAGE_URL_MAX_LENGTH}
- *                      chars
- */
 @JsonPropertyOrder({
         "title",
         "description",

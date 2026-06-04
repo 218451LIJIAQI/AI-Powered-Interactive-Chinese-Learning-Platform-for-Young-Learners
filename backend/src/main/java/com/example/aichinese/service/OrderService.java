@@ -21,17 +21,6 @@ import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.OrderRepository;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
-/**
- * Persists {@link Order} and {@link OrderItem} rows representing a
- * committed checkout, computing line totals and currency through
- * {@link CommerceMoneyService}/{@link CommerceSettingsService}.
- *
- * <p>Orders are created in {@link PaymentStatus#PENDING}; the
- * transition to {@code SUCCESS}/{@code FAILED} happens later in
- * {@link PaymentService} once the provider confirms the result.
- * Each order is keyed by a server-generated {@link UUID} so the
- * external order number is never guessable.</p>
- */
 @Service
 public class OrderService {
 
@@ -57,14 +46,6 @@ public class OrderService {
     public Order createOrder(StudentProfile student, CheckoutSource source, List<ResolvedPurchasableItem> items) {
         Order order = new Order();
         order.setStudent(student);
-        // The previous "ORD-" + 8-hex-char UUID prefix carried only 32 bits of
-        // entropy (~50% chance of collision after ~65K orders, per the
-        // birthday paradox). Because the orderNumber column is UNIQUE, a
-        // collision surfaces as a 500 to the student during checkout.
-        // Lifting the random suffix to a hyphenated 16-hex pattern raises
-        // entropy to 64 bits, which stays birthday-safe past 4B orders, while
-        // being short enough for a human-readable "ORD-XXXXXXXX-XXXXXXXX"
-        // identifier in receipts and admin views.
         String uuid = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
         String suffix = uuid.substring(0, 8) + "-" + uuid.substring(8, 16);
         order.setOrderNumber("ORD-" + suffix);

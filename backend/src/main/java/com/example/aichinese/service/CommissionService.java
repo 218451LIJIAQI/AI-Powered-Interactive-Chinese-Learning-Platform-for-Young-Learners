@@ -19,16 +19,6 @@ import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
-/**
- * Admin-only read/update for the platform commission rate that
- * {@link CommerceSettingsService} exposes to the rest of the commerce
- * stack.
- *
- * <p>The current value is persisted as a {@link SystemSetting}
- * {@code platform_commission_rate} entry; this service is the only
- * write path. Every change is audited so reconciliation reports can
- * pinpoint when teacher payouts shifted percentage-wise.</p>
- */
 @Service
 public class CommissionService {
 

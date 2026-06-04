@@ -44,24 +44,6 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Manages the learner-filed "report this AI response" workflow:
- * student submission, admin review queue, and resolution.
- *
- * <p>Reports are linked to either an {@code AiUsageLog} entry or a
- * specific chat-session message so the admin reviewer can see the
- * exact provider response that triggered the complaint without
- * re-running the prompt. The {@code MAX_REPORT_SNAPSHOT_LENGTH}
- * cap on captured snippets prevents the report row from balooning
- * when a report references a very long generated story or quiz.</p>
- *
- * <p>Status transitions ({@code OPEN → IN_REVIEW → RESOLVED}) are
- * one-way; reviewers cannot reopen a resolved report — instead the
- * student files a new one. Audit trail is written to {@code AuditLog}
- * on every state change, and a notification is dispatched to the
- * student when a reviewer resolves their report so they know the
- * complaint was acted on.</p>
- */
 @Service
 public class AiResponseReportService {
 
@@ -175,16 +157,6 @@ public class AiResponseReportService {
                 currentUser.getUserId(),
                 newestPageable(safePage, safeSize));
         return mapStudentReportPage(reportPage, safePage, safeSize);
-    }
-
-    @Transactional(readOnly = true)
-    public List<StudentAiResponseReportResponse> getCurrentUserReports(SecurityUserDetails currentUser) {
-        return getCurrentUserReports(currentUser, 0, 20).items();
-    }
-
-    @Transactional(readOnly = true)
-    public List<AdminAiResponseReportResponse> getAdminReports(String status) {
-        return getAdminReports(status, 0, 20).items();
     }
 
     @Transactional(readOnly = true)
@@ -386,12 +358,6 @@ public class AiResponseReportService {
                 report.getUpdatedAt());
     }
 
-    /**
-     * Student-facing report views intentionally omit admin-only moderation
-     * metadata such as reviewer identity and reviewer notes. Those fields are
-     * used for internal moderation and should not be leaked back through the
-     * self-service learner endpoint.
-     */
     private StudentAiResponseReportResponse toStudentResponse(AiResponseReport report) {
         return toStudentResponse(report, loadPromptSnapshots(List.of(report)));
     }

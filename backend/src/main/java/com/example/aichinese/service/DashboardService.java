@@ -9,8 +9,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,23 +51,8 @@ import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
-/**
- * Aggregated "home page" data per persona: student dashboard
- * (progress, streaks, recommended lessons, unread notifications),
- * teacher dashboard (recent earnings, pending payouts, fresh student
- * activity), and admin dashboard (platform vitals — DAU, recent
- * orders / refunds, AI usage today).
- *
- * <p>Each dashboard returns a fixed shape in a single read so the
- * front-end can render the home page in one round trip. Time-windowed
- * counts use bounded recent-window queries (e.g. last 7 days) so the
- * dashboards stay cheap even at scale. Aggregates round through
- * {@link CommerceMoneyService} conventions for currency consistency.</p>
- */
 @Service
 public class DashboardService {
-
-    private static final Logger log = LoggerFactory.getLogger(DashboardService.class);
 
     private final StudentProfileRepository studentProfileRepository;
     private final TeacherProfileRepository teacherProfileRepository;

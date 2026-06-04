@@ -30,32 +30,6 @@ import com.example.aichinese.util.SensitiveDataRedactor;
 
 import jakarta.persistence.criteria.Predicate;
 
-/**
- * Centralised audit-trail writer used by every state-changing service
- * across the platform (auth, payment, refund, payout, teacher
- * approval, content moderation, system settings).
- *
- * <h2>What gets written</h2>
- * <p>Each call captures the actor, action, target type / id, and a
- * human-readable description. The description is run through
- * {@link SensitiveDataRedactor} to redact tokens, passwords, reset
- * links, API keys, email addresses, and {@code Authorization: Bearer}
- * headers
- * — so an admin browsing the audit history cannot lift secrets from
- * the description even if a developer accidentally passed one in.
- * Descriptions are capped at {@link #MAX_AUDIT_DESCRIPTION_LENGTH}
- * to keep rows bounded.</p>
- *
- * <h2>Correlation</h2>
- * <p>The current {@link RequestIdHolder} value is recorded so every
- * audit row joins back to its triggering HTTP request, simplifying
- * incident reconstruction.</p>
- *
- * <h2>Read side</h2>
- * <p>Listing supports JPA {@link Specification}-driven filtering
- * (actor, action, target, date range) so admins can pivot the audit
- * log along any dimension without hand-written query branches.</p>
- */
 @Service
 public class AuditLogService {
 
@@ -107,10 +81,6 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public PageResponse<AuditLogResponse> getAuditLogs(String actionType, String targetType, String actor, int page, int size) {
-        // DB-side ordering replaces the previous JVM sort over the full
-        // audit_log table. Since audit_log grows on every privileged action,
-        // pushing the sort down to SQL avoids a worst-case O(N log N) JVM
-        // pass plus an additional copy of the entity list per request.
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<AuditLog> auditPage = auditLogRepository.findAll(
@@ -126,10 +96,6 @@ public class AuditLogService {
                 PaginationUtils.totalPages(auditPage.getTotalElements(), safeSize));
     }
 
-    /**
-     * Look up a single audit log by its identifier via the repository's
-     * primary-key index.
-     */
     @Transactional(readOnly = true)
     public AuditLogResponse getAuditLog(Long id) {
         AuditLog auditLog = auditLogRepository.findById(id)

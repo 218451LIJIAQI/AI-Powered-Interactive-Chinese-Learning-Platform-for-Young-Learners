@@ -41,25 +41,6 @@ import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
-/**
- * Admin-side workflow for teacher onboarding and oversight:
- * application review, document verification, status changes
- * (PENDING / APPROVED / SUSPENDED), and profile inspection.
- *
- * <h2>Verification flow</h2>
- * <p>{@link TeacherVerificationDocument}s submitted by the teacher
- * are reviewed and recorded as {@link TeacherVerificationReview}
- * rows; the admin's note + decision is the audit trail. Approving a
- * teacher requires every required document to have been reviewed,
- * so the policy is "all green or stays pending".</p>
- *
- * <h2>Status changes</h2>
- * <p>{@link TeacherStatus} transitions affect both the teacher's
- * ability to author content and the visibility of their existing
- * published content; suspension hides existing live content from
- * the public surface while preserving the rows for audit / reactivation.
- * All changes go through {@link AuditLogService}.</p>
- */
 @Service
 public class AdminTeacherManagementService {
 
@@ -112,11 +93,6 @@ public class AdminTeacherManagementService {
                 resolveTeacherSort(sort));
 
         TeacherStatus parsedStatus = parseTeacherStatus(status);
-        // Centralise the trim/lowercase/blank-to-null normalisation through
-        // the shared TextUtils helper. The previous inline ternary repeated
-        // the same pattern that appears in PublicContentService and
-        // AdminContentReviewService, so we now share a single contract that
-        // is unit-tested in TextUtilsTests.
         String normalizedKeyword = TextUtils.trimToOptional(keyword)
                 .map(value -> "%" + value.toLowerCase(Locale.ROOT) + "%")
                 .orElse(null);
@@ -172,12 +148,6 @@ public class AdminTeacherManagementService {
         TeacherProfile teacherProfile = findTeacherProfile(teacherId);
         String normalizedNote = TextUtils.trimToNull(note);
 
-        // Idempotency guard. Without this, an admin double-clicking "Approve"
-        // on an already-APPROVED teacher would write a duplicate
-        // TeacherVerificationReview row, send a duplicate in-app
-        // notification, AND fire a duplicate approval email — the email
-        // duplicate is the worst of these because it is the only side
-        // effect that escapes the application boundary.
         if (teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED) {
             return buildTeacherDetail(teacherProfile);
         }
@@ -225,10 +195,6 @@ public class AdminTeacherManagementService {
             throw new ResponseStatusException(BAD_REQUEST, "Rejection reason is required.");
         }
 
-        // Idempotency guard mirroring approveTeacher: prevents a duplicate
-        // rejection email + notification + audit row + verification-review
-        // row when the admin re-clicks reject on an already-REJECTED
-        // teacher (or refreshes the page mid-action).
         if (teacherProfile.getTeacherStatus() == TeacherStatus.REJECTED) {
             return buildTeacherDetail(teacherProfile);
         }
@@ -288,15 +254,6 @@ public class AdminTeacherManagementService {
                 auditLogRepository.findTop10ByTargetTypeAndTargetIdOrderByCreatedAtDesc("TeacherProfile", teacherProfile.getId()));
     }
 
-    /**
-     * Converts a list of {@link TeacherProfile} entities to list-item DTOs
-     * using exactly 3 batch queries for the entire list (latest document,
-     * latest review, and document count per teacher), regardless of list size.
-     *
-     * <p>The previous per-row approach fired 3 queries per profile, producing
-     * 1 + 3N database round-trips for an N-item page. This method reduces that
-     * to a constant 1 + 3 queries per page request.
-     */
     private List<AdminTeacherListItemResponse> toTeacherListItemsFromPage(List<TeacherProfile> profiles) {
         if (profiles.isEmpty()) {
             return List.of();

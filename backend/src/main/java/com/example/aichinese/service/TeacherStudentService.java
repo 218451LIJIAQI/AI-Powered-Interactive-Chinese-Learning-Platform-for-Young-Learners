@@ -13,8 +13,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -60,8 +58,6 @@ import com.example.aichinese.util.PaginationUtils;
  */
 @Service
 public class TeacherStudentService {
-
-    private static final Logger log = LoggerFactory.getLogger(TeacherStudentService.class);
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LessonProgressRepository lessonProgressRepository;

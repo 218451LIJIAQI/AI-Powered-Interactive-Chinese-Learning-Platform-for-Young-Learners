@@ -17,14 +17,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Shared per-user AI quota state.
- *
- * <p>This row is deliberately database-backed instead of in-memory so two
- * backend instances cannot each grant their own minute/day allowance. The
- * limiter locks the owning {@link User} row first, then updates this counter in
- * a short transaction before the provider HTTP call starts.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor

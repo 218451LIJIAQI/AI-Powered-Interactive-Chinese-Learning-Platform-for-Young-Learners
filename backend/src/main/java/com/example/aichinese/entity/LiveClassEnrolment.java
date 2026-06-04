@@ -20,49 +20,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Student reservation for a {@link LiveClass} session.
- *
- * <p>Two unique constraints govern this entity:</p>
- * <ul>
- *   <li>{@code (live_class_id, student_id)} prevents enrolling the same
- *       student twice in the same class — the second insert idempotently
- *       maps to a friendly "already enrolled" response.</li>
- *   <li>{@code active_enrolment_key} (a generated column populated by
- *       the database to a deterministic key only when the enrolment is
- *       still active) prevents the student from holding multiple active
- *       enrolments that overlap in time. The column is read-only from
- *       Hibernate's perspective.</li>
- * </ul>
- *
- * <p>Lifecycle is governed by
- * {@link com.example.aichinese.entity.enums.LiveClassEnrolmentStatus}:
- * {@code ENROLLED → ATTENDED|MISSED|CANCELLED}. {@link #attendedAt} and
- * {@link #cancelledAt} are stamped by the corresponding transitions and
- * never cleared, providing a complete audit trail.</p>
- *
- * <p>{@link #version} guards against the rare race between an automatic
- * "missed" job and a late "attended" check-in.</p>
- *
- * <h3>Field mutability contract</h3>
- * <ul>
- *   <li>{@link #liveClass} and {@link #student} are mapped
- *       {@code updatable = false}: the row's identity is the
- *       {@code (live_class, student)} pair and re-targeting either
- *       would additionally collide with
- *       {@code uk_live_class_enrolments_live_class_student}. The
- *       re-enrolment-after-cancel flow already keys on the same pair,
- *       so the {@code setLiveClass/setStudent} calls inside
- *       {@code LiveClassService} are guaranteed no-ops at flush time.</li>
- *   <li>{@link #enrolmentStatus}, {@link #enrolledAt},
- *       {@link #cancelledAt}, {@link #attendedAt} are mutated by the
- *       enrolment state-machine; the {@link Version @Version} field
- *       above protects those writes against lost-update races.</li>
- *   <li>{@link #activeEnrolmentKey} is database-managed (a generated
- *       column) and therefore mapped {@code insertable = false,
- *       updatable = false}.</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

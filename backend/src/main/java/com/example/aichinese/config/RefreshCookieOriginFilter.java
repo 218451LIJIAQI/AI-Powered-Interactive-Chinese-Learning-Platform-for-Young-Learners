@@ -2,7 +2,6 @@ package com.example.aichinese.config;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -13,12 +12,10 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -164,12 +161,7 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
     }
 
     private void reject(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpStatus.FORBIDDEN.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        response.setHeader(HttpHeaders.PRAGMA, "no-cache");
         String message = FriendlyErrorMessageResolver.permissionDeniedMessage();
-        objectMapper.writeValue(response.getOutputStream(), ApiResponse.failure(message, List.of(message)));
+        ApiErrorResponseWriter.write(objectMapper, response, HttpStatus.FORBIDDEN, message);
     }
 }

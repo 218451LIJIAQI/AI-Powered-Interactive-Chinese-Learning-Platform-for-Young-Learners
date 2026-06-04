@@ -48,42 +48,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-/**
- * REST surface for every learner-facing AI feature: chat tutor, quiz
- * generator, story generator, vocabulary helper, sentence practice,
- * pronunciation feedback (audio upload), writing feedback (image
- * upload), and the AI-driven learning-recommendation / progress
- * insight endpoints.
- *
- * <h2>Authorization</h2>
- * <p>Endpoints in this controller require {@code hasRole("STUDENT")};
- * administrative AI usage-log and report-management surfaces live under
- * the admin controllers. Per-call ownership is re-checked in
- * {@link com.example.aichinese.service.AiService} so chat-session
- * lookups via {@code findByIdAndUserId} fail with 404 if a learner
- * forges another user's session id.</p>
- *
- * <h2>Token cost & input sanitization</h2>
- * <p>{@link com.example.aichinese.util.AiInputSanitizer} strips
- * prompt-injection / control-token spoofing before any request
- * reaches the LLM; per-feature length caps bound worst-case provider
- * cost. Output token caps come from
- * {@link com.example.aichinese.config.AiProperties#getMaxOutputTokens()}.</p>
- *
- * <h2>Availability gate</h2>
- * <p>{@code GET /availability} reflects
- * {@link com.example.aichinese.service.ai.AiAvailabilityService};
- * when the provider is disabled or mis-configured, individual feature
- * endpoints return a friendly unavailable status so learners never
- * see a raw 500 or fake generated content.</p>
- *
- * <h2>Uploads</h2>
- * <p>Pronunciation audio and writing image uploads go through
- * {@link com.example.aichinese.service.AiFileStorageService} which
- * runs the same defence-in-depth pipeline (extension + content-type
- * + magic byte) as the other multipart endpoints; stored blobs are
- * marked PRIVATE.</p>
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/ai")
@@ -112,13 +76,6 @@ public class AiController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Only students can use learner AI endpoints.")
     })
     public ResponseEntity<ApiResponse<AiAvailabilityResponse>> getAvailability() {
-        // GET is the semantically-correct verb for an idempotent "what is the
-        // current AI provider state?" probe. Cache-Control: private, max-age=30
-        // lets the browser reuse the response across the several AI pages a
-        // student typically opens in a single session without holding the
-        // answer stale across backend config reloads. `private` ensures the
-        // body is never cached by shared proxies since the response is
-        // served behind JWT auth.
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(30, TimeUnit.SECONDS).cachePrivate())
                 .body(ApiResponse.success("AI availability retrieved successfully.", aiService.getAvailability()));

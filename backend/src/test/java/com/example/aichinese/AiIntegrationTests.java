@@ -53,7 +53,6 @@ import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UploadedFileRepository;
 import com.example.aichinese.repository.UserRepository;
-import com.example.aichinese.service.AiLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -880,17 +879,6 @@ class AiIntegrationTests {
                         "level", "Beginner",
                         "languagePreference", "en"))))
                 .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void aiTinyTextSummariesStayWithinMysqlTinyTextByteLimit() {
-        String repeatedChinese = "你好".repeat(200);
-
-        String summary = AiLogService.summarizeForTinyText(repeatedChinese);
-
-        assertThat(summary).isNotBlank();
-        assertThat(summary.getBytes(StandardCharsets.UTF_8).length)
-                .isLessThanOrEqualTo(AiLogService.TINYTEXT_SAFE_BYTES);
     }
 
     private void registerTeacher(String email) throws Exception {

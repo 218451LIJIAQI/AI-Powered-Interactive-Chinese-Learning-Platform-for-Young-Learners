@@ -9,36 +9,7 @@ import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
- * Fail-fast startup guard that refuses to launch the application when
- * the {@code prod} (or {@code production}) profile is active and the AI
- * provider is mis-configured for live use.
- *
- * <p>The platform supports two AI provider modes: an explicit
- * unavailable fail-safe used when no real provider is configured, and
- * a real OpenAI-compatible / DeepSeek endpoint used in production.
- * Without this guard, a mis-configured production deploy would start
- * with AI disabled (because the real-provider toggle defaults to
- * {@code false}) and ship learners a degraded AI experience without
- * any operational alarm. The guard turns that silent failure into a
- * hard startup error.</p>
- *
- * <p>The validation rules are deliberately strict:</p>
- * <ul>
- *   <li>Provider must be one of the supported real providers
- *       ({@code deepseek} / {@code openai-compatible}).</li>
- *   <li>API key must be present and not a known placeholder
- *       ({@code replace-with-...}, {@code changeme}, {@code todo}).</li>
- *   <li>Model name must be present.</li>
- *   <li>Base URL must be a valid HTTPS URL targeting a non-loopback
- *       public host (so a typo of {@code localhost} cannot reach
- *       production by accident).</li>
- * </ul>
- *
- * <p>The constructor calls {@link #validate()} so the guard runs at
- * bean creation time (before any HTTP traffic), and throws
- * {@link IllegalStateException} on failure — Spring Boot stops the
- * application on a constructor failure, which is the desired
- * fail-closed behaviour.</p>
+ * Fail-fast startup guard for production AI provider configuration.
  */
 @Component
 public class AiProductionGuard {
@@ -62,26 +33,21 @@ public class AiProductionGuard {
             return;
         }
         if (!aiProperties.isEnableRealProvider()) {
-            throw new IllegalStateException(
-                    "AI_ENABLE_REAL_PROVIDER must be true when the prod profile is active.");
+            throw new IllegalStateException("AI_ENABLE_REAL_PROVIDER must be true when the prod profile is active.");
         }
 
         String provider = normalizedProvider();
         if (!SUPPORTED_REAL_PROVIDERS.contains(provider)) {
-            throw new IllegalStateException(
-                    "AI_PROVIDER is not supported while AI_ENABLE_REAL_PROVIDER=true and the prod profile is active.");
+            throw new IllegalStateException(requiredMessage("AI_PROVIDER", "is not supported"));
         }
         if (isBlank(aiProperties.getApiKey())) {
-            throw new IllegalStateException(
-                    "AI_API_KEY must be configured when AI_ENABLE_REAL_PROVIDER=true and the prod profile is active.");
+            throw new IllegalStateException(requiredMessage("AI_API_KEY", "must be configured"));
         }
         if (isPlaceholder(aiProperties.getApiKey())) {
-            throw new IllegalStateException(
-                    "AI_API_KEY must not use a placeholder value when AI_ENABLE_REAL_PROVIDER=true and the prod profile is active.");
+            throw new IllegalStateException(requiredMessage("AI_API_KEY", "must not use a placeholder value"));
         }
         if (isBlank(aiProperties.getModelName())) {
-            throw new IllegalStateException(
-                    "AI_MODEL_NAME must be configured when AI_ENABLE_REAL_PROVIDER=true and the prod profile is active.");
+            throw new IllegalStateException(requiredMessage("AI_MODEL_NAME", "must be configured"));
         }
         HttpUrlValidation.requirePublicHttpsUrl(aiProperties.getApiBaseUrl(), "AI_API_BASE_URL", PROD_CONTEXT);
     }
@@ -95,6 +61,10 @@ public class AiProductionGuard {
      */
     private boolean isProductionProfileActive() {
         return environment.acceptsProfiles(PROD_PROFILES);
+    }
+
+    private static String requiredMessage(String property, String requirement) {
+        return property + " " + requirement + " " + PROD_CONTEXT + ".";
     }
 
     private String normalizedProvider() {

@@ -19,24 +19,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Short-story reading activity in the platform practice library.
- *
- * <p>Carries the original Chinese narrative ({@link #storyText}),
- * optional pinyin transliteration ({@link #pinyin}), and optional
- * translation ({@link #translation}). After reading, the learner
- * answers a small set of {@link StoryQuestion} prompts that test
- * comprehension.</p>
- *
- * <p>Shares the activity metadata vocabulary with the other practice
- * library entities for uniform filtering.</p>
- *
- * <p>{@link #createdByUser} is mapped {@code updatable = false}:
- * authorship is captured once at insert time by
- * {@code AdminActivityMapper#toEntity} and intentionally not touched
- * again by the matching {@code applyTo} update method. All other
- * domain fields remain mutable through the admin moderation workflow.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -60,25 +42,14 @@ public class StoryActivity extends BaseEntity {
     @Column(name = "instructions", length = 1000)
     private String instructions;
 
-    /**
-     * Required. The original Mandarin short-story body in simplified Chinese.
-     */
     @Lob
     @Column(name = "story_text", columnDefinition = "LONGTEXT", nullable = false)
     private String storyText;
 
-    /**
-     * Optional Pinyin transliteration shown alongside the story to scaffold
-     * young beginners.
-     */
     @Lob
     @Column(name = "pinyin", columnDefinition = "TEXT")
     private String pinyin;
 
-    /**
-     * Optional English (or Bahasa Melayu) translation displayed under a
-     * "translate" toggle.
-     */
     @Lob
     @Column(name = "translation", columnDefinition = "TEXT")
     private String translation;

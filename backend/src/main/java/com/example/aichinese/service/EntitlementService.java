@@ -23,26 +23,6 @@ import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.PaymentEntitlementRepository;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
-/**
- * Resolves "does this student have paid access to this content?"
- * queries.
- *
- * <h2>Entitlement sources</h2>
- * <p>An entitlement row is created when a payment completes (see
- * {@link PaymentService#completeOrder}) for every purchased
- * {@link OrderItem}. Lessons inside a purchased
- * {@link com.example.aichinese.entity.CoursePackage} or
- * {@link com.example.aichinese.entity.LearningModule} are accessed
- * indirectly — {@link #hasAccessToItem} also checks whether the
- * lesson belongs to a purchased package / module, so we don't need
- * to denormalise every lesson into its own entitlement row.</p>
- *
- * <h2>Used by</h2>
- * <p>{@link StudentLearningAccessService} for lesson / quiz access,
- * {@link LiveLearningAccessService} for live class + recorded video
- * access, and {@link CartService} / {@link CheckoutService} to refuse
- * re-purchase of already-owned items.</p>
- */
 @Service
 public class EntitlementService {
 
@@ -174,14 +154,6 @@ public class EntitlementService {
             String itemType,
             Long itemId,
             String featureKey) {
-        // Idempotency guard. PaymentService.verifyPaymentStatus has a small
-        // window where two concurrent calls can both observe PENDING and both
-        // call markPaymentPaid before either has committed; without this
-        // check the same (order, itemType, itemId, featureKey) tuple would
-        // produce duplicate entitlement rows. Once a row exists for the
-        // tuple we skip the insert — refunds use revokeAccessAfterRefund
-        // which deactivates every row owned by the order, so duplicate
-        // suppression here does not break the refund pipeline.
         String normalisedFeatureKey = featureKey != null && featureKey.isBlank() ? null : featureKey;
         if (paymentEntitlementRepository.existsForOrderItem(order.getId(), itemType, itemId, normalisedFeatureKey)) {
             return;

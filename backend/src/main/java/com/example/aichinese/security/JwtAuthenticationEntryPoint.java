@@ -22,24 +22,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-/**
- * Renders the canonical {@code 401 Unauthorized} JSON envelope when a
- * caller is missing credentials, presents an invalid / expired token,
- * or otherwise fails authentication.
- *
- * <p>Returns the {@link FriendlyErrorMessageResolver#sessionExpiredMessage()}
- * sentinel because almost every 401 from this platform is either
- * "session timed out" or "never signed in"; the front-end uses this
- * uniform message to drive its "redirect to login" behaviour. The
- * deliberate vagueness also prevents user-enumeration attacks (we
- * never disclose whether the email exists or whether the token was
- * malformed vs expired vs signed with a rotated secret).</p>
- *
- * <p>The {@code Cache-Control: no-store} / {@code Pragma: no-cache}
- * pair is required so an intermediate proxy or browser cannot cache
- * the 401 response and replay it for a later legitimate request after
- * the user signs in.</p>
- */
 @Component
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
@@ -54,9 +36,6 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException, ServletException {
-        // 401 entries are normal background noise (token expiry, anonymous browses to a
-        // protected endpoint) and so are logged at DEBUG rather than WARN to avoid
-        // drowning the security ops channel \u2014 access-denied (403) is the elevated event.
         if (log.isDebugEnabled()) {
             log.debug("Unauthenticated request rejected with HTTP 401 [requestId={}, method={}, path={}, cause={}]",
                     requestId(),
@@ -75,7 +54,6 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         objectMapper.writeValue(response.getOutputStream(), body);
     }
 
-    /** Resolves the per-request correlation id, falling back to a literal {@code "-"} when none is bound. */
     private static String requestId() {
         String id = RequestIdHolder.get();
         return id == null ? "-" : id;

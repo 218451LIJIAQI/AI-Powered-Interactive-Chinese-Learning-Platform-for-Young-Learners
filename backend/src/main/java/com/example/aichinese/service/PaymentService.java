@@ -44,39 +44,6 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.model.CommerceCheckout;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * The commerce payment pipeline: order → provider redirect → webhook
- * settlement → entitlement creation.
- *
- * <h2>Lifecycle</h2>
- * <ol>
- *   <li>{@link CheckoutService} creates the {@link Order} and asks
- *       this service to mint a {@link PaymentRecord} in
- *       {@link PaymentStatus#PENDING} state and a provider checkout
- *       URL via {@link PaymentProviderClient}.</li>
- *   <li>The student is redirected; the provider eventually calls
- *       back via {@link StripeWebhookService} with the final status.</li>
- *   <li>On {@code SUCCESS}, this service is re-entered to flip the
- *       payment / order status and have {@link EntitlementService}
- *       create entitlement rows for every {@link OrderItem}, unlocking
- *       the purchased content.</li>
- * </ol>
- *
- * <h2>Idempotency</h2>
- * <p>Webhooks can be re-delivered. Completion is idempotent: only
- * {@code PENDING → SUCCESS} (or {@code FAILED}) transitions write
- * entitlements; subsequent {@code SUCCESS} re-deliveries are no-ops
- * thanks to a status guard inside the same transaction that locks the
- * payment record.</p>
- *
- * <h2>Failure handling</h2>
- * <p>Provider-side failures (timeout, 5xx, invalid response) are
- * surfaced through {@link PaymentProviderClient}'s never-throw
- * contract — the order is marked {@code FAILED} and the student is
- * routed to the failure page without any 500 leaking provider
- * internals.</p>
- */
-
 @Service
 public class PaymentService {
 
@@ -349,14 +316,6 @@ public class PaymentService {
         PaymentRecord lockedPaymentRecord = paymentRecord.getId() == null
                 ? paymentRecord
                 : paymentRecordRepository.findLockedById(paymentRecord.getId()).orElse(paymentRecord);
-        // Idempotency guard: if the payment is no longer PENDING this is a
-        // redundant or invalid replay from a concurrent verifyPaymentStatus
-        // invocation (e.g. the student opened two browser tabs and refreshed
-        // payment status on each). Without this short-circuit we would
-        // double-emit the "Payment successful" notification, re-run the
-        // order/payment update for no reason, and burn provider quota
-        // refreshing teacherEarningService side effects (already idempotent —
-        // only the notification was not).
         if (lockedPaymentRecord.getPaymentStatus() != PaymentStatus.PENDING) {
             return;
         }

@@ -15,19 +15,6 @@ import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 
-/**
- * Reads the editable commerce-tier system settings: default
- * currency (ISO 4217) and platform commission rate.
- *
- * <p>Values live in {@link SystemSetting} and are admin-editable via
- * {@link CommissionService} / the system-settings UI. Defaults
- * ({@code MYR} currency, 20% commission) are applied when the row is
- * missing so a fresh deployment always has a coherent commerce
- * baseline. Validation refuses anything outside [0,1] for commission
- * and anything that does not match the strict three-letter ISO 4217
- * pattern for currency — preventing the rest of the commerce stack
- * from inheriting malformed numeric input.</p>
- */
 @Service
 public class CommerceSettingsService {
 
@@ -78,12 +65,6 @@ public class CommerceSettingsService {
                 });
     }
 
-    /**
-     * Validates and normalises a commission rate to
-     * {@link CommerceMoneyService#RATE_SCALE} decimal places.
-     *
-     * @throws IllegalArgumentException if the rate is outside [0, 1]
-     */
     public BigDecimal normalizeCommissionRate(BigDecimal value) {
         BigDecimal rate = commerceMoneyService.normalizeRate(value);
         if (rate.compareTo(MIN_COMMISSION_RATE) < 0 || rate.compareTo(MAX_COMMISSION_RATE) > 0) {

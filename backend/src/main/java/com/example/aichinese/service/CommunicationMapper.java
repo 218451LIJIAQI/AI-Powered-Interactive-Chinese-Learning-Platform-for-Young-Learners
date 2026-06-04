@@ -12,17 +12,6 @@ import com.example.aichinese.entity.ContentModerationRecord;
 import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.TeacherFeedback;
 
-/**
- * Maps the communication-tier entities ({@link Notification},
- * {@link TeacherFeedback}, {@link ContentModerationRecord},
- * {@link AuditLog}) to their response DTOs.
- *
- * <p>Each mapping defensively null-checks the optional related
- * entities (teacher / student / actor) so a partial row (e.g. an
- * audit record whose actor account has since been deleted) still
- * renders cleanly with {@code null} for missing fields instead of
- * throwing during the response build.</p>
- */
 @Component
 public class CommunicationMapper {
 

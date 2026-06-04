@@ -30,49 +30,7 @@ import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
 
 /**
- * Idempotent reference-data and bootstrap-admin seeder run on every
- * application startup.
- *
- * <p>The seeder is implemented as a {@link CommandLineRunner} (not a
- * Flyway migration) for two reasons:</p>
- * <ol>
- *   <li>The values reference enum types and platform-specific
- *       constants that would be brittle to express in raw SQL.</li>
- *   <li>Each entry uses a {@code findByName(...).orElseGet(create...)}
- *       upsert pattern, so re-running the seeder is a no-op rather
- *       than an error — perfect for the per-startup behaviour Spring
- *       Boot's {@code CommandLineRunner} provides.</li>
- * </ol>
- *
- * <h2>What is seeded</h2>
- * <ul>
- *   <li>{@link com.example.aichinese.entity.Role} — STUDENT / TEACHER /
- *       ADMIN with their human-readable descriptions.</li>
- *   <li>{@link com.example.aichinese.entity.LearningLevel} —
- *       Beginner / Intermediate / Advanced.</li>
- *   <li>{@link com.example.aichinese.entity.LearningCategory} — the
- *       fifteen Chinese-learning categories used by the discovery
- *       catalogue (Pinyin / Tones / Vocabulary / etc.).</li>
- *   <li>{@link com.example.aichinese.entity.Badge} — three starter
- *       achievement tokens plus their icon keys.</li>
- *   <li>{@link com.example.aichinese.entity.SystemSetting} — every
- *       runtime-tunable platform setting (currency, commission rate,
- *       AI safety toggles, etc.). Settings flagged as
- *       {@code editable=true} can later be tweaked from the admin
- *       settings page; non-editable rows are platform constants.</li>
- *   <li>An optional bootstrap admin user, created only when both
- *       {@code DEFAULT_ADMIN_EMAIL} and {@code DEFAULT_ADMIN_PASSWORD}
- *       environment variables are configured. Skipping silently when
- *       either is unset means a fresh deploy can be initialised by an
- *       operator who supplies these via secrets, without forcing
- *       every dev environment to have an admin account.</li>
- * </ul>
- *
- * <p>The whole {@link #run(String...)} method is wrapped in
- * {@link org.springframework.transaction.annotation.Transactional @Transactional}
- * so the entire seed runs atomically — either every reference row is
- * present or none of them are, preventing half-seeded state if the
- * application crashes mid-startup.</p>
+ * Idempotent reference-data and bootstrap-admin seeder.
  */
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -264,7 +222,6 @@ public class DataSeeder implements CommandLineRunner {
         settings.put(key, new SettingSeed(value, description, editable));
     }
 
-    /** Small private tuple capturing the seed payload for one {@link SystemSetting} row. */
     private record SettingSeed(String value, String description, boolean editable) {
     }
 

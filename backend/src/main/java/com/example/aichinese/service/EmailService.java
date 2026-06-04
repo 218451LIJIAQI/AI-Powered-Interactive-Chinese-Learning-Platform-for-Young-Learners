@@ -7,24 +7,6 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * Strategy interface for outbound emails: teacher
- * approval / rejection notices and password reset links.
- *
- * <p>Two implementations exist:</p>
- * <ul>
- *   <li>{@link SmtpEmailService} - talks to a real SMTP server when
- *       {@code app.email.enabled=true}.</li>
- *   <li>{@link NoOpEmailService} - permitted for local and test
- *       environments only; production startup rejects disabled SMTP because
- *       password-reset messages cannot be replaced by in-app notification.</li>
- * </ul>
- *
- * <p>The {@code safe*} default helpers swallow exceptions and log at
- * {@code WARN} so a transient SMTP failure does not abort the
- * triggering business transaction - email delivery is best-effort and runs
- * after the committing transaction.</p>
- */
 public interface EmailService {
 
     Logger log = LoggerFactory.getLogger(EmailService.class);
@@ -71,14 +53,6 @@ public interface EmailService {
         }
     }
 
-    /**
-     * Sends a password-reset email containing the reset link / token.
-     *
-     * <p>{@code resetLink} is the absolute URL the recipient can click to
-     * land on the frontend reset page with the token attached as a query
-     * parameter. {@code rawToken} is included separately so the user can
-     * paste it manually if their mail client mangles the link.</p>
-     */
     default void sendPasswordResetEmail(User recipient, String resetLink, String rawToken) {
         sendEmail(
                 recipient,

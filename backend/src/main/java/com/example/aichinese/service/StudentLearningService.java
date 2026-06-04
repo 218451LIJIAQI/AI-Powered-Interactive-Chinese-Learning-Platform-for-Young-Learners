@@ -63,19 +63,6 @@ import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Student-side read/submit access to lesson playback and quiz attempts.
- *
- * <p>What remains here:
- * <ul>
- *   <li>Lesson playback (live classes + recorded videos surfaced to a student
- *       given their enrolment / package access).</li>
- *   <li>Quiz attempts: load (without correct answers leaking), submit, fetch
- *       past attempts, and pull wrong answers for retry.</li>
- *   <li>Aggregated progress / rewards / badges / points history / streak
- *       passthroughs to {@link StudentLearningProgressService}.</li>
- * </ul>
- */
 @Service
 public class StudentLearningService {
 
@@ -122,10 +109,6 @@ public class StudentLearningService {
         this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
     }
 
-    // ===================================================================
-    // Lesson playback
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public StudentLessonPlayerResponse getLessonPlayer(SecurityUserDetails currentUser, Long lessonId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
@@ -147,10 +130,6 @@ public class StudentLearningService {
                 buildLessonLiveClasses(student, lesson),
                 buildRecordedVideos(student, lesson));
     }
-
-    // ===================================================================
-    // Quiz: load, submit, history
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public PageResponse<StudentQuizSummaryResponse> listQuizzes(
@@ -381,10 +360,6 @@ public class StudentLearningService {
                 .toList();
     }
 
-    // ===================================================================
-    // Aggregations
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public StudentProgressSummaryResponse getProgressSummary(SecurityUserDetails currentUser) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
@@ -415,10 +390,6 @@ public class StudentLearningService {
         return studentLearningProgressService.getStreak(student);
     }
 
-    // ===================================================================
-    // Helpers
-    // ===================================================================
-
     private void ensureQuizAttemptStillAccessible(StudentProfile student, QuizAttempt attempt) {
         if (!isQuizAttemptStillAccessible(student, attempt)) {
             throw new ResponseStatusException(FORBIDDEN, "Paid content is locked until payment is completed.");
@@ -437,10 +408,6 @@ public class StudentLearningService {
     private List<LiveClassResponse> buildLessonLiveClasses(StudentProfile student, Lesson lesson) {
         Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
 
-        // Targeted query so we only pull live classes that target this lesson
-        // or one of its related packages, instead of scanning every live class
-        // in the system and filtering in-memory. The repository owns the empty
-        // package-id branch so callers do not need sentinel ids.
         return liveClassRepository.findRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
                 .filter(liveClass -> liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
                         && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
@@ -470,9 +437,6 @@ public class StudentLearningService {
     private List<RecordedLessonVideoResponse> buildRecordedVideos(StudentProfile student, Lesson lesson) {
         Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
 
-        // Same DB-side filtering pattern as live classes above: ask the
-        // database for only the videos that target this lesson or one of its
-        // related packages. The repository owns the empty package-id branch.
         return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
                 .filter(video -> canAccessVideo(student, video))
                 .map(video -> liveLearningMapper.toRecordedVideoResponse(

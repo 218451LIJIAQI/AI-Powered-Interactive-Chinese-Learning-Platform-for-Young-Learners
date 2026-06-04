@@ -10,8 +10,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -66,36 +64,8 @@ import com.example.aichinese.util.PaginationUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
-/**
- * Admin-side authoring of the six interactive activity types in the
- * platform library: flashcards, matching games, listening exercises,
- * drag-drop activities, tracing exercises, and story activities.
- *
- * <h2>Why "platform library"</h2>
- * <p>These activities used to be lesson-attached. They have been
- * decoupled and now live in an admin-curated library so the same
- * flashcard / story / matching game can be reused across many lessons
- * and surfaced to students by age band, difficulty, and content
- * status. {@link StudentActivityLibraryService} is the read-side
- * companion; this class owns the write side.</p>
- *
- * <h2>Lifecycle</h2>
- * <p>Each activity has its own {@link ContentStatus} (DRAFT /
- * PUBLISHED / ARCHIVED). Only PUBLISHED rows are visible to students;
- * status transitions are gated through {@link AdminActivityStatusUpdateRequest}
- * to keep allowed transitions explicit and auditable.</p>
- *
- * <h2>Authoring invariants</h2>
- * <p>Per-type validation lives in private helpers below — e.g.
- * matching games must have at least one pair, drag-drop activities
- * must define drop targets, story activities require at least one
- * comprehension question. These checks run before commit so a
- * malformed activity never reaches the student library.</p>
- */
 @Service
 public class AdminActivityService {
-
-    private static final Logger log = LoggerFactory.getLogger(AdminActivityService.class);
 
     private static final List<ContentStatus> ALLOWED_TARGET_STATUSES = List.of(
             ContentStatus.DRAFT,
@@ -141,10 +111,6 @@ public class AdminActivityService {
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
     }
-
-    // ===================================================================
-    // Flashcard
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public PageResponse<AdminFlashcardResponse> listFlashcards(ActivityFilter filter, int page, int size, String sort) {
@@ -208,10 +174,6 @@ public class AdminActivityService {
         return flashcardRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Flashcard not found."));
     }
-
-    // ===================================================================
-    // MatchingGame
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public PageResponse<AdminMatchingGameResponse> listMatchingGames(ActivityFilter filter, int page, int size, String sort) {
@@ -295,10 +257,6 @@ public class AdminActivityService {
         return matchingGameItemRepository.saveAll(entities);
     }
 
-    // ===================================================================
-    // ListeningExercise
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public PageResponse<AdminListeningExerciseResponse> listListeningExercises(ActivityFilter filter, int page, int size, String sort) {
         Pageable pageable = buildPageable(page, size, sort);
@@ -362,10 +320,6 @@ public class AdminActivityService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Listening exercise not found."));
     }
 
-    // ===================================================================
-    // TracingExercise
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public PageResponse<AdminTracingExerciseResponse> listTracingExercises(ActivityFilter filter, int page, int size, String sort) {
         Pageable pageable = buildPageable(page, size, sort);
@@ -428,10 +382,6 @@ public class AdminActivityService {
         return tracingExerciseRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Tracing exercise not found."));
     }
-
-    // ===================================================================
-    // DragDropActivity
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDragDropActivityResponse> listDragDropActivities(ActivityFilter filter, int page, int size, String sort) {
@@ -515,10 +465,6 @@ public class AdminActivityService {
         return dragDropItemRepository.saveAll(entities);
     }
 
-    // ===================================================================
-    // StoryActivity
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public PageResponse<AdminStoryActivityResponse> listStoryActivities(ActivityFilter filter, int page, int size, String sort) {
         Pageable pageable = buildPageable(page, size, sort);
@@ -601,17 +547,6 @@ public class AdminActivityService {
         return storyQuestionRepository.saveAll(entities);
     }
 
-    // ===================================================================
-    // Cross-type summary listing
-    // ===================================================================
-
-    /**
-     * Returns a unified, sortable feed across all six activity tables. The
-     * implementation grabs a small slice from each repository, sort-merges
-     * them in-memory by {@code updatedAt} desc, and applies the requested
-     * page window. Suitable for admin UI dashboards on a curated library;
-     * not intended as a hot path.
-     */
     @Transactional(readOnly = true)
     public PageResponse<AdminActivitySummaryResponse> listAllActivities(
             ActivityFilter filter,
@@ -619,8 +554,6 @@ public class AdminActivityService {
             int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        // Fetch enough rows from each table to fill the requested window after
-        // merge. We bound the per-type fetch to keep memory usage predictable.
         int perTypeLimit = Math.min(500, (int) Math.min(((long) safePage + 1L) * safeSize, 500L));
         Pageable slice = PageRequest.of(0, perTypeLimit, Sort.by(Sort.Order.desc("updatedAt")));
 
@@ -648,10 +581,6 @@ public class AdminActivityService {
         int totalPages = PaginationUtils.totalPages(total, safeSize);
         return new PageResponse<>(windowed, safePage, safeSize, total, totalPages);
     }
-
-    // ===================================================================
-    // Generic helpers
-    // ===================================================================
 
     private User findActor(SecurityUserDetails currentUser) {
         return userRepository.findById(currentUser.getUserId())
@@ -681,7 +610,6 @@ public class AdminActivityService {
         Sort.Direction direction = parts.length > 1 && parts[1].trim().equalsIgnoreCase("asc")
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
-        // Whitelist the sortable columns to prevent abuse via random fields.
         String safeField = switch (field) {
             case "title", "createdAt", "updatedAt", "hskLevel", "ageBand",
                     "difficulty", "contentStatus", "xpReward" -> field;
@@ -694,12 +622,6 @@ public class AdminActivityService {
         return new PageResponse<>(items, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
-    /**
-     * Builds a JPA {@link Specification} matching every non-null field on the
-     * supplied {@link ActivityFilter}. All six activity entities share the
-     * same metadata column names so the spec can be parameterised by entity
-     * type with no per-type customisation.
-     */
     private <T> Specification<T> filterSpec(ActivityFilter filter) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -737,11 +659,6 @@ public class AdminActivityService {
         };
     }
 
-    /**
-     * Immutable filter aggregating every query parameter the admin endpoints
-     * accept. Use {@link #empty()} as the {@code null}-safe default when no
-     * filter was supplied.
-     */
     public record ActivityFilter(
             ContentStatus status,
             Integer hskLevel,

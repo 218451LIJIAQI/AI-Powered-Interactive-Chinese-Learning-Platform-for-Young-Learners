@@ -45,62 +45,14 @@ import com.example.aichinese.util.RequestIdHolder;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 
-/**
- * Centralised, never-leaking translation layer from Spring / JPA /
- * security / multipart exceptions into the platform's uniform
- * {@link ApiResponse} envelope.
- *
- * <h2>Why a single class</h2>
- * <p>Every controller in the platform returns {@link ApiResponse}; every
- * thrown exception must therefore land here so the front-end (and any
- * future API client) sees the same
- * {@code { success, message, data, errors, fieldErrors, requestId }} shape
- * regardless of what failed deep in the stack. The order of the
- * handlers below is deliberately specific-to-generic, so a typed handler
- * (e.g. {@link MaxUploadSizeExceededException}) always wins over the
- * catch-all {@link Exception} handler at the bottom.</p>
- *
- * <h2>Privacy & log hygiene</h2>
- * <p>Every log line records only the exception class name (via
- * {@link #rootCauseClassName(Throwable)}) and the current request id
- * (via {@link RequestIdHolder}); raw exception messages are never
- * logged here because they often contain the user-supplied input that
- * triggered the failure (an email, a Stripe id, a path token). The
- * client-visible message is filtered through
- * {@link FriendlyErrorMessageResolver}, which intentionally collapses
- * many error variants into a small set of safe canonical messages so
- * we never expose stack-trace-style internals to the browser.</p>
- *
- * <h2>Validation handlers</h2>
- * <p>Validation responses preserve the coarse top-level
- * {@code "validation failed"} message for every client. For authenticated
- * form routes, the envelope also includes a safe {@code fieldErrors} map so
- * the UI can anchor messages next to fields. Public authentication routes
- * keep that map empty to avoid account-enumeration and credential-policy
- * hints.</p>
- *
- * <h2>Advice ordering</h2>
- * <p>The class is annotated {@link Order @Order(HIGHEST_PRECEDENCE)} so
- * that any future {@link org.springframework.web.bind.annotation.ControllerAdvice}
- * added to the platform cannot accidentally pre-empt the centralised
- * envelope translation — every controller-thrown exception must flow
- * through here so the wire format never diverges.</p>
- */
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    /** Sentinel returned when the cause chain cannot be inspected. */
     private static final String UNKNOWN_CAUSE = "unknown";
 
-    /**
-     * Hard cap on cause-chain traversal depth. Realistic JVM exceptions
-     * never nest beyond a handful of levels; this cap exists purely to
-     * defend against pathological or self-referential cause chains that
-     * would otherwise turn an exception handler into an infinite loop.
-     */
     private static final int MAX_CAUSE_DEPTH = 20;
 
     private static final String REQUEST_FIELD = "request";
@@ -198,14 +150,6 @@ public class GlobalExceptionHandler {
         return badRequest(FriendlyErrorMessageResolver.invalidRequestMessage());
     }
 
-    /**
-     * Catches missing-required-parameter / missing-path-variable /
-     * missing-required-header / missing-required-cookie failures from
-     * Spring's request binder. Without this handler those exceptions
-     * would fall through to the catch-all {@code Exception} branch and
-     * be reported as HTTP 500, which would mis-attribute a client error
-     * as a server fault.
-     */
     @ExceptionHandler(ServletRequestBindingException.class)
     public ResponseEntity<ApiResponse<Void>> handleServletRequestBindingException(
             ServletRequestBindingException exception) {
@@ -278,10 +222,6 @@ public class GlobalExceptionHandler {
                 .body(failure(FriendlyErrorMessageResolver.serverUnavailableMessage()));
     }
 
-    /**
-     * DRY helper for the common "400 Bad Request with this canonical
-     * message" response shape used by half the handlers in this class.
-     */
     private static ResponseEntity<ApiResponse<Void>> badRequest(String message) {
         return ResponseEntity.badRequest().body(failure(message));
     }
@@ -293,13 +233,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.failure(message, List.of(message), safeFieldErrors));
     }
 
-    /**
-     * Builds the canonical failure envelope used by every handler:
-     * a non-success {@link ApiResponse} with the same message both at
-     * the top level and inside the single-element {@code errors} list,
-     * so the front-end can render either field at its preferred location
-     * without conditional null checks.
-     */
     private static ApiResponse<Void> failure(String message) {
         return ApiResponse.failure(message, List.of(message));
     }
@@ -441,18 +374,6 @@ public class GlobalExceptionHandler {
         return path == null || !PUBLIC_AUTH_VALIDATION_PATHS.contains(path);
     }
 
-    /**
-     * Walks the {@link Throwable#getCause()} chain to look for an
-     * {@link MaxUploadSizeExceededException} buried inside a generic
-     * {@link MultipartException} wrapper — Tomcat / Jetty sometimes wrap
-     * the size violation in a {@code MultipartException} rather than
-     * surfacing the typed exception directly.
-     *
-     * <p>The traversal is bounded by both an {@link IdentityHashMap}
-     * cycle guard and {@link #MAX_CAUSE_DEPTH} so a pathological or
-     * self-referential cause chain cannot turn this helper into an
-     * infinite loop.</p>
-     */
     private static boolean isUploadTooLarge(Throwable exception) {
         Set<Throwable> visited = newIdentitySet();
         Throwable current = exception;
@@ -466,16 +387,6 @@ public class GlobalExceptionHandler {
         return false;
     }
 
-    /**
-     * Returns the simple class name of the innermost (root) cause in the
-     * exception chain. Used in logs in place of the raw exception message,
-     * which can echo user input back into the log file and risk PII leaks.
-     *
-     * <p>The traversal is bounded by both an {@link IdentityHashMap}
-     * cycle guard and {@link #MAX_CAUSE_DEPTH} so a pathological or
-     * self-referential cause chain cannot turn this helper into an
-     * infinite loop.</p>
-     */
     private static String rootCauseClassName(Throwable exception) {
         if (exception == null) {
             return UNKNOWN_CAUSE;
@@ -491,25 +402,10 @@ public class GlobalExceptionHandler {
         return root.getClass().getSimpleName();
     }
 
-    /**
-     * Allocates a small identity-equality {@link Set} suitable for
-     * tracking already-visited exceptions during cause-chain traversal.
-     * Identity comparison (via {@link IdentityHashMap}) is required
-     * because two distinct exception instances may legitimately share
-     * {@link Object#equals(Object) equals} / {@link Object#hashCode()}
-     * implementations and we only want to detect literal cycles.
-     */
     private static Set<Throwable> newIdentitySet() {
         return java.util.Collections.newSetFromMap(new IdentityHashMap<>(8));
     }
 
-    /**
-     * Resolves the current request's correlation id (set by
-     * {@code RequestIdFilter}) for inclusion in log lines, falling back
-     * to a literal {@code "-"} when no id is available (e.g. exceptions
-     * thrown outside a normal HTTP request lifecycle such as scheduled
-     * jobs).
-     */
     private static String requestId() {
         String id = RequestIdHolder.get();
         return id == null ? "-" : id;

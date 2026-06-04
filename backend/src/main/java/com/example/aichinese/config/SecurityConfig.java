@@ -28,65 +28,8 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
 
 /**
  * Central Spring Security configuration.
- *
- * <h2>Filter chain order</h2>
- * <p>{@link RequestIdFilter} is a highest-precedence servlet filter,
- * before Spring Security itself, so even early upload-size rejections
- * carry a correlation id. {@link JwtAuthenticationFilter} is registered
- * only inside the Spring Security chain, before
- * {@link UsernamePasswordAuthenticationFilter}, where it resolves bearer
- * tokens into authenticated principals.</p>
- *
- * <h2>Authorisation policy</h2>
- * <p>Routes are matched in declaration order; the first match wins. The
- * policy is intentionally <em>default-deny</em>: every endpoint that is
- * not explicitly listed in {@code authorizeHttpRequests} requires
- * authentication, so a developer adding a new controller cannot
- * accidentally publish it as public.</p>
- *
- * <p>Public surfaces are kept tightly scoped:</p>
- * <ul>
- *   <li>{@code /api/v1/health} and {@code /actuator/health(/**)} —
- *       simple local health checks.</li>
- *   <li>{@code /v3/api-docs(/**)} and {@code /swagger-ui(/**)} — OpenAPI
- *       discovery for local development and FYP demonstration.</li>
- *   <li>Auth bootstrap routes ({@code register}, {@code login},
- *       {@code forgot-password}, {@code reset-password}) and the public
- *       Stripe webhook endpoint.</li>
- *   <li>{@code GET /api/v1/public/**} for the discovery catalog.</li>
- * </ul>
- *
- * <p>Role-scoped routes ({@code /api/v1/students/**},
- * {@code /api/v1/teachers/**}, {@code /api/v1/admin/**}) use the
- * {@code "ROLE_"} prefix that {@link com.example.aichinese.security.SecurityUserDetails}
- * applies; {@code @PreAuthorize} on individual controllers can layer
- * finer-grained checks on top.</p>
- *
- * <h2>Security headers</h2>
- * <ul>
- *   <li>CSRF: disabled — state-changing API requests are authenticated
- *       by short-lived bearer access tokens, while the HttpOnly refresh
- *       cookie is scoped to {@code /api/v1/auth}, uses SameSite by
- *       default, and can only rotate sessions on the refresh endpoint.</li>
- *   <li>Sessions: stateless — Spring Security never creates an HTTP
- *       session; request authentication comes from the bearer access token.</li>
- *   <li>{@code X-Content-Type-Options: nosniff} — prevents MIME sniffing.</li>
- *   <li>{@code X-Frame-Options: DENY} — clickjacking defence.</li>
- *   <li>{@code Referrer-Policy: strict-origin-when-cross-origin} —
- *       trims referrer leakage.</li>
- *   <li>{@code Permissions-Policy} — disables geolocation / camera /
- *       microphone / payment / USB; the platform never asks for any of
- *       these.</li>
- * </ul>
- *
- * <h2>Property bindings</h2>
- * <p>{@code @EnableConfigurationProperties} is co-located here (rather
- * than on individual property classes) so a single annotation lists
- * every {@code @ConfigurationProperties} record / class consumed by the
- * security and platform layer — making it trivial to audit which
- * settings are environment-driven.</p>
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
 @EnableConfigurationProperties({
         SecurityProperties.class,
@@ -99,29 +42,12 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
 })
 public class SecurityConfig {
 
-    /**
-     * BCrypt cost factor (work factor / log2 of rounds). The Spring default
-     * is 10 (\u22481024 rounds); OWASP 2023 guidance recommends \u226512 for
-     * new deployments. The encoder transparently verifies older hashes
-     * recorded at strength 10, so bumping this is backward-compatible
-     * with existing user rows.
-     */
     private static final int BCRYPT_STRENGTH = 12;
 
-    /**
-     * Permissions-Policy header value. Disables every browser feature the
-     * platform never asks for, so a compromised page hosted under the
-     * platform's origin cannot prompt the learner for sensitive sensors.
-     */
     private static final String PERMISSIONS_POLICY =
             "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
                     + "accelerometer=(), gyroscope=(), magnetometer=(), serial=()";
 
-    /**
-     * Restrictive browser policy for any same-origin UI or API error content
-     * served by this application. A frontend served by a separate web server
-     * must send the same policy at that delivery edge.
-     */
     private static final String CONTENT_SECURITY_POLICY =
             "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
                     + "form-action 'self'; img-src 'self' data: https:; font-src 'self' data:; "
@@ -155,9 +81,6 @@ public class SecurityConfig {
                         .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
                         .referrerPolicy(ref -> ref.policy(
                                 ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                        // HSTS: one year, include subdomains, request preload-list inclusion.
-                        // Spring's HstsHeaderWriter only emits this header on HTTPS requests by
-                        // default, so dev/preview HTTP traffic stays unaffected.
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .preload(true)
@@ -167,21 +90,10 @@ public class SecurityConfig {
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                         .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
-                        // The initial controller request is still role protected below.
-                        // Permit framework redispatch after an authenticated SSE request
-                        // has started so the completed response is not rejected after
-                        // bytes have already been written to the client.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/v1/health").permitAll()
-                        // Minimal local health checks.
-                        // Only the curated subset configured under management.endpoints.web.exposure
-                        // (health + info) is mounted; everything else is gone from the runtime.
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                         .permitAll()
-                        // SpringDoc surfaces: machine-readable OpenAPI JSON and the Swagger UI
-                        // bundle. Both are read-only and intentionally accessible without auth so
-                        // the FYP demo and local development workflow can inspect the API
-                        // contract without extra tooling.
                         .requestMatchers(
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",
@@ -206,10 +118,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/teachers/**").hasRole("TEACHER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        // Default-deny: any future endpoint that is not explicitly listed
-                        // above must be authenticated. This prevents accidentally exposing
-                        // a newly-added route as public when the developer forgets to
-                        // configure an explicit rule.
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

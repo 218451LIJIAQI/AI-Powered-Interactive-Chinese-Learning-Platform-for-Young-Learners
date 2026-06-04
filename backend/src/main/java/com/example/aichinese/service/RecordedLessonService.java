@@ -26,22 +26,6 @@ import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Teacher-facing CRUD for recorded lesson videos plus student-facing
- * playback access to the same.
- *
- * <p>Teachers can attach either an uploaded MP4 / WEBM / MOV via
- * {@link RecordedVideoStorageService} or an external URL
- * ({@link RecordedVideoSourceType#EXTERNAL_URL}). Drafts are private
- * to the owning teacher; once {@link ContentStatus#PUBLISHED} the
- * video is gated by {@link LiveLearningAccessService} so only students
- * with the right paid / free access can watch.</p>
- *
- * <p>Every state transition (create / publish / delete) is audited
- * via {@link AuditLogService} and notifications are dispatched to the
- * enrolled students when a new video drops on a lesson they have
- * access to.</p>
- */
 @Service
 public class RecordedLessonService {
 
@@ -165,8 +149,6 @@ public class RecordedLessonService {
     @Transactional
     public RecordedLessonVideoResponse archiveRecordedVideo(SecurityUserDetails currentUser, Long lessonId, Long videoId) {
         RecordedLessonVideo video = liveLearningAccessService.requireTeacherOwnedRecordedVideo(currentUser, lessonId, videoId);
-        // Idempotency guard: a teacher double-clicking the archive button on
-        // an already-inactive video must not produce a duplicate audit-log row.
         if (!video.isActive()) {
             return toTeacherResponse(video);
         }

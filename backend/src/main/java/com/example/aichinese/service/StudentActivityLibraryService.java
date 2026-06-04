@@ -61,45 +61,6 @@ import com.example.aichinese.util.PaginationUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
-/**
- * Read-only library access and completion bookkeeping for the six
- * platform-managed activity types from the student's point of view.
- *
- * <ul>
- *   <li>Listing and detail endpoints expose only activities in
- *       {@link ContentStatus#PUBLISHED} state — drafts and archived rows are
- *       filtered out at the database level.</li>
- *   <li>Completion endpoints delegate XP bookkeeping to
- *       {@link StudentLearningProgressService#completePlatformActivity}, so
- *       the streak / dedupe logic stays in one place.</li>
- *   <li>Audit fields (admin creator id, timestamps) are intentionally NOT
- *       exposed to students.</li>
- * </ul>
- *
- * <h2>Read-side of the admin-managed platform activity library</h2>
- * <p>The six
- * interactive activity types ({@link ActivityType}) filtered down to
- * what the current student is allowed to see.
- *
- * <h2>Visibility</h2>
- * <p>Only PUBLISHED activities are returned. Each activity exposes an
- * {@link AgeBand} and {@link ActivityDifficulty} so the catalogue can
- * pre-filter to age-appropriate content; admins control this via
- * {@link AdminActivityService}.</p>
- *
- * <h2>Completion semantics</h2>
- * <p>Activity completion is decoupled from lesson progress —
- * completing a platform activity awards XP / streak credit via
- * {@link StudentLearningProgressService#completePlatformActivity}
- * but does not advance lesson progress, since these are
- * platform-library rather than lesson-attached items.</p>
- *
- * <h2>Security boundary</h2>
- * <p>Student-facing DTOs intentionally omit any answer-key fields
- * (e.g. correct match-pair identifiers, story question correct
- * answers) so the response cannot be inspected to cheat; those fields
- * only exist in {@link AdminActivityService}'s admin DTOs.</p>
- */
 @Service
 public class StudentActivityLibraryService {
 
@@ -154,10 +115,6 @@ public class StudentActivityLibraryService {
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.studentLearningProgressService = Objects.requireNonNull(studentLearningProgressService, "studentLearningProgressService");
     }
-
-    // ===================================================================
-    // Library feed (cross-type)
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public PageResponse<StudentActivitySummaryResponse> listLibrary(
@@ -258,10 +215,6 @@ public class StudentActivityLibraryService {
         return new PageResponse<>(windowed, safePage, safeSize, totalItems, totalPages);
     }
 
-    // ===================================================================
-    // Detail / completion: Flashcard
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public StudentFlashcardResponse getFlashcard(SecurityUserDetails currentUser, Long id) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
@@ -319,10 +272,6 @@ public class StudentActivityLibraryService {
         }
         return entity.getFrontText() == null ? "(untitled)" : entity.getFrontText();
     }
-
-    // ===================================================================
-    // Detail / completion: MatchingGame
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public StudentMatchingGameResponse getMatchingGame(SecurityUserDetails currentUser, Long id) {
@@ -382,10 +331,6 @@ public class StudentActivityLibraryService {
                 item.getSortOrder());
     }
 
-    // ===================================================================
-    // Detail / completion: ListeningExercise
-    // ===================================================================
-
     @Transactional(readOnly = true)
     public StudentListeningExerciseResponse getListeningExercise(SecurityUserDetails currentUser, Long id) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
@@ -429,10 +374,6 @@ public class StudentActivityLibraryService {
         ensurePublished(entity.getContentStatus(), "Listening exercise");
         return entity;
     }
-
-    // ===================================================================
-    // Detail / completion: TracingExercise
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public StudentTracingExerciseResponse getTracingExercise(SecurityUserDetails currentUser, Long id) {
@@ -480,10 +421,6 @@ public class StudentActivityLibraryService {
         ensurePublished(entity.getContentStatus(), "Tracing exercise");
         return entity;
     }
-
-    // ===================================================================
-    // Detail / completion: DragDropActivity
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public StudentDragDropActivityResponse getDragDropActivity(SecurityUserDetails currentUser, Long id) {
@@ -542,10 +479,6 @@ public class StudentActivityLibraryService {
                 item.getImageUrl(),
                 item.getSortOrder());
     }
-
-    // ===================================================================
-    // Detail / completion: StoryActivity
-    // ===================================================================
 
     @Transactional(readOnly = true)
     public StudentStoryActivityResponse getStoryActivity(SecurityUserDetails currentUser, Long id) {
@@ -608,13 +541,7 @@ public class StudentActivityLibraryService {
                 question.getSortOrder());
     }
 
-    // ===================================================================
-    // Helpers
-    // ===================================================================
-
     private void ensurePublished(ContentStatus status, String label) {
-        // Students must never see drafts or archived rows. Returning 404
-        // (instead of 403) keeps draft-row existence opaque to the client.
         if (status != ContentStatus.PUBLISHED) {
             throw new ResponseStatusException(NOT_FOUND, label + " is not available.");
         }
@@ -667,11 +594,6 @@ public class StudentActivityLibraryService {
             LocalDateTime updatedAt) {
     }
 
-    /**
-     * Spec that always forces {@code contentStatus = PUBLISHED} so students
-     * never see drafts or archived rows, then composes the optional user
-     * filter on top.
-     */
     private <T> Specification<T> filterSpec(ActivityFilter filter) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -704,11 +626,6 @@ public class StudentActivityLibraryService {
         };
     }
 
-    /**
-     * Student-facing filter, narrower than the admin one: students may not
-     * filter by {@code status} (only PUBLISHED is ever returned) or by
-     * {@code createdByUserId} (creator identity is internal).
-     */
     public record ActivityFilter(
             Integer hskLevel,
             AgeBand ageBand,
@@ -717,10 +634,6 @@ public class StudentActivityLibraryService {
             String tag,
             String keyword,
             ActivityType type) {
-
-        public static ActivityFilter empty() {
-            return new ActivityFilter(null, null, null, null, null, null, null);
-        }
 
         public static ActivityFilter of(
                 Optional<Integer> hskLevel,

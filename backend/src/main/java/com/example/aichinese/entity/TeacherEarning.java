@@ -20,52 +20,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Commission ledger row attributing a single {@link OrderItem} to a
- * {@link TeacherProfile}.
- *
- * <p>Created by {@code TeacherEarningService} when an order moves to
- * {@link com.example.aichinese.entity.enums.PaymentStatus#PAID}.
- * Exactly one earning row exists per order item (enforced by the
- * unique constraint on {@code order_item_id}) so a refund can
- * idempotently flip {@link #earningStatus} from {@code AVAILABLE} to
- * {@code REFUNDED} without race conditions.</p>
- *
- * <p>The three monetary fields capture the full commission split at
- * settlement time:</p>
- * <ul>
- *   <li>{@link #grossAmount} — what the student paid for this line.</li>
- *   <li>{@link #commissionAmount} — the platform's cut (configured per
- *       teacher tier; defaults from {@code SystemSetting}).</li>
- *   <li>{@link #netAmount} — what the teacher is entitled to:
- *       {@code grossAmount - commissionAmount}.</li>
- * </ul>
- *
- * <p>All three are stored explicitly (rather than computed from a
- * commission rate) so that retroactive rate changes do not corrupt
- * historical earnings.</p>
- *
- * <p>{@link #version} guards against the rare race between a refund
- * and a payout calculation reading the same row.</p>
- *
- * <h3>Field mutability contract</h3>
- *
- * <p>The three monetary fields plus the identity FKs are mapped
- * {@code updatable = false}, making the Javadoc claim above
- * ("retroactive rate changes do not corrupt historical earnings")
- * a technical guarantee rather than a documentation promise.</p>
- *
- * <ul>
- *   <li><b>Immutable</b>: {@link #teacher}, {@link #orderItem},
- *       {@link #grossAmount}, {@link #commissionAmount},
- *       {@link #netAmount}. The single legitimate write path is
- *       {@code TeacherEarningService#createEarning}.</li>
- *   <li><b>Mutable</b>: {@link #earningStatus} only, flipped by
- *       {@code RefundService} from {@code AVAILABLE} to
- *       {@code REFUNDED} during clawback. Guarded by
- *       {@link Version @Version} above.</li>
- * </ul>
- */
 @Getter
 @Setter
 @NoArgsConstructor

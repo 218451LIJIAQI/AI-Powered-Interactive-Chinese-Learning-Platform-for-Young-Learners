@@ -9,9 +9,6 @@ import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 
-/**
- * Cached read boundary for the frequently evaluated content-safety feature flag.
- */
 @Service
 public class ContentSafetySettingsReader {
 

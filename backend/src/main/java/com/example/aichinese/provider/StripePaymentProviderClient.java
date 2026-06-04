@@ -35,15 +35,6 @@ import com.example.aichinese.entity.OrderItem;
 import com.example.aichinese.entity.enums.PaymentStatus;
 import com.example.aichinese.service.model.CommerceCheckout;
 
-/**
- * Real-money {@link PaymentProviderClient} backed by Stripe Checkout's REST API.
- *
- * <p>The adapter intentionally keeps Stripe details at the provider boundary:
- * request bodies are form encoded here, provider errors are translated to
- * unavailable results, and no raw Stripe exception text is returned to callers.
- * Runtime URL and amount validation mirror the startup production guard so a
- * bad configuration fails closed even outside the {@code prod} profile.</p>
- */
 @Component
 public class StripePaymentProviderClient implements PaymentProviderClient {
 
@@ -64,10 +55,6 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
     private static final Pattern CURRENCY_CODE_PATTERN = Pattern.compile("^[A-Za-z]{3}$");
     private static final Pattern PROVIDER_REFERENCE_PATTERN = Pattern.compile("^cs_[A-Za-z0-9_]+$");
 
-    /**
-     * Stripe currencies whose smallest representable unit equals the currency
-     * itself. Review this list when adding a new commerce currency.
-     */
     private static final Set<String> ZERO_DECIMAL_CURRENCIES = Set.of(
             "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
             "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF");

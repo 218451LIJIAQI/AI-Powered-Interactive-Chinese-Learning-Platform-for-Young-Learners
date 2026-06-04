@@ -6,26 +6,7 @@ import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Strongly-typed binding for the {@code app.payment.*} configuration block.
- *
- * <p>Captures the success / cancel redirect URLs, the provider
- * selector, and the Stripe-specific credentials. The compact
- * constructor performs eager validation:</p>
- * <ul>
- *   <li>Success / cancel / Stripe-API URLs are validated as absolute
- *       HTTP(S) URLs (with sane local-development defaults).</li>
- *   <li>Provider is normalised to one of {@code mock} / {@code no-op} /
- *       {@code stripe}; an unrecognised value fails fast at startup.</li>
- *   <li>Stripe credentials are trimmed; non-empty / live-key checks
- *       happen later in {@link PaymentProductionGuard} so the
- *       defaults stay valid for dev profiles.</li>
- * </ul>
- *
- * <p>Production gates ({@code sk_live_} prefix on the API key,
- * exact {@code api.stripe.com} hostname, etc.) live in
- * {@link PaymentProductionGuard} rather than here so dev profiles can
- * still bind {@code sk_test_...} values without failing the property
- * record's compact constructor.</p>
+ * Strongly typed binding for the {@code app.payment.*} configuration block.
  */
 @ConfigurationProperties(prefix = "app.payment")
 public record PaymentProperties(
@@ -54,8 +35,6 @@ public record PaymentProperties(
     }
 
     private static String normalize(String value, String defaultValue) {
-        // strip() over trim() so a CJK fullwidth space pasted from an editor
-        // does not silently mask a configured URL.
         return value == null || value.isBlank() ? defaultValue : value.strip();
     }
 
@@ -79,15 +58,6 @@ public record PaymentProperties(
         return normalized;
     }
 
-    /**
-     * Diagnostic representation that masks both Stripe secrets. The
-     * auto-generated record toString would emit them verbatim, so a stray
-     * {@code log.info(paymentProperties)} shipping to production would
-     * leak the live API key and webhook signing secret. We report only
-     * the presence flag and \u2014 for the API key only \u2014 the
-     * {@code sk_live_} / {@code sk_test_} prefix because the live/test
-     * distinction is operationally useful at a glance.
-     */
     @Override
     public String toString() {
         return "PaymentProperties[successUrl=" + successUrl

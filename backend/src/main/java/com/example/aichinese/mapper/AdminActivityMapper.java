@@ -44,13 +44,6 @@ import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.util.TextUtils;
 
-/**
- * Translates between the platform-managed activity entities and the
- * {@code AdminXxx} DTOs used by the admin REST endpoints. Centralising the
- * conversion (including tag list ↔ comma-separated string and child-item
- * sorting) keeps {@link com.example.aichinese.service.AdminActivityService}
- * focused on business logic and audit.
- */
 @Component
 public class AdminActivityMapper {
 
@@ -64,16 +57,6 @@ public class AdminActivityMapper {
             Comparator.comparing(StoryQuestion::getSortOrder, Comparator.nullsLast(Integer::compareTo))
                     .thenComparing(StoryQuestion::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
 
-    // ---------- Tag helpers ----------
-
-    /**
-     * Trims, deduplicates and joins a tag list into the comma-separated
-     * representation persisted in the {@code tags} column. Returns
-     * {@code null} (rather than the empty string) when the list yields
-     * no usable tags so the underlying column stays {@code NULL} instead
-     * of holding a stray {@code ""} that would falsely advertise the row
-     * as tagged.
-     */
     private String joinTags(List<String> tags) {
         if (tags == null || tags.isEmpty()) {
             return null;
@@ -87,12 +70,6 @@ public class AdminActivityMapper {
         return joined.isEmpty() ? null : joined;
     }
 
-    /**
-     * Inverse of {@link #joinTags}: parses a stored CSV tag string back
-     * into the per-tag list shape the API exposes. Returns an immutable
-     * empty list when the input is {@code null} / blank so callers can
-     * iterate the result unconditionally.
-     */
     private List<String> splitTags(String tags) {
         if (tags == null || tags.isBlank()) {
             return List.of();
@@ -118,8 +95,6 @@ public class AdminActivityMapper {
     private static Long creatorId(User user) {
         return user == null ? null : user.getId();
     }
-
-    // ---------- Flashcard ----------
 
     public Flashcard toEntity(AdminFlashcardRequest request, User admin) {
         Flashcard entity = new Flashcard();
@@ -188,8 +163,6 @@ public class AdminActivityMapper {
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
-
-    // ---------- MatchingGame ----------
 
     public MatchingGame toEntity(AdminMatchingGameRequest request, User admin) {
         MatchingGame entity = new MatchingGame();
@@ -268,8 +241,6 @@ public class AdminActivityMapper {
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
-    // ---------- ListeningExercise ----------
-
     public ListeningExercise toEntity(AdminListeningExerciseRequest request, User admin) {
         ListeningExercise entity = new ListeningExercise();
         entity.setCreatedByUser(admin);
@@ -321,8 +292,6 @@ public class AdminActivityMapper {
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
-
-    // ---------- TracingExercise ----------
 
     public TracingExercise toEntity(AdminTracingExerciseRequest request, User admin) {
         TracingExercise entity = new TracingExercise();
@@ -381,8 +350,6 @@ public class AdminActivityMapper {
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
-
-    // ---------- DragDropActivity ----------
 
     public DragDropActivity toEntity(AdminDragDropActivityRequest request, User admin) {
         DragDropActivity entity = new DragDropActivity();
@@ -460,8 +427,6 @@ public class AdminActivityMapper {
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
-
-    // ---------- StoryActivity ----------
 
     public StoryActivity toEntity(AdminStoryActivityRequest request, User admin) {
         StoryActivity entity = new StoryActivity();
@@ -546,25 +511,6 @@ public class AdminActivityMapper {
                 entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
-    // ---------- Common summary helper ----------
-
-    /**
-     * Type-safe shared assembler for {@link AdminActivitySummaryResponse}.
-     *
-     * <p>Replaces the previous reflection-style {@code instanceof} cascade
-     * over a generic {@code Object} entity — each {@code toSummary(...)}
-     * overload now passes its typed accessors directly, so the compiler
-     * verifies at compile-time that every supported activity entity
-     * exposes the full shared metadata vocabulary. Adding a new activity
-     * type requires nothing more than a new typed {@code toSummary(...)}
-     * method (and its corresponding {@link ActivityType} enum value);
-     * forgetting any of the metadata fields is now a compile error
-     * rather than a silent {@code null}.</p>
-     *
-     * <p>The {@code createdBy} parameter is read once and split into id
-     * and display-name fields so callers do not pay for two lazy-load
-     * round-trips against the {@code User} association.</p>
-     */
     private AdminActivitySummaryResponse buildSummary(
             Long id,
             ActivityType type,

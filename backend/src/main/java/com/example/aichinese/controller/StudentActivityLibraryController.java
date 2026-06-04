@@ -27,12 +27,6 @@ import com.example.aichinese.service.StudentActivityLibraryService.ActivityFilte
 
 import jakarta.validation.constraints.Size;
 
-/**
- * Read-only student access to the admin-managed activity library, plus an
- * idempotent completion endpoint per activity type. Mounted under
- * {@code /api/v1/students/activities}; secured by
- * {@code hasRole("STUDENT")} via the global security configuration.
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/students/activities")
@@ -43,10 +37,6 @@ public class StudentActivityLibraryController {
     public StudentActivityLibraryController(StudentActivityLibraryService studentActivityLibraryService) {
         this.studentActivityLibraryService = studentActivityLibraryService;
     }
-
-    // ===================================================================
-    // Library feed (cross-type)
-    // ===================================================================
 
     @GetMapping
     public ApiResponse<PageResponse<StudentActivitySummaryResponse>> listLibrary(
@@ -79,10 +69,6 @@ public class StudentActivityLibraryController {
                 studentActivityLibraryService.listLibrary(currentUser, filter, page, size));
     }
 
-    // ===================================================================
-    // Flashcards
-    // ===================================================================
-
     @GetMapping("/flashcards/{id}")
     public ApiResponse<StudentFlashcardResponse> getFlashcard(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
@@ -100,10 +86,6 @@ public class StudentActivityLibraryController {
                 "Flashcard completion recorded.",
                 studentActivityLibraryService.completeFlashcard(currentUser, id));
     }
-
-    // ===================================================================
-    // Matching games
-    // ===================================================================
 
     @GetMapping("/matching-games/{id}")
     public ApiResponse<StudentMatchingGameResponse> getMatchingGame(
@@ -123,10 +105,6 @@ public class StudentActivityLibraryController {
                 studentActivityLibraryService.completeMatchingGame(currentUser, id));
     }
 
-    // ===================================================================
-    // Listening exercises
-    // ===================================================================
-
     @GetMapping("/listening-exercises/{id}")
     public ApiResponse<StudentListeningExerciseResponse> getListeningExercise(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
@@ -144,10 +122,6 @@ public class StudentActivityLibraryController {
                 "Listening exercise completion recorded.",
                 studentActivityLibraryService.completeListeningExercise(currentUser, id));
     }
-
-    // ===================================================================
-    // Tracing exercises
-    // ===================================================================
 
     @GetMapping("/tracing-exercises/{id}")
     public ApiResponse<StudentTracingExerciseResponse> getTracingExercise(
@@ -167,10 +141,6 @@ public class StudentActivityLibraryController {
                 studentActivityLibraryService.completeTracingExercise(currentUser, id));
     }
 
-    // ===================================================================
-    // Drag-drop activities
-    // ===================================================================
-
     @GetMapping("/drag-drop-activities/{id}")
     public ApiResponse<StudentDragDropActivityResponse> getDragDropActivity(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
@@ -188,10 +158,6 @@ public class StudentActivityLibraryController {
                 "Drag-drop activity completion recorded.",
                 studentActivityLibraryService.completeDragDropActivity(currentUser, id));
     }
-
-    // ===================================================================
-    // Story activities
-    // ===================================================================
 
     @GetMapping("/story-activities/{id}")
     public ApiResponse<StudentStoryActivityResponse> getStoryActivity(

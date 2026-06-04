@@ -18,34 +18,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Single admin decision taken against a teacher's verification
- * submission.
- *
- * <p>One review may apply to a whole round of submitted
- * {@link TeacherVerificationDocument}s (typical case) or be scoped to
- * a specific document via {@link #document}. The
- * {@link #decisionStatus} mirrors the canonical
- * {@link com.example.aichinese.entity.enums.TeacherStatus} so the
- * admin's verdict directly drives the
- * {@link TeacherProfile#getTeacherStatus()} field.</p>
- *
- * <p>The full audit trail of all reviews per teacher is preserved (no
- * soft-delete), with the latest decision indexed for efficient
- * retrieval via the {@code idx_teacher_verification_reviews_latest}
- * index.</p>
- *
- * <p>{@link #reviewerUser} is nullable to support legacy data; the
- * application layer requires it for new reviews.</p>
- *
- * <p>This table is append-only: every field is mapped
- * {@code updatable = false}. The Javadoc above ("full audit trail
- * preserved, no soft-delete") describes the intent; the
- * {@code updatable} flags here make the contract technical. Reversing
- * a decision is expressed by inserting a fresh review row with the new
- * status, never by mutating the historical decision in place — which
- * would erase the very audit trail this table exists to preserve.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -79,11 +51,6 @@ public class TeacherVerificationReview extends BaseEntity {
     @Column(name = "reviewed_at", nullable = false, updatable = false)
     private LocalDateTime reviewedAt;
 
-    /**
-     * Stores only final admin decisions. {@link TeacherStatus#PENDING}
-     * belongs to {@link TeacherProfile}; a review row is append-only audit
-     * evidence and must represent a completed approval or rejection.
-     */
     public void setDecisionStatus(TeacherStatus decisionStatus) {
         if (decisionStatus == null) {
             throw new IllegalArgumentException("Teacher verification review decision status is required.");

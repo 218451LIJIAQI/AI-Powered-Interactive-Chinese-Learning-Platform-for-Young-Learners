@@ -7,36 +7,7 @@ import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
- * Fail-fast startup guard for the payment integration.
- *
- * <p>When the {@code prod} profile is active, this guard refuses to
- * launch the application unless every payment-related setting is
- * production-grade:</p>
- * <ul>
- *   <li>Mock-success mode is OFF — otherwise checkouts would silently
- *       complete without any real money movement.</li>
- *   <li>Provider is set to {@code stripe} — the only supported real
- *       provider; the {@code mock} / {@code no-op} variants are dev-only.</li>
- *   <li>Stripe API key is present and starts with {@code sk_live_} or
- *       {@code rk_live_} — refusing test-mode keys
- *       ({@code sk_test_} / {@code rk_test_}) prevents the production
- *       deploy from accidentally using a sandbox account.</li>
- *   <li>Stripe webhook signing secret is present and starts with
- *       {@code whsec_} — verified at construction so the signature
- *       check in {@code StripeWebhookService} cannot silently no-op.</li>
- *   <li>Success / cancel URLs are HTTPS and point to non-loopback
- *       hosts.</li>
- *   <li>Stripe API base URL is exactly {@code https://api.stripe.com}
- *       — pinning the hostname so a typo in
- *       {@code STRIPE_API_BASE_URL} cannot send live payment traffic
- *       to an attacker-controlled endpoint.</li>
- * </ul>
- *
- * <p>The constructor invokes {@link #validate()} so the guard runs at
- * bean creation time and throws {@link IllegalStateException} on
- * failure — Spring Boot stops the application on a constructor
- * failure, which is the desired fail-closed behaviour for any payment
- * misconfiguration.</p>
+ * Fail-fast startup guard for production payment configuration.
  */
 @Component
 public class PaymentProductionGuard {
@@ -83,11 +54,6 @@ public class PaymentProductionGuard {
         requireOfficialStripeApiBaseUrl(paymentProperties.stripeApiBaseUrl());
     }
 
-    /**
-     * Uses {@link Environment#acceptsProfiles(Profiles)} so
-     * {@code spring.profiles.default=prod} (the common Kubernetes pattern)
-     * also triggers the fail-fast guard.
-     */
     private boolean isProductionProfileActive() {
         return environment.acceptsProfiles(PROD_PROFILES);
     }

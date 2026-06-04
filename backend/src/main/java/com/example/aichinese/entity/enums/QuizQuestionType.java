@@ -6,62 +6,28 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Question format for a single {@code QuizQuestion} row.
- *
- * <p>The format determines what the answer payload looks like and how
- * the auto-grader scores the response. Every <em>option-based</em>
- * question must carry at least one {@code QuizOption} child row (see
- * {@link #isOptionBased()} and {@code TeacherQuizService.persistQuizQuestion}).</p>
- *
- * <p>The remaining types either accept free-text input ({@link #FILL_BLANK})
- * or a structured payload ({@link #REARRANGE_SENTENCE}) and are
- * therefore graded against the question's {@code correctAnswer} field
- * directly rather than through option rows.</p>
- *
- * <p>This enum is parsed from teacher-authored DTOs and stored as a
- * {@code String} on {@code QuizQuestion}. The constant names appear in
- * JSON payloads, so they MUST NOT be renamed without a coordinated
- * frontend change.</p>
- */
 public enum QuizQuestionType {
 
-    /** Pick the single correct answer from a list of options. */
     MULTIPLE_CHOICE,
 
-    /** Choose between "true" and "false". */
     TRUE_FALSE,
 
-    /** Type the missing word(s) into a blank in the prompt. */
     FILL_BLANK,
 
-    /** Match each Chinese word to its English meaning from a list. */
     MATCH_WORD_MEANING,
 
-    /** Match each Chinese word to its illustrating image from a list. */
     MATCH_WORD_IMAGE,
 
-    /** Listen to an audio clip and choose the correct option. */
     LISTEN_CHOOSE,
 
-    /** Drag-and-drop sentence fragments into the correct order. */
     REARRANGE_SENTENCE,
 
-    /** Choose the correct pinyin spelling for the given character. */
     CHOOSE_PINYIN,
 
-    /** Choose the correct tone mark for the given pinyin. */
     CHOOSE_TONE,
 
-    /** Choose the correct meaning for the given character. */
     CHARACTER_MEANING;
 
-    /**
-     * Question types that require at least one {@code QuizOption} child
-     * row. Preserved from the original implementation; consumed by
-     * {@code TeacherQuizService.persistQuizQuestion} via
-     * {@link #isOptionBased()}.
-     */
     private static final Set<QuizQuestionType> OPTION_BASED_TYPES = Collections.unmodifiableSet(EnumSet.of(
             MULTIPLE_CHOICE,
             TRUE_FALSE,
@@ -72,33 +38,12 @@ public enum QuizQuestionType {
             CHOOSE_TONE,
             CHARACTER_MEANING));
 
-    /** Question types that accept free-text input rather than option rows. */
     private static final Set<QuizQuestionType> FREE_TEXT_TYPES =
             Collections.unmodifiableSet(EnumSet.of(FILL_BLANK));
 
-    /** Question types that accept a structured (non-text, non-option) payload. */
     private static final Set<QuizQuestionType> STRUCTURED_PAYLOAD_TYPES =
             Collections.unmodifiableSet(EnumSet.of(REARRANGE_SENTENCE));
 
-    /*
-     * Startup-time exhaustiveness AND pairwise-disjointness guard.
-     *
-     *   1. Coverage: every constant must belong to at least one of the
-     *      three answer-format sets.  An unclassified constant would
-     *      silently produce false from all three predicates and crash
-     *      the grading dispatch downstream.
-     *
-     *   2. Disjointness: no constant may belong to more than one set.
-     *      The Javadoc above states "exactly one" disjoint set; the
-     *      grading path uses isOptionBased() / isFreeText() /
-     *      hasStructuredPayload() on that contract.  A constant
-     *      accidentally placed in two sets would cause grading to
-     *      take the wrong branch and silently mis-score student
-     *      answers.  Pairwise intersections must all be empty.
-     *
-     * Both checks run exactly once at class load and fail fast with a
-     * message naming the offending constants.
-     */
     static {
         EnumSet<QuizQuestionType> covered = EnumSet.copyOf(OPTION_BASED_TYPES);
         covered.addAll(FREE_TEXT_TYPES);
@@ -125,34 +70,13 @@ public enum QuizQuestionType {
         }
     }
 
-    /** O(1) case-insensitive lookup table built once at class-load time. */
     private static final Map<String, QuizQuestionType> LOOKUP =
             EnumLookups.indexByName(QuizQuestionType.class);
 
-    /**
-     * Tolerant case- and whitespace-insensitive lookup.
-     *
-     * @param value raw textual representation; may be {@code null} or blank
-     * @return matching constant, or {@link Optional#empty()} when the input
-     *         is {@code null}, blank, or not a recognised question type
-     */
     public static Optional<QuizQuestionType> tryFrom(String value) {
         return EnumLookups.tryFrom(LOOKUP, value);
     }
 
-    /**
-     * Strict counterpart of {@link #tryFrom(String)}.
-     *
-     * <p>Behaviour preserved from the original implementation: {@code null}
-     * or blank input throws "{@code Question type is required.}", invalid
-     * input throws the canonical "Allowed values are …" message listing
-     * every constant in declaration order. Callers that depend on the
-     * exact wording (e.g. teacher-facing error toasts) keep working
-     * unchanged.</p>
-     *
-     * @throws IllegalArgumentException when {@code value} is {@code null},
-     *         blank, or not a recognised question type
-     */
     public static QuizQuestionType fromValue(String value) {
         return EnumLookups.fromValue(
                 LOOKUP,
@@ -163,23 +87,14 @@ public enum QuizQuestionType {
                         + "REARRANGE_SENTENCE, CHOOSE_PINYIN, CHOOSE_TONE, or CHARACTER_MEANING.");
     }
 
-    /**
-     * @return {@code true} when this question type requires at least one
-     *         {@code QuizOption} row to be persisted alongside it
-     */
     public boolean isOptionBased() {
         return OPTION_BASED_TYPES.contains(this);
     }
 
-    /** @return {@code true} when the answer is captured as free-text input. */
     public boolean isFreeText() {
         return FREE_TEXT_TYPES.contains(this);
     }
 
-    /**
-     * @return {@code true} when the answer is captured as a structured
-     *         non-text payload (drag-and-drop ordering, etc.)
-     */
     public boolean hasStructuredPayload() {
         return STRUCTURED_PAYLOAD_TYPES.contains(this);
     }

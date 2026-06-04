@@ -26,33 +26,6 @@ import com.example.aichinese.repository.CartRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
-/**
- * Manages a student's shopping cart: add / remove items, recompute
- * prices, and persist line-items.
- *
- * <h2>Item identity</h2>
- * <p>Each cart line is identified by an
- * {@code (itemType, itemId)} pair resolved through
- * {@link PurchasableItemService}, which is the single source of truth
- * for what is sellable. Already-owned items are rejected at add time
- * via {@link EntitlementService} so a student cannot accidentally
- * pay twice for the same content.</p>
- *
- * <h2>Pricing</h2>
- * <p>Per-line and cart totals are computed from the
- * {@link CartItem#getUnitPrice() captured unit price} that was frozen
- * at add-time — not re-resolved live — so a price change between
- * "add to cart" and "checkout" does not silently re-bill the student.
- * Rounding and scale are delegated to {@link CommerceMoneyService}
- * for consistency with the order / payment paths.</p>
- *
- * <h2>Stale item handling</h2>
- * <p>If a cart line references a purchasable item that is no longer
- * resolvable (e.g.&nbsp;the underlying lesson was unpublished or
- * deleted after the student added it), the cart removes that hidden
- * line and logs a warning. A student must never be trapped behind an
- * invisible row that cannot be removed through the rendered cart.</p>
- */
 @Service
 public class CartService {
 
@@ -214,8 +187,6 @@ public class CartService {
             return;
         }
 
-        // A hidden archived item must not make a full cart impossible to
-        // recover through the API; remove stale rows before enforcing capacity.
         buildCartResponse(cart, cartItemRepository.findByCartIdOrderByCreatedAtAsc(cart.getId()));
         if (cartItemRepository.countByCartId(cart.getId()) >= MAX_CART_ITEMS) {
             throw new ResponseStatusException(

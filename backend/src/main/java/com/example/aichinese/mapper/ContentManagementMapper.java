@@ -30,57 +30,18 @@ import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.ManagedContentType;
 import com.example.aichinese.entity.enums.TeacherStatus;
 
-/**
- * Translates the published content domain ({@link Lesson} /
- * {@link LearningModule} / {@link CoursePackage} / {@link PackageItem})
- * into the response DTOs consumed by the teacher dashboard, the admin
- * moderation queue and the public discovery catalog.
- *
- * <p>Every method is null-defensive at the boundary — a {@code null}
- * entity simply returns {@code null} rather than throwing — so that
- * partial domain graphs (e.g. a lesson with no module, or a teacher
- * profile whose {@code user} association failed to hydrate) degrade
- * gracefully to a missing field on the wire instead of a 500.</p>
- *
- * <p>The public-view mappers
- * ({@link #toPublicCourseSummary(Lesson, String)} /
- * {@link #toPublicCourseDetail(CoursePackage, List, String)}) deliberately keep
- * the locked / unlocked decision inside this class so the controller
- * layer never has to repeat the
- * {@code accessType == PAID} check at every callsite — paid items get a
- * stable, user-friendly placeholder message in the
- * {@code accessLockedReason} field which the front-end displays in the
- * locked-content card.</p>
- */
 @Component
 public class ContentManagementMapper {
 
-    /**
-     * Friendly explanation surfaced on every {@code PAID} public-catalog
-     * response. The platform's payment integration is fully wired (Stripe
-     * webhook + mock provider), so the gate is now "sign in &amp; enrol"
-     * rather than "feature not yet built". Centralised so copy edits do
-     * not require a service-layer change.
-     */
     private static final String PAID_LOCKED_REASON =
             "Sign in and enrol to unlock this paid content.";
 
-    /**
-     * Stable client-side identifier prefix for {@link Lesson} entries in
-     * the public catalogue. The frontend uses {@code id} (not
-     * {@code resourceId}) as the routing key when the catalogue mixes
-     * lessons and packages, so a stable prefix prevents collisions
-     * between a lesson with id 42 and a package with id 42.
-     */
     private static final String LESSON_ID_PREFIX = "LESSON-";
 
-    /** Stable client-side identifier prefix for {@link CoursePackage} entries. */
     private static final String PACKAGE_ID_PREFIX = "PACKAGE-";
 
-    /** Call-to-action shown to anonymous visitors viewing a single lesson. */
     private static final String LESSON_CTA = "Login to enrol";
 
-    /** Call-to-action shown to anonymous visitors viewing a course package. */
     private static final String PACKAGE_CTA = "Register to start learning";
 
     private LearningLevelResponse toLevelResponse(LearningLevel level) {
@@ -454,14 +415,6 @@ public class ContentManagementMapper {
                 locked ? PAID_LOCKED_REASON : null);
     }
 
-    /**
-     * Maps a single {@link PackageItem} to the public-catalogue item
-     * summary the discovery UI renders inside a course-package detail
-     * card. Extracted from the inline lambda inside
-     * {@link #toPublicCourseDetail(CoursePackage, List, String)} so the
-     * mapping rule lives next to its sibling helpers and is unit-test
-     * reachable.
-     */
     private PublicCourseItemSummaryResponse toPublicCourseItemSummary(PackageItem item) {
         return new PublicCourseItemSummaryResponse(
                 mapPackageItemType(item),
@@ -470,12 +423,6 @@ public class ContentManagementMapper {
                 item.getSortOrder());
     }
 
-    /**
-     * Defensive null-safe stream mapper for {@link PackageItem} lists
-     * passed into the submission-detail helpers. Returns an immutable
-     * empty list when the input is {@code null} so the response record
-     * always carries a non-{@code null} {@code packageItems} field.
-     */
     private List<PackageItemResponse> mapPackageItems(List<PackageItem> items) {
         if (items == null || items.isEmpty()) {
             return List.of();

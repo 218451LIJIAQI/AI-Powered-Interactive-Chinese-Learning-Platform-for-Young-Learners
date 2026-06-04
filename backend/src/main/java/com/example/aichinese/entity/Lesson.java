@@ -24,31 +24,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Atomic teaching unit — the smallest piece of content a learner
- * actually consumes.
- *
- * <p>A lesson can stand alone or live inside a {@link LearningModule},
- * be sold individually, or be bundled into a {@link CoursePackage}.
- * Companion entities attach the actual delivery payload:</p>
- * <ul>
- *   <li>{@link RecordedLessonVideo} — for {@link com.example.aichinese.entity.enums.LearningType#RECORDED}
- *       and {@link com.example.aichinese.entity.enums.LearningType#HYBRID} lessons.</li>
- *   <li>{@link LiveClass} — for {@link com.example.aichinese.entity.enums.LearningType#LIVE}
- *       and {@code HYBRID} lessons.</li>
- *   <li>{@link Quiz} — assessment attached to the lesson.</li>
- *   <li>Activity entities (drag-drop, flashcards, etc.) — referenced via
- *       intermediate join tables, not direct FKs.</li>
- * </ul>
- *
- * <p>{@link #lessonContent} is the rich-text body shown above the
- * media; persisted as {@code LONGTEXT} to accommodate teacher-authored
- * long-form material.</p>
- *
- * <p>{@link #estimatedDurationMinutes} drives the catalogue badge and
- * the student dashboard "study plan" estimator; it is a hint, not an
- * enforced timer.</p>
- */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -59,13 +34,6 @@ import lombok.Setter;
         @Index(name = "idx_lessons_status", columnList = "content_status")
 })
 @NamedEntityGraph(
-        // Single source of truth for the eager-fetch attribute set used
-        // by every read in LessonRepository: teacher dashboards, public
-        // catalogue and admin moderation all need teacher / teacher.user
-        // / module / level / category hydrated in one round trip. The
-        // teacher.user nested fetch is declared as a sub-graph so the
-        // mapper can render the teacher's display name without an N+1
-        // lazy load.
         name = Lesson.GRAPH_DETAIL,
         attributeNodes = {
                 @NamedAttributeNode(value = "teacher", subgraph = "Lesson.teacherWithUser"),
@@ -80,13 +48,6 @@ import lombok.Setter;
 )
 public class Lesson extends BaseEntity {
 
-    /**
-     * Name of the {@link NamedEntityGraph} that eagerly fetches the
-     * standard attribute set required by every read endpoint that
-     * surfaces a {@code Lesson}: {@code teacher} (with the nested
-     * {@code teacher.user} sub-graph), {@code module}, {@code level}
-     * and {@code category}.
-     */
     public static final String GRAPH_DETAIL = "Lesson.detail";
 
     @ManyToOne(fetch = FetchType.LAZY)

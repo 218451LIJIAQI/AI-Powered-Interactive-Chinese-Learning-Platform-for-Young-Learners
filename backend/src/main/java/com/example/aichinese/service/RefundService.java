@@ -33,25 +33,6 @@ import com.example.aichinese.repository.RefundRequestRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Student-filed refund requests with admin-side review workflow.
- *
- * <h2>Lifecycle</h2>
- * <p>{@code PENDING -> APPROVED -> REFUNDED} or {@code REJECTED}.
- * Approval records the admin decision; the separate
- * {@link #markRefunded(SecurityUserDetails, Long)} transition is used
- * after the operator has completed the provider-side refund. That
- * terminal transition revokes the underlying
- * {@link com.example.aichinese.entity.PaymentEntitlement} so the
- * student loses access to the previously purchased content. Rejection
- * writes an admin note explaining the reason for the decision so the
- * student sees something more helpful than a bare "denied".</p>
- *
- * <h2>Concurrency / idempotency</h2>
- * <p>Each refund request is pessimistically locked before every
- * state transition so two admins acting on the same row cannot
- * double-process the platform-side records.</p>
- */
 @Service
 public class RefundService {
 
@@ -100,9 +81,6 @@ public class RefundService {
             throw new ResponseStatusException(BAD_REQUEST, "Only paid orders can be refunded.");
         }
 
-        // Delegate to the canonical RefundStatus.ACTIONABLE set so the "active
-        // refund" definition cannot drift away from the enum's class-load guard
-        // (which enforces ACTIONABLE union TERMINAL == ALL and disjointness).
         if (refundRequestRepository.existsByOrderIdAndRefundStatusIn(order.getId(), RefundStatus.ACTIONABLE)) {
             throw new ResponseStatusException(BAD_REQUEST, "A refund request is already active for this order.");
         }
@@ -152,10 +130,6 @@ public class RefundService {
         Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
         RefundRequest refundRequest = refundRequestRepository.findLockedById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
-        // Only PENDING refunds may be approved. Without this guard an admin
-        // double-clicking "Approve" would emit a second notification and a
-        // second audit-log row for the exact same decision, and worse, would
-        // let a REJECTED or already-REFUNDED request slip back into APPROVED.
         requireTransition(refundRequest.getRefundStatus(), RefundStatus.PENDING, "approved");
         refundRequest.setRefundStatus(RefundStatus.APPROVED);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
@@ -191,18 +165,11 @@ public class RefundService {
         Long refundId = Objects.requireNonNull(id, "Refund id must not be null.");
         RefundRequest refundRequest = refundRequestRepository.findLockedById(refundId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
-        // Only APPROVED refunds may transition to REFUNDED. Guards the same
-        // double-click / state-machine-violation cases described on
-        // approveRefund: refusing the second call here keeps entitlements
-        // from being revoked twice and prevents a spurious "Refund completed"
-        // notification.
         requireTransition(refundRequest.getRefundStatus(), RefundStatus.APPROVED, "marked as refunded");
         refundRequest.setRefundStatus(RefundStatus.REFUNDED);
         if (refundRequest.getOrder() != null) {
             Long orderId = refundRequest.getOrder().getId();
             refundRequest.getOrder().setPaymentStatus(PaymentStatus.REFUNDED);
-            // Targeted lookup by order id instead of pulling every PaymentRecord row
-            // into memory just to find the one(s) attached to this refund's order.
             for (PaymentRecord paymentRecord : paymentRecordRepository.findByOrderId(orderId)) {
                 paymentRecord.setPaymentStatus(PaymentStatus.REFUNDED);
                 paymentRecord.setProviderStatus("REFUNDED");
@@ -219,13 +186,6 @@ public class RefundService {
         return mapAdminRefund(saved);
     }
 
-    /**
-     * Enforces the refund state machine: a transition is only valid when the
-     * refund is currently in {@code expected}. Short-circuits the common
-     * mistake of an admin double-clicking the action button by returning a
-     * 400 with a human-readable message instead of silently duplicating
-     * notifications and audit rows.
-     */
     private void requireTransition(RefundStatus current, RefundStatus expected, String action) {
         if (current != expected) {
             throw new ResponseStatusException(

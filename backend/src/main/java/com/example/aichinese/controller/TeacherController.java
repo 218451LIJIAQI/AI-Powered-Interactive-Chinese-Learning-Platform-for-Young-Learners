@@ -72,35 +72,6 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/**
- * Teacher persona REST surface — dashboard, content authoring
- * (modules, lessons, quizzes, course packages), live-class
- * scheduling, recorded video upload, profile + verification document
- * management, and the teacher view onto students and analytics.
- *
- * <h2>Authorization</h2>
- * <p>Class-level {@code hasRole("TEACHER")} is enforced in
- * {@link com.example.aichinese.config.SecurityConfig}. Per-call
- * checks in
- * {@link com.example.aichinese.service.TeacherContentAccessService}
- * additionally verify the teacher is APPROVED and owns the row being
- * mutated — preventing a pending or rejected teacher from sneaking
- * into the authoring path.</p>
- *
- * <h2>Multipart endpoints</h2>
- * <p>Document and recorded-video upload endpoints delegate to the
- * storage services
- * ({@link com.example.aichinese.service.FileStorageService},
- * {@link com.example.aichinese.service.RecordedVideoStorageService})
- * which apply the platform's three-layer defence-in-depth upload
- * pipeline (extension / content-type / magic-byte).</p>
- *
- * <h2>Input validation</h2>
- * <p>Free-text query parameters are {@code @Size}-capped at the
- * controller boundary; JSON bodies use {@code @Valid} so per-field
- * constraints declared on the request DTOs fire before the service
- * is reached.</p>
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/teachers")
@@ -415,14 +386,8 @@ public class TeacherController {
                 recordedLessonService.createRecordedVideo(
                         currentUser,
                         lessonId,
-                        new RecordedLessonVideoRequest(
-                                title,
-                                description,
-                                packageId,
-                                sourceType,
-                                externalVideoUrl,
-                                durationSeconds,
-                                sortOrder),
+                        recordedLessonVideoRequest(
+                                title, description, packageId, sourceType, externalVideoUrl, durationSeconds, sortOrder),
                         file));
     }
 
@@ -456,14 +421,8 @@ public class TeacherController {
                         currentUser,
                         lessonId,
                         videoId,
-                        new RecordedLessonVideoRequest(
-                                title,
-                                description,
-                                packageId,
-                                sourceType,
-                                externalVideoUrl,
-                                durationSeconds,
-                                sortOrder),
+                        recordedLessonVideoRequest(
+                                title, description, packageId, sourceType, externalVideoUrl, durationSeconds, sortOrder),
                         file));
     }
 
@@ -660,6 +619,24 @@ public class TeacherController {
         return ApiResponse.success(
                 "Quiz attempts retrieved successfully.",
                 teacherQuizService.getQuizAttempts(currentUser, quizId, page, size));
+    }
+
+    private static RecordedLessonVideoRequest recordedLessonVideoRequest(
+            String title,
+            String description,
+            Long packageId,
+            String sourceType,
+            String externalVideoUrl,
+            Integer durationSeconds,
+            Integer sortOrder) {
+        return new RecordedLessonVideoRequest(
+                title,
+                description,
+                packageId,
+                sourceType,
+                externalVideoUrl,
+                durationSeconds,
+                sortOrder);
     }
 
 }

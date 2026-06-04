@@ -18,34 +18,6 @@ import com.example.aichinese.util.TextUtils;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
-/**
- * In-memory rate limiter for the anonymous-accessible authentication
- * endpoints ({@code /api/auth/register},
- * {@code /api/auth/forgot-password}).
- *
- * <h2>Why two separate caps</h2>
- * <p>Registration and forgot-password both expose user-enumeration
- * surfaces (they reveal whether an email is already in use, or trigger
- * an external email send) but they have different abuse models:</p>
- * <ul>
- *   <li><b>Register</b> is bot-farmed for free signups - keyed only by
- *       IP, with a generous {@value #MAX_REGISTER_REQUESTS}-per-window
- *       cap so a school computer lab doesn't accidentally lock itself
- *       out.</li>
- *   <li><b>Forgot-password</b> is used both for credential-stuffing
- *       (probe one email per request) and for email bombing (force the
- *       SMTP service to spam one victim) - keyed by both IP <em>and</em>
- *       email so neither vector accumulates without limit, with a
- *       tighter {@value #MAX_FORGOT_PASSWORD_REQUESTS}-per-window cap.</li>
- * </ul>
- *
- * <h2>State management</h2>
- * <p>State is held in a process-local bounded Caffeine cache,
- * matching the single-replica deployment assumption documented on
- * {@link LoginAttemptLimiter}. Expired records are evicted during
- * normal access; a hard cap on tracked entries bounds memory without
- * scanning all tracked requests during sustained abuse.</p>
- */
 @Component
 public class PublicAuthRequestLimiter {
 
@@ -139,22 +111,19 @@ public class PublicAuthRequestLimiter {
 
         requests.asMap().compute(key, (ignored, existing) -> {
             if (existing == null || !existing.windowStartedAt.plus(window).isAfter(now)) {
-                return new RequestRecord(now, 1, now);
+                return new RequestRecord(now, 1);
             }
             if (existing.requestCount >= maxRequests) {
                 retryAfter.set(Duration.between(now, existing.windowStartedAt.plus(window)));
-                return new RequestRecord(existing.windowStartedAt, existing.requestCount, now);
+                return existing;
             }
-            return new RequestRecord(existing.windowStartedAt, existing.requestCount + 1, now);
+            return new RequestRecord(existing.windowStartedAt, existing.requestCount + 1);
         });
         requests.cleanUp();
         return retryAfter.get();
     }
 
     private String key(String action, String subject, String clientIp) {
-        // strip() (vs trim()) is Unicode-aware so a stray CJK fullwidth space
-        // before the email cannot produce a different bucket than the
-        // normalised form the auth pipeline submits.
         String normalizedSubject = TextUtils.safeTruncate(
                 subject == null ? "" : subject.strip().toLowerCase(Locale.ROOT), MAX_SUBJECT_KEY_LENGTH);
         String normalizedIp = TextUtils.safeTruncate(
@@ -162,6 +131,6 @@ public class PublicAuthRequestLimiter {
         return action + "|" + normalizedSubject + "|" + normalizedIp;
     }
 
-    private record RequestRecord(Instant windowStartedAt, int requestCount, Instant lastUpdatedAt) {
+    private record RequestRecord(Instant windowStartedAt, int requestCount) {
     }
 }

@@ -39,26 +39,6 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.PaginationUtils;
 
-/**
- * Writes and queries {@link Notification} rows — the in-app inbox
- * surface used by every persona.
- *
- * <h2>Producer surface</h2>
- * <p>Other services call this layer (instead of touching the
- * repository directly) so the notification dispatch is uniformly
- * audited and side-effects (e.g. real-time push, email fallback) can
- * be added without rewiring every producer. Producers cover all the
- * usual events: teacher approval, refund decisions, payout updates,
- * content moderation actions, teacher feedback, recorded video drops,
- * etc.</p>
- *
- * <h2>Consumer surface</h2>
- * <p>Paginated listing + mark-read / mark-all-read / unread-count
- * endpoints for the receiving persona. Producer notifications are
- * persisted in an independent transaction after their source
- * transaction commits, avoiding both phantom notices for rolled-back
- * work and self-lock waits on related rows.</p>
- */
 @Service
 public class NotificationService {
 
@@ -192,11 +172,6 @@ public class NotificationService {
             log.warn("Notification creation failed for recipient user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
             log.debug("Notification creation stack trace for recipient user id {}.", recipientId, exception);
         }
-    }
-
-    @Transactional(readOnly = true)
-    public List<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser) {
-        return getCurrentUserNotifications(currentUser, 0, 20).items();
     }
 
     @Transactional(readOnly = true)

@@ -22,27 +22,6 @@ import com.example.aichinese.service.storage.StorageProvider;
 import com.example.aichinese.service.storage.StorageWriteRequest;
 import com.example.aichinese.service.storage.StoredObject;
 
-/**
- * Persists learner-uploaded audio (pronunciation feedback) and image
- * (writing feedback) artefacts under the AI feedback subdirectory.
- *
- * <h2>Defence in depth</h2>
- * <p>Every upload goes through three independent checks before the
- * file ever lands on disk:</p>
- * <ol>
- *   <li>File-extension whitelist (lower-cased) — rejects obvious
- *       impostors.</li>
- *   <li>Content-Type header whitelist — rejects re-labelled types.</li>
- *   <li>Magic-byte / file-signature check via {@link UploadStorageSupport} —
- *       rejects payloads that disagree with their declared type, the
- *       classic upload-bypass vector.</li>
- * </ol>
- *
- * <p>All AI-uploaded blobs are tagged {@code accessLevel=PRIVATE} so
- * the file-download surface only serves them back to the originating
- * learner; cross-user reads are blocked at the access-control layer
- * regardless of file-name guessing.</p>
- */
 @Service
 public class AiFileStorageService {
 
@@ -87,7 +66,7 @@ public class AiFileStorageService {
                 ALLOWED_AUDIO_SIGNATURES,
                 "Uploaded audio content does not match the declared WEBM/WAV/MP3 type.",
                 uploadProperties.getAiAudioMaxFileSize());
-        return storeFile(multipartFile, ownerUser, "PRIVATE", validated[0], validated[1]);
+        return storeFile(multipartFile, ownerUser, validated[0], validated[1]);
     }
 
     public UploadedFile storeWritingImage(MultipartFile multipartFile, User ownerUser) {
@@ -97,20 +76,12 @@ public class AiFileStorageService {
                 ALLOWED_IMAGE_SIGNATURES,
                 "Uploaded image content does not match the declared PNG/JPG/JPEG type.",
                 uploadProperties.getAiImageMaxFileSize());
-        return storeFile(multipartFile, ownerUser, "PRIVATE", validated[0], validated[1]);
+        return storeFile(multipartFile, ownerUser, validated[0], validated[1]);
     }
 
-    /**
-     * Persists the validated multipart file to disk and records it in the
-     * database.
-     *
-     * @param originalFileName safe file name already validated
-     * @param extension        lower-cased extension already validated
-     */
     private UploadedFile storeFile(
             MultipartFile multipartFile,
             User ownerUser,
-            String accessLevel,
             String originalFileName,
             String extension) {
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
@@ -131,7 +102,7 @@ public class AiFileStorageService {
         uploadedFile.setFilePath(storedObject.location().toString());
         uploadedFile.setContentType(UploadStorageSupport.normalizeContentType(multipartFile.getContentType()));
         uploadedFile.setFileSize(multipartFile.getSize());
-        uploadedFile.setAccessLevel(accessLevel);
+        uploadedFile.setAccessLevel("PRIVATE");
         uploadedFile.setActive(true);
         try {
             return Objects.requireNonNull(
@@ -143,12 +114,6 @@ public class AiFileStorageService {
         }
     }
 
-    /**
-     * Validates size, extension, content-type, and magic-byte signature.
-     *
-     * @return {@code [originalFileName, extension]} — both already
-     *         validated so {@link #storeFile} avoids re-extraction
-     */
     private String[] validateMultipartFile(
             MultipartFile multipartFile,
             Set<String> allowedContentTypes,

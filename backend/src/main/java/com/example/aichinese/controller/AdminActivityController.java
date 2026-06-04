@@ -38,11 +38,6 @@ import com.example.aichinese.service.AdminActivityService.ActivityFilter;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
-/**
- * Admin CRUD endpoints for the six platform-managed learning activity
- * types. Mounted under {@code /api/v1/admin/activities}; secured by
- * {@code hasRole("ADMIN")} via the global security configuration.
- */
 @Validated
 @RestController
 @RequestMapping("/api/v1/admin/activities")
@@ -53,10 +48,6 @@ public class AdminActivityController {
     public AdminActivityController(AdminActivityService adminActivityService) {
         this.adminActivityService = adminActivityService;
     }
-
-    // ===================================================================
-    // Cross-type unified feed
-    // ===================================================================
 
     @GetMapping
     public ApiResponse<PageResponse<AdminActivitySummaryResponse>> listAll(
@@ -84,10 +75,6 @@ public class AdminActivityController {
                 "Activities retrieved successfully.",
                 adminActivityService.listAllActivities(filter, page, size));
     }
-
-    // ===================================================================
-    // Flashcards
-    // ===================================================================
 
     @GetMapping("/flashcards")
     public ApiResponse<PageResponse<AdminFlashcardResponse>> listFlashcards(
@@ -160,10 +147,6 @@ public class AdminActivityController {
         return ApiResponse.success("Flashcard deleted successfully.", null);
     }
 
-    // ===================================================================
-    // Matching games
-    // ===================================================================
-
     @GetMapping("/matching-games")
     public ApiResponse<PageResponse<AdminMatchingGameResponse>> listMatchingGames(
             @Size(max = 40, message = "Status must not exceed 40 characters.")
@@ -234,10 +217,6 @@ public class AdminActivityController {
         adminActivityService.deleteMatchingGame(currentUser, id);
         return ApiResponse.success("Matching game deleted successfully.", null);
     }
-
-    // ===================================================================
-    // Listening exercises
-    // ===================================================================
 
     @GetMapping("/listening-exercises")
     public ApiResponse<PageResponse<AdminListeningExerciseResponse>> listListeningExercises(
@@ -310,10 +289,6 @@ public class AdminActivityController {
         return ApiResponse.success("Listening exercise deleted successfully.", null);
     }
 
-    // ===================================================================
-    // Tracing exercises
-    // ===================================================================
-
     @GetMapping("/tracing-exercises")
     public ApiResponse<PageResponse<AdminTracingExerciseResponse>> listTracingExercises(
             @Size(max = 40, message = "Status must not exceed 40 characters.")
@@ -384,10 +359,6 @@ public class AdminActivityController {
         adminActivityService.deleteTracingExercise(currentUser, id);
         return ApiResponse.success("Tracing exercise deleted successfully.", null);
     }
-
-    // ===================================================================
-    // Drag-drop activities
-    // ===================================================================
 
     @GetMapping("/drag-drop-activities")
     public ApiResponse<PageResponse<AdminDragDropActivityResponse>> listDragDropActivities(
@@ -460,10 +431,6 @@ public class AdminActivityController {
         return ApiResponse.success("Drag-drop activity deleted successfully.", null);
     }
 
-    // ===================================================================
-    // Story activities
-    // ===================================================================
-
     @GetMapping("/story-activities")
     public ApiResponse<PageResponse<AdminStoryActivityResponse>> listStoryActivities(
             @Size(max = 40, message = "Status must not exceed 40 characters.")
@@ -534,10 +501,6 @@ public class AdminActivityController {
         adminActivityService.deleteStoryActivity(currentUser, id);
         return ApiResponse.success("Story activity deleted successfully.", null);
     }
-
-    // ===================================================================
-    // Shared filter assembly
-    // ===================================================================
 
     private ActivityFilter buildFilter(
             String status,

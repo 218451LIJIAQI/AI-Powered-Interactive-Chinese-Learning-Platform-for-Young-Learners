@@ -15,9 +15,6 @@ import com.example.aichinese.service.storage.StorageWriteRequest;
 import com.example.aichinese.service.storage.StoredObject;
 import com.example.aichinese.util.ExceptionLogUtils;
 
-/**
- * Local filesystem implementation of {@link StorageProvider}.
- */
 @Component
 public class LocalStorageProvider implements StorageProvider {
 

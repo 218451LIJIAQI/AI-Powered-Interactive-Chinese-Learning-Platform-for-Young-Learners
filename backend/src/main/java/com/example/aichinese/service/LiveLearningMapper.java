@@ -18,18 +18,6 @@ import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.VideoProgress;
 
-/**
- * Maps {@link LiveClass}, {@link LiveClassEnrolment},
- * {@link RecordedLessonVideo}, and {@link VideoProgress} entities to
- * their response DTOs.
- *
- * <p>The mapping is access-aware — flags such as {@code enrolled},
- * {@code canEnrol}, {@code canJoin}, and {@code showMeetingLink} are
- * passed in by {@link LiveLearningAccessService} so a single mapper
- * call produces a payload tailored to the current viewer (teacher,
- * enrolled student, or unauthenticated catalogue browser) without the
- * mapper having to know the access policy itself.</p>
- */
 @Component
 public class LiveLearningMapper {
 

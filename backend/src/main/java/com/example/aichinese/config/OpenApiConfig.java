@@ -12,15 +12,8 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 
 /**
  * OpenAPI / Swagger UI metadata.
- *
- * <p>Defines the global title, description, and a {@code bearerAuth} security
- * scheme so that the Swagger UI's "Authorize" button accepts a raw JWT (the
- * token returned by {@code POST /api/v1/auth/login}) and replays it as
- * {@code Authorization: Bearer <token>} on every subsequent request. Without
- * this configuration, the UI would be browsable but every secured endpoint
- * would 401 because the JWT filter would not see a valid token.</p>
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class OpenApiConfig {
 
     private static final String SECURITY_SCHEME_NAME = "bearerAuth";
@@ -47,7 +40,7 @@ public class OpenApiConfig {
                 .version(API_VERSION)
                 .description(API_DESCRIPTION)
                 .license(new License()
-                        .name("Proprietary \u2014 UPM Final Year Project")
+                        .name("Proprietary - UPM Final Year Project")
                         .url("https://www.upm.edu.my/"));
     }
 

@@ -15,17 +15,6 @@ import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.util.ExceptionLogUtils;
 
-/**
- * SMTP-backed {@link EmailService} active when
- * {@code app.email.enabled=true}.
- *
- * <p>The {@code @DependsOn("emailConfigurationValidator")} guarantees
- * the fail-fast validator runs before this bean is instantiated, so
- * a malformed SMTP config refuses to start rather than silently
- * mis-sending. Send failures are caught and logged at {@code WARN}
- * — the platform falls back to in-app notifications so a transient
- * SMTP outage cannot block business transactions.</p>
- */
 @Service
 @ConditionalOnProperty(prefix = "app.email", name = "enabled", havingValue = "true")
 @DependsOn("emailConfigurationValidator")
