@@ -12,7 +12,6 @@ import java.util.stream.Collectors;
 final class EnumLookups {
 
     private EnumLookups() {
-        throw new AssertionError("No instances");
     }
 
     static <E extends Enum<E>> Map<String, E> indexByName(Class<E> type) {

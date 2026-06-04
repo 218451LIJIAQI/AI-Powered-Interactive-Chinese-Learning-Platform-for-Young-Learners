@@ -12,9 +12,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-/**
- * Adds no-store headers to sensitive API responses.
- */
 @Configuration(proxyBeanMethods = false)
 public class SensitiveResponseHeadersConfig implements WebMvcConfigurer {
 

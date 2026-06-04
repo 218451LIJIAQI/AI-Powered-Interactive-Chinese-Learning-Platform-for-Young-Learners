@@ -92,7 +92,7 @@ public class TeacherManagementMapper {
                 user.getDisplayName(),
                 user.getEmail(),
                 profile.getTeacherStatus(),
-                summarize(profile.getBio(), BIO_SUMMARY_MAX_LENGTH),
+                TextUtils.truncateWithEllipsis(profile.getBio(), BIO_SUMMARY_MAX_LENGTH),
                 documentCount,
                 latestReview == null ? null : latestReview.getReviewedAt(),
                 latestDocument == null ? null : latestDocument.getSubmittedAt(),
@@ -203,9 +203,5 @@ public class TeacherManagementMapper {
                 .map(TextUtils::trimToNull)
                 .filter(value -> value != null)
                 .toList();
-    }
-
-    private String summarize(String value, int maxLength) {
-        return TextUtils.truncateWithEllipsis(value, maxLength);
     }
 }

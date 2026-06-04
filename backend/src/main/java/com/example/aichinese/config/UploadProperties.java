@@ -3,9 +3,6 @@ package com.example.aichinese.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
-/**
- * Strongly typed binding for the {@code app.upload.*} configuration block.
- */
 @ConfigurationProperties(prefix = "app.upload")
 public class UploadProperties {
 

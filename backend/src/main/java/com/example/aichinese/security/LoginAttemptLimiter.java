@@ -39,10 +39,6 @@ public class LoginAttemptLimiter {
     private final Duration attemptWindow;
     private final Duration lockDuration;
 
-    public LoginAttemptLimiter() {
-        this(Clock.systemUTC());
-    }
-
     @Autowired
     public LoginAttemptLimiter(
             @Value("${app.security.login-rate-limit.max-failed-attempts:5}") int maxFailedAttempts,

@@ -19,9 +19,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-/**
- * CORS configuration for credentialed {@code /api/**} requests.
- */
 @Configuration(proxyBeanMethods = false)
 public class CorsConfig {
 

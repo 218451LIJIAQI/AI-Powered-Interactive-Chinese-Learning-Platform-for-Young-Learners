@@ -100,5 +100,4 @@ public class CommunicationMapper {
                 auditLog.getRequestId(),
                 auditLog.getCreatedAt());
     }
-
 }

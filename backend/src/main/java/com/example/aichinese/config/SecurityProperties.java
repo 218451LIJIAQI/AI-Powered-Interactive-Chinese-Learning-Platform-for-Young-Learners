@@ -9,9 +9,6 @@ import org.springframework.validation.annotation.Validated;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 
-/**
- * Strongly typed binding for the {@code app.security.jwt.*} configuration block.
- */
 @Validated
 @ConfigurationProperties(prefix = "app.security.jwt")
 public record SecurityProperties(

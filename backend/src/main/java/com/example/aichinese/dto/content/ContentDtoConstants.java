@@ -19,6 +19,5 @@ public final class ContentDtoConstants {
     public static final int MODERATION_NOTE_MAX_LENGTH = 1000;
 
     private ContentDtoConstants() {
-        throw new UnsupportedOperationException("No instances");
     }
 }

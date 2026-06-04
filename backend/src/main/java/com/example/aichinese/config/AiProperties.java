@@ -2,9 +2,6 @@ package com.example.aichinese.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Strongly typed binding for the {@code app.ai.*} configuration block.
- */
 @ConfigurationProperties(prefix = "app.ai")
 public class AiProperties {
 

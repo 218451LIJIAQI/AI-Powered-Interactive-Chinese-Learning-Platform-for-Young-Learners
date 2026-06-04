@@ -29,9 +29,6 @@ import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
 
-/**
- * Idempotent reference-data and bootstrap-admin seeder.
- */
 @Component
 public class DataSeeder implements CommandLineRunner {
 
@@ -252,5 +249,4 @@ public class DataSeeder implements CommandLineRunner {
 
         log.info("Default admin account created.");
     }
-
 }

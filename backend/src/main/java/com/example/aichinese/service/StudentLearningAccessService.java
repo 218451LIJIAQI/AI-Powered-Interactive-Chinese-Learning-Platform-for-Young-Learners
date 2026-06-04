@@ -70,13 +70,9 @@ public class StudentLearningAccessService {
         return quiz;
     }
 
-    private boolean isLocked(Lesson lesson) {
-        return lesson.getAccessType() == AccessType.PAID;
-    }
-
     @Transactional(readOnly = true)
     public boolean hasLessonAccess(StudentProfile student, Lesson lesson) {
-        if (!isLocked(lesson)) {
+        if (lesson.getAccessType() != AccessType.PAID) {
             return true;
         }
 

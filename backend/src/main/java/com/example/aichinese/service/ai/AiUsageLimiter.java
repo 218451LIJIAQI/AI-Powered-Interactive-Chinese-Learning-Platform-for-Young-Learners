@@ -110,5 +110,4 @@ public class AiUsageLimiter {
             counter.setDayCount(0);
         }
     }
-
 }

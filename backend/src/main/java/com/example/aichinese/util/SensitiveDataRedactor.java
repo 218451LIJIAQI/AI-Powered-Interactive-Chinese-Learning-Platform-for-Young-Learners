@@ -38,7 +38,6 @@ public final class SensitiveDataRedactor {
             "(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b");
 
     private SensitiveDataRedactor() {
-        throw new AssertionError("SensitiveDataRedactor is a utility class and must not be instantiated.");
     }
 
     private static boolean isSensitiveKey(String key) {

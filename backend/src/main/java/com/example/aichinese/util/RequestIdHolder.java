@@ -42,7 +42,6 @@ public final class RequestIdHolder {
     private static final ThreadLocal<String> CURRENT_REQUEST_ID = new ThreadLocal<>();
 
     private RequestIdHolder() {
-        throw new AssertionError("RequestIdHolder is a utility class and must not be instantiated.");
     }
 
     /**
@@ -78,5 +77,4 @@ public final class RequestIdHolder {
     public static void clear() {
         CURRENT_REQUEST_ID.remove();
     }
-
 }

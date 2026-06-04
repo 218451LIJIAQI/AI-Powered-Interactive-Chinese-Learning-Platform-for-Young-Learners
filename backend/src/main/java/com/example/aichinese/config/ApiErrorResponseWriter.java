@@ -21,7 +21,6 @@ import jakarta.servlet.http.HttpServletResponse;
 final class ApiErrorResponseWriter {
 
     private ApiErrorResponseWriter() {
-        throw new AssertionError("No instances");
     }
 
     static void write(

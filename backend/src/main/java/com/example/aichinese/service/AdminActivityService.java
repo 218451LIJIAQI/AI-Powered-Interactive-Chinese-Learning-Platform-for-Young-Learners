@@ -558,18 +558,30 @@ public class AdminActivityService {
         Pageable slice = PageRequest.of(0, perTypeLimit, Sort.by(Sort.Order.desc("updatedAt")));
 
         List<AdminActivitySummaryResponse> merged = new ArrayList<>();
-        flashcardRepository.findAll(filterSpec(filter), slice).getContent()
-                .forEach(e -> merged.add(mapper.toSummary(e)));
-        matchingGameRepository.findAll(filterSpec(filter), slice).getContent()
-                .forEach(e -> merged.add(mapper.toSummary(e)));
-        listeningExerciseRepository.findAll(filterSpec(filter), slice).getContent()
-                .forEach(e -> merged.add(mapper.toSummary(e)));
-        tracingExerciseRepository.findAll(filterSpec(filter), slice).getContent()
-                .forEach(e -> merged.add(mapper.toSummary(e)));
-        dragDropActivityRepository.findAll(filterSpec(filter), slice).getContent()
-                .forEach(e -> merged.add(mapper.toSummary(e)));
-        storyActivityRepository.findAll(filterSpec(filter), slice).getContent()
-                .forEach(e -> merged.add(mapper.toSummary(e)));
+        if (includesActivityType(filter, ActivityType.FLASHCARD)) {
+            flashcardRepository.findAll(filterSpec(filter), slice).getContent()
+                    .forEach(e -> merged.add(mapper.toSummary(e)));
+        }
+        if (includesActivityType(filter, ActivityType.MATCHING_GAME)) {
+            matchingGameRepository.findAll(filterSpec(filter), slice).getContent()
+                    .forEach(e -> merged.add(mapper.toSummary(e)));
+        }
+        if (includesActivityType(filter, ActivityType.LISTENING_EXERCISE)) {
+            listeningExerciseRepository.findAll(filterSpec(filter), slice).getContent()
+                    .forEach(e -> merged.add(mapper.toSummary(e)));
+        }
+        if (includesActivityType(filter, ActivityType.TRACING_EXERCISE)) {
+            tracingExerciseRepository.findAll(filterSpec(filter), slice).getContent()
+                    .forEach(e -> merged.add(mapper.toSummary(e)));
+        }
+        if (includesActivityType(filter, ActivityType.DRAG_DROP_ACTIVITY)) {
+            dragDropActivityRepository.findAll(filterSpec(filter), slice).getContent()
+                    .forEach(e -> merged.add(mapper.toSummary(e)));
+        }
+        if (includesActivityType(filter, ActivityType.STORY_ACTIVITY)) {
+            storyActivityRepository.findAll(filterSpec(filter), slice).getContent()
+                    .forEach(e -> merged.add(mapper.toSummary(e)));
+        }
 
         merged.sort(Comparator
                 .comparing(AdminActivitySummaryResponse::updatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
@@ -620,6 +632,10 @@ public class AdminActivityService {
 
     private <T, R> PageResponse<R> toPageResponse(List<R> items, Page<T> page) {
         return new PageResponse<>(items, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+    }
+
+    private static boolean includesActivityType(ActivityFilter filter, ActivityType type) {
+        return filter == null || filter.type() == null || filter.type() == type;
     }
 
     private <T> Specification<T> filterSpec(ActivityFilter filter) {

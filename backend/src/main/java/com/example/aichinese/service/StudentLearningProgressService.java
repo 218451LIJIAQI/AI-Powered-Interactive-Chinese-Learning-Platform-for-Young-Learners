@@ -91,7 +91,7 @@ public class StudentLearningProgressService {
     @Transactional
     public CompletionOutcome completeQuiz(StudentProfile student, Quiz quiz, int percentageScore) {
         StudentProfile lockedStudent = lockStudent(student);
-        boolean firstCompletion = markQuizCompleted(
+        boolean firstCompletion = recordQuizCompletion(
                 lockedStudent,
                 quiz,
                 "Submitted quiz: " + quiz.getTitle());
@@ -199,10 +199,7 @@ public class StudentLearningProgressService {
                 totalPoints,
                 currentLevelNumber,
                 progressToNextLevelPercent,
-                new DailyStreakResponse(
-                        streak != null && streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0,
-                        streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,
-                        streak != null ? streak.getLastLearningDate() : null),
+                toDailyStreakResponse(streak),
                 badges,
                 recentPoints);
     }
@@ -236,29 +233,21 @@ public class StudentLearningProgressService {
     @Transactional(readOnly = true)
     public DailyStreakResponse getStreak(StudentProfile student) {
         DailyStreak streak = dailyStreakRepository.findByStudentId(student.getId()).orElse(null);
-        return new DailyStreakResponse(
-                streak != null && streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0,
-                streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,
-                streak != null ? streak.getLastLearningDate() : null);
-    }
-
-    private boolean markQuizCompleted(StudentProfile student, Quiz quiz, String summary) {
-        return recordQuizProgress(student, quiz, true, summary);
+        return toDailyStreakResponse(streak);
     }
 
     private StudentProfile lockStudent(StudentProfile student) {
         return studentProfileRepository.findLockedById(student.getId()).orElse(student);
     }
 
-    private boolean recordQuizProgress(
+    private boolean recordQuizCompletion(
             StudentProfile student,
             Quiz quiz,
-            boolean completed,
             String summary) {
         StudentQuizProgress progress = studentQuizProgressRepository
                 .findByStudentIdAndQuizId(student.getId(), quiz.getId())
                 .orElseGet(StudentQuizProgress::new);
-        boolean firstCompletion = !progress.isCompleted() && completed;
+        boolean firstCompletion = !progress.isCompleted();
         LocalDateTime now = LocalDateTime.now();
 
         if (progress.getId() == null) {
@@ -271,11 +260,9 @@ public class StudentLearningProgressService {
         progress.setAttemptCount((progress.getAttemptCount() == null ? 0 : progress.getAttemptCount()) + 1);
         progress.setLastInteractedAt(now);
         progress.setCompletionSummary(summary);
-        if (completed) {
-            progress.setCompleted(true);
-            if (progress.getCompletedAt() == null) {
-                progress.setCompletedAt(now);
-            }
+        progress.setCompleted(true);
+        if (progress.getCompletedAt() == null) {
+            progress.setCompletedAt(now);
         }
         studentQuizProgressRepository.save(progress);
         return firstCompletion;
@@ -420,6 +407,13 @@ public class StudentLearningProgressService {
                 transaction.getSourceType(),
                 transaction.getSourceId(),
                 transaction.getCreatedAt());
+    }
+
+    private DailyStreakResponse toDailyStreakResponse(DailyStreak streak) {
+        return new DailyStreakResponse(
+                streak != null && streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0,
+                streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,
+                streak != null ? streak.getLastLearningDate() : null);
     }
 
     private int round(double value) {

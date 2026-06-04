@@ -100,5 +100,4 @@ public class PublicController {
                 "Published course detail retrieved successfully.",
                 publicContentService.getCourseDetail(id));
     }
-
 }

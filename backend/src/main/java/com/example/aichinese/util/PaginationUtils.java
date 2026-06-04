@@ -25,7 +25,6 @@ public final class PaginationUtils {
     public static final int DEFAULT_MAX_PAGE_SIZE = 100;
 
     private PaginationUtils() {
-        throw new AssertionError("PaginationUtils is a utility class and must not be instantiated.");
     }
 
     /**

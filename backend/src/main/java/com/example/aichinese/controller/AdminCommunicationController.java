@@ -166,5 +166,4 @@ public class AdminCommunicationController {
     public ApiResponse<AuditLogResponse> getAuditLog(@PathVariable Long id) {
         return ApiResponse.success("Audit log retrieved successfully.", auditLogService.getAuditLog(id));
     }
-
 }

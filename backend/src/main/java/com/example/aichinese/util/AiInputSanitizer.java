@@ -122,7 +122,6 @@ public final class AiInputSanitizer {
             "[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]");
 
     private AiInputSanitizer() {
-        throw new AssertionError("AiInputSanitizer is a utility class and must not be instantiated.");
     }
 
     /**

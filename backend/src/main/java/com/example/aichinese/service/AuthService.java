@@ -277,7 +277,7 @@ public class AuthService {
         token.setUser(user);
         token.setTokenHash(hashResetToken(rawToken));
         token.setExpiresAt(now.plus(RESET_TOKEN_TTL));
-        PasswordResetToken saved = passwordResetTokenRepository.save(token);
+        passwordResetTokenRepository.save(token);
 
         String resetLink = emailProperties.resolvePasswordResetBaseUrl()
                 + "?token=" + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);

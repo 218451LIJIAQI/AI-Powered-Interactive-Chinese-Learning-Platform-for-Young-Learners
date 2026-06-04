@@ -16,9 +16,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
@@ -175,7 +173,7 @@ public class GlobalExceptionHandler {
                 .body(failure(FriendlyErrorMessageResolver.notFoundMessage()));
     }
 
-    @ExceptionHandler({ AccessDeniedException.class, AuthorizationDeniedException.class })
+    @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(RuntimeException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(failure(FriendlyErrorMessageResolver.permissionDeniedMessage()));
@@ -206,7 +204,7 @@ public class GlobalExceptionHandler {
                 .body(failure(FriendlyErrorMessageResolver.conflictMessage()));
     }
 
-    @ExceptionHandler({ OptimisticLockingFailureException.class, ObjectOptimisticLockingFailureException.class })
+    @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(RuntimeException exception) {
         log.warn("Concurrent update rejected request [requestId={}]: {}",
                 requestId(), rootCauseClassName(exception));

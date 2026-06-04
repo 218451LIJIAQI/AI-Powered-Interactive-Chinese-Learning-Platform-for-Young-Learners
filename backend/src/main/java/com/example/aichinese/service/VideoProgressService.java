@@ -199,16 +199,6 @@ public class VideoProgressService {
                 : request.totalSeconds();
         Integer progressPercentage = request.progressPercentage();
 
-        if (watchedSeconds != null && watchedSeconds < 0) {
-            throw new ResponseStatusException(BAD_REQUEST, "Watched seconds must not be negative.");
-        }
-        if (totalSeconds != null && totalSeconds < 0) {
-            throw new ResponseStatusException(BAD_REQUEST, "Total seconds must not be negative.");
-        }
-        if (watchedSeconds != null && totalSeconds != null && watchedSeconds > totalSeconds) {
-            throw new ResponseStatusException(BAD_REQUEST, "Watched seconds must not exceed total seconds.");
-        }
-
         if (progressPercentage == null) {
             if (Boolean.TRUE.equals(request.completed())) {
                 progressPercentage = 100;
@@ -217,10 +207,6 @@ public class VideoProgressService {
             } else {
                 progressPercentage = progress.getProgressPercentage() == null ? 0 : progress.getProgressPercentage();
             }
-        }
-
-        if (progressPercentage < 0 || progressPercentage > 100) {
-            throw new ResponseStatusException(BAD_REQUEST, "Progress percentage must be between 0 and 100.");
         }
 
         boolean completed = Boolean.TRUE.equals(request.completed()) || progressPercentage >= 100;

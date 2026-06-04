@@ -4,9 +4,6 @@ import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Strongly typed binding for {@code app.security.forwarded.*}.
- */
 @ConfigurationProperties(prefix = "app.security.forwarded")
 public record ForwardedHeaderProperties(List<String> trustedProxies) {
 

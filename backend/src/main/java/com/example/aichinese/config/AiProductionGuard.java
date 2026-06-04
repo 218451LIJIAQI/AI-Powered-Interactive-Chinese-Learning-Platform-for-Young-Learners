@@ -8,9 +8,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
-/**
- * Fail-fast startup guard for production AI provider configuration.
- */
 @Component
 public class AiProductionGuard {
 

@@ -29,7 +29,7 @@ public record PageResponse<T>(
     }
 
     public static <T> PageResponse<T> of(List<T> items, int page, int size, long totalItems) {
-        return new PageResponse<>(items, page, size, totalItems, computeTotalPages(totalItems, size));
+        return new PageResponse<>(items, page, size, totalItems, 0);
     }
 
     public static <T> PageResponse<T> empty(int page, int size) {
@@ -43,5 +43,4 @@ public record PageResponse<T>(
         long pages = ((totalItems - 1L) / size) + 1L;
         return pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
     }
-
 }

@@ -136,7 +136,6 @@ public class ContentManagementMapper {
         if (coursePackage == null) {
             return null;
         }
-        List<PackageItem> safeItems = items == null ? List.of() : items;
         return new CoursePackageResponse(
                 coursePackage.getId(),
                 coursePackage.getTitle(),
@@ -150,10 +149,7 @@ public class ContentManagementMapper {
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
                 toTeacherSummary(coursePackage.getTeacher()),
-                safeItems.stream()
-                        .filter(Objects::nonNull)
-                        .map(this::toPackageItemResponse)
-                        .toList(),
+                mapPackageItems(items),
                 coursePackage.getCreatedAt(),
                 coursePackage.getUpdatedAt());
     }

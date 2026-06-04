@@ -186,7 +186,9 @@ public class TeacherQuizService {
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
         ensureQuizQuestionsEditable(quiz.getId());
-        applyQuizQuestion(createQuestion(quiz), request.questionType(), request.questionText(), request.correctAnswerText(),
+        QuizQuestion question = new QuizQuestion();
+        question.setQuiz(quiz);
+        applyQuizQuestion(question, request.questionType(), request.questionText(), request.correctAnswerText(),
                 request.points(), request.displayOrder(), request.options(), request.explanation());
         recomputeQuizTotalPoints(quiz);
         auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_QUESTION_CREATE", "Quiz", quiz.getId(),
@@ -287,12 +289,6 @@ public class TeacherQuizService {
         }
     }
 
-    private QuizQuestion createQuestion(Quiz quiz) {
-        QuizQuestion question = new QuizQuestion();
-        question.setQuiz(quiz);
-        return question;
-    }
-
     private void applyQuizQuestion(
             QuizQuestion question,
             String questionTypeRaw,
@@ -351,7 +347,7 @@ public class TeacherQuizService {
 
         QuizQuestion savedQuestion = quizQuestionRepository.save(question);
         quizOptionRepository.deleteByQuestionId(savedQuestion.getId());
-        if (optionBased && !safeOptions.isEmpty()) {
+        if (optionBased) {
             safeOptions.forEach(option -> {
                 if (option.displayOrder() != null && option.displayOrder() < 0) {
                     throw new ResponseStatusException(BAD_REQUEST, "Option display order must be greater than or equal to 0.");

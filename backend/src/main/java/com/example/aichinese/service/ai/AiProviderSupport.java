@@ -17,7 +17,6 @@ final class AiProviderSupport {
     private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1");
 
     private AiProviderSupport() {
-        throw new AssertionError("AiProviderSupport is a static helper and must not be instantiated.");
     }
 
     static String normalizeProvider(String raw) {

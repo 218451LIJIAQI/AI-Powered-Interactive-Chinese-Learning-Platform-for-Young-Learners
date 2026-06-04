@@ -14,7 +14,6 @@ public final class ExceptionLogUtils {
     private static final int MAX_EXCEPTION_SUMMARY_LENGTH = 220;
 
     private ExceptionLogUtils() {
-        throw new AssertionError("ExceptionLogUtils is a utility class and must not be instantiated.");
     }
 
     public static String exceptionType(Throwable exception) {
@@ -38,5 +37,4 @@ public final class ExceptionLogUtils {
         String message = safeMessage(exception);
         return TextUtils.truncateWithEllipsis(message == null ? type : type + ": " + message, MAX_EXCEPTION_SUMMARY_LENGTH);
     }
-
 }

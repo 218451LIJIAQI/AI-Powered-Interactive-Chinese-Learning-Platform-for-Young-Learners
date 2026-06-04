@@ -124,7 +124,6 @@ public final class FriendlyErrorMessageResolver {
             "between 0 and 100");
 
     private FriendlyErrorMessageResolver() {
-        throw new AssertionError("No instances");
     }
 
     public static String resolve(HttpStatusCode statusCode, String rawMessage) {

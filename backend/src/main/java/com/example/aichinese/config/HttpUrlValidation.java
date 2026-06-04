@@ -11,7 +11,6 @@ import java.util.Locale;
 final class HttpUrlValidation {
 
     private HttpUrlValidation() {
-        throw new AssertionError("No instances");
     }
 
     static URI requireAbsoluteHttpUrl(String value, String label) {

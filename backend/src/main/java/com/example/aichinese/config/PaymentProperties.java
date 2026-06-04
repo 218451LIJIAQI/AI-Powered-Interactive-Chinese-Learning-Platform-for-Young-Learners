@@ -5,9 +5,6 @@ import java.util.Set;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Strongly typed binding for the {@code app.payment.*} configuration block.
- */
 @ConfigurationProperties(prefix = "app.payment")
 public record PaymentProperties(
         String successUrl,

@@ -5,7 +5,6 @@ import java.util.List;
 public final class DtoNormalization {
 
     private DtoNormalization() {
-        throw new UnsupportedOperationException("No instances");
     }
 
     public static String strip(String value) {

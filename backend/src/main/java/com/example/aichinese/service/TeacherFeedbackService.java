@@ -6,7 +6,6 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -148,7 +147,10 @@ public class TeacherFeedbackService {
         Page<TeacherFeedback> feedbackPage = teacherFeedbackRepository.findByTeacherUserIdOrderByCreatedAtDesc(
                 currentUser.getUserId(),
                 PageRequest.of(safePage, safeSize));
-        return mapFeedbackPage(feedbackPage, safePage, safeSize, communicationMapper::toTeacherFeedbackResponse);
+        List<TeacherFeedbackResponse> items = feedbackPage.getContent().stream()
+                .map(communicationMapper::toTeacherFeedbackResponse)
+                .toList();
+        return new PageResponse<>(items, safePage, safeSize, feedbackPage.getTotalElements(), feedbackPage.getTotalPages());
     }
 
     @Transactional(readOnly = true)
@@ -234,7 +236,7 @@ public class TeacherFeedbackService {
     }
 
     private boolean isStudentFeedbackCurrentlyAccessible(StudentProfile student, TeacherFeedback feedback) {
-        Lesson lesson = feedbackLesson(feedback);
+        Lesson lesson = linkedLesson(feedback.getLesson(), feedback.getQuizAttempt());
         if (lesson != null) {
             return studentLearningAccessService.hasLessonAccess(student, lesson);
         }
@@ -279,16 +281,6 @@ public class TeacherFeedbackService {
         }
         if (quizAttempt != null && quizAttempt.getQuiz() != null) {
             return quizAttempt.getQuiz().getLesson();
-        }
-        return null;
-    }
-
-    private Lesson feedbackLesson(TeacherFeedback feedback) {
-        if (feedback.getLesson() != null) {
-            return feedback.getLesson();
-        }
-        if (feedback.getQuizAttempt() != null && feedback.getQuizAttempt().getQuiz() != null) {
-            return feedback.getQuizAttempt().getQuiz().getLesson();
         }
         return null;
     }
@@ -346,17 +338,6 @@ public class TeacherFeedbackService {
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid feedback type.");
         }
-    }
-
-    private <T> PageResponse<T> mapFeedbackPage(
-            Page<TeacherFeedback> feedbackPage,
-            int page,
-            int size,
-            Function<TeacherFeedback, T> mapper) {
-        List<T> items = feedbackPage.getContent().stream()
-                .map(mapper)
-                .toList();
-        return new PageResponse<>(items, page, size, feedbackPage.getTotalElements(), feedbackPage.getTotalPages());
     }
 
 }

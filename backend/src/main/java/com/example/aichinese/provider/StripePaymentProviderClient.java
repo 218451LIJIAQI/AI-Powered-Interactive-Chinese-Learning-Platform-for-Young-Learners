@@ -266,7 +266,7 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
             body.add("line_items[" + index + "][price_data][product_data][name]", productName(item));
             body.add("line_items[" + index + "][price_data][unit_amount]",
                     String.valueOf(toMinorUnits(item.getUnitPrice(), checkout.currencyCode())));
-            body.add("line_items[" + index + "][quantity]", String.valueOf(safeQuantity(item.getQuantity())));
+            body.add("line_items[" + index + "][quantity]", String.valueOf(item.getQuantity()));
         }
     }
 
@@ -295,10 +295,6 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
             }
         }
         return true;
-    }
-
-    private static int safeQuantity(Integer quantity) {
-        return quantity == null || quantity < 1 ? 1 : quantity;
     }
 
     private static String currency(String currencyCode) {

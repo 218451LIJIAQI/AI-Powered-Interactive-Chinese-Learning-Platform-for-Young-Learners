@@ -113,7 +113,6 @@ public class StudentLearningService {
     public StudentLessonPlayerResponse getLessonPlayer(SecurityUserDetails currentUser, Long lessonId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Lesson lesson = studentLearningAccessService.requirePublishedLesson(lessonId);
-        boolean locked = !studentLearningAccessService.hasLessonAccess(student, lesson);
         studentLearningAccessService.ensureLessonAccess(student, lesson);
         int completionPercent = studentLearningProgressService.lessonCompletionPercent(student, lesson);
 
@@ -125,7 +124,7 @@ public class StudentLearningService {
                 lesson.getEstimatedDurationMinutes(),
                 completionPercent,
                 completionPercent >= 100,
-                locked,
+                false,
                 lesson.getLearningType() == null ? null : lesson.getLearningType().name(),
                 buildLessonLiveClasses(student, lesson),
                 buildRecordedVideos(student, lesson));
@@ -207,11 +206,12 @@ public class StudentLearningService {
         }
 
         QuizAttempt attempt = new QuizAttempt();
+        LocalDateTime now = LocalDateTime.now();
         attempt.setQuiz(quiz);
         attempt.setStudent(student);
-        attempt.setStartedAt(LocalDateTime.now());
+        attempt.setStartedAt(now);
         attempt.setSubmitted(true);
-        attempt.setCompletedAt(LocalDateTime.now());
+        attempt.setCompletedAt(now);
 
         int score = 0;
         int maxScore = 0;

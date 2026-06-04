@@ -24,9 +24,6 @@ public final class CommerceDtoConstants {
 
     public static final int COMMISSION_RATE_FRACTION_DIGITS = 4;
 
-    public static final String CURRENCY_CODE_PATTERN = "^[A-Z]{3}$";
-
     private CommerceDtoConstants() {
-        throw new UnsupportedOperationException("No instances");
     }
 }

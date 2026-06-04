@@ -7,9 +7,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.util.StringUtils;
 
-/**
- * SMTP / outbound-email startup validation.
- */
 @Configuration(proxyBeanMethods = false)
 public class EmailConfiguration {
 
@@ -59,5 +56,4 @@ public class EmailConfiguration {
     private static boolean isProductionProfileActive(Environment environment) {
         return environment.acceptsProfiles(PROD_PROFILES);
     }
-
 }

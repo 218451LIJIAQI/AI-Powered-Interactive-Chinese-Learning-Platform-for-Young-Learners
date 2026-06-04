@@ -20,9 +20,6 @@ public record CreateModerationActionRequest(
         @Size(max = MAX_REASON_LENGTH, message = "Reason must be 1000 characters or fewer.")
         String reason) {
 
-    /**
-     * Maximum number of characters accepted in {@link #targetType}.
-     */
     public static final int MAX_TARGET_TYPE_LENGTH = 40;
 
     public static final int MAX_REASON_LENGTH = 1000;

@@ -6,9 +6,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
-/**
- * Fail-fast startup guard for production payment configuration.
- */
 @Component
 public class PaymentProductionGuard {
 
@@ -89,5 +86,4 @@ public class PaymentProductionGuard {
                     "STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret when the prod profile is active.");
         }
     }
-
 }

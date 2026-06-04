@@ -25,7 +25,6 @@ public final class TextUtils {
     private static final Pattern WHITESPACE_RUN = Pattern.compile("\\p{javaWhitespace}+");
 
     private TextUtils() {
-        throw new AssertionError("TextUtils is a utility class and must not be instantiated.");
     }
 
     /**

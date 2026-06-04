@@ -2,9 +2,6 @@ package com.example.aichinese.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Strongly typed binding for the {@code app.email.*} configuration block.
- */
 @ConfigurationProperties(prefix = "app.email")
 public record EmailProperties(
         boolean enabled,

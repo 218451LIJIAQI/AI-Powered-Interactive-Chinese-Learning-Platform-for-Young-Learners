@@ -34,10 +34,6 @@ public class PublicAuthRequestLimiter {
     private final int maxRegisterRequests;
     private final int maxForgotPasswordRequests;
 
-    public PublicAuthRequestLimiter() {
-        this(Clock.systemUTC(), MAX_REGISTER_REQUESTS, MAX_FORGOT_PASSWORD_REQUESTS, MAX_TRACKED_REQUEST_RECORDS);
-    }
-
     @Autowired
     public PublicAuthRequestLimiter(
             @Value("${app.security.public-auth-rate-limit.register-requests:100}") int maxRegisterRequests,

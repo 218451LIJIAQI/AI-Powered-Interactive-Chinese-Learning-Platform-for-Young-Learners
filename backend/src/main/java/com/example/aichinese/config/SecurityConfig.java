@@ -26,9 +26,6 @@ import com.example.aichinese.security.JwtAccessDeniedHandler;
 import com.example.aichinese.security.JwtAuthenticationEntryPoint;
 import com.example.aichinese.security.JwtAuthenticationFilter;
 
-/**
- * Central Spring Security configuration.
- */
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
 @EnableConfigurationProperties({

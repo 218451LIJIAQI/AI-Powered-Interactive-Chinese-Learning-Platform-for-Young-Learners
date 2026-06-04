@@ -82,5 +82,4 @@ public class CommissionService {
         setting.setEditable(true);
         return setting;
     }
-
 }
