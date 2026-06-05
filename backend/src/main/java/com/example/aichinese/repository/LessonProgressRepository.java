@@ -3,8 +3,6 @@ package com.example.aichinese.repository;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -26,11 +24,7 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
             @Param("studentId") Long studentId,
             @Param("lessonId") Long lessonId);
 
-    long countByStudentId(Long studentId);
-
     List<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId);
-
-    Page<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId, Pageable pageable);
 
     @EntityGraph(attributePaths = { "student", "student.user", "student.currentLevel", "lesson", "lesson.teacher" })
     List<LessonProgress> findByLessonTeacherIdAndStudentIdIn(Long teacherId, List<Long> studentIds);

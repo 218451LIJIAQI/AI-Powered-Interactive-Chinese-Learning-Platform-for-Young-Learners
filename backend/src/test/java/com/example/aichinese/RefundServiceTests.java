@@ -65,7 +65,6 @@ class RefundServiceTests {
                         .contains("already active"));
 
         verify(fixture.orderRepository).findLockedByIdAndStudentUserId(500L, currentUser.getUserId());
-        verify(fixture.orderRepository, never()).findByIdAndStudentUserId(500L, currentUser.getUserId());
         verify(fixture.refundRequestRepository, never()).save(any(RefundRequest.class));
         verifyNoInteractions(
                 fixture.entitlementService,

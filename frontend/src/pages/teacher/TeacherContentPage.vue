@@ -1467,7 +1467,6 @@ type DisplayCourse = {
   subtitle: string
   description: string
   statusLabel: string
-  contentStatus: ContentStatus
   lessonCount: number
   levelLabel: string
   accessLabel: string
@@ -1749,7 +1748,6 @@ const displayCourses = computed<DisplayCourse[]>(() => {
     subtitle: item.category.name,
     description: item.description || 'No description available yet.',
     statusLabel: normalizeStatus(item.contentStatus),
-    contentStatus: item.contentStatus,
     lessonCount: item.packageItems.length,
     levelLabel: item.level.name,
     accessLabel: item.accessType === 'PAID' ? formatPrice(item.price) : 'Free',
@@ -1768,7 +1766,6 @@ const selectedCourse = computed<DisplayCourse>(() => {
       subtitle: 'Create or select a course',
       description: 'No course data is available right now.',
       statusLabel: 'Draft',
-      contentStatus: 'DRAFT',
       lessonCount: 0,
       levelLabel: '--',
       accessLabel: '--',

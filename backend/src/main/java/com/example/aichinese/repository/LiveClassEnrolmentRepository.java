@@ -3,8 +3,6 @@ package com.example.aichinese.repository;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -18,9 +16,6 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
 
     @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user" })
     List<LiveClassEnrolment> findByLiveClassIdOrderByEnrolledAtAsc(Long liveClassId);
-
-    @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user" })
-    Page<LiveClassEnrolment> findByLiveClassIdOrderByEnrolledAtAsc(Long liveClassId, Pageable pageable);
 
     @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "liveClass.lesson", "liveClass.coursePackage", "student", "student.user" })
     List<LiveClassEnrolment> findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(

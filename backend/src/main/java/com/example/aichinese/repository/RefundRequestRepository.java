@@ -26,9 +26,6 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
 
     boolean existsByOrderIdAndRefundStatusIn(Long orderId, Collection<RefundStatus> statuses);
 
-    @EntityGraph(attributePaths = { "student", "student.user", "order" })
-    Optional<RefundRequest> findByIdAndStudentUserId(Long id, Long userId);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = { "student", "student.user", "order" })
     @Query("select rr from RefundRequest rr where rr.id = :id")

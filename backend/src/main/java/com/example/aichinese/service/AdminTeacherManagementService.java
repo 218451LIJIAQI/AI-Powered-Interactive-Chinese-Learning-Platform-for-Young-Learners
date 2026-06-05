@@ -127,11 +127,6 @@ public class AdminTeacherManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<AdminTeacherListItemResponse> listPendingTeachers() {
-        return listPendingTeachers(0, 20).items();
-    }
-
-    @Transactional(readOnly = true)
     public PageResponse<AdminTeacherListItemResponse> listPendingTeachers(int page, int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);

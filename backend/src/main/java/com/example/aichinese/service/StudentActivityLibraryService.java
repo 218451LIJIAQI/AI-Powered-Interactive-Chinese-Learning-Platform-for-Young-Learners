@@ -64,12 +64,12 @@ import jakarta.persistence.criteria.Predicate;
 @Service
 public class StudentActivityLibraryService {
 
-    static final String SOURCE_FLASHCARD = "PLATFORM_FLASHCARD";
-    static final String SOURCE_MATCHING_GAME = "PLATFORM_MATCHING_GAME";
-    static final String SOURCE_LISTENING_EXERCISE = "PLATFORM_LISTENING_EXERCISE";
-    static final String SOURCE_TRACING_EXERCISE = "PLATFORM_TRACING_EXERCISE";
-    static final String SOURCE_DRAG_DROP_ACTIVITY = "PLATFORM_DRAG_DROP_ACTIVITY";
-    static final String SOURCE_STORY_ACTIVITY = "PLATFORM_STORY_ACTIVITY";
+    private static final String SOURCE_FLASHCARD = "PLATFORM_FLASHCARD";
+    private static final String SOURCE_MATCHING_GAME = "PLATFORM_MATCHING_GAME";
+    private static final String SOURCE_LISTENING_EXERCISE = "PLATFORM_LISTENING_EXERCISE";
+    private static final String SOURCE_TRACING_EXERCISE = "PLATFORM_TRACING_EXERCISE";
+    private static final String SOURCE_DRAG_DROP_ACTIVITY = "PLATFORM_DRAG_DROP_ACTIVITY";
+    private static final String SOURCE_STORY_ACTIVITY = "PLATFORM_STORY_ACTIVITY";
 
     private static final Comparator<LocalDateTime> NEWEST_TIMESTAMP_FIRST =
             Comparator.nullsLast(Comparator.reverseOrder());

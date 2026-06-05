@@ -1036,11 +1036,6 @@ img {
   border-color: rgba(106, 73, 255, 0.18);
 }
 
-.list {
-  display: grid;
-  gap: 12px;
-}
-
 .list-item {
   display: flex;
   align-items: center;
@@ -3683,8 +3678,7 @@ img {
   letter-spacing: -0.04em;
 }
 
-.student-home-page .student-home-main,
-.student-home-page .student-home-side {
+.student-home-page .student-home-main {
   gap: 18px;
 }
 

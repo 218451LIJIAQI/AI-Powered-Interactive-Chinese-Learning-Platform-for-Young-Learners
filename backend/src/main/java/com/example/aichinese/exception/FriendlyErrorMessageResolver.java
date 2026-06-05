@@ -211,10 +211,6 @@ public final class FriendlyErrorMessageResolver {
         return "Your session has expired. Please sign in again to continue.";
     }
 
-    public static String invalidCredentialsMessage() {
-        return "The email or password is incorrect. Please try again.";
-    }
-
     public static String permissionDeniedMessage() {
         return "You do not have permission to perform this action. Contact an administrator if needed.";
     }
@@ -231,24 +227,12 @@ public final class FriendlyErrorMessageResolver {
         return "The request could not be processed. Please check the input and try again.";
     }
 
-    public static String emailAlreadyRegisteredMessage() {
-        return "This email is already registered. Please use another email or sign in.";
-    }
-
-    public static String passwordMismatchMessage() {
-        return "The passwords do not match. Please check them and try again.";
-    }
-
     public static String uploadFailedMessage() {
         return "The file upload did not work. Please check the file type and size, then try again.";
     }
 
     public static String uploadTooLargeMessage() {
         return "The file is too large. Please choose a smaller file and try again.";
-    }
-
-    public static String uploadInvalidTypeMessage() {
-        return "This file type is not supported. Please upload a permitted file format.";
     }
 
     public static String serverUnavailableMessage() {

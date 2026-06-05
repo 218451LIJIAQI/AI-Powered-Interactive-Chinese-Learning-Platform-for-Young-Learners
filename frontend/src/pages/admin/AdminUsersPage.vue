@@ -1302,12 +1302,8 @@ function reloadAll() {
   min-width: 0;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.admin-users-profile-main {
   justify-content: flex-start;
+  gap: 12px;
 }
 
 .admin-users-profile-copy {

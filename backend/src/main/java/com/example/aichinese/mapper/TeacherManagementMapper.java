@@ -156,10 +156,6 @@ public class TeacherManagementMapper {
                 studentProfile.getCreatedAt());
     }
 
-    public PublicTeacherProfileResponse toPublicTeacherProfileResponse(TeacherProfile teacherProfile) {
-        return toPublicTeacherProfileResponse(teacherProfile, 0);
-    }
-
     public PublicTeacherProfileResponse toPublicTeacherProfileResponse(TeacherProfile teacherProfile, int courseCount) {
         return new PublicTeacherProfileResponse(
                 teacherProfile.getId(),

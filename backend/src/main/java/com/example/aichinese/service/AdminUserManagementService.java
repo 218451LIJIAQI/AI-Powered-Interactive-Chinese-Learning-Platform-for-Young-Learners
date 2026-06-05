@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -112,7 +111,6 @@ public class AdminUserManagementService {
         int sanitizedSize = PaginationUtils.sanitizeSize(size);
 
         Page<StudentProfile> studentPage = studentProfileRepository.findAll(
-                (Specification<StudentProfile>) null,
                 PageRequest.of(sanitizedPage, sanitizedSize, Sort.by(Sort.Direction.DESC, "createdAt")));
 
         List<AdminStudentListItemResponse> items = studentPage.getContent().stream()

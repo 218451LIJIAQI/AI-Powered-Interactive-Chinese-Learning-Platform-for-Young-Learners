@@ -686,10 +686,6 @@ public class AdminActivityService {
             String keyword,
             ActivityType type) {
 
-        public static ActivityFilter empty() {
-            return new ActivityFilter(null, null, null, null, null, null, null, null, null);
-        }
-
         public static ActivityFilter of(
                 Optional<String> status,
                 Optional<Integer> hskLevel,

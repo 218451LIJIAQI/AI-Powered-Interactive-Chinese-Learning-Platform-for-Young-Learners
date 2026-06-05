@@ -26,9 +26,6 @@ public interface PayoutRequestRepository extends JpaRepository<PayoutRequest, Lo
     @EntityGraph(attributePaths = { "teacher", "teacher.user" })
     Page<PayoutRequest> findByTeacherUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
-    @EntityGraph(attributePaths = { "teacher", "teacher.user" })
-    Optional<PayoutRequest> findByIdAndTeacherUserId(Long id, Long userId);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = { "teacher", "teacher.user" })
     @Query("select pr from PayoutRequest pr where pr.id = :id")
