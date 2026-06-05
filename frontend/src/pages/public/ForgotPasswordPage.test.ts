@@ -59,9 +59,7 @@ describe('ForgotPasswordPage recovery email hygiene', () => {
 
     const wrapper = mountForgotPasswordPage()
 
-    expect((wrapper.get<HTMLInputElement>('#forgot-email').element as HTMLInputElement).value).toBe(
-      'Parent@Example.com',
-    )
+    expect(wrapper.get<HTMLInputElement>('#forgot-email').element.value).toBe('Parent@Example.com')
     expect(window.sessionStorage.getItem(storageKeys.recoveryEmail)).toBeNull()
     expect(mocks.replace).not.toHaveBeenCalled()
   })
@@ -75,9 +73,7 @@ describe('ForgotPasswordPage recovery email hygiene', () => {
 
     const wrapper = mountForgotPasswordPage()
 
-    expect((wrapper.get<HTMLInputElement>('#forgot-email').element as HTMLInputElement).value).toBe(
-      'parent@example.com',
-    )
+    expect(wrapper.get<HTMLInputElement>('#forgot-email').element.value).toBe('parent@example.com')
     expect(mocks.replace).toHaveBeenCalledWith({
       name: 'forgot-password',
       query: { source: 'login' },

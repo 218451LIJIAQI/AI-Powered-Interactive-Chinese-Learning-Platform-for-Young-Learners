@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.commerce;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -13,8 +15,6 @@ public record PayoutDecisionRequest(
         String reason) {
 
     public PayoutDecisionRequest {
-        if (reason != null) {
-            reason = reason.strip();
-        }
+        reason = strip(reason);
     }
 }

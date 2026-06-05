@@ -33,6 +33,7 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 
 /**
  * End-to-end MockMvc coverage of synchronous live classes and
@@ -922,7 +923,7 @@ class LiveRecordedLearningIntegrationTests {
                 return item;
             }
         }
-        return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+        return MissingNode.getInstance();
     }
 
     private String uniqueEmail(String prefix) {

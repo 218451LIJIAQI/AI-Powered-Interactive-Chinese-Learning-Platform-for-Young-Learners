@@ -229,7 +229,7 @@ public class AdminContentReviewService {
             }
         };
 
-        recordModeration(adminUser, contentType, id, "ARCHIVE", note);
+        recordModeration(adminUser, contentType, id, note);
         log.info("Content archived: type={}, id={}, adminUserId={}", contentType, id, adminUser.getId());
         auditLogService.record(adminUser, "ADMIN_CONTENT_ARCHIVE", contentType.name(), id,
                 "Admin archived content.");
@@ -276,12 +276,12 @@ public class AdminContentReviewService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Admin user could not be found."));
     }
 
-    private void recordModeration(User adminUser, ManagedContentType contentType, Long id, String action, String note) {
+    private void recordModeration(User adminUser, ManagedContentType contentType, Long id, String note) {
         ContentModerationRecord record = new ContentModerationRecord();
         record.setAdminUser(adminUser);
         record.setTargetType(contentType.name());
         record.setTargetId(id);
-        record.setActionTaken(action);
+        record.setActionTaken("ARCHIVE");
         record.setNote(AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH));
         contentModerationRecordRepository.save(record);
     }

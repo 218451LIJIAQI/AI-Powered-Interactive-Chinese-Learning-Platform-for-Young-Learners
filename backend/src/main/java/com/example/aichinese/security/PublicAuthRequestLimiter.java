@@ -22,9 +22,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 public class PublicAuthRequestLimiter {
 
     static final Duration WINDOW = Duration.ofMinutes(15);
-    static final int MAX_REGISTER_REQUESTS = 100;
-    static final int MAX_FORGOT_PASSWORD_REQUESTS = 10;
-    static final int MAX_TRACKED_REQUEST_RECORDS = 10_000;
     private static final int MAX_SUBJECT_KEY_LENGTH = 320;
     private static final int MAX_IP_KEY_LENGTH = 64;
 

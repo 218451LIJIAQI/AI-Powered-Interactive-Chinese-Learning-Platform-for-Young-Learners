@@ -52,7 +52,7 @@ public class JwtService {
                 .subject(email)
                 .claims(Map.of(
                         CLAIM_USER_ID, user.getId(),
-                        CLAIM_SESSION_VERSION, currentSessionVersion(user)))
+                        CLAIM_SESSION_VERSION, user.getSessionVersion()))
                 .id(UUID.randomUUID().toString())
                 .issuedAt(now)
                 .expiration(expiry)
@@ -94,10 +94,6 @@ public class JwtService {
     private static long extractSessionVersion(Claims claims) {
         Number sessionVersion = claims.get(CLAIM_SESSION_VERSION, Number.class);
         return sessionVersion == null ? DEFAULT_SESSION_VERSION : sessionVersion.longValue();
-    }
-
-    private static long currentSessionVersion(User user) {
-        return user == null ? DEFAULT_SESSION_VERSION : user.getSessionVersion();
     }
 
     private static byte[] resolveSigningKeyBytes(String configuredSecret) {

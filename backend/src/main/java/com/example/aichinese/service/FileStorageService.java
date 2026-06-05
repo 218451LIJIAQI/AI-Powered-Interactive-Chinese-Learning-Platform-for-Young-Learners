@@ -47,14 +47,9 @@ public class FileStorageService {
 
     @Transactional
     public UploadedFile storeVerificationDocument(MultipartFile multipartFile, User ownerUser) {
-        validateMultipartFile(multipartFile);
-
-        String originalFileName = UploadStorageSupport.extractSafeOriginalFileName(
-                multipartFile.getOriginalFilename(),
-                "Uploaded file name is invalid.");
-        String extension = UploadStorageSupport.getRequiredExtension(
-                originalFileName,
-                "Uploaded file must include a valid extension. Allowed types are PDF, JPG, JPEG, and PNG.");
+        String[] validated = validateMultipartFile(multipartFile);
+        String originalFileName = validated[0];
+        String extension = validated[1];
         String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
 
         StoredObject storedObject = storageProvider.store(
@@ -66,21 +61,15 @@ public class FileStorageService {
                         "Uploaded file could not be stored."));
         UploadStorageSupport.registerRollbackCleanup(storageProvider, storedObject);
 
-        UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setOwnerUser(ownerUser);
-        uploadedFile.setFileName(originalFileName);
-        uploadedFile.setStoredFileName(storedFileName);
-        uploadedFile.setFilePath(storedObject.location().toString());
-        uploadedFile.setContentType(UploadStorageSupport.normalizeContentType(multipartFile.getContentType()));
-        uploadedFile.setFileSize(multipartFile.getSize());
-        uploadedFile.setAccessLevel("PRIVATE");
-        uploadedFile.setActive(true);
-        try {
-            return uploadedFileRepository.save(uploadedFile);
-        } catch (RuntimeException exception) {
-            storageProvider.deleteQuietly(storedObject);
-            throw exception;
-        }
+        return UploadStorageSupport.saveUploadedFileMetadata(
+                uploadedFileRepository::save,
+                storageProvider,
+                storedObject,
+                ownerUser,
+                originalFileName,
+                storedFileName,
+                multipartFile.getContentType(),
+                multipartFile.getSize());
     }
 
     public StoredFileDownload loadAsDownload(UploadedFile uploadedFile) {
@@ -90,7 +79,7 @@ public class FileStorageService {
                 "Requested file could not be found."));
     }
 
-    private void validateMultipartFile(MultipartFile multipartFile) {
+    private String[] validateMultipartFile(MultipartFile multipartFile) {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Verification document file is required.");
         }
@@ -105,7 +94,8 @@ public class FileStorageService {
         String extension = UploadStorageSupport.getRequiredExtension(
                 originalFileName,
                 "Uploaded file must include a valid extension. Allowed types are PDF, JPG, JPEG, and PNG.");
-        if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase(Locale.ROOT))) {
+        String normalizedExtension = extension.toLowerCase(Locale.ROOT);
+        if (!ALLOWED_EXTENSIONS.contains(normalizedExtension)) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
                     "Unsupported file type. Allowed types are PDF, JPG, JPEG, and PNG.");
@@ -120,10 +110,12 @@ public class FileStorageService {
 
         UploadStorageSupport.validateFileSignature(
                 multipartFile,
-                extension.toLowerCase(Locale.ROOT),
+                normalizedExtension,
                 contentType,
                 ALLOWED_SIGNATURES,
                 "Uploaded file content does not match the declared PDF/JPG/PNG type.");
+
+        return new String[]{originalFileName, extension};
     }
 
     private Path resolveBaseDirectory() {

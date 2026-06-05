@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learning;
 
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -17,4 +19,8 @@ public record RescheduleLiveClassRequest(
 
         @Size(max = 64, message = "Time zone must be 64 characters or fewer.")
         String timeZone) {
+
+    public RescheduleLiveClassRequest {
+        timeZone = stripToNull(timeZone);
+    }
 }

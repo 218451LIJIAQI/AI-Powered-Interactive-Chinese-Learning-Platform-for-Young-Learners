@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.teacher.TeacherStudentSummaryResponse;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LessonProgress;
 import com.example.aichinese.entity.LiveClassEnrolment;
 import com.example.aichinese.entity.QuizAttempt;
@@ -204,10 +205,12 @@ public class TeacherStudentService {
             if (feedback.getLesson() != null) {
                 return studentLearningAccessService.hasLessonAccess(student, feedback.getLesson());
             }
-            if (feedback.getQuizAttempt() != null
-                    && feedback.getQuizAttempt().getQuiz() != null
-                    && feedback.getQuizAttempt().getQuiz().getLesson() != null) {
-                return studentLearningAccessService.hasLessonAccess(student, feedback.getQuizAttempt().getQuiz().getLesson());
+            QuizAttempt quizAttempt = feedback.getQuizAttempt();
+            Lesson quizLesson = quizAttempt != null && quizAttempt.getQuiz() != null
+                    ? quizAttempt.getQuiz().getLesson()
+                    : null;
+            if (quizLesson != null) {
+                return studentLearningAccessService.hasLessonAccess(student, quizLesson);
             }
             return true;
         }
@@ -219,13 +222,14 @@ public class TeacherStudentService {
         }
 
         private boolean hasCurrentEnrolmentAccess(LiveClassEnrolment enrolment) {
-            if (enrolment.getLiveClass() == null) {
+            var liveClass = enrolment.getLiveClass();
+            if (liveClass == null) {
                 return false;
             }
-            boolean lessonAccess = enrolment.getLiveClass().getLesson() == null
-                    || liveLearningAccessService.hasStudentLessonAccess(student, enrolment.getLiveClass().getLesson());
-            boolean packageAccess = enrolment.getLiveClass().getCoursePackage() == null
-                    || liveLearningAccessService.hasStudentPackageAccess(student, enrolment.getLiveClass().getCoursePackage());
+            boolean lessonAccess = liveClass.getLesson() == null
+                    || liveLearningAccessService.hasStudentLessonAccess(student, liveClass.getLesson());
+            boolean packageAccess = liveClass.getCoursePackage() == null
+                    || liveLearningAccessService.hasStudentPackageAccess(student, liveClass.getCoursePackage());
             return lessonAccess && packageAccess;
         }
 
@@ -266,6 +270,7 @@ public class TeacherStudentService {
         }
 
         private TeacherStudentSummaryResponse toResponse() {
+            var user = student.getUser();
             int progressPercent = lessonProgressCount > 0 ? Math.round((float) lessonProgressTotal / lessonProgressCount) : 0;
             Double quizAveragePercent = submittedAttemptCount > 0
                     ? submittedAttemptPercentTotal / (double) submittedAttemptCount
@@ -276,8 +281,8 @@ public class TeacherStudentService {
 
             return new TeacherStudentSummaryResponse(
                     student.getId(),
-                    student.getUser() != null ? student.getUser().getId() : null,
-                    student.getUser() != null ? student.getUser().getDisplayName() : student.getDisplayName(),
+                    user != null ? user.getId() : null,
+                    user != null ? user.getDisplayName() : student.getDisplayName(),
                     null,
                     student.getDisplayName(),
                     student.getCurrentLevel() != null ? student.getCurrentLevel().getName() : null,

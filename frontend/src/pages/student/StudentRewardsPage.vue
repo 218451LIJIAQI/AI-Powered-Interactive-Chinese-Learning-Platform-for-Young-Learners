@@ -7,7 +7,7 @@
       <p>Keep learning, earn points, and unlock milestones that make practice feel playful.</p>
     </section>
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="pageError" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="student-rewards-layout">
@@ -282,7 +282,7 @@
  * rewards, points history, dashboard, progress, and activity
  * resources.</p>
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { studentApi } from '@/api/services'
@@ -365,7 +365,6 @@ const progress = computed(
 const activities = computed(
   () => activitiesResource.data.value ?? (activitiesResource.usingFallback.value ? activityLibrary : emptyActivities),
 )
-const actionSuccess = ref<string | null>(null)
 const recommendedPracticeActivity = computed(() => {
   const nextIncomplete = activities.value.items.find((item) => !item.completed)
   const fromLibrary = normalizePracticeActivity(nextIncomplete?.type)
@@ -606,7 +605,6 @@ const journeySteps = computed(() =>
 )
 
 function openRewardPractice() {
-  actionSuccess.value = null
   void router.push(practiceRoute(recommendedPracticeActivity.value))
 }
 

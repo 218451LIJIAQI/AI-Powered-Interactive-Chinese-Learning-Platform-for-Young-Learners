@@ -23,13 +23,7 @@ public interface EmailService {
     }
 
     default void safeSendTeacherApprovalNotice(User recipient, String note) {
-        try {
-            sendTeacherApprovalNotice(recipient, note);
-        } catch (Exception exception) {
-            Long recipientId = recipient != null ? recipient.getId() : null;
-            log.warn("Teacher approval email delivery failed for user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
-            log.debug("Teacher approval email delivery stack trace for user id {}.", recipientId, exception);
-        }
+        safeSendTeacherNotice(recipient, "approval", () -> sendTeacherApprovalNotice(recipient, note));
     }
 
     default void sendTeacherRejectionNotice(User recipient, String reason) {
@@ -44,12 +38,16 @@ public interface EmailService {
     }
 
     default void safeSendTeacherRejectionNotice(User recipient, String reason) {
+        safeSendTeacherNotice(recipient, "rejection", () -> sendTeacherRejectionNotice(recipient, reason));
+    }
+
+    private void safeSendTeacherNotice(User recipient, String noticeType, Runnable delivery) {
         try {
-            sendTeacherRejectionNotice(recipient, reason);
+            delivery.run();
         } catch (Exception exception) {
             Long recipientId = recipient != null ? recipient.getId() : null;
-            log.warn("Teacher rejection email delivery failed for user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
-            log.debug("Teacher rejection email delivery stack trace for user id {}.", recipientId, exception);
+            log.warn("Teacher {} email delivery failed for user id {}: {}", noticeType, recipientId, ExceptionLogUtils.safeSummary(exception));
+            log.debug("Teacher {} email delivery stack trace for user id {}.", noticeType, recipientId, exception);
         }
     }
 

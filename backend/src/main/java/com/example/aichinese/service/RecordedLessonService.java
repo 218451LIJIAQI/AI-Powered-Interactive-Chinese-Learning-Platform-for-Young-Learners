@@ -232,7 +232,7 @@ public class RecordedLessonService {
         video.setActive(true);
     }
 
-    private void validateRequestInvariants(RecordedLessonVideoRequest request) {
+    private static void validateRequestInvariants(RecordedLessonVideoRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         if (request.durationSeconds() != null && request.durationSeconds() < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Duration must not be negative.");
@@ -248,7 +248,7 @@ public class RecordedLessonService {
         }
     }
 
-    private PageResponse<RecordedLessonVideoResponse> mapRecordedVideoPage(
+    private static PageResponse<RecordedLessonVideoResponse> mapRecordedVideoPage(
             Page<RecordedLessonVideo> videoPage,
             int page,
             int size,
@@ -267,15 +267,17 @@ public class RecordedLessonService {
         String streamUrl = video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
                 ? "/api/v1/teachers/lessons/" + video.getLesson().getId() + "/recorded-videos/" + video.getId() + "/stream"
                 : null;
-        String externalUrl = video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
-        return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl);
+        return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl(video));
     }
 
     private RecordedLessonVideoResponse toStudentResponse(RecordedLessonVideo video) {
         String streamUrl = video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
                 ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
                 : null;
-        String externalUrl = video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
-        return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl);
+        return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl(video));
+    }
+
+    private static String externalUrl(RecordedLessonVideo video) {
+        return video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
     }
 }

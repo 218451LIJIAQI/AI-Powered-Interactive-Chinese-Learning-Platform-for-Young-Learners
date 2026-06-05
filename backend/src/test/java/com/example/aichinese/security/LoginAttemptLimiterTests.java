@@ -52,32 +52,15 @@ class LoginAttemptLimiterTests {
 
     @Test
     void unlocksOnceLockWindowElapses() {
-        AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
-        Clock movingClock = new Clock() {
-            @Override
-            public ZoneId getZone() {
-                return ZoneId.of("UTC");
-            }
-
-            @Override
-            public Clock withZone(ZoneId zone) {
-                return this;
-            }
-
-            @Override
-            public Instant instant() {
-                return now.get();
-            }
-        };
-
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(movingClock);
+        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock);
         for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
             limiter.recordFailure(EMAIL, IP);
         }
         assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
 
         // Advance the clock past the lock window — the slot should reset.
-        now.set(now.get().plus(LoginAttemptLimiter.LOCK_DURATION).plusSeconds(1));
+        clock.advance(LoginAttemptLimiter.LOCK_DURATION.plusSeconds(1));
 
         assertThat(limiter.isAllowed(EMAIL, IP)).isTrue();
         assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
@@ -128,28 +111,12 @@ class LoginAttemptLimiterTests {
 
     @Test
     void trackedAttemptRecordsStayWithinCapacity() {
-        AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
-        Clock movingClock = new Clock() {
-            @Override
-            public ZoneId getZone() {
-                return ZoneId.of("UTC");
-            }
-
-            @Override
-            public Clock withZone(ZoneId zone) {
-                return this;
-            }
-
-            @Override
-            public Instant instant() {
-                return now.get();
-            }
-        };
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(movingClock, 3);
+        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock, 3);
 
         for (int i = 0; i < 20; i++) {
             limiter.recordFailure("spray-" + i + "@example.com", "203.0.113." + i);
-            now.set(now.get().plusSeconds(1));
+            clock.advance(Duration.ofSeconds(1));
         }
 
         assertThat(limiter.trackedAttemptCount()).isLessThanOrEqualTo(3);
@@ -189,5 +156,32 @@ class LoginAttemptLimiterTests {
         limiter.recordFailure(longEmailPrefix + "second@example.com", longIpPrefix + "2");
 
         assertThat(limiter.trackedAttemptCount()).isEqualTo(1);
+    }
+
+    private static final class MutableClock extends Clock {
+        private final AtomicReference<Instant> now;
+
+        private MutableClock(Instant initialInstant) {
+            this.now = new AtomicReference<>(initialInstant);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now.get();
+        }
+
+        private void advance(Duration duration) {
+            now.updateAndGet(instant -> instant.plus(duration));
+        }
     }
 }

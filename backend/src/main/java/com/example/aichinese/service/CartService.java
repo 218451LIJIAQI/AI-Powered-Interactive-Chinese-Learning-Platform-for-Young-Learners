@@ -82,10 +82,12 @@ public class CartService {
             throw new ResponseStatusException(BAD_REQUEST, "You already have access to this item.");
         }
 
-        cartItemRepository.findByCartIdAndItemTypeAndItemId(cart.getId(), item.itemType().name(), item.itemId())
-                .ifPresent(existing -> {
-                    throw new ResponseStatusException(BAD_REQUEST, "This item is already in your cart.");
-                });
+        if (cartItemRepository.findByCartIdAndItemTypeAndItemId(
+                cart.getId(),
+                item.itemType().name(),
+                item.itemId()).isPresent()) {
+            throw new ResponseStatusException(BAD_REQUEST, "This item is already in your cart.");
+        }
         enforceCartCapacity(cart);
 
         CartItem cartItem = new CartItem();

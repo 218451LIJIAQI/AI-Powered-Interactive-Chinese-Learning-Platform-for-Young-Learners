@@ -74,11 +74,13 @@ class OpenAiCompatibleAiProviderClientTests {
         AiProperties fragmentProperties = configuredProperties();
         fragmentProperties.setApiBaseUrl("https://api.deepseek.com#fragment");
         OpenAiCompatibleAiProviderClient fragmentClient = new OpenAiCompatibleAiProviderClient(fragmentProperties, new RestTemplateBuilder());
+        AiProviderResult queryResult = queryClient.generateText(prompt());
+        AiProviderResult fragmentResult = fragmentClient.generateText(prompt());
 
-        assertThat(queryClient.generateText(prompt()).success()).isFalse();
-        assertThat(queryClient.generateText(prompt()).errorSummary()).isEqualTo("AI API base URL is missing or invalid.");
-        assertThat(fragmentClient.generateText(prompt()).success()).isFalse();
-        assertThat(fragmentClient.generateText(prompt()).errorSummary()).isEqualTo("AI API base URL is missing or invalid.");
+        assertThat(queryResult.success()).isFalse();
+        assertThat(queryResult.errorSummary()).isEqualTo("AI API base URL is missing or invalid.");
+        assertThat(fragmentResult.success()).isFalse();
+        assertThat(fragmentResult.errorSummary()).isEqualTo("AI API base URL is missing or invalid.");
     }
 
     @Test
@@ -201,11 +203,13 @@ class OpenAiCompatibleAiProviderClientTests {
         fragmentProperties.setEnableRealProvider(true);
         fragmentProperties.setApiBaseUrl("https://api.deepseek.com#fragment");
         AiAvailabilityService fragmentAvailability = new AiAvailabilityService(fragmentProperties);
+        var queryResult = queryAvailability.getAvailability();
+        var fragmentResult = fragmentAvailability.getAvailability();
 
-        assertThat(queryAvailability.getAvailability().available()).isFalse();
-        assertThat(queryAvailability.getAvailability().message()).contains("base URL");
-        assertThat(fragmentAvailability.getAvailability().available()).isFalse();
-        assertThat(fragmentAvailability.getAvailability().message()).contains("base URL");
+        assertThat(queryResult.available()).isFalse();
+        assertThat(queryResult.message()).contains("base URL");
+        assertThat(fragmentResult.available()).isFalse();
+        assertThat(fragmentResult.message()).contains("base URL");
     }
 
     @Test

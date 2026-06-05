@@ -1,9 +1,9 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -478,7 +478,7 @@ class ContentManagementIntegrationTests {
         String publishedTitle = "PublishedCandidate-" + suffix;
         String archivedTitle = "ArchivedCandidate-" + suffix;
 
-        Long publishedModuleId = createModule(teacherToken, publishedTitle);
+        createModule(teacherToken, publishedTitle);
         Long archivedModuleId = createModule(teacherToken, archivedTitle);
         archiveContent("MODULE", archivedModuleId, adminToken);
 
@@ -535,8 +535,6 @@ class ContentManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.items[?(@.title=='" + archivedTitle + "')]").doesNotExist())
                 .andExpect(jsonPath("$.data.items[?(@.title=='" + publishedTitle + "')]").doesNotExist());
 
-        // Sanity check that the published module is still reachable by its id.
-        assertNotNull(publishedModuleId);
     }
 
     @Test
@@ -830,7 +828,7 @@ class ContentManagementIntegrationTests {
                 "application/pdf",
                 TestUploadFixtures.minimalPdf());
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
                 .file(file)
                 .param("documentType", "QUALIFICATION")
                 .param("description", "Qualification proof")

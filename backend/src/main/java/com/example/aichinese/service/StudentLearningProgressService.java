@@ -188,7 +188,7 @@ public class StudentLearningProgressService {
 
         List<PointsTransactionResponse> recentPoints = pointsTransactionRepository
                 .findByStudentIdOrderByCreatedAtDesc(student.getId(), PageRequest.of(0, 10)).getContent().stream()
-                .map(this::toPointsTransactionResponse)
+                .map(StudentLearningProgressService::toPointsTransactionResponse)
                 .toList();
 
         int totalPoints = totalPoints(student);
@@ -212,7 +212,7 @@ public class StudentLearningProgressService {
                 student.getId(),
                 PageRequest.of(safePage, safeSize));
         List<BadgeSummaryResponse> items = badgePage.getContent().stream()
-                .map(this::toBadgeSummaryResponse)
+                .map(StudentLearningProgressService::toBadgeSummaryResponse)
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, badgePage.getTotalElements(), badgePage.getTotalPages());
     }
@@ -225,7 +225,7 @@ public class StudentLearningProgressService {
                 student.getId(),
                 PageRequest.of(safePage, safeSize));
         List<PointsTransactionResponse> items = pointsPage.getContent().stream()
-                .map(this::toPointsTransactionResponse)
+                .map(StudentLearningProgressService::toPointsTransactionResponse)
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, pointsPage.getTotalElements(), pointsPage.getTotalPages());
     }
@@ -386,20 +386,21 @@ public class StudentLearningProgressService {
         studentBadgeRepository.save(studentBadge);
     }
 
-    private int totalPoints(StudentProfile student) {
+    private static int totalPoints(StudentProfile student) {
         return student.getTotalPoints() == null ? 0 : student.getTotalPoints();
     }
 
-    private BadgeSummaryResponse toBadgeSummaryResponse(StudentBadge badge) {
+    private static BadgeSummaryResponse toBadgeSummaryResponse(StudentBadge badge) {
+        Badge badgeDetails = badge.getBadge();
         return new BadgeSummaryResponse(
-                badge.getBadge().getId(),
-                badge.getBadge().getName(),
-                badge.getBadge().getDescription(),
-                badge.getBadge().getIconKey(),
+                badgeDetails.getId(),
+                badgeDetails.getName(),
+                badgeDetails.getDescription(),
+                badgeDetails.getIconKey(),
                 badge.getAwardedAt());
     }
 
-    private PointsTransactionResponse toPointsTransactionResponse(PointsTransaction transaction) {
+    private static PointsTransactionResponse toPointsTransactionResponse(PointsTransaction transaction) {
         return new PointsTransactionResponse(
                 transaction.getId(),
                 transaction.getPointsDelta(),
@@ -409,14 +410,14 @@ public class StudentLearningProgressService {
                 transaction.getCreatedAt());
     }
 
-    private DailyStreakResponse toDailyStreakResponse(DailyStreak streak) {
+    private static DailyStreakResponse toDailyStreakResponse(DailyStreak streak) {
         return new DailyStreakResponse(
                 streak != null && streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0,
                 streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,
                 streak != null ? streak.getLastLearningDate() : null);
     }
 
-    private int round(double value) {
+    private static int round(double value) {
         return (int) Math.round(value);
     }
 
@@ -445,7 +446,7 @@ public class StudentLearningProgressService {
         return round(percentages.stream().mapToInt(Integer::intValue).average().orElse(0));
     }
 
-    private int overallCompletionPercent(List<LessonProgress> lessonProgressList) {
+    private static int overallCompletionPercent(List<LessonProgress> lessonProgressList) {
         if (lessonProgressList.isEmpty()) {
             return 0;
         }
@@ -453,7 +454,7 @@ public class StudentLearningProgressService {
         return round((completedLessons * 100.0) / lessonProgressList.size());
     }
 
-    private String latestAccessibleActivitySummary(List<LessonProgress> lessonProgressList) {
+    private static String latestAccessibleActivitySummary(List<LessonProgress> lessonProgressList) {
         return lessonProgressList.stream()
                 .findFirst()
                 .filter(progress -> progress.getLesson() != null)

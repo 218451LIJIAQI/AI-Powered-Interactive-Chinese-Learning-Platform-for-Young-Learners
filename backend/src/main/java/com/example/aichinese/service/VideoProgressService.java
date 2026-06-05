@@ -143,7 +143,7 @@ public class VideoProgressService {
         int endIndex = PaginationUtils.endIndex(startIndex, safeSize, accessibleProgress.size());
         return new PageResponse<>(
                 accessibleProgress.subList(startIndex, endIndex).stream()
-                        .map(this::toLessonVideoProgressSummary)
+                        .map(VideoProgressService::toLessonVideoProgressSummary)
                         .toList(),
                 safePage,
                 safeSize,
@@ -163,15 +163,18 @@ public class VideoProgressService {
         return lessonAccess && packageAccess;
     }
 
-    private LessonVideoProgressSummaryResponse toLessonVideoProgressSummary(VideoProgress progress) {
+    private static LessonVideoProgressSummaryResponse toLessonVideoProgressSummary(VideoProgress progress) {
+        StudentProfile student = progress.getStudent();
+        RecordedLessonVideo video = progress.getRecordedVideo();
+        var user = student.getUser();
         return new LessonVideoProgressSummaryResponse(
-                progress.getStudent().getId(),
-                progress.getStudent().getUser() == null
-                        ? progress.getStudent().getDisplayName()
-                        : progress.getStudent().getUser().getDisplayName(),
-                progress.getStudent().getUser() == null ? null : progress.getStudent().getUser().getEmail(),
-                progress.getRecordedVideo() == null ? null : progress.getRecordedVideo().getId(),
-                progress.getRecordedVideo() == null ? null : progress.getRecordedVideo().getTitle(),
+                student.getId(),
+                user == null
+                        ? student.getDisplayName()
+                        : user.getDisplayName(),
+                user == null ? null : user.getEmail(),
+                video == null ? null : video.getId(),
+                video == null ? null : video.getTitle(),
                 progress.getProgressPercentage(),
                 progress.isCompleted(),
                 progress.getWatchedSeconds(),
@@ -179,7 +182,7 @@ public class VideoProgressService {
                 progress.getLastWatchedAt() == null ? null : progress.getLastWatchedAt().toString());
     }
 
-    private VideoProgress createDefaultProgress(StudentProfile student, RecordedLessonVideo video) {
+    private static VideoProgress createDefaultProgress(StudentProfile student, RecordedLessonVideo video) {
         VideoProgress progress = new VideoProgress();
         progress.setStudent(student);
         progress.setLesson(video.getLesson());
@@ -192,7 +195,7 @@ public class VideoProgressService {
         return progress;
     }
 
-    private void applyProgress(VideoProgress progress, VideoProgressRequest request, RecordedLessonVideo video) {
+    private static void applyProgress(VideoProgress progress, VideoProgressRequest request, RecordedLessonVideo video) {
         Integer watchedSeconds = request.watchedSeconds() == null ? progress.getWatchedSeconds() : request.watchedSeconds();
         Integer totalSeconds = request.totalSeconds() == null
                 ? (progress.getTotalSeconds() == null ? video.getDurationSeconds() : progress.getTotalSeconds())
@@ -217,7 +220,7 @@ public class VideoProgressService {
         progress.setLastWatchedAt(LocalDateTime.now());
     }
 
-    private void validateRequest(VideoProgressRequest request) {
+    private static void validateRequest(VideoProgressRequest request) {
         if (request.watchedSeconds() != null && request.watchedSeconds() < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Watched seconds must not be negative.");
         }

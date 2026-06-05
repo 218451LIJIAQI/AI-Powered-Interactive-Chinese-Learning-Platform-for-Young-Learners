@@ -84,7 +84,7 @@ public class TeacherManagementService {
         User user = getUserById(currentUser.getUserId());
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
 
-        user.setDisplayName(request.fullName() != null ? request.fullName().trim() : user.getDisplayName());
+        user.setDisplayName(request.fullName() != null ? request.fullName() : user.getDisplayName());
         profile.setBio(TextUtils.trimToNull(request.bio()));
         profile.setQualificationSummary(TextUtils.trimToNull(request.shortIntroduction()));
         profile.setTeachingCategories(teacherManagementMapper.joinCategories(request.teachingCategories()));
@@ -141,7 +141,7 @@ public class TeacherManagementService {
         document.setCurrentVersion(true);
         teacherVerificationDocumentRepository.save(document);
 
-        notificationAdmins("Teacher verification document uploaded",
+        notifyAdmins("Teacher verification document uploaded",
                 user.getDisplayName() + " uploaded a teacher verification document.",
                 "/admin/teacher-verification");
         log.info("Verification document uploaded: docId={}, teacherId={}, type={}",
@@ -170,7 +170,7 @@ public class TeacherManagementService {
         profile.setPublicVisible(false);
         teacherProfileRepository.save(profile);
 
-        notificationAdmins(
+        notifyAdmins(
                 "Teacher verification resubmitted",
                 user.getDisplayName() + " resubmitted teacher verification for review.",
                 "/admin/teacher-verification");
@@ -207,7 +207,7 @@ public class TeacherManagementService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
     }
 
-    private void notificationAdmins(String title, String message, String targetPath) {
+    private void notifyAdmins(String title, String message, String targetPath) {
         List<User> adminUsers = userRepository.findAllByRoleName(RoleName.ADMIN);
         for (User admin : adminUsers) {
             notificationService.safeCreateNotification(admin, title, message, targetPath);

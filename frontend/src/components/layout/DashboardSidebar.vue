@@ -284,7 +284,7 @@ const showcaseOutfit = computed<string>(() =>
   !isGuestCatalog.value && role.value === 'TEACHER' ? '#7d56ff' : '#ef6b40',
 )
 
-const showcaseAccent = computed<string>(() => '#f6d056')
+const showcaseAccent = '#f6d056'
 
 const showFooterProgress = computed<boolean>(() => !isGuestCatalog.value && role.value === 'STUDENT')
 

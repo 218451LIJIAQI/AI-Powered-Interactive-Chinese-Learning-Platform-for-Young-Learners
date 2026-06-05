@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,14 +58,13 @@ class PublicAuthRequestLimiterTests {
 
     @Test
     void requestRecordsExpireAfterWindow() {
-        AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
-        Clock movingClock = movingClock(now);
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(movingClock, 1, 1, 10);
+        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
+        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(clock, 1, 1, 10);
 
         limiter.checkRegisterAllowed(IP);
         assertThatThrownBy(() -> limiter.checkRegisterAllowed(IP)).isInstanceOf(ResponseStatusException.class);
 
-        now.set(now.get().plus(PublicAuthRequestLimiter.WINDOW).plusSeconds(1));
+        clock.advance(PublicAuthRequestLimiter.WINDOW.plusSeconds(1));
 
         limiter.checkRegisterAllowed(IP);
         assertThat(limiter.trackedRequestCount()).isEqualTo(1);
@@ -72,11 +72,11 @@ class PublicAuthRequestLimiterTests {
 
     @Test
     void requestBudgetResetsExactlyAtWindowBoundary() {
-        AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(movingClock(now), 1, 1, 10);
+        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
+        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(clock, 1, 1, 10);
 
         limiter.checkRegisterAllowed(IP);
-        now.set(now.get().plus(PublicAuthRequestLimiter.WINDOW));
+        clock.advance(PublicAuthRequestLimiter.WINDOW);
 
         limiter.checkRegisterAllowed(IP);
         assertThatThrownBy(() -> limiter.checkRegisterAllowed(IP))
@@ -85,13 +85,12 @@ class PublicAuthRequestLimiterTests {
 
     @Test
     void trackedRequestRecordsStayWithinCapacity() {
-        AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2025-01-01T00:00:00Z"));
-        Clock movingClock = movingClock(now);
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(movingClock, 100, 100, 3);
+        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
+        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(clock, 100, 100, 3);
 
         for (int i = 0; i < 20; i++) {
             limiter.checkRegisterAllowed("203.0.113." + i);
-            now.set(now.get().plusSeconds(1));
+            clock.advanceSeconds(1);
         }
 
         assertThat(limiter.trackedRequestCount()).isLessThanOrEqualTo(3);
@@ -109,22 +108,34 @@ class PublicAuthRequestLimiterTests {
         assertThat(limiter.trackedRequestCount()).isEqualTo(2);
     }
 
-    private Clock movingClock(AtomicReference<Instant> now) {
-        return new Clock() {
-            @Override
-            public ZoneId getZone() {
-                return ZoneId.of("UTC");
-            }
+    private static final class MutableClock extends Clock {
+        private final AtomicReference<Instant> now;
 
-            @Override
-            public Clock withZone(ZoneId zone) {
-                return this;
-            }
+        private MutableClock(Instant initialInstant) {
+            this.now = new AtomicReference<>(initialInstant);
+        }
 
-            @Override
-            public Instant instant() {
-                return now.get();
-            }
-        };
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now.get();
+        }
+
+        private void advance(Duration duration) {
+            now.updateAndGet(instant -> instant.plus(duration));
+        }
+
+        private void advanceSeconds(long seconds) {
+            now.updateAndGet(instant -> instant.plusSeconds(seconds));
+        }
     }
 }

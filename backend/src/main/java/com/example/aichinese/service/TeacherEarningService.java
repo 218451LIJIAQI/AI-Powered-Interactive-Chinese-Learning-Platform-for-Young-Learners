@@ -73,13 +73,12 @@ public class TeacherEarningService {
         List<OrderItem> orderItems = orderItemRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
         int refunded = 0;
         for (OrderItem orderItem : orderItems) {
-            if (teacherEarningRepository.findByOrderItemId(orderItem.getId())
-                    .map(earning -> {
-                        earning.setEarningStatus(TeacherEarningStatus.REFUNDED);
-                        return true;
-                    }).orElse(false)) {
-                refunded++;
+            TeacherEarning earning = teacherEarningRepository.findByOrderItemId(orderItem.getId()).orElse(null);
+            if (earning == null) {
+                continue;
             }
+            earning.setEarningStatus(TeacherEarningStatus.REFUNDED);
+            refunded++;
         }
         if (refunded > 0) {
             log.info("Marked {} teacher earning(s) as REFUNDED for orderId={}", refunded, orderId);

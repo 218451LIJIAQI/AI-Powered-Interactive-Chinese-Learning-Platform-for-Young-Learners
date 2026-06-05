@@ -137,7 +137,7 @@ public class StudentActivityLibraryService {
         ActivityType requestedType = filter == null ? null : filter.type();
 
         if (requestedType == null || requestedType == ActivityType.FLASHCARD) {
-            var pageResult = flashcardRepository.findAll(this.<Flashcard>filterSpec(filter), slice);
+            var pageResult = flashcardRepository.findAll(StudentActivityLibraryService.<Flashcard>filterSpec(filter), slice);
             totalItems += pageResult.getTotalElements();
             pageResult.getContent()
                     .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.FLASHCARD,
@@ -148,7 +148,7 @@ public class StudentActivityLibraryService {
                             isCompleted(student, SOURCE_FLASHCARD, e.getId()))));
         }
         if (requestedType == null || requestedType == ActivityType.MATCHING_GAME) {
-            var pageResult = matchingGameRepository.findAll(this.<MatchingGame>filterSpec(filter), slice);
+            var pageResult = matchingGameRepository.findAll(StudentActivityLibraryService.<MatchingGame>filterSpec(filter), slice);
             totalItems += pageResult.getTotalElements();
             pageResult.getContent()
                     .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.MATCHING_GAME,
@@ -159,7 +159,7 @@ public class StudentActivityLibraryService {
                             isCompleted(student, SOURCE_MATCHING_GAME, e.getId()))));
         }
         if (requestedType == null || requestedType == ActivityType.LISTENING_EXERCISE) {
-            var pageResult = listeningExerciseRepository.findAll(this.<ListeningExercise>filterSpec(filter), slice);
+            var pageResult = listeningExerciseRepository.findAll(StudentActivityLibraryService.<ListeningExercise>filterSpec(filter), slice);
             totalItems += pageResult.getTotalElements();
             pageResult.getContent()
                     .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.LISTENING_EXERCISE,
@@ -170,7 +170,7 @@ public class StudentActivityLibraryService {
                             isCompleted(student, SOURCE_LISTENING_EXERCISE, e.getId()))));
         }
         if (requestedType == null || requestedType == ActivityType.TRACING_EXERCISE) {
-            var pageResult = tracingExerciseRepository.findAll(this.<TracingExercise>filterSpec(filter), slice);
+            var pageResult = tracingExerciseRepository.findAll(StudentActivityLibraryService.<TracingExercise>filterSpec(filter), slice);
             totalItems += pageResult.getTotalElements();
             pageResult.getContent()
                     .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.TRACING_EXERCISE,
@@ -181,7 +181,7 @@ public class StudentActivityLibraryService {
                             isCompleted(student, SOURCE_TRACING_EXERCISE, e.getId()))));
         }
         if (requestedType == null || requestedType == ActivityType.DRAG_DROP_ACTIVITY) {
-            var pageResult = dragDropActivityRepository.findAll(this.<DragDropActivity>filterSpec(filter), slice);
+            var pageResult = dragDropActivityRepository.findAll(StudentActivityLibraryService.<DragDropActivity>filterSpec(filter), slice);
             totalItems += pageResult.getTotalElements();
             pageResult.getContent()
                     .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.DRAG_DROP_ACTIVITY,
@@ -192,7 +192,7 @@ public class StudentActivityLibraryService {
                             isCompleted(student, SOURCE_DRAG_DROP_ACTIVITY, e.getId()))));
         }
         if (requestedType == null || requestedType == ActivityType.STORY_ACTIVITY) {
-            var pageResult = storyActivityRepository.findAll(this.<StoryActivity>filterSpec(filter), slice);
+            var pageResult = storyActivityRepository.findAll(StudentActivityLibraryService.<StoryActivity>filterSpec(filter), slice);
             totalItems += pageResult.getTotalElements();
             pageResult.getContent()
                     .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.STORY_ACTIVITY,
@@ -266,7 +266,7 @@ public class StudentActivityLibraryService {
         return entity;
     }
 
-    private String flashcardLabel(Flashcard entity) {
+    private static String flashcardLabel(Flashcard entity) {
         if (entity.getTitle() != null && !entity.getTitle().isBlank()) {
             return entity.getTitle();
         }
@@ -279,7 +279,7 @@ public class StudentActivityLibraryService {
         MatchingGame entity = requirePublishedMatchingGame(id);
         List<StudentMatchingGameItemResponse> items = matchingGameItemRepository
                 .findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(id).stream()
-                .map(this::toStudentMatchingGameItemResponse)
+                .map(StudentActivityLibraryService::toStudentMatchingGameItemResponse)
                 .toList();
         return new StudentMatchingGameResponse(
                 entity.getId(),
@@ -320,7 +320,7 @@ public class StudentActivityLibraryService {
         return entity;
     }
 
-    private StudentMatchingGameItemResponse toStudentMatchingGameItemResponse(MatchingGameItem item) {
+    private static StudentMatchingGameItemResponse toStudentMatchingGameItemResponse(MatchingGameItem item) {
         return new StudentMatchingGameItemResponse(
                 item.getId(),
                 item.getLeftText(),
@@ -428,7 +428,7 @@ public class StudentActivityLibraryService {
         DragDropActivity entity = requirePublishedDragDropActivity(id);
         List<StudentDragDropItemResponse> items = dragDropItemRepository
                 .findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(id).stream()
-                .map(this::toStudentDragDropItemResponse)
+                .map(StudentActivityLibraryService::toStudentDragDropItemResponse)
                 .toList();
         return new StudentDragDropActivityResponse(
                 entity.getId(),
@@ -470,7 +470,7 @@ public class StudentActivityLibraryService {
         return entity;
     }
 
-    private StudentDragDropItemResponse toStudentDragDropItemResponse(DragDropItem item) {
+    private static StudentDragDropItemResponse toStudentDragDropItemResponse(DragDropItem item) {
         return new StudentDragDropItemResponse(
                 item.getId(),
                 item.getDragText(),
@@ -486,7 +486,7 @@ public class StudentActivityLibraryService {
         StoryActivity entity = requirePublishedStoryActivity(id);
         List<StudentStoryQuestionResponse> questions = storyQuestionRepository
                 .findByStoryActivityIdOrderBySortOrderAscCreatedAtAsc(id).stream()
-                .map(this::toStudentStoryQuestionResponse)
+                .map(StudentActivityLibraryService::toStudentStoryQuestionResponse)
                 .toList();
         return new StudentStoryActivityResponse(
                 entity.getId(),
@@ -532,7 +532,7 @@ public class StudentActivityLibraryService {
         return entity;
     }
 
-    private StudentStoryQuestionResponse toStudentStoryQuestionResponse(StoryQuestion question) {
+    private static StudentStoryQuestionResponse toStudentStoryQuestionResponse(StoryQuestion question) {
         return new StudentStoryQuestionResponse(
                 question.getId(),
                 question.getQuestionText(),
@@ -541,7 +541,7 @@ public class StudentActivityLibraryService {
                 question.getSortOrder());
     }
 
-    private void ensurePublished(ContentStatus status, String label) {
+    private static void ensurePublished(ContentStatus status, String label) {
         if (status != ContentStatus.PUBLISHED) {
             throw new ResponseStatusException(NOT_FOUND, label + " is not available.");
         }
@@ -551,7 +551,7 @@ public class StudentActivityLibraryService {
         return studentLearningProgressService.isPlatformActivityCompleted(student, sourceType, sourceId);
     }
 
-    private List<String> splitTags(String tags) {
+    private static List<String> splitTags(String tags) {
         if (tags == null || tags.isBlank()) {
             return List.of();
         }
@@ -561,14 +561,14 @@ public class StudentActivityLibraryService {
                 .toList();
     }
 
-    private String preferredTitle(String primary, String fallback) {
+    private static String preferredTitle(String primary, String fallback) {
         if (primary != null && !primary.isBlank()) {
             return primary;
         }
         return fallback == null ? "(untitled)" : fallback;
     }
 
-    private ActivityFeedItem activityFeedItem(
+    private static ActivityFeedItem activityFeedItem(
             Long id,
             ActivityType type,
             String title,
@@ -594,7 +594,7 @@ public class StudentActivityLibraryService {
             LocalDateTime updatedAt) {
     }
 
-    private <T> Specification<T> filterSpec(ActivityFilter filter) {
+    private static <T> Specification<T> filterSpec(ActivityFilter filter) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED));

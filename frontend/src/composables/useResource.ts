@@ -91,8 +91,6 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
       usingFallback.value = false
     } catch (reason) {
       if (sequence !== executionSequence) return
-      const message = resolveApiError(reason, 'Request failed')
-      error.value = message
 
       if (shouldUseFailureFallback(reason)) {
         if (data.value === null) {
@@ -100,6 +98,8 @@ export function useResource<T>(loader: () => Promise<T>, fallback?: FallbackFact
         }
         usingFallback.value = true
         error.value = null
+      } else {
+        error.value = resolveApiError(reason, 'Request failed')
       }
     } finally {
       if (sequence === executionSequence) {

@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -461,7 +460,7 @@ public class AnalyticsService {
         }
         for (StatusCountProjection projection : projections) {
             if (projection.getStatus() != null) {
-                counts.merge(projection.getStatus(), projection.getCount(), (a, b) -> a + b);
+                counts.merge(projection.getStatus(), projection.getCount(), Long::sum);
             }
         }
         return buildBreakdownFromMap(counts);
@@ -472,25 +471,25 @@ public class AnalyticsService {
             List<StatusCountProjection> lessonCounts,
             List<StatusCountProjection> packageCounts) {
         Map<String, Long> counts = initializeContentStatusCounts();
-        Consumer<List<StatusCountProjection>> mergeAll =
-                projections -> {
-                    for (StatusCountProjection projection : projections) {
-                        if (projection.getStatus() != null) {
-                            counts.merge(projection.getStatus(), projection.getCount(), (a, b) -> a + b);
-                        }
-                    }
-                };
-        mergeAll.accept(moduleCounts);
-        mergeAll.accept(lessonCounts);
-        mergeAll.accept(packageCounts);
+        mergeProjectionCounts(counts, moduleCounts);
+        mergeProjectionCounts(counts, lessonCounts);
+        mergeProjectionCounts(counts, packageCounts);
         return buildBreakdownFromMap(counts);
+    }
+
+    private static void mergeProjectionCounts(Map<String, Long> counts, List<StatusCountProjection> projections) {
+        for (StatusCountProjection projection : projections) {
+            if (projection.getStatus() != null) {
+                counts.merge(projection.getStatus(), projection.getCount(), Long::sum);
+            }
+        }
     }
 
     private List<AnalyticsBreakdownItemResponse> buildAiStatusBreakdownFromProjections(
             List<StatusCountProjection> projections) {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (StatusCountProjection projection : projections) {
-            counts.merge(normalizeStatus(projection.getStatus()), projection.getCount(), (a, b) -> a + b);
+            counts.merge(normalizeStatus(projection.getStatus()), projection.getCount(), Long::sum);
         }
         return buildBreakdownFromMap(counts);
     }
@@ -546,7 +545,7 @@ public class AnalyticsService {
 
     private void incrementContentStatus(Map<String, Long> counts, ContentStatus status) {
         if (status != null) {
-            counts.merge(status.name(), 1L, (a, b) -> a + b);
+            counts.merge(status.name(), 1L, Long::sum);
         }
     }
 

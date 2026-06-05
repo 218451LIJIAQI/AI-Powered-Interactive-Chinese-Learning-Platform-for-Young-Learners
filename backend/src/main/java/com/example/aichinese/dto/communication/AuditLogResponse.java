@@ -26,8 +26,8 @@ public record AuditLogResponse(
         Long targetId,
         String description,
         String ipAddress,
-            String requestId,
-            LocalDateTime createdAt) {
+        String requestId,
+        LocalDateTime createdAt) {
 
     public AuditLogResponse {
         Objects.requireNonNull(id, "id must not be null");

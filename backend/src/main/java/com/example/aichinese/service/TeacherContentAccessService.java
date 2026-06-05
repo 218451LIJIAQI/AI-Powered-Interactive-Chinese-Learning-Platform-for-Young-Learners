@@ -1,5 +1,10 @@
 package com.example.aichinese.service;
 
+import static com.example.aichinese.dto.content.ContentDtoConstants.LESSON_CONTENT_MAX_LENGTH;
+import static com.example.aichinese.dto.content.ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH;
+import static com.example.aichinese.dto.content.ContentDtoConstants.PRICE_FRACTION_DIGITS;
+import static com.example.aichinese.dto.content.ContentDtoConstants.PRICE_INTEGER_DIGITS;
+import static com.example.aichinese.dto.content.ContentDtoConstants.TITLE_MAX_LENGTH;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -34,11 +39,6 @@ public class TeacherContentAccessService {
 
     private static final Set<ContentStatus> TEACHER_EDITABLE_STATUSES = ContentStatus.TEACHER_EDITABLE;
     private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES = ContentStatus.TEACHER_ARCHIVABLE;
-    private static final int MAX_TITLE_LENGTH = 200;
-    private static final int MAX_DESCRIPTION_LENGTH = 2000;
-    private static final int MAX_LESSON_CONTENT_LENGTH = 10000;
-    private static final int PRICE_INTEGER_DIGITS = 8;
-    private static final int PRICE_FRACTION_DIGITS = 2;
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LearningLevelRepository learningLevelRepository;
@@ -116,7 +116,7 @@ public class TeacherContentAccessService {
         }
     }
 
-    private BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
+    private static BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
         if (accessType == AccessType.FREE) {
             return BigDecimal.ZERO.setScale(PRICE_FRACTION_DIGITS);
         }
@@ -127,7 +127,7 @@ public class TeacherContentAccessService {
         return price.setScale(PRICE_FRACTION_DIGITS, RoundingMode.UNNECESSARY);
     }
 
-    private void validateMoneyPrecision(BigDecimal price) {
+    private static void validateMoneyPrecision(BigDecimal price) {
         if (price.signum() < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Price must be greater than or equal to 0.");
         }
@@ -153,8 +153,8 @@ public class TeacherContentAccessService {
         module.setTeacher(teacherProfile);
         module.setLevel(level);
         module.setCategory(category);
-        module.setTitle(contentSafetyService.requireSafeText(title, MAX_TITLE_LENGTH, "Title is required."));
-        module.setDescription(contentSafetyService.optionalSafeText(description, MAX_DESCRIPTION_LENGTH));
+        module.setTitle(contentSafetyService.requireSafeText(title, TITLE_MAX_LENGTH, "Title is required."));
+        module.setDescription(contentSafetyService.optionalSafeText(description, LONG_DESCRIPTION_MAX_LENGTH));
         module.setAccessType(accessType);
         module.setPrice(normalizePrice(accessType, price));
         module.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
@@ -178,9 +178,9 @@ public class TeacherContentAccessService {
         lesson.setModule(module);
         lesson.setLevel(level);
         lesson.setCategory(category);
-        lesson.setTitle(contentSafetyService.requireSafeText(title, MAX_TITLE_LENGTH, "Title is required."));
-        lesson.setSummary(contentSafetyService.optionalSafeText(description, MAX_DESCRIPTION_LENGTH));
-        lesson.setLessonContent(contentSafetyService.optionalSafeText(lessonContent, MAX_LESSON_CONTENT_LENGTH));
+        lesson.setTitle(contentSafetyService.requireSafeText(title, TITLE_MAX_LENGTH, "Title is required."));
+        lesson.setSummary(contentSafetyService.optionalSafeText(description, LONG_DESCRIPTION_MAX_LENGTH));
+        lesson.setLessonContent(contentSafetyService.optionalSafeText(lessonContent, LESSON_CONTENT_MAX_LENGTH));
         lesson.setAccessType(accessType);
         lesson.setPrice(normalizePrice(accessType, price));
         lesson.setLearningType(learningType);
@@ -202,8 +202,8 @@ public class TeacherContentAccessService {
         coursePackage.setTeacher(teacherProfile);
         coursePackage.setLevel(level);
         coursePackage.setCategory(category);
-        coursePackage.setTitle(contentSafetyService.requireSafeText(title, MAX_TITLE_LENGTH, "Title is required."));
-        coursePackage.setDescription(contentSafetyService.optionalSafeText(description, MAX_DESCRIPTION_LENGTH));
+        coursePackage.setTitle(contentSafetyService.requireSafeText(title, TITLE_MAX_LENGTH, "Title is required."));
+        coursePackage.setDescription(contentSafetyService.optionalSafeText(description, LONG_DESCRIPTION_MAX_LENGTH));
         coursePackage.setAccessType(accessType);
         coursePackage.setPrice(normalizePrice(accessType, price));
         coursePackage.setLearningType(learningType);

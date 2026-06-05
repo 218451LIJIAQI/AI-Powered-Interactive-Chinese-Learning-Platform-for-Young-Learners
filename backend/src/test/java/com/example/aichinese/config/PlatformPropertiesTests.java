@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.service.LocalStorageProvider;
+
 class PlatformPropertiesTests {
 
     @Test
@@ -34,7 +36,7 @@ class PlatformPropertiesTests {
     void deploymentGuardRejectsProcessLocalAuthLimitingInMultiInstanceMode() {
         PlatformProperties multiInstance = new PlatformProperties("Asia/Singapore", "multi-instance", false, true);
 
-        assertThatThrownBy(() -> new DeploymentTopologyGuard(multiInstance, new com.example.aichinese.service.LocalStorageProvider()))
+        assertThatThrownBy(() -> new DeploymentTopologyGuard(multiInstance, new LocalStorageProvider()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("APP_SHARED_AUTH_RATE_LIMITING_ENABLED");
     }
@@ -43,7 +45,7 @@ class PlatformPropertiesTests {
     void deploymentGuardRejectsUnreviewedLocalStorageInMultiInstanceMode() {
         PlatformProperties multiInstance = new PlatformProperties("Asia/Singapore", "multi-instance", true, false);
 
-        assertThatThrownBy(() -> new DeploymentTopologyGuard(multiInstance, new com.example.aichinese.service.LocalStorageProvider()))
+        assertThatThrownBy(() -> new DeploymentTopologyGuard(multiInstance, new LocalStorageProvider()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("APP_LOCAL_STORAGE_MULTI_INSTANCE_ACKNOWLEDGED");
     }
@@ -52,7 +54,7 @@ class PlatformPropertiesTests {
     void deploymentGuardAllowsSingleInstanceLocalStorage() {
         PlatformProperties singleInstance = new PlatformProperties("Asia/Singapore", "single-instance", false, false);
 
-        assertThatCode(() -> new DeploymentTopologyGuard(singleInstance, new com.example.aichinese.service.LocalStorageProvider()))
+        assertThatCode(() -> new DeploymentTopologyGuard(singleInstance, new LocalStorageProvider()))
                 .doesNotThrowAnyException();
     }
 }

@@ -1238,8 +1238,7 @@ function reloadAll() {
   );
 }
 
-.student-practice-stage-cloud,
-.student-practice-recorded-cloud {
+.student-practice-stage-cloud {
   position: absolute;
   width: 88px;
   height: 24px;

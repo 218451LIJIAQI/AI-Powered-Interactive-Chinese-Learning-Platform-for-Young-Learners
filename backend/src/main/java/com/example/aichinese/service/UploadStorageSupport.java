@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.core.io.FileSystemResource;
@@ -25,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.UploadedFile;
+import com.example.aichinese.entity.User;
 import com.example.aichinese.service.storage.StorageProvider;
 import com.example.aichinese.service.storage.StoredObject;
 
@@ -172,6 +174,32 @@ final class UploadStorageSupport {
                 }
             }
         });
+    }
+
+    static UploadedFile saveUploadedFileMetadata(
+            Function<UploadedFile, UploadedFile> metadataSaver,
+            StorageProvider storageProvider,
+            StoredObject storedObject,
+            User ownerUser,
+            String originalFileName,
+            String storedFileName,
+            String contentType,
+            long fileSize) {
+        UploadedFile uploadedFile = new UploadedFile();
+        uploadedFile.setOwnerUser(ownerUser);
+        uploadedFile.setFileName(originalFileName);
+        uploadedFile.setStoredFileName(storedFileName);
+        uploadedFile.setFilePath(storedObject.location().toString());
+        uploadedFile.setContentType(normalizeContentType(contentType));
+        uploadedFile.setFileSize(fileSize);
+        uploadedFile.setAccessLevel("PRIVATE");
+        uploadedFile.setActive(true);
+        try {
+            return metadataSaver.apply(uploadedFile);
+        } catch (RuntimeException exception) {
+            storageProvider.deleteQuietly(storedObject);
+            throw exception;
+        }
     }
 
     static StoredFileDownload loadManagedFile(

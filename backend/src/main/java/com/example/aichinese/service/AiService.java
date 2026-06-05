@@ -510,18 +510,20 @@ public class AiService {
             List<AiProviderPrompt.AiMessage> history,
             String relatedEntityType,
             Long relatedEntityId) {
+        String userRole = primaryRole(user);
+        String inputSummary = summarize(userPrompt, 500);
         AiAvailabilityResponse availability = aiAvailabilityService.getAvailability();
         if (!availability.available()) {
             aiLogService.createUsageLog(
                     user,
-                    primaryRole(user),
+                    userRole,
                     featureKey,
                     language,
                     AiRequestStatus.UNAVAILABLE,
                     availability.provider(),
                     availability.model(),
                     null,
-                    summarize(userPrompt, 500),
+                    inputSummary,
                     null,
                     availability.message(),
                     relatedEntityType,
@@ -545,14 +547,14 @@ public class AiService {
                     featureKey, exception.getClass().getSimpleName());
             aiLogService.createUsageLog(
                     user,
-                    primaryRole(user),
+                    userRole,
                     featureKey,
                     language,
                     AiRequestStatus.FAILED,
                     availability.provider(),
                     availability.model(),
                     null,
-                    summarize(userPrompt, 500),
+                    inputSummary,
                     null,
                     "Provider request failed or timed out.",
                     relatedEntityType,
@@ -567,14 +569,14 @@ public class AiService {
         if (!result.success()) {
             aiLogService.createUsageLog(
                     user,
-                    primaryRole(user),
+                    userRole,
                     featureKey,
                     language,
                     AiRequestStatus.FAILED,
                     result.providerName(),
                     result.modelName(),
                     null,
-                    summarize(userPrompt, 500),
+                    inputSummary,
                     null,
                     result.errorSummary(),
                     relatedEntityType,
@@ -589,14 +591,14 @@ public class AiService {
         if (expectJson && !parseJsonMap(result.text()).valid()) {
             aiLogService.createUsageLog(
                     user,
-                    primaryRole(user),
+                    userRole,
                     featureKey,
                     language,
                     AiRequestStatus.FAILED,
                     result.providerName(),
                     result.modelName(),
                     result.tokenCount(),
-                    summarize(userPrompt, 500),
+                    inputSummary,
                     null,
                     "Provider response was not valid JSON.",
                     relatedEntityType,
@@ -610,14 +612,14 @@ public class AiService {
 
         aiLogService.createUsageLog(
                 user,
-                primaryRole(user),
+                userRole,
                 featureKey,
                 language,
                 AiRequestStatus.SUCCESS,
                 result.providerName(),
                 result.modelName(),
                 result.tokenCount(),
-                summarize(userPrompt, 500),
+                inputSummary,
                 summarize(result.text(), 500),
                 null,
                 relatedEntityType,
@@ -1011,7 +1013,7 @@ public class AiService {
 
         return new AiStoryGeneratorResponse(
                 TextUtils.defaultIfBlank(text(map, "title"), requireSanitizedShort(request.topic(), "Topic is required.")),
-                TextUtils.defaultIfBlank(text(map, "chineseStory"), "AI tutor is currently unavailable. Please try again later."),
+                TextUtils.defaultIfBlank(text(map, "chineseStory"), AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE),
                 text(map, "pinyin"),
                 text(map, "englishTranslation"),
                 text(map, "bahasaMelayuTranslation"),

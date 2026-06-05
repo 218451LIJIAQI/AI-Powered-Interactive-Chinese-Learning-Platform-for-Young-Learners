@@ -228,7 +228,7 @@ public class DashboardService {
                 .findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
                 .filter(notification -> notificationService.isNotificationCurrentlyAccessible(currentUser, notification))
                 .limit(5)
-                .map(this::mapTeacherNotification)
+                .map(DashboardService::mapTeacherNotification)
                 .toList();
 
         return new TeacherDashboardResponse(
@@ -300,7 +300,7 @@ public class DashboardService {
                 recentAuditLogs);
     }
 
-    private List<StudentDashboardResponse.NotificationSummary> mapStudentNotifications(List<Notification> notifications) {
+    private static List<StudentDashboardResponse.NotificationSummary> mapStudentNotifications(List<Notification> notifications) {
         return notifications.stream()
                 .map(notification -> new StudentDashboardResponse.NotificationSummary(
                         notification.getId(),
@@ -312,7 +312,7 @@ public class DashboardService {
                 .toList();
     }
 
-    private TeacherDashboardResponse.NotificationSummary mapTeacherNotification(Notification notification) {
+    private static TeacherDashboardResponse.NotificationSummary mapTeacherNotification(Notification notification) {
         return new TeacherDashboardResponse.NotificationSummary(
                 notification.getId(),
                 notification.getTitle(),
@@ -332,7 +332,7 @@ public class DashboardService {
                 .toList();
     }
 
-    private String buildStudentRecommendation(List<String> weakAreas, int progressPercent) {
+    private static String buildStudentRecommendation(List<String> weakAreas, int progressPercent) {
         if (!weakAreas.isEmpty()) {
             return "Focus on " + weakAreas.get(0) + " with short daily practice before moving to new topics.";
         }
@@ -370,7 +370,7 @@ public class DashboardService {
                 && studentLearningAccessService.hasLessonAccess(student, answer.getQuestion().getQuiz().getLesson());
     }
 
-    private int overallCompletionPercent(List<LessonProgress> lessonProgressList) {
+    private static int overallCompletionPercent(List<LessonProgress> lessonProgressList) {
         if (lessonProgressList.isEmpty()) {
             return 0;
         }
@@ -378,10 +378,10 @@ public class DashboardService {
         return (int) Math.round((completedLessons * 100.0) / lessonProgressList.size());
     }
 
-    private BigDecimal averageAttemptScore(List<QuizAttempt> attempts) {
+    private static BigDecimal averageAttemptScore(List<QuizAttempt> attempts) {
         List<BigDecimal> percentages = attempts.stream()
-                .filter(this::hasValidPercentage)
-                .map(this::percentageForAttempt)
+                .filter(DashboardService::hasValidPercentage)
+                .map(DashboardService::percentageForAttempt)
                 .toList();
         if (percentages.isEmpty()) {
             return ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -390,14 +390,14 @@ public class DashboardService {
         return total.divide(BigDecimal.valueOf(percentages.size()), 2, RoundingMode.HALF_UP);
     }
 
-    private boolean hasValidPercentage(QuizAttempt attempt) {
+    private static boolean hasValidPercentage(QuizAttempt attempt) {
         return attempt.isSubmitted()
                 && attempt.getScore() != null
                 && attempt.getMaxScore() != null
                 && attempt.getMaxScore() > 0;
     }
 
-    private BigDecimal percentageForAttempt(QuizAttempt attempt) {
+    private static BigDecimal percentageForAttempt(QuizAttempt attempt) {
         if (!hasValidPercentage(attempt)) {
             return ZERO.setScale(2, RoundingMode.HALF_UP);
         }
@@ -407,7 +407,7 @@ public class DashboardService {
                 .divide(BigDecimal.valueOf(attempt.getMaxScore()), 2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal defaultMoney(BigDecimal amount) {
+    private static BigDecimal defaultMoney(BigDecimal amount) {
         if (amount == null) {
             return ZERO.setScale(2, RoundingMode.HALF_UP);
         }

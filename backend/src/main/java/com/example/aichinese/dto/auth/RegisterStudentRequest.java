@@ -27,7 +27,6 @@ public record RegisterStudentRequest(
         @Size(max = 72, message = "Confirm password must be at most 72 characters")
         String confirmPassword,
         @Pattern(regexp = "^(en|ms|zh)?$", message = "Preferred language must be one of en, ms, or zh")
-        @Size(max = 10, message = "Preferred language must be at most 10 characters")
         String preferredLanguage) {
 
     public RegisterStudentRequest {

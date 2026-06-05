@@ -321,7 +321,7 @@ class CommunicationModerationIntegrationTests {
         String teacherEmail = uniqueEmail("moderation-teacher");
         approveTeacherProfile(teacherEmail);
         String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        Long lessonId = createPublishedLesson(teacherToken, "Moderation Lesson");
+        Long lessonId = createLesson(teacherToken, "Moderation Lesson");
         String studentToken = registerStudentAndLogin(uniqueEmail("moderation-student"));
 
         mockMvc.perform(post("/api/v1/admin/moderation/request-revision")
@@ -418,7 +418,7 @@ class CommunicationModerationIntegrationTests {
         String teacherEmail = uniqueEmail("moderation-state-teacher");
         approveTeacherProfile(teacherEmail);
         String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        Long lessonId = createPublishedLesson(teacherToken, "State Machine Lesson");
+        Long lessonId = createLesson(teacherToken, "State Machine Lesson");
 
         // RESTORE on a PUBLISHED (not ARCHIVED) lesson must fail. Otherwise
         // a stray "Restore" click on a public lesson would silently
@@ -485,10 +485,6 @@ class CommunicationModerationIntegrationTests {
                 .path("data")
                 .path("attemptId")
                 .asLong();
-    }
-
-    private Long createPublishedLesson(String teacherToken, String title) throws Exception {
-        return createLesson(teacherToken, title);
     }
 
     private Long createLesson(String teacherToken, String title) throws Exception {

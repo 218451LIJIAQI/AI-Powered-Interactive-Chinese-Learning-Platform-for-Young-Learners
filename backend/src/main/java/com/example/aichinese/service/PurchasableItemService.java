@@ -107,7 +107,7 @@ public class PurchasableItemService {
                 null);
     }
 
-    private void validatePaidContent(AccessType accessType, BigDecimal price) {
+    private static void validatePaidContent(AccessType accessType, BigDecimal price) {
         if (accessType == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Purchasable content is missing its access type.");
         }
@@ -121,11 +121,11 @@ public class PurchasableItemService {
         }
     }
 
-    private BigDecimal defaultPrice(BigDecimal price) {
+    private static BigDecimal defaultPrice(BigDecimal price) {
         return price == null ? BigDecimal.ZERO : price;
     }
 
-    private boolean isFree(BigDecimal price) {
+    private static boolean isFree(BigDecimal price) {
         return defaultPrice(price).compareTo(BigDecimal.ZERO) <= 0;
     }
 }

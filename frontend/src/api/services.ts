@@ -720,7 +720,7 @@ export const studentApi = {
     return unwrapPageItems<LiveClassResponse>(http.get('/students/live-classes'))
   },
   joinLiveClass(id: number) {
-    return unwrap<{ joinUrl: string; meetingPlatform: string; title: string; startsAt: string }>(
+    return unwrap<{ liveClassId: number; title: string; meetingPlatform: string; meetingLink: string }>(
       http.get(`/students/live-classes/${id}/join`),
     )
   },

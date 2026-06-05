@@ -32,7 +32,7 @@ public class LearningCatalogService {
     @Cacheable(cacheNames = CacheConfig.PUBLIC_LEVELS)
     public List<LearningLevelResponse> getPublicLevels() {
         return learningLevelRepository.findAllByOrderBySortOrderAscNameAsc().stream()
-                .map(this::toLevelResponse)
+                .map(LearningCatalogService::toLevelResponse)
                 .toList();
     }
 
@@ -40,11 +40,11 @@ public class LearningCatalogService {
     @Cacheable(cacheNames = CacheConfig.PUBLIC_CATEGORIES)
     public List<LearningCategoryResponse> getPublicCategories() {
         return learningCategoryRepository.findAllByOrderBySortOrderAscNameAsc().stream()
-                .map(this::toCategoryResponse)
+                .map(LearningCatalogService::toCategoryResponse)
                 .toList();
     }
 
-    private LearningLevelResponse toLevelResponse(LearningLevel level) {
+    private static LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
             return null;
         }
@@ -52,7 +52,7 @@ public class LearningCatalogService {
         return new LearningLevelResponse(level.getId(), level.getName(), level.getDescription());
     }
 
-    private LearningCategoryResponse toCategoryResponse(LearningCategory category) {
+    private static LearningCategoryResponse toCategoryResponse(LearningCategory category) {
         if (category == null) {
             return null;
         }

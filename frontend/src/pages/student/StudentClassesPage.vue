@@ -580,7 +580,7 @@ async function join(id: number) {
     actionError.value = null
     try {
       const response = await studentApi.joinLiveClass(id)
-      if (openSafeHttpUrl(response.joinUrl)) {
+      if (openSafeHttpUrl(response.meetingLink)) {
         actionSuccess.value = 'Opening the live class in a new tab.'
       } else {
         actionError.value = 'The live class meeting link is not a safe web URL.'

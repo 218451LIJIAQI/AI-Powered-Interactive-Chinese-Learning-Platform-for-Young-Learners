@@ -95,23 +95,17 @@ public class AiFileStorageService {
                         "Uploaded file could not be stored."));
         UploadStorageSupport.registerRollbackCleanup(storageProvider, storedObject);
 
-        UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setOwnerUser(ownerUser);
-        uploadedFile.setFileName(originalFileName);
-        uploadedFile.setStoredFileName(storedFileName);
-        uploadedFile.setFilePath(storedObject.location().toString());
-        uploadedFile.setContentType(UploadStorageSupport.normalizeContentType(multipartFile.getContentType()));
-        uploadedFile.setFileSize(multipartFile.getSize());
-        uploadedFile.setAccessLevel("PRIVATE");
-        uploadedFile.setActive(true);
-        try {
-            return Objects.requireNonNull(
-                    metadataWriteTransaction.execute(status -> uploadedFileRepository.save(uploadedFile)),
-                    "uploaded file metadata");
-        } catch (RuntimeException exception) {
-            storageProvider.deleteQuietly(storedObject);
-            throw exception;
-        }
+        return UploadStorageSupport.saveUploadedFileMetadata(
+                uploadedFile -> Objects.requireNonNull(
+                        metadataWriteTransaction.execute(status -> uploadedFileRepository.save(uploadedFile)),
+                        "uploaded file metadata"),
+                storageProvider,
+                storedObject,
+                ownerUser,
+                originalFileName,
+                storedFileName,
+                multipartFile.getContentType(),
+                multipartFile.getSize());
     }
 
     private String[] validateMultipartFile(

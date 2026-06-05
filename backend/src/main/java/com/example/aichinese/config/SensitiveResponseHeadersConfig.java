@@ -15,7 +15,6 @@ import jakarta.servlet.http.HttpServletResponse;
 @Configuration(proxyBeanMethods = false)
 public class SensitiveResponseHeadersConfig implements WebMvcConfigurer {
 
-    private static final String NO_STORE_AUTH_ME = "/api/v1/auth/me";
     private static final String NO_STORE_AUTH = "/api/v1/auth/**";
     private static final String NO_STORE_NOTIFICATIONS_LIST = "/api/v1/notifications";
     private static final String NO_STORE_NOTIFICATIONS = "/api/v1/notifications/**";
@@ -26,11 +25,7 @@ public class SensitiveResponseHeadersConfig implements WebMvcConfigurer {
     private static final String NO_STORE_TEACHERS = "/api/v1/teachers/**";
     private static final String NO_STORE_ADMIN_LIST = "/api/v1/admin";
     private static final String NO_STORE_ADMIN = "/api/v1/admin/**";
-    private static final String NO_STORE_STUDENT_PAYMENTS = "/api/v1/students/payments/**";
-    private static final String NO_STORE_STUDENT_REFUNDS = "/api/v1/students/refund-requests/**";
     private static final String NO_STORE_PAYMENTS = "/api/v1/payments/**";
-    private static final String NO_STORE_ADMIN_AUDIT_LOGS_LIST = "/api/v1/admin/audit-logs";
-    private static final String NO_STORE_ADMIN_AUDIT_LOGS = "/api/v1/admin/audit-logs/**";
     private static final String CACHEABLE_AI_AVAILABILITY = "/api/v1/ai/availability";
 
     private static final String CACHE_CONTROL_NO_STORE = "no-store";
@@ -40,7 +35,6 @@ public class SensitiveResponseHeadersConfig implements WebMvcConfigurer {
     public void addInterceptors(@NonNull InterceptorRegistry registry) {
         registry.addInterceptor(new NoStoreHeaderInterceptor())
                 .addPathPatterns(
-                        NO_STORE_AUTH_ME,
                         NO_STORE_AUTH,
                         NO_STORE_NOTIFICATIONS_LIST,
                         NO_STORE_NOTIFICATIONS,
@@ -51,11 +45,7 @@ public class SensitiveResponseHeadersConfig implements WebMvcConfigurer {
                         NO_STORE_TEACHERS,
                         NO_STORE_ADMIN_LIST,
                         NO_STORE_ADMIN,
-                        NO_STORE_STUDENT_PAYMENTS,
-                        NO_STORE_STUDENT_REFUNDS,
-                        NO_STORE_PAYMENTS,
-                        NO_STORE_ADMIN_AUDIT_LOGS_LIST,
-                        NO_STORE_ADMIN_AUDIT_LOGS)
+                        NO_STORE_PAYMENTS)
                 .excludePathPatterns(CACHEABLE_AI_AVAILABILITY);
     }
 

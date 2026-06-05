@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -115,9 +117,9 @@ class AiUsageLimiterTests {
 
         limiter.checkProviderCallAllowed(99L);
 
-        assertThat(counter.getMinuteStartedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 5, 25, 1, 0));
+        assertThat(counter.getMinuteStartedAt()).isEqualTo(LocalDateTime.of(2026, 5, 25, 1, 0));
         assertThat(counter.getMinuteCount()).isEqualTo(1);
-        assertThat(counter.getUsageDay()).isEqualTo(java.time.LocalDate.of(2026, 5, 25));
+        assertThat(counter.getUsageDay()).isEqualTo(LocalDate.of(2026, 5, 25));
         assertThat(counter.getDayCount()).isEqualTo(1);
     }
 

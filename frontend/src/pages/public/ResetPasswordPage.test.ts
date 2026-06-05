@@ -61,7 +61,7 @@ describe('ResetPasswordPage token hygiene', () => {
 
     const wrapper = mountResetPasswordPage()
 
-    expect((wrapper.get<HTMLInputElement>('#reset-token').element as HTMLInputElement).value).toBe('raw-reset-token')
+    expect(wrapper.get<HTMLInputElement>('#reset-token').element.value).toBe('raw-reset-token')
     expect(mocks.replace).toHaveBeenCalledWith({
       name: 'reset-password',
       query: { tab: 'account' },
@@ -96,7 +96,7 @@ describe('ResetPasswordPage token hygiene', () => {
       password: 'Password123',
       confirmPassword: 'Password123',
     })
-    expect((wrapper.get<HTMLInputElement>('#reset-token').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('#reset-token').element.value).toBe('')
     expect(wrapper.text()).toContain('Password reset successfully')
   })
 })

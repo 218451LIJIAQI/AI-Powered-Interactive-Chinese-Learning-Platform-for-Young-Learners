@@ -23,85 +23,41 @@ class PaymentProviderServiceTests {
 
     @Test
     void selectsNoOpProviderWhenMockSuccessIsDisabled() {
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5174/payment/success",
-                "http://localhost:5174/payment/cancel",
-                false,
-                "mock",
-                "https://api.stripe.com",
-                "",
-                "");
-        MockPaymentProviderClient mockClient = new MockPaymentProviderClient(paymentProperties);
-        NoOpPaymentProviderClient noOpClient = new NoOpPaymentProviderClient();
-        StripePaymentProviderClient stripeClient = new StripePaymentProviderClient(paymentProperties, new RestTemplateBuilder());
-        PaymentProviderService service = new PaymentProviderService(paymentProperties, mockClient, noOpClient, stripeClient);
+        Fixture fixture = fixture(false, "mock", "", "");
 
-        PaymentProviderClient client = service.getClient();
+        PaymentProviderClient client = fixture.service().getClient();
 
-        assertThat(client).isSameAs(noOpClient);
+        assertThat(client).isSameAs(fixture.noOpClient());
         assertThat(client.providerName()).isEqualTo("no-op");
     }
 
     @Test
     void defaultsToNoOpProviderWhenProviderIsBlank() {
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5174/payment/success",
-                "http://localhost:5174/payment/cancel",
-                true,
-                "",
-                "https://api.stripe.com",
-                "",
-                "");
-        MockPaymentProviderClient mockClient = new MockPaymentProviderClient(paymentProperties);
-        NoOpPaymentProviderClient noOpClient = new NoOpPaymentProviderClient();
-        StripePaymentProviderClient stripeClient = new StripePaymentProviderClient(paymentProperties, new RestTemplateBuilder());
-        PaymentProviderService service = new PaymentProviderService(paymentProperties, mockClient, noOpClient, stripeClient);
+        Fixture fixture = fixture(true, "", "", "");
 
-        PaymentProviderClient client = service.getClient();
+        PaymentProviderClient client = fixture.service().getClient();
 
-        assertThat(paymentProperties.provider()).isEqualTo("no-op");
-        assertThat(client).isSameAs(noOpClient);
+        assertThat(fixture.paymentProperties().provider()).isEqualTo("no-op");
+        assertThat(client).isSameAs(fixture.noOpClient());
     }
 
     @Test
     void selectsMockProviderOnlyWhenMockSuccessIsEnabled() {
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5174/payment/success",
-                "http://localhost:5174/payment/cancel",
-                true,
-                "mock",
-                "https://api.stripe.com",
-                "",
-                "");
-        MockPaymentProviderClient mockClient = new MockPaymentProviderClient(paymentProperties);
-        NoOpPaymentProviderClient noOpClient = new NoOpPaymentProviderClient();
-        StripePaymentProviderClient stripeClient = new StripePaymentProviderClient(paymentProperties, new RestTemplateBuilder());
-        PaymentProviderService service = new PaymentProviderService(paymentProperties, mockClient, noOpClient, stripeClient);
+        Fixture fixture = fixture(true, "mock", "", "");
 
-        PaymentProviderClient client = service.getClient();
+        PaymentProviderClient client = fixture.service().getClient();
 
-        assertThat(client).isSameAs(mockClient);
+        assertThat(client).isSameAs(fixture.mockClient());
         assertThat(client.providerName()).isEqualTo("mock");
     }
 
     @Test
     void selectsStripeProviderWhenConfiguredEvenIfMockIsEnabled() {
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5174/payment/success",
-                "http://localhost:5174/payment/cancel",
-                true,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_test_example",
-                "whsec_test_example");
-        MockPaymentProviderClient mockClient = new MockPaymentProviderClient(paymentProperties);
-        NoOpPaymentProviderClient noOpClient = new NoOpPaymentProviderClient();
-        StripePaymentProviderClient stripeClient = new StripePaymentProviderClient(paymentProperties, new RestTemplateBuilder());
-        PaymentProviderService service = new PaymentProviderService(paymentProperties, mockClient, noOpClient, stripeClient);
+        Fixture fixture = fixture(true, "stripe", "sk_test_example", "whsec_test_example");
 
-        PaymentProviderClient client = service.getClient();
+        PaymentProviderClient client = fixture.service().getClient();
 
-        assertThat(client).isSameAs(stripeClient);
+        assertThat(client).isSameAs(fixture.stripeClient());
         assertThat(client.providerName()).isEqualTo("stripe");
     }
 
@@ -142,5 +98,39 @@ class PaymentProviderServiceTests {
                 ""))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Payment provider");
+    }
+
+    private static Fixture fixture(
+            boolean mockSuccessEnabled,
+            String provider,
+            String stripeApiKey,
+            String stripeWebhookSecret) {
+        PaymentProperties paymentProperties = new PaymentProperties(
+                "http://localhost:5174/payment/success",
+                "http://localhost:5174/payment/cancel",
+                mockSuccessEnabled,
+                provider,
+                "https://api.stripe.com",
+                stripeApiKey,
+                stripeWebhookSecret);
+        MockPaymentProviderClient mockClient = new MockPaymentProviderClient(paymentProperties);
+        NoOpPaymentProviderClient noOpClient = new NoOpPaymentProviderClient();
+        StripePaymentProviderClient stripeClient = new StripePaymentProviderClient(
+                paymentProperties,
+                new RestTemplateBuilder());
+        return new Fixture(
+                paymentProperties,
+                mockClient,
+                noOpClient,
+                stripeClient,
+                new PaymentProviderService(paymentProperties, mockClient, noOpClient, stripeClient));
+    }
+
+    private record Fixture(
+            PaymentProperties paymentProperties,
+            MockPaymentProviderClient mockClient,
+            NoOpPaymentProviderClient noOpClient,
+            StripePaymentProviderClient stripeClient,
+            PaymentProviderService service) {
     }
 }

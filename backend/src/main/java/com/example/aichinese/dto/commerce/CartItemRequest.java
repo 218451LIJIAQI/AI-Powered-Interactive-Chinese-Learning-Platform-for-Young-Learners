@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.commerce;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
@@ -21,14 +24,7 @@ public record CartItemRequest(
         String featureKey) {
 
     public CartItemRequest {
-        if (itemType != null) {
-            itemType = itemType.strip();
-        }
-        if (featureKey != null) {
-            featureKey = featureKey.strip();
-            if (featureKey.isEmpty()) {
-                featureKey = null;
-            }
-        }
+        itemType = strip(itemType);
+        featureKey = stripToNull(featureKey);
     }
 }

@@ -21,6 +21,8 @@ import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.communication.BulkOperationResponse;
 import com.example.aichinese.dto.communication.NotificationResponse;
 import com.example.aichinese.dto.communication.NotificationUnreadCountResponse;
+import com.example.aichinese.entity.CoursePackage;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
@@ -229,15 +231,15 @@ public class NotificationService {
         if (student == null) {
             return false;
         }
-        if (feedback.getLesson() != null) {
-            return feedback.getLesson().getContentStatus() == ContentStatus.PUBLISHED
-                    && studentLearningAccessService.hasLessonAccess(student, feedback.getLesson());
+        Lesson feedbackLesson = feedback.getLesson();
+        if (feedbackLesson != null) {
+            return hasFeedbackLessonAccess(student, feedbackLesson);
         }
-        if (feedback.getQuizAttempt() != null
-                && feedback.getQuizAttempt().getQuiz() != null
-                && feedback.getQuizAttempt().getQuiz().getLesson() != null) {
-            return feedback.getQuizAttempt().getQuiz().getLesson().getContentStatus() == ContentStatus.PUBLISHED
-                    && studentLearningAccessService.hasLessonAccess(student, feedback.getQuizAttempt().getQuiz().getLesson());
+        Lesson quizLesson = feedback.getQuizAttempt() == null || feedback.getQuizAttempt().getQuiz() == null
+                ? null
+                : feedback.getQuizAttempt().getQuiz().getLesson();
+        if (quizLesson != null) {
+            return hasFeedbackLessonAccess(student, quizLesson);
         }
         return true;
     }
@@ -248,29 +250,34 @@ public class NotificationService {
         if (student == null || video == null) {
             return false;
         }
-        boolean lessonAccess = video.getLesson() == null
-                || (video.getLesson().getContentStatus() == ContentStatus.PUBLISHED
-                        && liveLearningAccessService.hasStudentLessonAccess(student, video.getLesson()));
-        boolean packageAccess = video.getCoursePackage() == null
-                || (video.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED
-                        && liveLearningAccessService.hasStudentPackageAccess(student, video.getCoursePackage()));
-        return lessonAccess && packageAccess;
+        return hasLiveLessonAccess(student, video.getLesson())
+                && hasLivePackageAccess(student, video.getCoursePackage());
     }
 
     private boolean isLiveClassNotificationAccessible(Notification notification) {
         StudentProfile student = resolveNotificationStudent(notification);
         Long targetId = notification.getTargetId();
         return student != null && targetId != null && liveClassRepository.findById(targetId)
-                .map(liveClass -> {
-                    boolean lessonAccess = liveClass.getLesson() == null
-                            || (liveClass.getLesson().getContentStatus() == ContentStatus.PUBLISHED
-                                    && liveLearningAccessService.hasStudentLessonAccess(student, liveClass.getLesson()));
-                    boolean packageAccess = liveClass.getCoursePackage() == null
-                            || (liveClass.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED
-                                    && liveLearningAccessService.hasStudentPackageAccess(student, liveClass.getCoursePackage()));
-                    return lessonAccess && packageAccess;
-                })
+                .map(liveClass -> hasLiveLessonAccess(student, liveClass.getLesson())
+                        && hasLivePackageAccess(student, liveClass.getCoursePackage()))
                 .orElse(false);
+    }
+
+    private boolean hasFeedbackLessonAccess(StudentProfile student, Lesson lesson) {
+        return lesson.getContentStatus() == ContentStatus.PUBLISHED
+                && studentLearningAccessService.hasLessonAccess(student, lesson);
+    }
+
+    private boolean hasLiveLessonAccess(StudentProfile student, Lesson lesson) {
+        return lesson == null
+                || (lesson.getContentStatus() == ContentStatus.PUBLISHED
+                        && liveLearningAccessService.hasStudentLessonAccess(student, lesson));
+    }
+
+    private boolean hasLivePackageAccess(StudentProfile student, CoursePackage coursePackage) {
+        return coursePackage == null
+                || (coursePackage.getContentStatus() == ContentStatus.PUBLISHED
+                        && liveLearningAccessService.hasStudentPackageAccess(student, coursePackage));
     }
 
     private StudentProfile resolveNotificationStudent(Notification notification) {

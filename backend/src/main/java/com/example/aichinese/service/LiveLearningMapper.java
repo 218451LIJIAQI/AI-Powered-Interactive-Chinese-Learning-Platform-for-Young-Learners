@@ -142,7 +142,7 @@ public class LiveLearningMapper {
                 updatedAt);
     }
 
-    private Integer clampDurationMinutes(long minutes) {
+    private static Integer clampDurationMinutes(long minutes) {
         if (minutes > Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }
@@ -152,28 +152,28 @@ public class LiveLearningMapper {
         return (int) minutes;
     }
 
-    private Long requirePersistedId(VideoProgress progress, String message) {
+    private static Long requirePersistedId(VideoProgress progress, String message) {
         if (progress == null || progress.getId() == null) {
             throw new IllegalStateException(message);
         }
         return progress.getId();
     }
 
-    private Long requirePersistedId(Lesson lesson, String message) {
+    private static Long requirePersistedId(Lesson lesson, String message) {
         if (lesson == null || lesson.getId() == null) {
             throw new IllegalStateException(message);
         }
         return lesson.getId();
     }
 
-    private Long requirePersistedId(RecordedLessonVideo video, String message) {
+    private static Long requirePersistedId(RecordedLessonVideo video, String message) {
         if (video == null || video.getId() == null) {
             throw new IllegalStateException(message);
         }
         return video.getId();
     }
 
-    private LocalDateTime requireUpdatedAt(VideoProgress progress) {
+    private static LocalDateTime requireUpdatedAt(VideoProgress progress) {
         if (progress.getUpdatedAt() == null) {
             throw new IllegalStateException("Video progress must carry an updated timestamp before it can be mapped.");
         }

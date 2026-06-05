@@ -91,7 +91,7 @@ public class RefundService {
         refundRequest.setAmount(commerceMoneyService.normalizePersistableAmount(
                 order.getTotalAmount(),
                 "Refund amount is too large."));
-        refundRequest.setReason(request.reason() != null ? request.reason().trim() : null);
+        refundRequest.setReason(request.reason());
         refundRequest.setRefundStatus(RefundStatus.PENDING);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
 
@@ -186,7 +186,7 @@ public class RefundService {
         return mapAdminRefund(saved);
     }
 
-    private void requireTransition(RefundStatus current, RefundStatus expected, String action) {
+    private static void requireTransition(RefundStatus current, RefundStatus expected, String action) {
         if (current != expected) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
@@ -194,11 +194,11 @@ public class RefundService {
         }
     }
 
-    private Pageable newestPageable(int page, int size) {
+    private static Pageable newestPageable(int page, int size) {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
-    private <T> PageResponse<T> mapRefundPage(
+    private static <T> PageResponse<T> mapRefundPage(
             Page<RefundRequest> refundPage,
             int page,
             int size,

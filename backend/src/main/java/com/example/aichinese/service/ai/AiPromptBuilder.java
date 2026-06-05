@@ -12,11 +12,11 @@ import com.example.aichinese.entity.enums.AiFeatureKey;
 @Component
 public class AiPromptBuilder {
 
-    static final String LANG_EN = "en";
+    private static final String LANG_EN = "en";
 
-    static final String LANG_MS = "ms";
+    private static final String LANG_MS = "ms";
 
-    static final String LANG_ZH = "zh";
+    private static final String LANG_ZH = "zh";
 
     private static final String BASE_INSTRUCTIONS = String.join(" ", List.of(
             "You are a friendly Mandarin Chinese learning assistant for children aged 7 to 12.",

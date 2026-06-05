@@ -74,7 +74,7 @@ final class AiProviderSupport {
         return null;
     }
 
-    static boolean isLoopbackHost(String host) {
+    private static boolean isLoopbackHost(String host) {
         if (host == null) {
             return false;
         }

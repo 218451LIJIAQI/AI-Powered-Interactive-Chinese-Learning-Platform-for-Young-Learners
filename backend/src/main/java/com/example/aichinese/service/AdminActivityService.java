@@ -248,7 +248,7 @@ public class AdminActivityService {
     }
 
     private List<MatchingGameItem> saveMatchingGameItems(MatchingGame parent, AdminMatchingGameRequest request) {
-        if (request.items() == null || request.items().isEmpty()) {
+        if (request.items().isEmpty()) {
             return List.of();
         }
         List<MatchingGameItem> entities = request.items().stream()
@@ -456,7 +456,7 @@ public class AdminActivityService {
     }
 
     private List<DragDropItem> saveDragDropItems(DragDropActivity parent, AdminDragDropActivityRequest request) {
-        if (request.items() == null || request.items().isEmpty()) {
+        if (request.items().isEmpty()) {
             return List.of();
         }
         List<DragDropItem> entities = request.items().stream()
@@ -538,7 +538,7 @@ public class AdminActivityService {
     }
 
     private List<StoryQuestion> saveStoryQuestions(StoryActivity parent, AdminStoryActivityRequest request) {
-        if (request.questions() == null || request.questions().isEmpty()) {
+        if (request.questions().isEmpty()) {
             return List.of();
         }
         List<StoryQuestion> entities = request.questions().stream()

@@ -24,7 +24,7 @@ vi.mock('@/stores/auth', () => ({
 
 function mountResource<T>(loader: () => Promise<T>, fallback?: (() => T) | T, immediate = true) {
   let resource: ReturnType<typeof useResource<T>> | undefined
-  const wrapper = mount(
+  mount(
     defineComponent({
       setup() {
         resource = useResource(loader, fallback, immediate)
@@ -37,7 +37,7 @@ function mountResource<T>(loader: () => Promise<T>, fallback?: (() => T) | T, im
     throw new Error('resource did not initialize')
   }
 
-  return { resource, wrapper }
+  return resource
 }
 
 describe('useResource guarded fallback behavior', () => {
@@ -49,7 +49,7 @@ describe('useResource guarded fallback behavior', () => {
 
   it('does not render fallback fixtures for a normal non-preview API outage', async () => {
     const loader = vi.fn().mockRejectedValue({ request: {} })
-    const { resource } = mountResource(loader, { message: 'demo fixture' })
+    const resource = mountResource(loader, { message: 'demo fixture' })
 
     await flushPromises()
 
@@ -68,7 +68,7 @@ describe('useResource guarded fallback behavior', () => {
     mocks.auth.isPreviewSession = true
     const fallback = { message: 'safe preview fixture' }
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
-    const { resource } = mountResource(loader, () => fallback)
+    const resource = mountResource(loader, () => fallback)
 
     await flushPromises()
 
@@ -85,7 +85,7 @@ describe('useResource guarded fallback behavior', () => {
     mocks.auth.isPreviewSession = false
     const fallback = { message: 'anonymous preview fixture' }
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
-    const { resource } = mountResource(loader, () => fallback)
+    const resource = mountResource(loader, () => fallback)
 
     await flushPromises()
 
@@ -101,7 +101,7 @@ describe('useResource guarded fallback behavior', () => {
       .fn()
       .mockRejectedValueOnce({ response: { status: 500, data: {} } })
       .mockResolvedValueOnce({ count: 2 })
-    const { resource } = mountResource(loader, undefined, false)
+    const resource = mountResource(loader, undefined, false)
 
     expect(resource.loading.value).toBe(false)
     expect(resource.data.value).toBeNull()

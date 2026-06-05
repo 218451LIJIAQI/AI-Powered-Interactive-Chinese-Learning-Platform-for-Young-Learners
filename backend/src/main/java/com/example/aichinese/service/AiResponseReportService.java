@@ -258,15 +258,15 @@ public class AiResponseReportService {
         return chatMessage;
     }
 
-    private String normalizeSnapshot(String value) {
+    private static String normalizeSnapshot(String value) {
         return normalizeReportText(value, MAX_REPORT_SNAPSHOT_LENGTH);
     }
 
-    private String normalizeReportText(String value, int maxLength) {
+    private static String normalizeReportText(String value, int maxLength) {
         return AiInputSanitizer.sanitize(value, maxLength);
     }
 
-    private String requireReportText(String value, int maxLength, String message) {
+    private static String requireReportText(String value, int maxLength, String message) {
         String sanitized = normalizeReportText(value, maxLength);
         if (sanitized == null) {
             throw new ResponseStatusException(BAD_REQUEST, message);
@@ -302,20 +302,20 @@ public class AiResponseReportService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
     }
 
-    private void requireRole(SecurityUserDetails currentUser, RoleName roleName, String message) {
+    private static void requireRole(SecurityUserDetails currentUser, RoleName roleName, String message) {
         if (currentUser == null || currentUser.getRoleNames().stream().noneMatch(role -> role.equals(roleName.name()))) {
             throw new ResponseStatusException(FORBIDDEN, message);
         }
     }
 
-    private AiResponseReportStatus parseOptionalStatus(String value) {
+    private static AiResponseReportStatus parseOptionalStatus(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         return parseEnum(AiResponseReportStatus.class, value, "Invalid AI report status.");
     }
 
-    private <T extends Enum<T>> T parseEnum(Class<T> enumType, String value, String message) {
+    private static <T extends Enum<T>> T parseEnum(Class<T> enumType, String value, String message) {
         if (value == null || value.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, message);
         }
@@ -382,7 +382,7 @@ public class AiResponseReportService {
                 report.getUpdatedAt());
     }
 
-    private Pageable newestPageable(int page, int size) {
+    private static Pageable newestPageable(int page, int size) {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
@@ -410,7 +410,7 @@ public class AiResponseReportService {
                 PaginationUtils.totalPages(reportPage.getTotalElements(), size));
     }
 
-    private ResolvedReportSnapshots resolveReportSnapshots(
+    private static ResolvedReportSnapshots resolveReportSnapshots(
             AiResponseReport report,
             Map<Long, String> promptSnapshotsByChatMessageId) {
         AiChatMessage chatMessage = report.getChatMessage();

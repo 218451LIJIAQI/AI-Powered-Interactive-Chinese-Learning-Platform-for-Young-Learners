@@ -39,10 +39,11 @@ public class LocalStorageProvider implements StorageProvider {
         try {
             Files.deleteIfExists(storedObject.location());
         } catch (IOException exception) {
+            String fileName = safeFileName(storedObject);
             log.warn("Failed to delete stored object during upload rollback for name {}: {}",
-                    safeFileName(storedObject),
+                    fileName,
                     ExceptionLogUtils.exceptionType(exception));
-            log.debug("Stored object cleanup stack trace for name {}.", safeFileName(storedObject), exception);
+            log.debug("Stored object cleanup stack trace for name {}.", fileName, exception);
         }
     }
 

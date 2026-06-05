@@ -1277,7 +1277,6 @@ function reloadAll() {
     flex-wrap: wrap;
   }
 
-  .teacher-feedback-detail-head,
   .teacher-feedback-score-row,
   .teacher-feedback-create-grid {
     grid-template-columns: 1fr;

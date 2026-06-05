@@ -2,6 +2,7 @@ package com.example.aichinese.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -49,7 +50,7 @@ class SecurityLayerContractTests {
 
     @Test
     void customUserDetailsServiceNormalizesUsernameBeforeRepositoryLookup() {
-        UserRepository repository = org.mockito.Mockito.mock(UserRepository.class);
+        UserRepository repository = mock(UserRepository.class);
         User persistedUser = user(42L, "teacher@example.com");
         when(repository.findByEmailWithRoles("teacher@example.com")).thenReturn(Optional.of(persistedUser));
 
@@ -62,7 +63,7 @@ class SecurityLayerContractTests {
 
     @Test
     void customUserDetailsServiceRejectsBlankUsernameWithoutRepositoryLookup() {
-        UserRepository repository = org.mockito.Mockito.mock(UserRepository.class);
+        UserRepository repository = mock(UserRepository.class);
         CustomUserDetailsService service = new CustomUserDetailsService(repository);
 
         assertThatThrownBy(() -> service.loadUserByUsername("\u3000"))

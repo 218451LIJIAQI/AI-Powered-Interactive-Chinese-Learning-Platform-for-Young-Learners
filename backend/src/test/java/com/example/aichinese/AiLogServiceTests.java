@@ -116,8 +116,8 @@ class AiLogServiceTests {
 
         assertThat(saved.getInputText()).isEqualTo("content_length=32");
         assertThat(saved.getFeedbackText()).isEqualTo("content_length=63");
-        assertThat(saved.getInputFileUrl()).isNull();
         assertThat(saved.getUploadedFile()).isSameAs(uploadedFile);
+        assertThat(saved.getInputFileUrl()).isNull();
         verify(aiFeedbackRecordRepository).save(any(AiFeedbackRecord.class));
     }
 }

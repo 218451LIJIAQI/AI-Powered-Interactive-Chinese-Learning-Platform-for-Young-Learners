@@ -76,7 +76,6 @@ public class AiLogService {
         record.setFeedbackText(contentMetadata(feedbackText));
         record.setStatus(status.name());
         record.setUploadedFile(uploadedFile);
-        record.setInputFileUrl(null);
         return aiFeedbackRecordRepository.save(record);
     }
 
@@ -112,14 +111,14 @@ public class AiLogService {
         return aiUsageLogRepository.save(usageLog);
     }
 
-    private String defaultSessionTitle(AiFeatureKey featureKey) {
+    private static String defaultSessionTitle(AiFeatureKey featureKey) {
         return switch (featureKey) {
             case CHAT_TUTOR -> "AI Tutor Chat";
             default -> featureKey.name();
         };
     }
 
-    private String summarize(String value, int limit) {
+    private static String summarize(String value, int limit) {
         if (value == null) {
             return null;
         }
@@ -139,7 +138,7 @@ public class AiLogService {
         return trimmed.substring(0, end);
     }
 
-    private String contentMetadata(String value) {
+    private static String contentMetadata(String value) {
         if (value == null) {
             return null;
         }

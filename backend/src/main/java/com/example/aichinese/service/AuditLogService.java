@@ -105,11 +105,11 @@ public class AuditLogService {
         return communicationMapper.toAuditLogResponse(auditLog);
     }
 
-    private Pageable newestPageable(int page, int size) {
+    private static Pageable newestPageable(int page, int size) {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 
-    private String sanitizeDescription(String description) {
+    private static String sanitizeDescription(String description) {
         if (description == null) {
             return null;
         }

@@ -256,7 +256,7 @@ public class StudentLearningService {
         savedAttempt.setMaxScore(maxScore);
         quizAttemptRepository.save(savedAttempt);
 
-        int percentage = maxScore == 0 ? 0 : (int) Math.round((score * 100.0) / maxScore);
+        int percentage = percentageScore(score, maxScore);
         StudentLearningProgressService.CompletionOutcome completionOutcome =
                 studentLearningProgressService.completeQuiz(student, quiz, percentage);
 
@@ -291,22 +291,14 @@ public class StudentLearningService {
         List<QuizAttemptAnswer> answers = quizAttemptAnswerRepository
                 .findByQuizAttemptIdOrderByCreatedAtAsc(attempt.getId());
         List<QuizAttemptResultQuestionResponse> answerResponses = answers.stream()
-                .map(answer -> new QuizAttemptResultQuestionResponse(
-                        answer.getQuestion().getId(),
-                        answer.getQuestion().getQuestionType(),
-                        answer.getQuestion().getQuestionText(),
-                        answer.getAnswerText(),
-                        answer.getQuestion().getCorrectAnswerText(),
-                        answer.isCorrect(),
-                        answer.getQuestion().getPoints(),
-                        answer.getQuestion().getExplanation()))
+                .map(StudentLearningService::toQuizAttemptResultQuestionResponse)
                 .toList();
 
         int correctCount = (int) answers.stream().filter(QuizAttemptAnswer::isCorrect).count();
         int totalQuestions = answers.size();
         int score = attempt.getScore() == null ? 0 : attempt.getScore();
         int maxScore = attempt.getMaxScore() == null ? 0 : attempt.getMaxScore();
-        int percentage = maxScore == 0 ? 0 : (int) Math.round((score * 100.0) / maxScore);
+        int percentage = percentageScore(score, maxScore);
 
         return new QuizAttemptResultResponse(
                 attempt.getId(),
@@ -337,7 +329,7 @@ public class StudentLearningService {
                 AccessType.FREE,
                 PageRequest.of(safePage, safeSize));
         List<WrongAnswerResponse> items = wrongAnswerPage.getContent().stream()
-                .map(this::toWrongAnswerResponse)
+                .map(StudentLearningService::toWrongAnswerResponse)
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, wrongAnswerPage.getTotalElements(), wrongAnswerPage.getTotalPages());
     }
@@ -441,10 +433,8 @@ public class StudentLearningService {
                 .filter(video -> canAccessVideo(student, video))
                 .map(video -> liveLearningMapper.toRecordedVideoResponse(
                         video,
-                        video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
-                                ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
-                                : null,
-                        video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null))
+                        studentRecordedVideoStreamUrl(video),
+                        externalVideoUrl(video)))
                 .sorted(Comparator.comparing(RecordedLessonVideoResponse::sortOrder)
                         .thenComparing(RecordedLessonVideoResponse::createdAt))
                 .toList();
@@ -476,25 +466,54 @@ public class StudentLearningService {
         }
     }
 
-    private boolean isCorrectAnswer(QuizQuestion question, String answerText) {
+    private static boolean isCorrectAnswer(QuizQuestion question, String answerText) {
         String submitted = answerText == null ? "" : answerText.trim();
         return normalize(submitted).equals(normalize(question.getCorrectAnswerText()));
     }
 
-    private WrongAnswerResponse toWrongAnswerResponse(QuizAttemptAnswer answer) {
-        return new WrongAnswerResponse(
-                answer.getQuizAttempt().getId(),
-                answer.getQuestion().getId(),
-                answer.getQuestion().getQuiz().getTitle(),
-                answer.getQuestion().getQuestionText(),
-                answer.getQuestion().getQuestionType(),
+    private static QuizAttemptResultQuestionResponse toQuizAttemptResultQuestionResponse(QuizAttemptAnswer answer) {
+        QuizQuestion question = answer.getQuestion();
+        return new QuizAttemptResultQuestionResponse(
+                question.getId(),
+                question.getQuestionType(),
+                question.getQuestionText(),
                 answer.getAnswerText(),
-                answer.getQuestion().getCorrectAnswerText(),
-                answer.getQuestion().getExplanation(),
-                answer.getQuizAttempt().getCompletedAt());
+                question.getCorrectAnswerText(),
+                answer.isCorrect(),
+                question.getPoints(),
+                question.getExplanation());
     }
 
-    private String normalize(String value) {
+    private static WrongAnswerResponse toWrongAnswerResponse(QuizAttemptAnswer answer) {
+        QuizAttempt attempt = answer.getQuizAttempt();
+        QuizQuestion question = answer.getQuestion();
+        return new WrongAnswerResponse(
+                attempt.getId(),
+                question.getId(),
+                question.getQuiz().getTitle(),
+                question.getQuestionText(),
+                question.getQuestionType(),
+                answer.getAnswerText(),
+                question.getCorrectAnswerText(),
+                question.getExplanation(),
+                attempt.getCompletedAt());
+    }
+
+    private static int percentageScore(int score, int maxScore) {
+        return maxScore == 0 ? 0 : (int) Math.round((score * 100.0) / maxScore);
+    }
+
+    private static String studentRecordedVideoStreamUrl(RecordedLessonVideo video) {
+        return video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
+                ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
+                : null;
+    }
+
+    private static String externalVideoUrl(RecordedLessonVideo video) {
+        return video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
+    }
+
+    private static String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 }

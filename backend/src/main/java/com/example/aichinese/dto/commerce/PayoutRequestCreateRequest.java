@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.commerce;
 
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.math.BigDecimal;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -23,11 +25,6 @@ public record PayoutRequestCreateRequest(
         String requestedNote) {
 
     public PayoutRequestCreateRequest {
-        if (requestedNote != null) {
-            requestedNote = requestedNote.strip();
-            if (requestedNote.isEmpty()) {
-                requestedNote = null;
-            }
-        }
+        requestedNote = stripToNull(requestedNote);
     }
 }

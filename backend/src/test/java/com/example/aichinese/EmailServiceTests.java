@@ -3,6 +3,7 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -113,7 +114,7 @@ class EmailServiceTests {
     @Test
     void smtpEmailServiceLogsSendFailuresWithoutWarnStackTrace(CapturedOutput output) {
         JavaMailSender mailSender = mock(JavaMailSender.class);
-        org.mockito.Mockito.doThrow(new RuntimeException("SMTP provider unavailable password=secret"))
+        doThrow(new RuntimeException("SMTP provider unavailable password=secret"))
                 .when(mailSender).send(any(SimpleMailMessage.class));
         EmailProperties emailProperties = new EmailProperties(true, " no-reply@example.com ", "https://example.com/reset-password");
         SmtpEmailService service = new SmtpEmailService(mailSender, emailProperties, "smtp-user@example.com");

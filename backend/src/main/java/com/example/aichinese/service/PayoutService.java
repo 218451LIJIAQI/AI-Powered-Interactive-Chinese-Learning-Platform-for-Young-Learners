@@ -205,7 +205,7 @@ public class PayoutService {
         return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
 
-    private void requireTransition(PayoutStatus current, PayoutStatus expected, String action) {
+    private static void requireTransition(PayoutStatus current, PayoutStatus expected, String action) {
         if (current != expected) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
@@ -234,7 +234,7 @@ public class PayoutService {
         return commerceMoneyService.subtract(totalNetAmount, committedPayoutAmount);
     }
 
-    private Pageable newestPageable(int page, int size) {
+    private static Pageable newestPageable(int page, int size) {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 

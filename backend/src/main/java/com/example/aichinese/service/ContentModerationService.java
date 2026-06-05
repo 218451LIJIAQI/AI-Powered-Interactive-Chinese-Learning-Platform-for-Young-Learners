@@ -184,7 +184,7 @@ public class ContentModerationService {
         }
     }
 
-    private ContentStatus mapContentStatus(ContentModerationAction action, ContentStatus currentStatus) {
+    private static ContentStatus mapContentStatus(ContentModerationAction action, ContentStatus currentStatus) {
         return switch (action) {
             case HIDE, UNPUBLISH -> ContentStatus.APPROVED;
             case ARCHIVE -> ContentStatus.ARCHIVED;
@@ -193,7 +193,7 @@ public class ContentModerationService {
         };
     }
 
-    private void requireValidContentTransition(
+    private static void requireValidContentTransition(
             ContentStatus current,
             ContentModerationAction action,
             String entityName) {
@@ -224,7 +224,7 @@ public class ContentModerationService {
         }
     }
 
-    private void requireValidVisibilityTransition(
+    private static void requireValidVisibilityTransition(
             boolean currentlyVisible,
             ContentModerationAction action,
             String entityName) {
@@ -243,7 +243,7 @@ public class ContentModerationService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
     }
 
-    private String requireModerationNote(String value) {
+    private static String requireModerationNote(String value) {
         String sanitized = AiInputSanitizer.sanitize(value, MAX_MODERATION_NOTE_LENGTH);
         if (sanitized == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Reason is required.");
@@ -251,7 +251,7 @@ public class ContentModerationService {
         return sanitized;
     }
 
-    private Pageable newestPageable(int page, int size) {
+    private static Pageable newestPageable(int page, int size) {
         return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     }
 }

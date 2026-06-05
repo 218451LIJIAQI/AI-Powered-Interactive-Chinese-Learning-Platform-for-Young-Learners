@@ -102,15 +102,14 @@ public class PublicContentService {
 
     @Transactional(readOnly = true)
     public PublicCourseDetailResponse getCourseDetail(String id) {
-        ManagedContentType contentType = parseContentType(id);
-        Long contentId = parseContentId(id);
+        CourseKey courseKey = parseCourseKey(id);
         String currencyCode = commerceSettingsService.getDefaultCurrency();
 
-        return switch (contentType) {
+        return switch (courseKey.type()) {
             case LESSON -> {
                 Lesson lesson = lessonRepository
                         .findByIdAndContentStatusAndTeacherTeacherStatusAndTeacherPublicVisibleTrue(
-                                contentId,
+                                courseKey.id(),
                                 ContentStatus.PUBLISHED,
                                 TeacherStatus.APPROVED)
                         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published lesson was not found."));
@@ -119,7 +118,7 @@ public class PublicContentService {
             case PACKAGE -> {
                 CoursePackage coursePackage = coursePackageRepository
                         .findByIdAndContentStatusAndTeacherTeacherStatusAndTeacherPublicVisibleTrue(
-                                contentId,
+                                courseKey.id(),
                                 ContentStatus.PUBLISHED,
                                 TeacherStatus.APPROVED)
                         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published package was not found."));
@@ -230,7 +229,7 @@ public class PublicContentService {
         return items;
     }
 
-    private String publicCourseUnionSql(
+    private static String publicCourseUnionSql(
             Long levelId,
             Long categoryId,
             AccessType accessTypeFilter,
@@ -265,7 +264,7 @@ public class PublicContentService {
         return lessonSql + " union all " + packageSql;
     }
 
-    private void appendPublicCourseFilters(
+    private static void appendPublicCourseFilters(
             StringBuilder sql,
             String alias,
             Long levelId,
@@ -286,7 +285,7 @@ public class PublicContentService {
         }
     }
 
-    private void bindPublicCourseParams(
+    private static void bindPublicCourseParams(
             Query query,
             Long levelId,
             Long categoryId,
@@ -310,7 +309,7 @@ public class PublicContentService {
         }
     }
 
-    private String publicCourseOrderClause(String sort) {
+    private static String publicCourseOrderClause(String sort) {
         String normalizedSort = sort == null || sort.isBlank() ? "newest" : sort.trim().toLowerCase(Locale.ROOT);
         return switch (normalizedSort) {
             case "title" -> " order by lower(title) asc, item_type asc, item_id asc";
@@ -319,7 +318,7 @@ public class PublicContentService {
         };
     }
 
-    private AccessType parseAccessType(String accessType) {
+    private static AccessType parseAccessType(String accessType) {
         if (accessType == null || accessType.isBlank()) {
             return null;
         }
@@ -331,7 +330,7 @@ public class PublicContentService {
         }
     }
 
-    private LearningType parseLearningType(String learningType) {
+    private static LearningType parseLearningType(String learningType) {
         if (learningType == null || learningType.isBlank()) {
             return null;
         }
@@ -343,21 +342,16 @@ public class PublicContentService {
         }
     }
 
-    private ManagedContentType parseContentType(String id) {
-        String[] parts = splitId(id);
-        return ManagedContentType.fromValue(parts[0]);
-    }
-
-    private Long parseContentId(String id) {
+    private static CourseKey parseCourseKey(String id) {
         String[] parts = splitId(id);
         try {
-            return Long.valueOf(parts[1]);
+            return new CourseKey(ManagedContentType.fromValue(parts[0]), Long.valueOf(parts[1]));
         } catch (NumberFormatException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid public course id format.");
         }
     }
 
-    private String[] splitId(String id) {
+    private static String[] splitId(String id) {
         if (id == null || !id.contains("-")) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid public course id format.");
         }

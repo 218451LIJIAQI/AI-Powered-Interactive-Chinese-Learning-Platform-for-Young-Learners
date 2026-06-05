@@ -197,7 +197,6 @@ public class LiveLearningAccessService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Recorded video was not found."));
     }
 
-    @Transactional(readOnly = true)
     private LiveClassEnrolment requireActiveEnrolment(Long liveClassId, Long studentId) {
         LiveClassEnrolment enrolment = liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(liveClassId, studentId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Live class enrolment was not found."));
@@ -357,7 +356,7 @@ public class LiveLearningAccessService {
         return uri.normalize().toASCIIString();
     }
 
-    private String validateExternalVideoUrl(String value) {
+    private static String validateExternalVideoUrl(String value) {
         return normalizeSupportedWebUri(value, "External video URL must be valid.");
     }
 
@@ -449,11 +448,11 @@ public class LiveLearningAccessService {
         }
     }
 
-    private String normalizeSupportedWebUri(String value, String invalidMessage) {
+    private static String normalizeSupportedWebUri(String value, String invalidMessage) {
         return parseSupportedWebUri(value, invalidMessage).normalize().toASCIIString();
     }
 
-    private URI parseSupportedWebUri(String value, String invalidMessage) {
+    private static URI parseSupportedWebUri(String value, String invalidMessage) {
         if (value == null || value.isBlank() || containsUnsafeUrlCodePoint(value) || value.indexOf('\\') >= 0) {
             throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
         }
@@ -471,7 +470,7 @@ public class LiveLearningAccessService {
         }
     }
 
-    private boolean isSupportedWebUri(URI uri) {
+    private static boolean isSupportedWebUri(URI uri) {
         if (uri == null || uri.isOpaque() || uri.getScheme() == null || uri.getHost() == null) {
             return false;
         }
@@ -479,7 +478,7 @@ public class LiveLearningAccessService {
         return "http".equals(scheme) || "https".equals(scheme);
     }
 
-    private boolean containsUnsafeUrlCodePoint(String value) {
+    private static boolean containsUnsafeUrlCodePoint(String value) {
         for (int offset = 0; offset < value.length();) {
             int codePoint = value.codePointAt(offset);
             offset += Character.charCount(codePoint);

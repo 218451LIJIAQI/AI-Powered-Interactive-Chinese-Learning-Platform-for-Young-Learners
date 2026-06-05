@@ -704,7 +704,6 @@ function reloadAll() {
 .admin-analytics-breakdown-row span,
 .admin-analytics-mini-stat small,
 .admin-analytics-mini-stat span,
-.admin-analytics-empty-copy,
 .admin-analytics-notes p,
 .admin-analytics-audit-copy span,
 .admin-analytics-audit-copy small,

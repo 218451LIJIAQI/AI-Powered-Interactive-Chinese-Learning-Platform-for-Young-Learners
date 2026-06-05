@@ -253,15 +253,26 @@ public class TeacherFeedbackService {
         boolean quizAttemptAccess = quizAttemptRepository.findByStudentIdOrderByCompletedAtDescCreatedAtDesc(student.getId()).stream()
                 .map(quizAttempt -> linkedLesson(null, quizAttempt))
                 .anyMatch(lesson -> isTeacherLesson(lesson, teacherUserId) && studentLearningAccessService.hasLessonAccess(student, lesson));
-        boolean enrolledLiveClassAccess = liveClassEnrolmentRepository
-                .findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(student.getId(), LiveClassEnrolmentStatus.ENROLLED).stream()
-                .map(LiveClassEnrolment::getLiveClass)
-                .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId) && hasCurrentLiveClassAccess(student, liveClass));
-        boolean attendedLiveClassAccess = liveClassEnrolmentRepository
-                .findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(student.getId(), LiveClassEnrolmentStatus.ATTENDED).stream()
-                .map(LiveClassEnrolment::getLiveClass)
-                .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId) && hasCurrentLiveClassAccess(student, liveClass));
+        boolean enrolledLiveClassAccess = hasAccessibleLiveClassRelationship(
+                student,
+                teacherUserId,
+                LiveClassEnrolmentStatus.ENROLLED);
+        boolean attendedLiveClassAccess = hasAccessibleLiveClassRelationship(
+                student,
+                teacherUserId,
+                LiveClassEnrolmentStatus.ATTENDED);
         return lessonProgressAccess || quizAttemptAccess || enrolledLiveClassAccess || attendedLiveClassAccess;
+    }
+
+    private boolean hasAccessibleLiveClassRelationship(
+            StudentProfile student,
+            Long teacherUserId,
+            LiveClassEnrolmentStatus status) {
+        return liveClassEnrolmentRepository
+                .findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(student.getId(), status).stream()
+                .map(LiveClassEnrolment::getLiveClass)
+                .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId)
+                        && hasCurrentLiveClassAccess(student, liveClass));
     }
 
     private boolean hasCurrentLiveClassAccess(StudentProfile student, LiveClass liveClass) {
@@ -275,7 +286,7 @@ public class TeacherFeedbackService {
         return lessonAccess && packageAccess;
     }
 
-    private Lesson linkedLesson(Lesson lesson, QuizAttempt quizAttempt) {
+    private static Lesson linkedLesson(Lesson lesson, QuizAttempt quizAttempt) {
         if (lesson != null) {
             return lesson;
         }
@@ -285,27 +296,27 @@ public class TeacherFeedbackService {
         return null;
     }
 
-    private boolean isTeacherLesson(Lesson lesson, Long teacherUserId) {
+    private static boolean isTeacherLesson(Lesson lesson, Long teacherUserId) {
         return lesson != null
                 && lesson.getTeacher() != null
                 && lesson.getTeacher().getUser() != null
                 && teacherUserId.equals(lesson.getTeacher().getUser().getId());
     }
 
-    private boolean isTeacherLiveClass(LiveClass liveClass, Long teacherUserId) {
+    private static boolean isTeacherLiveClass(LiveClass liveClass, Long teacherUserId) {
         return liveClass != null
                 && liveClass.getTeacher() != null
                 && liveClass.getTeacher().getUser() != null
                 && teacherUserId.equals(liveClass.getTeacher().getUser().getId());
     }
 
-    private Long teacherUserId(TeacherFeedback feedback) {
+    private static Long teacherUserId(TeacherFeedback feedback) {
         return feedback.getTeacher() != null && feedback.getTeacher().getUser() != null
                 ? feedback.getTeacher().getUser().getId()
                 : null;
     }
 
-    private boolean isSameId(Long left, Long right) {
+    private static boolean isSameId(Long left, Long right) {
         return left != null && left.equals(right);
     }
 
@@ -329,7 +340,7 @@ public class TeacherFeedbackService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quiz attempt was not found."));
     }
 
-    private TeacherFeedbackType parseFeedbackType(String rawType) {
+    private static TeacherFeedbackType parseFeedbackType(String rawType) {
         if (rawType == null || rawType.isBlank()) {
             return TeacherFeedbackType.GENERAL;
         }

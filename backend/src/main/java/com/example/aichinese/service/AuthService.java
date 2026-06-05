@@ -15,7 +15,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -263,12 +262,11 @@ public class AuthService {
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
         String email = normalizeEmail(request.email());
-        Optional<User> userLookup = userRepository.findLockedByEmail(email);
-        if (userLookup.isEmpty()) {
+        User user = userRepository.findLockedByEmail(email).orElse(null);
+        if (user == null) {
             return;
         }
 
-        User user = userLookup.orElseThrow();
         LocalDateTime now = LocalDateTime.now();
         passwordResetTokenRepository.invalidateActiveTokensForUser(user.getId(), now);
 
