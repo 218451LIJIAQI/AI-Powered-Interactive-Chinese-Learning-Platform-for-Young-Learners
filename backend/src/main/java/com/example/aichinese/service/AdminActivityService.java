@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -71,6 +72,9 @@ public class AdminActivityService {
             ContentStatus.DRAFT,
             ContentStatus.PUBLISHED,
             ContentStatus.ARCHIVED);
+    private static final int MAX_MERGED_FEED_WINDOW = 1_000;
+    private static final String ACTIVITY_PAGE_TOO_DEEP_MESSAGE =
+            "Requested activity page is too deep. Please use filters or a smaller page.";
 
     private final FlashcardRepository flashcardRepository;
     private final MatchingGameRepository matchingGameRepository;
@@ -554,44 +558,63 @@ public class AdminActivityService {
             int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        int perTypeLimit = Math.min(500, (int) Math.min(((long) safePage + 1L) * safeSize, 500L));
+        int perTypeLimit = mergedPageFetchLimit(safePage, safeSize);
         Pageable slice = PageRequest.of(0, perTypeLimit, Sort.by(Sort.Order.desc("updatedAt")));
 
         List<AdminActivitySummaryResponse> merged = new ArrayList<>();
+        long totalItems = 0L;
         if (includesActivityType(filter, ActivityType.FLASHCARD)) {
-            flashcardRepository.findAll(filterSpec(filter), slice).getContent()
-                    .forEach(e -> merged.add(mapper.toSummary(e)));
+            totalItems += appendSummaries(merged, flashcardRepository.findAll(filterSpec(filter), slice),
+                    mapper::toSummary);
         }
         if (includesActivityType(filter, ActivityType.MATCHING_GAME)) {
-            matchingGameRepository.findAll(filterSpec(filter), slice).getContent()
-                    .forEach(e -> merged.add(mapper.toSummary(e)));
+            totalItems += appendSummaries(merged, matchingGameRepository.findAll(filterSpec(filter), slice),
+                    mapper::toSummary);
         }
         if (includesActivityType(filter, ActivityType.LISTENING_EXERCISE)) {
-            listeningExerciseRepository.findAll(filterSpec(filter), slice).getContent()
-                    .forEach(e -> merged.add(mapper.toSummary(e)));
+            totalItems += appendSummaries(merged, listeningExerciseRepository.findAll(filterSpec(filter), slice),
+                    mapper::toSummary);
         }
         if (includesActivityType(filter, ActivityType.TRACING_EXERCISE)) {
-            tracingExerciseRepository.findAll(filterSpec(filter), slice).getContent()
-                    .forEach(e -> merged.add(mapper.toSummary(e)));
+            totalItems += appendSummaries(merged, tracingExerciseRepository.findAll(filterSpec(filter), slice),
+                    mapper::toSummary);
         }
         if (includesActivityType(filter, ActivityType.DRAG_DROP_ACTIVITY)) {
-            dragDropActivityRepository.findAll(filterSpec(filter), slice).getContent()
-                    .forEach(e -> merged.add(mapper.toSummary(e)));
+            totalItems += appendSummaries(merged, dragDropActivityRepository.findAll(filterSpec(filter), slice),
+                    mapper::toSummary);
         }
         if (includesActivityType(filter, ActivityType.STORY_ACTIVITY)) {
-            storyActivityRepository.findAll(filterSpec(filter), slice).getContent()
-                    .forEach(e -> merged.add(mapper.toSummary(e)));
+            totalItems += appendSummaries(merged, storyActivityRepository.findAll(filterSpec(filter), slice),
+                    mapper::toSummary);
         }
 
         merged.sort(Comparator
                 .comparing(AdminActivitySummaryResponse::updatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
 
-        int total = merged.size();
-        int fromIndex = PaginationUtils.startIndex(safePage, safeSize, total);
-        int toIndex = PaginationUtils.endIndex(fromIndex, safeSize, total);
+        int loadedTotal = merged.size();
+        int fromIndex = PaginationUtils.startIndex(safePage, safeSize, loadedTotal);
+        int toIndex = PaginationUtils.endIndex(fromIndex, safeSize, loadedTotal);
         List<AdminActivitySummaryResponse> windowed = merged.subList(fromIndex, toIndex);
-        int totalPages = PaginationUtils.totalPages(total, safeSize);
-        return new PageResponse<>(windowed, safePage, safeSize, total, totalPages);
+        int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
+        return new PageResponse<>(windowed, safePage, safeSize, totalItems, totalPages);
+    }
+
+    private static int mergedPageFetchLimit(int safePage, int safeSize) {
+        long requestedWindow = ((long) safePage + 1L) * safeSize;
+        if (requestedWindow > MAX_MERGED_FEED_WINDOW) {
+            throw new ResponseStatusException(BAD_REQUEST, ACTIVITY_PAGE_TOO_DEEP_MESSAGE);
+        }
+        return (int) requestedWindow;
+    }
+
+    private static <T> long appendSummaries(
+            List<AdminActivitySummaryResponse> target,
+            Page<T> page,
+            Function<? super T, AdminActivitySummaryResponse> mapper) {
+        page.getContent().stream()
+                .map(mapper)
+                .forEach(target::add);
+        return page.getTotalElements();
     }
 
     private User findActor(SecurityUserDetails currentUser) {
@@ -618,8 +641,8 @@ public class AdminActivityService {
             return Sort.by(Sort.Order.desc("updatedAt"));
         }
         String[] parts = sort.split(",");
-        String field = parts[0].trim();
-        Sort.Direction direction = parts.length > 1 && parts[1].trim().equalsIgnoreCase("asc")
+        String field = parts[0].strip();
+        Sort.Direction direction = parts.length > 1 && parts[1].strip().equalsIgnoreCase("asc")
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
         String safeField = switch (field) {
@@ -658,17 +681,17 @@ public class AdminActivityService {
             }
             if (filter.topic() != null && !filter.topic().isBlank()) {
                 predicates.add(cb.equal(cb.lower(root.get("topic")),
-                        filter.topic().trim().toLowerCase(Locale.ROOT)));
+                        filter.topic().strip().toLowerCase(Locale.ROOT)));
             }
             if (filter.tag() != null && !filter.tag().isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("tags")),
-                        "%" + filter.tag().trim().toLowerCase(Locale.ROOT) + "%"));
+                        "%" + filter.tag().strip().toLowerCase(Locale.ROOT) + "%"));
             }
             if (filter.createdByUserId() != null) {
                 predicates.add(cb.equal(root.get("createdByUser").get("id"), filter.createdByUserId()));
             }
             if (filter.keyword() != null && !filter.keyword().isBlank()) {
-                String pattern = "%" + filter.keyword().trim().toLowerCase(Locale.ROOT) + "%";
+                String pattern = "%" + filter.keyword().strip().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("title")), pattern));
             }
             return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
@@ -709,7 +732,7 @@ public class AdminActivityService {
         }
 
         private static String requireMaxLength(String raw, int maxLength, String fieldName) {
-            String trimmed = raw.trim();
+            String trimmed = raw.strip();
             if (trimmed.length() > maxLength) {
                 throw new ResponseStatusException(BAD_REQUEST, fieldName + " is too long.");
             }
@@ -718,7 +741,7 @@ public class AdminActivityService {
 
         private static ContentStatus parseStatus(String raw) {
             try {
-                return ContentStatus.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+                return ContentStatus.fromValue(raw);
             } catch (IllegalArgumentException ex) {
                 throw new ResponseStatusException(BAD_REQUEST, "Unknown status: " + raw);
             }
@@ -726,7 +749,7 @@ public class AdminActivityService {
 
         private static AgeBand parseAgeBand(String raw) {
             try {
-                return AgeBand.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+                return AgeBand.fromValue(raw);
             } catch (IllegalArgumentException ex) {
                 throw new ResponseStatusException(BAD_REQUEST, "Unknown ageBand: " + raw);
             }
@@ -734,7 +757,7 @@ public class AdminActivityService {
 
         private static ActivityDifficulty parseDifficulty(String raw) {
             try {
-                return ActivityDifficulty.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+                return ActivityDifficulty.fromValue(raw);
             } catch (IllegalArgumentException ex) {
                 throw new ResponseStatusException(BAD_REQUEST, "Unknown difficulty: " + raw);
             }
@@ -742,7 +765,8 @@ public class AdminActivityService {
 
         private static ActivityType parseType(String raw) {
             try {
-                return ActivityType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+                return ActivityType.parseLenient(raw)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown activity type: " + raw));
             } catch (IllegalArgumentException ex) {
                 throw new ResponseStatusException(BAD_REQUEST, "Unknown activity type: " + raw);
             }

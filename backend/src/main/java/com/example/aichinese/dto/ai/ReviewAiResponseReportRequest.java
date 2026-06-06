@@ -26,9 +26,11 @@ public record ReviewAiResponseReportRequest(
     public String toString() {
         return "ReviewAiResponseReportRequest["
                 + "status=" + status
-                + ", reviewerNote=" + (reviewerNote == null
-                        ? "null"
-                        : "<redacted:" + reviewerNote.length() + ">")
+                + ", reviewerNote=" + redactLength(reviewerNote)
                 + "]";
+    }
+
+    private static String redactLength(String value) {
+        return value == null ? "null" : "<redacted:" + value.length() + ">";
     }
 }

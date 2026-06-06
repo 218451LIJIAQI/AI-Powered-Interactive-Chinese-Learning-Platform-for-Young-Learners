@@ -1,7 +1,6 @@
 package com.example.aichinese.dto.content;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.entity.enums.PackageItemType;
 
 import jakarta.validation.constraints.NotNull;

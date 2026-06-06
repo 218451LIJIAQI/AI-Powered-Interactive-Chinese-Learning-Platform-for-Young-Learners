@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class ContentSafetySettingsReader {
@@ -22,7 +23,7 @@ public class ContentSafetySettingsReader {
     public boolean sensitiveWordFilterEnabled() {
         return systemSettingRepository.findBySettingKey(PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY)
                 .map(SystemSetting::getSettingValue)
-                .map(String::trim)
+                .map(TextUtils::trimToNull)
                 .map(value -> !"false".equalsIgnoreCase(value))
                 .orElse(true);
     }

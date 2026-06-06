@@ -1,14 +1,15 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
@@ -31,7 +32,6 @@ import com.example.aichinese.service.RefundService;
 
 import jakarta.validation.Valid;
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/admin")
 public class AdminCommerceController {
@@ -48,11 +48,11 @@ public class AdminCommerceController {
             CommissionService commissionService,
             PaymentService paymentService,
             PlatformSettingsService platformSettingsService) {
-        this.refundService = refundService;
-        this.payoutService = payoutService;
-        this.commissionService = commissionService;
-        this.paymentService = paymentService;
-        this.platformSettingsService = platformSettingsService;
+        this.refundService = Objects.requireNonNull(refundService, "refundService");
+        this.payoutService = Objects.requireNonNull(payoutService, "payoutService");
+        this.commissionService = Objects.requireNonNull(commissionService, "commissionService");
+        this.paymentService = Objects.requireNonNull(paymentService, "paymentService");
+        this.platformSettingsService = Objects.requireNonNull(platformSettingsService, "platformSettingsService");
     }
 
     @GetMapping("/payments")

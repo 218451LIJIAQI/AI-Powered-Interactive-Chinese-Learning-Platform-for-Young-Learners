@@ -23,7 +23,7 @@ public class AiProperties {
     }
 
     public void setProvider(String provider) {
-        this.provider = provider;
+        this.provider = trim(provider);
     }
 
     public String getApiBaseUrl() {
@@ -31,7 +31,7 @@ public class AiProperties {
     }
 
     public void setApiBaseUrl(String apiBaseUrl) {
-        this.apiBaseUrl = apiBaseUrl;
+        this.apiBaseUrl = trim(apiBaseUrl);
     }
 
     public String getApiKey() {
@@ -39,7 +39,7 @@ public class AiProperties {
     }
 
     public void setApiKey(String apiKey) {
-        this.apiKey = apiKey;
+        this.apiKey = trim(apiKey);
     }
 
     public String getModelName() {
@@ -47,7 +47,7 @@ public class AiProperties {
     }
 
     public void setModelName(String modelName) {
-        this.modelName = modelName;
+        this.modelName = trim(modelName);
     }
 
     public int getTimeoutSeconds() {
@@ -83,11 +83,19 @@ public class AiProperties {
         return value;
     }
 
+    private static String trim(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private String apiKeyStatus() {
+        return apiKey == null || apiKey.isBlank() ? "[unset]" : "[set]";
+    }
+
     @Override
     public String toString() {
         return "AiProperties[provider=" + provider
                 + ", apiBaseUrl=" + apiBaseUrl
-                + ", apiKey=" + (apiKey == null || apiKey.isBlank() ? "[unset]" : "[set]")
+                + ", apiKey=" + apiKeyStatus()
                 + ", modelName=" + modelName
                 + ", timeoutSeconds=" + timeoutSeconds
                 + ", maxOutputTokens=" + maxOutputTokens

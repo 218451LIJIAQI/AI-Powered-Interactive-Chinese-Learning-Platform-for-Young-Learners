@@ -8,7 +8,7 @@
 
     <DataNotice
       :using-fallback="contentResource.usingFallback.value"
-      :error="actionError || contentResource.error.value"
+      :error="pageError"
       :success="actionSuccess"
     />
 
@@ -49,10 +49,7 @@
               <template #meta>
                 <span class="tag">{{ item.contentType }}</span>
                 <span class="tag">{{ item.teacher.fullName }}</span>
-                <StatusPill
-                  :label="item.contentStatus"
-                  :tone="item.contentStatus === 'PUBLISHED' ? 'success' : 'warning'"
-                />
+                <StatusPill :label="item.contentStatus" :tone="contentStatusTone(item.contentStatus)" />
               </template>
               <template #aside>
                 <div class="list-action-row">
@@ -160,14 +157,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin content-management surface — inspect published teacher content,
- * archive stale items, and submit moderation actions after publication.
- *
- * <p>The page calls the live admin content and moderation endpoints.
- * Preview data is read-only so fallback records cannot trigger backend
- * moderation side effects.</p>
- */
 import { computed, ref } from 'vue'
 
 import { adminApi } from '@/api/services'
@@ -181,7 +170,7 @@ import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminContentDetail, adminContentList } from '@/demo/data'
-import type { ContentSubmissionDetailResponse, ManagedContentType } from '@/types/api'
+import type { ContentStatus, ContentSubmissionDetailResponse, ManagedContentType } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 
 const contentResource = useResource(() => adminApi.content(), adminContentList)
@@ -205,25 +194,39 @@ const content = computed(
 const detail = computed(() => detailResource.data.value)
 const contentReadOnly = computed(() => contentResource.usingFallback.value)
 const detailReadOnly = computed(() => detailResource.usingFallback.value)
-const contentStats = computed(() => [
-  { icon: 'content', label: 'Visible content', value: String(content.value.items.length) },
-  {
-    icon: 'status',
-    label: 'Published',
-    value: String(content.value.items.filter((item) => item.contentStatus === 'PUBLISHED').length),
-  },
-  {
-    icon: 'teacher',
-    label: 'Teachers',
-    value: String(new Set(content.value.items.map((item) => item.teacher.fullName)).size),
-  },
-])
+const pageError = computed(() => actionError.value || contentResource.error.value)
+const contentStats = computed(() => {
+  const items = content.value.items
+  const teachers = new Set(items.map((item) => item.teacher.fullName))
+  const publishedCount = items.reduce(
+    (count, item) => (item.contentStatus === 'PUBLISHED' ? count + 1 : count),
+    0,
+  )
+
+  return [
+    { icon: 'content', label: 'Visible content', value: String(items.length) },
+    {
+      icon: 'status',
+      label: 'Published',
+      value: String(publishedCount),
+    },
+    {
+      icon: 'teacher',
+      label: 'Teachers',
+      value: String(teachers.size),
+    },
+  ]
+})
 const moderationReason = ref('Please revise this content for quality and consistency.')
 const submittingModeration = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 
-async function loadDetail(contentType: ManagedContentType, id: number) {
+function contentStatusTone(status: ContentStatus): 'success' | 'warning' {
+  return status === 'PUBLISHED' ? 'success' : 'warning'
+}
+
+async function loadDetail(contentType: ManagedContentType, id: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
 
@@ -238,16 +241,13 @@ async function loadDetail(contentType: ManagedContentType, id: number) {
     return
   }
 
-  await adminApi
-    .contentDetail(contentType, id)
-    .then((data) => {
-      detailResource.data.value = data
-      actionSuccess.value = 'Content detail loaded for review.'
-    })
-    .catch((reason) => {
-      actionError.value = resolveApiError(reason, 'Unable to load this content detail.')
-      detailResource.data.value = null
-    })
+  try {
+    detailResource.data.value = await adminApi.contentDetail(contentType, id)
+    actionSuccess.value = 'Content detail loaded for review.'
+  } catch (reason) {
+    actionError.value = resolveApiError(reason, 'Unable to load this content detail.')
+    detailResource.data.value = null
+  }
 }
 
 function previewContentDetail(contentType: ManagedContentType, id: number): ContentSubmissionDetailResponse | null {
@@ -270,7 +270,7 @@ function previewContentDetail(contentType: ManagedContentType, id: number): Cont
   }
 }
 
-async function archiveContent(contentType: string, id: number) {
+async function archiveContent(contentType: string, id: number): Promise<void> {
   if (!ensureLiveContent('Content cannot be archived while preview data is active.')) return
   actionError.value = null
   actionSuccess.value = null
@@ -283,7 +283,7 @@ async function archiveContent(contentType: string, id: number) {
   }
 }
 
-async function moderate(action: 'hide' | 'unpublish' | 'archive' | 'request-revision' | 'restore') {
+async function moderate(action: 'hide' | 'unpublish' | 'archive' | 'request-revision' | 'restore'): Promise<void> {
   if (submittingModeration.value) return
   if (!detail.value) return
   if (!ensureLiveContent('Moderation actions cannot be submitted while preview data is active.')) return
@@ -305,7 +305,7 @@ async function moderate(action: 'hide' | 'unpublish' | 'archive' | 'request-revi
   }
 }
 
-function ensureLiveContent(message: string) {
+function ensureLiveContent(message: string): boolean {
   if (!contentReadOnly.value && !detailReadOnly.value) return true
   actionSuccess.value = null
   actionError.value = message

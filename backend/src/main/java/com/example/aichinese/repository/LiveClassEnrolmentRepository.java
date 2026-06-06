@@ -17,12 +17,27 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
     @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user" })
     List<LiveClassEnrolment> findByLiveClassIdOrderByEnrolledAtAsc(Long liveClassId);
 
-    @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "liveClass.lesson", "liveClass.coursePackage", "student", "student.user" })
+    @EntityGraph(attributePaths = {
+            "liveClass",
+            "liveClass.teacher",
+            "liveClass.teacher.user",
+            "liveClass.lesson",
+            "liveClass.coursePackage",
+            "student",
+            "student.user"
+    })
     List<LiveClassEnrolment> findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(
             Long studentId,
             LiveClassEnrolmentStatus enrolmentStatus);
 
-    @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user", "student.currentLevel" })
+    @EntityGraph(attributePaths = {
+            "liveClass",
+            "liveClass.teacher",
+            "liveClass.teacher.user",
+            "student",
+            "student.user",
+            "student.currentLevel"
+    })
     List<LiveClassEnrolment> findByLiveClassTeacherIdAndStudentIdIn(Long teacherId, List<Long> studentIds);
 
     long countByLiveClassIdAndEnrolmentStatus(Long liveClassId, LiveClassEnrolmentStatus enrolmentStatus);
@@ -34,9 +49,20 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
 
     boolean existsByStudentIdAndLiveClassTeacherUserId(Long studentId, Long teacherUserId);
 
-    boolean existsByStudentIdAndLiveClassLessonIdAndLiveClassTeacherUserId(Long studentId, Long lessonId, Long teacherUserId);
+    boolean existsByStudentIdAndLiveClassLessonIdAndLiveClassTeacherUserId(
+            Long studentId,
+            Long lessonId,
+            Long teacherUserId);
 
-    @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "liveClass.lesson", "liveClass.coursePackage", "student", "student.user" })
+    @EntityGraph(attributePaths = {
+            "liveClass",
+            "liveClass.teacher",
+            "liveClass.teacher.user",
+            "liveClass.lesson",
+            "liveClass.coursePackage",
+            "student",
+            "student.user"
+    })
     List<LiveClassEnrolment> findByLiveClassTeacherIdAndEnrolmentStatusNot(
             Long teacherId,
             LiveClassEnrolmentStatus excludedStatus);

@@ -100,7 +100,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return jwtService.isTokenValid(
                     token,
                     securityUserDetails.getUsername(),
-                    securityUserDetails.getUser().getSessionVersion());
+                    securityUserDetails.getSessionVersion());
         }
 
         return jwtService.isTokenValid(token, userDetails.getUsername(), DEFAULT_SESSION_VERSION);

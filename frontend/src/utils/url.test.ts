@@ -3,22 +3,28 @@ import { describe, expect, it, vi } from 'vitest'
 import { openSafeHttpUrl, safeHttpUrl } from './url'
 
 describe('safeHttpUrl', () => {
-  it('accepts absolute HTTP and HTTPS URLs', () => {
-    expect(safeHttpUrl('https://example.com/checkout?session=123')).toBe('https://example.com/checkout?session=123')
-    expect(safeHttpUrl('http://localhost:8080/files/video.mp4')).toBe('http://localhost:8080/files/video.mp4')
+  it.each(['https://example.com/checkout?session=123', 'http://localhost:8080/files/video.mp4'])(
+    'accepts %s',
+    (url) => {
+      expect(safeHttpUrl(url)).toBe(url)
+    },
+  )
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'file:///etc/passwd',
+    '//evil.example/redirect',
+  ])('rejects dangerous or ambiguous URL %s', (url) => {
+    expect(safeHttpUrl(url)).toBeNull()
   })
 
-  it('rejects dangerous and ambiguous protocols', () => {
-    expect(safeHttpUrl('javascript:alert(1)')).toBeNull()
-    expect(safeHttpUrl('data:text/html,<script>alert(1)</script>')).toBeNull()
-    expect(safeHttpUrl('file:///etc/passwd')).toBeNull()
-    expect(safeHttpUrl('//evil.example/redirect')).toBeNull()
-  })
-
-  it('rejects credentialed or visually ambiguous URLs', () => {
-    expect(safeHttpUrl('https://trusted.example@evil.example/checkout')).toBeNull()
-    expect(safeHttpUrl('https://example.com/\u202echeckout')).toBeNull()
-    expect(safeHttpUrl('https://example.com/\u0000checkout')).toBeNull()
+  it.each([
+    'https://trusted.example@evil.example/checkout',
+    'https://example.com/\u202echeckout',
+    'https://example.com/\u0000checkout',
+  ])('rejects credentialed or visually ambiguous URL %s', (url) => {
+    expect(safeHttpUrl(url)).toBeNull()
   })
 
   it('rejects relative URLs unless explicitly allowed for first-party resources', () => {
@@ -46,10 +52,12 @@ describe('safeHttpUrl', () => {
     ).toBeNull()
   })
 
-  it('rejects backslash-prefixed browser URL quirks', () => {
-    expect(safeHttpUrl('\\evil.example\\payload', { allowRelative: true })).toBeNull()
-    expect(safeHttpUrl('https:\\evil.example\\payload')).toBeNull()
-  })
+  it.each(['\\evil.example\\payload', 'https:\\evil.example\\payload'])(
+    'rejects backslash-prefixed browser URL quirk %s',
+    (url) => {
+      expect(safeHttpUrl(url, { allowRelative: true })).toBeNull()
+    },
+  )
 })
 
 describe('openSafeHttpUrl', () => {

@@ -3,33 +3,43 @@ import { describe, expect, it } from 'vitest'
 import { normalizeAppRoute } from './routeCompat'
 
 describe('normalizeAppRoute', () => {
-  it('rewrites legacy deep links while preserving suffixes', () => {
-    expect(normalizeAppRoute('/catalog?level=beginner')).toBe('/courses?level=beginner')
-    expect(normalizeAppRoute('/student/payments?tab=history')).toBe('/student/profile?tab=history')
-    expect(normalizeAppRoute('/admin/ai-response-reports/42#review')).toBe('/admin/moderation#review')
+  it.each([
+    ['/catalog?level=beginner', '/courses?level=beginner'],
+    ['/student/payments?tab=history', '/student/profile?tab=history'],
+    ['/admin/ai-response-reports/42#review', '/admin/moderation#review'],
+  ])('rewrites %s to %s', (input, output) => {
+    expect(normalizeAppRoute(input)).toBe(output)
   })
 
-  it('rejects external and unknown redirect targets', () => {
-    expect(normalizeAppRoute('https://evil.example/student/home')).toBeNull()
-    expect(normalizeAppRoute('//evil.example/student/home')).toBeNull()
-    expect(normalizeAppRoute('/%2f%2fevil.example/student/home')).toBeNull()
-    expect(normalizeAppRoute('/student/home%00')).toBeNull()
-    expect(normalizeAppRoute('/unknown')).toBeNull()
+  it.each([
+    'https://evil.example/student/home',
+    '//evil.example/student/home',
+    '/%2f%2fevil.example/student/home',
+    '/student/home%00',
+    '/unknown',
+  ])('rejects external or unknown target %s', (input) => {
+    expect(normalizeAppRoute(input)).toBeNull()
   })
 
-  it('rejects browser-normalised path traversal variants', () => {
-    expect(normalizeAppRoute('/courses/../../admin/settings')).toBeNull()
-    expect(normalizeAppRoute('/courses/%2e%2e/%2e%2e/admin/settings')).toBeNull()
-    expect(normalizeAppRoute('/courses\\..\\admin\\settings')).toBeNull()
+  it.each([
+    '/courses/../../admin/settings',
+    '/courses/%2e%2e/%2e%2e/admin/settings',
+    '/courses\\..\\admin\\settings',
+  ])('rejects path traversal target %s', (input) => {
+    expect(normalizeAppRoute(input)).toBeNull()
   })
 
-  it('keeps valid dynamic app routes with query strings', () => {
-    expect(normalizeAppRoute('/courses/PACKAGE-42?tab=overview')).toBe('/courses/PACKAGE-42?tab=overview')
-    expect(normalizeAppRoute('/student/quiz/123?lessonId=9')).toBe('/student/quiz/123?lessonId=9')
-  })
+  it.each(['/courses/PACKAGE-42?tab=overview', '/student/quiz/123?lessonId=9'])(
+    'keeps valid dynamic app route %s',
+    (input) => {
+      expect(normalizeAppRoute(input)).toBe(input)
+    },
+  )
 
-  it('preserves only known routes after trimming harmless surrounding whitespace', () => {
-    expect(normalizeAppRoute('  /student/home  ')).toBe('/student/home')
-    expect(normalizeAppRoute('\n/admin/settings\t')).toBe('/admin/settings')
+  it.each([
+    ['  /student/home  ', '/student/home'],
+    ['\n/admin/settings\t', '/admin/settings'],
+  ])('trims harmless surrounding whitespace in %s', (input, output) => {
+    expect(normalizeAppRoute(input)).toBe(output)
   })
 })

@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,6 +16,7 @@ import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiSentencePracticeRequest;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
+import com.example.aichinese.entity.User;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiFileStorageService;
 import com.example.aichinese.service.AiService;
@@ -23,31 +25,70 @@ class AiServiceTransactionBoundaryTests {
 
     @Test
     void textProviderEndpointsDoNotWrapRemoteCallsInDatabaseTransactions() throws Exception {
-        List<Method> providerCallingMethods = List.of(
-                AiService.class.getMethod("chat", SecurityUserDetails.class, AiChatRequest.class),
-                AiService.class.getMethod("vocabularyHelper", SecurityUserDetails.class, AiVocabularyHelperRequest.class),
-                AiService.class.getMethod("sentencePractice", SecurityUserDetails.class, AiSentencePracticeRequest.class),
-                AiService.class.getMethod("quizGenerator", SecurityUserDetails.class, AiQuizGeneratorRequest.class),
-                AiService.class.getMethod("storyGenerator", SecurityUserDetails.class, AiStoryGeneratorRequest.class),
-                AiService.class.getMethod("learningRecommendation", SecurityUserDetails.class, AiLearningRecommendationRequest.class));
-
-        assertThat(providerCallingMethods)
-                .noneMatch(method -> method.isAnnotationPresent(Transactional.class));
+        assertThat(textProviderEndpoints())
+                .allSatisfy(AiServiceTransactionBoundaryTests::assertOutsideTransactionBoundary);
     }
 
     @Test
     void multipartFeedbackFileCopiesDoNotRunInsideDatabaseTransactions() throws Exception {
-        List<Method> fileCopyingMethods = List.of(
-                AiService.class.getMethod("pronunciationFeedback", SecurityUserDetails.class, MultipartFile.class,
-                        String.class, String.class, String.class, String.class),
-                AiService.class.getMethod("writingFeedback", SecurityUserDetails.class, MultipartFile.class,
-                        String.class, String.class),
-                AiFileStorageService.class.getMethod("storePronunciationAudio", MultipartFile.class,
-                        com.example.aichinese.entity.User.class),
-                AiFileStorageService.class.getMethod("storeWritingImage", MultipartFile.class,
-                        com.example.aichinese.entity.User.class));
+        assertThat(fileCopyingEndpoints())
+                .allSatisfy(AiServiceTransactionBoundaryTests::assertOutsideTransactionBoundary);
+    }
 
-        assertThat(fileCopyingMethods)
-                .noneMatch(method -> method.isAnnotationPresent(Transactional.class));
+    private static List<Method> textProviderEndpoints() throws NoSuchMethodException {
+        return List.of(
+                method(AiService.class, "chat", SecurityUserDetails.class, AiChatRequest.class),
+                method(AiService.class, "vocabularyHelper", SecurityUserDetails.class, AiVocabularyHelperRequest.class),
+                method(AiService.class, "sentencePractice", SecurityUserDetails.class, AiSentencePracticeRequest.class),
+                method(AiService.class, "quizGenerator", SecurityUserDetails.class, AiQuizGeneratorRequest.class),
+                method(AiService.class, "storyGenerator", SecurityUserDetails.class, AiStoryGeneratorRequest.class),
+                method(
+                        AiService.class,
+                        "learningRecommendation",
+                        SecurityUserDetails.class,
+                        AiLearningRecommendationRequest.class));
+    }
+
+    private static List<Method> fileCopyingEndpoints() throws NoSuchMethodException {
+        return List.of(
+                method(
+                        AiService.class,
+                        "pronunciationFeedback",
+                        SecurityUserDetails.class,
+                        MultipartFile.class,
+                        String.class,
+                        String.class,
+                        String.class,
+                        String.class),
+                method(
+                        AiService.class,
+                        "writingFeedback",
+                        SecurityUserDetails.class,
+                        MultipartFile.class,
+                        String.class,
+                        String.class),
+                method(AiFileStorageService.class, "storePronunciationAudio", MultipartFile.class, User.class),
+                method(AiFileStorageService.class, "storeWritingImage", MultipartFile.class, User.class));
+    }
+
+    private static Method method(Class<?> owner, String name, Class<?>... parameterTypes) throws NoSuchMethodException {
+        return owner.getMethod(name, parameterTypes);
+    }
+
+    private static void assertOutsideTransactionBoundary(Method method) {
+        assertThat(hasTransactionalAnnotation(method))
+                .as("%s should not be transactional", method)
+                .isFalse();
+        assertThat(hasTransactionalAnnotation(method.getDeclaringClass()))
+                .as("%s should not inherit a class-level transaction", method)
+                .isFalse();
+    }
+
+    private static boolean hasTransactionalAnnotation(Method method) {
+        return AnnotatedElementUtils.hasAnnotation(method, Transactional.class);
+    }
+
+    private static boolean hasTransactionalAnnotation(Class<?> type) {
+        return AnnotatedElementUtils.hasAnnotation(type, Transactional.class);
     }
 }

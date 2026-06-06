@@ -1,6 +1,7 @@
 package com.example.aichinese.controller;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,10 +40,12 @@ public class PublicController {
             LearningCatalogService learningCatalogService,
             PublicContentService publicContentService,
             PlatformSettingsService platformSettingsService) {
-        this.publicTeacherProfileService = publicTeacherProfileService;
-        this.learningCatalogService = learningCatalogService;
-        this.publicContentService = publicContentService;
-        this.platformSettingsService = platformSettingsService;
+        this.publicTeacherProfileService = Objects.requireNonNull(
+                publicTeacherProfileService,
+                "publicTeacherProfileService");
+        this.learningCatalogService = Objects.requireNonNull(learningCatalogService, "learningCatalogService");
+        this.publicContentService = Objects.requireNonNull(publicContentService, "publicContentService");
+        this.platformSettingsService = Objects.requireNonNull(platformSettingsService, "platformSettingsService");
     }
 
     @GetMapping("/teachers/{id}")
@@ -89,7 +92,15 @@ public class PublicController {
             @RequestParam(value = "size", defaultValue = "10") int size) {
         return ApiResponse.success(
                 "Published courses retrieved successfully.",
-                publicContentService.discoverCourses(keyword, levelId, categoryId, accessType, learningType, sort, page, size));
+                publicContentService.discoverCourses(
+                        keyword,
+                        levelId,
+                        categoryId,
+                        accessType,
+                        learningType,
+                        sort,
+                        page,
+                        size));
     }
 
     @GetMapping("/courses/{id}")

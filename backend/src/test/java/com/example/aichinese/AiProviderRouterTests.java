@@ -22,29 +22,43 @@ class AiProviderRouterTests {
 
     @Test
     void disabledRealProviderUsesNoOpClientForLocalAndTestProfiles() {
-        AiProperties properties = new AiProperties();
-        properties.setEnableRealProvider(false);
         NoOpAiProviderClient noOpClient = mock(NoOpAiProviderClient.class);
-        OpenAiCompatibleAiProviderClient realClient = mock(OpenAiCompatibleAiProviderClient.class);
-
-        AiProviderRouter router = new AiProviderRouter(properties, realClient, noOpClient);
+        AiProviderRouter router = router(properties(false, null), mock(OpenAiCompatibleAiProviderClient.class), noOpClient);
 
         assertThat(router.resolveClient()).isSameAs(noOpClient);
     }
 
     @Test
-    void enabledRealProviderRejectsUnknownProviderInsteadOfFallingBackToNoOp() {
-        AiProperties properties = new AiProperties();
-        properties.setEnableRealProvider(true);
-        properties.setProvider("unknown-provider");
+    void enabledRealProviderUsesOpenAiCompatibleClientForSupportedProvider() {
+        OpenAiCompatibleAiProviderClient realClient = mock(OpenAiCompatibleAiProviderClient.class);
+        AiProviderRouter router = router(properties(true, "deepseek"), realClient, mock(NoOpAiProviderClient.class));
 
-        AiProviderRouter router = new AiProviderRouter(
-                properties,
+        assertThat(router.resolveClient()).isSameAs(realClient);
+    }
+
+    @Test
+    void enabledRealProviderRejectsUnknownProviderInsteadOfFallingBackToNoOp() {
+        AiProviderRouter router = router(
+                properties(true, "unknown-provider"),
                 mock(OpenAiCompatibleAiProviderClient.class),
                 mock(NoOpAiProviderClient.class));
 
         assertThatThrownBy(router::resolveClient)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Unsupported AI provider");
+    }
+
+    private static AiProperties properties(boolean enableRealProvider, String provider) {
+        AiProperties properties = new AiProperties();
+        properties.setEnableRealProvider(enableRealProvider);
+        properties.setProvider(provider);
+        return properties;
+    }
+
+    private static AiProviderRouter router(
+            AiProperties properties,
+            OpenAiCompatibleAiProviderClient realClient,
+            NoOpAiProviderClient noOpClient) {
+        return new AiProviderRouter(properties, realClient, noOpClient);
     }
 }

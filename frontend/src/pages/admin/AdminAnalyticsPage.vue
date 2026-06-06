@@ -35,7 +35,7 @@
             <div class="student-section-heading">
               <strong>User Registration Trend</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/users')">Open Users</button>
+            <button class="student-link-button" type="button" @click="openUsers">Open Users</button>
           </div>
 
           <template v-if="analytics.userRegistrationTrend.length">
@@ -67,7 +67,7 @@
             <div class="student-section-heading">
               <strong>Teacher Approval Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/teacher-verification')">
+            <button class="student-link-button" type="button" @click="openTeacherQueue">
               Open Queue
             </button>
           </div>
@@ -79,7 +79,7 @@
                 <span>{{ item.displayValue }}</span>
               </div>
               <div class="admin-analytics-track">
-                <span :class="`is-${item.tone}`" :style="{ width: `${item.percentage}%` }" />
+                <span :class="item.toneClass" :style="item.barStyle" />
               </div>
             </article>
           </div>
@@ -96,7 +96,7 @@
             <div class="student-section-heading">
               <strong>Content Status Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/content')">
+            <button class="student-link-button" type="button" @click="openContent">
               Open Content
             </button>
           </div>
@@ -108,7 +108,7 @@
                 <span>{{ item.displayValue }}</span>
               </div>
               <div class="admin-analytics-track">
-                <span :class="`is-${item.tone}`" :style="{ width: `${item.percentage}%` }" />
+                <span :class="item.toneClass" :style="item.barStyle" />
               </div>
             </article>
           </div>
@@ -125,7 +125,7 @@
             <div class="student-section-heading">
               <strong>Payment Status Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/finance')">
+            <button class="student-link-button" type="button" @click="openFinance">
               Open Finance
             </button>
           </div>
@@ -137,7 +137,7 @@
                 <span>{{ item.displayValue }}</span>
               </div>
               <div class="admin-analytics-track">
-                <span :class="`is-${item.tone}`" :style="{ width: `${item.percentage}%` }" />
+                <span :class="item.toneClass" :style="item.barStyle" />
               </div>
             </article>
           </div>
@@ -154,7 +154,7 @@
             <div class="student-section-heading">
               <strong>AI Request Status Breakdown</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">
+            <button class="student-link-button" type="button" @click="openModeration">
               Open Moderation
             </button>
           </div>
@@ -166,7 +166,7 @@
                 <span>{{ item.displayValue }}</span>
               </div>
               <div class="admin-analytics-track">
-                <span :class="`is-${item.tone}`" :style="{ width: `${item.percentage}%` }" />
+                <span :class="item.toneClass" :style="item.barStyle" />
               </div>
             </article>
           </div>
@@ -183,7 +183,7 @@
             <div class="student-section-heading">
               <strong>Recent AI Usage</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">
+            <button class="student-link-button" type="button" @click="openModeration">
               Open Moderation
             </button>
           </div>
@@ -243,10 +243,10 @@
             <strong>System Health</strong>
           </div>
 
-          <div class="admin-analytics-health-banner" :class="{ 'is-up': health.status === 'UP' }">
+          <div class="admin-analytics-health-banner" :class="{ 'is-up': isHealthUp }">
             <IconGlyph name="status" :size="18" />
             <div class="stack u-gap-4">
-              <strong>{{ health.status === 'UP' ? 'All Systems Operational' : 'Status Unavailable' }}</strong>
+              <strong>{{ healthStatusLabel }}</strong>
               <span>Checked {{ healthCheckedLabel }}</span>
             </div>
           </div>
@@ -275,7 +275,7 @@
             <div class="student-section-heading">
               <strong>Recent Audit Log</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/settings')">View All</button>
+            <button class="student-link-button" type="button" @click="openSettings">View All</button>
           </div>
 
           <div v-if="auditItems.length" class="admin-analytics-audit-list">
@@ -319,14 +319,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin analytics surface — platform-wide backend metrics, trend charts,
- * operational breakdowns, audit signals, and service health.
- *
- * <p>Aggregates {@code adminApi.analytics()} into stacked trend
- * cards using {@link TrendChart} — pure SVG sparklines, no external
- * chart library, so the page stays light and accessible.</p>
- */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -343,6 +335,12 @@ import { adminAnalytics, adminAuditLogs } from '@/demo/data'
 import type { AdminAiUsageLogResponse, AnalyticsBreakdownItem, LiveClassResponse } from '@/types/api'
 import { formatCurrency, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
+const HEALTH_FALLBACK = {
+  status: 'UP',
+  service: 'backend',
+  timestamp: new Date().toISOString(),
+}
+
 const router = useRouter()
 
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
@@ -355,11 +353,7 @@ const aiUsageResource = useResource(() => adminApi.aiUsageLogs({ size: 8 }), {
   totalPages: 0,
 })
 const liveClassesResource = useResource(() => adminApi.liveClasses(), [])
-const healthResource = useResource(() => systemApi.health(), {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-})
+const healthResource = useResource(() => systemApi.health(), HEALTH_FALLBACK)
 
 const emptyAnalytics = {
   overview: {
@@ -399,13 +393,7 @@ const liveClasses = computed(() => liveClassesResource.data.value ?? [])
 const health = computed(
   () =>
     healthResource.data.value ??
-    (healthResource.usingFallback.value
-      ? {
-          status: 'UP',
-          service: 'backend',
-          timestamp: new Date().toISOString(),
-        }
-      : emptyHealth),
+    (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
 )
 
 const pageLoading = computed(
@@ -534,9 +522,16 @@ const liveClassRows = computed(() =>
 )
 
 const healthCheckedLabel = computed(() => (health.value.timestamp ? formatDateTime(health.value.timestamp) : '--'))
+const isHealthUp = computed(() => health.value.status === 'UP')
+const healthStatusLabel = computed(() => (isHealthUp.value ? 'All Systems Operational' : 'Status Unavailable'))
 const liveClassSummaryLabel = computed(() => `${formatNumber(liveClasses.value.length)} row(s) loaded`)
 
-function normalizeBreakdown(items: AnalyticsBreakdownItem[]) {
+function normalizeBreakdown(items: AnalyticsBreakdownItem[]): Array<{
+  label: string
+  displayValue: string
+  toneClass: string
+  barStyle: { width: string }
+}> {
   const total = items.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item.value)), 0)
   const tones = ['purple', 'green', 'orange', 'blue'] as const
 
@@ -546,41 +541,41 @@ function normalizeBreakdown(items: AnalyticsBreakdownItem[]) {
     return {
       label: item.label,
       displayValue: `${formatNumber(value)} (${percentage}%)`,
-      percentage,
-      tone: tones[index % tones.length],
+      toneClass: `is-${tones[index % tones.length]}`,
+      barStyle: { width: `${percentage}%` },
     }
   })
 }
 
-function formatStatus(status: string) {
+function formatStatus(status: string): string {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function auditIcon(actionType: string) {
+function auditIcon(actionType: string): string {
   if (actionType.includes('APPROVE')) return 'status'
   if (actionType.includes('REJECT')) return 'close'
   if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'content'
   return 'history'
 }
 
-function auditTone(actionType: string) {
+function auditTone(actionType: string): string {
   if (actionType.includes('APPROVE')) return 'green'
   if (actionType.includes('REJECT')) return 'red'
   if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'purple'
   return 'blue'
 }
 
-function formatFeatureKey(featureKey: string) {
+function formatFeatureKey(featureKey: string): string {
   return featureKey
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function aiUsageTone(item: AdminAiUsageLogResponse) {
+function aiUsageTone(item: AdminAiUsageLogResponse): string {
   if (item.status.includes('FAILED') || item.status.includes('ERROR')) return 'red'
   if (item.status.includes('UNAVAILABLE')) return 'orange'
   return 'purple'
@@ -601,7 +596,31 @@ function liveClassTone(item: LiveClassResponse): 'success' | 'warning' | 'danger
   }
 }
 
-function reloadAll() {
+function openUsers(): void {
+  void router.push('/admin/users')
+}
+
+function openTeacherQueue(): void {
+  void router.push('/admin/teacher-verification')
+}
+
+function openContent(): void {
+  void router.push('/admin/content')
+}
+
+function openFinance(): void {
+  void router.push('/admin/finance')
+}
+
+function openModeration(): void {
+  void router.push('/admin/moderation')
+}
+
+function openSettings(): void {
+  void router.push('/admin/settings')
+}
+
+function reloadAll(): void {
   void analyticsResource.reload()
   void auditResource.reload()
   void aiUsageResource.reload()

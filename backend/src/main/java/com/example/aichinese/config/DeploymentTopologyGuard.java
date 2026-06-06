@@ -35,10 +35,15 @@ public class DeploymentTopologyGuard {
                             + "login and public-auth limiters are only safe for single-instance deployments.");
         }
 
-        if (storageProvider instanceof LocalStorageProvider && !platformProperties.localStorageMultiInstanceAcknowledged()) {
+        if (usesUnacknowledgedLocalStorage()) {
             throw new IllegalStateException(
                     "APP_DEPLOYMENT_MODE=multi-instance requires shared object storage or "
                             + "APP_LOCAL_STORAGE_MULTI_INSTANCE_ACKNOWLEDGED=true after a controlled shared-volume review.");
         }
+    }
+
+    private boolean usesUnacknowledgedLocalStorage() {
+        return storageProvider instanceof LocalStorageProvider
+                && !platformProperties.localStorageMultiInstanceAcknowledged();
     }
 }

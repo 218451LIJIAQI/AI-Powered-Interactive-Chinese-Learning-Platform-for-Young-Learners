@@ -24,15 +24,18 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  */
 class CorsConfigTests {
 
+    private static final String LOCALHOST_VITE_ORIGIN = "http://localhost:5173";
+    private static final String EXAMPLE_ORIGIN = "https://example.test";
+
     private final CorsConfig config = new CorsConfig();
 
     @Test
     void registersExactOriginsForApiPath() {
-        CorsConfiguration api = apiCorsConfiguration("http://localhost:5173,https://example.test");
+        CorsConfiguration api = apiCorsConfiguration(LOCALHOST_VITE_ORIGIN + "," + EXAMPLE_ORIGIN);
 
         assertThat(api).isNotNull();
         assertThat(api.getAllowedOrigins())
-                .containsExactly("http://localhost:5173", "https://example.test");
+                .containsExactly(LOCALHOST_VITE_ORIGIN, EXAMPLE_ORIGIN);
         assertThat(api.getAllowCredentials()).isTrue();
         assertThat(api.getAllowedMethods()).containsExactly("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
         assertThat(api.getAllowedHeaders())
@@ -44,9 +47,9 @@ class CorsConfigTests {
 
     @Test
     void dropsWildcardOriginWhileKeepingExplicitOnes() {
-        CorsConfiguration api = apiCorsConfiguration("*,http://localhost:5173");
+        CorsConfiguration api = apiCorsConfiguration("*," + LOCALHOST_VITE_ORIGIN);
 
-        assertThat(api.getAllowedOrigins()).containsExactly("http://localhost:5173");
+        assertThat(api.getAllowedOrigins()).containsExactly(LOCALHOST_VITE_ORIGIN);
     }
 
     @Test
@@ -58,10 +61,10 @@ class CorsConfigTests {
 
     @Test
     void trimsSurroundingWhitespaceOnOrigins() {
-        CorsConfiguration api = apiCorsConfiguration("  http://localhost:5173 , https://example.test  ");
+        CorsConfiguration api = apiCorsConfiguration("  " + LOCALHOST_VITE_ORIGIN + " , " + EXAMPLE_ORIGIN + "  ");
 
         assertThat(api.getAllowedOrigins())
-                .containsExactly("http://localhost:5173", "https://example.test");
+                .containsExactly(LOCALHOST_VITE_ORIGIN, EXAMPLE_ORIGIN);
     }
 
     @Test
@@ -121,9 +124,7 @@ class CorsConfigTests {
 
     @Test
     void prodProfileRequiresExplicitCorsOrigins() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        CorsConfig prodConfig = new CorsConfig(environment);
+        CorsConfig prodConfig = new CorsConfig(prodEnvironment());
 
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("  ,  *  ,"))
                 .isInstanceOf(IllegalStateException.class)
@@ -132,9 +133,7 @@ class CorsConfigTests {
 
     @Test
     void prodProfileRequiresPublicHttpsCorsOrigins() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        CorsConfig prodConfig = new CorsConfig(environment);
+        CorsConfig prodConfig = new CorsConfig(prodEnvironment());
 
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("http://app.example.test"))
                 .isInstanceOf(IllegalStateException.class)
@@ -158,5 +157,11 @@ class CorsConfigTests {
                 .toList();
         assertThat(matched).hasSize(1);
         return matched.get(0);
+    }
+
+    private static MockEnvironment prodEnvironment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod");
+        return environment;
     }
 }

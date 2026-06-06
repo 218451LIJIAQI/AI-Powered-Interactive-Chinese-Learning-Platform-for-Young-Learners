@@ -1,8 +1,6 @@
 package com.example.aichinese;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -29,9 +27,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * surfaces (student / teacher / admin): time-series trends, breakdown
  * aggregates, and per-persona authorization scope.
  *
- * <p>Pins the row-level filter — a teacher only sees their own
+ * <p>Pins the row-level filter: a teacher only sees their own
  * classes / earnings, a student only their own progress, an admin
- * sees platform-wide aggregates — so a refactor of
+ * sees platform-wide aggregates, so a refactor of
  * {@code AnalyticsService} cannot quietly leak cross-tenant data.</p>
  */
 @SpringBootTest(properties = {
@@ -41,6 +39,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AnalyticsIntegrationTests {
+
+    private static final String ADMIN_EMAIL = "admin@example.com";
+    private static final String ADMIN_PASSWORD = "SuperSecure123!";
+    private static final String USER_PASSWORD = "Password123!";
+    private static final String CURRENCY_CODE = "MYR";
+    private static final String STUDENT_ANALYTICS_PATH = "/api/v1/students/analytics";
+    private static final String TEACHER_ANALYTICS_PATH = "/api/v1/teachers/analytics";
+    private static final String ADMIN_ANALYTICS_PATH = "/api/v1/admin/analytics";
 
     @Autowired
     private MockMvc mockMvc;
@@ -52,8 +58,8 @@ class AnalyticsIntegrationTests {
     void studentAnalyticsShouldReturnOwnedSummary() throws Exception {
         String studentToken = registerAndLoginStudent(uniqueEmail("student-analytics"));
 
-        mockMvc.perform(get("/api/v1/students/analytics")
-                .header("Authorization", "Bearer " + studentToken))
+        mockMvc.perform(get(STUDENT_ANALYTICS_PATH)
+                .header("Authorization", bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.completedLessons").isNumber())
@@ -66,112 +72,113 @@ class AnalyticsIntegrationTests {
     void teacherAnalyticsShouldReturnOwnedSummary() throws Exception {
         String teacherToken = registerAndLoginTeacher(uniqueEmail("teacher-analytics"));
 
-        mockMvc.perform(get("/api/v1/teachers/analytics")
-                .header("Authorization", "Bearer " + teacherToken))
+        mockMvc.perform(get(TEACHER_ANALYTICS_PATH)
+                .header("Authorization", bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.totalLessons").isNumber())
                 .andExpect(jsonPath("$.data.overview.netEarnings").exists())
-                .andExpect(jsonPath("$.data.overview.currencyCode").value("MYR"))
+                .andExpect(jsonPath("$.data.overview.currencyCode").value(CURRENCY_CODE))
                 .andExpect(jsonPath("$.data.contentStatusBreakdown").isArray());
     }
 
     @Test
     void adminAnalyticsShouldReturnPlatformSummary() throws Exception {
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
 
-        mockMvc.perform(get("/api/v1/admin/analytics")
-                .header("Authorization", "Bearer " + adminToken))
+        mockMvc.perform(get(ADMIN_ANALYTICS_PATH)
+                .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.totalStudents").isNumber())
                 .andExpect(jsonPath("$.data.overview.totalTeachers").isNumber())
-                .andExpect(jsonPath("$.data.overview.currencyCode").value("MYR"))
+                .andExpect(jsonPath("$.data.overview.currencyCode").value(CURRENCY_CODE))
                 .andExpect(jsonPath("$.data.userRegistrationTrend").isArray())
                 .andExpect(jsonPath("$.data.teacherApprovalBreakdown").isArray())
                 .andExpect(jsonPath("$.data.aiStatusBreakdown").isArray());
     }
 
     /**
-     * Pins down the Wave 4 refactor of {@code AnalyticsService.getAdminAnalytics}.
-     * The previous implementation loaded entire tables into JVM memory and
-     * counted there; the new implementation issues per-status {@code COUNT}
-     * and {@code GROUP BY} queries through {@code StatusCountProjection}.
-     *
-     * <p>This test exercises three invariants that the refactor must
-     * preserve:</p>
-     * <ol>
-     *   <li>Teacher / student counts react to new registrations through the
-     *       same {@code COUNT(distinct u)} query that powered the legacy
-     *       path.</li>
-     *   <li>Every enum value of the breakdown enums shows up in the
-     *       response (even with a count of zero), so the frontend can
-     *       always render a complete chart without conditional checks.</li>
-     *   <li>The {@code teacherApprovalBreakdown} contains a non-zero
-     *       {@code PENDING} count after a teacher self-registers — the new
-     *       {@code countByTeacherStatus(PENDING)} must surface that.</li>
-     * </ol>
+     * Pins the aggregate-query path used by {@code AnalyticsService.getAdminAnalytics}.
+     * Counts must react to new registrations, pending teacher approvals must
+     * include self-registered teachers, and emitted breakdown buckets must carry
+     * usable labels and positive values.
      */
     @Test
     void adminAnalyticsShouldReflectAggregateRegistrationsAndBreakdowns() throws Exception {
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
 
-        // Snapshot baseline counts (other tests may have left registrations).
-        MvcResult baselineResult = mockMvc.perform(get("/api/v1/admin/analytics")
-                .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andReturn();
-        JsonNode baseline = objectMapper.readTree(baselineResult.getResponse().getContentAsString())
-                .path("data").path("overview");
+        JsonNode baseline = analyticsData(adminToken).path("overview");
         long baselineTeachers = baseline.path("totalTeachers").asLong();
         long baselineStudents = baseline.path("totalStudents").asLong();
         long baselinePendingTeachers = baseline.path("pendingTeacherApprovals").asLong();
 
-        // Register exactly one new teacher and one new student.
         registerAndLoginTeacher(uniqueEmail("teacher-admin-aggregate"));
         registerAndLoginStudent(uniqueEmail("student-admin-aggregate"));
 
-        MvcResult afterResult = mockMvc.perform(get("/api/v1/admin/analytics")
-                .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
-                .andReturn();
-        JsonNode afterData = objectMapper.readTree(afterResult.getResponse().getContentAsString())
-                .path("data");
+        JsonNode afterData = analyticsData(adminToken);
         JsonNode after = afterData.path("overview");
 
-        assertEquals(
-                baselineTeachers + 1L, after.path("totalTeachers").asLong(),
-                "Teacher count should increase by exactly one after a teacher self-registers.");
-        assertEquals(
-                baselineStudents + 1L, after.path("totalStudents").asLong(),
-                "Student count should increase by exactly one after a student self-registers.");
-        assertTrue(
-                after.path("pendingTeacherApprovals").asLong() >= baselinePendingTeachers + 1L,
-                "Pending teacher approvals must include the newly registered teacher.");
+        assertThat(after.path("totalTeachers").asLong())
+                .as("Teacher count should increase by exactly one after a teacher self-registers.")
+                .isEqualTo(baselineTeachers + 1L);
+        assertThat(after.path("totalStudents").asLong())
+                .as("Student count should increase by exactly one after a student self-registers.")
+                .isEqualTo(baselineStudents + 1L);
+        assertThat(after.path("pendingTeacherApprovals").asLong())
+                .as("Pending teacher approvals must include the newly registered teacher.")
+                .isGreaterThanOrEqualTo(baselinePendingTeachers + 1L);
 
-        // The teacher approval breakdown is built by the Wave 4 refactor
-        // through {@code countByTeacherStatus(PENDING/APPROVED/REJECTED)}
-        // followed by the zero-value filter in {@code buildBreakdownFromMap}.
-        // After registering a new teacher we expect at least the PENDING
-        // bucket to appear with a positive count — this pins down the new
-        // aggregate-query path end to end.
         JsonNode teacherApproval = afterData.path("teacherApprovalBreakdown");
-        long pendingBucketValue = bucketValue(teacherApproval, "PENDING");
-        assertTrue(
-                pendingBucketValue >= 1L,
-                "Teacher approval breakdown must surface a PENDING bucket with at least one teacher.");
+        assertThat(bucketValue(teacherApproval, "PENDING"))
+                .as("Teacher approval breakdown must surface a PENDING bucket.")
+                .isPositive();
 
-        // Sanity-check the breakdown shape itself: every emitted bucket must
-        // carry a positive count (zero buckets are filtered by design) and
-        // a non-blank key.
         teacherApproval.forEach(item -> {
-            assertFalse(
-                    item.path("label").asText().isBlank(),
-                    "Breakdown items must always have a non-blank label.");
-            assertTrue(
-                    item.path("value").asLong() > 0L,
-                    "Breakdown items with value 0 should be filtered out by buildBreakdownFromMap.");
+            assertThat(item.path("label").asText())
+                    .as("Breakdown items must always have a non-blank label.")
+                    .isNotBlank();
+            assertThat(item.path("value").asLong())
+                    .as("Zero-value breakdown items should be filtered out.")
+                    .isPositive();
         });
+    }
+
+    @Test
+    void analyticsEndpointsShouldRejectUnauthorizedRequests() throws Exception {
+        assertUnauthorized(STUDENT_ANALYTICS_PATH);
+        assertUnauthorized(TEACHER_ANALYTICS_PATH);
+        assertUnauthorized(ADMIN_ANALYTICS_PATH);
+    }
+
+    @Test
+    void analyticsEndpointsShouldRejectWrongRoles() throws Exception {
+        String studentToken = registerAndLoginStudent(uniqueEmail("student-wrong-role-analytics"));
+        String teacherToken = registerAndLoginTeacher(uniqueEmail("teacher-wrong-role-analytics"));
+
+        mockMvc.perform(get(TEACHER_ANALYTICS_PATH)
+                .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get(ADMIN_ANALYTICS_PATH)
+                .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    private JsonNode analyticsData(String adminToken) throws Exception {
+        MvcResult result = mockMvc.perform(get(ADMIN_ANALYTICS_PATH)
+                .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+    }
+
+    private void assertUnauthorized(String path) throws Exception {
+        mockMvc.perform(get(path))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     private long bucketValue(JsonNode breakdownArray, String label) {
@@ -186,37 +193,6 @@ class AnalyticsIntegrationTests {
         return 0L;
     }
 
-    @Test
-    void analyticsEndpointsShouldRejectUnauthorizedRequests() throws Exception {
-        mockMvc.perform(get("/api/v1/students/analytics"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
-
-        mockMvc.perform(get("/api/v1/teachers/analytics"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
-
-        mockMvc.perform(get("/api/v1/admin/analytics"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
-    }
-
-    @Test
-    void analyticsEndpointsShouldRejectWrongRoles() throws Exception {
-        String studentToken = registerAndLoginStudent(uniqueEmail("student-wrong-role-analytics"));
-        String teacherToken = registerAndLoginTeacher(uniqueEmail("teacher-wrong-role-analytics"));
-
-        mockMvc.perform(get("/api/v1/teachers/analytics")
-                .header("Authorization", "Bearer " + studentToken))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.success").value(false));
-
-        mockMvc.perform(get("/api/v1/admin/analytics")
-                .header("Authorization", "Bearer " + teacherToken))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.success").value(false));
-    }
-
     private String registerAndLoginStudent(String email) throws Exception {
         mockMvc.perform(post("/api/v1/auth/register/student")
                 .with(csrf())
@@ -224,12 +200,12 @@ class AnalyticsIntegrationTests {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "fullName", "Student Analytics Tester",
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
                         "preferredLanguage", "en"))))
                 .andExpect(status().isOk());
 
-        return loginAndExtractToken(email, "Password123!");
+        return loginAndExtractToken(email, USER_PASSWORD);
     }
 
     private String registerAndLoginTeacher(String email) throws Exception {
@@ -239,12 +215,12 @@ class AnalyticsIntegrationTests {
                 .content(objectMapper.writeValueAsString(Map.of(
                         "fullName", "Teacher Analytics Tester",
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
                         "bio", "Teacher analytics test user"))))
                 .andExpect(status().isOk());
 
-        return loginAndExtractToken(email, "Password123!");
+        return loginAndExtractToken(email, USER_PASSWORD);
     }
 
     private String loginAndExtractToken(String email, String password) throws Exception {
@@ -257,11 +233,17 @@ class AnalyticsIntegrationTests {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        JsonNode jsonNode = objectMapper.readTree(result.getResponse().getContentAsString());
-        return jsonNode.path("data").path("token").asText();
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data")
+                .path("token")
+                .asText();
     }
 
-    private String uniqueEmail(String prefix) {
+    private static String bearer(String token) {
+        return "Bearer " + token;
+    }
+
+    private static String uniqueEmail(String prefix) {
         return prefix.replace("-", "") + UUID.randomUUID().toString().replace("-", "") + "@example.com";
     }
 }

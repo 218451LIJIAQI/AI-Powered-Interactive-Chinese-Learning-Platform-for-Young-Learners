@@ -19,14 +19,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Single row in any dashboard list (recent orders, recent students,
- * recent lessons, etc.). Icon + title + optional description on the
- * left, free-form `aside` slot on the right for status pills or
- * actions, and an inline `meta` slot for trailing tags. Keeps every
- * list visually uniform across personas without each parent
- * recomputing the same flex layout.
- */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 interface Props {

@@ -78,7 +78,7 @@ public class AdminUserManagementService {
         TeacherStatus teacherStatusFilter = parseTeacherStatus(status);
         String keywordFilter = keyword == null || keyword.isBlank()
                 ? null
-                : "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+                : "%" + keyword.strip().toLowerCase(Locale.ROOT) + "%";
 
         Page<Long> userIdPage = userRepository.findAdminUserIds(
                 roleFilter != null ? roleFilter.name() : null,
@@ -94,7 +94,10 @@ public class AdminUserManagementService {
         Map<Long, TeacherProfile> teacherProfiles = pageUserIds.isEmpty()
                 ? Map.of()
                 : teacherProfileRepository.findByUserIdIn(pageUserIds).stream()
-                .collect(Collectors.toMap(profile -> profile.getUser().getId(), Function.identity(), (left, right) -> left));
+                        .collect(Collectors.toMap(
+                                profile -> profile.getUser().getId(),
+                                Function.identity(),
+                                (left, right) -> left));
 
         List<AdminUserListItemResponse> items = pageUserIds.stream()
                 .map(usersById::get)
@@ -185,7 +188,7 @@ public class AdminUserManagementService {
         }
 
         try {
-            return RoleName.valueOf(role.trim().toUpperCase(Locale.ROOT));
+            return RoleName.fromValue(role);
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid user role filter.");
         }
@@ -197,7 +200,7 @@ public class AdminUserManagementService {
         }
 
         try {
-            return TeacherStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+            return TeacherStatus.fromValue(status);
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid teacher status filter.");
         }

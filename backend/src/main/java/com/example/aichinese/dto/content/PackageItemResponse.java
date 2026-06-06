@@ -3,7 +3,6 @@ package com.example.aichinese.dto.content;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.entity.enums.PackageItemType;
 
 @JsonPropertyOrder({

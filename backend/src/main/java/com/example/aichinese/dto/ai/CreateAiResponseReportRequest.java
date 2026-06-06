@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.ai;
 
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -46,9 +47,9 @@ public record CreateAiResponseReportRequest(
     public CreateAiResponseReportRequest {
         featureKey = strip(featureKey);
         reasonCategory = strip(reasonCategory);
-        description = strip(description);
-        promptSnapshot = strip(promptSnapshot);
-        aiResponseSnapshot = strip(aiResponseSnapshot);
+        description = stripToNull(description);
+        promptSnapshot = stripToNull(promptSnapshot);
+        aiResponseSnapshot = stripToNull(aiResponseSnapshot);
     }
 
     @Override

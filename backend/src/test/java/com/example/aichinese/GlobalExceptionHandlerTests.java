@@ -3,38 +3,37 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import java.util.Objects;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.MethodValidationResult;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.multipart.MultipartException;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
-import org.springframework.validation.method.MethodValidationResult;
-import org.springframework.validation.method.ParameterValidationResult;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.exception.GlobalExceptionHandler;
 import com.example.aichinese.util.RequestIdHolder;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 
 /**
  * Unit tests for {@link GlobalExceptionHandler} that exercise the null/blank
@@ -44,6 +43,16 @@ import com.example.aichinese.util.RequestIdHolder;
  */
 class GlobalExceptionHandlerTests {
 
+    private static final String REQUEST_ID = "audit-request-123";
+    private static final String GENERIC_CLIENT_ERROR =
+            "The request could not be processed. Please check the input and try again.";
+    private static final String CONFLICT_MESSAGE =
+            "The request conflicts with the current state. Please refresh and try again.";
+    private static final String PAYLOAD_TOO_LARGE_MESSAGE =
+            "The file is too large. Please choose a smaller file and try again.";
+    private static final String VALIDATION_MESSAGE =
+            "The information you entered is incomplete or invalid. Please check it and try again.";
+
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
     @Test
@@ -52,7 +61,7 @@ class GlobalExceptionHandlerTests {
                 new IllegalArgumentException((String) null));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isNotBlank();
         assertThat(body.message()).doesNotContainIgnoringCase("null");
@@ -65,7 +74,7 @@ class GlobalExceptionHandlerTests {
         ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
                 new IllegalArgumentException("   "));
 
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        ApiResponse<Void> body = body(response);
         assertThat(body.message()).isNotBlank();
         assertThat(body.errors()).noneMatch(item -> item == null || item.isBlank());
     }
@@ -75,7 +84,7 @@ class GlobalExceptionHandlerTests {
         ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
                 new IllegalArgumentException("Specific business rule violated."));
 
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        ApiResponse<Void> body = body(response);
         assertThat(body.message()).isEqualTo("Specific business rule violated.");
         assertThat(body.errors()).containsExactly("Specific business rule violated.");
     }
@@ -86,7 +95,7 @@ class GlobalExceptionHandlerTests {
                 new AccessDeniedException(null));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isNotBlank();
         assertThat(body.errors()).noneMatch(item -> item == null || item.isBlank());
@@ -94,13 +103,13 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void errorResponseIncludesCurrentRequestIdWhenAvailable() {
-        RequestIdHolder.set("audit-request-123");
+        RequestIdHolder.set(REQUEST_ID);
         try {
             ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
                     new IllegalArgumentException("Specific business rule violated."));
 
-            ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
-            assertThat(body.requestId()).isEqualTo("audit-request-123");
+            ApiResponse<Void> body = body(response);
+            assertThat(body.requestId()).isEqualTo(REQUEST_ID);
         } finally {
             RequestIdHolder.clear();
         }
@@ -111,9 +120,7 @@ class GlobalExceptionHandlerTests {
         ResponseEntity<ApiResponse<Void>> response = handler.handleMaxUploadSizeExceededException(
                 new MaxUploadSizeExceededException(1024L));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
-        assertThat(body.message()).isEqualTo("The file is too large. Please choose a smaller file and try again.");
+        assertPayloadTooLarge(response);
     }
 
     @Test
@@ -121,9 +128,7 @@ class GlobalExceptionHandlerTests {
         ResponseEntity<ApiResponse<Void>> response = handler.handleMultipartException(
                 new MultipartException("multipart failed", new MaxUploadSizeExceededException(1024L)));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
-        assertThat(body.message()).isEqualTo("The file is too large. Please choose a smaller file and try again.");
+        assertPayloadTooLarge(response);
     }
 
     @Test
@@ -135,10 +140,7 @@ class GlobalExceptionHandlerTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         assertThat(response.getHeaders().getAccept()).contains(MediaType.APPLICATION_JSON);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
-        assertThat(body.success()).isFalse();
-        assertThat(body.message()).isEqualTo("The request could not be processed. Please check the input and try again.");
-        assertThat(body.errors()).containsExactly(body.message());
+        assertGenericClientError(response);
     }
 
     @Test
@@ -150,10 +152,7 @@ class GlobalExceptionHandlerTests {
         assertThat(response.getHeaders().getAllow()).containsExactlyInAnyOrder(
                 HttpMethod.GET,
                 HttpMethod.POST);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
-        assertThat(body.success()).isFalse();
-        assertThat(body.message()).isEqualTo("The request could not be processed. Please check the input and try again.");
-        assertThat(body.errors()).containsExactly(body.message());
+        assertGenericClientError(response);
     }
 
     @Test
@@ -162,9 +161,9 @@ class GlobalExceptionHandlerTests {
                 new DataIntegrityViolationException("Duplicate entry 'student@example.com' for key 'users.email'"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
-        assertThat(body.message()).isEqualTo("The request conflicts with the current state. Please refresh and try again.");
+        assertThat(body.message()).isEqualTo(CONFLICT_MESSAGE);
         assertThat(body.message()).doesNotContain("student@example.com", "users.email", "Duplicate entry");
     }
 
@@ -174,9 +173,9 @@ class GlobalExceptionHandlerTests {
                 new ObjectOptimisticLockingFailureException("PaymentRecord", 10L));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+        ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
-        assertThat(body.message()).isEqualTo("The request conflicts with the current state. Please refresh and try again.");
+        assertThat(body.message()).isEqualTo(CONFLICT_MESSAGE);
     }
 
     @Test
@@ -189,9 +188,8 @@ class GlobalExceptionHandlerTests {
                             fieldError("email", "Email is required.")));
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
-            assertThat(body.message()).isEqualTo(
-                    "The information you entered is incomplete or invalid. Please check it and try again.");
+            ApiResponse<Void> body = body(response);
+            assertThat(body.message()).isEqualTo(VALIDATION_MESSAGE);
             assertThat(body.fieldErrors()).containsEntry("displayName", List.of("Display name is required."));
             assertThat(body.fieldErrors().keySet()).containsExactly("displayName", "email");
         } finally {
@@ -206,7 +204,7 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
                     validationException(fieldError("email", "Email address is required.")));
 
-            ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+            ApiResponse<Void> body = body(response);
             assertThat(body.fieldErrors()).isEmpty();
             assertThat(body.errors()).containsExactly(body.message());
         } finally {
@@ -239,7 +237,7 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ApiResponse<Void>> response = handler.handleHandlerMethodValidationException(
                     new HandlerMethodValidationException(validationResult));
 
-            ApiResponse<Void> body = Objects.requireNonNull(response.getBody(), "response body");
+            ApiResponse<Void> body = body(response);
             assertThat(body.fieldErrors()).containsEntry("teacherId", List.of("Teacher id must be positive."));
         } finally {
             RequestContextHolder.resetRequestAttributes();
@@ -250,6 +248,23 @@ class GlobalExceptionHandlerTests {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRequestURI(path);
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+    }
+
+    private static ApiResponse<Void> body(ResponseEntity<ApiResponse<Void>> response) {
+        assertThat(response.getBody()).as("response body").isNotNull();
+        return response.getBody();
+    }
+
+    private static void assertPayloadTooLarge(ResponseEntity<ApiResponse<Void>> response) {
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(body(response).message()).isEqualTo(PAYLOAD_TOO_LARGE_MESSAGE);
+    }
+
+    private static void assertGenericClientError(ResponseEntity<ApiResponse<Void>> response) {
+        ApiResponse<Void> body = body(response);
+        assertThat(body.success()).isFalse();
+        assertThat(body.message()).isEqualTo(GENERIC_CLIENT_ERROR);
+        assertThat(body.errors()).containsExactly(body.message());
     }
 
     private static MethodArgumentNotValidException validationException(FieldError... errors) throws Exception {

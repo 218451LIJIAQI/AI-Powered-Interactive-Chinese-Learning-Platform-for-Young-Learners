@@ -25,22 +25,20 @@ import com.example.aichinese.service.storage.StoredObject;
 @Service
 public class AiFileStorageService {
 
-    private static final Set<UploadStorageSupport.FileSignature> ALLOWED_AUDIO_SIGNATURES = Set.of(
-            UploadStorageSupport.FileSignature.WEBM,
-            UploadStorageSupport.FileSignature.WAV,
-            UploadStorageSupport.FileSignature.MP3);
+    private static final FileValidationPolicy AUDIO_POLICY = new FileValidationPolicy(
+            Set.of(
+                    UploadStorageSupport.FileSignature.WEBM,
+                    UploadStorageSupport.FileSignature.WAV,
+                    UploadStorageSupport.FileSignature.MP3),
+            "Unsupported audio file type. Allowed types are WEBM, WAV, MPEG, and MP3.",
+            "Uploaded audio content does not match the declared WEBM/WAV/MP3 type.");
 
-    private static final Set<String> ALLOWED_AUDIO_CONTENT_TYPES = UploadStorageSupport.contentTypesOf(ALLOWED_AUDIO_SIGNATURES);
-
-    private static final Set<String> ALLOWED_AUDIO_EXTENSIONS = UploadStorageSupport.extensionsOf(ALLOWED_AUDIO_SIGNATURES);
-
-    private static final Set<UploadStorageSupport.FileSignature> ALLOWED_IMAGE_SIGNATURES = Set.of(
-            UploadStorageSupport.FileSignature.PNG,
-            UploadStorageSupport.FileSignature.JPEG);
-
-    private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = UploadStorageSupport.contentTypesOf(ALLOWED_IMAGE_SIGNATURES);
-
-    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = UploadStorageSupport.extensionsOf(ALLOWED_IMAGE_SIGNATURES);
+    private static final FileValidationPolicy IMAGE_POLICY = new FileValidationPolicy(
+            Set.of(
+                    UploadStorageSupport.FileSignature.PNG,
+                    UploadStorageSupport.FileSignature.JPEG),
+            "Unsupported image file type. Allowed types are PNG, JPG, and JPEG.",
+            "Uploaded image content does not match the declared PNG/JPG/JPEG type.");
 
     private final UploadProperties uploadProperties;
     private final UploadedFileRepository uploadedFileRepository;
@@ -60,23 +58,19 @@ public class AiFileStorageService {
     }
 
     public UploadedFile storePronunciationAudio(MultipartFile multipartFile, User ownerUser) {
-        String[] validated = validateMultipartFile(multipartFile,
-                ALLOWED_AUDIO_CONTENT_TYPES, ALLOWED_AUDIO_EXTENSIONS,
-                "Unsupported audio file type. Allowed types are WEBM, WAV, MPEG, and MP3.",
-                ALLOWED_AUDIO_SIGNATURES,
-                "Uploaded audio content does not match the declared WEBM/WAV/MP3 type.",
+        ValidatedUpload validated = validateMultipartFile(
+                multipartFile,
+                AUDIO_POLICY,
                 uploadProperties.getAiAudioMaxFileSize());
-        return storeFile(multipartFile, ownerUser, validated[0], validated[1]);
+        return storeFile(multipartFile, ownerUser, validated.originalFileName(), validated.extension());
     }
 
     public UploadedFile storeWritingImage(MultipartFile multipartFile, User ownerUser) {
-        String[] validated = validateMultipartFile(multipartFile,
-                ALLOWED_IMAGE_CONTENT_TYPES, ALLOWED_IMAGE_EXTENSIONS,
-                "Unsupported image file type. Allowed types are PNG, JPG, and JPEG.",
-                ALLOWED_IMAGE_SIGNATURES,
-                "Uploaded image content does not match the declared PNG/JPG/JPEG type.",
+        ValidatedUpload validated = validateMultipartFile(
+                multipartFile,
+                IMAGE_POLICY,
                 uploadProperties.getAiImageMaxFileSize());
-        return storeFile(multipartFile, ownerUser, validated[0], validated[1]);
+        return storeFile(multipartFile, ownerUser, validated.originalFileName(), validated.extension());
     }
 
     private UploadedFile storeFile(
@@ -108,13 +102,9 @@ public class AiFileStorageService {
                 multipartFile.getSize());
     }
 
-    private String[] validateMultipartFile(
+    private ValidatedUpload validateMultipartFile(
             MultipartFile multipartFile,
-            Set<String> allowedContentTypes,
-            Set<String> allowedExtensions,
-            String invalidTypeMessage,
-            Set<UploadStorageSupport.FileSignature> allowedSignatures,
-            String invalidSignatureMessage,
+            FileValidationPolicy policy,
             DataSize maxFileSize) {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Uploaded file is required.");
@@ -131,26 +121,43 @@ public class AiFileStorageService {
         String extension = UploadStorageSupport.getRequiredExtension(
                 originalFileName,
                 "Uploaded file must include a valid extension.");
-        if (!allowedExtensions.contains(extension)) {
-            throw new ResponseStatusException(BAD_REQUEST, invalidTypeMessage);
+        if (!policy.allowedExtensions().contains(extension)) {
+            throw new ResponseStatusException(BAD_REQUEST, policy.invalidTypeMessage());
         }
 
         String contentType = UploadStorageSupport.normalizeContentType(multipartFile.getContentType());
-        if (!allowedContentTypes.contains(contentType)) {
-            throw new ResponseStatusException(BAD_REQUEST, invalidTypeMessage);
+        if (!policy.allowedContentTypes().contains(contentType)) {
+            throw new ResponseStatusException(BAD_REQUEST, policy.invalidTypeMessage());
         }
 
         UploadStorageSupport.validateFileSignature(
                 multipartFile,
                 extension,
                 contentType,
-                allowedSignatures,
-                invalidSignatureMessage);
+                policy.allowedSignatures(),
+                policy.invalidSignatureMessage());
 
-        return new String[]{originalFileName, extension};
+        return new ValidatedUpload(originalFileName, extension);
     }
 
     private Path resolveAiDirectory() {
         return UploadStorageSupport.resolveBaseDirectory(Path.of(uploadProperties.getDirectory(), "ai-feedback").toString());
+    }
+
+    private record FileValidationPolicy(
+            Set<UploadStorageSupport.FileSignature> allowedSignatures,
+            String invalidTypeMessage,
+            String invalidSignatureMessage) {
+
+        private Set<String> allowedContentTypes() {
+            return UploadStorageSupport.contentTypesOf(allowedSignatures);
+        }
+
+        private Set<String> allowedExtensions() {
+            return UploadStorageSupport.extensionsOf(allowedSignatures);
+        }
+    }
+
+    private record ValidatedUpload(String originalFileName, String extension) {
     }
 }

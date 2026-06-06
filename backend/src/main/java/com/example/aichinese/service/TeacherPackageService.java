@@ -3,6 +3,7 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -22,7 +23,9 @@ import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.TeacherProfile;
+import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.PackageItemType;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.CoursePackageRepository;
@@ -46,6 +49,18 @@ import com.example.aichinese.util.PaginationUtils;
  */
 @Service
 public class TeacherPackageService {
+
+    private static final String PACKAGE_REQUEST_REQUIRED = "Package request is required.";
+    private static final String PACKAGE_ITEM_REQUEST_REQUIRED = "Package item request is required.";
+    private static final String PACKAGE_NOT_FOUND = "Requested package was not found.";
+    private static final String PACKAGE_ITEM_NOT_FOUND = "Requested package item was not found.";
+    private static final String AUDIT_TARGET_PACKAGE = "CoursePackage";
+    private static final String ACTION_CREATE = "TEACHER_PACKAGE_CREATE";
+    private static final String ACTION_UPDATE = "TEACHER_PACKAGE_UPDATE";
+    private static final String ACTION_ARCHIVE = "TEACHER_PACKAGE_ARCHIVE";
+    private static final String ACTION_ITEM_ADD = "TEACHER_PACKAGE_ITEM_ADD";
+    private static final String ACTION_ITEM_REMOVE = "TEACHER_PACKAGE_ITEM_REMOVE";
+    private static final int DEFAULT_PACKAGE_ITEM_SORT_ORDER = 0;
 
     private final CoursePackageRepository coursePackageRepository;
     private final PackageItemRepository packageItemRepository;
@@ -95,23 +110,13 @@ public class TeacherPackageService {
     @Transactional
     public CoursePackageResponse createPackage(SecurityUserDetails currentUser, CreateCoursePackageRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Package request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, PACKAGE_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
         CoursePackage coursePackage = new CoursePackage();
-        teacherContentAccessService.attachPackageMetadata(
-                coursePackage,
-                teacherProfile,
-                teacherContentAccessService.requireLevel(request.levelId()),
-                teacherContentAccessService.requireCategory(request.categoryId()),
-                request.title(),
-                request.description(),
-                request.accessType(),
-                request.price(),
-                request.learningType(),
-                request.coverImageUrl());
+        attachPackageMetadata(coursePackage, teacherProfile, PackageMetadata.from(request));
         // No admin review flow: teacher-created packages are immediately
         // available in the public course catalogue.
         coursePackage.setContentStatus(ContentStatus.PUBLISHED);
@@ -120,8 +125,8 @@ public class TeacherPackageService {
         CoursePackage saved = coursePackageRepository.save(coursePackage);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_PACKAGE_CREATE",
-                "CoursePackage",
+                ACTION_CREATE,
+                AUDIT_TARGET_PACKAGE,
                 saved.getId(),
                 "Teacher created and published a course package.");
         return toCoursePackageResponse(saved);
@@ -133,30 +138,20 @@ public class TeacherPackageService {
             Long packageId,
             UpdateCoursePackageRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Package request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, PACKAGE_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
         teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
-        teacherContentAccessService.attachPackageMetadata(
-                coursePackage,
-                teacherProfile,
-                teacherContentAccessService.requireLevel(request.levelId()),
-                teacherContentAccessService.requireCategory(request.categoryId()),
-                request.title(),
-                request.description(),
-                request.accessType(),
-                request.price(),
-                request.learningType(),
-                request.coverImageUrl());
+        attachPackageMetadata(coursePackage, teacherProfile, PackageMetadata.from(request));
 
         CoursePackage saved = coursePackageRepository.save(coursePackage);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_PACKAGE_UPDATE",
-                "CoursePackage",
+                ACTION_UPDATE,
+                AUDIT_TARGET_PACKAGE,
                 saved.getId(),
                 "Teacher updated a course package draft.");
         return toCoursePackageResponse(saved);
@@ -172,8 +167,8 @@ public class TeacherPackageService {
         coursePackageRepository.save(coursePackage);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_PACKAGE_ARCHIVE",
-                "CoursePackage",
+                ACTION_ARCHIVE,
+                AUDIT_TARGET_PACKAGE,
                 coursePackage.getId(),
                 "Teacher archived a course package.");
         return toCoursePackageResponse(coursePackage);
@@ -182,14 +177,9 @@ public class TeacherPackageService {
     @Transactional
     public CoursePackageResponse addPackageItem(SecurityUserDetails currentUser, Long packageId, PackageItemRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Package item request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, PACKAGE_ITEM_REQUEST_REQUIRED);
         }
-        if (request.itemType() == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Item type is required.");
-        }
-        if (request.itemId() == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Item id is required.");
-        }
+        validatePackageItemRequest(request);
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
         teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
@@ -200,18 +190,12 @@ public class TeacherPackageService {
             throw new ResponseStatusException(BAD_REQUEST, "This item is already included in the package.");
         }
 
-        PackageItem packageItem = new PackageItem();
-        packageItem.setCoursePackage(coursePackage);
-        packageItem.setItemType(request.itemType());
-        packageItem.setItemId(request.itemId());
-        packageItem.setSortOrder(request.displayOrder() == null ? 0 : request.displayOrder());
-        packageItem.setTitleSnapshot(resolvePackageItemTitle(currentUser, request.itemType(), request.itemId()));
-        packageItemRepository.save(packageItem);
+        packageItemRepository.save(newPackageItem(currentUser, coursePackage, request));
 
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_PACKAGE_ITEM_ADD",
-                "CoursePackage",
+                ACTION_ITEM_ADD,
+                AUDIT_TARGET_PACKAGE,
                 coursePackage.getId(),
                 "Teacher added a package item.");
         return toCoursePackageResponse(coursePackage);
@@ -224,17 +208,17 @@ public class TeacherPackageService {
         teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
 
         PackageItem item = packageItemRepository.findByIdAndCoursePackageTeacherUserId(itemId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested package item was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, PACKAGE_ITEM_NOT_FOUND));
 
-        if (!item.getCoursePackage().getId().equals(coursePackage.getId())) {
-            throw new ResponseStatusException(NOT_FOUND, "Requested package item was not found.");
+        if (!Objects.equals(item.getCoursePackage().getId(), coursePackage.getId())) {
+            throw new ResponseStatusException(NOT_FOUND, PACKAGE_ITEM_NOT_FOUND);
         }
 
         packageItemRepository.delete(item);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_PACKAGE_ITEM_REMOVE",
-                "CoursePackage",
+                ACTION_ITEM_REMOVE,
+                AUDIT_TARGET_PACKAGE,
                 coursePackage.getId(),
                 "Teacher removed a package item.");
         return toCoursePackageResponse(coursePackage);
@@ -242,31 +226,107 @@ public class TeacherPackageService {
 
     private CoursePackage findOwnedPackage(SecurityUserDetails currentUser, Long packageId) {
         return coursePackageRepository.findByIdAndTeacherUserId(packageId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested package was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, PACKAGE_NOT_FOUND));
+    }
+
+    private void attachPackageMetadata(
+            CoursePackage coursePackage,
+            TeacherProfile teacherProfile,
+            PackageMetadata request) {
+        teacherContentAccessService.attachPackageMetadata(
+                coursePackage,
+                teacherProfile,
+                teacherContentAccessService.requireLevel(request.levelId()),
+                teacherContentAccessService.requireCategory(request.categoryId()),
+                request.title(),
+                request.description(),
+                request.accessType(),
+                request.price(),
+                request.learningType(),
+                request.coverImageUrl());
+    }
+
+    private static void validatePackageItemRequest(PackageItemRequest request) {
+        if (request.itemType() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Item type is required.");
+        }
+        if (request.itemId() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Item id is required.");
+        }
+    }
+
+    private PackageItem newPackageItem(
+            SecurityUserDetails currentUser,
+            CoursePackage coursePackage,
+            PackageItemRequest request) {
+        PackageItem packageItem = new PackageItem();
+        packageItem.setCoursePackage(coursePackage);
+        packageItem.setItemType(request.itemType());
+        packageItem.setItemId(request.itemId());
+        packageItem.setSortOrder(Objects.requireNonNullElse(request.displayOrder(), DEFAULT_PACKAGE_ITEM_SORT_ORDER));
+        packageItem.setTitleSnapshot(resolvePackageItemTitle(currentUser, request.itemType(), request.itemId()));
+        return packageItem;
     }
 
     private String resolvePackageItemTitle(SecurityUserDetails currentUser, PackageItemType itemType, Long itemId) {
         return switch (itemType) {
             case MODULE -> {
                 LearningModule module = teacherModuleService.findOwnedModule(currentUser, itemId);
-                if (module.getContentStatus() == ContentStatus.ARCHIVED) {
-                    throw new ResponseStatusException(BAD_REQUEST, "Archived modules cannot be added to a package.");
-                }
+                ensurePackageItemIsNotArchived(module.getContentStatus(), "Archived modules cannot be added to a package.");
                 yield module.getTitle();
             }
             case LESSON -> {
                 Lesson lesson = teacherLessonService.findOwnedLesson(currentUser, itemId);
-                if (lesson.getContentStatus() == ContentStatus.ARCHIVED) {
-                    throw new ResponseStatusException(BAD_REQUEST, "Archived lessons cannot be added to a package.");
-                }
+                ensurePackageItemIsNotArchived(lesson.getContentStatus(), "Archived lessons cannot be added to a package.");
                 yield lesson.getTitle();
             }
         };
+    }
+
+    private static void ensurePackageItemIsNotArchived(ContentStatus status, String message) {
+        if (status == ContentStatus.ARCHIVED) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
+        }
     }
 
     private CoursePackageResponse toCoursePackageResponse(CoursePackage coursePackage) {
         return contentManagementMapper.toCoursePackageResponse(
                 coursePackage,
                 packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(coursePackage.getId()));
+    }
+
+    private record PackageMetadata(
+            String title,
+            String description,
+            Long levelId,
+            Long categoryId,
+            LearningType learningType,
+            AccessType accessType,
+            BigDecimal price,
+            String coverImageUrl) {
+
+        private static PackageMetadata from(CreateCoursePackageRequest request) {
+            return new PackageMetadata(
+                    request.title(),
+                    request.description(),
+                    request.levelId(),
+                    request.categoryId(),
+                    request.learningType(),
+                    request.accessType(),
+                    request.price(),
+                    request.coverImageUrl());
+        }
+
+        private static PackageMetadata from(UpdateCoursePackageRequest request) {
+            return new PackageMetadata(
+                    request.title(),
+                    request.description(),
+                    request.levelId(),
+                    request.categoryId(),
+                    request.learningType(),
+                    request.accessType(),
+                    request.price(),
+                    request.coverImageUrl());
+        }
     }
 }

@@ -39,6 +39,7 @@ import com.example.aichinese.repository.MatchingGameRepository;
 import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.PaymentRecordRepository;
 import com.example.aichinese.repository.PayoutRequestRepository;
+import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.RefundRequestRepository;
@@ -47,12 +48,15 @@ import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherEarningRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.TracingExerciseRepository;
-import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 
 @Service
 public class DashboardService {
+
+    private static final int RECENT_ITEM_LIMIT = 5;
+    private static final int MONEY_SCALE = 2;
+    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final StudentProfileRepository studentProfileRepository;
     private final TeacherProfileRepository teacherProfileRepository;
@@ -155,7 +159,7 @@ public class DashboardService {
         List<StudentDashboardResponse.RecentQuizResult> recentQuizResults = quizAttemptRepository
                 .findByStudentIdOrderByCompletedAtDescCreatedAtDesc(studentProfile.getId()).stream()
                 .filter(attempt -> hasCurrentStudentAttemptAccess(studentProfile, attempt))
-                .limit(5)
+                .limit(RECENT_ITEM_LIMIT)
                 .map(attempt -> new StudentDashboardResponse.RecentQuizResult(
                         attempt.getId(),
                         attempt.getQuiz() != null ? attempt.getQuiz().getId() : null,
@@ -170,7 +174,7 @@ public class DashboardService {
         List<StudentDashboardResponse.LessonProgressSummary> unfinishedLessons = accessibleLessonProgress.stream()
                 .filter(progress -> !progress.isCompleted())
                 .filter(progress -> progress.getLesson() != null)
-                .limit(5)
+                .limit(RECENT_ITEM_LIMIT)
                 .map(progress -> new StudentDashboardResponse.LessonProgressSummary(
                         progress.getLesson().getId(),
                         progress.getLesson().getTitle(),
@@ -181,11 +185,11 @@ public class DashboardService {
         List<StudentDashboardResponse.NotificationSummary> notifications = mapStudentNotifications(
                 notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
                         .filter(notification -> notificationService.isNotificationCurrentlyAccessible(currentUser, notification))
-                        .limit(5)
+                        .limit(RECENT_ITEM_LIMIT)
                         .toList());
 
         return new StudentDashboardResponse(
-                currentUser.getUser().getDisplayName(),
+                currentUser.getDisplayName(),
                 currentLevel,
                 progressPercent,
                 dailyStreak,
@@ -212,13 +216,11 @@ public class DashboardService {
         BigDecimal averageQuizScore = averageAttemptScore(accessibleAttempts);
 
         List<TeacherDashboardResponse.RecentQuizResult> recentQuizResults = accessibleAttempts.stream()
-                .limit(5)
+                .limit(RECENT_ITEM_LIMIT)
                 .map(attempt -> new TeacherDashboardResponse.RecentQuizResult(
                         attempt.getId(),
                         attempt.getQuiz() != null ? attempt.getQuiz().getTitle() : "Practice Quiz",
-                        attempt.getStudent() != null && attempt.getStudent().getUser() != null
-                                ? attempt.getStudent().getUser().getDisplayName()
-                                : "Student",
+                        studentDisplayName(attempt),
                         attempt.getScore(),
                         attempt.getMaxScore(),
                         attempt.getCompletedAt()))
@@ -227,12 +229,12 @@ public class DashboardService {
         List<TeacherDashboardResponse.NotificationSummary> notifications = notificationRepository
                 .findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
                 .filter(notification -> notificationService.isNotificationCurrentlyAccessible(currentUser, notification))
-                .limit(5)
+                .limit(RECENT_ITEM_LIMIT)
                 .map(DashboardService::mapTeacherNotification)
                 .toList();
 
         return new TeacherDashboardResponse(
-                currentUser.getUser().getDisplayName(),
+                currentUser.getDisplayName(),
                 teacherProfile.getTeacherStatus(),
                 lessonRepository.countByTeacherId(teacherProfile.getId()),
                 studentProfileRepository.findLinkedStudentIdsByTeacherId(teacherProfile.getId(), PageRequest.of(0, 1)).getTotalElements(),
@@ -241,7 +243,7 @@ public class DashboardService {
                         grossAmount,
                         netAmount,
                         netAmount,
-                        ZERO.setScale(2, RoundingMode.HALF_UP),
+                        zeroMoney(),
                         commerceSettingsService.getDefaultCurrency()),
                 recentQuizResults,
                 notifications);
@@ -278,7 +280,7 @@ public class DashboardService {
                 .toList();
 
         return new AdminDashboardResponse(
-                currentUser.getUser().getDisplayName(),
+                currentUser.getDisplayName(),
                 studentProfileRepository.count(),
                 teacherProfileRepository.count(),
                 teacherProfileRepository.countByTeacherStatus(TeacherStatus.PENDING),
@@ -328,7 +330,7 @@ public class DashboardService {
                 .map(answer -> answer.getQuestion() == null ? null : answer.getQuestion().getQuestionType())
                 .filter(value -> value != null && !value.isBlank())
                 .distinct()
-                .limit(5)
+                .limit(RECENT_ITEM_LIMIT)
                 .toList();
     }
 
@@ -375,7 +377,7 @@ public class DashboardService {
             return 0;
         }
         long completedLessons = lessonProgressList.stream().filter(LessonProgress::isCompleted).count();
-        return (int) Math.round((completedLessons * 100.0) / lessonProgressList.size());
+        return (int) Math.round(completedLessons * 100.0 / lessonProgressList.size());
     }
 
     private static BigDecimal averageAttemptScore(List<QuizAttempt> attempts) {
@@ -384,10 +386,10 @@ public class DashboardService {
                 .map(DashboardService::percentageForAttempt)
                 .toList();
         if (percentages.isEmpty()) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
+            return zeroMoney();
         }
         BigDecimal total = percentages.stream().reduce(ZERO, BigDecimal::add);
-        return total.divide(BigDecimal.valueOf(percentages.size()), 2, RoundingMode.HALF_UP);
+        return total.divide(BigDecimal.valueOf(percentages.size()), MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     private static boolean hasValidPercentage(QuizAttempt attempt) {
@@ -399,19 +401,29 @@ public class DashboardService {
 
     private static BigDecimal percentageForAttempt(QuizAttempt attempt) {
         if (!hasValidPercentage(attempt)) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
+            return zeroMoney();
         }
 
         return BigDecimal.valueOf(attempt.getScore())
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(attempt.getMaxScore()), 2, RoundingMode.HALF_UP);
+                .multiply(HUNDRED)
+                .divide(BigDecimal.valueOf(attempt.getMaxScore()), MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     private static BigDecimal defaultMoney(BigDecimal amount) {
         if (amount == null) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
+            return zeroMoney();
         }
 
-        return amount.setScale(2, RoundingMode.HALF_UP);
+        return amount.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal zeroMoney() {
+        return ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private static String studentDisplayName(QuizAttempt attempt) {
+        return attempt.getStudent() != null && attempt.getStudent().getUser() != null
+                ? attempt.getStudent().getUser().getDisplayName()
+                : "Student";
     }
 }

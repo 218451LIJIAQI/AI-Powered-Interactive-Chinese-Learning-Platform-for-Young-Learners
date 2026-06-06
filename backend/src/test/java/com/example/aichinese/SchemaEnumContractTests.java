@@ -44,6 +44,7 @@ import com.example.aichinese.entity.enums.TeacherVerificationDocumentType;
  */
 class SchemaEnumContractTests {
 
+    private static final String ADD_CONSTRAINT = "add constraint";
     private static final Path CONSOLIDATED_MIGRATION = Path.of(
             "src",
             "main",
@@ -58,18 +59,15 @@ class SchemaEnumContractTests {
 
     @Test
     void latestNotificationTypeDatabaseEnumContainsEveryApplicationValue() throws IOException {
-        Set<String> databaseValues = latestNotificationTypeEnumValues();
-        Set<String> applicationValues = Arrays.stream(NotificationType.values())
-                .map(Enum::name)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> databaseValues = latestNotificationTypeEnumValues(readConsolidatedMigration());
 
         assertThat(databaseValues)
-                .containsExactlyInAnyOrderElementsOf(applicationValues);
+                .containsExactlyInAnyOrderElementsOf(enumNames(NotificationType.values()));
     }
 
     @Test
     void databaseEnumColumnsContainEveryApplicationEnumValue() throws IOException {
-        String migration = Files.readString(CONSOLIDATED_MIGRATION);
+        String migration = readConsolidatedMigration();
 
         assertEveryColumnEnumDefinition(migration, "access_type", AccessType.values());
         assertEveryColumnEnumDefinition(migration, "content_status", ContentStatus.values());
@@ -91,7 +89,7 @@ class SchemaEnumContractTests {
 
     @Test
     void finalDomainCheckConstraintsContainEveryApplicationEnumValue() throws IOException {
-        String migration = Files.readString(CONSOLIDATED_MIGRATION);
+        String migration = readConsolidatedMigration();
 
         assertCheckValues(migration, "chk_ai_chat_messages_sender_role", AiChatSenderRole.values());
         assertCheckValues(migration, "chk_teacher_earnings_status", TeacherEarningStatus.values());
@@ -106,9 +104,13 @@ class SchemaEnumContractTests {
                 TeacherStatus.REJECTED);
     }
 
-    private Set<String> latestNotificationTypeEnumValues() throws IOException {
+    private static String readConsolidatedMigration() throws IOException {
+        return Files.readString(CONSOLIDATED_MIGRATION);
+    }
+
+    private static Set<String> latestNotificationTypeEnumValues(String migration) {
         Set<String> latestValues = null;
-        Matcher enumMatcher = NOTIFICATION_TYPE_ENUM.matcher(Files.readString(CONSOLIDATED_MIGRATION));
+        Matcher enumMatcher = NOTIFICATION_TYPE_ENUM.matcher(migration);
         while (enumMatcher.find()) {
             latestValues = extractEnumValues(enumMatcher.group(1));
         }
@@ -129,11 +131,11 @@ class SchemaEnumContractTests {
         return values;
     }
 
-    private static void assertEveryColumnEnumDefinition(String migration, String columnName, Enum<?>[] applicationEnumValues) {
-        Pattern columnEnum = Pattern.compile(
-                "\\b" + Pattern.quote(columnName) + "\\s+enum\\s*\\((.*?)\\)",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-        Matcher enumMatcher = columnEnum.matcher(migration);
+    private static void assertEveryColumnEnumDefinition(
+            String migration,
+            String columnName,
+            Enum<?>[] applicationEnumValues) {
+        Matcher enumMatcher = columnEnumPattern(columnName).matcher(migration);
         int definitionCount = 0;
         while (enumMatcher.find()) {
             definitionCount++;
@@ -145,6 +147,12 @@ class SchemaEnumContractTests {
         assertThat(definitionCount)
                 .as("The consolidated Flyway baseline must define at least one enum column named " + columnName)
                 .isPositive();
+    }
+
+    private static Pattern columnEnumPattern(String columnName) {
+        return Pattern.compile(
+                "\\b" + Pattern.quote(columnName) + "\\s+enum\\s*\\((.*?)\\)",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     }
 
     private static void assertCheckValues(String migration, String constraintName, Enum<?>... expectedValues) {
@@ -166,12 +174,12 @@ class SchemaEnumContractTests {
     }
 
     private static Set<String> checkValues(String migration, String constraintName) {
-        int constraintStart = migration.toLowerCase(Locale.ROOT)
-                .indexOf(constraintName.toLowerCase(Locale.ROOT));
+        String lowerMigration = migration.toLowerCase(Locale.ROOT);
+        int constraintStart = lowerMigration.indexOf(constraintName.toLowerCase(Locale.ROOT));
         if (constraintStart < 0) {
             throw new AssertionError("Could not find check constraint " + constraintName);
         }
-        int nextConstraintStart = migration.toLowerCase(Locale.ROOT).indexOf("add constraint", constraintStart + 1);
+        int nextConstraintStart = lowerMigration.indexOf(ADD_CONSTRAINT, constraintStart + 1);
         int statementEnd = migration.indexOf(';', constraintStart);
         int constraintEnd = nextConstraintStart >= 0 && nextConstraintStart < statementEnd
                 ? nextConstraintStart

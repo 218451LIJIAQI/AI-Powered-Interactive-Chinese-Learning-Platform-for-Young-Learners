@@ -1,9 +1,10 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -15,6 +16,7 @@ public class CommerceMoneyService {
     public static final RoundingMode MONEY_ROUNDING = RoundingMode.HALF_UP;
 
     private static final int MONEY_PRECISION = 10;
+    private static final int MAX_INTEGER_DIGITS = MONEY_PRECISION - MONEY_SCALE;
     private static final BigDecimal ZERO_MONEY = BigDecimal.ZERO.setScale(MONEY_SCALE, MONEY_ROUNDING);
     private static final BigDecimal ZERO_RATE = BigDecimal.ZERO.setScale(RATE_SCALE, MONEY_ROUNDING);
 
@@ -44,8 +46,8 @@ public class CommerceMoneyService {
 
     public BigDecimal normalizePersistableAmount(BigDecimal value, String message) {
         BigDecimal amount = normalize(value);
-        if (amount.precision() - amount.scale() > MONEY_PRECISION - MONEY_SCALE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        if (amount.precision() - amount.scale() > MAX_INTEGER_DIGITS) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
         }
         return amount;
     }

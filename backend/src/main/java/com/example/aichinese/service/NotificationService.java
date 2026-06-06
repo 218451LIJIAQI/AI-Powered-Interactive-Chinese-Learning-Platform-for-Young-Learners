@@ -45,6 +45,9 @@ import com.example.aichinese.util.PaginationUtils;
 public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+    private static final String TARGET_TEACHER_FEEDBACK = "TEACHER_FEEDBACK";
+    private static final String TARGET_RECORDED_VIDEO = "RECORDED_VIDEO";
+    private static final String TARGET_LIVE_CLASS = "LIVE_CLASS";
 
     private final NotificationRepository notificationRepository;
     private final CommunicationMapper communicationMapper;
@@ -99,22 +102,18 @@ public class NotificationService {
         if (notificationType == null) {
             throw new IllegalArgumentException("Notification type must not be null.");
         }
-        if (title == null || title.isBlank()) {
-            throw new IllegalArgumentException("Notification title must not be blank.");
-        }
-        if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("Notification message must not be blank.");
-        }
+        String normalizedTitle = requireText(title, "Notification title");
+        String normalizedMessage = requireText(message, "Notification message");
 
         Notification notification = new Notification();
         notification.setUser(recipient);
-        notification.setTitle(title.strip());
-        notification.setMessage(message.strip());
+        notification.setTitle(normalizedTitle);
+        notification.setMessage(normalizedMessage);
         notification.setNotificationType(notificationType);
         notification.setNotificationStatus(NotificationStatus.UNREAD);
-        notification.setTargetType(targetType == null || targetType.isBlank() ? null : targetType.strip());
+        notification.setTargetType(optionalText(targetType));
         notification.setTargetId(targetId);
-        notification.setTargetPath(targetPath == null || targetPath.isBlank() ? null : targetPath.strip());
+        notification.setTargetPath(optionalText(targetPath));
         notification.setCreatedByUser(createdByUser);
         notification.setReadAt(null);
         return notificationRepository.save(notification);
@@ -213,9 +212,9 @@ public class NotificationService {
             return true;
         }
         return switch (notification.getTargetType()) {
-            case "TEACHER_FEEDBACK" -> isTeacherFeedbackNotificationAccessible(currentUser, notification);
-            case "RECORDED_VIDEO" -> isRecordedVideoNotificationAccessible(notification);
-            case "LIVE_CLASS" -> isLiveClassNotificationAccessible(notification);
+            case TARGET_TEACHER_FEEDBACK -> isTeacherFeedbackNotificationAccessible(currentUser, notification);
+            case TARGET_RECORDED_VIDEO -> isRecordedVideoNotificationAccessible(notification);
+            case TARGET_LIVE_CLASS -> isLiveClassNotificationAccessible(notification);
             default -> true;
         };
     }
@@ -281,13 +280,17 @@ public class NotificationService {
     }
 
     private StudentProfile resolveNotificationStudent(Notification notification) {
-        if (notification.getUser() != null && notification.getUser().getRoles().stream()
-                .anyMatch(role -> role.getName() == RoleName.STUDENT)) {
+        if (hasRole(notification.getUser(), RoleName.STUDENT)) {
             return studentProfileRepository.findByUserId(notification.getUser().getId()).orElse(null);
         }
         return notification.getCreatedByUser() == null
                 ? null
                 : studentProfileRepository.findByUserId(notification.getCreatedByUser().getId()).orElse(null);
+    }
+
+    private static boolean hasRole(User user, RoleName roleName) {
+        return user != null && user.getRoles().stream()
+                .anyMatch(role -> role.getName() == roleName);
     }
 
     @Transactional
@@ -320,5 +323,21 @@ public class NotificationService {
         });
         notificationRepository.saveAll(accessibleUnreadNotifications);
         return new BulkOperationResponse(accessibleUnreadNotifications.size());
+    }
+
+    private static String requireText(String value, String fieldName) {
+        String stripped = optionalText(value);
+        if (stripped == null) {
+            throw new IllegalArgumentException(fieldName + " must not be blank.");
+        }
+        return stripped;
+    }
+
+    private static String optionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String stripped = value.strip();
+        return stripped.isEmpty() ? null : stripped;
     }
 }

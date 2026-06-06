@@ -8,7 +8,7 @@
 
     <DataNotice
       :using-fallback="usingFallback"
-      :error="actionError || pageError"
+      :error="noticeError"
       :success="actionSuccess"
       fallback-title="Preview student profile"
       fallback-message="Progress, rewards, feedback, activities, and payments are showing safe preview data for this preview session."
@@ -26,7 +26,7 @@
                 <span class="student-profile-identity-eyebrow">Student snapshot</span>
                 <h2>{{ displayName }}</h2>
                 <span class="student-profile-role">{{ currentLevelTitle }}</span>
-                <small>{{ profile.email || 'No email available' }}</small>
+                <small>{{ profileEmailLabel }}</small>
                 <div class="student-profile-member-chip">{{ accountModeLabel }}</div>
               </div>
             </div>
@@ -50,7 +50,7 @@
               <article class="student-profile-stat-card">
                 <small>Quiz Average</small>
                 <strong>{{ formatPercent(progress.quizAverage) }}</strong>
-                <span>{{ progress.lastActivitySummary || 'No recent summary available' }}</span>
+                <span>{{ lastActivitySummaryLabel }}</span>
               </article>
             </div>
           </article>
@@ -61,7 +61,7 @@
                 <div class="student-section-heading">
                   <strong>Recent Badges</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/rewards')">
+                <button type="button" class="student-link-button" @click="openRewards">
                   View Rewards
                 </button>
               </div>
@@ -86,7 +86,7 @@
                 <div class="student-section-heading">
                   <strong>Recent Points Activity</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/rewards')">
+                <button type="button" class="student-link-button" @click="openRewards">
                   Open Rewards
                 </button>
               </div>
@@ -114,7 +114,7 @@
                 <div class="student-section-heading">
                   <strong>Recent Lessons</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/learn')">
+                <button type="button" class="student-link-button" @click="openLearn">
                   Open Learn
                 </button>
               </div>
@@ -142,7 +142,7 @@
                 <div class="student-section-heading">
                   <strong>Teacher Feedback</strong>
                 </div>
-                <button type="button" class="student-link-button" @click="router.push('/student/practice')">
+                <button type="button" class="student-link-button" @click="openPractice">
                   Open Practice
                 </button>
               </div>
@@ -150,9 +150,9 @@
               <div v-if="feedback.length" class="student-profile-feedback-list">
                 <article v-for="item in feedback.slice(0, 4)" :key="item.id" class="student-profile-feedback-item">
                   <div class="student-profile-feedback-copy">
-                    <strong>{{ item.lessonTitle || item.quizTitle || 'Teacher feedback' }}</strong>
+                    <strong>{{ feedbackTitle(item) }}</strong>
                     <p>{{ item.message }}</p>
-                    <span>{{ item.teacherName }} - {{ item.feedbackType || 'General' }}</span>
+                    <span>{{ item.teacherName }} - {{ feedbackTypeLabel(item) }}</span>
                   </div>
                   <small>{{ formatDateTime(item.createdAt) }}</small>
                 </article>
@@ -202,7 +202,7 @@
                 :disabled="markingNotificationsRead || !hasUnreadNotifications"
                 @click="markAllNotificationsRead"
               >
-                {{ markingNotificationsRead ? 'Marking...' : 'Mark all read' }}
+                {{ markAllNotificationsLabel }}
               </button>
             </div>
 
@@ -222,8 +222,8 @@
                     <small>{{ formatDateTime(item.createdAt) }}</small>
                   </div>
                   <StatusPill
-                    :label="item.status === 'READ' ? 'Read' : 'Unread'"
-                    :tone="item.status === 'READ' ? 'info' : 'warning'"
+                    :label="notificationStatusLabel(item.status)"
+                    :tone="notificationStatusTone(item.status)"
                   />
                 </article>
               </NotificationLinkButton>
@@ -241,7 +241,7 @@
               <div class="student-section-heading">
                 <strong>Activity Library</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/practice')">
+              <button type="button" class="student-link-button" @click="openPractice">
                 Open Practice
               </button>
             </div>
@@ -280,7 +280,7 @@
               </article>
               <article class="student-profile-setting-row">
                 <span>Email</span>
-                <small>{{ profile.email || '--' }}</small>
+                <small>{{ profileAccountEmailLabel }}</small>
               </article>
             </div>
           </article>
@@ -341,7 +341,7 @@
                   :disabled="refundFormDisabled || !refundablePayments.length"
                 >
                   <option :value="0">
-                    {{ refundablePayments.length ? 'Select an order' : 'No refundable order available' }}
+                    {{ refundOrderPlaceholder }}
                   </option>
                   <option v-for="payment in refundablePayments" :key="payment.paymentId" :value="payment.orderId">
                     {{ payment.orderNumber }} · {{ formatCurrency(payment.amount, payment.currencyCode) }} ·
@@ -369,16 +369,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student profile + commerce hub.
- *
- * <p>Combines self-service profile viewing, payment history (read-only
- * from {@code studentApi.payments()}), refund requests, and learning
- * activity. The page used to be split into multiple routes
- * (payments / refunds / feedback) — those redirect here via
- * {@link normalizeAppRoute} so legacy notification deep-links still
- * land somewhere useful.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -412,6 +402,13 @@ import {
   toFiniteNumber,
 } from '@/utils/format'
 import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
+
+type NotificationStatusTone = 'info' | 'warning'
+type FeedbackSummary = {
+  lessonTitle?: string | null
+  quizTitle?: string | null
+  feedbackType?: string | null
+}
 
 const router = useRouter()
 
@@ -521,8 +518,9 @@ const pageError = computed(
     activitiesResource.error.value ||
     notificationsResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
 const profileNoticeDetail = computed(() => {
-  if (actionError.value || pageError.value) {
+  if (noticeError.value) {
     return 'Your most recent profile snapshot remains visible so you can still review progress and account context.'
   }
 
@@ -540,6 +538,8 @@ const profileNoticeDetail = computed(() => {
 const displayName = computed(
   () => profile.value.studentProfile?.displayName || profile.value.fullName.split(' ')[0] || 'Student',
 )
+const profileEmailLabel = computed(() => profile.value.email || 'No email available')
+const profileAccountEmailLabel = computed(() => profile.value.email || '--')
 const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
 const currentStreakCount = computed(() => nonNegativeInteger(rewards.value.streak.currentStreak))
 const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
@@ -549,6 +549,7 @@ const currentLevelTitle = computed(
   () => profile.value.studentProfile?.currentLevel || `Level ${currentLevelNumber.value}`,
 )
 const accountModeLabel = computed(() => (usingFallback.value ? 'Preview profile data' : 'Live student account'))
+const lastActivitySummaryLabel = computed(() => progress.value.lastActivitySummary || 'No recent summary available')
 const streakDateLabel = computed(() =>
   rewards.value.streak.lastLearningDate
     ? `Last active ${formatDate(rewards.value.streak.lastLearningDate)}`
@@ -561,6 +562,7 @@ const preferredLanguageLabel = computed(() => {
   return 'English'
 })
 const hasUnreadNotifications = computed(() => notifications.value.some((item) => item.status !== 'READ'))
+const markAllNotificationsLabel = computed(() => (markingNotificationsRead.value ? 'Marking...' : 'Mark all read'))
 const activeRefundOrderIds = computed(
   () =>
     new Set(
@@ -571,6 +573,9 @@ const activeRefundOrderIds = computed(
 )
 const refundablePayments = computed(() =>
   payments.value.filter((item) => item.paymentStatus === 'PAID' && !activeRefundOrderIds.value.has(item.orderId)),
+)
+const refundOrderPlaceholder = computed(() =>
+  refundablePayments.value.length ? 'Select an order' : 'No refundable order available',
 )
 const refundReadOnly = computed(() => paymentsResource.usingFallback.value || refundsResource.usingFallback.value)
 const refundFormDisabled = computed(() => refundReadOnly.value || submittingRefund.value)
@@ -647,13 +652,41 @@ watch(
   { immediate: true },
 )
 
-function markStudentNotificationRead(notificationId: number) {
+function openRewards(): void {
+  void router.push('/student/rewards')
+}
+
+function openLearn(): void {
+  void router.push('/student/learn')
+}
+
+function openPractice(): void {
+  void router.push('/student/practice')
+}
+
+function feedbackTitle(item: FeedbackSummary): string {
+  return item.lessonTitle || item.quizTitle || 'Teacher feedback'
+}
+
+function feedbackTypeLabel(item: FeedbackSummary): string {
+  return item.feedbackType || 'General'
+}
+
+function notificationStatusLabel(status: string): string {
+  return status === 'READ' ? 'Read' : 'Unread'
+}
+
+function notificationStatusTone(status: string): NotificationStatusTone {
+  return status === 'READ' ? 'info' : 'warning'
+}
+
+function markStudentNotificationRead(notificationId: number): void {
   notificationsResource.data.value = notifications.value.map((item) =>
     item.id === notificationId ? { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() } : item,
   )
 }
 
-async function markAllNotificationsRead() {
+async function markAllNotificationsRead(): Promise<void> {
   if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionError.value = 'Notifications cannot be changed while using preview data.'
@@ -681,7 +714,7 @@ async function markAllNotificationsRead() {
   }
 }
 
-async function submitRefund() {
+async function submitRefund(): Promise<void> {
   if (submittingRefund.value) return
   if (refundReadOnly.value) {
     actionError.value = 'Refund requests cannot be submitted while preview payment data is active.'
@@ -717,12 +750,12 @@ async function submitRefund() {
   }
 }
 
-function signedIntegerLabel(value: number) {
+function signedIntegerLabel(value: number): string {
   const rounded = Math.round(toFiniteNumber(value))
   return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void profileResource.reload()
   void feedbackResource.reload()
   void paymentsResource.reload()

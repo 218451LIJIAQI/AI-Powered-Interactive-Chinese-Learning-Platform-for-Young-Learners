@@ -2,6 +2,12 @@ import type { LocationQueryRaw, LocationQueryValue } from 'vue-router'
 
 export const FILTERED = '[Filtered]'
 
+type SanitizedRouteState = {
+  query: LocationQueryRaw
+  hash: string
+  changed: boolean
+}
+
 const MAX_SCRUB_DEPTH = 8
 
 const SENSITIVE_KEY_FRAGMENTS = [
@@ -80,7 +86,7 @@ export function firstQueryText(value: unknown): string {
 export function removeSensitiveRouteState(
   queryState: Record<string, LocationQueryValue | LocationQueryValue[]>,
   hash = '',
-): { query: LocationQueryRaw; hash: string; changed: boolean } {
+): SanitizedRouteState {
   const query: LocationQueryRaw = {}
   let changed = false
 

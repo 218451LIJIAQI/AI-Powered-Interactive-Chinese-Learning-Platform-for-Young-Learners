@@ -4,6 +4,7 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,11 @@ import com.example.aichinese.security.SecurityUserDetails;
 
 @Service
 public class StudentLearningAccessService {
+
+    private static final String STUDENT_PROFILE_NOT_FOUND = "Student profile could not be found.";
+    private static final String QUIZ_NOT_FOUND = "Quiz was not found.";
+    private static final String ITEM_TYPE_LESSON = "LESSON";
+    private static final String ITEM_TYPE_MODULE = "MODULE";
 
     private final StudentProfileRepository studentProfileRepository;
     private final LessonRepository lessonRepository;
@@ -40,14 +46,12 @@ public class StudentLearningAccessService {
 
     @Transactional(readOnly = true)
     public StudentProfile requireStudent(SecurityUserDetails currentUser) {
-        return studentProfileRepository.findByUserId(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Student profile could not be found."));
+        return requireStudentProfile(studentProfileRepository.findByUserId(currentUser.getUserId()));
     }
 
     @Transactional
     public StudentProfile requireLockedStudent(SecurityUserDetails currentUser) {
-        return studentProfileRepository.findLockedByUserId(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Student profile could not be found."));
+        return requireStudentProfile(studentProfileRepository.findLockedByUserId(currentUser.getUserId()));
     }
 
     @Transactional(readOnly = true)
@@ -59,13 +63,9 @@ public class StudentLearningAccessService {
     @Transactional(readOnly = true)
     public Quiz requirePublishedQuiz(Long quizId) {
         Quiz quiz = quizRepository.findById(quizId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quiz was not found."));
-        Lesson lesson = quiz.getLesson();
-        if (lesson == null || lesson.getContentStatus() != ContentStatus.PUBLISHED) {
-            throw new ResponseStatusException(NOT_FOUND, "Quiz was not found.");
-        }
-        if (quiz.getContentStatus() != ContentStatus.PUBLISHED) {
-            throw new ResponseStatusException(NOT_FOUND, "Quiz was not found.");
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, QUIZ_NOT_FOUND));
+        if (!isPublishedQuiz(quiz)) {
+            throw new ResponseStatusException(NOT_FOUND, QUIZ_NOT_FOUND);
         }
         return quiz;
     }
@@ -76,9 +76,9 @@ public class StudentLearningAccessService {
             return true;
         }
 
-        boolean directLessonAccess = entitlementService.hasAccessToItem(student.getId(), "LESSON", lesson.getId());
+        boolean directLessonAccess = entitlementService.hasAccessToItem(student.getId(), ITEM_TYPE_LESSON, lesson.getId());
         boolean moduleAccess = lesson.getModule() != null
-                && entitlementService.hasAccessToItem(student.getId(), "MODULE", lesson.getModule().getId());
+                && entitlementService.hasAccessToItem(student.getId(), ITEM_TYPE_MODULE, lesson.getModule().getId());
         return directLessonAccess || moduleAccess;
     }
 
@@ -87,5 +87,16 @@ public class StudentLearningAccessService {
             throw new ResponseStatusException(FORBIDDEN,
                     "Paid content is locked until payment is completed.");
         }
+    }
+
+    private static StudentProfile requireStudentProfile(Optional<StudentProfile> studentProfile) {
+        return studentProfile.orElseThrow(() -> new ResponseStatusException(NOT_FOUND, STUDENT_PROFILE_NOT_FOUND));
+    }
+
+    private static boolean isPublishedQuiz(Quiz quiz) {
+        Lesson lesson = quiz.getLesson();
+        return quiz.getContentStatus() == ContentStatus.PUBLISHED
+                && lesson != null
+                && lesson.getContentStatus() == ContentStatus.PUBLISHED;
     }
 }

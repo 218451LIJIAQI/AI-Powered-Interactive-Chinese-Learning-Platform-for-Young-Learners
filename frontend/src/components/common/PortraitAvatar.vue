@@ -1,10 +1,10 @@
 <template>
   <div
     class="portrait-avatar"
-    :class="[rounded === 'soft' ? 'is-soft' : 'is-circle', `is-${kind}`]"
-    :style="{ '--portrait-size': `${size}px`, '--portrait-accent': accent }"
+    :class="avatarClass"
+    :style="avatarStyle"
     role="img"
-    aria-label="User avatar"
+    :aria-label="ariaLabel"
   >
     <span class="portrait-backdrop" />
     <span class="portrait-shoulders" />
@@ -22,18 +22,8 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Stylised stand-in avatar used everywhere the platform shows a
- * user (student / teacher / parent / admin) without an uploaded
- * profile picture. Built entirely from CSS shapes for the same
- * reasons as {@link PandaIllustration} — no asset weight and
- * fully themable through the `accent` prop.
- *
- * `kind` chooses the face / hair style. The `hijab` kind exists
- * because Malaysia is a target market and showing inclusive
- * default avatars matters for first-time learners' sense of
- * belonging.
- */
+import { computed, type StyleValue } from 'vue'
+
 type AvatarKind = 'female' | 'male' | 'hijab' | 'student'
 type AvatarShape = 'circle' | 'soft'
 
@@ -42,14 +32,27 @@ interface Props {
   kind?: AvatarKind
   accent?: string
   rounded?: AvatarShape
+  ariaLabel?: string
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   size: 56,
   kind: 'student',
   accent: '#7b57ff',
   rounded: 'circle',
+  ariaLabel: 'User avatar',
 })
+
+const avatarClass = computed(() => ({
+  [`is-${props.kind}`]: true,
+  'is-circle': props.rounded === 'circle',
+  'is-soft': props.rounded === 'soft',
+}))
+
+const avatarStyle = computed<StyleValue>(() => ({
+  '--portrait-accent': props.accent,
+  '--portrait-size': `${props.size}px`,
+}))
 </script>
 
 <style scoped>

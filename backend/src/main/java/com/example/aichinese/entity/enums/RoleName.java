@@ -30,16 +30,4 @@ public enum RoleName {
     public String authority() {
         return AUTHORITY_PREFIX + name();
     }
-
-    public boolean isStudent() {
-        return this == STUDENT;
-    }
-
-    public boolean isTeacher() {
-        return this == TEACHER;
-    }
-
-    public boolean isAdmin() {
-        return this == ADMIN;
-    }
 }

@@ -11,11 +11,13 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -75,6 +77,11 @@ public class AnalyticsService {
 
     private static final int MAX_TREND_POINTS = 6;
     private static final int RECENT_ACTIVITY_DAYS = 7;
+    private static final int DECIMAL_SCALE = 2;
+    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+    private static final String UNKNOWN_STATUS = "UNKNOWN";
+    private static final Set<LiveClassStatus> CLOSED_LIVE_CLASS_STATUSES =
+            EnumSet.of(LiveClassStatus.CANCELLED, LiveClassStatus.COMPLETED);
     private static final DateTimeFormatter DAY_LABEL_FORMATTER = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
     private static final DateTimeFormatter MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
 
@@ -230,8 +237,9 @@ public class AnalyticsService {
 
     @Transactional(readOnly = true)
     public AdminAnalyticsResponse getAdminAnalytics(SecurityUserDetails currentUser) {
-        LocalDateTime trendWindowStart =
-                LocalDate.now().minusDays(RECENT_ACTIVITY_DAYS - 1L).atStartOfDay();
+        LocalDateTime trendWindowStart = LocalDate.now()
+                .minusDays(RECENT_ACTIVITY_DAYS - 1L)
+                .atStartOfDay();
         List<User> recentUsers = userRepository
                 .findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(trendWindowStart);
 
@@ -268,6 +276,7 @@ public class AnalyticsService {
     private List<AnalyticsTrendPointResponse> buildQuizTrend(List<QuizAttempt> attempts) {
         List<QuizAttempt> validSortedAttempts = attempts.stream()
                 .filter(this::hasValidPercentage)
+                .filter(attempt -> resolveAttemptTime(attempt) != null)
                 .sorted(Comparator.comparing(this::resolveAttemptTime))
                 .toList();
         long skipCount = Math.max(0, validSortedAttempts.size() - MAX_TREND_POINTS);
@@ -290,7 +299,7 @@ public class AnalyticsService {
         videoProgressList.forEach(progress -> addTrendPoint(countsByDay, resolveVideoProgressTime(progress), BigDecimal.ONE));
 
         return countsByDay.entrySet().stream()
-                .filter(entry -> entry.getValue().compareTo(BigDecimal.ZERO) > 0)
+                .filter(entry -> entry.getValue().compareTo(ZERO) > 0)
                 .map(entry -> new AnalyticsTrendPointResponse(
                         DAY_LABEL_FORMATTER.format(entry.getKey()),
                         entry.getValue()))
@@ -309,7 +318,7 @@ public class AnalyticsService {
         Map<String, Long> counts = new LinkedHashMap<>();
         quizAttemptAnswerRepository.findByQuizAttemptStudentIdAndCorrectFalseOrderByCreatedAtDesc(student.getId()).stream()
                 .filter(answer -> hasCurrentWrongAnswerAccess(student, answer))
-                .map(answer -> answer.getQuestion() == null ? null : answer.getQuestion().getQuestionType())
+                .map(this::questionType)
                 .filter(value -> value != null && !value.isBlank())
                 .forEach(value -> counts.merge(value, 1L, (a, b) -> a + b));
         return buildBreakdownFromMap(counts);
@@ -328,13 +337,10 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsTrendPointResponse> buildTeacherQuizTrend(List<QuizAttempt> attempts) {
-        if (attempts.isEmpty()) {
-            return List.of();
-        }
-
         Map<LocalDate, List<BigDecimal>> grouped = new LinkedHashMap<>();
         attempts.stream()
                 .filter(this::hasValidPercentage)
+                .filter(attempt -> resolveAttemptTime(attempt) != null)
                 .sorted(Comparator.comparing(this::resolveAttemptTime))
                 .forEach(attempt -> grouped
                         .computeIfAbsent(resolveAttemptTime(attempt).toLocalDate(), ignored -> new ArrayList<>())
@@ -381,6 +387,10 @@ public class AnalyticsService {
                 && studentLearningAccessService.hasLessonAccess(student, answer.getQuestion().getQuiz().getLesson());
     }
 
+    private String questionType(QuizAttemptAnswer answer) {
+        return answer.getQuestion() == null ? null : answer.getQuestion().getQuestionType();
+    }
+
     private boolean hasCurrentTeacherLiveEnrolmentAccess(LiveClassEnrolment enrolment) {
         if (enrolment.getStudent() == null || enrolment.getLiveClass() == null) {
             return false;
@@ -401,12 +411,9 @@ public class AnalyticsService {
     }
 
     private List<AnalyticsTrendPointResponse> buildTeacherEarningsTrend(List<TeacherEarning> earnings) {
-        if (earnings.isEmpty()) {
-            return List.of();
-        }
-
         Map<YearMonth, BigDecimal> grouped = new LinkedHashMap<>();
         earnings.stream()
+                .filter(earning -> earning.getCreatedAt() != null)
                 .sorted(Comparator.comparing(TeacherEarning::getCreatedAt))
                 .forEach(earning -> grouped.merge(
                         YearMonth.from(earning.getCreatedAt()),
@@ -416,7 +423,7 @@ public class AnalyticsService {
         return takeLastEntries(grouped, MAX_TREND_POINTS).stream()
                 .map(entry -> new AnalyticsTrendPointResponse(
                         MONTH_LABEL_FORMATTER.format(entry.getKey().atDay(1)),
-                        entry.getValue().setScale(2, RoundingMode.HALF_UP)))
+                        entry.getValue().setScale(DECIMAL_SCALE, RoundingMode.HALF_UP)))
                 .toList();
     }
 
@@ -436,7 +443,7 @@ public class AnalyticsService {
         users.forEach(user -> addTrendPoint(countsByDay, user.getCreatedAt(), BigDecimal.ONE));
 
         return countsByDay.entrySet().stream()
-                .filter(entry -> entry.getValue().compareTo(BigDecimal.ZERO) > 0)
+                .filter(entry -> entry.getValue().compareTo(ZERO) > 0)
                 .map(entry -> new AnalyticsTrendPointResponse(
                         DAY_LABEL_FORMATTER.format(entry.getKey()),
                         entry.getValue()))
@@ -454,15 +461,8 @@ public class AnalyticsService {
     private List<AnalyticsBreakdownItemResponse> buildBreakdownFromProjections(
             List<StatusCountProjection> projections,
             String[] expectedStatuses) {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (String status : expectedStatuses) {
-            counts.put(status, 0L);
-        }
-        for (StatusCountProjection projection : projections) {
-            if (projection.getStatus() != null) {
-                counts.merge(projection.getStatus(), projection.getCount(), Long::sum);
-            }
-        }
+        Map<String, Long> counts = initializeCounts(expectedStatuses);
+        mergeProjectionCounts(counts, projections);
         return buildBreakdownFromMap(counts);
     }
 
@@ -517,28 +517,25 @@ public class AnalyticsService {
         LocalDateTime now = LocalDateTime.now();
         return enrolments.stream()
                 .map(LiveClassEnrolment::getLiveClass)
-                .filter(liveClass -> liveClass != null
-                        && liveClass.getScheduledStartAt() != null
-                        && liveClass.getScheduledStartAt().isAfter(now)
-                        && liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
-                        && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
+                .filter(liveClass -> isUpcomingLiveClass(liveClass, now))
                 .count();
     }
 
     private long countUpcomingTeacherLiveClasses(List<LiveClass> liveClasses) {
         LocalDateTime now = LocalDateTime.now();
         return liveClasses.stream()
-                .filter(liveClass -> liveClass.getScheduledStartAt() != null
-                        && liveClass.getScheduledStartAt().isAfter(now)
-                        && liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
-                        && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
+                .filter(liveClass -> isUpcomingLiveClass(liveClass, now))
                 .count();
     }
 
     private Map<String, Long> initializeContentStatusCounts() {
+        return initializeCounts(enumNames(ContentStatus.class));
+    }
+
+    private static Map<String, Long> initializeCounts(String[] statuses) {
         Map<String, Long> counts = new LinkedHashMap<>();
-        for (ContentStatus status : ContentStatus.values()) {
-            counts.put(status.name(), 0L);
+        for (String status : statuses) {
+            counts.put(status, 0L);
         }
         return counts;
     }
@@ -553,7 +550,7 @@ public class AnalyticsService {
         Map<LocalDate, BigDecimal> countsByDay = new LinkedHashMap<>();
         LocalDate today = LocalDate.now();
         for (int index = RECENT_ACTIVITY_DAYS - 1; index >= 0; index--) {
-            countsByDay.put(today.minusDays(index), BigDecimal.ZERO);
+            countsByDay.put(today.minusDays(index), ZERO);
         }
         return countsByDay;
     }
@@ -562,10 +559,14 @@ public class AnalyticsService {
         if (time == null) {
             return;
         }
-        LocalDate date = time.toLocalDate();
-        if (countsByDay.containsKey(date)) {
-            countsByDay.put(date, countsByDay.get(date).add(increment));
-        }
+        countsByDay.computeIfPresent(time.toLocalDate(), (ignored, current) -> current.add(increment));
+    }
+
+    private boolean isUpcomingLiveClass(LiveClass liveClass, LocalDateTime now) {
+        return liveClass != null
+                && liveClass.getScheduledStartAt() != null
+                && liveClass.getScheduledStartAt().isAfter(now)
+                && !CLOSED_LIVE_CLASS_STATUSES.contains(liveClass.getLiveClassStatus());
     }
 
     private LocalDateTime resolveAttemptTime(QuizAttempt attempt) {
@@ -598,27 +599,27 @@ public class AnalyticsService {
 
     private BigDecimal percentageForAttempt(QuizAttempt attempt) {
         if (!hasValidPercentage(attempt)) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
+            return ZERO.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
         }
 
         return BigDecimal.valueOf(attempt.getScore())
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(attempt.getMaxScore()), 2, RoundingMode.HALF_UP);
+                .multiply(HUNDRED)
+                .divide(BigDecimal.valueOf(attempt.getMaxScore()), DECIMAL_SCALE, RoundingMode.HALF_UP);
     }
 
     private String normalizeStatus(String rawStatus) {
         if (rawStatus == null || rawStatus.isBlank()) {
-            return "UNKNOWN";
+            return UNKNOWN_STATUS;
         }
         return rawStatus.trim().toUpperCase(Locale.ROOT);
     }
 
     private BigDecimal average(List<BigDecimal> values) {
         if (values.isEmpty()) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
+            return ZERO.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
         }
         BigDecimal total = values.stream().reduce(ZERO, BigDecimal::add);
-        return total.divide(BigDecimal.valueOf(values.size()), 2, RoundingMode.HALF_UP);
+        return total.divide(BigDecimal.valueOf(values.size()), DECIMAL_SCALE, RoundingMode.HALF_UP);
     }
 
     private <K, V> List<Map.Entry<K, V>> takeLastEntries(Map<K, V> values, int limit) {
@@ -629,9 +630,9 @@ public class AnalyticsService {
 
     private BigDecimal defaultMoney(BigDecimal amount) {
         if (amount == null) {
-            return ZERO.setScale(2, RoundingMode.HALF_UP);
+            return ZERO.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
         }
-        return amount.setScale(2, RoundingMode.HALF_UP);
+        return amount.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
     }
 
     private List<AnalyticsBreakdownItemResponse> buildBreakdownFromMap(Map<String, Long> counts) {

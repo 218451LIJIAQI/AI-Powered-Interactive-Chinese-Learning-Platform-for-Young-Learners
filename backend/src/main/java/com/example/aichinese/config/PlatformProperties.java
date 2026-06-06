@@ -1,7 +1,8 @@
 package com.example.aichinese.config;
 
+import java.time.DateTimeException;
 import java.time.ZoneId;
-import java.time.zone.ZoneRulesException;
+import java.util.List;
 import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -20,6 +21,7 @@ public record PlatformProperties(
     private static final String DEFAULT_TIME_ZONE = "Asia/Singapore";
     private static final String SINGLE_INSTANCE = "single-instance";
     private static final String MULTI_INSTANCE = "multi-instance";
+    private static final List<String> DEPLOYMENT_MODES = List.of(SINGLE_INSTANCE, MULTI_INSTANCE);
 
     public PlatformProperties {
         defaultTimeZone = normalizeTimeZone(defaultTimeZone);
@@ -38,7 +40,7 @@ public record PlatformProperties(
         String normalized = value == null || value.isBlank() ? DEFAULT_TIME_ZONE : value.strip();
         try {
             return ZoneId.of(normalized).getId();
-        } catch (ZoneRulesException exception) {
+        } catch (DateTimeException exception) {
             throw new IllegalArgumentException("APP_DEFAULT_TIME_ZONE must be a valid IANA time zone.", exception);
         }
     }
@@ -47,8 +49,9 @@ public record PlatformProperties(
         String normalized = value == null || value.isBlank()
                 ? SINGLE_INSTANCE
                 : value.strip().toLowerCase(Locale.ROOT);
-        if (!SINGLE_INSTANCE.equals(normalized) && !MULTI_INSTANCE.equals(normalized)) {
-            throw new IllegalArgumentException("APP_DEPLOYMENT_MODE must be single-instance or multi-instance.");
+        if (!DEPLOYMENT_MODES.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "APP_DEPLOYMENT_MODE must be one of: " + String.join(", ", DEPLOYMENT_MODES) + ".");
         }
         return normalized;
     }

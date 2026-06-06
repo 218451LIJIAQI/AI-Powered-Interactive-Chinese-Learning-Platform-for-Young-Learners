@@ -4,7 +4,10 @@ import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
+function isNodeModule(id: string, packageName: string): boolean {
+  return id.includes(`/node_modules/${packageName}/`)
+}
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -81,18 +84,18 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (
-            id.includes('/node_modules/vue/') ||
-            id.includes('/node_modules/@vue/') ||
-            id.includes('/node_modules/vue-router/') ||
-            id.includes('/node_modules/pinia/') ||
-            id.includes('/node_modules/vue-i18n/')
+            isNodeModule(id, 'vue') ||
+            isNodeModule(id, '@vue') ||
+            isNodeModule(id, 'vue-router') ||
+            isNodeModule(id, 'pinia') ||
+            isNodeModule(id, 'vue-i18n')
           ) {
             return 'framework'
           }
-          if (id.includes('/node_modules/axios/')) {
+          if (isNodeModule(id, 'axios')) {
             return 'networking'
           }
-          if (id.includes('/node_modules/@lucide/vue/')) {
+          if (isNodeModule(id, '@lucide/vue')) {
             return 'icons'
           }
           return undefined

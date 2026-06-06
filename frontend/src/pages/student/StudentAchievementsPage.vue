@@ -41,7 +41,7 @@
               </div>
               <p>
                 <IconGlyph name="star" :size="16" />
-                {{ progress.lastActivitySummary || 'Your progress trend updates as you complete lessons and quizzes.' }}
+                {{ progressTrendSummary }}
               </p>
             </article>
 
@@ -51,9 +51,7 @@
                   <span><IconGlyph name="trophy" :size="20" /></span>
                   <strong>Your Achievements</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="router.push('/student/rewards')">
-                  Open Rewards
-                </button>
+                <button class="student-link-button" type="button" @click="openRewards">Open Rewards</button>
               </div>
               <div v-if="badgeCards.length" class="student-achievements-badge-grid">
                 <article v-for="badge in badgeCards" :key="badge.id" class="student-achievements-badge">
@@ -103,9 +101,7 @@
                   <span><IconGlyph name="learn" :size="20" /></span>
                   <strong>Recent Lesson Progress</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="router.push('/student/learn')">
-                  Open Learn
-                </button>
+                <button class="student-link-button" type="button" @click="openLearn">Open Learn</button>
               </div>
               <div v-if="moduleProgress.length" class="student-achievements-module-list">
                 <article v-for="module in moduleProgress" :key="module.title" class="student-achievements-module-row">
@@ -152,14 +148,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student achievement / badge / streak surface.
- *
- * <p>Aggregates badge progress, point milestones, lesson completion
- * markers, streak data, rewards, and recent progress into a dense
- * dashboard. Each resource keeps its own fallback/error state, while
- * empty learning sections use StatePanel for morale-positive copy.</p>
- */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -262,6 +250,9 @@ const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverag
 const overallProgressPercent = computed(() => clampPercent(progress.value.overallCompletionPercent))
 const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
 const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
+const progressTrendSummary = computed(
+  () => progress.value.lastActivitySummary || 'Your progress trend updates as you complete lessons and quizzes.',
+)
 
 const achievementStats = computed(() => [
   { icon: 'streak', value: String(nonNegativeInteger(streak.value.currentStreak)), label: 'Day Streak' },
@@ -269,10 +260,11 @@ const achievementStats = computed(() => [
   { icon: 'rewards', value: `${quizAveragePercent.value}%`, label: 'Quiz Avg' },
   {
     icon: 'shield',
-    value: String(badges.value.length > 0 ? badges.value.length : rewards.value.badges.length),
+    value: String(badgeCount.value),
     label: 'Badges',
   },
 ])
+const badgeCount = computed(() => (badges.value.length > 0 ? badges.value.length : rewards.value.badges.length))
 
 const badgeCards = computed(() =>
   badges.value.slice(0, 5).map((badge) => ({
@@ -290,7 +282,7 @@ const chartPoints = computed(() => {
     : [{ completionPercent: overallProgressPercent.value }]
 
   return lessons.slice(0, 6).map((lesson, index, collection) => ({
-    left: `${collection.length === 1 ? 50 : Math.round((index / Math.max(collection.length - 1, 1)) * 82 + 6)}%`,
+    left: `${chartPointLeft(index, collection.length)}%`,
     bottom: `${clampNumber(lesson.completionPercent, 10, 78)}%`,
   }))
 })
@@ -306,30 +298,36 @@ const milestoneCards = computed(() =>
 )
 
 type ProgressTone = 'primary' | 'success' | 'warning' | 'info'
+type SourceIcon = 'quiz' | 'star' | 'status' | 'streak'
+type BadgeIcon = 'learn' | 'moderation' | 'quiz' | 'streak' | 'trophy'
+type BadgeTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink'
+type SourceTone = 'blue' | 'green' | 'orange' | 'purple'
+type ModuleTone = 'blue' | 'green' | 'orange'
 
 const moduleProgress = computed<
   Array<{
     id: string
     title: string
     progress: number
-    tone: string
+    tone: ModuleTone
     barTone: ProgressTone
   }>
 >(() =>
   progress.value.recentLessons.slice(0, 5).map((lesson, index) => {
     const completionPercent = clampPercent(lesson.completionPercent)
+    const progressTone = toneForProgress(completionPercent)
 
     return {
-      id: lesson.lessonId ? `L${lesson.lessonId}` : String(index + 1),
-      title: lesson.lessonTitle || `Lesson ${index + 1}`,
+      id: lessonIdLabel(lesson.lessonId, index),
+      title: lesson.lessonTitle || lessonTitleFallback(index),
       progress: completionPercent,
-      tone: completionPercent >= 80 ? 'green' : completionPercent >= 50 ? 'orange' : 'blue',
-      barTone: completionPercent >= 80 ? 'success' : completionPercent >= 50 ? 'warning' : 'info',
+      tone: progressTone.tone,
+      barTone: progressTone.barTone,
     }
   }),
 )
 
-function iconForSource(sourceType: string) {
+function iconForSource(sourceType: string): SourceIcon {
   const normalized = sourceType.toUpperCase()
   if (normalized.includes('QUIZ')) return 'quiz'
   if (normalized.includes('STREAK')) return 'streak'
@@ -337,7 +335,7 @@ function iconForSource(sourceType: string) {
   return 'star'
 }
 
-function iconForBadge(iconKey?: string | null) {
+function iconForBadge(iconKey?: string | null): BadgeIcon {
   const normalized = (iconKey ?? '').toUpperCase()
   if (normalized.includes('STREAK') || normalized.includes('FIRE')) return 'streak'
   if (normalized.includes('QUIZ')) return 'quiz'
@@ -347,7 +345,7 @@ function iconForBadge(iconKey?: string | null) {
   return 'trophy'
 }
 
-function toneForBadge(iconKey?: string | null) {
+function toneForBadge(iconKey?: string | null): BadgeTone {
   const normalized = (iconKey ?? '').toUpperCase()
   if (normalized.includes('STREAK') || normalized.includes('FIRE')) return 'pink'
   if (normalized.includes('QUIZ')) return 'blue'
@@ -356,7 +354,7 @@ function toneForBadge(iconKey?: string | null) {
   return 'gold'
 }
 
-function toneForSource(sourceType: string) {
+function toneForSource(sourceType: string): SourceTone {
   const normalized = sourceType.toUpperCase()
   if (normalized.includes('QUIZ')) return 'blue'
   if (normalized.includes('STREAK')) return 'orange'
@@ -364,23 +362,49 @@ function toneForSource(sourceType: string) {
   return 'purple'
 }
 
-function formatSource(sourceType: string) {
+function formatSource(sourceType: string): string {
   return sourceType
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function signedIntegerLabel(value: number) {
+function signedIntegerLabel(value: number): string {
   const rounded = Math.round(Number.isFinite(value) ? value : 0)
   return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
-function reloadAll() {
+function chartPointLeft(index: number, total: number): number {
+  if (total === 1) return 50
+  return Math.round((index / Math.max(total - 1, 1)) * 82 + 6)
+}
+
+function lessonIdLabel(lessonId: number | null | undefined, index: number): string {
+  return lessonId ? `L${lessonId}` : String(index + 1)
+}
+
+function lessonTitleFallback(index: number): string {
+  return `Lesson ${index + 1}`
+}
+
+function reloadAll(): void {
   void badgesResource.reload()
   void streakResource.reload()
   void rewardsResource.reload()
   void progressResource.reload()
   void pointsResource.reload()
+}
+
+function toneForProgress(progressPercent: number): { tone: ModuleTone; barTone: ProgressTone } {
+  if (progressPercent >= 80) return { tone: 'green', barTone: 'success' }
+  return progressPercent >= 50 ? { tone: 'orange', barTone: 'warning' } : { tone: 'blue', barTone: 'info' }
+}
+
+function openRewards(): void {
+  void router.push('/student/rewards')
+}
+
+function openLearn(): void {
+  void router.push('/student/learn')
 }
 </script>

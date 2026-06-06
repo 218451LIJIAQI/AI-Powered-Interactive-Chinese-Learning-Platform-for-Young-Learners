@@ -23,6 +23,7 @@ public class LocalStorageProvider implements StorageProvider {
     @Override
     public StoredObject store(MultipartFile multipartFile, StorageWriteRequest request) {
         Objects.requireNonNull(multipartFile, "multipartFile");
+        Objects.requireNonNull(request, "request");
         return new StoredObject(UploadStorageSupport.storeMultipartFile(
                 multipartFile,
                 request.baseDirectory(),

@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -38,5 +39,12 @@ public class StudentBadge extends BaseEntity {
     private Badge badge;
 
     @Column(name = "awarded_at", nullable = false, updatable = false)
-    private LocalDateTime awardedAt = LocalDateTime.now();
+    private LocalDateTime awardedAt;
+
+    @PrePersist
+    void ensureAwardedAt() {
+        if (awardedAt == null) {
+            awardedAt = LocalDateTime.now();
+        }
+    }
 }

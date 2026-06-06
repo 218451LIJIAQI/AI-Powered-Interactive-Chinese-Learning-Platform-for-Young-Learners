@@ -9,15 +9,17 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   })
 }
 
-export async function clearOfflineCaches() {
+export async function clearOfflineCaches(): Promise<void> {
   if (typeof window === 'undefined' || !('caches' in window)) {
     return
   }
 
   const cacheNames = await window.caches.keys()
   await Promise.all(
-    cacheNames
-      .filter((cacheName) => cacheName.startsWith('mandarin-spark-') || cacheName.includes('workbox'))
-      .map((cacheName) => window.caches.delete(cacheName)),
+    cacheNames.filter(isManagedOfflineCache).map((cacheName) => window.caches.delete(cacheName)),
   )
+}
+
+function isManagedOfflineCache(cacheName: string): boolean {
+  return cacheName.startsWith('mandarin-spark-') || cacheName.includes('workbox')
 }

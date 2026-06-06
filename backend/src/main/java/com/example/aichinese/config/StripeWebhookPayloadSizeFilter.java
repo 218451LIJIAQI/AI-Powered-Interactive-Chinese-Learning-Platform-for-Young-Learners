@@ -36,6 +36,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class StripeWebhookPayloadSizeFilter extends OncePerRequestFilter {
 
     private static final String STRIPE_WEBHOOK_PATH = "/api/v1/payments/webhooks/stripe";
+    private static final int MAX_WEBHOOK_PAYLOAD_BYTES = StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES;
 
     private final ObjectMapper objectMapper;
 
@@ -53,14 +54,13 @@ public class StripeWebhookPayloadSizeFilter extends OncePerRequestFilter {
             return;
         }
 
-        int maxBytes = StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES;
-        if (request.getContentLengthLong() > maxBytes) {
+        if (exceedsPayloadLimit(request.getContentLengthLong())) {
             rejectOversizedPayload(response);
             return;
         }
 
-        byte[] body = request.getInputStream().readNBytes(maxBytes + 1);
-        if (body.length > maxBytes) {
+        byte[] body = request.getInputStream().readNBytes(MAX_WEBHOOK_PAYLOAD_BYTES + 1);
+        if (exceedsPayloadLimit(body.length)) {
             rejectOversizedPayload(response);
             return;
         }
@@ -84,6 +84,10 @@ public class StripeWebhookPayloadSizeFilter extends OncePerRequestFilter {
             return path.isBlank() ? "/" : path;
         }
         return requestUri;
+    }
+
+    private static boolean exceedsPayloadLimit(long contentLength) {
+        return contentLength > MAX_WEBHOOK_PAYLOAD_BYTES;
     }
 
     private void rejectOversizedPayload(HttpServletResponse response) throws IOException {

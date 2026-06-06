@@ -1,7 +1,7 @@
 package com.example.aichinese.config;
 
 import java.util.Locale;
-import java.util.Set;
+import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -15,8 +15,10 @@ public record PaymentProperties(
         String stripeApiKey,
         String stripeWebhookSecret) {
 
-    private static final Set<String> ALLOWED_PROVIDERS = Set.of("mock", "no-op", "stripe");
+    private static final List<String> ALLOWED_PROVIDERS = List.of("mock", "no-op", "stripe");
     private static final int MAX_URL_LENGTH = 2048;
+    private static final String ALLOWED_PROVIDER_MESSAGE =
+            "Payment provider must be one of: " + String.join(", ", ALLOWED_PROVIDERS) + ".";
     private static final String DEFAULT_SUCCESS_URL = "http://localhost:5174/payment/success";
     private static final String DEFAULT_CANCEL_URL = "http://localhost:5174/payment/cancel";
     private static final String DEFAULT_STRIPE_API_BASE_URL = "https://api.stripe.com";
@@ -50,7 +52,7 @@ public record PaymentProperties(
             normalized = "no-op";
         }
         if (!ALLOWED_PROVIDERS.contains(normalized)) {
-            throw new IllegalArgumentException("Payment provider must be one of: mock, no-op, stripe.");
+            throw new IllegalArgumentException(ALLOWED_PROVIDER_MESSAGE);
         }
         return normalized;
     }
@@ -63,12 +65,16 @@ public record PaymentProperties(
                 + ", provider=" + provider
                 + ", stripeApiBaseUrl=" + stripeApiBaseUrl
                 + ", stripeApiKey=" + maskedStripeApiKey()
-                + ", stripeWebhookSecret=" + (stripeWebhookSecret == null || stripeWebhookSecret.isBlank() ? "[unset]" : "[set]")
+                + ", stripeWebhookSecret=" + stripeWebhookSecretStatus()
                 + "]";
     }
 
+    private String stripeWebhookSecretStatus() {
+        return stripeWebhookSecret.isBlank() ? "[unset]" : "[set]";
+    }
+
     private String maskedStripeApiKey() {
-        if (stripeApiKey == null || stripeApiKey.isBlank()) {
+        if (stripeApiKey.isBlank()) {
             return "[unset]";
         }
         if (stripeApiKey.startsWith("sk_live_")) {

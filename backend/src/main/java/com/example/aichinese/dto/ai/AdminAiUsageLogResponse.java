@@ -42,6 +42,8 @@ public record AdminAiUsageLogResponse(
         Long relatedEntityId,
         LocalDateTime createdAt) {
 
+    private static final String REDACTED = "<redacted>";
+
     @Override
     public String toString() {
         return "AdminAiUsageLogResponse["
@@ -66,7 +68,7 @@ public record AdminAiUsageLogResponse(
     }
 
     private static String redactValue(String value) {
-        return value == null ? "null" : "<redacted>";
+        return value == null ? "null" : REDACTED;
     }
 
     private static String redactLength(String value) {

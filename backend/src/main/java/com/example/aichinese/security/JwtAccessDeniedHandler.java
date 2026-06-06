@@ -1,6 +1,7 @@
 package com.example.aichinese.security;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 
@@ -41,12 +42,15 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
                 request.getRequestURI(),
                 accessDeniedException == null ? "AccessDeniedException" : accessDeniedException.getClass().getSimpleName());
 
-        response.setStatus(HttpStatus.FORBIDDEN.value());
+        writeFailure(response, HttpStatus.FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
+    }
+
+    private void writeFailure(HttpServletResponse response, HttpStatus status, String message) throws IOException {
+        response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
-        String message = FriendlyErrorMessageResolver.permissionDeniedMessage();
         ApiResponse<Void> body = ApiResponse.failure(message, List.of(message));
         objectMapper.writeValue(response.getOutputStream(), body);
     }

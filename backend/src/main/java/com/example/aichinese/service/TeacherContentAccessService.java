@@ -1,10 +1,5 @@
 package com.example.aichinese.service;
 
-import static com.example.aichinese.dto.content.ContentDtoConstants.LESSON_CONTENT_MAX_LENGTH;
-import static com.example.aichinese.dto.content.ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH;
-import static com.example.aichinese.dto.content.ContentDtoConstants.PRICE_FRACTION_DIGITS;
-import static com.example.aichinese.dto.content.ContentDtoConstants.PRICE_INTEGER_DIGITS;
-import static com.example.aichinese.dto.content.ContentDtoConstants.TITLE_MAX_LENGTH;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -18,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.aichinese.dto.content.ContentDtoConstants;
 import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.LearningCategory;
 import com.example.aichinese.entity.LearningLevel;
@@ -39,6 +35,7 @@ public class TeacherContentAccessService {
 
     private static final Set<ContentStatus> TEACHER_EDITABLE_STATUSES = ContentStatus.TEACHER_EDITABLE;
     private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES = ContentStatus.TEACHER_ARCHIVABLE;
+    private static final BigDecimal ZERO_PRICE = BigDecimal.ZERO.setScale(ContentDtoConstants.PRICE_FRACTION_DIGITS);
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LearningLevelRepository learningLevelRepository;
@@ -117,14 +114,10 @@ public class TeacherContentAccessService {
     }
 
     private static BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
-        if (accessType == AccessType.FREE) {
-            return BigDecimal.ZERO.setScale(PRICE_FRACTION_DIGITS);
+        if (accessType == AccessType.FREE || price == null) {
+            return ZERO_PRICE;
         }
-
-        if (price == null) {
-            return BigDecimal.ZERO.setScale(PRICE_FRACTION_DIGITS);
-        }
-        return price.setScale(PRICE_FRACTION_DIGITS, RoundingMode.UNNECESSARY);
+        return price.setScale(ContentDtoConstants.PRICE_FRACTION_DIGITS, RoundingMode.UNNECESSARY);
     }
 
     private static void validateMoneyPrecision(BigDecimal price) {
@@ -134,9 +127,12 @@ public class TeacherContentAccessService {
         BigDecimal normalized = price.stripTrailingZeros();
         int scale = Math.max(0, normalized.scale());
         int integerDigits = Math.max(1, normalized.precision() - normalized.scale());
-        if (scale > PRICE_FRACTION_DIGITS || integerDigits > PRICE_INTEGER_DIGITS) {
+        if (scale > ContentDtoConstants.PRICE_FRACTION_DIGITS
+                || integerDigits > ContentDtoConstants.PRICE_INTEGER_DIGITS) {
             throw new ResponseStatusException(BAD_REQUEST,
-                    "Price must fit within 8 integer digits and 2 decimal places.");
+                    "Price must fit within " + ContentDtoConstants.PRICE_INTEGER_DIGITS
+                            + " integer digits and " + ContentDtoConstants.PRICE_FRACTION_DIGITS
+                            + " decimal places.");
         }
     }
 
@@ -153,8 +149,10 @@ public class TeacherContentAccessService {
         module.setTeacher(teacherProfile);
         module.setLevel(level);
         module.setCategory(category);
-        module.setTitle(contentSafetyService.requireSafeText(title, TITLE_MAX_LENGTH, "Title is required."));
-        module.setDescription(contentSafetyService.optionalSafeText(description, LONG_DESCRIPTION_MAX_LENGTH));
+        module.setTitle(contentSafetyService.requireSafeText(
+                title, ContentDtoConstants.TITLE_MAX_LENGTH, "Title is required."));
+        module.setDescription(contentSafetyService.optionalSafeText(
+                description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
         module.setAccessType(accessType);
         module.setPrice(normalizePrice(accessType, price));
         module.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
@@ -178,9 +176,12 @@ public class TeacherContentAccessService {
         lesson.setModule(module);
         lesson.setLevel(level);
         lesson.setCategory(category);
-        lesson.setTitle(contentSafetyService.requireSafeText(title, TITLE_MAX_LENGTH, "Title is required."));
-        lesson.setSummary(contentSafetyService.optionalSafeText(description, LONG_DESCRIPTION_MAX_LENGTH));
-        lesson.setLessonContent(contentSafetyService.optionalSafeText(lessonContent, LESSON_CONTENT_MAX_LENGTH));
+        lesson.setTitle(contentSafetyService.requireSafeText(
+                title, ContentDtoConstants.TITLE_MAX_LENGTH, "Title is required."));
+        lesson.setSummary(contentSafetyService.optionalSafeText(
+                description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
+        lesson.setLessonContent(contentSafetyService.optionalSafeText(
+                lessonContent, ContentDtoConstants.LESSON_CONTENT_MAX_LENGTH));
         lesson.setAccessType(accessType);
         lesson.setPrice(normalizePrice(accessType, price));
         lesson.setLearningType(learningType);
@@ -202,8 +203,10 @@ public class TeacherContentAccessService {
         coursePackage.setTeacher(teacherProfile);
         coursePackage.setLevel(level);
         coursePackage.setCategory(category);
-        coursePackage.setTitle(contentSafetyService.requireSafeText(title, TITLE_MAX_LENGTH, "Title is required."));
-        coursePackage.setDescription(contentSafetyService.optionalSafeText(description, LONG_DESCRIPTION_MAX_LENGTH));
+        coursePackage.setTitle(contentSafetyService.requireSafeText(
+                title, ContentDtoConstants.TITLE_MAX_LENGTH, "Title is required."));
+        coursePackage.setDescription(contentSafetyService.optionalSafeText(
+                description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
         coursePackage.setAccessType(accessType);
         coursePackage.setPrice(normalizePrice(accessType, price));
         coursePackage.setLearningType(learningType);

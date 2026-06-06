@@ -16,10 +16,10 @@ public record StorageReadRequest(
     }
 
     private static String requireText(String value, String fieldName) {
-        Objects.requireNonNull(value, fieldName);
-        if (value.isBlank()) {
+        String stripped = Objects.requireNonNull(value, fieldName).strip();
+        if (stripped.isEmpty()) {
             throw new IllegalArgumentException(fieldName + " must not be blank.");
         }
-        return value;
+        return stripped;
     }
 }

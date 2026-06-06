@@ -1,11 +1,6 @@
-/**
- * Translates the backend {@code TeacherFeedbackType} enum constant
- * (e.g. {@code "QUIZ_ATTEMPT"}) into a Title-Case label
- * (e.g. {@code "Quiz Attempt"}) for the dashboard chips and history
- * lists. Returns {@code "General"} for null/blank to avoid empty
- * UI labels.
- */
-export function formatTeacherFeedbackType(value: string | null | undefined) {
+const WORD_START_PATTERN = /(^|\s)\w/g
+
+export function formatTeacherFeedbackType(value: string | null | undefined): string {
   if (!value?.trim()) {
     return 'General'
   }
@@ -14,5 +9,5 @@ export function formatTeacherFeedbackType(value: string | null | undefined) {
     .trim()
     .replaceAll('_', ' ')
     .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+    .replace(WORD_START_PATTERN, (match) => match.toUpperCase())
 }

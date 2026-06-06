@@ -27,6 +27,12 @@ import com.example.aichinese.repository.UserRepository;
 @Component
 public class AiUsageLimiter {
 
+    private static final String QUOTA_VERIFICATION_FAILED = "AI usage quota could not be verified.";
+    private static final String MINUTE_LIMIT_REACHED =
+            "AI request limit reached. Please wait a minute before trying again.";
+    private static final String DAILY_LIMIT_REACHED =
+            "Daily AI request limit reached. Please try again tomorrow.";
+
     private final Clock clock;
     private final int requestsPerMinute;
     private final int requestsPerDay;
@@ -61,31 +67,38 @@ public class AiUsageLimiter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkProviderCallAllowed(Long userId) {
         if (userId == null) {
-            throw new ResponseStatusException(TOO_MANY_REQUESTS, "AI usage quota could not be verified.");
+            throw new ResponseStatusException(TOO_MANY_REQUESTS, QUOTA_VERIFICATION_FAILED);
         }
 
         User user = userRepository.findLockedById(userId)
-                .orElseThrow(() -> new ResponseStatusException(TOO_MANY_REQUESTS, "AI usage quota could not be verified."));
+                .orElseThrow(() -> new ResponseStatusException(TOO_MANY_REQUESTS, QUOTA_VERIFICATION_FAILED));
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
-        AiUsageQuotaCounter counter = quotaCounterRepository.findLockedByUserId(userId)
-                .orElseGet(() -> createCounter(user, now, today));
+        AiUsageQuotaCounter counter = findOrCreateCounter(user, userId, now, today);
 
         rollForward(counter, now, today);
+        enforceLimits(counter);
+        increment(counter);
+        quotaCounterRepository.save(counter);
+    }
+
+    private AiUsageQuotaCounter findOrCreateCounter(User user, Long userId, LocalDateTime now, LocalDate today) {
+        return quotaCounterRepository.findLockedByUserId(userId)
+                .orElseGet(() -> createCounter(user, now, today));
+    }
+
+    private void enforceLimits(AiUsageQuotaCounter counter) {
         if (counter.getMinuteCount() >= requestsPerMinute) {
-            throw new ResponseStatusException(
-                    TOO_MANY_REQUESTS,
-                    "AI request limit reached. Please wait a minute before trying again.");
+            throw new ResponseStatusException(TOO_MANY_REQUESTS, MINUTE_LIMIT_REACHED);
         }
         if (counter.getDayCount() >= requestsPerDay) {
-            throw new ResponseStatusException(
-                    TOO_MANY_REQUESTS,
-                    "Daily AI request limit reached. Please try again tomorrow.");
+            throw new ResponseStatusException(TOO_MANY_REQUESTS, DAILY_LIMIT_REACHED);
         }
+    }
 
+    private static void increment(AiUsageQuotaCounter counter) {
         counter.setMinuteCount(counter.getMinuteCount() + 1);
         counter.setDayCount(counter.getDayCount() + 1);
-        quotaCounterRepository.save(counter);
     }
 
     private AiUsageQuotaCounter createCounter(User user, LocalDateTime now, LocalDate today) {

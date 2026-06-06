@@ -17,12 +17,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Read-only sibling of {@link ActionFormCard} — same header shape
- * (icon badge + title + optional subtitle) but a free-form `<slot />`
- * body instead of a form. Used for tile-style sections on every
- * persona dashboard.
- */
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 interface Props {

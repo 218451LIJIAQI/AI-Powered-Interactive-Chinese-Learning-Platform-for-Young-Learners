@@ -60,6 +60,12 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class TeacherStudentService {
 
+    private static final String TEACHER_PROFILE_NOT_FOUND = "Teacher profile could not be found.";
+    private static final int LOW_PROGRESS_THRESHOLD_PERCENT = 60;
+    private static final int LOW_QUIZ_AVERAGE_THRESHOLD_PERCENT = 70;
+    private static final int WEAK_AREA_LIMIT = 4;
+    private static final int PERCENT_MAX = 100;
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final LessonProgressRepository lessonProgressRepository;
     private final QuizAttemptRepository quizAttemptRepository;
@@ -91,7 +97,7 @@ public class TeacherStudentService {
     @Transactional(readOnly = true)
     public PageResponse<TeacherStudentSummaryResponse> getTeacherStudents(SecurityUserDetails currentUser, int page, int size) {
         TeacherProfile teacher = teacherProfileRepository.findDetailedByUserId(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, TEACHER_PROFILE_NOT_FOUND));
 
         Long teacherId = teacher.getId();
         int safePage = PaginationUtils.sanitizePage(page);
@@ -124,42 +130,28 @@ public class TeacherStudentService {
         List<LessonProgress> lessonProgressList = lessonProgressRepository.findByLessonTeacherIdAndStudentIdIn(teacherId, studentIds);
 
         for (TeacherFeedback feedback : feedbackList) {
-            StudentProfile student = feedback.getStudent();
-            if (student == null) {
-                continue;
-            }
-            StudentAggregate aggregate = aggregates.get(student.getId());
+            StudentAggregate aggregate = aggregateFor(aggregates, feedback.getStudent());
             if (aggregate != null && aggregate.hasCurrentFeedbackAccess(feedback)) {
                 aggregate.captureFeedback(feedback);
             }
         }
 
         for (QuizAttempt attempt : attempts) {
-            StudentProfile student = attempt.getStudent();
-            if (student == null) {
-                continue;
-            }
-            StudentAggregate aggregate = aggregates.get(student.getId());
+            StudentAggregate aggregate = aggregateFor(aggregates, attempt.getStudent());
             if (aggregate != null && aggregate.hasCurrentAttemptAccess(attempt)) {
                 aggregate.captureAttempt(attempt);
             }
         }
 
         for (LiveClassEnrolment enrolment : enrolments) {
-            if (enrolment.getStudent() == null) {
-                continue;
-            }
-            StudentAggregate aggregate = aggregates.get(enrolment.getStudent().getId());
+            StudentAggregate aggregate = aggregateFor(aggregates, enrolment.getStudent());
             if (aggregate != null && aggregate.hasCurrentEnrolmentAccess(enrolment)) {
                 aggregate.captureEnrolment(enrolment);
             }
         }
 
         for (LessonProgress progress : lessonProgressList) {
-            if (progress.getStudent() == null) {
-                continue;
-            }
-            StudentAggregate aggregate = aggregates.get(progress.getStudent().getId());
+            StudentAggregate aggregate = aggregateFor(aggregates, progress.getStudent());
             if (aggregate != null && aggregate.hasCurrentLessonAccess(progress)) {
                 aggregate.captureLessonProgress(progress);
             }
@@ -172,6 +164,12 @@ public class TeacherStudentService {
                         .thenComparing(TeacherStudentSummaryResponse::fullName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, studentIdPage.getTotalElements(), studentIdPage.getTotalPages());
+    }
+
+    private StudentAggregate aggregateFor(
+            Map<Long, StudentAggregate> aggregates,
+            StudentProfile student) {
+        return student == null ? null : aggregates.get(student.getId());
     }
 
     private final class StudentAggregate {
@@ -216,9 +214,8 @@ public class TeacherStudentService {
         }
 
         private boolean hasCurrentAttemptAccess(QuizAttempt attempt) {
-            return attempt.getQuiz() == null
-                    || attempt.getQuiz().getLesson() == null
-                    || studentLearningAccessService.hasLessonAccess(student, attempt.getQuiz().getLesson());
+            Lesson lesson = attempt.getQuiz() == null ? null : attempt.getQuiz().getLesson();
+            return lesson == null || studentLearningAccessService.hasLessonAccess(student, lesson);
         }
 
         private boolean hasCurrentEnrolmentAccess(LiveClassEnrolment enrolment) {
@@ -243,7 +240,7 @@ public class TeacherStudentService {
                     && attempt.getMaxScore() != null
                     && attempt.getMaxScore() > 0) {
                 submittedAttemptCount += 1;
-                submittedAttemptPercentTotal += Math.round((attempt.getScore() * 100f) / attempt.getMaxScore());
+                submittedAttemptPercentTotal += Math.round(attempt.getScore() * 100f / attempt.getMaxScore());
             }
             bumpLatestActivity(attempt.getCompletedAt() != null ? attempt.getCompletedAt() : attempt.getCreatedAt());
         }
@@ -275,8 +272,8 @@ public class TeacherStudentService {
             Double quizAveragePercent = submittedAttemptCount > 0
                     ? submittedAttemptPercentTotal / (double) submittedAttemptCount
                     : null;
-            boolean atRisk = (progressPercent > 0 && progressPercent < 60)
-                    || (quizAveragePercent != null && quizAveragePercent < 70)
+            boolean atRisk = (progressPercent > 0 && progressPercent < LOW_PROGRESS_THRESHOLD_PERCENT)
+                    || (quizAveragePercent != null && quizAveragePercent < LOW_QUIZ_AVERAGE_THRESHOLD_PERCENT)
                     || !weakAreas.isEmpty();
 
             return new TeacherStudentSummaryResponse(
@@ -289,7 +286,7 @@ public class TeacherStudentService {
                     progressPercent,
                     quizAveragePercent,
                     atRisk,
-                    weakAreas.stream().limit(4).toList(),
+                    weakAreas.stream().limit(WEAK_AREA_LIMIT).toList(),
                     latestFeedbackType,
                     latestFeedbackAt,
                     latestActivityAt,
@@ -300,7 +297,7 @@ public class TeacherStudentService {
             if (value == null) {
                 return 0;
             }
-            return Math.max(0, Math.min(100, value));
+            return Math.max(0, Math.min(PERCENT_MAX, value));
         }
 
         private String normalizeWeakArea(String rawType) {

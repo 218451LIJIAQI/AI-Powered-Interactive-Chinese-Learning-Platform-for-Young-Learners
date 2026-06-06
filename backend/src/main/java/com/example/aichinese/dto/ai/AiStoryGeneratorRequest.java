@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.ai;
 
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -21,8 +22,8 @@ public record AiStoryGeneratorRequest(
 
     public AiStoryGeneratorRequest {
         topic = strip(topic);
-        level = strip(level);
-        languagePreference = strip(languagePreference);
-        lengthPreference = strip(lengthPreference);
+        level = stripToNull(level);
+        languagePreference = stripToNull(languagePreference);
+        lengthPreference = stripToNull(lengthPreference);
     }
 }

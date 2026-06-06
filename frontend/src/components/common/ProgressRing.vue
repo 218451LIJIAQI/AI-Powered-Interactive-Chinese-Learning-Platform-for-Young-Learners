@@ -3,31 +3,24 @@
     <div
       class="ring"
       :class="toneClass"
-      :style="{ '--progress': progressValue }"
+      :style="ringStyle"
       role="progressbar"
       :aria-valuenow="progressValue"
       aria-valuemin="0"
       aria-valuemax="100"
-      :aria-label="`${title}: ${label}`"
+      :aria-label="ariaLabel"
     >
       <span aria-hidden="true">{{ label }}</span>
     </div>
     <div class="stack">
       <strong>{{ title }}</strong>
-      <span class="muted">{{ subtitle }}</span>
+      <span v-if="subtitle" class="muted">{{ subtitle }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-/**
- * Circular progress indicator used on student progress cards and
- * the home dashboard hero. The `--progress` CSS custom property
- * drives the SVG fill so the visual stays in sync with the
- * displayed percentage. Pairs with a title + optional subtitle to
- * form a self-contained KPI tile.
- */
-import { computed } from 'vue'
+import { computed, type StyleValue } from 'vue'
 
 type RingTone = 'primary' | 'success'
 
@@ -49,5 +42,7 @@ function clampProgress(value: number): number {
 
 const progressValue = computed<number>(() => clampProgress(props.progress))
 const label = computed<string>(() => `${progressValue.value}%`)
+const ariaLabel = computed<string>(() => `${props.title}: ${label.value}`)
+const ringStyle = computed<StyleValue>(() => ({ '--progress': progressValue.value }))
 const toneClass = computed<string>(() => (props.tone === 'success' ? 'success' : ''))
 </script>

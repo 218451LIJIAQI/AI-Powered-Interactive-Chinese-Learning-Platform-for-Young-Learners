@@ -55,7 +55,7 @@ class Batch4MapperContractTests {
     void adminActivityMapperNormalizesCsvTagsAndNullChildLists() {
         AdminFlashcardRequest request = new AdminFlashcardRequest(
                 "Card",
-                "你",
+                "\u4F60",
                 "you",
                 null,
                 null,
@@ -93,7 +93,7 @@ class Batch4MapperContractTests {
 
         assertThat(joined).isEqualTo("HSK 1, storytelling");
 
-        TeacherProfile profile = teacherProfile("One two\nthree 😀 four " + "x".repeat(160));
+        TeacherProfile profile = teacherProfile("One two\nthree \uD83D\uDE00 four " + "x".repeat(160));
 
         AdminTeacherListItemResponse listItem = teacherManagementMapper.toAdminTeacherListItem(
                 profile,
@@ -139,10 +139,11 @@ class Batch4MapperContractTests {
 
         CoursePackageResponse response = contentManagementMapper.toCoursePackageResponse(
                 coursePackage,
-                Arrays.asList(null, item));
+                packageItemsWithNull(item));
 
-        assertThat(response.packageItems()).hasSize(1);
-        assertThat(response.packageItems().getFirst().itemId()).isEqualTo(55L);
+        assertThat(response.packageItems())
+                .singleElement()
+                .satisfies(packageItem -> assertThat(packageItem.itemId()).isEqualTo(55L));
     }
 
     @Test
@@ -241,6 +242,10 @@ class Batch4MapperContractTests {
         item.setSortOrder(1);
         item.setTitleSnapshot("Lesson 55");
         return item;
+    }
+
+    private static List<PackageItem> packageItemsWithNull(PackageItem item) {
+        return Arrays.asList(null, item);
     }
 
     private static VideoProgress videoProgress() {

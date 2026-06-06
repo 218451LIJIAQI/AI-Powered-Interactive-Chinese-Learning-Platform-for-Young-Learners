@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -104,6 +105,16 @@ public class AiService {
     private static final int MAX_AI_OPTION_ITEMS = 8;
     private static final int DEFAULT_QUIZ_QUESTIONS = 5;
     private static final int MAX_RETAINED_AI_CHAT_RESPONSE_CHARS = 4000;
+    private static final int USAGE_LOG_SUMMARY_LIMIT = 500;
+    private static final int RECENT_CONTEXT_ITEM_LIMIT = 3;
+    private static final int WEAK_AREA_LIMIT = 5;
+    private static final String RELATED_ENTITY_CHAT_SESSION = "AiChatSession";
+    private static final String RELATED_ENTITY_STUDENT_PROFILE = "StudentProfile";
+    private static final String RELATED_ENTITY_UPLOADED_FILE = "UploadedFile";
+    private static final String PROVIDER_TIMEOUT_ERROR = "Provider request failed or timed out.";
+    private static final String INVALID_JSON_ERROR = "Provider response was not valid JSON.";
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+    };
 
     private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
@@ -186,7 +197,7 @@ public class AiService {
                 buildChatPrompt(request, sanitizedUserMessage),
                 false,
                 history,
-                "AiChatSession",
+                RELATED_ENTITY_CHAT_SESSION,
                 session.getId());
 
         String responseText = execution.status() == AiRequestStatus.SUCCESS
@@ -304,7 +315,7 @@ public class AiService {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
         String language = resolveLanguage(user, request.languagePreference());
-        requireSanitizedShort(request.topic(), "Topic is required.");
+        String sanitizedTopic = requireSanitizedShort(request.topic(), "Topic is required.");
         String usageMode = "SELF_PRACTICE";
         AiExecutionResult execution = generateText(
                 user,
@@ -317,14 +328,14 @@ public class AiService {
                 null);
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
-            return fallbackStoryResponse(request, usageMode, execution.status().name());
+            return fallbackStoryResponse(sanitizedTopic, usageMode, execution.status().name());
         }
 
         ParsedAiJson parsed = parseJsonMap(execution.responseText());
         if (!parsed.valid()) {
-            return fallbackStoryResponse(request, usageMode, AiRequestStatus.FAILED.name());
+            return fallbackStoryResponse(sanitizedTopic, usageMode, AiRequestStatus.FAILED.name());
         }
-        return parseStoryResponse(request, usageMode, parsed.values(), execution.status().name());
+        return parseStoryResponse(request, sanitizedTopic, usageMode, parsed.values(), execution.status().name());
     }
 
     public AiLearningRecommendationResponse learningRecommendation(
@@ -342,7 +353,7 @@ public class AiService {
                 buildLearningRecommendationPrompt(request, context.summary(), context.language()),
                 true,
                 List.of(),
-                "StudentProfile",
+                RELATED_ENTITY_STUDENT_PROFILE,
                 context.studentProfileId());
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
@@ -365,13 +376,11 @@ public class AiService {
             String languagePreference) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "Pronunciation feedback requires a student account.");
-        if (targetText == null || targetText.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, "Target text is required.");
-        }
+        String sanitizedTargetText = requireSanitizedShort(targetText, "Target text is required.");
 
         UploadedFile uploadedFile = aiFileStorageService.storePronunciationAudio(audioFile, user);
         String language = resolveLanguage(user, languagePreference);
-        String inputSummary = "Target text: " + targetText.trim() + "; Pinyin: " + TextUtils.trimToNull(pinyin) + "; Tone: " + TextUtils.trimToNull(tone);
+        String inputSummary = pronunciationInputSummary(sanitizedTargetText, pinyin, tone);
 
         aiLogService.createFeedbackRecord(
                 user,
@@ -391,10 +400,10 @@ public class AiService {
                 aiAvailabilityService.normalizedProvider(),
                 null,
                 null,
-                summarize(inputSummary, 500),
+                summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
                 null,
                 "Selected provider does not support audio analysis in this phase.",
-                "UploadedFile",
+                RELATED_ENTITY_UPLOADED_FILE,
                 uploadedFile.getId());
 
         return new AiPronunciationFeedbackResponse(
@@ -413,13 +422,11 @@ public class AiService {
             String languagePreference) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "Writing feedback requires a student account.");
-        if (targetCharacter == null || targetCharacter.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, "Target character is required.");
-        }
+        String sanitizedTargetCharacter = requireSanitizedShort(targetCharacter, "Target character is required.");
 
         UploadedFile uploadedFile = aiFileStorageService.storeWritingImage(imageFile, user);
         String language = resolveLanguage(user, languagePreference);
-        String inputSummary = "Target character: " + targetCharacter.trim();
+        String inputSummary = "Target character: " + sanitizedTargetCharacter;
 
         aiLogService.createFeedbackRecord(
                 user,
@@ -439,10 +446,10 @@ public class AiService {
                 aiAvailabilityService.normalizedProvider(),
                 null,
                 null,
-                summarize(inputSummary, 500),
+                summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
                 null,
                 "Selected provider does not support image analysis in this phase.",
-                "UploadedFile",
+                RELATED_ENTITY_UPLOADED_FILE,
                 uploadedFile.getId());
 
         return new AiWritingFeedbackResponse(
@@ -466,18 +473,21 @@ public class AiService {
                 PaginationUtils.sanitizePage(page),
                 PaginationUtils.sanitizeSize(size),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
+        String normalizedFeatureType = normalizeFilterValue(featureType);
+        String normalizedStatus = normalizeFilterValue(status);
+        String normalizedUserRole = normalizeFilterValue(userRole);
 
         Specification<AiUsageLog> specification = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (featureType != null && !featureType.isBlank()) {
-                predicates.add(cb.equal(root.get("featureKey"), featureType.trim().toUpperCase(Locale.ROOT)));
+            if (normalizedFeatureType != null) {
+                predicates.add(cb.equal(root.get("featureKey"), normalizedFeatureType));
             }
-            if (status != null && !status.isBlank()) {
-                predicates.add(cb.equal(root.get("status"), status.trim().toUpperCase(Locale.ROOT)));
+            if (normalizedStatus != null) {
+                predicates.add(cb.equal(root.get("status"), normalizedStatus));
             }
-            if (userRole != null && !userRole.isBlank()) {
-                predicates.add(cb.equal(root.get("userRole"), userRole.trim().toUpperCase(Locale.ROOT)));
+            if (normalizedUserRole != null) {
+                predicates.add(cb.equal(root.get("userRole"), normalizedUserRole));
             }
             if (dateFrom != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), dateFrom.atStartOfDay()));
@@ -511,7 +521,7 @@ public class AiService {
             String relatedEntityType,
             Long relatedEntityId) {
         String userRole = primaryRole(user);
-        String inputSummary = summarize(userPrompt, 500);
+        String inputSummary = summarize(userPrompt, USAGE_LOG_SUMMARY_LIMIT);
         AiAvailabilityResponse availability = aiAvailabilityService.getAvailability();
         if (!availability.available()) {
             aiLogService.createUsageLog(
@@ -556,14 +566,14 @@ public class AiService {
                     null,
                     inputSummary,
                     null,
-                    "Provider request failed or timed out.",
+                    PROVIDER_TIMEOUT_ERROR,
                     relatedEntityType,
                     relatedEntityId);
             return AiExecutionResult.failed(
                     availability.provider(),
                     availability.model(),
                     AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
-                    "Provider request failed or timed out.");
+                    PROVIDER_TIMEOUT_ERROR);
         }
         recordProviderDuration(providerTimer, featureKey, result.success() ? "success" : "failure");
         if (!result.success()) {
@@ -600,14 +610,14 @@ public class AiService {
                     result.tokenCount(),
                     inputSummary,
                     null,
-                    "Provider response was not valid JSON.",
+                    INVALID_JSON_ERROR,
                     relatedEntityType,
                     relatedEntityId);
             return AiExecutionResult.failed(
                     result.providerName(),
                     result.modelName(),
                     AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
-                    "Provider response was not valid JSON.");
+                    INVALID_JSON_ERROR);
         }
 
         aiLogService.createUsageLog(
@@ -620,7 +630,7 @@ public class AiService {
                 result.modelName(),
                 result.tokenCount(),
                 inputSummary,
-                summarize(result.text(), 500),
+                summarize(result.text(), USAGE_LOG_SUMMARY_LIMIT),
                 null,
                 relatedEntityType,
                 relatedEntityId);
@@ -628,7 +638,7 @@ public class AiService {
     }
 
     private User requireUser(SecurityUserDetails currentUser) {
-        Long userId = currentUser.getUserId();
+        Long userId = currentUser == null ? null : currentUser.getUserId();
         if (userId == null) {
             throw new ResponseStatusException(NOT_FOUND, "Authenticated user could not be found.");
         }
@@ -645,6 +655,11 @@ public class AiService {
             return normalizeLanguage(user.getPreferredLanguage());
         }
         return "en";
+    }
+
+    private static String normalizeFilterValue(String value) {
+        String trimmed = TextUtils.trimToNull(value);
+        return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 
     private String normalizeLanguage(String value) {
@@ -739,6 +754,21 @@ public class AiService {
                 + ". Return keys: title, chineseStory, pinyin, englishTranslation, bahasaMelayuTranslation, vocabularyList, comprehensionQuestions, encouragement.";
     }
 
+    private static String pronunciationInputSummary(String targetText, String pinyin, String tone) {
+        List<String> parts = new ArrayList<>();
+        parts.add("Target text: " + targetText);
+        addSummaryPart(parts, "Pinyin", pinyin);
+        addSummaryPart(parts, "Tone", tone);
+        return String.join("; ", parts);
+    }
+
+    private static void addSummaryPart(List<String> parts, String label, String value) {
+        String trimmed = TextUtils.trimToNull(value);
+        if (trimmed != null) {
+            parts.add(label + ": " + trimmed);
+        }
+    }
+
     private String buildLearningRecommendationPrompt(AiLearningRecommendationRequest request, String summary, String language) {
         String recentQuizResults = joinPromptList("Recent quiz results", request.recentQuizResults(), MAX_RECOMMENDATION_CONTEXT_ITEMS);
         String wrongAnswers = joinPromptList("Wrong answers", request.wrongAnswers(), MAX_RECOMMENDATION_CONTEXT_ITEMS);
@@ -780,8 +810,9 @@ public class AiService {
         }
     }
 
-    private boolean hasRole(SecurityUserDetails currentUser, RoleName roleName) {
-        return currentUser.getRoleNames().stream().anyMatch(role -> role.equals(roleName.name()));
+    private static boolean hasRole(SecurityUserDetails currentUser, RoleName roleName) {
+        return currentUser != null
+                && currentUser.getRoleNames().stream().anyMatch(role -> role.equals(roleName.name()));
     }
 
     private String buildStudentContextSummary(StudentProfile studentProfile) {
@@ -797,19 +828,35 @@ public class AiService {
         String level = studentProfile.getCurrentLevel() != null ? studentProfile.getCurrentLevel().getName() : "Beginner";
         int totalPoints = studentProfile.getTotalPoints() == null ? 0 : studentProfile.getTotalPoints();
         int completion = overallCompletionPercent(accessibleLessons);
-        String weakAreas = String.join(", ", wrongAnswers.stream()
-                .map(answer -> answer.getQuestion() == null ? null : answer.getQuestion().getQuestionType())
-                .filter(value -> value != null && !value.isBlank())
-                .distinct()
-                .limit(5)
-                .toList());
+        String weakAreas = String.join(", ", recentQuestionTypes(wrongAnswers, WEAK_AREA_LIMIT));
 
         return "Student level: " + level
                 + ". Total points: " + totalPoints
                 + ". Completion percent: " + completion
                 + ". Weak areas: " + weakAreas
-                + ". Recent lessons: " + accessibleLessons.stream().limit(3).map(progress -> progress.getLesson().getTitle()).toList()
-                + ". Recent wrong answers: " + wrongAnswers.stream().limit(3).map(answer -> answer.getQuestion().getQuestionType()).toList() + ".";
+                + ". Recent lessons: " + recentLessonTitles(accessibleLessons)
+                + ". Recent wrong answers: " + recentQuestionTypes(wrongAnswers, RECENT_CONTEXT_ITEM_LIMIT) + ".";
+    }
+
+    private static List<String> recentLessonTitles(List<LessonProgress> lessonProgressList) {
+        return lessonProgressList.stream()
+                .map(LessonProgress::getLesson)
+                .filter(Objects::nonNull)
+                .map(lesson -> AiInputSanitizer.sanitizeShort(lesson.getTitle()))
+                .filter(value -> value != null && !value.isBlank())
+                .limit(RECENT_CONTEXT_ITEM_LIMIT)
+                .toList();
+    }
+
+    private static List<String> recentQuestionTypes(List<QuizAttemptAnswer> answers, int limit) {
+        return answers.stream()
+                .map(QuizAttemptAnswer::getQuestion)
+                .filter(Objects::nonNull)
+                .map(question -> AiInputSanitizer.sanitizeShort(question.getQuestionType()))
+                .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .limit(limit)
+                .toList();
     }
 
     private boolean hasCurrentLessonProgressAccess(StudentProfile student, LessonProgress progress) {
@@ -828,7 +875,7 @@ public class AiService {
             return 0;
         }
         long completedLessons = lessonProgressList.stream().filter(LessonProgress::isCompleted).count();
-        return (int) Math.round((completedLessons * 100.0) / lessonProgressList.size());
+        return (int) Math.round(completedLessons * 100.0 / lessonProgressList.size());
     }
 
     private AiVocabularyHelperResponse unavailableVocabularyResponse(AiExecutionResult execution) {
@@ -861,12 +908,9 @@ public class AiService {
                 execution.status().name());
     }
 
-    private AiStoryGeneratorResponse fallbackStoryResponse(
-            AiStoryGeneratorRequest request,
-            String usageMode,
-            String status) {
+    private AiStoryGeneratorResponse fallbackStoryResponse(String topic, String usageMode, String status) {
         return new AiStoryGeneratorResponse(
-                requireSanitizedShort(request.topic(), "Topic is required."),
+                topic,
                 AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
                 null,
                 null,
@@ -932,29 +976,22 @@ public class AiService {
             String usageMode,
             Map<String, Object> map,
             String status) {
-        List<AiGeneratedQuizQuestionResponse> questions = new ArrayList<>();
-        Object questionsObject = map.get("questions");
-        if (questionsObject instanceof List<?> list) {
-            for (Object item : list) {
-                if (questions.size() >= MAX_QUIZ_QUESTIONS) {
-                    break;
-                }
-                if (item instanceof Map<?, ?> question) {
-                    questions.add(new AiGeneratedQuizQuestionResponse(
-                            text(question, "questionText"),
-                            TextUtils.defaultIfBlank(text(question, "questionType"), "MULTIPLE_CHOICE"),
-                            boundedStringList(question.get("options"), MAX_AI_OPTION_ITEMS),
-                            text(question, "correctAnswer"),
-                            text(question, "explanation"),
-                            text(question, "pinyin"),
-                            text(question, "translation")));
-                }
-            }
-        }
+        String topic = requireSanitizedShort(request.topic(), "Topic is required.");
+        List<AiGeneratedQuizQuestionResponse> questions = mapObjectList(
+                map.get("questions"),
+                MAX_QUIZ_QUESTIONS,
+                question -> new AiGeneratedQuizQuestionResponse(
+                        text(question, "questionText"),
+                        TextUtils.defaultIfBlank(text(question, "questionType"), "MULTIPLE_CHOICE"),
+                        boundedStringList(question.get("options"), MAX_AI_OPTION_ITEMS),
+                        text(question, "correctAnswer"),
+                        text(question, "explanation"),
+                        text(question, "pinyin"),
+                        text(question, "translation")));
         if (questions.isEmpty()) {
             return new AiQuizGeneratorResponse(
                     "AI quiz unavailable",
-                    requireSanitizedShort(request.topic(), "Topic is required."),
+                    topic,
                     sanitizePromptFragment(request.level()),
                     sanitizePromptFragment(request.category()),
                     usageMode,
@@ -963,8 +1000,8 @@ public class AiService {
         }
 
         return new AiQuizGeneratorResponse(
-                TextUtils.defaultIfBlank(text(map, "title"), requireSanitizedShort(request.topic(), "Topic is required.") + " Quiz"),
-                requireSanitizedShort(request.topic(), "Topic is required."),
+                TextUtils.defaultIfBlank(text(map, "title"), topic + " Quiz"),
+                topic,
                 sanitizePromptFragment(request.level()),
                 sanitizePromptFragment(request.category()),
                 usageMode,
@@ -974,45 +1011,29 @@ public class AiService {
 
     private AiStoryGeneratorResponse parseStoryResponse(
             AiStoryGeneratorRequest request,
+            String topic,
             String usageMode,
             Map<String, Object> map,
             String status) {
-        List<AiStoryVocabularyItemResponse> vocabularyList = new ArrayList<>();
-        Object vocabObject = map.get("vocabularyList");
-        if (vocabObject instanceof List<?> list) {
-            for (Object item : list) {
-                if (vocabularyList.size() >= MAX_STORY_VOCABULARY_ITEMS) {
-                    break;
-                }
-                if (item instanceof Map<?, ?> vocab) {
-                    vocabularyList.add(new AiStoryVocabularyItemResponse(
-                            text(vocab, "chineseWord"),
-                            text(vocab, "pinyin"),
-                            text(vocab, "englishMeaning"),
-                            text(vocab, "bahasaMelayuMeaning")));
-                }
-            }
-        }
-
-        List<AiStoryComprehensionQuestionResponse> comprehensionQuestions = new ArrayList<>();
-        Object questionObject = map.get("comprehensionQuestions");
-        if (questionObject instanceof List<?> list) {
-            for (Object item : list) {
-                if (comprehensionQuestions.size() >= MAX_STORY_COMPREHENSION_QUESTIONS) {
-                    break;
-                }
-                if (item instanceof Map<?, ?> question) {
-                    comprehensionQuestions.add(new AiStoryComprehensionQuestionResponse(
-                            text(question, "question"),
-                            boundedStringList(question.get("options"), MAX_AI_OPTION_ITEMS),
-                            text(question, "answer"),
-                            text(question, "explanation")));
-                }
-            }
-        }
+        List<AiStoryVocabularyItemResponse> vocabularyList = mapObjectList(
+                map.get("vocabularyList"),
+                MAX_STORY_VOCABULARY_ITEMS,
+                vocab -> new AiStoryVocabularyItemResponse(
+                        text(vocab, "chineseWord"),
+                        text(vocab, "pinyin"),
+                        text(vocab, "englishMeaning"),
+                        text(vocab, "bahasaMelayuMeaning")));
+        List<AiStoryComprehensionQuestionResponse> comprehensionQuestions = mapObjectList(
+                map.get("comprehensionQuestions"),
+                MAX_STORY_COMPREHENSION_QUESTIONS,
+                question -> new AiStoryComprehensionQuestionResponse(
+                        text(question, "question"),
+                        boundedStringList(question.get("options"), MAX_AI_OPTION_ITEMS),
+                        text(question, "answer"),
+                        text(question, "explanation")));
 
         return new AiStoryGeneratorResponse(
-                TextUtils.defaultIfBlank(text(map, "title"), requireSanitizedShort(request.topic(), "Topic is required.")),
+                TextUtils.defaultIfBlank(text(map, "title"), topic),
                 TextUtils.defaultIfBlank(text(map, "chineseStory"), AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE),
                 text(map, "pinyin"),
                 text(map, "englishTranslation"),
@@ -1042,8 +1063,7 @@ public class AiService {
 
     private ParsedAiJson parseJsonMap(String responseText) {
         try {
-            Map<String, Object> values = objectMapper.readValue(responseText, new TypeReference<Map<String, Object>>() {
-            });
+            Map<String, Object> values = objectMapper.readValue(responseText, MAP_TYPE);
             return values.isEmpty() ? ParsedAiJson.invalid() : ParsedAiJson.valid(values);
         } catch (JsonProcessingException exception) {
             log.warn("AI JSON parsing fallback triggered for invalid provider response.");
@@ -1054,6 +1074,18 @@ public class AiService {
     private String text(Map<?, ?> map, String key) {
         Object value = map.get(key);
         return value == null ? null : AiInputSanitizer.sanitizeLong(String.valueOf(value));
+    }
+
+    private <T> List<T> mapObjectList(Object value, int maxItems, Function<Map<?, ?>, T> mapper) {
+        if (!(value instanceof List<?> list) || maxItems <= 0) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .limit(maxItems)
+                .map(map -> mapper.apply(map))
+                .toList();
     }
 
     private List<String> boundedStringList(Object value, int maxItems) {

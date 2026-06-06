@@ -26,7 +26,7 @@ public enum ActivityType {
     private static final Map<String, ActivityType> LOOKUP =
             Arrays.stream(values())
                     .collect(Collectors.toUnmodifiableMap(
-                            value -> value.name().toUpperCase(Locale.ROOT),
+                            Enum::name,
                             Function.identity()));
 
     private static final String ALLOWED_VALUES_LIST =

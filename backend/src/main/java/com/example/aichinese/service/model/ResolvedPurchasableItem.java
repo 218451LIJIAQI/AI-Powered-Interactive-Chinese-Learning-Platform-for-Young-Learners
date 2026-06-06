@@ -19,16 +19,31 @@ public record ResolvedPurchasableItem(
     public ResolvedPurchasableItem {
         itemType = Objects.requireNonNull(itemType, "itemType");
         itemId = Objects.requireNonNull(itemId, "itemId");
+        if (itemId <= 0) {
+            throw new IllegalArgumentException("itemId must be positive.");
+        }
         title = requireText(title, "title");
         unitPrice = Objects.requireNonNull(unitPrice, "unitPrice");
+        if (unitPrice.signum() < 0) {
+            throw new IllegalArgumentException("unitPrice must not be negative.");
+        }
         currencyCode = requireText(currencyCode, "currencyCode");
+        relatedFeatureKey = optionalText(relatedFeatureKey);
     }
 
     private static String requireText(String value, String fieldName) {
-        Objects.requireNonNull(value, fieldName);
-        if (value.isBlank()) {
+        String stripped = Objects.requireNonNull(value, fieldName).strip();
+        if (stripped.isEmpty()) {
             throw new IllegalArgumentException(fieldName + " must not be blank.");
         }
-        return value;
+        return stripped;
+    }
+
+    private static String optionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String stripped = value.strip();
+        return stripped.isEmpty() ? null : stripped;
     }
 }

@@ -21,8 +21,8 @@ public record AdminListeningExerciseRequest(
         String title,
 
         @Pattern(
-                regexp = "^(https?://.+)?$",
-                message = "Audio URL must start with http:// or https://.")
+                regexp = "^(https?://\\S+)?$",
+                message = "Audio URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Audio URL must not exceed 255 characters.")
         String audioUrl,
 

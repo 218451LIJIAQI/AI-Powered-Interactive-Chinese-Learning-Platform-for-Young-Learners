@@ -22,11 +22,19 @@ import com.example.aichinese.repository.UserRepository;
  * configuration.
  */
 @SpringBootTest(properties = {
-        "DEFAULT_ADMIN_EMAIL=",
-        "DEFAULT_ADMIN_PASSWORD="
+        DataSeederTests.BLANK_DEFAULT_ADMIN_EMAIL_PROPERTY,
+        DataSeederTests.BLANK_DEFAULT_ADMIN_PASSWORD_PROPERTY
 })
 @ActiveProfiles("test")
 class DataSeederTests {
+
+    static final String BLANK_DEFAULT_ADMIN_EMAIL_PROPERTY = "DEFAULT_ADMIN_EMAIL=";
+    static final String BLANK_DEFAULT_ADMIN_PASSWORD_PROPERTY = "DEFAULT_ADMIN_PASSWORD=";
+    private static final long EXPECTED_ROLE_COUNT = 3;
+    private static final long EXPECTED_LEVEL_COUNT = 3;
+    private static final long EXPECTED_CATEGORY_COUNT = 15;
+    private static final long MIN_BADGE_COUNT = 3;
+    private static final long MIN_SYSTEM_SETTING_COUNT = 3;
 
     @Autowired
     private RoleRepository roleRepository;
@@ -48,11 +56,11 @@ class DataSeederTests {
 
     @Test
     void shouldSeedEssentialReferenceDataWithoutDefaultAdmin() {
-        assertThat(roleRepository.count()).isEqualTo(3);
-        assertThat(learningLevelRepository.count()).isEqualTo(3);
-        assertThat(learningCategoryRepository.count()).isEqualTo(15);
-        assertThat(badgeRepository.count()).isGreaterThanOrEqualTo(3);
-        assertThat(systemSettingRepository.count()).isGreaterThanOrEqualTo(3);
+        assertThat(roleRepository.count()).isEqualTo(EXPECTED_ROLE_COUNT);
+        assertThat(learningLevelRepository.count()).isEqualTo(EXPECTED_LEVEL_COUNT);
+        assertThat(learningCategoryRepository.count()).isEqualTo(EXPECTED_CATEGORY_COUNT);
+        assertThat(badgeRepository.count()).isGreaterThanOrEqualTo(MIN_BADGE_COUNT);
+        assertThat(systemSettingRepository.count()).isGreaterThanOrEqualTo(MIN_SYSTEM_SETTING_COUNT);
         assertThat(userRepository.count()).isZero();
     }
 }

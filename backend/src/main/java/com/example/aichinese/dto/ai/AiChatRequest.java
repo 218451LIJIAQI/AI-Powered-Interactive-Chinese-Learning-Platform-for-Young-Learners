@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.ai;
 
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -24,7 +25,7 @@ public record AiChatRequest(
 
     public AiChatRequest {
         message = strip(message);
-        languagePreference = strip(languagePreference);
-        context = strip(context);
+        languagePreference = stripToNull(languagePreference);
+        context = stripToNull(context);
     }
 }

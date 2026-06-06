@@ -24,6 +24,11 @@ public record SecurityProperties(
         @NotBlank(message = "Refresh token SameSite policy must not be blank.")
         String refreshTokenSameSite) {
 
+    private static final long DEFAULT_REFRESH_TOKEN_EXPIRATION_MS = 604_800_000L;
+    private static final String DEFAULT_REFRESH_TOKEN_COOKIE_NAME = "mandarin_spark_refresh";
+    private static final String DEFAULT_REFRESH_TOKEN_SAME_SITE = "Strict";
+    private static final String SAME_SITE_ERROR = "Refresh token SameSite policy must be Strict, Lax, or None.";
+
     @ConstructorBinding
     public SecurityProperties {
         secret = normalizeSecret(secret);
@@ -41,7 +46,13 @@ public record SecurityProperties(
     }
 
     public SecurityProperties(String secret, long expiration) {
-        this(secret, expiration, 604_800_000L, "mandarin_spark_refresh", false, "Strict");
+        this(
+                secret,
+                expiration,
+                DEFAULT_REFRESH_TOKEN_EXPIRATION_MS,
+                DEFAULT_REFRESH_TOKEN_COOKIE_NAME,
+                false,
+                DEFAULT_REFRESH_TOKEN_SAME_SITE);
     }
 
     @Override
@@ -55,9 +66,6 @@ public record SecurityProperties(
     }
 
     private String maskedSecret() {
-        if (secret == null || secret.isBlank()) {
-            return "[unset]";
-        }
         if (secret.startsWith("base64:")) {
             return "[set:base64]";
         }
@@ -65,7 +73,10 @@ public record SecurityProperties(
     }
 
     private static String normalizeSecret(String value) {
-        return value == null ? null : value.strip();
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("JWT secret must not be blank.");
+        }
+        return value.strip();
     }
 
     private static String requireCookieName(String value) {
@@ -99,7 +110,7 @@ public record SecurityProperties(
             case "strict" -> "Strict";
             case "lax" -> "Lax";
             case "none" -> "None";
-            default -> throw new IllegalArgumentException("Refresh token SameSite policy must be Strict, Lax, or None.");
+            default -> throw new IllegalArgumentException(SAME_SITE_ERROR);
         };
     }
 }

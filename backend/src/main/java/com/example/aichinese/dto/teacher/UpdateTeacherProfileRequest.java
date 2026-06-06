@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.teacher;
 
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
 
 import java.util.List;
@@ -23,12 +24,15 @@ public record UpdateTeacherProfileRequest(
         String shortIntroduction,
 
         @Size(max = 12, message = "Teaching categories must not exceed 12 entries.")
-        List<@Size(max = 60, message = "Each teaching category must be 60 characters or fewer.") String> teachingCategories) {
+        List<
+                @NotBlank(message = "Teaching category must not be blank.")
+                @Size(max = 60, message = "Each teaching category must be 60 characters or fewer.")
+                String> teachingCategories) {
 
     public UpdateTeacherProfileRequest {
         fullName = strip(fullName);
-        bio = strip(bio);
-        shortIntroduction = strip(shortIntroduction);
+        bio = stripToNull(bio);
+        shortIntroduction = stripToNull(shortIntroduction);
         teachingCategories = strippedStringListOrNull(teachingCategories);
     }
 }

@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RequestIdFilter extends OncePerRequestFilter {
 
     private static final int MAX_REQUEST_ID_LENGTH = 120;
+    private static final String MDC_REQUEST_ID_KEY = "requestId";
 
     @Override
     protected void doFilterInternal(
@@ -34,12 +35,12 @@ public class RequestIdFilter extends OncePerRequestFilter {
         }
 
         RequestIdHolder.set(requestId);
-        MDC.put("requestId", requestId);
+        MDC.put(MDC_REQUEST_ID_KEY, requestId);
         response.setHeader(RequestIdHolder.HEADER_NAME, requestId);
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove("requestId");
+            MDC.remove(MDC_REQUEST_ID_KEY);
             RequestIdHolder.clear();
         }
     }

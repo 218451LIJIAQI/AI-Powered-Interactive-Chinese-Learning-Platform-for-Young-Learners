@@ -1,49 +1,48 @@
-/**
- * Locale-aware display formatters used across every persona surface
- * for numbers, currency, dates and percentages. Centralising avoids
- * the classic "TypeError: Cannot read properties of null (reading
- * 'toFixed')" by null-coalescing every input to a sensible default
- * and returning the `'--'` placeholder for invalid date strings so
- * the UI never shows raw `Invalid Date` to a learner.
- *
- * The locale is fixed to `en-US` because the platform's authored
- * content is English-first; persona-specific labels are translated
- * separately via i18n.
- */
-export function toFiniteNumber(value: number | null | undefined, fallback = 0) {
+const DISPLAY_LOCALE = 'en-US'
+const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
+const DEFAULT_DATE_FORMATTER = new Intl.DateTimeFormat(DISPLAY_LOCALE, DEFAULT_DATE_OPTIONS)
+const DEFAULT_DATE_TIME_FORMATTER = new Intl.DateTimeFormat(DISPLAY_LOCALE, {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+const DEFAULT_NUMBER_FORMATTER = new Intl.NumberFormat(DISPLAY_LOCALE)
+
+export function toFiniteNumber(value: number | null | undefined, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
-export function nonNegativeInteger(value: number | null | undefined, fallback = 0) {
+export function nonNegativeInteger(value: number | null | undefined, fallback = 0): number {
   return Math.max(0, Math.round(toFiniteNumber(value, fallback)))
 }
 
-export function clampNumber(value: number | null | undefined, min: number, max: number, fallback = min) {
+export function clampNumber(value: number | null | undefined, min: number, max: number, fallback = min): number {
   const low = Math.min(min, max)
   const high = Math.max(min, max)
   return Math.min(high, Math.max(low, toFiniteNumber(value, fallback)))
 }
 
-export function clampPercent(value: number | null | undefined, fallback = 0) {
+export function clampPercent(value: number | null | undefined, fallback = 0): number {
   return Math.round(clampNumber(value, 0, 100, fallback))
 }
 
-export function ratioPercent(numerator: number | null | undefined, denominator: number | null | undefined) {
+export function ratioPercent(numerator: number | null | undefined, denominator: number | null | undefined): number {
   const divisor = toFiniteNumber(denominator)
   if (divisor <= 0) return 0
 
   return clampPercent((toFiniteNumber(numerator) / divisor) * 100)
 }
 
-export function formatNumber(value: number | null | undefined) {
-  return new Intl.NumberFormat('en-US').format(toFiniteNumber(value))
+export function formatNumber(value: number | null | undefined): string {
+  return DEFAULT_NUMBER_FORMATTER.format(toFiniteNumber(value))
 }
 
 const DEFAULT_CURRENCY_CODE = 'USD'
 const WELL_FORMED_CURRENCY_CODE = /^[A-Z]{3}$/
 let supportedCurrencyCodes: ReadonlySet<string> | null | undefined
 
-function getSupportedCurrencyCodes() {
+function getSupportedCurrencyCodes(): ReadonlySet<string> | null {
   if (supportedCurrencyCodes !== undefined) {
     return supportedCurrencyCodes
   }
@@ -64,7 +63,7 @@ function getSupportedCurrencyCodes() {
   return supportedCurrencyCodes
 }
 
-function normalizeCurrencyCode(currency: string | null | undefined) {
+function normalizeCurrencyCode(currency: string | null | undefined): string {
   const normalized = typeof currency === 'string' ? currency.trim().toUpperCase() : ''
   if (!WELL_FORMED_CURRENCY_CODE.test(normalized)) {
     return DEFAULT_CURRENCY_CODE
@@ -78,40 +77,35 @@ function normalizeCurrencyCode(currency: string | null | undefined) {
   return normalized
 }
 
-export function formatCurrency(value: number | null | undefined, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(value: number | null | undefined, currency = DEFAULT_CURRENCY_CODE): string {
+  return new Intl.NumberFormat(DISPLAY_LOCALE, {
     style: 'currency',
     currency: normalizeCurrencyCode(currency),
     maximumFractionDigits: 2,
   }).format(toFiniteNumber(value))
 }
 
-function parseDate(value: string | null | undefined) {
+function parseDate(value: string | null | undefined): Date | null {
   if (!value) return null
 
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-export function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions) {
+export function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions): string {
   const date = parseDate(value)
   if (!date) return '--'
 
-  return new Intl.DateTimeFormat('en-US', options ?? { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+  return options ? new Intl.DateTimeFormat(DISPLAY_LOCALE, options).format(date) : DEFAULT_DATE_FORMATTER.format(date)
 }
 
-export function formatDateTime(value: string | null | undefined) {
+export function formatDateTime(value: string | null | undefined): string {
   const date = parseDate(value)
   if (!date) return '--'
 
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
+  return DEFAULT_DATE_TIME_FORMATTER.format(date)
 }
 
-export function formatPercent(value: number | null | undefined) {
+export function formatPercent(value: number | null | undefined): string {
   return `${clampPercent(value)}%`
 }

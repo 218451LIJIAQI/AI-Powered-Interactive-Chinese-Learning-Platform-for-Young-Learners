@@ -11,6 +11,7 @@ import com.example.aichinese.provider.MockPaymentProviderClient;
 import com.example.aichinese.provider.NoOpPaymentProviderClient;
 import com.example.aichinese.provider.PaymentProviderClient;
 import com.example.aichinese.provider.StripePaymentProviderClient;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class PaymentProviderService {
@@ -34,7 +35,7 @@ public class PaymentProviderService {
     }
 
     public PaymentProviderClient getClient() {
-        String provider = paymentProperties.provider();
+        String provider = TextUtils.defaultIfBlank(paymentProperties.provider(), "noop");
         PaymentProviderClient client = switch (provider) {
             case "stripe" -> stripePaymentProviderClient;
             case "mock" -> paymentProperties.mockSuccessEnabled()

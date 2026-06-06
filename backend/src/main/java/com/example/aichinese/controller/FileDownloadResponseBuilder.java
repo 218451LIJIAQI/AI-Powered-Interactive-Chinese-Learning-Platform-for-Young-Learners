@@ -12,16 +12,18 @@ import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.lang.NonNull;
 
 import com.example.aichinese.service.StoredFileDownload;
 
 final class FileDownloadResponseBuilder {
 
-    @NonNull
-    private static final MediaType DEFAULT_MEDIA_TYPE = Objects.requireNonNull(MediaType.APPLICATION_OCTET_STREAM);
+    private static final MediaType DEFAULT_MEDIA_TYPE = MediaType.APPLICATION_OCTET_STREAM;
 
     private static final String DEFAULT_FILE_NAME = "download";
+    private static final String CROSS_ORIGIN_RESOURCE_POLICY = "Cross-Origin-Resource-Policy";
+    private static final String SAME_ORIGIN = "same-origin";
+    private static final String X_CONTENT_TYPE_OPTIONS = "X-Content-Type-Options";
+    private static final String NOSNIFF = "nosniff";
 
     private FileDownloadResponseBuilder() {
     }
@@ -52,14 +54,14 @@ final class FileDownloadResponseBuilder {
                 .cacheControl(CacheControl.noStore())
                 .contentType(inline ? mediaType : safeAttachmentMediaType(mediaType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .header("X-Content-Type-Options", "nosniff")
+                .header(X_CONTENT_TYPE_OPTIONS, NOSNIFF)
                 .header(HttpHeaders.PRAGMA, "no-cache")
                 .header(HttpHeaders.EXPIRES, "Thu, 01 Jan 1970 00:00:00 GMT")
-                .header("Cross-Origin-Resource-Policy", "same-origin")
+                .header(CROSS_ORIGIN_RESOURCE_POLICY, SAME_ORIGIN)
                 .body(resource);
     }
 
-    private static @NonNull MediaType resolveMediaType(StoredFileDownload download) {
+    private static MediaType resolveMediaType(StoredFileDownload download) {
         String contentType = trimToNull(download.contentType());
         if (contentType != null) {
             try {
@@ -68,13 +70,10 @@ final class FileDownloadResponseBuilder {
                 return DEFAULT_MEDIA_TYPE;
             }
         }
-        return Objects.requireNonNull(MediaTypeFactory.getMediaType(download.resource()).orElse(DEFAULT_MEDIA_TYPE));
+        return MediaTypeFactory.getMediaType(download.resource()).orElse(DEFAULT_MEDIA_TYPE);
     }
 
     private static boolean isSafeInlineMediaType(MediaType mediaType) {
-        if (mediaType == null) {
-            return false;
-        }
         if (MediaType.APPLICATION_PDF.includes(mediaType) || MediaType.TEXT_PLAIN.includes(mediaType)) {
             return true;
         }
@@ -86,14 +85,14 @@ final class FileDownloadResponseBuilder {
     }
 
     private static MediaType safeAttachmentMediaType(MediaType mediaType) {
-        if (mediaType == null || isExecutableOrStructuredText(mediaType)) {
+        if (isExecutableOrStructuredText(mediaType)) {
             return DEFAULT_MEDIA_TYPE;
         }
         return mediaType;
     }
 
     private static boolean isExecutableOrStructuredText(MediaType mediaType) {
-        String subtype = mediaType.getSubtype() == null ? "" : mediaType.getSubtype().toLowerCase(Locale.ROOT);
+        String subtype = mediaType.getSubtype().toLowerCase(Locale.ROOT);
         if (MediaType.TEXT_HTML.includes(mediaType)
                 || MediaType.APPLICATION_XHTML_XML.includes(mediaType)
                 || MediaType.APPLICATION_XML.includes(mediaType)

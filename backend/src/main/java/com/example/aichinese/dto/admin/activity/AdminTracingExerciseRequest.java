@@ -21,8 +21,8 @@ public record AdminTracingExerciseRequest(
         String title,
 
         @Pattern(
-                regexp = "^(https?://.+)?$",
-                message = "Worksheet URL must start with http:// or https://.")
+                regexp = "^(https?://\\S+)?$",
+                message = "Worksheet URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Worksheet URL must not exceed 255 characters.")
         String worksheetUrl,
 

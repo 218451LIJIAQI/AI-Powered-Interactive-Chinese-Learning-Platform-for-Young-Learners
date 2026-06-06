@@ -16,22 +16,27 @@ public class EmailConfiguration {
     @Bean
     InitializingBean emailConfigurationValidator(Environment environment, EmailProperties emailProperties) {
         return () -> {
-            if (isProductionProfileActive(environment) && !emailProperties.enabled()) {
+            boolean productionProfileActive = isProductionProfileActive(environment);
+            if (productionProfileActive && !emailProperties.enabled()) {
                 throw new IllegalStateException("SMTP_ENABLED must be true when the prod profile is active.");
             }
             if (emailProperties.enabled()) {
-                validateSmtpConfiguration(environment, emailProperties);
+                validateSmtpConfiguration(environment, emailProperties, productionProfileActive);
             }
         };
     }
 
-    private static void validateSmtpConfiguration(Environment environment, EmailProperties emailProperties) {
+    private static void validateSmtpConfiguration(
+            Environment environment,
+            EmailProperties emailProperties,
+            boolean productionProfileActive) {
         String host = environment.getProperty("spring.mail.host");
         requireText("spring.mail.host", host);
 
         String username = environment.getProperty("spring.mail.username");
-        boolean smtpAuth = Boolean.parseBoolean(
-                environment.getProperty("spring.mail.properties.mail.smtp.auth", "true").trim());
+        boolean smtpAuth = parseBooleanProperty(
+                environment.getProperty("spring.mail.properties.mail.smtp.auth"),
+                true);
         if (smtpAuth) {
             requireText("spring.mail.username", username);
             requireText("spring.mail.password", environment.getProperty("spring.mail.password"));
@@ -39,7 +44,7 @@ public class EmailConfiguration {
 
         emailProperties.resolveFrom(username);
         String passwordResetBaseUrl = emailProperties.resolvePasswordResetBaseUrl();
-        if (isProductionProfileActive(environment)) {
+        if (productionProfileActive) {
             HttpUrlValidation.requirePublicHttpsUrl(
                     passwordResetBaseUrl,
                     "app.email.password-reset-base-url",
@@ -51,6 +56,10 @@ public class EmailConfiguration {
         if (!StringUtils.hasText(value)) {
             throw new IllegalStateException(propertyName + " must be configured when app.email.enabled=true.");
         }
+    }
+
+    private static boolean parseBooleanProperty(String value, boolean defaultValue) {
+        return StringUtils.hasText(value) ? Boolean.parseBoolean(value.trim()) : defaultValue;
     }
 
     private static boolean isProductionProfileActive(Environment environment) {

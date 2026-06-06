@@ -11,7 +11,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -82,15 +81,7 @@ class EntityLayerContractTests {
                     continue;
                 }
 
-                Enumerated enumerated = field.getAnnotation(Enumerated.class);
-                assertThat(enumerated)
-                        .as(entityClass.getName() + "." + field.getName()
-                                + " must explicitly use @Enumerated(EnumType.STRING)")
-                        .isNotNull();
-                assertThat(enumerated.value())
-                        .as(entityClass.getName() + "." + field.getName()
-                                + " must not persist enum ordinals")
-                        .isEqualTo(EnumType.STRING);
+                assertEnumFieldUsesStringMapping(entityClass, field);
             }
         }
     }
@@ -155,13 +146,7 @@ class EntityLayerContractTests {
 
     private static List<Class<?>> concreteEntityClasses() throws Exception {
         try (Stream<Path> sources = concreteEntitySources()) {
-            List<Class<?>> classes = new ArrayList<>();
-            sources
-                    .map(EntityLayerContractTests::sourceToClassName)
-                    .map(EntityLayerContractTests::loadClass)
-                    .forEach(classes::add);
-            classes.sort(Comparator.comparing(Class::getName));
-            return List.copyOf(classes);
+            return loadSortedSourceClasses(sources);
         }
     }
 
@@ -174,17 +159,29 @@ class EntityLayerContractTests {
 
     private static List<Class<?>> enumClasses() throws Exception {
         try (Stream<Path> sources = Files.list(ENUM_SOURCE_ROOT)) {
-            List<Class<?>> classes = new ArrayList<>();
-            sources
+            return loadSortedEnumClasses(sources
                     .filter(path -> path.getFileName().toString().endsWith(".java"))
-                    .filter(path -> !"EnumLookups.java".equals(path.getFileName().toString()))
-                    .map(EntityLayerContractTests::sourceToClassName)
-                    .map(EntityLayerContractTests::loadClass)
-                    .filter(Class::isEnum)
-                    .forEach(classes::add);
-            classes.sort(Comparator.comparing(Class::getName));
-            return List.copyOf(classes);
+                    .filter(path -> !"EnumLookups.java".equals(path.getFileName().toString())));
         }
+    }
+
+    private static List<Class<?>> loadSortedSourceClasses(Stream<Path> sources) {
+        return loadSortedClasses(sources
+                .map(EntityLayerContractTests::sourceToClassName)
+                .map(EntityLayerContractTests::loadClass));
+    }
+
+    private static List<Class<?>> loadSortedEnumClasses(Stream<Path> sources) {
+        return loadSortedClasses(sources
+                .map(EntityLayerContractTests::sourceToClassName)
+                .map(EntityLayerContractTests::loadClass)
+                .filter(Class::isEnum));
+    }
+
+    private static List<Class<?>> loadSortedClasses(Stream<Class<?>> classes) {
+        return classes
+                .sorted(Comparator.comparing(Class::getName))
+                .toList();
     }
 
     private static List<String> sourceContractViolations(Path source) {
@@ -217,6 +214,17 @@ class EntityLayerContractTests {
         Path relativeSource = MAIN_JAVA.relativize(source);
         String sourceName = relativeSource.toString().replace('\\', '.').replace('/', '.');
         return sourceName.substring(0, sourceName.length() - ".java".length());
+    }
+
+    private static void assertEnumFieldUsesStringMapping(Class<?> entityClass, Field field) {
+        String fieldPath = entityClass.getName() + "." + field.getName();
+        Enumerated enumerated = field.getAnnotation(Enumerated.class);
+        assertThat(enumerated)
+                .as(fieldPath + " must explicitly use @Enumerated(EnumType.STRING)")
+                .isNotNull();
+        assertThat(enumerated.value())
+                .as(fieldPath + " must not persist enum ordinals")
+                .isEqualTo(EnumType.STRING);
     }
 
     private static Class<?> loadClass(String className) {

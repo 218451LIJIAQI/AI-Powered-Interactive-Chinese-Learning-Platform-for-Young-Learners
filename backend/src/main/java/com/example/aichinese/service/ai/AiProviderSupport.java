@@ -41,9 +41,7 @@ final class AiProviderSupport {
         if (trimmed == null) {
             return null;
         }
-        while (trimmed.endsWith("/")) {
-            trimmed = trimmed.substring(0, trimmed.length() - 1);
-        }
+        trimmed = stripTrailingSlashes(trimmed);
         if (trimmed.isEmpty()) {
             return null;
         }
@@ -65,19 +63,28 @@ final class AiProviderSupport {
         if (host == null || host.isBlank()) {
             return null;
         }
-        if ("https".equals(scheme)) {
-            return trimmed;
-        }
-        if ("http".equals(scheme) && isLoopbackHost(host)) {
+        if (isAllowedRuntimeScheme(scheme, host)) {
             return trimmed;
         }
         return null;
     }
 
-    private static boolean isLoopbackHost(String host) {
-        if (host == null) {
-            return false;
+    private static String stripTrailingSlashes(String value) {
+        String stripped = value;
+        while (stripped.endsWith("/")) {
+            stripped = stripped.substring(0, stripped.length() - 1);
         }
+        return stripped;
+    }
+
+    private static boolean isAllowedRuntimeScheme(String scheme, String host) {
+        if ("https".equals(scheme)) {
+            return true;
+        }
+        return "http".equals(scheme) && isLoopbackHost(host);
+    }
+
+    private static boolean isLoopbackHost(String host) {
         String normalized = host.trim().toLowerCase(Locale.ROOT);
         if (normalized.startsWith("[") && normalized.endsWith("]") && normalized.length() > 2) {
             normalized = normalized.substring(1, normalized.length() - 1);

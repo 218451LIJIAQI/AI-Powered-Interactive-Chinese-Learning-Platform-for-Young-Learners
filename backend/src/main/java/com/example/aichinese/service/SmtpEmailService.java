@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.util.ExceptionLogUtils;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 @ConditionalOnProperty(prefix = "app.email", name = "enabled", havingValue = "true")
@@ -32,19 +33,20 @@ public class SmtpEmailService implements EmailService {
             @Value("${spring.mail.username:}") String smtpUsername) {
         this.mailSender = Objects.requireNonNull(mailSender, "mailSender");
         this.emailProperties = Objects.requireNonNull(emailProperties, "emailProperties");
-        this.smtpUsername = smtpUsername;
+        this.smtpUsername = TextUtils.defaultIfBlank(smtpUsername, "");
     }
 
     @Override
     public void sendEmail(User recipient, String subject, String body) {
-        if (recipient == null || recipient.getEmail() == null || recipient.getEmail().isBlank()) {
+        String recipientEmail = recipient == null ? null : TextUtils.trimToNull(recipient.getEmail());
+        if (recipientEmail == null) {
             log.info("Email sending skipped because the recipient email address is missing.");
             return;
         }
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(recipient.getEmail());
+            message.setTo(recipientEmail);
             message.setFrom(emailProperties.resolveFrom(smtpUsername));
             message.setSubject(subject);
             message.setText(body);

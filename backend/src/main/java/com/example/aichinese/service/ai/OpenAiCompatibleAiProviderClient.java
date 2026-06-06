@@ -31,7 +31,13 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
 
     private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
     private static final String CHAT_COMPLETIONS_PATH = "/chat/completions";
+    private static final String ROLE_SYSTEM = "system";
+    private static final String ROLE_USER = "user";
     private static final double DEFAULT_TEMPERATURE = 0.7;
+    private static final BigInteger INTEGER_MAX_VALUE = BigInteger.valueOf(Integer.MAX_VALUE);
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP_RESPONSE_TYPE =
+            new ParameterizedTypeReference<>() {
+            };
 
     private final AiProperties aiProperties;
     private final RestTemplate restTemplate;
@@ -68,27 +74,46 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             return AiProviderResult.failure(providerName, modelName, "AI API base URL is missing or invalid.");
         }
 
+        return executeRequest(
+                providerName,
+                modelName,
+                endpoint,
+                buildHeaders(apiKey),
+                buildRequestBody(modelName, prompt),
+                prompt.featureKey());
+    }
+
+    private static HttpHeaders buildHeaders(String apiKey) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(apiKey);
+        return headers;
+    }
 
-        List<Map<String, Object>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", prompt.systemInstruction()));
-        for (AiProviderPrompt.AiMessage message : prompt.messageHistory()) {
-            messages.add(Map.of("role", message.role(), "content", message.content()));
-        }
-        messages.add(Map.of("role", "user", "content", prompt.userPrompt()));
-
+    private static Map<String, Object> buildRequestBody(String modelName, AiProviderPrompt prompt) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", modelName);
-        body.put("messages", messages);
+        body.put("messages", buildMessages(prompt));
         body.put("max_tokens", prompt.maxOutputTokens());
         body.put("temperature", DEFAULT_TEMPERATURE);
         if (prompt.expectJson()) {
             body.put("response_format", Map.of("type", "json_object"));
         }
+        return body;
+    }
 
-        return executeRequest(providerName, modelName, endpoint, headers, body, prompt.featureKey());
+    private static List<Map<String, Object>> buildMessages(AiProviderPrompt prompt) {
+        List<Map<String, Object>> messages = new ArrayList<>(prompt.messageHistory().size() + 2);
+        messages.add(message(ROLE_SYSTEM, prompt.systemInstruction()));
+        for (AiProviderPrompt.AiMessage message : prompt.messageHistory()) {
+            messages.add(message(message.role(), message.content()));
+        }
+        messages.add(message(ROLE_USER, prompt.userPrompt()));
+        return messages;
+    }
+
+    private static Map<String, Object> message(String role, String content) {
+        return Map.of("role", role, "content", content);
     }
 
     private AiProviderResult executeRequest(
@@ -103,8 +128,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
                     endpoint,
                     HttpMethod.POST,
                     new HttpEntity<>(body, headers),
-                    new ParameterizedTypeReference<Map<String, Object>>() {
-                    });
+                    MAP_RESPONSE_TYPE);
 
             return parseResponse(providerName, modelName, response.getBody());
         } catch (RuntimeException ex) {
@@ -173,16 +197,11 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
                     : null;
         }
         if (totalTokens instanceof BigInteger bigInteger) {
-            return bigInteger.signum() >= 0 && bigInteger.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0
-                    ? bigInteger.intValue()
-                    : null;
+            return toNonNegativeInt(bigInteger);
         }
         if (totalTokens instanceof BigDecimal bigDecimal) {
             try {
-                BigInteger exact = bigDecimal.toBigIntegerExact();
-                return exact.signum() >= 0 && exact.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) <= 0
-                        ? exact.intValue()
-                        : null;
+                return toNonNegativeInt(bigDecimal.toBigIntegerExact());
             } catch (ArithmeticException exception) {
                 return null;
             }
@@ -192,5 +211,11 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             return tokenCount >= 0 && tokenCount <= Integer.MAX_VALUE ? (int) tokenCount : null;
         }
         return null;
+    }
+
+    private static Integer toNonNegativeInt(BigInteger value) {
+        return value.signum() >= 0 && value.compareTo(INTEGER_MAX_VALUE) <= 0
+                ? value.intValue()
+                : null;
     }
 }

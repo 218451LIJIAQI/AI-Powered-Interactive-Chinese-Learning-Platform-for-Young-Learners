@@ -1,5 +1,7 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -25,12 +27,14 @@ import jakarta.validation.constraints.Size;
 @RequestMapping("/api/v1/payments")
 public class PaymentController {
 
+    private static final String STRIPE_SIGNATURE_HEADER = "Stripe-Signature";
+
     private final PaymentService paymentService;
     private final StripeWebhookService stripeWebhookService;
 
     public PaymentController(PaymentService paymentService, StripeWebhookService stripeWebhookService) {
-        this.paymentService = paymentService;
-        this.stripeWebhookService = stripeWebhookService;
+        this.paymentService = Objects.requireNonNull(paymentService, "paymentService");
+        this.stripeWebhookService = Objects.requireNonNull(stripeWebhookService, "stripeWebhookService");
     }
 
     @GetMapping("/status/{paymentId}")
@@ -44,7 +48,7 @@ public class PaymentController {
 
     @PostMapping(value = "/webhooks/stripe", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<StripeWebhookResultResponse> handleStripeWebhook(
-            @RequestHeader(name = "Stripe-Signature", required = false) String signatureHeader,
+            @RequestHeader(name = STRIPE_SIGNATURE_HEADER, required = false) String signatureHeader,
             @Size(max = StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES,
                     message = "Stripe webhook payload must not exceed 262144 characters.")
             @RequestBody String payload) {

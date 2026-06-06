@@ -13,7 +13,9 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
     List<QuizAttempt> findByQuizTeacherIdOrderByCompletedAtDescCreatedAtDesc(Long teacherId);
 
     @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "student", "student.user", "student.currentLevel" })
-    List<QuizAttempt> findByQuizTeacherIdAndStudentIdInOrderByCompletedAtDescCreatedAtDesc(Long teacherId, List<Long> studentIds);
+    List<QuizAttempt> findByQuizTeacherIdAndStudentIdInOrderByCompletedAtDescCreatedAtDesc(
+            Long teacherId,
+            List<Long> studentIds);
 
     @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "student", "student.user" })
     List<QuizAttempt> findByQuizIdAndSubmittedTrueOrderByCompletedAtDescCreatedAtDesc(Long quizId);

@@ -78,7 +78,7 @@
             </div>
             <div class="auth-reset-check-grid">
               <span v-for="check in passwordChecks" :key="check.label" :class="{ 'is-met': check.met }">
-                <IconGlyph :name="check.met ? 'status' : 'close'" :size="14" /> {{ check.label }}
+                <IconGlyph :name="passwordCheckIcon(check.met)" :size="14" /> {{ check.label }}
               </span>
             </div>
           </div>
@@ -96,7 +96,7 @@
           </div>
 
           <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmit" type="submit">
-            <span>{{ submitting ? 'Resetting...' : 'Reset password' }}</span>
+            <span>{{ submitLabel }}</span>
             <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
           </button>
         </form>
@@ -116,23 +116,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Step 2 of the password-recovery flow: redeem the email-link token
- * and set a new password.
- *
- * <h2>Token handling</h2>
- * <p>The token arrives as a URL query parameter and is sent back as
- * an opaque string — the frontend never inspects or persists it.
- * Backend validates the SHA-256 hash, checks the 60-minute TTL,
- * and consumes the token atomically with the password change so
- * a single token cannot be redeemed twice.</p>
- *
- * <h2>Post-success behaviour</h2>
- * <p>On success the user is informed to sign in again — the auth
- * store is intentionally NOT auto-logged-in here so the existing
- * password is properly invalidated everywhere before the new one
- * goes live.</p>
- */
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -141,6 +124,7 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
 import { resolveApiError } from '@/utils/apiError'
+import { isPasswordLengthValid } from '@/utils/password'
 import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
 
 const route = useRoute()
@@ -153,35 +137,38 @@ const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 const submitting = ref(false)
 
+type PasswordCheckIcon = 'close' | 'status'
+const passwordStrengthLabels = ['Start typing', 'Getting close', 'Almost ready', 'Ready'] as const
+
 removeSensitiveQueryFromAddressBar()
 
 const canSubmit = computed(
   () =>
     !submitting.value &&
     token.value.trim().length > 0 &&
-    password.value.length >= 8 &&
+    isPasswordLengthValid(password.value) &&
     password.value === confirmPassword.value,
 )
 const passwordChecks = computed(() => [
   { label: 'At least 8 characters', met: password.value.length >= 8 },
+  { label: 'Within the secure 72-byte limit', met: isPasswordLengthValid(password.value) },
   { label: 'Includes a number', met: /\d/.test(password.value) },
   { label: 'Passwords match', met: Boolean(confirmPassword.value && password.value === confirmPassword.value) },
 ])
 const passwordStrengthScore = computed(() => passwordChecks.value.filter((check) => check.met).length)
-const passwordStrengthLabel = computed(
-  () => ['Start typing', 'Getting close', 'Almost ready', 'Ready'][passwordStrengthScore.value],
-)
-const passwordStrengthClass = computed(() => `is-${passwordStrengthScore.value}`)
+const passwordStrengthLabel = computed(() => passwordStrengthLabels[Math.min(passwordStrengthScore.value, 3)])
+const passwordStrengthClass = computed(() => `is-${Math.min(passwordStrengthScore.value, 3)}`)
 const passwordStrengthWidth = computed(() => `${(passwordStrengthScore.value / passwordChecks.value.length) * 100}%`)
+const submitLabel = computed(() => (submitting.value ? 'Resetting...' : 'Reset password'))
 
-async function submitReset() {
+async function submitReset(): Promise<void> {
   if (submitting.value) return
 
   error.value = null
   success.value = null
 
-  if (password.value.length < 8) {
-    error.value = 'Password must be at least 8 characters.'
+  if (!isPasswordLengthValid(password.value)) {
+    error.value = 'Password must be 8 to 72 characters and no more than 72 bytes.'
     return
   }
 
@@ -211,11 +198,15 @@ async function submitReset() {
   }
 }
 
-function removeSensitiveQueryFromAddressBar() {
+function removeSensitiveQueryFromAddressBar(): void {
   const { changed, query, hash } = removeSensitiveRouteState(route.query, route.hash)
 
   if (changed) {
     void router.replace({ name: 'reset-password', query, hash })
   }
+}
+
+function passwordCheckIcon(met: boolean): PasswordCheckIcon {
+  return met ? 'status' : 'close'
 }
 </script>

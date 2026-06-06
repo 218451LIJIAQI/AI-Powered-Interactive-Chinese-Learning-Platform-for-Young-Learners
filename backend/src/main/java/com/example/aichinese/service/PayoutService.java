@@ -33,11 +33,14 @@ import com.example.aichinese.repository.TeacherEarningRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class PayoutService {
 
     private static final Logger log = LoggerFactory.getLogger(PayoutService.class);
+    private static final String PAYOUT_REQUEST_TARGET = "PAYOUT_REQUEST";
+    private static final String TEACHER_EARNINGS_PATH = "/teacher/earnings";
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherEarningRepository teacherEarningRepository;
@@ -126,13 +129,13 @@ public class PayoutService {
                 teacher.getUser(),
                 "Payout request submitted",
                 "Your payout request has been submitted for review.",
-                "/teacher/earnings");
+                TEACHER_EARNINGS_PATH);
         log.info("Payout request created: payoutId={}, teacherId={}, amount={}",
                 saved.getId(), teacher.getId(), normalizedAmount);
         auditLogService.record(
-                currentUser.getUser(),
+                currentUser,
                 "PAYOUT_REQUESTED",
-                "PAYOUT_REQUEST",
+                PAYOUT_REQUEST_TARGET,
                 saved.getId(),
                 "Teacher payout request submitted for " + normalizedAmount.toPlainString());
         return mapTeacherPayout(saved, commerceSettingsService.getDefaultCurrency());
@@ -166,7 +169,7 @@ public class PayoutService {
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout approved", "Your payout request has been approved.");
         log.info("Payout approved: payoutId={}, amount={}", id, saved.getAmount());
-        auditLogService.record(currentUser.getUser(), "PAYOUT_APPROVED", "PAYOUT_REQUEST", id,
+        auditLogService.record(currentUser, "PAYOUT_APPROVED", PAYOUT_REQUEST_TARGET, id,
                 "Payout approved for " + saved.getAmount().toPlainString());
         return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
@@ -180,13 +183,14 @@ public class PayoutService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Payout request was not found."));
         requireTransition(payoutRequest.getPayoutStatus(), PayoutStatus.PENDING, "rejected");
         payoutRequest.setPayoutStatus(PayoutStatus.REJECTED);
-        payoutRequest.setDecisionReason(request.reason());
+        String reason = TextUtils.trimToNull(request.reason());
+        payoutRequest.setDecisionReason(reason);
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout rejected", "Your payout request was rejected.");
-        log.info("Payout rejected: payoutId={}, amount={}, reason={}", id, saved.getAmount(), request.reason());
-        auditLogService.record(currentUser.getUser(), "PAYOUT_REJECTED", "PAYOUT_REQUEST", id,
+        log.info("Payout rejected: payoutId={}, amount={}, reason={}", id, saved.getAmount(), reason);
+        auditLogService.record(currentUser, "PAYOUT_REJECTED", PAYOUT_REQUEST_TARGET, id,
                 "Payout rejected for " + saved.getAmount().toPlainString()
-                        + (request.reason() != null ? ". Reason: " + request.reason() : ""));
+                        + (reason == null ? "" : ". Reason: " + reason));
         return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
 
@@ -200,7 +204,7 @@ public class PayoutService {
         PayoutRequest saved = payoutRequestRepository.save(payoutRequest);
         notifyPayoutStatus(saved, "Payout paid", "Your payout has been marked as paid.");
         log.info("Payout marked paid: payoutId={}, amount={}", id, saved.getAmount());
-        auditLogService.record(currentUser.getUser(), "PAYOUT_MARKED_PAID", "PAYOUT_REQUEST", id,
+        auditLogService.record(currentUser, "PAYOUT_MARKED_PAID", PAYOUT_REQUEST_TARGET, id,
                 "Payout marked paid for " + saved.getAmount().toPlainString());
         return mapAdminPayout(saved, commerceSettingsService.getDefaultCurrency());
     }
@@ -311,12 +315,8 @@ public class PayoutService {
         return new AdminPayoutRequestResponse(
                 payoutRequest.getId(),
                 payoutRequest.getTeacher() != null ? payoutRequest.getTeacher().getId() : null,
-                payoutRequest.getTeacher() != null && payoutRequest.getTeacher().getUser() != null
-                        ? payoutRequest.getTeacher().getUser().getDisplayName()
-                        : null,
-                payoutRequest.getTeacher() != null && payoutRequest.getTeacher().getUser() != null
-                        ? payoutRequest.getTeacher().getUser().getEmail()
-                        : null,
+                teacherDisplayName(payoutRequest),
+                teacherEmail(payoutRequest),
                 commerceMoneyService.normalize(payoutRequest.getAmount()),
                 currencyCode,
                 payoutRequest.getRequestedNote(),
@@ -327,7 +327,23 @@ public class PayoutService {
 
     private void notifyPayoutStatus(PayoutRequest payoutRequest, String title, String message) {
         if (payoutRequest.getTeacher() != null && payoutRequest.getTeacher().getUser() != null) {
-            notificationService.safeCreateNotification(payoutRequest.getTeacher().getUser(), title, message, "/teacher/earnings");
+            notificationService.safeCreateNotification(
+                    payoutRequest.getTeacher().getUser(),
+                    title,
+                    message,
+                    TEACHER_EARNINGS_PATH);
         }
+    }
+
+    private static String teacherDisplayName(PayoutRequest payoutRequest) {
+        return payoutRequest.getTeacher() != null && payoutRequest.getTeacher().getUser() != null
+                ? payoutRequest.getTeacher().getUser().getDisplayName()
+                : null;
+    }
+
+    private static String teacherEmail(PayoutRequest payoutRequest) {
+        return payoutRequest.getTeacher() != null && payoutRequest.getTeacher().getUser() != null
+                ? payoutRequest.getTeacher().getUser().getEmail()
+                : null;
     }
 }

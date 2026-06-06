@@ -1,5 +1,5 @@
 <template>
-  <div class="course-scene-thumb" :class="`is-${variant}`" :style="{ '--scene-thumb-size': `${size}px` }">
+  <div class="course-scene-thumb" :class="variantClass" :style="sceneStyle">
     <span class="course-scene-sun" />
     <span class="course-scene-cloud course-scene-cloud--1" />
     <span class="course-scene-cloud course-scene-cloud--2" />
@@ -10,26 +10,26 @@
     <span class="course-scene-confetti course-scene-confetti--3" />
 
     <PandaIllustration
-      v-if="variant === 'panda'"
+      v-if="props.variant === 'panda'"
       class="course-scene-panda"
-      :size="Math.round(size * 0.74)"
+      :size="pandaSize"
       outfit="#ef6b40"
       accent="#f5c74f"
       compact
     />
 
-    <div v-else-if="variant === 'family'" class="course-scene-family">
+    <div v-else-if="props.variant === 'family'" class="course-scene-family">
       <span class="course-scene-person is-left" />
       <span class="course-scene-person is-center" />
       <span class="course-scene-person is-right" />
     </div>
 
-    <div v-else-if="variant === 'pagoda'" class="course-scene-pagoda-wrap">
+    <div v-else-if="props.variant === 'pagoda'" class="course-scene-pagoda-wrap">
       <span class="course-scene-pagoda" />
       <span class="course-scene-tree" />
     </div>
 
-    <div v-else-if="variant === 'travel'" class="course-scene-travel">
+    <div v-else-if="props.variant === 'travel'" class="course-scene-travel">
       <span class="course-scene-wave" />
       <span class="course-scene-boat" />
       <span class="course-scene-peak course-scene-peak--1" />
@@ -41,18 +41,8 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Pure-CSS illustrated thumbnail used as the fallback course
- * cover when a teacher has not uploaded a real image. Five
- * variants render different scenes (panda, family, pagoda,
- * travel, classic-book) so a row of course cards looks
- * visually varied without any image assets in the bundle.
- *
- * Sizing flows through the `--scene-thumb-size` custom property
- * so a single component can serve catalogue cards (large),
- * dashboard summaries (medium) and dense list rows (small)
- * without separate variants.
- */
+import { computed, type StyleValue } from 'vue'
+
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 
 type SceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
@@ -62,10 +52,14 @@ interface Props {
   variant?: SceneVariant
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   size: 72,
   variant: 'general',
 })
+
+const pandaSize = computed(() => Math.round(props.size * 0.74))
+const sceneStyle = computed<StyleValue>(() => ({ '--scene-thumb-size': `${props.size}px` }))
+const variantClass = computed(() => `is-${props.variant}`)
 </script>
 
 <style scoped>

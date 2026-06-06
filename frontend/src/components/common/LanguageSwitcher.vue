@@ -5,11 +5,11 @@
       <button
         v-for="option in options"
         :key="option.value"
-        :class="{ 'is-active': option.value === ui.locale }"
+        :class="{ 'is-active': isActiveLocale(option.value) }"
         :aria-label="option.ariaLabel"
-        :aria-pressed="option.value === ui.locale"
+        :aria-pressed="isActiveLocale(option.value)"
         type="button"
-        @click="ui.setLocale(option.value)"
+        @click="selectLocale(option.value)"
       >
         {{ option.label }}
       </button>
@@ -18,17 +18,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Three-button pill that toggles the UI locale between EN, BM
- * (Bahasa Melayu) and 简体中文. Lives in the public top nav,
- * the dashboard topbar, and the auth chrome so the user can
- * change language anywhere.
- *
- * Writes through the `ui` store, which persists the selection to
- * localStorage and re-binds `i18n.global.locale` so every
- * component re-renders with the new translation without a page
- * reload.
- */
 import { useUiStore } from '@/stores/ui'
 
 type SupportedLocale = 'en' | 'ms' | 'zh'
@@ -58,6 +47,16 @@ const options: readonly LocaleOption[] = [
   { label: 'BM', value: 'ms', ariaLabel: 'Switch to Bahasa Melayu' },
   { label: '简体中文', value: 'zh', ariaLabel: 'Switch to Simplified Chinese' },
 ]
+
+function isActiveLocale(locale: SupportedLocale): boolean {
+  return ui.locale === locale
+}
+
+function selectLocale(locale: SupportedLocale): void {
+  if (!isActiveLocale(locale)) {
+    ui.setLocale(locale)
+  }
+}
 </script>
 
 <style scoped>

@@ -1,13 +1,5 @@
 import type { AppLanguage } from '@/types/api'
 
-/**
- * Single source of truth for `localStorage` keys used by the frontend,
- * plus `safe*` wrappers that swallow exceptions so a Safari Private
- * mode or quota-exceeded error never crashes the calling code.
- *
- * Keep keys prefixed with `mandarin-spark.` so they are easy to find
- * in DevTools and do not clash with other apps on the same origin.
- */
 export const storageKeys = {
   token: 'mandarin-spark.token',
   recoveryEmail: 'mandarin-spark.recovery-email',
@@ -47,24 +39,20 @@ export function safeGetItem(key: string, storage: Storage | null = getLocalStora
   }
 }
 
-export function safeSetItem(key: string, value: string, storage: Storage | null = getLocalStorage()) {
-  if (!storage) {
-    return
-  }
+function writeStorage(storage: Storage | null, action: (storage: Storage) => void): void {
+  if (!storage) return
 
   try {
-    storage.setItem(key, value)
+    action(storage)
   } catch {}
 }
 
-export function safeRemoveItem(key: string, storage: Storage | null = getLocalStorage()) {
-  if (!storage) {
-    return
-  }
+export function safeSetItem(key: string, value: string, storage: Storage | null = getLocalStorage()): void {
+  writeStorage(storage, (availableStorage) => availableStorage.setItem(key, value))
+}
 
-  try {
-    storage.removeItem(key)
-  } catch {}
+export function safeRemoveItem(key: string, storage: Storage | null = getLocalStorage()): void {
+  writeStorage(storage, (availableStorage) => availableStorage.removeItem(key))
 }
 
 const validLocales: ReadonlySet<string> = new Set<AppLanguage>(['en', 'ms', 'zh'])

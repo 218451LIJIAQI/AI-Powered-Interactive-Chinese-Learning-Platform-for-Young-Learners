@@ -33,23 +33,29 @@ import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
 
 /**
- * Unit coverage for {@code CartService}'s idempotency edges —
+ * Unit coverage for {@code CartService}'s idempotency edges:
  * notably that {@code clearCartIfExists} is a no-op when no cart
  * row exists, so an early-pay flow can call it unconditionally
  * without 404-ing.
  */
 class CartServiceTests {
 
+    private static final long STUDENT_USER_ID = 99L;
+    private static final long STUDENT_PROFILE_ID = 199L;
+    private static final long CART_ID = 123L;
+    private static final long LESSON_ID = 10L;
+    private static final long CART_CAPACITY = 50L;
+
     @Test
     void clearCartIfExistsDoesNotFailWhenCartIsMissing() {
         CartRepository cartRepository = mock(CartRepository.class);
         CartItemRepository cartItemRepository = mock(CartItemRepository.class);
-        when(cartRepository.findByStudentUserId(99L)).thenReturn(Optional.empty());
+        when(cartRepository.findByStudentUserId(STUDENT_USER_ID)).thenReturn(Optional.empty());
 
         CartService cartService = service(cartRepository, cartItemRepository);
 
-        assertThatCode(() -> cartService.clearCartIfExists(99L)).doesNotThrowAnyException();
-        verify(cartRepository).findByStudentUserId(99L);
+        assertThatCode(() -> cartService.clearCartIfExists(STUDENT_USER_ID)).doesNotThrowAnyException();
+        verify(cartRepository).findByStudentUserId(STUDENT_USER_ID);
         verifyNoInteractions(cartItemRepository);
     }
 
@@ -58,15 +64,15 @@ class CartServiceTests {
         CartRepository cartRepository = mock(CartRepository.class);
         CartItemRepository cartItemRepository = mock(CartItemRepository.class);
         Cart cart = new Cart();
-        cart.setId(123L);
-        when(cartRepository.findByStudentUserId(99L)).thenReturn(Optional.of(cart));
+        cart.setId(CART_ID);
+        when(cartRepository.findByStudentUserId(STUDENT_USER_ID)).thenReturn(Optional.of(cart));
 
         CartService cartService = service(cartRepository, cartItemRepository);
 
-        cartService.clearCartIfExists(99L);
+        cartService.clearCartIfExists(STUDENT_USER_ID);
 
-        verify(cartRepository).findByStudentUserId(99L);
-        verify(cartItemRepository).deleteByCartId(123L);
+        verify(cartRepository).findByStudentUserId(STUDENT_USER_ID);
+        verify(cartItemRepository).deleteByCartId(CART_ID);
     }
 
     @Test
@@ -82,37 +88,28 @@ class CartServiceTests {
                 cartItemRepository,
                 purchasableItemService,
                 entitlementService);
-        SecurityUserDetails currentUser = currentUser();
-        StudentProfile student = student(currentUser.getUser());
-        Cart cart = new Cart();
-        cart.setId(123L);
-        cart.setStudent(student);
-        ResolvedPurchasableItem item = new ResolvedPurchasableItem(
-                PurchasableItemType.LESSON,
-                10L,
-                "Paid Lesson",
-                BigDecimal.TEN,
-                "MYR",
-                null,
-                false,
-                null);
+        User user = currentUserEntity();
+        SecurityUserDetails currentUser = new SecurityUserDetails(user);
+        StudentProfile student = student(user);
+        Cart cart = cartFor(student);
+        ResolvedPurchasableItem item = paidLesson();
 
         when(studentLearningAccessService.requireLockedStudent(currentUser)).thenReturn(student);
-        when(cartRepository.findLockedByStudentUserId(99L)).thenReturn(Optional.of(cart));
-        when(purchasableItemService.resolve("LESSON", 10L, null)).thenReturn(item);
+        when(cartRepository.findLockedByStudentUserId(STUDENT_USER_ID)).thenReturn(Optional.of(cart));
+        when(purchasableItemService.resolve("LESSON", LESSON_ID, null)).thenReturn(item);
         when(entitlementService.hasAccessToPurchasableItem(student, item)).thenReturn(false);
-        when(cartItemRepository.findByCartIdAndItemTypeAndItemId(123L, "LESSON", 10L)).thenReturn(Optional.empty());
-        when(cartItemRepository.countByCartId(123L)).thenReturn(50L, 50L);
-        when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(123L)).thenReturn(List.of());
+        when(cartItemRepository.findByCartIdAndItemTypeAndItemId(CART_ID, "LESSON", LESSON_ID)).thenReturn(Optional.empty());
+        when(cartItemRepository.countByCartId(CART_ID)).thenReturn(CART_CAPACITY, CART_CAPACITY);
+        when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(CART_ID)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> cartService.addItem(currentUser, new CartItemRequest("LESSON", 10L, null)))
+        assertThatThrownBy(() -> cartService.addItem(currentUser, new CartItemRequest("LESSON", LESSON_ID, null)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Cart can contain at most 50 items.");
 
         verify(cartItemRepository, never()).save(any());
     }
 
-    private CartService service(CartRepository cartRepository, CartItemRepository cartItemRepository) {
+    private static CartService service(CartRepository cartRepository, CartItemRepository cartItemRepository) {
         return service(
                 mock(StudentLearningAccessService.class),
                 cartRepository,
@@ -121,7 +118,7 @@ class CartServiceTests {
                 mock(EntitlementService.class));
     }
 
-    private CartService service(
+    private static CartService service(
             StudentLearningAccessService studentLearningAccessService,
             CartRepository cartRepository,
             CartItemRepository cartItemRepository,
@@ -137,20 +134,39 @@ class CartServiceTests {
                 mock(CommerceSettingsService.class));
     }
 
-    private SecurityUserDetails currentUser() {
+    private static User currentUserEntity() {
         User user = new User();
-        user.setId(99L);
+        user.setId(STUDENT_USER_ID);
         user.setEmail("student@example.com");
         user.setDisplayName("Student Example");
         user.setPasswordHash("password-hash");
         user.setActive(true);
-        return new SecurityUserDetails(user);
+        return user;
     }
 
-    private StudentProfile student(User user) {
+    private static StudentProfile student(User user) {
         StudentProfile student = new StudentProfile();
-        student.setId(199L);
+        student.setId(STUDENT_PROFILE_ID);
         student.setUser(user);
         return student;
+    }
+
+    private static Cart cartFor(StudentProfile student) {
+        Cart cart = new Cart();
+        cart.setId(CART_ID);
+        cart.setStudent(student);
+        return cart;
+    }
+
+    private static ResolvedPurchasableItem paidLesson() {
+        return new ResolvedPurchasableItem(
+                PurchasableItemType.LESSON,
+                LESSON_ID,
+                "Paid Lesson",
+                BigDecimal.TEN,
+                "MYR",
+                null,
+                false,
+                null);
     }
 }

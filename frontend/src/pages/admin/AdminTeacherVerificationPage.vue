@@ -30,7 +30,7 @@
 
     <DataNotice
       :using-fallback="pendingResource.usingFallback.value"
-      :error="actionError || pageError"
+      :error="noticeError"
       :success="actionSuccess"
     />
 
@@ -91,7 +91,7 @@
               class="admin-verification-page-button"
               :class="{ 'is-active': currentPage === page }"
               type="button"
-              @click="currentPage = page"
+              @click="goToPage(page)"
             >
               {{ page }}
             </button>
@@ -123,7 +123,7 @@
               class="tab-button"
               type="button"
               :class="{ 'is-active': activeDetailTab === 'overview' }"
-              @click="activeDetailTab = 'overview'"
+              @click="showDetailTab('overview')"
             >
               Overview
             </button>
@@ -131,7 +131,7 @@
               class="tab-button"
               type="button"
               :class="{ 'is-active': activeDetailTab === 'documents' }"
-              @click="activeDetailTab = 'documents'"
+              @click="showDetailTab('documents')"
             >
               Documents
             </button>
@@ -139,7 +139,7 @@
               class="tab-button"
               type="button"
               :class="{ 'is-active': activeDetailTab === 'notes' }"
-              @click="activeDetailTab = 'notes'"
+              @click="showDetailTab('notes')"
             >
               Decision
             </button>
@@ -246,7 +246,7 @@
                     :disabled="detailUsingFallback || downloadingDocumentId === document.id"
                     @click="downloadTeacherDocument(document.id, document.fileName)"
                   >
-                    {{ downloadingDocumentId === document.id ? 'Downloading...' : 'Download' }}
+                    {{ getDocumentDownloadLabel(document.id) }}
                   </button>
                 </div>
               </article>
@@ -297,7 +297,7 @@
           </section>
 
           <div class="admin-verification-footer-actions">
-            <button class="btn btn-secondary" type="button" @click="activeDetailTab = 'notes'">
+            <button class="btn btn-secondary" type="button" @click="showDetailTab('notes')">
               Open Decision Tab
             </button>
             <button
@@ -306,7 +306,7 @@
               :disabled="verificationReadOnly || submittingReject"
               @click="rejectTeacher"
             >
-              {{ submittingReject ? 'Rejecting...' : 'Reject' }}
+              {{ rejectButtonLabel }}
             </button>
             <button
               class="btn btn-primary"
@@ -314,7 +314,7 @@
               :disabled="verificationReadOnly || submittingApprove"
               @click="approveTeacher"
             >
-              {{ submittingApprove ? 'Approving...' : 'Approve' }}
+              {{ approveButtonLabel }}
             </button>
           </div>
         </template>
@@ -331,16 +331,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin teacher-verification queue — inspect pending teacher
- * applications, download verification documents, and approve or
- * reject applications.
- *
- * <p>Shows the teacher's submitted credentials, review history,
- * recent audit logs, and server-owned document downloads. Writes are
- * disabled while preview data is active, and decisions refresh both
- * the pending queue and teacher directory after success.</p>
- */
 import { computed, ref, watch } from 'vue'
 
 import { adminApi } from '@/api/services'
@@ -384,14 +374,18 @@ const submittingReject = ref(false)
 const downloadingDocumentId = ref<number | null>(null)
 const actionError = ref<string | null>(null)
 const selectedTeacherId = ref(0)
-const activeDetailTab = ref<'overview' | 'documents' | 'notes'>('overview')
 const searchTerm = ref('')
-const sortMode = ref<'newest' | 'name'>('newest')
 const currentPage = ref(1)
 const pageSize = 5
 
 type ApplicantTone = 'success' | 'warning'
 type AvatarKind = 'female' | 'male' | 'hijab' | 'student'
+type DetailTab = 'overview' | 'documents' | 'notes'
+type SortMode = 'newest' | 'name'
+
+const avatarKinds = ['female', 'male', 'hijab', 'student'] as const
+const activeDetailTab = ref<DetailTab>('overview')
+const sortMode = ref<SortMode>('newest')
 
 interface ApplicantAudit {
   id: string
@@ -443,7 +437,7 @@ const pendingApplicants = computed<ApplicantSummary[]>(() =>
     shortIntroductionLabel: item.bioSummary?.trim() || 'No short introduction provided.',
     bioLabel: 'Open the teacher detail to review the full profile.',
     rejectionReasonLabel: 'No rejection reason recorded.',
-    avatarKind: (['female', 'male', 'hijab', 'student'] as const)[index % 4],
+    avatarKind: avatarKinds[index % avatarKinds.length],
   })),
 )
 
@@ -589,6 +583,9 @@ const todayLabel = computed(() =>
   }).format(new Date()),
 )
 const sortModeLabel = computed(() => (sortMode.value === 'newest' ? 'Newest First' : 'A-Z'))
+const noticeError = computed(() => actionError.value || pageError.value)
+const approveButtonLabel = computed(() => (submittingApprove.value ? 'Approving...' : 'Approve'))
+const rejectButtonLabel = computed(() => (submittingReject.value ? 'Rejecting...' : 'Reject'))
 const paginationCountLabel = computed(() => {
   if (!filteredApplicants.value.length) {
     return '0-0'
@@ -600,11 +597,23 @@ const paginationCountLabel = computed(() => {
 })
 const actionSuccess = ref<string | null>(null)
 
-function cycleSortMode() {
+function cycleSortMode(): void {
   sortMode.value = sortMode.value === 'newest' ? 'name' : 'newest'
 }
 
-function previewTeacherDetail(id: number) {
+function goToPage(page: number): void {
+  currentPage.value = page
+}
+
+function showDetailTab(tab: DetailTab): void {
+  activeDetailTab.value = tab
+}
+
+function getDocumentDownloadLabel(documentId: number): string {
+  return downloadingDocumentId.value === documentId ? 'Downloading...' : 'Download'
+}
+
+function previewTeacherDetail(id: number): AdminTeacherDetailResponse | null {
   const applicant = pendingApplicants.value.find((item) => item.teacherId === id)
   if (!applicant) return null
 
@@ -620,7 +629,7 @@ function previewTeacherDetail(id: number) {
   }
 }
 
-async function selectTeacher(id: number) {
+async function selectTeacher(id: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   downloadingDocumentId.value = null
@@ -642,7 +651,7 @@ async function selectTeacher(id: number) {
   }
 }
 
-async function downloadTeacherDocument(documentId: number, fileName: string) {
+async function downloadTeacherDocument(documentId: number, fileName: string): Promise<void> {
   if (downloadingDocumentId.value) return
   if (detailUsingFallback.value) {
     actionSuccess.value = null
@@ -665,7 +674,7 @@ async function downloadTeacherDocument(documentId: number, fileName: string) {
   }
 }
 
-async function approveTeacher() {
+async function approveTeacher(): Promise<void> {
   if (submittingApprove.value) return
   if (!selectedApplicant.value) return
   if (verificationReadOnly.value) {
@@ -693,7 +702,7 @@ async function approveTeacher() {
   }
 }
 
-async function rejectTeacher() {
+async function rejectTeacher(): Promise<void> {
   if (submittingReject.value) return
   if (!selectedApplicant.value) return
   if (verificationReadOnly.value) {
@@ -728,7 +737,7 @@ async function rejectTeacher() {
   }
 }
 
-function formatStatus(status: string) {
+function formatStatus(status: string): string {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()

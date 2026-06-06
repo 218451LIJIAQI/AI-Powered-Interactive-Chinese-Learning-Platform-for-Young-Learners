@@ -1,6 +1,7 @@
 package com.example.aichinese.controller;
 
 import java.util.Optional;
+import java.util.Objects;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -35,7 +36,9 @@ public class StudentActivityLibraryController {
     private final StudentActivityLibraryService studentActivityLibraryService;
 
     public StudentActivityLibraryController(StudentActivityLibraryService studentActivityLibraryService) {
-        this.studentActivityLibraryService = studentActivityLibraryService;
+        this.studentActivityLibraryService = Objects.requireNonNull(
+                studentActivityLibraryService,
+                "studentActivityLibraryService");
     }
 
     @GetMapping
@@ -56,14 +59,7 @@ public class StudentActivityLibraryController {
             @RequestParam(value = "type", required = false) String type,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
-        ActivityFilter filter = ActivityFilter.of(
-                Optional.ofNullable(hskLevel),
-                Optional.ofNullable(ageBand),
-                Optional.ofNullable(difficulty),
-                Optional.ofNullable(topic),
-                Optional.ofNullable(tag),
-                Optional.ofNullable(keyword),
-                Optional.ofNullable(type));
+        ActivityFilter filter = buildFilter(hskLevel, ageBand, difficulty, topic, tag, keyword, type);
         return ApiResponse.success(
                 "Activity library retrieved successfully.",
                 studentActivityLibraryService.listLibrary(currentUser, filter, page, size));
@@ -175,5 +171,23 @@ public class StudentActivityLibraryController {
         return ApiResponse.success(
                 "Story activity completion recorded.",
                 studentActivityLibraryService.completeStoryActivity(currentUser, id));
+    }
+
+    private static ActivityFilter buildFilter(
+            Integer hskLevel,
+            String ageBand,
+            String difficulty,
+            String topic,
+            String tag,
+            String keyword,
+            String type) {
+        return ActivityFilter.of(
+                Optional.ofNullable(hskLevel),
+                Optional.ofNullable(ageBand),
+                Optional.ofNullable(difficulty),
+                Optional.ofNullable(topic),
+                Optional.ofNullable(tag),
+                Optional.ofNullable(keyword),
+                Optional.ofNullable(type));
     }
 }

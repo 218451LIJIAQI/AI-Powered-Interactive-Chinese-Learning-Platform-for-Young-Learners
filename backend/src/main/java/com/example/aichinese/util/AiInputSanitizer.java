@@ -38,10 +38,11 @@ import java.util.regex.Pattern;
  *
  * <h2>Truncation safety</h2>
  * <p>The length cap is enforced in Java {@code char} units but the
- * implementation backs up to the nearest code-point boundary so a CJK
- * character or emoji at the truncation seam can never be split into an
- * orphan high-surrogate / unpaired low-surrogate (which would emit a
- * malformed UTF-16 sequence and confuse the AI provider's tokeniser).</p>
+ * shared {@link TextUtils#safeTruncate(String, int)} implementation backs
+ * up to the nearest code-point boundary so a CJK character or emoji at the
+ * truncation seam can never be split into an orphan high-surrogate /
+ * unpaired low-surrogate (which would emit a malformed UTF-16 sequence
+ * and confuse the AI provider's tokeniser).</p>
  *
  * <p>The sanitiser is paired with {@code AiInputSanitizerTests} which
  * pins down every documented rule.</p>
@@ -140,20 +141,20 @@ public final class AiInputSanitizer {
         if (maxLength < 1) {
             throw new IllegalArgumentException("maxLength must be positive.");
         }
-        String stripped = input.strip();
-        if (stripped.isEmpty()) {
+        String stripped = TextUtils.trimToNull(input);
+        if (stripped == null) {
             return null;
         }
         String withoutControlTokens = CHAT_CONTROL_TOKEN.matcher(stripped).replaceAll("");
         String withoutControlChars = CONTROL_CHARS.matcher(withoutControlTokens).replaceAll("");
         String withoutInvisible = INVISIBLE_CHARS.matcher(withoutControlChars).replaceAll("");
         // Strip again to drop whitespace left behind by token / char removal.
-        String collapsed = withoutInvisible.strip();
-        if (collapsed.isEmpty()) {
+        String collapsed = TextUtils.trimToNull(withoutInvisible);
+        if (collapsed == null) {
             return null;
         }
         if (collapsed.length() > maxLength) {
-            collapsed = safeTruncate(collapsed, maxLength);
+            collapsed = TextUtils.safeTruncate(collapsed, maxLength);
         }
         return collapsed;
     }
@@ -174,23 +175,4 @@ public final class AiInputSanitizer {
         return sanitize(input, DEFAULT_LONG_INPUT_LIMIT);
     }
 
-    /**
-     * Truncate {@code value} to at most {@code maxLength} {@code char}
-     * units, backing up by one character if the slice would land in the
-     * middle of a UTF-16 surrogate pair.
-     *
-     * <p>The caller has already verified {@code value.length() &gt; maxLength}
-     * and {@code maxLength &gt;= 1}, so the seam check below cannot
-     * underflow the string bounds.</p>
-     */
-    private static String safeTruncate(String value, int maxLength) {
-        int seam = maxLength;
-        // If the seam would split a surrogate pair, drop the high surrogate.
-        if (Character.isHighSurrogate(value.charAt(seam - 1))
-                && seam < value.length()
-                && Character.isLowSurrogate(value.charAt(seam))) {
-            seam--;
-        }
-        return value.substring(0, seam);
-    }
 }

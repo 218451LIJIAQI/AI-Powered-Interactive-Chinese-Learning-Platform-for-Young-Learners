@@ -53,7 +53,7 @@ public class SentryConfiguration {
         return event;
     }
 
-    private static <T> Map<String, T> sanitizedMap(Map<String, T> values) {
+    private static Map<String, Object> sanitizedMap(Map<String, ?> values) {
         return SensitiveDataRedactor.redactMap(values, FILTERED);
     }
 
@@ -74,8 +74,9 @@ public class SentryConfiguration {
         }
         message.setMessage(mask(message.getMessage()));
         message.setFormatted(mask(message.getFormatted()));
-        if (message.getParams() != null) {
-            message.setParams(message.getParams().stream()
+        var params = message.getParams();
+        if (params != null) {
+            message.setParams(params.stream()
                     .map(SentryConfiguration::mask)
                     .toList());
         }
@@ -83,11 +84,17 @@ public class SentryConfiguration {
     }
 
     private static void sanitizeBreadcrumbs(SentryEvent event) {
-        if (event.getBreadcrumbs() == null) {
+        var breadcrumbs = event.getBreadcrumbs();
+        if (breadcrumbs == null) {
             return;
         }
-        for (Breadcrumb breadcrumb : event.getBreadcrumbs()) {
+        for (Breadcrumb breadcrumb : breadcrumbs) {
+            if (breadcrumb == null) {
+                continue;
+            }
+            breadcrumb.setCategory(mask(breadcrumb.getCategory()));
             breadcrumb.setMessage(mask(breadcrumb.getMessage()));
+            breadcrumb.setType(mask(breadcrumb.getType()));
             Map<String, Object> data = sanitizedMap(breadcrumb.getData());
             if (data != null) {
                 data.forEach(breadcrumb::setData);
@@ -97,10 +104,14 @@ public class SentryConfiguration {
     }
 
     private static void sanitizeExceptions(SentryEvent event) {
-        if (event.getExceptions() == null) {
+        var exceptions = event.getExceptions();
+        if (exceptions == null) {
             return;
         }
-        for (SentryException exception : event.getExceptions()) {
+        for (SentryException exception : exceptions) {
+            if (exception == null) {
+                continue;
+            }
             exception.setValue(mask(exception.getValue()));
             exception.setUnknown(sanitizedMap(exception.getUnknown()));
         }

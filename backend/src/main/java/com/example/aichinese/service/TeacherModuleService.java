@@ -1,8 +1,9 @@
 package com.example.aichinese.service;
 
-import static org.springframework.http.HttpStatus.NOT_FOUND;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,6 +19,7 @@ import com.example.aichinese.dto.content.LearningModuleResponse;
 import com.example.aichinese.dto.content.UpdateModuleRequest;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.TeacherProfile;
+import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.LearningModuleRepository;
@@ -36,6 +38,13 @@ import com.example.aichinese.util.PaginationUtils;
  */
 @Service
 public class TeacherModuleService {
+
+    private static final String MODULE_REQUEST_REQUIRED = "Module request is required.";
+    private static final String MODULE_NOT_FOUND = "Requested module was not found.";
+    private static final String AUDIT_TARGET_MODULE = "LearningModule";
+    private static final String ACTION_CREATE = "TEACHER_MODULE_CREATE";
+    private static final String ACTION_UPDATE = "TEACHER_MODULE_UPDATE";
+    private static final String ACTION_ARCHIVE = "TEACHER_MODULE_ARCHIVE";
 
     private final LearningModuleRepository learningModuleRepository;
     private final TeacherContentAccessService teacherContentAccessService;
@@ -76,22 +85,13 @@ public class TeacherModuleService {
     @Transactional
     public LearningModuleResponse createModule(SecurityUserDetails currentUser, CreateModuleRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Module request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, MODULE_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
         LearningModule module = new LearningModule();
-        teacherContentAccessService.attachModuleMetadata(
-                module,
-                teacherProfile,
-                teacherContentAccessService.requireLevel(request.levelId()),
-                teacherContentAccessService.requireCategory(request.categoryId()),
-                request.title(),
-                request.description(),
-                request.accessType(),
-                request.price(),
-                request.coverImageUrl());
+        attachModuleMetadata(module, teacherProfile, ModuleMetadata.from(request));
         // No admin review flow: teacher-created modules go live immediately so
         // approved teachers fully own the publish/archive lifecycle of their
         // own teaching containers.
@@ -101,8 +101,8 @@ public class TeacherModuleService {
         LearningModule saved = learningModuleRepository.save(module);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_MODULE_CREATE",
-                "LearningModule",
+                ACTION_CREATE,
+                AUDIT_TARGET_MODULE,
                 saved.getId(),
                 "Teacher created and published a learning module.");
         return contentManagementMapper.toLearningModuleResponse(saved);
@@ -111,29 +111,20 @@ public class TeacherModuleService {
     @Transactional
     public LearningModuleResponse updateModule(SecurityUserDetails currentUser, Long moduleId, UpdateModuleRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Module request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, MODULE_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         LearningModule module = findOwnedModule(currentUser, moduleId);
         teacherContentAccessService.validateEditableStatus(module.getContentStatus(), "Module");
         teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
-        teacherContentAccessService.attachModuleMetadata(
-                module,
-                teacherProfile,
-                teacherContentAccessService.requireLevel(request.levelId()),
-                teacherContentAccessService.requireCategory(request.categoryId()),
-                request.title(),
-                request.description(),
-                request.accessType(),
-                request.price(),
-                request.coverImageUrl());
+        attachModuleMetadata(module, teacherProfile, ModuleMetadata.from(request));
 
         LearningModule saved = learningModuleRepository.save(module);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_MODULE_UPDATE",
-                "LearningModule",
+                ACTION_UPDATE,
+                AUDIT_TARGET_MODULE,
                 saved.getId(),
                 "Teacher updated a learning module draft.");
         return contentManagementMapper.toLearningModuleResponse(saved);
@@ -149,8 +140,8 @@ public class TeacherModuleService {
         LearningModule saved = learningModuleRepository.save(module);
         auditLogService.record(
                 teacherProfile.getUser(),
-                "TEACHER_MODULE_ARCHIVE",
-                "LearningModule",
+                ACTION_ARCHIVE,
+                AUDIT_TARGET_MODULE,
                 saved.getId(),
                 "Teacher archived a learning module.");
         return contentManagementMapper.toLearningModuleResponse(saved);
@@ -159,6 +150,54 @@ public class TeacherModuleService {
     @Transactional(readOnly = true)
     public LearningModule findOwnedModule(SecurityUserDetails currentUser, Long moduleId) {
         return learningModuleRepository.findByIdAndTeacherUserId(moduleId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested module was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, MODULE_NOT_FOUND));
+    }
+
+    private void attachModuleMetadata(
+            LearningModule module,
+            TeacherProfile teacherProfile,
+            ModuleMetadata request) {
+        teacherContentAccessService.attachModuleMetadata(
+                module,
+                teacherProfile,
+                teacherContentAccessService.requireLevel(request.levelId()),
+                teacherContentAccessService.requireCategory(request.categoryId()),
+                request.title(),
+                request.description(),
+                request.accessType(),
+                request.price(),
+                request.coverImageUrl());
+    }
+
+    private record ModuleMetadata(
+            String title,
+            String description,
+            Long levelId,
+            Long categoryId,
+            AccessType accessType,
+            BigDecimal price,
+            String coverImageUrl) {
+
+        private static ModuleMetadata from(CreateModuleRequest request) {
+            return new ModuleMetadata(
+                    request.title(),
+                    request.description(),
+                    request.levelId(),
+                    request.categoryId(),
+                    request.accessType(),
+                    request.price(),
+                    request.coverImageUrl());
+        }
+
+        private static ModuleMetadata from(UpdateModuleRequest request) {
+            return new ModuleMetadata(
+                    request.title(),
+                    request.description(),
+                    request.levelId(),
+                    request.categoryId(),
+                    request.accessType(),
+                    request.price(),
+                    request.coverImageUrl());
+        }
     }
 }

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Unit coverage for {@code PublicAuthRequestLimiter} — pins the
+ * Unit coverage for {@code PublicAuthRequestLimiter}. It pins the
  * separate quotas for register (IP-keyed) and forgot-password
  * (IP+email-keyed) flows so the limiter applies the right window
  * per surface, and the 429 rejection after exhaustion.
@@ -22,47 +22,60 @@ import org.springframework.web.server.ResponseStatusException;
 class PublicAuthRequestLimiterTests {
 
     private static final String IP = "203.0.113.7";
+    private static final String USER_EMAIL = "user@example.com";
+    private static final String OTHER_EMAIL = "other@example.com";
+    private static final String TARGET_EMAIL = "target@example.com";
+    private static final String TARGET_IP_1 = "203.0.113.10";
+    private static final String TARGET_IP_2 = "203.0.113.11";
+    private static final String TARGET_IP_3 = "203.0.113.12";
+    private static final String LONG_EMAIL_PREFIX = "a".repeat(400);
+    private static final String LONG_IP_PREFIX = "1".repeat(100);
+    private static final Instant START_TIME = Instant.parse("2025-01-01T00:00:00Z");
+    private static final ZoneId UTC = ZoneId.of("UTC");
+    private static final int REGISTER_THRESHOLD = 3;
+    private static final int FORGOT_PASSWORD_THRESHOLD = 2;
+    private static final int SINGLE_REQUEST_THRESHOLD = 1;
+    private static final int SMALL_CAPACITY = 3;
+    private static final int DEFAULT_CAPACITY = 10;
+    private static final int HIGH_THRESHOLD = 100;
+    private static final int SPRAY_ATTEMPTS = 20;
 
     @Test
     void registerRequestsAreRejectedAfterThreshold() {
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(Clock.systemUTC(), 3, 3, 10);
+        PublicAuthRequestLimiter limiter = limiter(REGISTER_THRESHOLD, REGISTER_THRESHOLD, DEFAULT_CAPACITY);
 
-        limiter.checkRegisterAllowed(IP);
-        limiter.checkRegisterAllowed(IP);
-        limiter.checkRegisterAllowed(IP);
+        repeat(REGISTER_THRESHOLD, () -> limiter.checkRegisterAllowed(IP));
 
-        assertThatThrownBy(() -> limiter.checkRegisterAllowed(IP))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-                        assertThat(exception.getStatusCode()).isEqualTo(TOO_MANY_REQUESTS));
+        assertTooManyRequests(() -> limiter.checkRegisterAllowed(IP));
     }
 
     @Test
     void forgotPasswordRequestsAreRejectedByIpAndEmailThresholds() {
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(Clock.systemUTC(), 3, 2, 10);
+        PublicAuthRequestLimiter limiter = limiter(REGISTER_THRESHOLD, FORGOT_PASSWORD_THRESHOLD, DEFAULT_CAPACITY);
 
-        limiter.checkForgotPasswordAllowed("user@example.com", IP);
-        limiter.checkForgotPasswordAllowed("user@example.com", IP);
+        repeat(FORGOT_PASSWORD_THRESHOLD, () -> limiter.checkForgotPasswordAllowed(USER_EMAIL, IP));
 
-        assertThatThrownBy(() -> limiter.checkForgotPasswordAllowed("other@example.com", IP))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-                        assertThat(exception.getStatusCode()).isEqualTo(TOO_MANY_REQUESTS));
+        assertTooManyRequests(() -> limiter.checkForgotPasswordAllowed(OTHER_EMAIL, IP));
 
-        PublicAuthRequestLimiter emailLimiter = new PublicAuthRequestLimiter(Clock.systemUTC(), 3, 2, 10);
-        emailLimiter.checkForgotPasswordAllowed("target@example.com", "203.0.113.10");
-        emailLimiter.checkForgotPasswordAllowed("target@example.com", "203.0.113.11");
+        PublicAuthRequestLimiter emailLimiter =
+                limiter(REGISTER_THRESHOLD, FORGOT_PASSWORD_THRESHOLD, DEFAULT_CAPACITY);
+        emailLimiter.checkForgotPasswordAllowed(TARGET_EMAIL, TARGET_IP_1);
+        emailLimiter.checkForgotPasswordAllowed(TARGET_EMAIL, TARGET_IP_2);
 
-        assertThatThrownBy(() -> emailLimiter.checkForgotPasswordAllowed("target@example.com", "203.0.113.12"))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
-                        assertThat(exception.getStatusCode()).isEqualTo(TOO_MANY_REQUESTS));
+        assertTooManyRequests(() -> emailLimiter.checkForgotPasswordAllowed(TARGET_EMAIL, TARGET_IP_3));
     }
 
     @Test
     void requestRecordsExpireAfterWindow() {
-        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(clock, 1, 1, 10);
+        MutableClock clock = mutableClock();
+        PublicAuthRequestLimiter limiter = limiter(
+                clock,
+                SINGLE_REQUEST_THRESHOLD,
+                SINGLE_REQUEST_THRESHOLD,
+                DEFAULT_CAPACITY);
 
         limiter.checkRegisterAllowed(IP);
-        assertThatThrownBy(() -> limiter.checkRegisterAllowed(IP)).isInstanceOf(ResponseStatusException.class);
+        assertTooManyRequests(() -> limiter.checkRegisterAllowed(IP));
 
         clock.advance(PublicAuthRequestLimiter.WINDOW.plusSeconds(1));
 
@@ -72,40 +85,76 @@ class PublicAuthRequestLimiterTests {
 
     @Test
     void requestBudgetResetsExactlyAtWindowBoundary() {
-        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(clock, 1, 1, 10);
+        MutableClock clock = mutableClock();
+        PublicAuthRequestLimiter limiter = limiter(
+                clock,
+                SINGLE_REQUEST_THRESHOLD,
+                SINGLE_REQUEST_THRESHOLD,
+                DEFAULT_CAPACITY);
 
         limiter.checkRegisterAllowed(IP);
         clock.advance(PublicAuthRequestLimiter.WINDOW);
 
         limiter.checkRegisterAllowed(IP);
-        assertThatThrownBy(() -> limiter.checkRegisterAllowed(IP))
-                .isInstanceOf(ResponseStatusException.class);
+        assertTooManyRequests(() -> limiter.checkRegisterAllowed(IP));
     }
 
     @Test
     void trackedRequestRecordsStayWithinCapacity() {
-        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(clock, 100, 100, 3);
+        MutableClock clock = mutableClock();
+        PublicAuthRequestLimiter limiter = limiter(clock, HIGH_THRESHOLD, HIGH_THRESHOLD, SMALL_CAPACITY);
 
-        for (int i = 0; i < 20; i++) {
-            limiter.checkRegisterAllowed("203.0.113." + i);
-            clock.advanceSeconds(1);
-        }
+        recordRegisterSpray(limiter, clock);
 
-        assertThat(limiter.trackedRequestCount()).isLessThanOrEqualTo(3);
+        assertThat(limiter.trackedRequestCount()).isLessThanOrEqualTo(SMALL_CAPACITY);
     }
 
     @Test
     void oversizedRequestKeysAreNormalisedToBoundedEntries() {
-        PublicAuthRequestLimiter limiter = new PublicAuthRequestLimiter(Clock.systemUTC(), 100, 100, 10);
-        String longEmailPrefix = "a".repeat(400);
-        String longIpPrefix = "1".repeat(100);
+        PublicAuthRequestLimiter limiter = limiter(HIGH_THRESHOLD, HIGH_THRESHOLD, DEFAULT_CAPACITY);
 
-        limiter.checkForgotPasswordAllowed(longEmailPrefix + "first@example.com", longIpPrefix + "1");
-        limiter.checkForgotPasswordAllowed(longEmailPrefix + "second@example.com", longIpPrefix + "2");
+        limiter.checkForgotPasswordAllowed(LONG_EMAIL_PREFIX + "first@example.com", LONG_IP_PREFIX + "1");
+        limiter.checkForgotPasswordAllowed(LONG_EMAIL_PREFIX + "second@example.com", LONG_IP_PREFIX + "2");
 
         assertThat(limiter.trackedRequestCount()).isEqualTo(2);
+    }
+
+    private static PublicAuthRequestLimiter limiter(
+            int maxRegisterRequests,
+            int maxForgotPasswordRequests,
+            int capacity) {
+        return limiter(Clock.systemUTC(), maxRegisterRequests, maxForgotPasswordRequests, capacity);
+    }
+
+    private static PublicAuthRequestLimiter limiter(
+            Clock clock,
+            int maxRegisterRequests,
+            int maxForgotPasswordRequests,
+            int capacity) {
+        return new PublicAuthRequestLimiter(clock, maxRegisterRequests, maxForgotPasswordRequests, capacity);
+    }
+
+    private static MutableClock mutableClock() {
+        return new MutableClock(START_TIME);
+    }
+
+    private static void assertTooManyRequests(Runnable action) {
+        assertThatThrownBy(action::run)
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getStatusCode()).isEqualTo(TOO_MANY_REQUESTS));
+    }
+
+    private static void repeat(int times, Runnable action) {
+        for (int i = 0; i < times; i++) {
+            action.run();
+        }
+    }
+
+    private static void recordRegisterSpray(PublicAuthRequestLimiter limiter, MutableClock clock) {
+        for (int i = 0; i < SPRAY_ATTEMPTS; i++) {
+            limiter.checkRegisterAllowed("203.0.113." + i);
+            clock.advanceSeconds(1);
+        }
     }
 
     private static final class MutableClock extends Clock {
@@ -117,7 +166,7 @@ class PublicAuthRequestLimiterTests {
 
         @Override
         public ZoneId getZone() {
-            return ZoneId.of("UTC");
+            return UTC;
         }
 
         @Override

@@ -23,8 +23,7 @@ public enum ContentStatus {
     public static final Set<ContentStatus> TEACHER_EDITABLE =
             Collections.unmodifiableSet(EnumSet.of(DRAFT, PUBLISHED, REJECTED));
 
-    public static final Set<ContentStatus> TEACHER_ARCHIVABLE =
-            Collections.unmodifiableSet(EnumSet.of(DRAFT, PUBLISHED, REJECTED));
+    public static final Set<ContentStatus> TEACHER_ARCHIVABLE = TEACHER_EDITABLE;
 
     public static final Set<ContentStatus> PUBLIC_VISIBLE =
             Collections.unmodifiableSet(EnumSet.of(PUBLISHED));

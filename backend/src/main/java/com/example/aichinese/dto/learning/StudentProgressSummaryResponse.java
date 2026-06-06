@@ -28,7 +28,7 @@ public record StudentProgressSummaryResponse(
         quizAverage = Math.max(0, Math.min(100, quizAverage));
         overallCompletionPercent = Math.max(0, Math.min(100, overallCompletionPercent));
         weakAreas = weakAreas == null ? List.of() : List.copyOf(weakAreas);
-        lastActivitySummary = lastActivitySummary == null ? "" : lastActivitySummary;
+        lastActivitySummary = lastActivitySummary == null ? "" : lastActivitySummary.strip();
         recentLessons = recentLessons == null ? List.of() : List.copyOf(recentLessons);
     }
 

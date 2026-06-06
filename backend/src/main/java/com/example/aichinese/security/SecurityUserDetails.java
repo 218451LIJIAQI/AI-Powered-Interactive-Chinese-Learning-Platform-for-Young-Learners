@@ -16,14 +16,27 @@ import com.example.aichinese.entity.enums.RoleName;
 
 public final class SecurityUserDetails implements UserDetails {
 
-    private static final String ROLE_PREFIX = "ROLE_";
+    private static final long serialVersionUID = 1L;
 
-    private final User user;
+    private final Long userId;
+    private final String username;
+    private final String password;
+    private final String displayName;
+    private final boolean active;
+    private final long sessionVersion;
+    private final int fallbackHashCode;
     private final List<GrantedAuthority> authorities;
     private final List<String> roleNames;
 
     public SecurityUserDetails(User user) {
-        this.user = Objects.requireNonNull(user, "user");
+        Objects.requireNonNull(user, "user");
+        this.userId = user.getId();
+        this.username = user.getEmail();
+        this.password = user.getPasswordHash();
+        this.displayName = user.getDisplayName();
+        this.active = user.isActive();
+        this.sessionVersion = user.getSessionVersion();
+        this.fallbackHashCode = System.identityHashCode(user);
         Set<Role> roles = user.getRoles();
         if (roles == null || roles.isEmpty()) {
             this.authorities = List.of();
@@ -37,7 +50,7 @@ public final class SecurityUserDetails implements UserDetails {
                     .sorted(Comparator.comparing(RoleName::name))
                     .toList();
             this.authorities = validRoleNames.stream()
-                    .map(roleName -> (GrantedAuthority) new SimpleGrantedAuthority(ROLE_PREFIX + roleName.name()))
+                    .map(roleName -> (GrantedAuthority) new SimpleGrantedAuthority(roleName.authority()))
                     .toList();
             this.roleNames = validRoleNames.stream()
                     .map(RoleName::name)
@@ -46,11 +59,15 @@ public final class SecurityUserDetails implements UserDetails {
     }
 
     public Long getUserId() {
-        return user.getId();
+        return userId;
     }
 
-    public User getUser() {
-        return user;
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public long getSessionVersion() {
+        return sessionVersion;
     }
 
     @Override
@@ -64,12 +81,12 @@ public final class SecurityUserDetails implements UserDetails {
 
     @Override
     public String getPassword() {
-        return user.getPasswordHash();
+        return password;
     }
 
     @Override
     public String getUsername() {
-        return user.getEmail();
+        return username;
     }
 
     @Override
@@ -89,7 +106,7 @@ public final class SecurityUserDetails implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return user.isActive();
+        return active;
     }
 
     @Override
@@ -100,18 +117,16 @@ public final class SecurityUserDetails implements UserDetails {
         if (!(other instanceof SecurityUserDetails that)) {
             return false;
         }
-        Long id = user.getId();
-        return id != null && id.equals(that.user.getId());
+        return userId != null && userId.equals(that.userId);
     }
 
     @Override
     public int hashCode() {
-        Long id = user.getId();
-        return id == null ? System.identityHashCode(this) : id.hashCode();
+        return userId == null ? fallbackHashCode : userId.hashCode();
     }
 
     @Override
     public String toString() {
-        return "SecurityUserDetails[id=" + user.getId() + ", active=" + user.isActive() + "]";
+        return "SecurityUserDetails[id=" + userId + ", active=" + active + "]";
     }
 }

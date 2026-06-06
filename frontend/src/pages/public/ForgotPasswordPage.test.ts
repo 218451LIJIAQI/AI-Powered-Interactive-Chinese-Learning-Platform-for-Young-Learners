@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { storageKeys } from '@/utils/storage'
 
+const parentEmail = 'parent@example.com'
+const spacedParentEmail = ' Parent@Example.com '
+
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   forgotPassword: vi.fn(),
@@ -32,7 +35,7 @@ vi.mock('@/api/services', () => ({
 
 import ForgotPasswordPage from './ForgotPasswordPage.vue'
 
-function mountForgotPasswordPage() {
+function mountForgotPasswordPage(): ReturnType<typeof mount> {
   return mount(ForgotPasswordPage, {
     global: {
       stubs: {
@@ -55,7 +58,7 @@ describe('ForgotPasswordPage recovery email hygiene', () => {
   })
 
   it('prefills recovery email from one-time session storage and immediately clears it', () => {
-    window.sessionStorage.setItem(storageKeys.recoveryEmail, ' Parent@Example.com ')
+    window.sessionStorage.setItem(storageKeys.recoveryEmail, spacedParentEmail)
 
     const wrapper = mountForgotPasswordPage()
 
@@ -66,14 +69,14 @@ describe('ForgotPasswordPage recovery email hygiene', () => {
 
   it('prefills legacy email query once and removes sensitive URL state from history', () => {
     mocks.route.query = {
-      email: 'parent@example.com',
+      email: parentEmail,
       source: 'login',
       redirect: '/auth?token=nested-token',
     }
 
     const wrapper = mountForgotPasswordPage()
 
-    expect(wrapper.get<HTMLInputElement>('#forgot-email').element.value).toBe('parent@example.com')
+    expect(wrapper.get<HTMLInputElement>('#forgot-email').element.value).toBe(parentEmail)
     expect(mocks.replace).toHaveBeenCalledWith({
       name: 'forgot-password',
       query: { source: 'login' },
@@ -84,12 +87,12 @@ describe('ForgotPasswordPage recovery email hygiene', () => {
   it('submits a normalized email without persisting it after success', async () => {
     const wrapper = mountForgotPasswordPage()
 
-    await wrapper.get('#forgot-email').setValue(' Parent@Example.com ')
+    await wrapper.get('#forgot-email').setValue(spacedParentEmail)
     await wrapper.get('form').trigger('submit.prevent')
     await flushPromises()
 
-    expect(mocks.forgotPassword).toHaveBeenCalledWith('parent@example.com')
+    expect(mocks.forgotPassword).toHaveBeenCalledWith(parentEmail)
     expect(window.sessionStorage.getItem(storageKeys.recoveryEmail)).toBeNull()
-    expect(wrapper.text()).toContain('If parent@example.com is registered')
+    expect(wrapper.text()).toContain(`If ${parentEmail} is registered`)
   })
 })

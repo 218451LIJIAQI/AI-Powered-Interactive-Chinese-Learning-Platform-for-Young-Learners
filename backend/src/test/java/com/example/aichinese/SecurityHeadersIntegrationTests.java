@@ -12,25 +12,45 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SecurityHeadersIntegrationTests {
 
+    private static final String HEALTH_ENDPOINT = "/api/v1/health";
+    private static final String CONTENT_TYPE_OPTIONS = "X-Content-Type-Options";
+    private static final String FRAME_OPTIONS = "X-Frame-Options";
+    private static final String REFERRER_POLICY = "Referrer-Policy";
+    private static final String PERMISSIONS_POLICY = "Permissions-Policy";
+    private static final String CONTENT_SECURITY_POLICY = "Content-Security-Policy";
+    private static final String STRICT_TRANSPORT_SECURITY = "Strict-Transport-Security";
+    private static final String NO_SNIFF = "nosniff";
+    private static final String DENY = "DENY";
+    private static final String STRICT_ORIGIN_WHEN_CROSS_ORIGIN = "strict-origin-when-cross-origin";
+    private static final String GEOLOCATION_BLOCKED = "geolocation=()";
+    private static final String DEFAULT_SELF = "default-src 'self'";
+    private static final String UNSAFE_EVAL = "unsafe-eval";
+    private static final String HSTS_ONE_YEAR = "max-age=31536000";
+
     @Autowired
     private MockMvc mockMvc;
 
     @Test
     void publicHealthResponseCarriesBrowserSecurityHeaders() throws Exception {
-        mockMvc.perform(get("/api/v1/health").secure(true))
+        mockMvc.perform(secureGet(HEALTH_ENDPOINT))
                 .andExpect(status().isOk())
-                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
-                .andExpect(header().string("X-Frame-Options", "DENY"))
-                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
-                .andExpect(header().string("Permissions-Policy", containsString("geolocation=()")))
-                .andExpect(header().string("Content-Security-Policy", containsString("default-src 'self'")))
-                .andExpect(header().string("Content-Security-Policy", not(containsString("unsafe-eval"))))
-                .andExpect(header().string("Strict-Transport-Security", containsString("max-age=31536000")));
+                .andExpect(header().string(CONTENT_TYPE_OPTIONS, NO_SNIFF))
+                .andExpect(header().string(FRAME_OPTIONS, DENY))
+                .andExpect(header().string(REFERRER_POLICY, STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                .andExpect(header().string(PERMISSIONS_POLICY, containsString(GEOLOCATION_BLOCKED)))
+                .andExpect(header().string(CONTENT_SECURITY_POLICY, containsString(DEFAULT_SELF)))
+                .andExpect(header().string(CONTENT_SECURITY_POLICY, not(containsString(UNSAFE_EVAL))))
+                .andExpect(header().string(STRICT_TRANSPORT_SECURITY, containsString(HSTS_ONE_YEAR)));
+    }
+
+    private static MockHttpServletRequestBuilder secureGet(String path) {
+        return get(path).secure(true);
     }
 }

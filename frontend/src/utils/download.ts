@@ -1,18 +1,3 @@
-/**
- * Triggers a browser file-save dialog for a Blob fetched via the API
- * (e.g. recorded video, payment receipt, teacher verification document).
- *
- * <h2>Why a helper</h2>
- * Stitching together `URL.createObjectURL`, a hidden `<a download>`,
- * click(), and timely `revokeObjectURL` is fiddly and easy to get
- * wrong. Centralising it here means every download surface shares
- * one tested implementation and the same hardened filename sanitiser.
- *
- * <h2>Filename safety</h2>
- * {@link sanitizeDownloadFileName} strips control characters and
- * shell-tricky path separators before they reach the OS save dialog
- * as defense in depth on top of whatever the backend already does.
- */
 interface BlobDownloadPayload {
   blob: Blob
   fileName?: string | null
@@ -21,7 +6,7 @@ interface BlobDownloadPayload {
 const MAX_DOWNLOAD_FILE_NAME_LENGTH = 180
 const WINDOWS_RESERVED_DEVICE_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 
-export function saveBlobDownload(download: BlobDownloadPayload, fallbackName: string) {
+export function saveBlobDownload(download: BlobDownloadPayload, fallbackName: string): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') {
     throw new Error('Browser downloads are not available in this environment.')
   }
@@ -41,21 +26,23 @@ export function saveBlobDownload(download: BlobDownloadPayload, fallbackName: st
   }
 }
 
-export function sanitizeDownloadFileName(fileName: string | null | undefined, fallbackName: string) {
-  const candidate = limitFileNameLength(
-    (fileName?.trim() || fallbackName.trim() || 'download')
-      .replace(/[\u0000-\u001f\u007f]/g, '_')
-      .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '')
-      .replace(/[\\/:"*?<>|]+/g, '_')
-      .replace(/\s+/g, ' ')
-      .replace(/^\.+/, '')
-      .replace(/[. ]+$/g, '')
-      .trim(),
-  )
+export function sanitizeDownloadFileName(fileName: string | null | undefined, fallbackName: string): string {
+  const candidate = limitFileNameLength(normalizeFileNameCandidate(fileName?.trim() || fallbackName.trim()))
   return candidate === '' || WINDOWS_RESERVED_DEVICE_NAMES.test(candidate) ? 'download' : candidate
 }
 
-function limitFileNameLength(fileName: string) {
+function normalizeFileNameCandidate(fileName: string): string {
+  return (fileName || 'download')
+    .replace(/[\u0000-\u001f\u007f]/g, '_')
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '')
+    .replace(/[\\/:"*?<>|]+/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/^\.+/, '')
+    .replace(/[. ]+$/g, '')
+    .trim()
+}
+
+function limitFileNameLength(fileName: string): string {
   if (fileName.length <= MAX_DOWNLOAD_FILE_NAME_LENGTH) {
     return fileName
   }

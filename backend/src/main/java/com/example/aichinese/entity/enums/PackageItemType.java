@@ -23,12 +23,4 @@ public enum PackageItemType {
                 "Package item type is required.",
                 () -> "Invalid package item type. Allowed values are MODULE or LESSON.");
     }
-
-    public boolean isModule() {
-        return this == MODULE;
-    }
-
-    public boolean isLesson() {
-        return this == LESSON;
-    }
 }

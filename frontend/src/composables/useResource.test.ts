@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { defineComponent } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useResource } from './useResource'
 
@@ -22,9 +23,17 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => mocks.auth,
 }))
 
+const wrappers: VueWrapper[] = []
+
+function enablePreviewFallbacks(isPreviewSession = true): void {
+  mocks.appEnv.useDemoData = true
+  mocks.appEnv.enablePreviewMode = true
+  mocks.auth.isPreviewSession = isPreviewSession
+}
+
 function mountResource<T>(loader: () => Promise<T>, fallback?: (() => T) | T, immediate = true) {
   let resource: ReturnType<typeof useResource<T>> | undefined
-  mount(
+  const wrapper = mount(
     defineComponent({
       setup() {
         resource = useResource(loader, fallback, immediate)
@@ -32,6 +41,7 @@ function mountResource<T>(loader: () => Promise<T>, fallback?: (() => T) | T, im
       },
     }),
   )
+  wrappers.push(wrapper)
 
   if (!resource) {
     throw new Error('resource did not initialize')
@@ -45,6 +55,10 @@ describe('useResource guarded fallback behavior', () => {
     mocks.appEnv.useDemoData = false
     mocks.appEnv.enablePreviewMode = false
     mocks.auth.isPreviewSession = false
+  })
+
+  afterEach(() => {
+    wrappers.splice(0).forEach((wrapper) => wrapper.unmount())
   })
 
   it('does not render fallback fixtures for a normal non-preview API outage', async () => {
@@ -63,9 +77,7 @@ describe('useResource guarded fallback behavior', () => {
   })
 
   it('uses preview fixtures without issuing a live request when preview mode is active', async () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
-    mocks.auth.isPreviewSession = true
+    enablePreviewFallbacks()
     const fallback = { message: 'safe preview fixture' }
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
     const resource = mountResource(loader, () => fallback)
@@ -80,9 +92,7 @@ describe('useResource guarded fallback behavior', () => {
   })
 
   it('uses preview fixtures for anonymous public preview pages without issuing a live request', async () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
-    mocks.auth.isPreviewSession = false
+    enablePreviewFallbacks(false)
     const fallback = { message: 'anonymous preview fixture' }
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
     const resource = mountResource(loader, () => fallback)

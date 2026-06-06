@@ -32,6 +32,7 @@ public class RefreshTokenService {
     private static final int MAX_USER_AGENT_LENGTH = 255;
     private static final int MAX_IP_LENGTH = 64;
     private static final int MAX_RAW_TOKEN_LENGTH = 512;
+    private static final int TOKEN_GENERATION_ATTEMPTS = 5;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -123,14 +124,14 @@ public class RefreshTokenService {
         User user = refreshToken.getUser();
         if (user != null && user.getId() != null) {
             userRepository.findLockedById(user.getId()).ifPresent(lockedUser -> {
-                lockedUser.setSessionVersion(lockedUser.getSessionVersion() + 1);
+                rotateSessionVersion(lockedUser);
                 userRepository.save(lockedUser);
             });
         }
     }
 
     private String generateUniqueRawToken() {
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < TOKEN_GENERATION_ATTEMPTS; attempt++) {
             byte[] bytes = new byte[TOKEN_BYTES];
             secureRandom.nextBytes(bytes);
             String candidate = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -142,7 +143,15 @@ public class RefreshTokenService {
     }
 
     private Duration refreshTokenTtl() {
-        return Duration.ofMillis(securityProperties.refreshTokenExpiration());
+        long expirationMillis = securityProperties.refreshTokenExpiration();
+        if (expirationMillis <= 0) {
+            throw new IllegalStateException("Refresh token expiration must be positive.");
+        }
+        return Duration.ofMillis(expirationMillis);
+    }
+
+    private static void rotateSessionVersion(User user) {
+        user.setSessionVersion(user.getSessionVersion() + 1);
     }
 
     private static boolean isConsumed(RefreshToken token) {
@@ -184,5 +193,10 @@ public class RefreshTokenService {
     }
 
     public record RefreshSession(User user, RefreshTokenIssue refreshToken) {
+
+        public RefreshSession {
+            Objects.requireNonNull(user, "user");
+            Objects.requireNonNull(refreshToken, "refreshToken");
+        }
     }
 }

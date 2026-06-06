@@ -239,7 +239,7 @@ public final class FriendlyErrorMessageResolver {
         return "The service is temporarily unavailable. Please try again later.";
     }
 
-    public static String tooManyRequestsMessage() {
+    private static String tooManyRequestsMessage() {
         return "You are doing that too often. Please wait a moment and try again.";
     }
 
@@ -247,7 +247,7 @@ public final class FriendlyErrorMessageResolver {
         return "The request conflicts with the current state. Please refresh and try again.";
     }
 
-    public static String operationFailedMessage() {
+    private static String operationFailedMessage() {
         return "We could not complete that action. Please try again shortly.";
     }
 

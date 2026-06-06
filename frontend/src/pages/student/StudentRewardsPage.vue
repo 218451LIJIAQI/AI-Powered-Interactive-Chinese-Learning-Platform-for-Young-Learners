@@ -66,7 +66,7 @@
                 <span><IconGlyph name="trophy" :size="20" /></span>
                 <strong>Earned Badges</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">
+              <button type="button" class="student-link-button" @click="openAchievements">
                 Open Achievements
               </button>
             </div>
@@ -218,7 +218,7 @@
                 <span><IconGlyph name="file" :size="20" /></span>
                 <strong>Reward History</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/profile')">
+              <button type="button" class="student-link-button" @click="openProfile">
                 Points Activity
               </button>
             </div>
@@ -248,7 +248,7 @@
                 <span><IconGlyph name="star" :size="20" /></span>
                 <strong>Recent Achievements</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/achievements')">
+              <button type="button" class="student-link-button" @click="openAchievements">
                 Open
               </button>
             </div>
@@ -274,14 +274,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student rewards, XP, badge, and milestone surface.
- *
- * <p>Visualises points balance, recent reward transactions, badge
- * progress, the level journey, and practice goals from the student
- * rewards, points history, dashboard, progress, and activity
- * resources.</p>
- */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -299,10 +291,14 @@ import {
   studentProgress as studentProgressDemo,
   studentRewards,
 } from '@/demo/data'
-import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent } from '@/utils/format'
+import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent, toFiniteNumber } from '@/utils/format'
 import { inferPracticeActivityFromText, normalizePracticeActivity, practiceRoute } from '@/utils/practiceRoute'
 
+type BadgeIcon = 'star' | 'learn' | 'live' | 'trophy'
+type JourneyStatus = 'complete' | 'current' | 'future'
+
 const router = useRouter()
+const fallbackAchievementDateIso = new Date().toISOString()
 
 const resource = useResource(() => studentApi.rewards(), studentRewards)
 const historyResource = useResource(() => studentApi.pointsHistory(), studentPointsHistory)
@@ -398,16 +394,16 @@ const pageError = computed(
     activitiesResource.error.value,
 )
 
-function levelTitleFor(levelNumber: number) {
-  const titles: Record<number, string> = {
-    1: 'Little Starter',
-    2: 'Pinyin Explorer',
-    3: 'Little Learner',
-    4: 'Word Builder',
-    5: 'Sentence Maker',
-  }
+const levelTitles: Record<number, string> = {
+  1: 'Little Starter',
+  2: 'Pinyin Explorer',
+  3: 'Little Learner',
+  4: 'Word Builder',
+  5: 'Sentence Maker',
+}
 
-  return titles[levelNumber] ?? `Level ${levelNumber}`
+function levelTitleFor(levelNumber: number): string {
+  return levelTitles[levelNumber] ?? `Level ${levelNumber}`
 }
 
 const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
@@ -416,6 +412,13 @@ const levelProgressPercent = computed(() => clampPercent(rewards.value.progressT
 const currentStreakCount = computed(() => nonNegativeInteger(rewards.value.streak.currentStreak))
 const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
 const currentLevelTitle = computed(() => levelTitleFor(currentLevelNumber.value))
+const quizzesAbove80 = computed(
+  () => dashboard.value.recentQuizResults.filter((item) => ratioPercent(item.score, item.maxScore) >= 80).length,
+)
+const completedLessonsForGoal = computed(() => Math.min(8, nonNegativeInteger(progress.value.completedLessons)))
+const completedActivityCount = computed(() => activities.value.items.filter((item) => item.completed).length)
+const completedActivitiesForGoal = computed(() => Math.min(5, completedActivityCount.value))
+const quizGoalCount = computed(() => Math.min(3, quizzesAbove80.value))
 
 const heroStats = computed(() => [
   { label: 'Total Points', value: formatNumber(rewards.value.totalPoints), icon: 'star' },
@@ -423,25 +426,14 @@ const heroStats = computed(() => [
   { label: 'Achievements', value: String(nonNegativeInteger(dashboard.value.badgeCount)), icon: 'rewards' },
 ])
 
-const quizzesAbove80 = computed(
-  () => dashboard.value.recentQuizResults.filter((item) => ratioPercent(item.score, item.maxScore) >= 80).length,
-)
-
 const earnedBadgeCards = computed(() => {
   const base = rewards.value.badges.map((badge, index) => ({
     id: `earned-${badge.badgeId}`,
     title: badge.name,
     subtitle: badge.description,
-    statusLabel: index === 0 ? 'Mastered' : index === 1 ? 'Mastered' : 'In progress',
-    icon:
-      badge.iconKey === 'star'
-        ? 'star'
-        : badge.iconKey === 'book'
-          ? 'learn'
-          : badge.iconKey === 'mic'
-            ? 'live'
-            : 'trophy',
-    tone: index === 0 ? 'gold' : index === 1 ? 'green' : 'blue',
+    statusLabel: earnedBadgeStatusLabel(index),
+    icon: badgeIconFor(badge.iconKey),
+    tone: earnedBadgeTone(index),
     locked: false,
   }))
 
@@ -520,7 +512,7 @@ const achievementFeed = computed(() => [
     title: '7-Day Streak!',
     subtitle: `You have learned for ${currentStreakCount.value} days in a row.`,
     reward: `${currentStreakCount.value} day streak`,
-    date: formatDate(pointsHistory.value[0]?.createdAt ?? new Date().toISOString()),
+    date: formatDate(pointsHistory.value[0]?.createdAt ?? fallbackAchievementDateIso),
     tone: 'purple',
   },
   {
@@ -529,7 +521,7 @@ const achievementFeed = computed(() => [
     title: 'Quiz Progress',
     subtitle: `Average quiz score is now ${quizAveragePercent.value}%.`,
     reward: `${quizAveragePercent.value}% average`,
-    date: formatDate(dashboard.value.recentQuizResults[0]?.completedAt ?? new Date().toISOString()),
+    date: formatDate(dashboard.value.recentQuizResults[0]?.completedAt ?? fallbackAchievementDateIso),
     tone: 'green',
   },
   {
@@ -538,34 +530,32 @@ const achievementFeed = computed(() => [
     title: 'Practice Explorer',
     subtitle: `${activities.value.items.length} practice activities are available in your library.`,
     reward: `${activities.value.items.length} activities`,
-    date: formatDate(pointsHistory.value[1]?.createdAt ?? new Date().toISOString()),
+    date: formatDate(pointsHistory.value[1]?.createdAt ?? fallbackAchievementDateIso),
     tone: 'orange',
   },
 ])
 
-const completedActivityCount = computed(() => activities.value.items.filter((item) => item.completed).length)
-
 const weeklyGoals = computed(() => [
   {
     title: 'Complete 8 lessons',
-    count: `${Math.min(8, nonNegativeInteger(progress.value.completedLessons))} / 8`,
-    progress: ratioPercent(Math.min(8, nonNegativeInteger(progress.value.completedLessons)), 8),
+    count: `${completedLessonsForGoal.value} / 8`,
+    progress: ratioPercent(completedLessonsForGoal.value, 8),
     statusLabel: 'Tracking lessons',
     icon: 'learn',
     tone: 'green',
   },
   {
     title: 'Finish 5 practice activities',
-    count: `${Math.min(5, completedActivityCount.value)} / 5`,
-    progress: ratioPercent(Math.min(5, completedActivityCount.value), 5),
+    count: `${completedActivitiesForGoal.value} / 5`,
+    progress: ratioPercent(completedActivitiesForGoal.value, 5),
     statusLabel: 'Tracking practice',
     icon: 'live',
     tone: 'purple',
   },
   {
     title: 'Score 80%+ in 3 quizzes',
-    count: `${Math.min(3, quizzesAbove80.value)} / 3`,
-    progress: ratioPercent(Math.min(3, quizzesAbove80.value), 3),
+    count: `${quizGoalCount.value} / 3`,
+    progress: ratioPercent(quizGoalCount.value, 3),
     statusLabel: 'Tracking quizzes',
     icon: 'clip',
     tone: 'orange',
@@ -578,42 +568,82 @@ const rewardHistoryCards = computed(() =>
     title: item.reason,
     date: formatDate(item.createdAt),
     pointsLabel: signedIntegerLabel(item.pointsDelta),
-    icon: index === 0 ? 'rewards' : index === 1 ? 'learn' : 'status',
+    icon: rewardHistoryIcon(index),
   })),
 )
 
 const journeySteps = computed(() =>
   Array.from({ length: 5 }, (_, index) => {
     const level = index + 1
-    const status =
-      level < currentLevelNumber.value ? 'complete' : level === currentLevelNumber.value ? 'current' : 'future'
+    const status = journeyStatusFor(level)
     return {
       level,
       title: levelTitleFor(level),
-      caption:
-        status === 'complete'
-          ? 'Completed'
-          : status === 'current'
-            ? `${levelProgressPercent.value}% to next level`
-            : level === nextLevelNumber.value
-              ? 'Next up'
-              : 'Locked until more progress',
+      caption: journeyCaptionFor(level, status),
       status,
-      icon: status === 'complete' ? 'star' : status === 'current' ? 'trophy' : 'safe',
+      icon: journeyIconFor(status),
     }
   }),
 )
 
-function openRewardPractice() {
+function badgeIconFor(iconKey: string | null | undefined): BadgeIcon {
+  if (iconKey === 'star') return 'star'
+  if (iconKey === 'book') return 'learn'
+  if (iconKey === 'mic') return 'live'
+  return 'trophy'
+}
+
+function earnedBadgeStatusLabel(index: number): string {
+  return index < 2 ? 'Mastered' : 'In progress'
+}
+
+function earnedBadgeTone(index: number): string {
+  if (index === 0) return 'gold'
+  if (index === 1) return 'green'
+  return 'blue'
+}
+
+function rewardHistoryIcon(index: number): string {
+  if (index === 0) return 'rewards'
+  if (index === 1) return 'learn'
+  return 'status'
+}
+
+function journeyStatusFor(level: number): JourneyStatus {
+  if (level < currentLevelNumber.value) return 'complete'
+  return level === currentLevelNumber.value ? 'current' : 'future'
+}
+
+function journeyCaptionFor(level: number, status: JourneyStatus): string {
+  if (status === 'complete') return 'Completed'
+  if (status === 'current') return `${levelProgressPercent.value}% to next level`
+  return level === nextLevelNumber.value ? 'Next up' : 'Locked until more progress'
+}
+
+function journeyIconFor(status: JourneyStatus): string {
+  if (status === 'complete') return 'star'
+  if (status === 'current') return 'trophy'
+  return 'safe'
+}
+
+function openAchievements(): void {
+  void router.push('/student/achievements')
+}
+
+function openProfile(): void {
+  void router.push('/student/profile')
+}
+
+function openRewardPractice(): void {
   void router.push(practiceRoute(recommendedPracticeActivity.value))
 }
 
-function signedIntegerLabel(value: number) {
-  const rounded = Math.round(Number.isFinite(value) ? value : 0)
+function signedIntegerLabel(value: number): string {
+  const rounded = Math.round(toFiniteNumber(value))
   return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void resource.reload()
   void historyResource.reload()
   void dashboardResource.reload()
@@ -1452,11 +1482,6 @@ function reloadAll() {
   }
 }
 
-/* ====================================================================
-   Deep polish v2 — header, hero overflow fix, dense badges, sidebar
-   achievements list, history & badge empty states, journey clarity
-   ==================================================================== */
-
 .student-rewards-page .student-simple-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1499,7 +1524,6 @@ function reloadAll() {
   line-height: 1.5;
 }
 
-/* Hero stat readability fixes - "Achievements" no longer wraps, "0 days" stays on one line */
 .student-rewards-top-stat {
   min-width: 0;
 }
@@ -1526,7 +1550,6 @@ function reloadAll() {
   letter-spacing: -0.01em;
 }
 
-/* Hero left column "Little Starter" text shouldn't wrap awkwardly */
 .student-rewards-level-copy {
   min-width: 0;
 }
@@ -1541,7 +1564,6 @@ function reloadAll() {
   text-overflow: ellipsis;
 }
 
-/* Badges card now spans full main column - taller, denser, cleaner */
 .student-rewards-badges-card {
   padding: 20px;
   border-radius: 26px;
@@ -1565,7 +1587,6 @@ function reloadAll() {
   line-height: 1;
 }
 
-/* Wide grid: 5 columns now have generous space each */
 .student-badge-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
@@ -1664,7 +1685,6 @@ function reloadAll() {
   margin-top: 4px;
 }
 
-/* Earned badges empty state - dense and actionable */
 .student-badges-empty {
   margin-top: 14px;
   padding: 16px;
@@ -1757,7 +1777,6 @@ function reloadAll() {
   filter: brightness(1.05);
 }
 
-/* Journey track - cleaner captions, no clipping */
 .student-journey-step strong {
   color: #232b4a;
   font-family: 'Fredoka', sans-serif;
@@ -1775,7 +1794,6 @@ function reloadAll() {
   line-height: 1.3;
 }
 
-/* Reward History empty state */
 .student-reward-history-empty {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
@@ -1813,7 +1831,6 @@ function reloadAll() {
   line-height: 1.4;
 }
 
-/* Sidebar Recent Achievements card - now lives below Reward History */
 .student-rewards-achievements-card {
   padding: 18px;
   border-radius: 22px;
@@ -1878,12 +1895,10 @@ function reloadAll() {
   align-self: start;
 }
 
-/* Locked badges chip placement refinement */
 .student-badge-grid--locked .student-badge-card {
   background: rgba(248, 249, 252, 0.7);
 }
 
-/* Make the badges grid responsive: 4 cols on medium, 3 on small, 2 on phones */
 @media (max-width: 1280px) {
   .student-badge-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));

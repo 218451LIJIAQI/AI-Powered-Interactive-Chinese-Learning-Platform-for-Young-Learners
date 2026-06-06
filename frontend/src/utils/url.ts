@@ -1,15 +1,3 @@
-/**
- * Validates that a string is a safe HTTP(S) URL before the UI follows
- * it. External redirects are absolute-only by default; callers that
- * render first-party media endpoints can opt into same-origin relative
- * URLs. Rejects `javascript:`, `data:`, `file:` etc. so a malicious
- * teacher bio or AI-generated link cannot be turned into XSS via
- * `<a href>` or `window.open`.
- *
- * {@link openSafeHttpUrl} additionally hardens the popup with
- * `noopener,noreferrer` so the new tab cannot reverse-tabnab the
- * opener via `window.opener`.
- */
 interface SafeHttpUrlOptions {
   allowRelative?: boolean
   baseOrigin?: string
@@ -19,14 +7,18 @@ interface SafeHttpUrlOptions {
 const HTTP_PROTOCOLS = new Set(['http:', 'https:'])
 const UNSAFE_URL_CODE_POINT_PATTERN = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/
 
-function currentOrigin() {
+function currentOrigin(): string | null {
   return typeof window === 'undefined' ? null : window.location.origin
+}
+
+function hasUnsafeUrlShape(value: string): boolean {
+  return value.startsWith('//') || value.includes('\\') || UNSAFE_URL_CODE_POINT_PATTERN.test(value)
 }
 
 export function safeHttpUrl(value: string | null | undefined, options: SafeHttpUrlOptions = {}): string | null {
   const trimmed = value?.trim()
   if (!trimmed) return null
-  if (trimmed.startsWith('//') || trimmed.includes('\\') || UNSAFE_URL_CODE_POINT_PATTERN.test(trimmed)) return null
+  if (hasUnsafeUrlShape(trimmed)) return null
 
   try {
     const baseOrigin = options.baseOrigin ?? currentOrigin()

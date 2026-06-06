@@ -58,9 +58,9 @@
             <IconGlyph name="profile" :size="20" />
             <strong>Sign In</strong>
           </button>
-          <button
-            class="auth-showcase-header"
-            :class="{ 'auth-showcase-header--active': activeTab === 'register' }"
+            <button
+              class="auth-showcase-header"
+              :class="{ 'auth-showcase-header--active': activeTab === 'register' }"
             type="button"
             role="tab"
             :aria-selected="activeTab === 'register'"
@@ -137,7 +137,7 @@
             </div>
 
             <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmitLogin" type="submit">
-              <span>{{ auth.loading ? 'Signing In...' : 'Sign In' }}</span>
+              <span>{{ loginSubmitLabel }}</span>
               <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="18" /></span>
             </button>
           </form>
@@ -204,11 +204,7 @@
                 </button>
               </div>
               <p class="helper-text auth-role-help">
-                {{
-                  register.role === 'STUDENT'
-                    ? 'Student accounts open lessons, rewards, and AI practice for young learners.'
-                    : 'Teacher accounts unlock classes and content after verification is reviewed.'
-                }}
+                {{ registerRoleHelp }}
               </p>
             </div>
 
@@ -303,9 +299,9 @@
                 <input v-model="register.agreedToTerms" type="checkbox" required />
                 <span>
                   I agree to the
-                  <a href="/terms" @click.prevent="router.push('/terms')">Terms of Service</a>
+                  <a href="/terms" @click.prevent="openTerms">Terms of Service</a>
                   and
-                  <a href="/privacy" @click.prevent="router.push('/privacy')">Privacy Policy</a>.
+                  <a href="/privacy" @click.prevent="openPrivacy">Privacy Policy</a>.
                 </span>
               </label>
               <label class="auth-checkbox">
@@ -315,7 +311,7 @@
             </div>
 
             <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmitRegister" type="submit">
-              <span>{{ registerSubmitting ? 'Creating...' : 'Create Account' }}</span>
+              <span>{{ registerSubmitLabel }}</span>
               <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="18" /></span>
             </button>
 
@@ -360,28 +356,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Combined sign-in / register surface (one route, two tab modes).
- *
- * <h2>Why one page</h2>
- * <p>Keeping login + register together cuts a navigation step out
- * of the auth flow and lets the user toggle without losing typed
- * input.</p>
- *
- * <h2>Post-auth redirect</h2>
- * <p>After login we honour {@code ?redirect=} when it normalises
- * through {@link normalizeAppRoute} (defence against open-redirect
- * abuse); otherwise we use {@link defaultRouteForRole} so each
- * persona lands on their dashboard.  The active mode is reflected
- * in the URL ({@code ?tab=register}) so direct links from marketing
- * pages can land on the right tab.</p>
- *
- * <h2>Teacher onboarding</h2>
- * <p>Teacher registration calls a different endpoint and the
- * resulting account starts in {@code PENDING_APPROVAL} — the
- * post-register message tells the teacher to wait for admin
- * verification before logging in.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -394,6 +368,7 @@ import { appEnv } from '@/config/env'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
+import { isPasswordLengthValid } from '@/utils/password'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 import { defaultRouteForRole } from '@/utils/role'
 import { getSessionStorage, safeSetItem, storageKeys } from '@/utils/storage'
@@ -402,13 +377,18 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
+type AuthTab = 'signin' | 'register'
+type RegisterRole = 'STUDENT' | 'TEACHER'
+type PublicAuthRoute = '/privacy' | '/terms'
+type PreviewDestination = '/admin/dashboard' | '/student/home' | '/teacher/dashboard'
+
 const previewEnabled = appEnv.useDemoData && appEnv.enablePreviewMode
 const loginError = ref<string | null>(null)
 const loginInfo = ref<string | null>(null)
 const registerError = ref<string | null>(null)
 const registerInfo = ref<string | null>(null)
 const registerSubmitting = ref(false)
-const activeTab = ref<'signin' | 'register'>('signin')
+const activeTab = ref<AuthTab>('signin')
 
 const login = reactive({
   email: '',
@@ -416,7 +396,7 @@ const login = reactive({
 })
 
 const register = reactive({
-  role: 'STUDENT' as 'STUDENT' | 'TEACHER',
+  role: 'STUDENT' as RegisterRole,
   fullName: '',
   email: '',
   password: '',
@@ -434,11 +414,18 @@ const canSubmitLogin = computed(() => !auth.loading && loginEmailValid.value && 
 const normalizedRegisterFullName = computed(() => register.fullName.trim())
 const normalizedRegisterEmail = computed(() => register.email.trim().toLowerCase())
 const registerEmailValid = computed(() => emailPattern.test(normalizedRegisterEmail.value))
-const registerPasswordReady = computed(() => register.password.length >= 8)
+const registerPasswordReady = computed(() => isPasswordLengthValid(register.password))
 const registerPasswordsMatch = computed(
   () => register.password === register.confirmPassword && register.confirmPassword.length > 0,
 )
 const teacherBioReady = computed(() => register.role !== 'TEACHER' || register.bio.trim().length >= 20)
+const loginSubmitLabel = computed(() => (auth.loading ? 'Signing In...' : 'Sign In'))
+const registerSubmitLabel = computed(() => (registerSubmitting.value ? 'Creating...' : 'Create Account'))
+const registerRoleHelp = computed(() =>
+  register.role === 'STUDENT'
+    ? 'Student accounts open lessons, rewards, and AI practice for young learners.'
+    : 'Teacher accounts unlock classes and content after verification is reviewed.',
+)
 const canSubmitRegister = computed(
   () =>
     !registerSubmitting.value &&
@@ -473,13 +460,13 @@ watch(
   { immediate: true },
 )
 
-function resolveRedirect() {
+function resolveRedirect(): string {
   const redirect =
     typeof route.query.redirect === 'string' ? route.query.redirect : defaultRouteForRole(auth.activeRole)
   return normalizeAppRoute(redirect) ?? defaultRouteForRole(auth.activeRole)
 }
 
-async function submitLogin() {
+async function submitLogin(): Promise<void> {
   if (auth.loading) return
 
   loginError.value = null
@@ -506,7 +493,7 @@ async function submitLogin() {
   }
 }
 
-async function submitRegister() {
+async function submitRegister(): Promise<void> {
   if (registerSubmitting.value) return
 
   registerError.value = null
@@ -524,7 +511,7 @@ async function submitRegister() {
   }
 
   if (!registerPasswordReady.value) {
-    registerError.value = 'Use at least 8 characters for the password.'
+    registerError.value = 'Use 8 to 72 characters and keep the password within the 72-byte security limit.'
     return
   }
 
@@ -579,7 +566,7 @@ async function submitRegister() {
   }
 }
 
-function replaceAuthQuery(tab: 'signin' | 'register', role?: 'STUDENT' | 'TEACHER') {
+function replaceAuthQuery(tab: AuthTab, role?: RegisterRole): void {
   const nextQuery = { ...route.query }
 
   if (tab === 'register') {
@@ -596,14 +583,14 @@ function replaceAuthQuery(tab: 'signin' | 'register', role?: 'STUDENT' | 'TEACHE
   })
 }
 
-function activateSignIn() {
+function activateSignIn(): void {
   activeTab.value = 'signin'
   registerError.value = null
   registerInfo.value = null
   replaceAuthQuery('signin')
 }
 
-function activateRegister(role: 'STUDENT' | 'TEACHER' = register.role) {
+function activateRegister(role: RegisterRole = register.role): void {
   activeTab.value = 'register'
   register.role = role
   loginError.value = null
@@ -611,7 +598,7 @@ function activateRegister(role: 'STUDENT' | 'TEACHER' = register.role) {
   replaceAuthQuery('register', role)
 }
 
-function selectRegisterRole(role: 'STUDENT' | 'TEACHER') {
+function selectRegisterRole(role: RegisterRole): void {
   register.role = role
 
   if (activeTab.value === 'register') {
@@ -619,14 +606,26 @@ function selectRegisterRole(role: 'STUDENT' | 'TEACHER') {
   }
 }
 
-function openForgotPassword() {
+function openPublicRoute(path: PublicAuthRoute): void {
+  void router.push(path)
+}
+
+function openTerms(): void {
+  openPublicRoute('/terms')
+}
+
+function openPrivacy(): void {
+  openPublicRoute('/privacy')
+}
+
+function openForgotPassword(): void {
   if (loginEmailValid.value) {
     safeSetItem(storageKeys.recoveryEmail, normalizedLoginEmail.value, getSessionStorage())
   }
   void router.push({ name: 'forgot-password' })
 }
 
-function previewRole(role: UserRole, destination: string) {
+function previewRole(role: UserRole, destination: PreviewDestination): void {
   if (!previewEnabled) {
     return
   }
@@ -635,15 +634,15 @@ function previewRole(role: UserRole, destination: string) {
   void router.push(destination)
 }
 
-function previewStudent() {
+function previewStudent(): void {
   previewRole('STUDENT', '/student/home')
 }
 
-function previewTeacher() {
+function previewTeacher(): void {
   previewRole('TEACHER', '/teacher/dashboard')
 }
 
-function previewAdmin() {
+function previewAdmin(): void {
   previewRole('ADMIN', '/admin/dashboard')
 }
 </script>

@@ -1,25 +1,3 @@
-/**
- * Static fixture data the FYP preview mode uses when
- * {@code VITE_USE_DEMO_DATA=true} and {@code VITE_ENABLE_PREVIEW_MODE=true}.
- *
- * <h2>What it covers</h2>
- * <p>One fixture per response shape used by every page on every
- * persona — enough for an FYP demonstration to navigate the full
- * product without a backend.</p>
- *
- * <h2>Strict typing</h2>
- * <p>Each export is typed against the corresponding
- * {@code types/api.ts} interface so a backend contract change
- * trips a compile error in this file. Without that, demo data
- * silently drifts and demo pages render broken UI.</p>
- *
- * <h2>Normal-build behaviour</h2>
- * <p>The composables that read this file
- * ({@code useResource}, {@code stores/auth}) gate the fallback on
- * {@code appEnv.useDemoData}. The data may still be present in the
- * bundle, but a normal build never selects it at runtime, so there is
- * no accidental demo-fixture behaviour.</p>
- */
 import type {
   AdminAnalyticsResponse,
   AdminPaymentRecordResponse,
@@ -52,7 +30,6 @@ import type {
   LessonVideoProgressSummaryResponse,
   LiveClassEnrolmentResponse,
   LiveClassResponse,
-  ManagedContentType,
   ModerationRecordResponse,
   NotificationResponse,
   PageResponse,
@@ -108,6 +85,18 @@ const publicTeacherLi = { teacherId: 1, displayName: 'Teacher Li Wei', verified:
 const publicTeacherMei = { teacherId: 2, displayName: 'Teacher Mei', verified: true }
 const publicTeacherKen = { teacherId: 3, displayName: 'Teacher Ken', verified: true }
 const teacherOwnerLi = { teacherId: 301, userId: 102, fullName: 'Li Wei', teacherStatus: 'APPROVED' as const }
+
+function demoPage<T>(items: T[], size = items.length): PageResponse<T> {
+  const totalItems = items.length
+
+  return {
+    items,
+    page: 0,
+    size,
+    totalItems,
+    totalPages: size > 0 ? Math.ceil(totalItems / size) : 0,
+  }
+}
 
 export const publicCourses: PublicCourseSummary[] = [
   {
@@ -567,8 +556,7 @@ export const studentLessonPlayer: StudentLessonPlayerResponse = {
   ],
 }
 
-export const activityLibrary: PageResponse<StudentActivitySummaryResponse> = {
-  items: [
+export const activityLibrary: PageResponse<StudentActivitySummaryResponse> = demoPage([
     {
       id: 1,
       type: 'FLASHCARD',
@@ -905,12 +893,7 @@ export const activityLibrary: PageResponse<StudentActivitySummaryResponse> = {
       updatedAt: '2026-05-19T03:00:00Z',
       completed: false,
     },
-  ],
-  page: 0,
-  size: 24,
-  totalItems: 24,
-  totalPages: 1,
-}
+])
 
 export const flashcardActivities: StudentFlashcardResponse[] = [
   {
@@ -2623,8 +2606,8 @@ export const adminAnalytics: AdminAnalyticsResponse = {
   ],
 }
 
-export const adminUsers: PageResponse<AdminUserListItemResponse> = {
-  items: [
+export const adminUsers: PageResponse<AdminUserListItemResponse> = demoPage(
+  [
     {
       userId: 101,
       fullName: 'Learner',
@@ -2716,14 +2699,11 @@ export const adminUsers: PageResponse<AdminUserListItemResponse> = {
       updatedAt: '2026-05-18T01:10:00Z',
     },
   ],
-  page: 0,
-  size: 10,
-  totalItems: 9,
-  totalPages: 1,
-}
+  10,
+)
 
-export const adminStudents: PageResponse<AdminStudentListItemResponse> = {
-  items: [
+export const adminStudents: PageResponse<AdminStudentListItemResponse> = demoPage(
+  [
     {
       studentId: 201,
       userId: 101,
@@ -2757,14 +2737,11 @@ export const adminStudents: PageResponse<AdminStudentListItemResponse> = {
       createdAt: '2026-05-14T04:00:00Z',
     },
   ],
-  page: 0,
-  size: 10,
-  totalItems: 4,
-  totalPages: 1,
-}
+  10,
+)
 
-export const adminTeachers: PageResponse<AdminTeacherListItemResponse> = {
-  items: [
+export const adminTeachers: PageResponse<AdminTeacherListItemResponse> = demoPage(
+  [
     {
       teacherId: 301,
       userId: 203,
@@ -2826,11 +2803,8 @@ export const adminTeachers: PageResponse<AdminTeacherListItemResponse> = {
       createdAt: '2026-04-18T04:00:00Z',
     },
   ],
-  page: 0,
-  size: 10,
-  totalItems: 5,
-  totalPages: 1,
-}
+  10,
+)
 
 export const adminTeacherDetail: AdminTeacherDetailResponse = {
   teacherId: 301,
@@ -2881,8 +2855,8 @@ export const adminTeacherDetail: AdminTeacherDetailResponse = {
 
 export const teacherApplicationsPending = adminTeachers.items.filter((item) => item.teacherStatus === 'PENDING')
 
-export const adminContentList: PageResponse<ContentSubmissionResponse> = {
-  items: [
+export const adminContentList: PageResponse<ContentSubmissionResponse> = demoPage(
+  [
     {
       contentType: 'PACKAGE',
       id: 1,
@@ -2916,11 +2890,8 @@ export const adminContentList: PageResponse<ContentSubmissionResponse> = {
       updatedAt: '2026-05-13T04:00:00Z',
     },
   ],
-  page: 0,
-  size: 10,
-  totalItems: 2,
-  totalPages: 1,
-}
+  10,
+)
 
 export const adminContentDetail: ContentSubmissionDetailResponse = {
   contentType: 'PACKAGE',
@@ -3095,10 +3066,6 @@ export const adminRefunds: AdminRefundRequestResponse[] = [
   },
 ]
 
-// Student preview finance data intentionally uses student-owned aliases so
-// student pages do not depend on admin-named demo fixtures. This keeps the
-// fallback contract role-accurate even when the sample rows currently happen
-// to share the same underlying values.
 export const studentPayments: StudentPaymentRecordResponse[] = adminPayments.map(
   ({
     paymentId,
@@ -3159,7 +3126,7 @@ export const cartDemo: CartResponse = {
   items: [
     {
       cartItemId: 1,
-      itemType: 'PACKAGE' as ManagedContentType,
+      itemType: 'PACKAGE',
       itemId: 1,
       title: 'Mandarin for Beginners',
       unitPrice: 49,
@@ -3170,7 +3137,7 @@ export const cartDemo: CartResponse = {
     },
     {
       cartItemId: 2,
-      itemType: 'LESSON' as ManagedContentType,
+      itemType: 'LESSON',
       itemId: 2,
       title: 'Everyday Conversations',
       unitPrice: 79,

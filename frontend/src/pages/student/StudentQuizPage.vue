@@ -14,7 +14,7 @@
       </div>
     </section>
 
-    <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" />
+    <DataNotice :using-fallback="usingFallback" :error="noticeError" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="student-quiz-layout">
@@ -29,7 +29,7 @@
             <div class="student-quiz-question">
               <span class="student-quiz-audio" aria-hidden="true"><IconGlyph name="live" :size="20" /></span>
               <h2>{{ activeQuestion.questionText }}</h2>
-              <p>{{ quiz.description || 'Choose the best answer.' }}</p>
+              <p>{{ quizDescriptionLabel }}</p>
             </div>
 
             <div class="student-quiz-options">
@@ -37,17 +37,13 @@
                 v-for="(option, index) in activeQuestion.options"
                 :key="option.id"
                 class="student-quiz-option"
-                :class="{
-                  'is-selected': answers[activeQuestion.id] === option.optionText,
-                  'is-correct': answerTone(option.optionText) === 'correct',
-                  'is-wrong': answerTone(option.optionText) === 'wrong',
-                }"
+                :class="optionButtonClasses(option.optionText)"
                 :aria-pressed="answers[activeQuestion.id] === option.optionText"
                 :disabled="hasSubmitted"
                 type="button"
                 @click="chooseAnswer(activeQuestion.id, option.optionText)"
               >
-                <span>{{ optionLetters[index] }}</span>
+                <span>{{ optionLetter(index) }}</span>
                 <strong>{{ option.optionText }}</strong>
               </button>
             </div>
@@ -88,7 +84,7 @@
 
           <StatePanel v-else icon="quiz" title="No quiz ready" :message="quizEmptyMessage" tone="empty">
             <template #actions>
-              <button class="btn btn-primary" type="button" @click="router.push('/student/learn')">Open Lessons</button>
+              <button class="btn btn-primary" type="button" @click="openLessons">Open Lessons</button>
               <button class="btn btn-secondary" type="button" @click="openRecommendedPractice">Practice Instead</button>
             </template>
           </StatePanel>
@@ -166,7 +162,7 @@
           <article class="student-quiz-help-card">
             <strong>Need a hint?</strong>
             <p>SparkBot can explain the answer and help you try again.</p>
-            <button class="btn btn-primary" type="button" @click="router.push('/student/ai-helper')">
+            <button class="btn btn-primary" type="button" @click="openAiHelper">
               Ask SparkBot
             </button>
             <span><IconGlyph name="ai" :size="28" /></span>
@@ -178,17 +174,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Quiz player surface — start, submit, score, and wrong-answer
- * review for a single quiz attached to a published lesson.
- *
- * <h2>Answer-key boundary</h2>
- * <p>The student-side response strips correct-option / correct-answer
- * fields at the {@code QuizMapper} backend layer, so a malicious
- * learner cannot inspect the network payload to cheat. The page
- * also never persists answers to localStorage so a refresh restarts
- * the attempt rather than enabling repeated submission.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -204,6 +189,8 @@ import type { QuizAttemptResultResponse, StudentQuizResponse } from '@/types/api
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, nonNegativeInteger } from '@/utils/format'
 import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
+
+type AnswerTone = '' | 'correct' | 'wrong'
 
 const route = useRoute()
 const router = useRouter()
@@ -243,7 +230,7 @@ const emptyResult = {
   startedAt: '',
   submittedAt: '',
   answers: [],
-}
+} satisfies QuizAttemptResultResponse
 const resultData = ref<QuizAttemptResultResponse | null>(null)
 const emptyProgress = {
   totalLessonsStarted: 0,
@@ -265,6 +252,7 @@ const completedLessonCount = computed(() => nonNegativeInteger(progress.value.co
 const result = computed(() => resultData.value ?? emptyResult)
 const pageLoading = computed(() => quizResource.loading.value || progressResource.loading.value)
 const pageError = computed(() => quizResource.error.value || progressResource.error.value)
+const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(() => quizResource.usingFallback.value || progressResource.usingFallback.value)
 const quizReadOnly = computed(() => quizResource.usingFallback.value)
 const hasQuizSelection = computed(() => Boolean(quiz.value.id))
@@ -282,6 +270,7 @@ const quizMetaLabel = computed(() => {
   ]
   return parts.filter(Boolean).join(' - ')
 })
+const quizDescriptionLabel = computed(() => quiz.value.description || 'Choose the best answer.')
 const quizTimeLabel = computed(() =>
   quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : 'No time limit',
 )
@@ -339,24 +328,24 @@ const recommendedPracticeActivity = computed(() =>
   ),
 )
 
-function iconForLessonProgress(completionPercent: number, completed: boolean) {
+function iconForLessonProgress(completionPercent: number, completed: boolean): string {
   if (completed || completionPercent >= 100) return 'status'
   if (completionPercent > 0) return 'learn'
   return 'star'
 }
 
-function progressStatusLabel(completionPercent: number, completed: boolean) {
+function progressStatusLabel(completionPercent: number, completed: boolean): string {
   if (completed || completionPercent >= 100) return 'Completed'
   if (completionPercent > 0) return 'In progress'
   return 'Not started'
 }
 
-function chooseAnswer(questionId: number, optionText: string) {
+function chooseAnswer(questionId: number, optionText: string): void {
   answers[questionId] = optionText
   actionError.value = null
 }
 
-function answerTone(optionText: string) {
+function answerTone(optionText: string): AnswerTone {
   if (!hasSubmitted.value) return ''
   const selectedAnswer = activeQuestion.value ? answers[activeQuestion.value.id] : ''
   const matchingResult = result.value.answers.find((answer) => answer.questionId === activeQuestion.value?.id)
@@ -366,23 +355,36 @@ function answerTone(optionText: string) {
   return ''
 }
 
-function goToQuestion(index: number) {
+function optionButtonClasses(optionText: string): Record<string, boolean> {
+  const tone = answerTone(optionText)
+  return {
+    'is-selected': activeQuestion.value ? answers[activeQuestion.value.id] === optionText : false,
+    'is-correct': tone === 'correct',
+    'is-wrong': tone === 'wrong',
+  }
+}
+
+function optionLetter(index: number): string {
+  return optionLetters[index] ?? String(index + 1)
+}
+
+function goToQuestion(index: number): void {
   activeQuestionIndex.value = Math.min(Math.max(index, 0), Math.max(totalQuestionCount.value - 1, 0))
 }
 
-function goToPreviousQuestion() {
+function goToPreviousQuestion(): void {
   goToQuestion(activeQuestionIndex.value - 1)
 }
 
-function goToNextQuestion() {
+function goToNextQuestion(): void {
   goToQuestion(activeQuestionIndex.value + 1)
 }
 
-function firstUnansweredQuestionIndex() {
+function firstUnansweredQuestionIndex(): number {
   return orderedQuestions.value.findIndex((question) => !answers[question.id])
 }
 
-function numericParam(value: unknown) {
+function numericParam(value: unknown): number | null {
   const rawValue = Array.isArray(value) ? value[0] : value
   if (rawValue === null || rawValue === undefined || rawValue === '') return null
 
@@ -390,7 +392,7 @@ function numericParam(value: unknown) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 }
 
-async function loadQuiz() {
+async function loadQuiz(): Promise<StudentQuizResponse> {
   const quizId = currentQuizId.value
   if (quizId) {
     return studentApi.quiz(quizId)
@@ -408,16 +410,24 @@ async function loadQuiz() {
   return studentApi.quiz(firstQuiz.id)
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void quizResource.reload()
   void progressResource.reload()
 }
 
-function openRecommendedPractice() {
+function openLessons(): void {
+  void router.push('/student/learn')
+}
+
+function openAiHelper(): void {
+  void router.push('/student/ai-helper')
+}
+
+function openRecommendedPractice(): void {
   void router.push(practiceRoute(recommendedPracticeActivity.value))
 }
 
-async function submitQuiz() {
+async function submitQuiz(): Promise<void> {
   if (submitting.value || hasSubmitted.value) return
   actionError.value = null
   if (!hasQuizSelection.value) {
@@ -456,6 +466,15 @@ async function submitQuiz() {
   }
 }
 
+function resetAttempt(): void {
+  Object.keys(answers).forEach((questionId) => {
+    delete answers[Number(questionId)]
+  })
+  hasSubmitted.value = false
+  resultData.value = null
+  actionError.value = null
+}
+
 watch(orderedQuestions, (questions) => {
   if (!questions.length) {
     activeQuestionIndex.value = 0
@@ -470,12 +489,7 @@ watch(orderedQuestions, (questions) => {
 watch(
   () => [route.params.quizId, route.query.lessonId],
   () => {
-    Object.keys(answers).forEach((questionId) => {
-      delete answers[Number(questionId)]
-    })
-    hasSubmitted.value = false
-    resultData.value = null
-    actionError.value = null
+    resetAttempt()
     void quizResource.reload()
   },
 )

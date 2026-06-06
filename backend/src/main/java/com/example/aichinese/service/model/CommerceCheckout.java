@@ -20,6 +20,9 @@ public record CommerceCheckout(
         String cancelUrl) {
 
     public CommerceCheckout {
+        student = Objects.requireNonNull(student, "student");
+        order = Objects.requireNonNull(order, "order");
+        paymentRecord = Objects.requireNonNull(paymentRecord, "paymentRecord");
         orderItems = List.copyOf(Objects.requireNonNull(orderItems, "orderItems"));
         totalAmount = Objects.requireNonNull(totalAmount, "totalAmount");
         currencyCode = requireText(currencyCode, "currencyCode");
@@ -28,10 +31,10 @@ public record CommerceCheckout(
     }
 
     private static String requireText(String value, String fieldName) {
-        Objects.requireNonNull(value, fieldName);
-        if (value.isBlank()) {
+        String stripped = Objects.requireNonNull(value, fieldName).strip();
+        if (stripped.isEmpty()) {
             throw new IllegalArgumentException(fieldName + " must not be blank.");
         }
-        return value;
+        return stripped;
     }
 }

@@ -5,6 +5,8 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -85,6 +87,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 class CommerceIntegrationTests {
 
+    private static final String ADMIN_EMAIL = "admin@example.com";
+    private static final String ADMIN_PASSWORD = "SuperSecure123!";
+    private static final String USER_PASSWORD = "Password123!";
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String CACHE_CONTROL_HEADER = "Cache-Control";
+    private static final String NO_STORE = "no-store";
+    private static final String DEFAULT_CURRENCY = "MYR";
+    private static final String LESSON_ITEM_TYPE = "LESSON";
+    private static final String STRIPE_WEBHOOK_SECRET = "whsec_integration_test";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -132,37 +144,20 @@ class CommerceIntegrationTests {
         // than once on the same payment without double-granting access.
         String teacherEmail = uniqueEmail("idem-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Idempotency Lesson");
 
         String studentEmail = uniqueEmail("idem-s");
         String studentToken = registerStudentAndLogin(studentEmail);
 
-        mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
-                .andExpect(status().isOk());
+        addLessonToCart(studentToken, lessonId);
 
-        MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/cart")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
-                .andExpect(status().isOk())
+        MvcResult checkoutResult = checkoutCart(studentToken)
                 .andReturn();
 
-        Long paymentId = objectMapper.readTree(checkoutResult.getResponse().getContentAsString())
-                .path("data").path("paymentId").asLong();
+        Long paymentId = extractDataLong(checkoutResult, "paymentId");
 
-        long entitlementsAfterFirstPayment = paymentEntitlementRepository.findAll().stream()
-                .filter(entitlement -> entitlement.getPaymentRecord() != null
-                        && entitlement.getPaymentRecord().getId().equals(paymentId)
-                        && "LESSON".equals(entitlement.getItemType())
-                        && lessonId.equals(entitlement.getItemId()))
-                .count();
-        assertThat(entitlementsAfterFirstPayment).isEqualTo(1L);
+        assertThat(entitlementCount(paymentId, lessonId)).isEqualTo(1L);
 
         // Replay markPaymentPaid against the same payment record (simulating
         // the concurrent verifyPaymentStatus race) and confirm the
@@ -170,22 +165,11 @@ class CommerceIntegrationTests {
         PaymentRecord paymentRecord = paymentRecordRepository.findById(paymentId).orElseThrow();
         paymentService.markPaymentPaid(paymentRecord, "REPLAY", "REPLAY");
 
-        long entitlementsAfterReplay = paymentEntitlementRepository.findAll().stream()
-                .filter(entitlement -> entitlement.getPaymentRecord() != null
-                        && entitlement.getPaymentRecord().getId().equals(paymentId)
-                        && "LESSON".equals(entitlement.getItemType())
-                        && lessonId.equals(entitlement.getItemId()))
-                .count();
-        assertThat(entitlementsAfterReplay)
+        assertThat(entitlementCount(paymentId, lessonId))
                 .as("markPaymentPaid replay must not insert a duplicate entitlement row")
                 .isEqualTo(1L);
 
-        // Wave-5 regression: the replay must also not emit a duplicate
-        // "Payment successful" notification. Before the markPaymentPaid
-        // idempotency short-circuit was added, two concurrent
-        // verifyPaymentStatus calls (e.g. the student opened two browser
-        // tabs and refreshed payment status on each) would each fire a
-        // notification, spamming the recipient.
+        // Replaying payment settlement must not emit duplicate success notifications.
         Long studentUserId = paymentRecord.getStudent().getUser().getId();
         long paymentSuccessNotifications = notificationRepository
                 .findByUserIdOrderByCreatedAtDesc(studentUserId)
@@ -201,23 +185,17 @@ class CommerceIntegrationTests {
     void studentCanAddRemoveAndClearCart() throws Exception {
         String teacherEmail = uniqueEmail("commerce-cart-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Paid Cart Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-cart-student"));
 
-        mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        addLessonToCart(studentToken, lessonId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].title").value("Paid Cart Lesson"));
 
         MvcResult cartResult = mockMvc.perform(get("/api/v1/students/cart")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -226,22 +204,15 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(delete("/api/v1/students/cart/items/" + cartItemId)
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.empty").value(true));
 
-        mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
-                .andExpect(status().isOk());
+        addLessonToCart(studentToken, lessonId);
 
         mockMvc.perform(delete("/api/v1/students/cart/clear")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.empty").value(true));
     }
@@ -251,7 +222,7 @@ class CommerceIntegrationTests {
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-empty-cart-student"));
 
         mockMvc.perform(get("/api/v1/students/cart")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.items").isEmpty())
@@ -262,30 +233,23 @@ class CommerceIntegrationTests {
     void archivedCartContentIsRemovedWithoutBreakingTheLiveCart() throws Exception {
         String teacherEmail = uniqueEmail("commerce-stale-cart-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long staleLessonId = createPaidLesson(teacherToken, "Archived Cart Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-stale-cart-student"));
-        MvcResult added = mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", staleLessonId))))
+        MvcResult added = addLessonToCart(studentToken, staleLessonId)
                 .andExpect(status().isOk())
                 .andReturn();
         Long cartId = objectMapper.readTree(added.getResponse().getContentAsString())
                 .path("data").path("cartId").asLong();
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .patch("/api/v1/teachers/lessons/" + staleLessonId + "/archive")
+        mockMvc.perform(patch("/api/v1/teachers/lessons/" + staleLessonId + "/archive")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/students/cart")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isEmpty())
                 .andExpect(jsonPath("$.data.empty").value(true));
@@ -293,13 +257,7 @@ class CommerceIntegrationTests {
         assertThat(cartItemRepository.findByCartIdOrderByCreatedAtAsc(cartId)).isEmpty();
 
         Long replacementLessonId = createPaidLesson(teacherToken, "Replacement Cart Lesson");
-        mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", replacementLessonId))))
+        addLessonToCart(studentToken, replacementLessonId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].title").value("Replacement Cart Lesson"));
     }
@@ -310,9 +268,9 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/students/cart/items")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "PREMIUM_AI",
                         "itemId", 0,
                         "featureKey", "PREMIUM_AI_FEATURE"))))
@@ -321,9 +279,9 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "PREMIUM_AI",
                         "itemId", 0,
                         "featureKey", "PREMIUM_AI_FEATURE"))))
@@ -335,38 +293,20 @@ class CommerceIntegrationTests {
     void ownedPaidLessonCannotBePurchasedAgain() throws Exception {
         String teacherEmail = uniqueEmail("duplicate-lesson-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Duplicate Purchase Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("duplicate-lesson-student"));
 
-        mockMvc.perform(post("/api/v1/students/checkout/buy-now")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        buyNowLesson(studentToken, lessonId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("PAID"));
 
-        mockMvc.perform(post("/api/v1/students/checkout/buy-now")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        buyNowLesson(studentToken, lessonId)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        addLessonToCart(studentToken, lessonId)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -375,7 +315,7 @@ class CommerceIntegrationTests {
     void packageContainingOwnedLessonCannotBePurchasedAgain() throws Exception {
         String teacherEmail = uniqueEmail("duplicate-package-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long moduleId = createModule(teacherToken, "Duplicate Package Module");
         Long lessonId = createPaidLessonInModule(teacherToken, moduleId, "Duplicate Package Lesson");
         Long packageId = createPaidPackage(teacherToken, "Duplicate Package Bundle");
@@ -383,21 +323,15 @@ class CommerceIntegrationTests {
 
         String studentToken = registerStudentAndLogin(uniqueEmail("duplicate-package-student"));
 
-        mockMvc.perform(post("/api/v1/students/checkout/buy-now")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        buyNowLesson(studentToken, lessonId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("PAID"));
 
         mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "PACKAGE",
                         "itemId", packageId))))
                 .andExpect(status().isBadRequest())
@@ -405,9 +339,9 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/students/cart/items")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "PACKAGE",
                         "itemId", packageId))))
                 .andExpect(status().isBadRequest())
@@ -418,33 +352,23 @@ class CommerceIntegrationTests {
     void cartCheckoutCreatesPaymentAndUnlocksAccessInMockMode() throws Exception {
         String teacherEmail = uniqueEmail("commerce-checkout-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Mock Paid Lesson");
 
         String studentEmail = uniqueEmail("commerce-checkout-student");
         String studentToken = registerStudentAndLogin(studentEmail);
 
-        mockMvc.perform(post("/api/v1/students/cart/items")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
-                .andExpect(status().isOk());
+        addLessonToCart(studentToken, lessonId);
 
-        MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/cart")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+        MvcResult checkoutResult = checkoutCart(studentToken)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("PAID"))
                 .andReturn();
 
-        Long paymentId = objectMapper.readTree(checkoutResult.getResponse().getContentAsString())
-                .path("data").path("paymentId").asLong();
+        Long paymentId = extractDataLong(checkoutResult, "paymentId");
 
         mockMvc.perform(get("/api/v1/payments/status/" + paymentId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("PAID"))
                 .andExpect(jsonPath("$.data.studentId").doesNotExist())
@@ -459,12 +383,12 @@ class CommerceIntegrationTests {
                 .isTrue();
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.locked").value(false));
 
         mockMvc.perform(get("/api/v1/students/cart")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.empty").value(true));
     }
@@ -473,20 +397,20 @@ class CommerceIntegrationTests {
     void checkoutRequiresStudentRoleAndAdminCommerceRoutesStayProtected() throws Exception {
         String teacherEmail = uniqueEmail("commerce-roles-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-roles-student"));
 
         mockMvc.perform(post("/api/v1/students/checkout/cart")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/admin/refund-requests")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/teachers/earnings")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
     }
 
@@ -494,52 +418,45 @@ class CommerceIntegrationTests {
     void commerceHistoryListsClampOversizedPaginationRequests() throws Exception {
         String teacherEmail = uniqueEmail("commerce-page-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Paginated Commerce Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-page-student"));
-        MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
-                .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        MvcResult checkoutResult = buyNowLesson(studentToken, lessonId)
                 .andExpect(status().isOk())
                 .andReturn();
 
-        Long orderId = objectMapper.readTree(checkoutResult.getResponse().getContentAsString())
-                .path("data").path("orderId").asLong();
+        Long orderId = extractDataLong(checkoutResult, "orderId");
 
         mockMvc.perform(post("/api/v1/students/refund-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "orderId", orderId,
                         "reason", "Pagination test refund"))))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/teachers/payout-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "amount", 10.00,
                         "requestedNote", "Pagination test payout"))))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/students/payments")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").value(1));
 
         mockMvc.perform(get("/api/v1/students/refund-requests")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
@@ -549,14 +466,14 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(get("/api/v1/teachers/earnings")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").value(1));
 
         mockMvc.perform(get("/api/v1/teachers/payout-requests")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
@@ -566,14 +483,14 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(get("/api/v1/admin/payments")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").isNumber());
 
         mockMvc.perform(get("/api/v1/admin/refund-requests")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").isNumber())
@@ -583,7 +500,7 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(get("/api/v1/admin/payout-requests")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items.length()").isNumber())
@@ -596,29 +513,22 @@ class CommerceIntegrationTests {
     void guestCannotAccessPaymentStatusAndOtherStudentCannotViewIt() throws Exception {
         String teacherEmail = uniqueEmail("pay-owner-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Ownership Check Lesson");
 
         String ownerStudentToken = registerStudentAndLogin(uniqueEmail("pay-owner-s"));
-        MvcResult paymentResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
-                .with(csrf())
-                .header("Authorization", "Bearer " + ownerStudentToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "itemType", "LESSON",
-                        "itemId", lessonId))))
+        MvcResult paymentResult = buyNowLesson(ownerStudentToken, lessonId)
                 .andExpect(status().isOk())
                 .andReturn();
 
-        Long paymentId = objectMapper.readTree(paymentResult.getResponse().getContentAsString())
-                .path("data").path("paymentId").asLong();
+        Long paymentId = extractDataLong(paymentResult, "paymentId");
 
         mockMvc.perform(get("/api/v1/payments/status/" + paymentId))
                 .andExpect(status().isUnauthorized());
 
         String otherStudentToken = registerStudentAndLogin(uniqueEmail("pay-other-s"));
         mockMvc.perform(get("/api/v1/payments/status/" + paymentId)
-                .header("Authorization", "Bearer " + otherStudentToken))
+                .header(AUTHORIZATION_HEADER, bearer(otherStudentToken)))
                 .andExpect(status().isNotFound());
     }
 
@@ -638,14 +548,14 @@ class CommerceIntegrationTests {
         order.setStudent(student);
         order.setOrderNumber("ORD-WEBHOOK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
         order.setTotalAmount(new BigDecimal("29.90"));
-        order.setCurrencyCode("MYR");
+        order.setCurrencyCode(DEFAULT_CURRENCY);
         order.setPaymentStatus(PaymentStatus.PENDING);
         order.setCheckoutSource("BUY_NOW");
         order = orderRepository.save(order);
 
         OrderItem orderItem = new OrderItem();
         orderItem.setOrder(order);
-        orderItem.setItemType("LESSON");
+        orderItem.setItemType(LESSON_ITEM_TYPE);
         orderItem.setItemId(900_000L + System.nanoTime() % 10_000);
         orderItem.setItemTitleSnapshot("Stripe Webhook Lesson");
         orderItem.setQuantity(1);
@@ -660,7 +570,7 @@ class CommerceIntegrationTests {
         paymentRecord.setProviderName("stripe");
         paymentRecord.setProviderReference(sessionId);
         paymentRecord.setAmount(new BigDecimal("29.90"));
-        paymentRecord.setCurrencyCode("MYR");
+        paymentRecord.setCurrencyCode(DEFAULT_CURRENCY);
         paymentRecord.setPaymentStatus(PaymentStatus.PENDING);
         paymentRecord.setProviderStatus("CREATED");
         paymentRecord = paymentRecordRepository.save(paymentRecord);
@@ -733,8 +643,8 @@ class CommerceIntegrationTests {
     void studentPaymentEndpointsHideStudentIdentityFieldsWhileAdminEndpointsRetainThem() throws Exception {
         String teacherEmail = uniqueEmail("pay-privacy-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Privacy Boundary Lesson");
 
         String studentEmail = uniqueEmail("pay-privacy-s");
@@ -742,9 +652,9 @@ class CommerceIntegrationTests {
 
         MvcResult paymentResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -757,7 +667,7 @@ class CommerceIntegrationTests {
         Long studentId = studentProfileRepository.findByUserId(studentUser.getId()).orElseThrow().getId();
 
         MvcResult studentPaymentsResult = mockMvc.perform(get("/api/v1/students/payments")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -767,7 +677,7 @@ class CommerceIntegrationTests {
         assertThat(studentPaymentItem.has("studentEmail")).isFalse();
 
         mockMvc.perform(get("/api/v1/students/payments/" + paymentId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentId").value(paymentId))
                 .andExpect(jsonPath("$.data.studentId").doesNotExist())
@@ -775,7 +685,7 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.studentEmail").doesNotExist());
 
         mockMvc.perform(get("/api/v1/payments/status/" + paymentId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentId").value(paymentId))
                 .andExpect(jsonPath("$.data.studentId").doesNotExist())
@@ -783,7 +693,7 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.studentEmail").doesNotExist());
 
         mockMvc.perform(get("/api/v1/admin/payments/" + paymentId)
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentId").value(paymentId))
                 .andExpect(jsonPath("$.data.studentId").value(studentId))
@@ -795,17 +705,17 @@ class CommerceIntegrationTests {
     void studentCanCreateRefundRequestAndAdminCanManageIt() throws Exception {
         String teacherEmail = uniqueEmail("commerce-refund-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Refundable Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-refund-student"));
 
         MvcResult buyNowResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -816,9 +726,9 @@ class CommerceIntegrationTests {
 
         MvcResult refundResult = mockMvc.perform(post("/api/v1/students/refund-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "orderId", orderId,
                         "reason", "Purchased by mistake"))))
                 .andExpect(status().isOk())
@@ -833,7 +743,7 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.studentId").exists())
                 .andExpect(jsonPath("$.data.studentName").isString())
@@ -842,7 +752,7 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.studentId").exists())
                 .andExpect(jsonPath("$.data.studentName").isString())
@@ -855,16 +765,14 @@ class CommerceIntegrationTests {
         // emitting a duplicate "Refund approved" notification + audit row.
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        // Double-clicking mark-refunded on a refund that is already REFUNDED
-        // must also fail — otherwise the admin could trigger
-        // revokeAccessAfterRefund twice against the same order.
+        // Double-clicking mark-refunded after REFUNDED must not revoke access twice.
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -872,13 +780,13 @@ class CommerceIntegrationTests {
     void payoutAmountShouldRejectValuesOutsideDatabaseDecimalPrecision() throws Exception {
         String teacherEmail = uniqueEmail("payout-boundary-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
 
         mockMvc.perform(post("/api/v1/teachers/payout-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "amount", 100000000.00,
                         "requestedNote", "Should fail before persistence"))))
                 .andExpect(status().isBadRequest())
@@ -889,17 +797,17 @@ class CommerceIntegrationTests {
     void teacherCanRequestPayoutAndAdminCanApproveRejectOrMarkPaid() throws Exception {
         String teacherEmail = uniqueEmail("commerce-payout-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Teacher Earning Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-payout-student"));
 
         mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -907,9 +815,9 @@ class CommerceIntegrationTests {
 
         MvcResult payoutResult = mockMvc.perform(post("/api/v1/teachers/payout-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "amount", 10.00,
                         "requestedNote", "Monthly payout"))))
                 .andExpect(status().isOk())
@@ -927,7 +835,7 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/payout-requests/" + payoutId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.teacherId").value(teacherId))
                 .andExpect(jsonPath("$.data.teacherName").value(teacherUser.getDisplayName()))
@@ -936,7 +844,7 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/payout-requests/" + payoutId + "/mark-paid")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.teacherId").value(teacherId))
                 .andExpect(jsonPath("$.data.teacherName").value(teacherUser.getDisplayName()))
@@ -948,7 +856,7 @@ class CommerceIntegrationTests {
         // notification or audit-log row.
         mockMvc.perform(post("/api/v1/admin/payout-requests/" + payoutId + "/mark-paid")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -957,16 +865,16 @@ class CommerceIntegrationTests {
     void refundedEarningsCannotBeApprovedForPayout() throws Exception {
         String teacherEmail = uniqueEmail("refund-payout-teacher");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Refunded Payout Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("refund-payout-student"));
         MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -977,9 +885,9 @@ class CommerceIntegrationTests {
 
         MvcResult payoutResult = mockMvc.perform(post("/api/v1/teachers/payout-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "amount", 10.00,
                         "requestedNote", "Refund-sensitive payout"))))
                 .andExpect(status().isOk())
@@ -991,9 +899,9 @@ class CommerceIntegrationTests {
 
         MvcResult refundResult = mockMvc.perform(post("/api/v1/students/refund-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "orderId", orderId,
                         "reason", "Refund before payout approval"))))
                 .andExpect(status().isOk())
@@ -1004,54 +912,54 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.refundStatus").value("REFUNDED"));
 
         mockMvc.perform(post("/api/v1/admin/payout-requests/" + payoutId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
     void adminCanManageCommissionSetting() throws Exception {
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         String studentToken = registerStudentAndLogin(uniqueEmail("commerce-admin-student"));
 
         mockMvc.perform(put("/api/v1/admin/system-settings/commission")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION_HEADER, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("commissionRate", 0.25))))
+                .content(json(Map.of("commissionRate", 0.25))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.commissionRate").value(0.25));
 
         mockMvc.perform(get("/api/v1/admin/system-settings/commission")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/admin/system-settings/commission")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void adminCanManagePlatformSettings() throws Exception {
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         String studentToken = registerStudentAndLogin(uniqueEmail("platform-settings-student"));
 
         mockMvc.perform(put("/api/v1/admin/system-settings/platform")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION_HEADER, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "aiDisclaimerText", "Teacher guidance should still be reviewed.",
                         "emailNotifications", false,
                         "inAppNotifications", true,
@@ -1069,13 +977,13 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.aiSafetyCheck").value(false));
 
         mockMvc.perform(get("/api/v1/admin/system-settings/platform")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aiDisclaimerText").value("Teacher guidance should still be reviewed."))
                 .andExpect(jsonPath("$.data.dailySummary").value(true));
 
         mockMvc.perform(get("/api/v1/admin/system-settings/platform")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
     }
 
@@ -1083,21 +991,21 @@ class CommerceIntegrationTests {
     void paidLessonShowsLockedBeforePaymentAndRefundedPaymentUpdatesStatuses() throws Exception {
         String teacherEmail = uniqueEmail("lock-refund-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Lock Then Refund Lesson");
 
         String studentToken = registerStudentAndLogin(uniqueEmail("lock-refund-s"));
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
 
         MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -1108,15 +1016,15 @@ class CommerceIntegrationTests {
         Long paymentId = checkoutJson.path("paymentId").asLong();
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.locked").value(false));
 
         MvcResult refundResult = mockMvc.perform(post("/api/v1/students/refund-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "orderId", orderId,
                         "reason", "Need a refund"))))
                 .andExpect(status().isOk())
@@ -1127,32 +1035,28 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.refundStatus").value("REFUNDED"));
 
         mockMvc.perform(get("/api/v1/students/payments/" + paymentId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.paymentStatus").value("REFUNDED"))
                 .andExpect(jsonPath("$.data.studentId").doesNotExist())
                 .andExpect(jsonPath("$.data.studentName").doesNotExist())
                 .andExpect(jsonPath("$.data.studentEmail").doesNotExist())
-                // Wave-7 regression: SensitiveResponseHeadersConfig must add
-                // Cache-Control: no-store on the student payment-detail
-                // endpoint so the JSON body (amount, provider state, order
-                // metadata) cannot be replayed from disk cache or bfcache
-                // after the user logs out.
-                .andExpect(header().string("Cache-Control",
-                        containsString("no-store")));
+                // Prevent payment detail replay from browser cache after logout.
+                .andExpect(header().string(CACHE_CONTROL_HEADER,
+                        containsString(NO_STORE)));
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
     }
 
@@ -1160,26 +1064,26 @@ class CommerceIntegrationTests {
     void refundedPaidLessonRevokesRecordedVideoProgressAndLiveClassAccess() throws Exception {
         String teacherEmail = uniqueEmail("refund-media-live-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Refund Media Live Lesson");
         Long videoId = createUploadedRecordedVideo(teacherToken, lessonId, "Refunded Recording");
         Long liveClassId = createLiveClass(teacherToken, lessonId, "Refunded Live Class");
         String studentToken = registerStudentAndLogin(uniqueEmail("refund-media-live-s"));
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId + "/recorded-videos")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/students/live-classes/" + liveClassId + "/enrol")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
 
         MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -1189,21 +1093,21 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId + "/recorded-videos")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].id").value(videoId));
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId + "/recorded-videos/" + videoId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.streamUrl").isString());
         mockMvc.perform(get("/api/v1/students/recorded-videos/" + videoId + "/stream")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/students/video-progress/" + videoId)
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "watchedSeconds", 30,
                         "totalSeconds", 120,
                         "progressPercentage", 25,
@@ -1211,11 +1115,11 @@ class CommerceIntegrationTests {
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/students/live-classes/" + liveClassId + "/enrol")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.enrolled").value(true));
         mockMvc.perform(get("/api/v1/students/live-classes/" + liveClassId + "/join")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.meetingLink").isString());
 
@@ -1223,27 +1127,27 @@ class CommerceIntegrationTests {
         markRefunded(adminToken, refundId);
 
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId + "/recorded-videos")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/students/lessons/" + lessonId + "/recorded-videos/" + videoId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/students/recorded-videos/" + videoId + "/stream")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/students/video-progress/" + videoId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/students/video-progress/" + videoId + "/complete")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/students/live-classes/" + liveClassId + "/enrol")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/students/live-classes/" + liveClassId + "/join")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
     }
 
@@ -1251,8 +1155,8 @@ class CommerceIntegrationTests {
     void refundedPaidQuizAttemptsDoNotExposeHistoricalAnswers() throws Exception {
         String teacherEmail = uniqueEmail("refund-quiz-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Refund Quiz Lesson");
         Long quizId = createQuizWithQuestions(teacherToken, lessonId);
 
@@ -1260,9 +1164,9 @@ class CommerceIntegrationTests {
 
         MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -1272,7 +1176,7 @@ class CommerceIntegrationTests {
                 .path("data").path("orderId").asLong();
 
         MvcResult loadQuizResult = mockMvc.perform(get("/api/v1/students/quizzes/" + quizId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -1281,9 +1185,9 @@ class CommerceIntegrationTests {
 
         MvcResult submitResult = mockMvc.perform(post("/api/v1/students/quizzes/" + quizId + "/attempts")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "answers", List.of(Map.of("questionId", questionId, "answerText", "ma3"))))))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -1292,13 +1196,13 @@ class CommerceIntegrationTests {
                 .path("data").path("attemptId").asLong();
 
         mockMvc.perform(get("/api/v1/students/quiz-attempts/" + attemptId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.answers[0].correctAnswer").value("ma1"));
 
         mockMvc.perform(get("/api/v1/students/wrong-answers")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.size").value(100))
@@ -1306,9 +1210,9 @@ class CommerceIntegrationTests {
 
         MvcResult refundResult = mockMvc.perform(post("/api/v1/students/refund-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "orderId", orderId,
                         "reason", "Refund quiz access"))))
                 .andExpect(status().isOk())
@@ -1319,28 +1223,28 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/students/quizzes/" + quizId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/students/quiz-attempts/" + attemptId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/students/quiz-attempts/" + attemptId + "/wrong-answers")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/students/wrong-answers")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(0));
     }
@@ -1349,8 +1253,8 @@ class CommerceIntegrationTests {
     void refundedPaidLessonHidesExistingFeedbackAndBlocksNewFeedback() throws Exception {
         String teacherEmail = uniqueEmail("refund-feedback-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Refund Feedback Lesson");
         Long quizId = createQuizWithQuestions(teacherToken, lessonId);
         String studentEmail = uniqueEmail("refund-feedback-s");
@@ -1359,9 +1263,9 @@ class CommerceIntegrationTests {
 
         MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -1370,16 +1274,16 @@ class CommerceIntegrationTests {
                 .path("data").path("orderId").asLong();
 
         MvcResult loadQuizResult = mockMvc.perform(get("/api/v1/students/quizzes/" + quizId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andReturn();
         Long questionId = objectMapper.readTree(loadQuizResult.getResponse().getContentAsString())
                 .path("data").path("questions").get(0).path("id").asLong();
         MvcResult submitResult = mockMvc.perform(post("/api/v1/students/quizzes/" + quizId + "/attempts")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "answers", List.of(Map.of("questionId", questionId, "answerText", "ma3"))))))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -1388,9 +1292,9 @@ class CommerceIntegrationTests {
 
         MvcResult feedbackResult = mockMvc.perform(post("/api/v1/teachers/feedback")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "studentId", studentId,
                         "lessonId", lessonId,
                         "quizAttemptId", attemptId,
@@ -1401,7 +1305,7 @@ class CommerceIntegrationTests {
         Long feedbackId = extractId(feedbackResult);
 
         mockMvc.perform(get("/api/v1/students/feedback/" + feedbackId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(feedbackId));
 
@@ -1410,17 +1314,17 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(get("/api/v1/students/feedback")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(0));
         mockMvc.perform(get("/api/v1/students/feedback/" + feedbackId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isNotFound());
         mockMvc.perform(post("/api/v1/teachers/feedback")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "studentId", studentId,
                         "lessonId", lessonId,
                         "quizAttemptId", attemptId,
@@ -1429,9 +1333,9 @@ class CommerceIntegrationTests {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post("/api/v1/teachers/feedback")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "studentId", studentId,
                         "feedbackType", "GENERAL",
                         "message", "General feedback must also require current access."))))
@@ -1442,8 +1346,8 @@ class CommerceIntegrationTests {
     void refundedPaidLessonRemovesPaidOnlyStudentFromTeacherRosterAndAnalytics() throws Exception {
         String teacherEmail = uniqueEmail("refund-roster-t");
         approveTeacherProfile(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, USER_PASSWORD);
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         Long lessonId = createPaidLesson(teacherToken, "Refund Teacher Roster Lesson");
         Long quizId = createQuizWithQuestions(teacherToken, lessonId);
         Long videoId = createUploadedRecordedVideo(teacherToken, lessonId, "Refund Teacher Roster Video");
@@ -1454,9 +1358,9 @@ class CommerceIntegrationTests {
 
         MvcResult checkoutResult = mockMvc.perform(post("/api/v1/students/checkout/buy-now")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", "LESSON",
                         "itemId", lessonId))))
                 .andExpect(status().isOk())
@@ -1465,23 +1369,23 @@ class CommerceIntegrationTests {
                 .path("data").path("orderId").asLong();
 
         MvcResult loadQuizResult = mockMvc.perform(get("/api/v1/students/quizzes/" + quizId)
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andReturn();
         Long questionId = objectMapper.readTree(loadQuizResult.getResponse().getContentAsString())
                 .path("data").path("questions").get(0).path("id").asLong();
         mockMvc.perform(post("/api/v1/students/quizzes/" + quizId + "/attempts")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "answers", List.of(Map.of("questionId", questionId, "answerText", "ma3"))))))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/students/video-progress/" + videoId)
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "watchedSeconds", 120,
                         "totalSeconds", 120,
                         "progressPercentage", 100,
@@ -1489,35 +1393,35 @@ class CommerceIntegrationTests {
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/students/live-classes/" + liveClassId + "/enrol")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/teachers/students")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].studentId").value(studentId))
                 .andExpect(jsonPath("$.data.totalItems").value(1));
         mockMvc.perform(get("/api/v1/teachers/analytics")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.overview.totalActiveStudents").value(1))
                 .andExpect(jsonPath("$.data.quizScoreTrend.length()").value(1));
         mockMvc.perform(get("/api/v1/students/analytics")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.overview.totalTrackedLessons").value(1))
                 .andExpect(jsonPath("$.data.quizScoreTrend.length()").value(1))
                 .andExpect(jsonPath("$.data.weakAreaBreakdown.length()").value(1))
                 .andExpect(jsonPath("$.data.weakAreaBreakdown[0].label").value("CHOOSE_TONE"));
         mockMvc.perform(get("/api/v1/students/dashboard")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recentQuizResults[0].quizId").value(quizId))
                 .andExpect(jsonPath("$.data.weakAreas.length()").value(1))
                 .andExpect(jsonPath("$.data.weakAreas[0]").value("CHOOSE_TONE"));
         mockMvc.perform(get("/api/v1/students/progress")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalLessonsStarted").value(1))
                 .andExpect(jsonPath("$.data.completedLessons").value(1))
@@ -1525,25 +1429,25 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.weakAreas[0]").value("CHOOSE_TONE"))
                 .andExpect(jsonPath("$.data.recentLessons[0].lessonId").value(lessonId));
         mockMvc.perform(get("/api/v1/teachers/dashboard")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalStudents").value(1))
                 .andExpect(jsonPath("$.data.recentQuizResults.length()").value(1));
         mockMvc.perform(get("/api/v1/teachers/quizzes/" + quizId + "/attempts")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalItems").value(1))
                 .andExpect(jsonPath("$.data.items[0].studentId").value(studentId));
         mockMvc.perform(get("/api/v1/teachers/lessons/" + lessonId + "/video-progress")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalItems").value(1))
                 .andExpect(jsonPath("$.data.items[0].studentId").value(studentId));
         mockMvc.perform(get("/api/v1/teachers/live-classes/" + liveClassId + "/enrolments")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalItems").value(1))
                 .andExpect(jsonPath("$.data.items[0].studentId").value(studentId));
@@ -1553,17 +1457,17 @@ class CommerceIntegrationTests {
 
         mockMvc.perform(get("/api/v1/teachers/students")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(0))
                 .andExpect(jsonPath("$.data.totalItems").value(0));
         mockMvc.perform(get("/api/v1/teachers/analytics")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.overview.totalActiveStudents").value(0))
                 .andExpect(jsonPath("$.data.quizScoreTrend.length()").value(0));
         mockMvc.perform(get("/api/v1/students/analytics")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.overview.totalTrackedLessons").value(0))
                 .andExpect(jsonPath("$.data.overview.completedLessons").value(0))
@@ -1571,13 +1475,13 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.quizScoreTrend.length()").value(0))
                 .andExpect(jsonPath("$.data.weakAreaBreakdown.length()").value(0));
         mockMvc.perform(get("/api/v1/students/dashboard")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recentQuizResults.length()").value(0))
                 .andExpect(jsonPath("$.data.weakAreas.length()").value(0))
                 .andExpect(jsonPath("$.data.unfinishedLessons.length()").value(0));
         mockMvc.perform(get("/api/v1/students/progress")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalLessonsStarted").value(0))
                 .andExpect(jsonPath("$.data.completedLessons").value(0))
@@ -1585,26 +1489,26 @@ class CommerceIntegrationTests {
                 .andExpect(jsonPath("$.data.weakAreas.length()").value(0))
                 .andExpect(jsonPath("$.data.recentLessons.length()").value(0));
         mockMvc.perform(get("/api/v1/teachers/dashboard")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.totalStudents").value(0))
                 .andExpect(jsonPath("$.data.averageQuizScore").value(0.0))
                 .andExpect(jsonPath("$.data.recentQuizResults.length()").value(0));
         mockMvc.perform(get("/api/v1/teachers/quizzes/" + quizId + "/attempts")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(0))
                 .andExpect(jsonPath("$.data.totalItems").value(0));
         mockMvc.perform(get("/api/v1/teachers/lessons/" + lessonId + "/video-progress")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(0))
                 .andExpect(jsonPath("$.data.totalItems").value(0));
         mockMvc.perform(get("/api/v1/teachers/live-classes/" + liveClassId + "/enrolments")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(0))
                 .andExpect(jsonPath("$.data.totalItems").value(0));
@@ -1612,12 +1516,12 @@ class CommerceIntegrationTests {
 
     private void approveTeacherProfile(String teacherEmail) throws Exception {
         TeacherProfile profile = registerTeacherWithVerificationDocument(teacherEmail);
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         mockMvc.perform(post("/api/v1/admin/teachers/" + profile.getId() + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION_HEADER, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("note", "Approved for commerce"))))
+                .content(json(Map.of("note", "Approved for commerce"))))
                 .andExpect(status().isOk());
 
         TeacherProfile refreshed = teacherProfileRepository.findById(profile.getId()).orElseThrow();
@@ -1626,19 +1530,19 @@ class CommerceIntegrationTests {
 
     private TeacherProfile registerTeacherWithVerificationDocument(String email) throws Exception {
         registerTeacher(email);
-        String teacherToken = loginAndExtractToken(email, "Password123!");
+        String teacherToken = loginAndExtractToken(email, USER_PASSWORD);
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "qualification.pdf",
                 "application/pdf",
                 TestUploadFixtures.minimalPdf());
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
                 .file(file)
                 .param("documentType", "QUALIFICATION")
                 .param("description", "Qualification proof")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk());
 
         User user = userRepository.findByEmailWithRoles(email).orElseThrow();
@@ -1654,11 +1558,11 @@ class CommerceIntegrationTests {
         mockMvc.perform(post("/api/v1/auth/register/teacher")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Teacher " + email,
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
                         "bio", "Teacher bio"))))
                 .andExpect(status().isOk());
     }
@@ -1667,23 +1571,23 @@ class CommerceIntegrationTests {
         mockMvc.perform(post("/api/v1/auth/register/student")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Student " + email,
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
                         "preferredLanguage", "en"))))
                 .andExpect(status().isOk());
 
-        return loginAndExtractToken(email, "Password123!");
+        return loginAndExtractToken(email, USER_PASSWORD);
     }
 
     private Long createPaidLesson(String teacherToken, String title) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/teachers/lessons")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "title", title,
                         "description", "Paid lesson",
                         "levelId", 1,
@@ -1701,9 +1605,9 @@ class CommerceIntegrationTests {
     private Long createModule(String teacherToken, String title) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/teachers/modules")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "title", title,
                         "description", "Paid module",
                         "levelId", 1,
@@ -1718,9 +1622,9 @@ class CommerceIntegrationTests {
     private Long createPaidLessonInModule(String teacherToken, Long moduleId, String title) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/teachers/lessons")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "title", title,
                         "description", "Paid lesson",
                         "moduleId", moduleId,
@@ -1739,9 +1643,9 @@ class CommerceIntegrationTests {
     private Long createPaidPackage(String teacherToken, String title) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/teachers/packages")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "title", title,
                         "description", "Paid package",
                         "levelId", 1,
@@ -1757,9 +1661,9 @@ class CommerceIntegrationTests {
     private void addPackageItem(String teacherToken, Long packageId, String itemType, Long itemId) throws Exception {
         mockMvc.perform(post("/api/v1/teachers/packages/" + packageId + "/items")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "itemType", itemType,
                         "itemId", itemId,
                         "displayOrder", 1))))
@@ -1769,9 +1673,9 @@ class CommerceIntegrationTests {
     private Long createQuizWithQuestions(String teacherToken, Long lessonId) throws Exception {
         MvcResult quizResult = mockMvc.perform(post("/api/v1/teachers/lessons/" + lessonId + "/quizzes")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "title", "Paid tone quiz",
                         "description", "Checks paid lesson quiz access"))))
                 .andExpect(status().isOk())
@@ -1780,9 +1684,9 @@ class CommerceIntegrationTests {
         Long quizId = extractId(quizResult);
         mockMvc.perform(post("/api/v1/teachers/quizzes/" + quizId + "/questions")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "questionType", "CHOOSE_TONE",
                         "questionText", "Which tone matches ma?",
                         "points", 5,
@@ -1802,8 +1706,7 @@ class CommerceIntegrationTests {
                 "lesson.mp4",
                 "video/mp4",
                 TestUploadFixtures.minimalMp4());
-        MvcResult result = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
+        MvcResult result = mockMvc.perform(multipart("/api/v1/teachers/lessons/" + lessonId + "/recorded-videos")
                 .file(videoFile)
                 .param("title", title)
                 .param("description", "Recorded access refund coverage")
@@ -1811,7 +1714,7 @@ class CommerceIntegrationTests {
                 .param("durationSeconds", "120")
                 .param("sortOrder", "1")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken)))
                 .andExpect(status().isOk())
                 .andReturn();
         return extractId(result);
@@ -1821,9 +1724,9 @@ class CommerceIntegrationTests {
         LocalDateTime start = LocalDateTime.now().plusMinutes(5);
         MvcResult result = mockMvc.perform(post("/api/v1/teachers/live-classes")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION_HEADER, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "title", title,
                         "description", "Live access refund coverage",
                         "lessonId", lessonId,
@@ -1840,9 +1743,9 @@ class CommerceIntegrationTests {
     private Long requestRefund(String studentToken, Long orderId, String reason) throws Exception {
         MvcResult refundResult = mockMvc.perform(post("/api/v1/students/refund-requests")
                 .with(csrf())
-                .header("Authorization", "Bearer " + studentToken)
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "orderId", orderId,
                         "reason", reason))))
                 .andExpect(status().isOk())
@@ -1854,11 +1757,11 @@ class CommerceIntegrationTests {
     private void markRefunded(String adminToken, Long refundId) throws Exception {
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/admin/refund-requests/" + refundId + "/mark-refunded")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.refundStatus").value("REFUNDED"));
     }
@@ -1866,6 +1769,54 @@ class CommerceIntegrationTests {
     private Long extractId(MvcResult result) throws Exception {
         JsonNode jsonNode = objectMapper.readTree(result.getResponse().getContentAsString());
         return jsonNode.path("data").path("id").asLong();
+    }
+
+    private Long extractDataLong(MvcResult result, String fieldName) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data")
+                .path(fieldName)
+                .asLong();
+    }
+
+    private String json(Map<String, ?> body) throws Exception {
+        return objectMapper.writeValueAsString(body);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions addLessonToCart(String studentToken, Long lessonId)
+            throws Exception {
+        return mockMvc.perform(post("/api/v1/students/cart/items")
+                .with(csrf())
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "itemType", LESSON_ITEM_TYPE,
+                        "itemId", lessonId))));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions buyNowLesson(String studentToken, Long lessonId)
+            throws Exception {
+        return mockMvc.perform(post("/api/v1/students/checkout/buy-now")
+                .with(csrf())
+                .header(AUTHORIZATION_HEADER, bearer(studentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "itemType", LESSON_ITEM_TYPE,
+                        "itemId", lessonId))));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions checkoutCart(String studentToken) throws Exception {
+        return mockMvc.perform(post("/api/v1/students/checkout/cart")
+                .with(csrf())
+                .header(AUTHORIZATION_HEADER, bearer(studentToken)));
+    }
+
+    private long entitlementCount(Long paymentId, Long lessonId) {
+        return paymentEntitlementRepository.findAll().stream()
+                .filter(entitlement -> entitlement.getPaymentRecord() != null
+                        && entitlement.getPaymentRecord().getId().equals(paymentId)
+                        && LESSON_ITEM_TYPE.equals(entitlement.getItemType())
+                        && lessonId.equals(entitlement.getItemId()))
+                .count();
     }
 
     private JsonNode findPaymentItem(MvcResult result, Long paymentId) throws Exception {
@@ -1882,7 +1833,7 @@ class CommerceIntegrationTests {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", password))))
                 .andExpect(status().isOk())
@@ -1894,7 +1845,7 @@ class CommerceIntegrationTests {
     private String stripeSignature(String payload) throws Exception {
         long timestamp = Instant.now().getEpochSecond();
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec("whsec_integration_test".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        mac.init(new SecretKeySpec(STRIPE_WEBHOOK_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = HexFormat.of()
                 .formatHex(mac.doFinal((timestamp + "." + payload).getBytes(StandardCharsets.UTF_8)));
         return "t=" + timestamp + ",v1=" + signature;
@@ -1903,5 +1854,8 @@ class CommerceIntegrationTests {
     private String uniqueEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
     }
-}
 
+    private static String bearer(String token) {
+        return "Bearer " + token;
+    }
+}

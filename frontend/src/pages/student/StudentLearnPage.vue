@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="page-stack student-learn-page">
-    <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="student-learn-layout">
@@ -24,9 +24,7 @@
                 </div>
                 <div class="student-level-progress">
                   <span>{{ level.progress }}</span>
-                  <span
-                    ><IconGlyph :name="level.locked ? 'safe' : level.active ? 'star' : 'history'" :size="16"
-                  /></span>
+                  <span><IconGlyph :name="levelStatusIcon(level)" :size="16" /></span>
                 </div>
               </article>
             </div>
@@ -44,7 +42,7 @@
             <div class="student-learn-hero-copy">
               <div class="chip student-hero-chip">Lesson {{ lesson.lessonId }}</div>
               <h2>{{ lesson.title }}</h2>
-              <p>{{ lesson.description || 'Lesson details are not available yet.' }}</p>
+              <p>{{ lessonDescription }}</p>
 
               <div class="student-learn-progress-block">
                 <div class="row-between">
@@ -113,7 +111,7 @@
             </div>
             <p v-else class="muted u-m-0">No recent lesson progress yet.</p>
 
-            <button class="student-view-units" type="button" @click="router.push('/student/practice')">
+            <button class="student-view-units" type="button" @click="openPractice">
               Practice More Lessons
               <span><IconGlyph name="chevronRight" :size="16" /></span>
             </button>
@@ -149,7 +147,7 @@
             <div class="stack u-gap-8">
               <strong>{{ primaryVideo.title }}</strong>
               <p class="muted u-m-0">
-                {{ primaryVideo.description || 'Recorded lesson details are not available yet.' }}
+                {{ primaryVideoDescription }}
               </p>
             </div>
 
@@ -165,7 +163,7 @@
               :disabled="videoActionLoading || !hasPlayableVideo"
               @click="openRecordedLesson"
             >
-              {{ videoActionLoading ? 'Saving progress...' : 'Start Watching' }}
+              {{ videoWatchActionLabel }}
             </button>
             <button
               class="btn btn-accent btn-block"
@@ -173,7 +171,7 @@
               :disabled="videoActionLoading || !hasPlayableVideo || videoProgress?.completed"
               @click="markRecordedLessonComplete"
             >
-              {{ videoProgress?.completed ? 'Completed' : 'Mark Complete' }}
+              {{ videoCompleteActionLabel }}
             </button>
           </article>
 
@@ -224,14 +222,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student curriculum / lesson player surface.
- *
- * <p>Renders lesson progress, recent lesson navigation, recorded
- * video access, and completion controls. Paid or locked content stays
- * gated by the backend entitlement check; the page only opens safe
- * video URLs returned by the student lesson-player endpoint.</p>
- */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -292,6 +282,7 @@ const emptyLesson = {
   recordedVideos: [],
 }
 const lesson = computed(() => resource.data.value ?? (resource.usingFallback.value ? studentLessonPlayer : emptyLesson))
+const lessonDescription = computed(() => lesson.value.description || 'Lesson details are not available yet.')
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const videoProgress = ref<VideoProgressResponse | null>(null)
@@ -300,6 +291,7 @@ const videoActionLoading = ref(false)
 
 const pageLoading = computed(() => resource.loading.value || progressResource.loading.value)
 const pageError = computed(() => resource.error.value || progressResource.error.value)
+const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(() => resource.usingFallback.value || progressResource.usingFallback.value)
 const studentName = computed(
   () => auth.currentUser?.studentProfile?.displayName || auth.displayName.split(' ')[0] || 'Learner',
@@ -327,6 +319,9 @@ const primaryVideo = computed(
     (resource.usingFallback.value ? studentLessonPlayer.recordedVideos[0] : undefined) ??
     emptyVideo(lesson.value.lessonId),
 )
+const primaryVideoDescription = computed(
+  () => primaryVideo.value.description || 'Recorded lesson details are not available yet.',
+)
 
 const videoDurationLabel = computed(() => {
   const durationSeconds = nonNegativeInteger(primaryVideo.value?.durationSeconds)
@@ -349,6 +344,8 @@ const videoProgressLabel = computed(() => {
     ? '100% complete'
     : `${clampPercent(videoProgress.value.progressPercentage)}% watched`
 })
+const videoWatchActionLabel = computed(() => (videoActionLoading.value ? 'Saving progress...' : 'Start Watching'))
+const videoCompleteActionLabel = computed(() => (videoProgress.value?.completed ? 'Completed' : 'Mark Complete'))
 const currentLessonProgressLabel = computed(() => {
   if (currentLessonPercent.value >= 100) return 'Completed'
   if (currentLessonPercent.value > 0) return 'In progress'
@@ -362,7 +359,37 @@ const overallLessonCountLabel = computed(() => {
   return `${completed} completed - ${started} started`
 })
 
-const courseLevels = computed(() => [
+type LevelStatusIcon = 'history' | 'safe' | 'star'
+type ModuleIcon = 'flash' | 'history' | 'status'
+type ModuleTone = 'primary' | 'success'
+type ModuleVariant = 'greeting' | 'listening' | 'pinyin' | 'tones'
+
+interface CourseLevel {
+  id: number
+  title: string
+  subtitle: string
+  progress: string
+  icon: string
+  active: boolean
+  locked: boolean
+}
+
+interface LearningModule {
+  id: number
+  displayIndex: number
+  title: string
+  icon: ModuleIcon
+  statusLabel: string
+  progress: number
+  count: string
+  complete: boolean
+  current: boolean
+  locked: boolean
+  tone: ModuleTone
+  variant: ModuleVariant
+}
+
+const courseLevels = computed<CourseLevel[]>(() => [
   {
     id: 1,
     title: 'Started',
@@ -400,7 +427,7 @@ const courseLevels = computed(() => [
     locked: false,
   },
 ])
-const learningModules = computed(() =>
+const learningModules = computed<LearningModule[]>(() =>
   progress.value.recentLessons.map((recentLesson, index) => {
     const completionPercent = clampPercent(recentLesson.completionPercent)
     const complete = recentLesson.completed || completionPercent >= 100
@@ -416,7 +443,7 @@ const learningModules = computed(() =>
       complete,
       current,
       locked: false,
-      tone: complete ? ('success' as const) : ('primary' as const),
+      tone: complete ? 'success' : 'primary',
       variant: variantForProgress(completionPercent, complete),
     }
   }),
@@ -439,7 +466,7 @@ watch(
   { immediate: true },
 )
 
-function numericQuery(value: unknown) {
+function numericQuery(value: unknown): number | null {
   const rawValue = Array.isArray(value) ? value[0] : value
   if (rawValue === null || rawValue === undefined || rawValue === '') return null
 
@@ -447,30 +474,30 @@ function numericQuery(value: unknown) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 }
 
-function responseStatus(reason: unknown) {
+function responseStatus(reason: unknown): number | null {
   return (reason as { response?: { status?: number } } | null)?.response?.status ?? null
 }
 
-function iconForProgress(completionPercent: number, completed: boolean) {
+function iconForProgress(completionPercent: number, completed: boolean): ModuleIcon {
   if (completed || completionPercent >= 100) return 'status'
   if (completionPercent > 0) return 'flash'
   return 'history'
 }
 
-function progressLabel(completionPercent: number, completed: boolean) {
+function progressLabel(completionPercent: number, completed: boolean): string {
   if (completed || completionPercent >= 100) return 'Completed'
   if (completionPercent > 0) return 'In progress'
   return 'Not started'
 }
 
-function variantForProgress(completionPercent: number, completed: boolean) {
+function variantForProgress(completionPercent: number, completed: boolean): ModuleVariant {
   if (completed || completionPercent >= 100) return 'pinyin'
   if (completionPercent >= 50) return 'listening'
   if (completionPercent > 0) return 'tones'
   return 'greeting'
 }
 
-async function loadLessonPlayer() {
+async function loadLessonPlayer(): Promise<StudentLessonPlayerResponse> {
   for (const lessonId of lessonCandidateIds.value) {
     try {
       return await studentApi.lessonPlayer(lessonId)
@@ -484,14 +511,19 @@ async function loadLessonPlayer() {
   return emptyLesson
 }
 
-function formatDuration(totalSeconds: number) {
+function formatDuration(totalSeconds: number): string {
   const safeSeconds = nonNegativeInteger(totalSeconds)
   const minutes = Math.floor(safeSeconds / 60)
   const seconds = safeSeconds % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-function startProgressPayload(video: RecordedLessonVideoResponse) {
+function startProgressPayload(video: RecordedLessonVideoResponse): {
+  watchedSeconds: number | undefined
+  totalSeconds: number | undefined
+  progressPercentage: number
+  completed: boolean
+} {
   const safeDurationSeconds = nonNegativeInteger(video.durationSeconds)
   const totalSeconds = safeDurationSeconds > 0 ? safeDurationSeconds : undefined
   const watchedSeconds = totalSeconds ? Math.max(1, Math.min(30, Math.floor(totalSeconds * 0.1))) : undefined
@@ -506,7 +538,7 @@ function startProgressPayload(video: RecordedLessonVideoResponse) {
   }
 }
 
-async function loadVideoProgress() {
+async function loadVideoProgress(): Promise<void> {
   videoProgress.value = null
   if (!primaryVideo.value.id || resource.usingFallback.value) return
 
@@ -520,7 +552,7 @@ async function loadVideoProgress() {
   }
 }
 
-async function openRecordedLesson() {
+async function openRecordedLesson(): Promise<void> {
   if (videoActionLoading.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -549,7 +581,7 @@ async function openRecordedLesson() {
   actionError.value = 'This recorded lesson does not have a playable video link yet.'
 }
 
-async function markRecordedLessonComplete() {
+async function markRecordedLessonComplete(): Promise<void> {
   if (videoActionLoading.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -576,22 +608,39 @@ async function markRecordedLessonComplete() {
   }
 }
 
-function openLessonQuiz() {
+function openLessonQuiz(): void {
   const lessonId = toFiniteNumber(lesson.value.lessonId)
   if (lessonId <= 0) {
-    void router.push('/student/quiz')
+    openQuiz()
     return
   }
 
+  openStudentQuiz(lessonId)
+}
+
+function reloadAll(): void {
+  void resource.reload()
+  void progressResource.reload()
+  void loadVideoProgress()
+}
+
+function levelStatusIcon(level: CourseLevel): LevelStatusIcon {
+  if (level.locked) return 'safe'
+  return level.active ? 'star' : 'history'
+}
+
+function openPractice(): void {
+  void router.push('/student/practice')
+}
+
+function openQuiz(): void {
+  void router.push('/student/quiz')
+}
+
+function openStudentQuiz(lessonId: number): void {
   void router.push({
     name: 'student-quiz',
     query: { lessonId: String(lessonId) },
   })
-}
-
-function reloadAll() {
-  void resource.reload()
-  void progressResource.reload()
-  void loadVideoProgress()
 }
 </script>

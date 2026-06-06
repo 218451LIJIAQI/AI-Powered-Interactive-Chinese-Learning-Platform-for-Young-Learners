@@ -23,12 +23,4 @@ public enum NotificationStatus {
                 "Notification status is required.",
                 () -> "Invalid notification status. Allowed values are UNREAD or READ.");
     }
-
-    public boolean isRead() {
-        return this == READ;
-    }
-
-    public boolean isUnread() {
-        return this == UNREAD;
-    }
 }

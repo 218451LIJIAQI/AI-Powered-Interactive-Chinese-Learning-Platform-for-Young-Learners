@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.temporal.ChronoUnit;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -34,6 +34,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.PasswordResetToken;
+import com.example.aichinese.entity.RefreshToken;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
@@ -80,6 +81,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class AuthControllerIntegrationTests {
 
     private static final Pattern RESET_TOKEN_PATTERN = Pattern.compile("reset form:\\s*([A-Za-z0-9]+)");
+    private static final String ADMIN_EMAIL = "admin@example.com";
+    private static final String ADMIN_PASSWORD = "SuperSecure123!";
+    private static final String USER_PASSWORD = "Password123!";
+    private static final String REFRESH_COOKIE_NAME = "mandarin_spark_refresh";
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String CACHE_CONTROL_HEADER = "Cache-Control";
+    private static final String SET_COOKIE_HEADER = "Set-Cookie";
+    private static final String LOGIN_PATH = "/api/v1/auth/login";
+    private static final String REGISTER_STUDENT_PATH = "/api/v1/auth/register/student";
+    private static final String REGISTER_TEACHER_PATH = "/api/v1/auth/register/teacher";
+    private static final String REFRESH_PATH = "/api/v1/auth/refresh";
+    private static final String LOGOUT_PATH = "/api/v1/auth/logout";
+    private static final String ME_PATH = "/api/v1/auth/me";
+    private static final String FORGOT_PASSWORD_PATH = "/api/v1/auth/forgot-password";
+    private static final String RESET_PASSWORD_PATH = "/api/v1/auth/reset-password";
+    private static final String NO_STORE = "no-store";
+    private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/v1/auth";
+    private static final String REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
 
     @Autowired
     private MockMvc mockMvc;
@@ -112,14 +131,14 @@ class AuthControllerIntegrationTests {
     void shouldRegisterStudentSuccessfully() throws Exception {
         String email = uniqueEmail("student");
 
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/register/student")
+        MvcResult result = mockMvc.perform(post(REGISTER_STUDENT_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Student One",
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
                         "preferredLanguage", "ms"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -129,7 +148,7 @@ class AuthControllerIntegrationTests {
                 .andExpect(jsonPath("$.data.passwordHash").doesNotExist())
                 .andReturn();
 
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
+        User user = userByEmail(email);
 
         assertThat(user.getPasswordHash()).isNotBlank();
         assertThat(studentProfileRepository.findByUserId(user.getId())).isPresent();
@@ -140,14 +159,14 @@ class AuthControllerIntegrationTests {
     void shouldRegisterTeacherSuccessfullyWithPendingStatus() throws Exception {
         String email = uniqueEmail("teacher");
 
-        mockMvc.perform(post("/api/v1/auth/register/teacher")
+        mockMvc.perform(post(REGISTER_TEACHER_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Teacher One",
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
                         "bio", "Friendly Mandarin teacher"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -155,7 +174,7 @@ class AuthControllerIntegrationTests {
                 .andExpect(jsonPath("$.data.roles[0]").value("TEACHER"))
                 .andExpect(jsonPath("$.data.teacherStatus").value("PENDING"));
 
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
+        User user = userByEmail(email);
         TeacherProfile profile = teacherProfileRepository.findByUserId(user.getId()).orElseThrow();
 
         assertThat(profile.getTeacherStatus()).isEqualTo(TeacherStatus.PENDING);
@@ -165,16 +184,16 @@ class AuthControllerIntegrationTests {
     void shouldRejectDuplicateEmailRegistration() throws Exception {
         String email = uniqueEmail("duplicate");
 
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        mockMvc.perform(post("/api/v1/auth/register/student")
+        mockMvc.perform(post(REGISTER_STUDENT_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Student Duplicate",
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!"))))
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Email is already registered."));
@@ -183,21 +202,21 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldLoginSuccessfullyForStudent() throws Exception {
         String email = uniqueEmail("login-student");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
         String requestId = "req-login-" + UUID.randomUUID();
 
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult result = mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .header("X-Request-Id", requestId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
-                        "password", "Password123!"))))
+                        "password", USER_PASSWORD))))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Cache-Control", containsString("no-store")))
-                .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=")))
-                .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
-                .andExpect(header().string("Set-Cookie", containsString("SameSite=Strict")))
+                .andExpect(header().string(CACHE_CONTROL_HEADER, containsString(NO_STORE)))
+                .andExpect(header().string(SET_COOKIE_HEADER, containsString(refreshCookiePrefix())))
+                .andExpect(header().string(SET_COOKIE_HEADER, containsString("HttpOnly")))
+                .andExpect(header().string(SET_COOKIE_HEADER, containsString("SameSite=Strict")))
                 .andExpect(header().string("X-Request-Id", requestId))
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.token").isString())
@@ -207,23 +226,24 @@ class AuthControllerIntegrationTests {
 
         assertThat(result.getResponse().getContentAsString()).doesNotContain("passwordHash");
         assertThat(result.getResponse().getContentAsString()).doesNotContain("password_hash");
+        assertRefreshCookieIssuedAndLegacyCookieCleared(result);
     }
 
     @Test
     void shouldRefreshAccessTokenRotateRefreshCookieAndRejectReplay() throws Exception {
         String email = uniqueEmail("refresh-rotate");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        MvcResult loginResult = login(email, "Password123!");
+        MvcResult loginResult = login(email, USER_PASSWORD);
         String initialAccessToken = extractToken(loginResult);
         String initialRefreshToken = extractRefreshCookieValue(loginResult);
 
-        MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh")
+        MvcResult refreshResult = mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
-                .cookie(new MockCookie("mandarin_spark_refresh", initialRefreshToken)))
+                .cookie(refreshCookie(initialRefreshToken)))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Cache-Control", containsString("no-store")))
-                .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=")))
+                .andExpect(header().string(CACHE_CONTROL_HEADER, containsString(NO_STORE)))
+                .andExpect(header().string(SET_COOKIE_HEADER, containsString(refreshCookiePrefix())))
                 .andExpect(jsonPath("$.data.token").isString())
                 .andReturn();
 
@@ -231,20 +251,21 @@ class AuthControllerIntegrationTests {
         String rotatedRefreshToken = extractRefreshCookieValue(refreshResult);
         assertThat(rotatedAccessToken).isNotEqualTo(initialAccessToken);
         assertThat(rotatedRefreshToken).isNotEqualTo(initialRefreshToken);
+        assertRefreshCookieIssuedAndLegacyCookieCleared(refreshResult);
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + rotatedAccessToken))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(rotatedAccessToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value(email));
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
-                .cookie(new MockCookie("mandarin_spark_refresh", initialRefreshToken)))
+                .cookie(refreshCookie(initialRefreshToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + rotatedAccessToken))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(rotatedAccessToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -252,23 +273,23 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldRejectCrossSiteBrowserRefreshWithoutConsumingRefreshToken() throws Exception {
         String email = uniqueEmail("refresh-origin");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        MvcResult loginResult = login(email, "Password123!");
+        MvcResult loginResult = login(email, USER_PASSWORD);
         String refreshToken = extractRefreshCookieValue(loginResult);
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
                 .header("Origin", "https://evil.example")
                 .header("Sec-Fetch-Site", "cross-site")
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isForbidden())
-                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().string(CACHE_CONTROL_HEADER, containsString(NO_STORE)))
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.token").isString());
     }
@@ -276,21 +297,21 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldRejectSameSiteBrowserRefreshWithoutTrustedOriginMetadata() throws Exception {
         String email = uniqueEmail("refresh-same-site");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        MvcResult loginResult = login(email, "Password123!");
+        MvcResult loginResult = login(email, USER_PASSWORD);
         String refreshToken = extractRefreshCookieValue(loginResult);
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
                 .header("Sec-Fetch-Site", "same-site")
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.token").isString());
     }
@@ -298,15 +319,15 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldAllowSameOriginBrowserRefreshWithoutOriginOrReferer() throws Exception {
         String email = uniqueEmail("refresh-same-origin-fetch");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        MvcResult loginResult = login(email, "Password123!");
+        MvcResult loginResult = login(email, USER_PASSWORD);
         String refreshToken = extractRefreshCookieValue(loginResult);
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
                 .header("Sec-Fetch-Site", "same-origin")
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.token").isString());
     }
@@ -314,15 +335,15 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldAllowRefreshFromConfiguredFrontendOrigin() throws Exception {
         String email = uniqueEmail("refresh-allowed-origin");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        MvcResult loginResult = login(email, "Password123!");
+        MvcResult loginResult = login(email, USER_PASSWORD);
         String refreshToken = extractRefreshCookieValue(loginResult);
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
                 .header("Origin", "http://localhost:5173")
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.token").isString());
     }
@@ -330,39 +351,36 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldClearRefreshCookieAndRevokeRefreshTokensOnLogout() throws Exception {
         String email = uniqueEmail("refresh-logout");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        MvcResult loginResult = login(email, "Password123!");
+        MvcResult loginResult = login(email, USER_PASSWORD);
         String accessToken = extractToken(loginResult);
         String refreshToken = extractRefreshCookieValue(loginResult);
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
-        var issuedRefreshToken = refreshTokenRepository.findAll().stream()
-                .filter(token -> token.getUser() != null && token.getUser().getId().equals(user.getId()))
-                .filter(token -> token.getRevokedAt() == null)
-                .findFirst()
-                .orElseThrow();
+        User user = userByEmail(email);
+        RefreshToken issuedRefreshToken = activeRefreshTokenFor(user);
         assertThat(issuedRefreshToken.getUpdatedAt()).isNotNull();
 
-        mockMvc.perform(post("/api/v1/auth/logout")
+        MvcResult logoutResult = mockMvc.perform(post(LOGOUT_PATH)
                 .with(csrf())
-                .header("Authorization", "Bearer " + accessToken)
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .header(AUTHORIZATION_HEADER, bearer(accessToken))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Set-Cookie", containsString("mandarin_spark_refresh=;")))
-                .andExpect(header().string("Set-Cookie", containsString("Max-Age=0")));
+                .andExpect(header().string(SET_COOKIE_HEADER, containsString(refreshCookiePrefix() + ";")))
+                .andExpect(header().string(SET_COOKIE_HEADER, containsString("Max-Age=0")))
+                .andReturn();
+
+        assertRefreshCookieCleared(logoutResult, REFRESH_COOKIE_PATH);
+        assertRefreshCookieCleared(logoutResult, LEGACY_REFRESH_COOKIE_PATH);
 
         var revokedRefreshToken = refreshTokenRepository.findById(Objects.requireNonNull(issuedRefreshToken.getId()))
                 .orElseThrow();
         assertThat(revokedRefreshToken.getRevokedAt()).isNotNull();
         assertThat(revokedRefreshToken.getUpdatedAt()).isEqualTo(revokedRefreshToken.getRevokedAt());
-        assertThat(refreshTokenRepository.findAll().stream()
-                .filter(token -> token.getUser() != null && token.getUser().getId().equals(user.getId()))
-                .filter(token -> token.getRevokedAt() == null)
-                .count()).isZero();
+        assertThat(activeRefreshTokenCountFor(user)).isZero();
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
-                .cookie(new MockCookie("mandarin_spark_refresh", refreshToken)))
+                .cookie(refreshCookie(refreshToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -370,18 +388,15 @@ class AuthControllerIntegrationTests {
     @Test
     void forgotPasswordAuditLogShouldCaptureRequestTraceId() throws Exception {
         String email = uniqueEmail("forgot-trace");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
         String requestId = "req-forgot-" + UUID.randomUUID();
-        long maxAuditIdBefore = auditLogRepository.findAll().stream()
-                .mapToLong(auditLog -> auditLog.getId() == null ? 0L : auditLog.getId())
-                .max()
-                .orElse(0L);
+        long maxAuditIdBefore = maxAuditId();
 
-        mockMvc.perform(post("/api/v1/auth/forgot-password")
+        mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .header("X-Request-Id", requestId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("email", email))))
+                .content(json(Map.of("email", email))))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-Id", requestId))
                 .andExpect(jsonPath("$.success").value(true));
@@ -398,12 +413,12 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldRejectLoginWithWrongPassword() throws Exception {
         String email = uniqueEmail("wrong-password");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", "WrongPassword999!"))))
                 .andExpect(status().isUnauthorized())
@@ -416,91 +431,89 @@ class AuthControllerIntegrationTests {
         String oversizedEmail = "x".repeat(321);
         String oversizedPassword = "P".repeat(73);
 
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", "student@example.com",
                         "password", oversizedPassword))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/v1/auth/forgot-password")
+        mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", oversizedEmail))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/v1/auth/register/student")
+        mockMvc.perform(post(REGISTER_STUDENT_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Boundary Student",
                         "email", "boundary-student@example.com",
-                        "password", "Password123!",
+                        "password", USER_PASSWORD,
                         "confirmPassword", oversizedPassword,
                         "preferredLanguage", "en"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/v1/auth/reset-password")
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "token", "t".repeat(129),
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!"))))
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
     void shouldAllowAdminLoginFromSeededAccount() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "email", "admin@example.com",
-                        "password", "SuperSecure123!"))))
+                .content(json(Map.of(
+                        "email", ADMIN_EMAIL,
+                        "password", ADMIN_PASSWORD))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.user.email").value("admin@example.com"))
+                .andExpect(jsonPath("$.data.user.email").value(ADMIN_EMAIL))
                 .andExpect(jsonPath("$.data.user.roles[0]").value("ADMIN"));
     }
 
     @Test
     void shouldReturnCurrentUserForAuthenticatedStudent() throws Exception {
         String email = uniqueEmail("me-student");
-        registerStudent(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andExpect(jsonPath("$.data.studentProfile").isMap())
                 .andExpect(jsonPath("$.data.roles[0]").value("STUDENT"))
                 .andExpect(jsonPath("$.data.passwordHash").doesNotExist())
-                // Wave-6 regression: /auth/me returns Cache-Control: no-store
-                // so the JSON profile cannot be replayed from browser cache or
-                // bfcache after the user logs out.
-                .andExpect(header().string("Cache-Control", containsString("no-store")));
+                // Prevent profile replay from browser cache after logout.
+                .andExpect(header().string(CACHE_CONTROL_HEADER, containsString(NO_STORE)));
     }
 
     @Test
     void shouldRejectExistingTokenAfterUserIsDeactivated() throws Exception {
         String email = uniqueEmail("inactive-token");
-        registerStudent(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
+        User user = userByEmail(email);
         user.setActive(false);
         userRepository.save(user);
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -508,23 +521,20 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldRejectExistingTokenAfterExplicitLogout() throws Exception {
         String email = uniqueEmail("logout-token");
-        registerStudent(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
+        registerStudent(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
+        User user = userByEmail(email);
 
-        mockMvc.perform(post("/api/v1/auth/logout")
+        mockMvc.perform(post(LOGOUT_PATH)
                 .with(csrf())
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        assertThat(refreshTokenRepository.findAll().stream()
-                .filter(record -> record.getUser() != null && record.getUser().getId().equals(user.getId()))
-                .filter(record -> record.getRevokedAt() == null)
-                .count()).isZero();
+        assertThat(activeRefreshTokenCountFor(user)).isZero();
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -532,11 +542,11 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldReturnCurrentUserForAuthenticatedTeacher() throws Exception {
         String email = uniqueEmail("me-teacher");
-        registerTeacher(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerTeacher(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + token))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.email").value(email))
@@ -547,13 +557,13 @@ class AuthControllerIntegrationTests {
 
     @Test
     void shouldReturnCurrentUserForAuthenticatedAdminWithoutProfiles() throws Exception {
-        String token = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String token = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
 
-        MvcResult result = mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + token))
+        MvcResult result = mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.email").value("admin@example.com"))
+                .andExpect(jsonPath("$.data.email").value(ADMIN_EMAIL))
                 .andExpect(jsonPath("$.data.roles[0]").value("ADMIN"))
                 .andReturn();
 
@@ -574,11 +584,11 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldReturnForbiddenWhenStudentAccessesAdminRoute() throws Exception {
         String email = uniqueEmail("forbidden-student");
-        registerStudent(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
         mockMvc.perform(get("/api/v1/admin/dashboard")
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("You do not have permission to perform this action. Contact an administrator if needed."));
@@ -587,11 +597,11 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldReturnForbiddenWhenTeacherAccessesAdminRoute() throws Exception {
         String email = uniqueEmail("forbidden-teacher");
-        registerTeacher(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerTeacher(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
         mockMvc.perform(get("/api/v1/admin/dashboard")
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -599,11 +609,11 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldReturnForbiddenWhenStudentAccessesTeacherRoute() throws Exception {
         String email = uniqueEmail("student-on-teacher");
-        registerStudent(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
         mockMvc.perform(get("/api/v1/teachers/dashboard")
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -611,14 +621,14 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldIncludeTeacherStatusWhenTeacherLogsIn() throws Exception {
         String email = uniqueEmail("teacher-login");
-        registerTeacher(email, "Password123!");
+        registerTeacher(email, USER_PASSWORD);
 
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
-                        "password", "Password123!"))))
+                        "password", USER_PASSWORD))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.user.roles[0]").value("TEACHER"))
                 .andExpect(jsonPath("$.data.user.teacherStatus").value("PENDING"));
@@ -626,7 +636,7 @@ class AuthControllerIntegrationTests {
 
     @Test
     void shouldReturnBadRequestWhenRequestBodyIsMalformedJson() throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+        MvcResult result = mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"broken"))
@@ -660,11 +670,11 @@ class AuthControllerIntegrationTests {
         // permits the request and the GlobalExceptionHandler can handle the resulting
         // NoResourceFoundException with a clean 404 response.
         String email = uniqueEmail("not-found");
-        registerStudent(email, "Password123!");
-        String token = loginAndExtractToken(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
+        String token = loginAndExtractToken(email, USER_PASSWORD);
 
         MvcResult result = mockMvc.perform(get("/api/v1/students/this-route-does-not-exist-" + UUID.randomUUID())
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION_HEADER, bearer(token)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("We could not find the item you requested. Please refresh and try again."))
@@ -677,13 +687,11 @@ class AuthControllerIntegrationTests {
 
     @Test
     void shouldRejectResetPasswordWithUnknownToken() throws Exception {
-        // Tokens that were never issued must be rejected with 400. This is the public
-        // contract for both "wrong token" and "already used token" because the API
-        // intentionally does not differentiate the two — see AuthService.resetPassword.
-        mockMvc.perform(post("/api/v1/auth/reset-password")
+        // Unknown and already-used reset tokens intentionally share the same public error.
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "token", "not-a-real-token-" + UUID.randomUUID(),
                         "password", "NewPassword123!",
                         "confirmPassword", "NewPassword123!"))))
@@ -694,10 +702,10 @@ class AuthControllerIntegrationTests {
 
     @Test
     void shouldRejectResetPasswordWithBlankToken() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/reset-password")
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "token", "   ",
                         "password", "NewPassword123!",
                         "confirmPassword", "NewPassword123!"))))
@@ -707,11 +715,9 @@ class AuthControllerIntegrationTests {
 
     @Test
     void shouldCompletePasswordResetEndToEndAndAllowLoginWithNewPasswordExactlyOnce() throws Exception {
-        // End-to-end: register → request reset → read token from DB → reset → login with new
-        // password. We also assert single-use semantics by re-submitting the same token and
-        // checking the second attempt is rejected.
+        // End-to-end reset flow plus single-use enforcement.
         String email = uniqueEmail("reset-flow");
-        String oldPassword = "Password123!";
+        String oldPassword = USER_PASSWORD;
         String newPassword = "NewPassword456!";
         registerStudent(email, oldPassword);
         String originalToken = loginAndExtractToken(email, oldPassword);
@@ -720,66 +726,58 @@ class AuthControllerIntegrationTests {
 
         String rawResetToken = issueResetToken(email);
 
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
-        PasswordResetToken token = passwordResetTokenRepository.findAll().stream()
-                .filter(record -> record.getUser() != null
-                        && record.getUser().getId().equals(user.getId())
-                        && record.getUsedAt() == null)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Reset token was not persisted for the registered email."));
+        User user = userByEmail(email);
+        PasswordResetToken token = activePasswordResetTokenFor(user);
         assertThat(token.getExpiresAt()).isAfter(LocalDateTime.now());
         assertThat(token.getTokenHash()).isNotBlank().isNotEqualTo(rawResetToken);
 
         // First use of the token: must succeed and update the stored hash.
-        mockMvc.perform(post("/api/v1/auth/reset-password")
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "token", rawResetToken,
                         "password", newPassword,
                         "confirmPassword", newPassword))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        assertThat(refreshTokenRepository.findAll().stream()
-                .filter(record -> record.getUser() != null && record.getUser().getId().equals(user.getId()))
-                .filter(record -> record.getRevokedAt() == null)
-                .count()).isZero();
+        assertThat(activeRefreshTokenCountFor(user)).isZero();
 
-        mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post(REFRESH_PATH)
                 .with(csrf())
-                .cookie(new MockCookie("mandarin_spark_refresh", originalRefreshToken)))
+                .cookie(refreshCookie(originalRefreshToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
 
         // The old password must no longer work; the new password must.
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", oldPassword))))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", newPassword))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.token").isString());
 
-        mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + originalToken))
+        mockMvc.perform(get(ME_PATH)
+                .header(AUTHORIZATION_HEADER, bearer(originalToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
 
         // Single-use enforcement: the same token cannot be redeemed a second time.
-        mockMvc.perform(post("/api/v1/auth/reset-password")
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "token", rawResetToken,
                         "password", "AnotherNew789!",
                         "confirmPassword", "AnotherNew789!"))))
@@ -789,37 +787,27 @@ class AuthControllerIntegrationTests {
 
     @Test
     void shouldIssueFreshTokenAndInvalidatePreviousActiveTokenWhenForgotPasswordIsCalledTwice() throws Exception {
-        // If a learner clicks "forgot password" twice — for example because the first
-        // email landed in spam — the older link must no longer be redeemable, otherwise
-        // a stale leaked link could be used after the user explicitly asked for a new one.
+        // A newer reset request invalidates older still-active links.
         String email = uniqueEmail("reset-rotate");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
         String firstRawToken = issueResetToken(email);
 
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
-        PasswordResetToken firstToken = passwordResetTokenRepository.findAll().stream()
-                .filter(record -> record.getUser() != null && record.getUser().getId().equals(user.getId()))
-                .findFirst()
-                .orElseThrow();
+        User user = userByEmail(email);
+        PasswordResetToken firstToken = passwordResetTokenFor(user);
         assertThat(firstToken.getTokenHash()).isNotBlank().isNotEqualTo(firstRawToken);
 
         String secondRawToken = issueResetToken(email);
         assertThat(secondRawToken).isNotEqualTo(firstRawToken);
 
-        // The original token must now carry a usedAt timestamp from the invalidation pass,
-        // and a fresh still-active token must exist alongside it.
-        long activeTokens = passwordResetTokenRepository.findAll().stream()
-                .filter(record -> record.getUser() != null
-                        && record.getUser().getId().equals(user.getId())
-                        && record.getUsedAt() == null)
-                .count();
+        // The original token is marked used and only the newer token remains active.
+        long activeTokens = activePasswordResetTokenCountFor(user);
         assertThat(activeTokens).isEqualTo(1L);
 
-        mockMvc.perform(post("/api/v1/auth/reset-password")
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "token", firstRawToken,
                         "password", "NewPassword456!",
                         "confirmPassword", "NewPassword456!"))))
@@ -830,16 +818,11 @@ class AuthControllerIntegrationTests {
     @Test
     void shouldConsumePasswordResetTokenOnlyOnceAtRepositoryBoundary() throws Exception {
         String email = uniqueEmail("reset-atomic");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
         issueResetToken(email);
 
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
-        PasswordResetToken token = passwordResetTokenRepository.findAll().stream()
-                .filter(record -> record.getUser() != null
-                        && record.getUser().getId().equals(user.getId())
-                        && record.getUsedAt() == null)
-                .findFirst()
-                .orElseThrow();
+        User user = userByEmail(email);
+        PasswordResetToken token = activePasswordResetTokenFor(user);
         Long tokenId = Objects.requireNonNull(token.getId());
         LocalDateTime consumeAt = LocalDateTime.now();
 
@@ -865,20 +848,20 @@ class AuthControllerIntegrationTests {
         // public message in both cases so attackers cannot probe which addresses are
         // registered on the platform.
         String registeredEmail = uniqueEmail("forgot-existing");
-        registerStudent(registeredEmail, "Password123!");
+        registerStudent(registeredEmail, USER_PASSWORD);
 
-        MvcResult existingResult = mockMvc.perform(post("/api/v1/auth/forgot-password")
+        MvcResult existingResult = mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("email", registeredEmail))))
+                .content(json(Map.of("email", registeredEmail))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
 
-        MvcResult missingResult = mockMvc.perform(post("/api/v1/auth/forgot-password")
+        MvcResult missingResult = mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", "definitely-not-registered-" + UUID.randomUUID() + "@example.com"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -898,20 +881,20 @@ class AuthControllerIntegrationTests {
         String forwardedIp = "198.51.100.200";
 
         for (int i = 0; i < 10; i++) {
-            mockMvc.perform(post("/api/v1/auth/forgot-password")
+            mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                     .with(csrf())
                     .header("X-Forwarded-For", forwardedIp)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(Map.of("email", email))))
+                    .content(json(Map.of("email", email))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true));
         }
 
-        mockMvc.perform(post("/api/v1/auth/forgot-password")
+        mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .header("X-Forwarded-For", forwardedIp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("email", email))))
+                .content(json(Map.of("email", email))))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -923,7 +906,7 @@ class AuthControllerIntegrationTests {
         String actualRemoteIp = "203.0.113.200";
 
         for (int i = 0; i < 10; i++) {
-            mockMvc.perform(post("/api/v1/auth/forgot-password")
+            mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                     .with(csrf())
                     .with(request -> {
                         request.setRemoteAddr(actualRemoteIp);
@@ -931,19 +914,19 @@ class AuthControllerIntegrationTests {
                     })
                     .header("X-Forwarded-For", spoofedClientIp)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(Map.of("email", email))))
+                    .content(json(Map.of("email", email))))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true));
         }
 
-        mockMvc.perform(post("/api/v1/auth/forgot-password")
+        mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .with(request -> {
                     request.setRemoteAddr(actualRemoteIp);
                     return request;
                 })
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("email", email))))
+                .content(json(Map.of("email", email))))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -967,24 +950,24 @@ class AuthControllerIntegrationTests {
         // shared seeded admin account, and a unique email so other tests in
         // the same JVM cannot poison the limiter's bucket.
         String email = uniqueEmail("lockout-target");
-        registerStudent(email, "Password123!");
+        registerStudent(email, USER_PASSWORD);
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            mockMvc.perform(post("/api/v1/auth/login")
+            mockMvc.perform(post(LOGIN_PATH)
                     .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(Map.of(
+                    .content(json(Map.of(
                             "email", email,
                             "password", "WrongPassword!"))))
                     .andExpect(status().isUnauthorized());
         }
 
-        // Sixth attempt — still wrong password — should be refused at the
+        // Sixth attempt, still wrong password, should be refused at the
         // rate-limiter layer with 429 Too Many Requests, not 401.
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", "WrongPassword!"))))
                 .andExpect(status().isTooManyRequests())
@@ -993,12 +976,12 @@ class AuthControllerIntegrationTests {
         // And critically: even the *correct* password is refused while the
         // bucket is locked, otherwise an attacker who finally guesses right
         // would still slip through after the threshold.
-        mockMvc.perform(post("/api/v1/auth/login")
+        mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
-                        "password", "Password123!"))))
+                        "password", USER_PASSWORD))))
                 .andExpect(status().isTooManyRequests());
     }
 
@@ -1006,18 +989,15 @@ class AuthControllerIntegrationTests {
     void loginLockoutAuditRecordShouldNotStoreEmailOrIpAddress() throws Exception {
         String email = uniqueEmail("lockout-audit");
         String forwardedIp = "198.51.100.44";
-        registerStudent(email, "Password123!");
-        long maxAuditIdBefore = auditLogRepository.findAll().stream()
-                .mapToLong(auditLog -> auditLog.getId() == null ? 0L : auditLog.getId())
-                .max()
-                .orElse(0L);
+        registerStudent(email, USER_PASSWORD);
+        long maxAuditIdBefore = maxAuditId();
 
         for (int attempt = 0; attempt < 5; attempt++) {
-            mockMvc.perform(post("/api/v1/auth/login")
+            mockMvc.perform(post(LOGIN_PATH)
                     .with(csrf())
                     .header("X-Forwarded-For", forwardedIp)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(Map.of(
+                    .content(json(Map.of(
                             "email", email,
                             "password", "WrongPassword!"))))
                     .andExpect(status().isUnauthorized());
@@ -1037,10 +1017,10 @@ class AuthControllerIntegrationTests {
     }
 
     private void registerStudent(String email, String password) throws Exception {
-        mockMvc.perform(post("/api/v1/auth/register/student")
+        mockMvc.perform(post(REGISTER_STUDENT_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Student Test",
                         "email", email,
                         "password", password,
@@ -1050,10 +1030,10 @@ class AuthControllerIntegrationTests {
     }
 
     private void registerTeacher(String email, String password) throws Exception {
-        mockMvc.perform(post("/api/v1/auth/register/teacher")
+        mockMvc.perform(post(REGISTER_TEACHER_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Teacher Test",
                         "email", email,
                         "password", password,
@@ -1069,14 +1049,66 @@ class AuthControllerIntegrationTests {
     }
 
     private MvcResult login(String email, String password) throws Exception {
-        return mockMvc.perform(post("/api/v1/auth/login")
+        return mockMvc.perform(post(LOGIN_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", password))))
                 .andExpect(status().isOk())
                 .andReturn();
+    }
+
+    private String json(Map<String, ?> body) throws Exception {
+        return objectMapper.writeValueAsString(body);
+    }
+
+    private User userByEmail(String email) {
+        return userRepository.findByEmailWithRoles(email).orElseThrow();
+    }
+
+    private RefreshToken activeRefreshTokenFor(User user) {
+        return refreshTokenRepository.findAll().stream()
+                .filter(token -> belongsTo(token.getUser(), user))
+                .filter(token -> token.getRevokedAt() == null)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private long activeRefreshTokenCountFor(User user) {
+        return refreshTokenRepository.findAll().stream()
+                .filter(token -> belongsTo(token.getUser(), user))
+                .filter(token -> token.getRevokedAt() == null)
+                .count();
+    }
+
+    private PasswordResetToken activePasswordResetTokenFor(User user) {
+        return passwordResetTokenRepository.findAll().stream()
+                .filter(token -> belongsTo(token.getUser(), user))
+                .filter(token -> token.getUsedAt() == null)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Reset token was not persisted for the registered email."));
+    }
+
+    private PasswordResetToken passwordResetTokenFor(User user) {
+        return passwordResetTokenRepository.findAll().stream()
+                .filter(token -> belongsTo(token.getUser(), user))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private long activePasswordResetTokenCountFor(User user) {
+        return passwordResetTokenRepository.findAll().stream()
+                .filter(token -> belongsTo(token.getUser(), user))
+                .filter(token -> token.getUsedAt() == null)
+                .count();
+    }
+
+    private long maxAuditId() {
+        return auditLogRepository.findAll().stream()
+                .mapToLong(auditLog -> auditLog.getId() == null ? 0L : auditLog.getId())
+                .max()
+                .orElse(0L);
     }
 
     private String extractToken(MvcResult result) throws Exception {
@@ -1085,21 +1117,42 @@ class AuthControllerIntegrationTests {
     }
 
     private String extractRefreshCookieValue(MvcResult result) {
-        String setCookie = result.getResponse().getHeader("Set-Cookie");
+        String setCookie = result.getResponse().getHeader(SET_COOKIE_HEADER);
         assertThat(setCookie).isNotBlank();
-        assertThat(setCookie).contains("mandarin_spark_refresh=");
-        String cookieValue = setCookie.substring("mandarin_spark_refresh=".length());
+        assertThat(setCookie).contains(refreshCookiePrefix());
+        String cookieValue = setCookie.substring(refreshCookiePrefix().length());
         int separatorIndex = cookieValue.indexOf(';');
         return separatorIndex >= 0 ? cookieValue.substring(0, separatorIndex) : cookieValue;
+    }
+
+    private void assertRefreshCookieIssuedAndLegacyCookieCleared(MvcResult result) {
+        String refreshCookie = assertRefreshCookieWithPath(result, REFRESH_COOKIE_PATH);
+        assertThat(refreshCookie)
+                .contains(refreshCookiePrefix(), "HttpOnly", "SameSite=Strict")
+                .doesNotContain("Max-Age=0");
+        assertRefreshCookieCleared(result, LEGACY_REFRESH_COOKIE_PATH);
+    }
+
+    private void assertRefreshCookieCleared(MvcResult result, String path) {
+        assertThat(assertRefreshCookieWithPath(result, path))
+                .contains(refreshCookiePrefix() + ";", "Max-Age=0");
+    }
+
+    private String assertRefreshCookieWithPath(MvcResult result, String path) {
+        return result.getResponse().getHeaders(SET_COOKIE_HEADER).stream()
+                .filter(cookie -> cookie.contains(refreshCookiePrefix()))
+                .filter(cookie -> cookie.contains("; Path=" + path + ";"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing refresh cookie for path " + path));
     }
 
     private String issueResetToken(String email) throws Exception {
         clearInvocations(noOpEmailService);
 
-        mockMvc.perform(post("/api/v1/auth/forgot-password")
+        mockMvc.perform(post(FORGOT_PASSWORD_PATH)
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("email", email))))
+                .content(json(Map.of("email", email))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
@@ -1121,5 +1174,21 @@ class AuthControllerIntegrationTests {
 
     private String uniqueEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
+    }
+
+    private static String bearer(String token) {
+        return "Bearer " + token;
+    }
+
+    private static MockCookie refreshCookie(String token) {
+        return new MockCookie(REFRESH_COOKIE_NAME, token);
+    }
+
+    private static String refreshCookiePrefix() {
+        return REFRESH_COOKIE_NAME + "=";
+    }
+
+    private static boolean belongsTo(User candidate, User user) {
+        return candidate != null && candidate.getId().equals(user.getId());
     }
 }

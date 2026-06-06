@@ -35,7 +35,7 @@
             <div class="student-section-heading">
               <strong>Teacher Verification Queue</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/teacher-verification')">
+            <button class="student-link-button" type="button" @click="openTeacherVerification">
               View All
             </button>
           </div>
@@ -64,7 +64,7 @@
             <div class="student-section-heading">
               <strong>Moderation and AI Reports</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/moderation')">
+            <button class="student-link-button" type="button" @click="openModeration">
               Open Queue
             </button>
           </div>
@@ -95,7 +95,7 @@
             <div class="student-section-heading">
               <strong>Admin Notifications</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/settings')">View All</button>
+            <button class="student-link-button" type="button" @click="openSettings">View All</button>
           </div>
 
           <div v-if="notifications.length" class="admin-dashboard-list">
@@ -130,7 +130,7 @@
             <div class="student-section-heading">
               <strong>Platform Analytics Snapshot</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/analytics')">
+            <button class="student-link-button" type="button" @click="openAnalytics">
               Open Analytics
             </button>
           </div>
@@ -165,7 +165,7 @@
                 <span>{{ formatNumber(item.value) }}</span>
               </div>
               <div class="admin-dashboard-track">
-                <span :style="{ width: `${item.percentage}%` }" />
+                <span :style="item.barStyle" />
               </div>
             </article>
           </div>
@@ -179,7 +179,7 @@
             <div class="student-section-heading">
               <strong>Finance Overview</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/finance')">
+            <button class="student-link-button" type="button" @click="openFinance">
               Open Finance
             </button>
           </div>
@@ -213,7 +213,7 @@
             <div class="student-section-heading">
               <strong>Recent Audit Logs</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/admin/settings')">View All</button>
+            <button class="student-link-button" type="button" @click="openSettings">View All</button>
           </div>
 
           <div v-if="auditItems.length" class="admin-dashboard-list">
@@ -241,10 +241,10 @@
             <strong>Platform Health</strong>
           </div>
 
-          <div class="admin-dashboard-health-banner" :class="{ 'is-up': healthStatus === 'UP' }">
+          <div class="admin-dashboard-health-banner" :class="{ 'is-up': isHealthUp }">
             <IconGlyph name="status" :size="18" />
             <div class="stack u-gap-4">
-              <strong>{{ healthStatus === 'UP' ? 'All Systems Operational' : 'Status Unavailable' }}</strong>
+              <strong>{{ healthStatusLabel }}</strong>
               <span>Checked {{ healthTimestampLabel }}</span>
             </div>
           </div>
@@ -279,7 +279,7 @@
               :key="item.label"
               class="admin-dashboard-action"
               type="button"
-              @click="router.push(item.to)"
+              @click="openQuickAction(item.to)"
             >
               <IconGlyph :name="item.icon" :size="18" />
               <span>{{ item.label }}</span>
@@ -292,15 +292,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin executive dashboard — the landing surface for administrators.
- *
- * <p>Aggregates platform-wide KPIs (users, courses, content review
- * queue depth, finance health, moderation backlog) into a single
- * read-only overview. Heavy drill-downs live in their own sibling
- * pages, while this dashboard composes the lightweight summary
- * endpoints needed for the landing view.</p>
- */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -325,6 +316,12 @@ import {
 } from '@/demo/data'
 import { formatCurrency, formatDate, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
+const HEALTH_FALLBACK = {
+  status: 'UP',
+  service: 'backend',
+  timestamp: new Date().toISOString(),
+}
+
 const router = useRouter()
 
 const dashboardResource = useResource(() => adminApi.dashboard(), adminDashboard)
@@ -334,11 +331,7 @@ const moderationResource = useResource(() => adminApi.moderationRecords(), admin
 const notificationsResource = useResource(() => adminApi.notifications(), adminNotifications)
 const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
 const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
-const healthResource = useResource(() => systemApi.health(), {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-})
+const healthResource = useResource(() => systemApi.health(), HEALTH_FALLBACK)
 
 const emptyDashboard = {
   fullName: '',
@@ -415,13 +408,7 @@ const aiReports = computed(
 const health = computed(
   () =>
     healthResource.data.value ??
-    (healthResource.usingFallback.value
-      ? {
-          status: 'UP',
-          service: 'backend',
-          timestamp: new Date().toISOString(),
-        }
-      : emptyHealth),
+    (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
 )
 
 const pageLoading = computed(
@@ -458,7 +445,7 @@ const usingFallback = computed(
     healthResource.usingFallback.value,
 )
 
-function markAdminNotificationRead(notificationId: number) {
+function markAdminNotificationRead(notificationId: number): void {
   notificationsResource.data.value = notifications.value.map((item) =>
     item.id === notificationId ? { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() } : item,
   )
@@ -558,7 +545,7 @@ const registrationTrendRows = computed(() => {
     return {
       label: item.label,
       value,
-      percentage: max > 0 ? Math.max(8, ratioPercent(value, max)) : 0,
+      barStyle: { width: `${max > 0 ? Math.max(8, ratioPercent(value, max)) : 0}%` },
     }
   })
 })
@@ -575,6 +562,8 @@ const auditItems = computed(() =>
 )
 
 const healthStatus = computed(() => health.value.status || 'UNKNOWN')
+const isHealthUp = computed(() => healthStatus.value === 'UP')
+const healthStatusLabel = computed(() => (isHealthUp.value ? 'All Systems Operational' : 'Status Unavailable'))
 const healthTimestampLabel = computed(() => (health.value.timestamp ? formatDateTime(health.value.timestamp) : '--'))
 
 const quickActions = [
@@ -584,28 +573,28 @@ const quickActions = [
   { label: 'Finance', icon: 'finance', to: '/admin/finance' },
 ]
 
-function auditIcon(actionType: string) {
+function auditIcon(actionType: string): string {
   if (actionType.includes('APPROVE')) return 'status'
   if (actionType.includes('REJECT')) return 'close'
   if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'content'
   return 'history'
 }
 
-function auditTone(actionType: string) {
+function auditTone(actionType: string): string {
   if (actionType.includes('APPROVE')) return 'green'
   if (actionType.includes('REJECT')) return 'red'
   if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'purple'
   return 'blue'
 }
 
-function formatStatus(status: string) {
+function formatStatus(status: string): string {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function reportStatusTone(status: string) {
+function reportStatusTone(status: string): 'info' | 'primary' | 'success' | 'warning' {
   switch (status) {
     case 'PENDING_REVIEW':
       return 'warning' as const
@@ -620,7 +609,31 @@ function reportStatusTone(status: string) {
   }
 }
 
-function reloadAll() {
+function openTeacherVerification(): void {
+  void router.push('/admin/teacher-verification')
+}
+
+function openModeration(): void {
+  void router.push('/admin/moderation')
+}
+
+function openSettings(): void {
+  void router.push('/admin/settings')
+}
+
+function openAnalytics(): void {
+  void router.push('/admin/analytics')
+}
+
+function openFinance(): void {
+  void router.push('/admin/finance')
+}
+
+function openQuickAction(to: string): void {
+  void router.push(to)
+}
+
+function reloadAll(): void {
   void dashboardResource.reload()
   void analyticsResource.reload()
   void teachersResource.reload()

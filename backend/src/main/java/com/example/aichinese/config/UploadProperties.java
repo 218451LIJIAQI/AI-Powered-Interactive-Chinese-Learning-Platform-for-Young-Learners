@@ -7,6 +7,7 @@ import org.springframework.util.unit.DataSize;
 public class UploadProperties {
 
     private static final DataSize MAX_CONFIGURED_FILE_SIZE = DataSize.ofGigabytes(10);
+    private static final long MAX_CONFIGURED_FILE_SIZE_BYTES = MAX_CONFIGURED_FILE_SIZE.toBytes();
 
     private String directory = "./uploads";
     private DataSize maxFileSize = DataSize.ofMegabytes(5);
@@ -29,7 +30,7 @@ public class UploadProperties {
     }
 
     public void setMaxFileSize(DataSize maxFileSize) {
-        this.maxFileSize = requirePositive(maxFileSize, "Maximum upload file size must be greater than zero.");
+        this.maxFileSize = requireValidSize(maxFileSize, "Maximum upload file size");
     }
 
     public DataSize getVerificationDocumentMaxFileSize() {
@@ -37,9 +38,9 @@ public class UploadProperties {
     }
 
     public void setVerificationDocumentMaxFileSize(DataSize verificationDocumentMaxFileSize) {
-        this.verificationDocumentMaxFileSize = requirePositive(
+        this.verificationDocumentMaxFileSize = requireValidSize(
                 verificationDocumentMaxFileSize,
-                "Maximum verification document file size must be greater than zero.");
+                "Maximum verification document file size");
     }
 
     public DataSize getAiAudioMaxFileSize() {
@@ -47,9 +48,9 @@ public class UploadProperties {
     }
 
     public void setAiAudioMaxFileSize(DataSize aiAudioMaxFileSize) {
-        this.aiAudioMaxFileSize = requirePositive(
+        this.aiAudioMaxFileSize = requireValidSize(
                 aiAudioMaxFileSize,
-                "Maximum AI audio file size must be greater than zero.");
+                "Maximum AI audio file size");
     }
 
     public DataSize getAiImageMaxFileSize() {
@@ -57,9 +58,9 @@ public class UploadProperties {
     }
 
     public void setAiImageMaxFileSize(DataSize aiImageMaxFileSize) {
-        this.aiImageMaxFileSize = requirePositive(
+        this.aiImageMaxFileSize = requireValidSize(
                 aiImageMaxFileSize,
-                "Maximum AI image file size must be greater than zero.");
+                "Maximum AI image file size");
     }
 
     public String getRecordedVideoDirectory() {
@@ -67,7 +68,9 @@ public class UploadProperties {
     }
 
     public void setRecordedVideoDirectory(String recordedVideoDirectory) {
-        this.recordedVideoDirectory = requireText(recordedVideoDirectory, "Recorded video upload directory must not be blank.");
+        this.recordedVideoDirectory = requireText(
+                recordedVideoDirectory,
+                "Recorded video upload directory must not be blank.");
     }
 
     public DataSize getMaxVideoFileSize() {
@@ -75,7 +78,7 @@ public class UploadProperties {
     }
 
     public void setMaxVideoFileSize(DataSize maxVideoFileSize) {
-        this.maxVideoFileSize = requirePositive(maxVideoFileSize, "Maximum recorded video file size must be greater than zero.");
+        this.maxVideoFileSize = requireValidSize(maxVideoFileSize, "Maximum recorded video file size");
     }
 
     private static String requireText(String value, String message) {
@@ -85,13 +88,17 @@ public class UploadProperties {
         return value.strip();
     }
 
-    private static DataSize requirePositive(DataSize value, String message) {
-        if (value == null || value.toBytes() <= 0) {
-            throw new IllegalArgumentException(message);
+    private static DataSize requireValidSize(DataSize value, String label) {
+        if (value == null) {
+            throw new IllegalArgumentException(label + " must be configured.");
         }
-        if (value.toBytes() > MAX_CONFIGURED_FILE_SIZE.toBytes()) {
+        long bytes = value.toBytes();
+        if (bytes <= 0) {
+            throw new IllegalArgumentException(label + " must be greater than zero.");
+        }
+        if (bytes > MAX_CONFIGURED_FILE_SIZE_BYTES) {
             throw new IllegalArgumentException(
-                    message.replace("greater than zero", "at most " + MAX_CONFIGURED_FILE_SIZE.toGigabytes() + " GB"));
+                    label + " must be at most " + MAX_CONFIGURED_FILE_SIZE.toGigabytes() + " GB.");
         }
         return value;
     }

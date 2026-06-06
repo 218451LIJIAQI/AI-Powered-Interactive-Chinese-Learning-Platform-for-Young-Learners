@@ -60,17 +60,18 @@ public class CommissionService {
                 .orElseGet(this::defaultCommissionSetting);
 
         String previousValue = setting.getSettingValue();
-        setting.setSettingValue(normalizedRate.toPlainString());
+        String newValue = normalizedRate.toPlainString();
+        setting.setSettingValue(newValue);
         systemSettingRepository.save(setting);
 
         log.info("Commission rate changed from {} to {} by userId={}",
-                previousValue, normalizedRate.toPlainString(), currentUser.getUserId());
+                previousValue, newValue, currentUser == null ? null : currentUser.getUserId());
         auditLogService.record(
-                currentUser.getUser(),
+                currentUser,
                 "COMMISSION_RATE_CHANGED",
                 "SYSTEM_SETTING",
                 setting.getId(),
-                "Platform commission rate updated from " + previousValue + " to " + normalizedRate.toPlainString());
+                "Platform commission rate updated from " + previousValue + " to " + newValue);
         return new CommissionSettingResponse(normalizedRate, setting.getSettingKey(), setting.getDescription());
     }
 

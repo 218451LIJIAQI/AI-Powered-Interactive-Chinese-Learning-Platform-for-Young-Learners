@@ -74,7 +74,7 @@
                 :disabled="platformSettingsFormDisabled"
                 @click="saveDisclaimer"
               >
-                {{ savingPlatformSettings ? 'Saving...' : 'Save' }}
+                {{ platformSettingsSaveLabel }}
               </button>
             </div>
 
@@ -121,7 +121,7 @@
                 :disabled="platformSettingsFormDisabled"
                 @click="saveLocalPreferences"
               >
-                {{ savingPlatformSettings ? 'Saving...' : 'Save Settings' }}
+                {{ platformSettingsSaveSettingsLabel }}
               </button>
             </div>
           </article>
@@ -164,7 +164,7 @@
                 :disabled="platformSettingsFormDisabled"
                 @click="saveLocalPreferences"
               >
-                {{ savingPlatformSettings ? 'Saving...' : 'Save Settings' }}
+                {{ platformSettingsSaveSettingsLabel }}
               </button>
             </div>
           </article>
@@ -213,7 +213,7 @@
                     :disabled="commissionReadOnly || savingCommission"
                     @click="saveCommission"
                   >
-                    {{ savingCommission ? 'Saving...' : 'Save' }}
+                    {{ commissionSaveLabel }}
                   </button>
                 </div>
               </article>
@@ -289,7 +289,7 @@
                 type="button"
                 aria-label="Previous audit log page"
                 :disabled="currentPage === 1"
-                @click="currentPage = Math.max(1, currentPage - 1)"
+                @click="goToPreviousPage"
               >
                 <IconGlyph name="chevronLeft" :size="16" />
               </button>
@@ -300,7 +300,7 @@
                 class="admin-settings-page-button"
                 :class="{ 'is-active': currentPage === page }"
                 type="button"
-                @click="currentPage = page"
+                @click="goToPage(page)"
               >
                 {{ page }}
               </button>
@@ -310,7 +310,7 @@
                 type="button"
                 aria-label="Next audit log page"
                 :disabled="currentPage === totalPages"
-                @click="currentPage = Math.min(totalPages, currentPage + 1)"
+                @click="goToNextPage"
               >
                 <IconGlyph name="chevronRight" :size="16" />
               </button>
@@ -352,7 +352,7 @@
             <button
               class="teacher-outline-button admin-settings-health-button"
               type="button"
-              @click="router.push('/admin/analytics')"
+              @click="openAnalytics"
             >
               View Analytics
             </button>
@@ -397,7 +397,7 @@
                 :disabled="markingNotificationsRead || !hasUnreadNotifications"
                 @click="markAllAdminNotificationsRead"
               >
-                {{ markingNotificationsRead ? 'Marking...' : 'Mark all read' }}
+                {{ markAllNotificationsLabel }}
               </button>
             </div>
 
@@ -450,22 +450,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin platform settings — interface locale, AI disclaimer,
- * notification preferences, safety toggles, commission settings,
- * audit logs, notifications, and system health.
- *
- * <h2>Why one page</h2>
- * <p>Settings flow through the same load-edit-save pattern via
- * {@code adminApi.platformSettings()} and related admin endpoints.
- * Keeping the operational controls with audit context reduces
- * navigation churn for admins who routinely verify related changes.</p>
- *
- * <h2>Side effects</h2>
- * <p>Writes are blocked while preview data is active, and successful
- * saves reload the server-owned resource so the UI reflects persisted
- * backend state.</p>
- */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -506,17 +490,18 @@ const platformSettingsFallback = {
   sensitiveWordFilter: true,
   aiSafetyCheck: true,
 }
+const healthFallback = {
+  status: 'UP',
+  service: 'backend',
+  timestamp: new Date().toISOString(),
+}
 
 const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
 const commissionResource = useResource(() => adminApi.commissionSetting(), commissionSetting)
 const notificationsResource = useResource(() => adminApi.notifications({ size: 8 }), [])
 const platformSettingsResource = useResource(() => adminApi.platformSettings(), platformSettingsFallback)
-const healthResource = useResource(() => systemApi.health(), {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-})
+const healthResource = useResource(() => systemApi.health(), healthFallback)
 const emptyHealth = {
   status: 'UNKNOWN',
   service: 'backend',
@@ -555,13 +540,7 @@ const platformSettings = computed(() => platformSettingsResource.data.value ?? p
 const health = computed(
   () =>
     healthResource.data.value ??
-    (healthResource.usingFallback.value
-      ? {
-          status: 'UP',
-          service: 'backend',
-          timestamp: new Date().toISOString(),
-        }
-      : emptyHealth),
+    (healthResource.usingFallback.value ? healthFallback : emptyHealth),
 )
 
 const pageLoading = computed(
@@ -788,26 +767,34 @@ const lastHealthCheckLabel = computed(() => (health.value.timestamp ? formatDate
 const registeredStudents = computed(() => analytics.value.overview.totalStudents)
 const appName = computed(() => platformSettings.value.platformName || appEnv.appName)
 const hasUnreadNotifications = computed(() => adminNotifications.value.some((item) => item.status !== 'READ'))
+const platformSettingsSaveLabel = computed(() => (savingPlatformSettings.value ? 'Saving...' : 'Save'))
+const platformSettingsSaveSettingsLabel = computed(() =>
+  savingPlatformSettings.value ? 'Saving...' : 'Save Settings',
+)
+const commissionSaveLabel = computed(() => (savingCommission.value ? 'Saving...' : 'Save'))
+const markAllNotificationsLabel = computed(() =>
+  markingNotificationsRead.value ? 'Marking...' : 'Mark all read',
+)
 
 const quickActions = [
   { label: 'Save Platform Settings', icon: 'refresh', action: () => saveLocalPreferences() },
-  { label: 'View Analytics', icon: 'download', action: () => router.push('/admin/analytics') },
+  { label: 'View Analytics', icon: 'download', action: () => openAnalytics() },
   { label: 'Review Audit Logs', icon: 'history', action: () => reviewAuditLogs() },
-  { label: 'Open Finance Queue', icon: 'database', action: () => router.push('/admin/finance') },
+  { label: 'Open Finance Queue', icon: 'database', action: () => openFinance() },
 ]
 
-function markAdminNotificationRead(notificationId: number) {
+function markAdminNotificationRead(notificationId: number): void {
   notificationsResource.data.value = adminNotifications.value.map((item) =>
     item.id === notificationId ? { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() } : item,
   )
 }
 
-function toggleSetting(key: LocalSettingKey) {
+function toggleSetting(key: LocalSettingKey): void {
   if (platformSettingsFormDisabled.value) return
   localSettings.value[key] = !localSettings.value[key]
 }
 
-function saveLocale() {
+function saveLocale(): void {
   if (platformSettingsReadOnly.value) {
     actionError.value = 'Platform settings cannot be changed while using preview data.'
     actionSuccess.value = null
@@ -818,15 +805,15 @@ function saveLocale() {
   actionSuccess.value = 'Interface language preference saved.'
 }
 
-async function saveDisclaimer() {
+async function saveDisclaimer(): Promise<void> {
   await savePlatformSettings()
 }
 
-async function saveLocalPreferences() {
+async function saveLocalPreferences(): Promise<void> {
   await savePlatformSettings()
 }
 
-async function markAllAdminNotificationsRead() {
+async function markAllAdminNotificationsRead(): Promise<void> {
   if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionError.value = 'Notifications cannot be changed while using preview data.'
@@ -854,7 +841,7 @@ async function markAllAdminNotificationsRead() {
   }
 }
 
-async function savePlatformSettings() {
+async function savePlatformSettings(): Promise<void> {
   if (savingPlatformSettings.value) return
   if (platformSettingsResource.usingFallback.value) {
     actionError.value = 'Platform settings cannot be changed while using preview data.'
@@ -891,7 +878,7 @@ async function savePlatformSettings() {
   }
 }
 
-function reviewAuditLogs() {
+function reviewAuditLogs(): void {
   typeFilter.value = 'ALL'
   actorFilter.value = 'ALL'
   sortOrder.value = 'NEWEST'
@@ -900,7 +887,7 @@ function reviewAuditLogs() {
   actionSuccess.value = 'Audit log filters reset to the latest records.'
 }
 
-async function saveCommission() {
+async function saveCommission(): Promise<void> {
   if (savingCommission.value) return
   if (commissionReadOnly.value) {
     actionError.value = 'Commission settings cannot be changed while preview data is active.'
@@ -924,32 +911,52 @@ async function saveCommission() {
   }
 }
 
-function cycleTypeFilter() {
+function cycleTypeFilter(): void {
   const order: AuditTypeFilter[] = ['ALL', 'SECURITY', 'ADMIN_ACTION', 'CONTENT_CHANGE', 'MODERATION']
   typeFilter.value = order[(order.indexOf(typeFilter.value) + 1) % order.length]
 }
 
-function cycleActorFilter() {
+function cycleActorFilter(): void {
   const order: AuditActorFilter[] = ['ALL', 'ADMINS', 'SYSTEM']
   actorFilter.value = order[(order.indexOf(actorFilter.value) + 1) % order.length]
 }
 
-function cycleSort() {
+function cycleSort(): void {
   sortOrder.value = sortOrder.value === 'NEWEST' ? 'OLDEST' : 'NEWEST'
 }
 
-function auditMatchesActiveFilters(item: { type: string; actor: string }) {
+function auditMatchesActiveFilters(item: { type: string; actor: string }): boolean {
   if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
   if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
   if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
   return true
 }
 
-function clampCommissionRate(value: number) {
+function clampCommissionRate(value: number): number {
   return clampNumber(value, 0, 1)
 }
 
-function reloadAll() {
+function openAnalytics(): void {
+  void router.push('/admin/analytics')
+}
+
+function openFinance(): void {
+  void router.push('/admin/finance')
+}
+
+function goToPreviousPage(): void {
+  currentPage.value = Math.max(1, currentPage.value - 1)
+}
+
+function goToPage(page: number): void {
+  currentPage.value = page
+}
+
+function goToNextPage(): void {
+  currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
+}
+
+function reloadAll(): void {
   void auditResource.reload()
   void analyticsResource.reload()
   void commissionResource.reload()

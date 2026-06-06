@@ -21,39 +21,34 @@ import jakarta.servlet.ServletResponse;
 
 class StripeWebhookPayloadSizeFilterTests {
 
+    private static final String METHOD_POST = "POST";
     private static final String WEBHOOK_PATH = "/api/v1/payments/webhooks/stripe";
+    private static final int MAX_PAYLOAD_BYTES = StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES;
+    private static final long OVER_MAX_PAYLOAD_BYTES = MAX_PAYLOAD_BYTES + 1L;
+    private static final String OVERSIZED_WEBHOOK_REQUEST_ID = "oversized-webhook-request";
+    private static final String TOO_LARGE_MESSAGE =
+            "The file is too large. Please choose a smaller file and try again.";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final StripeWebhookPayloadSizeFilter filter = new StripeWebhookPayloadSizeFilter(objectMapper);
 
     @Test
     void rejectsWebhookWhenDeclaredContentLengthExceedsBound() throws Exception {
-        MockHttpServletRequest request = new DeclaredLengthRequest(
-                "POST",
-                WEBHOOK_PATH,
-                StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES + 1L);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        TrackingFilterChain chain = new TrackingFilterChain(false);
+        RejectedRequest rejected = reject(declaredLengthRequest(WEBHOOK_PATH, OVER_MAX_PAYLOAD_BYTES));
 
-        filter.doFilter(request, response, chain);
-
-        assertThat(response.getStatus()).isEqualTo(413);
-        assertPayloadTooLargeEnvelope(response);
-        assertThat(chain.invoked).isFalse();
+        assertPayloadTooLargeEnvelope(rejected.response());
+        assertThat(rejected.chain().invoked).isFalse();
     }
 
     @Test
     void rejectsOversizedWebhookWhenContentLengthIsUnknown() throws Exception {
-        MockHttpServletRequest request = new UnknownLengthRequest("POST", WEBHOOK_PATH);
-        request.setContent(new byte[StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES + 1]);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        TrackingFilterChain chain = new TrackingFilterChain(false);
+        MockHttpServletRequest request = unknownLengthRequest(WEBHOOK_PATH);
+        request.setContent(new byte[MAX_PAYLOAD_BYTES + 1]);
 
-        filter.doFilter(request, response, chain);
+        RejectedRequest rejected = reject(request);
 
-        assertThat(response.getStatus()).isEqualTo(413);
-        assertPayloadTooLargeEnvelope(response);
-        assertThat(chain.invoked).isFalse();
+        assertPayloadTooLargeEnvelope(rejected.response());
+        assertThat(rejected.chain().invoked).isFalse();
     }
 
     @Test
@@ -70,8 +65,8 @@ class StripeWebhookPayloadSizeFilterTests {
 
     @Test
     void ignoresOtherJsonEndpoints() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
-        request.setContent(new byte[StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES + 1]);
+        MockHttpServletRequest request = new MockHttpServletRequest(METHOD_POST, "/api/v1/ai/chat");
+        request.setContent(new byte[MAX_PAYLOAD_BYTES + 1]);
         TrackingFilterChain chain = new TrackingFilterChain(false);
 
         filter.doFilter(request, new MockHttpServletResponse(), chain);
@@ -81,42 +76,51 @@ class StripeWebhookPayloadSizeFilterTests {
 
     @Test
     void appliesBoundWhenApplicationRunsUnderContextPath() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/portal" + WEBHOOK_PATH);
+        MockHttpServletRequest request = new MockHttpServletRequest(METHOD_POST, "/portal" + WEBHOOK_PATH);
         request.setContextPath("/portal");
-        request.setContent(new byte[StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES + 1]);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        TrackingFilterChain chain = new TrackingFilterChain(false);
+        request.setContent(new byte[MAX_PAYLOAD_BYTES + 1]);
 
-        filter.doFilter(request, response, chain);
+        RejectedRequest rejected = reject(request);
 
-        assertThat(response.getStatus()).isEqualTo(413);
-        assertPayloadTooLargeEnvelope(response);
-        assertThat(chain.invoked).isFalse();
+        assertPayloadTooLargeEnvelope(rejected.response());
+        assertThat(rejected.chain().invoked).isFalse();
     }
 
     @Test
     void rejectedWebhookIncludesBoundRequestIdInApiEnvelope() throws Exception {
-        RequestIdHolder.set("oversized-webhook-request");
+        RequestIdHolder.set(OVERSIZED_WEBHOOK_REQUEST_ID);
         try {
-            MockHttpServletRequest request = new DeclaredLengthRequest(
-                    "POST",
-                    WEBHOOK_PATH,
-                    StripeWebhookService.MAX_WEBHOOK_PAYLOAD_BYTES + 1L);
-            MockHttpServletResponse response = new MockHttpServletResponse();
+            RejectedRequest rejected = reject(declaredLengthRequest(WEBHOOK_PATH, OVER_MAX_PAYLOAD_BYTES));
 
-            filter.doFilter(request, response, new TrackingFilterChain(false));
-
-            JsonNode body = objectMapper.readTree(response.getContentAsString());
-            assertThat(body.path("requestId").asText()).isEqualTo("oversized-webhook-request");
+            JsonNode body = objectMapper.readTree(rejected.response().getContentAsString());
+            assertThat(body.path("requestId").asText()).isEqualTo(OVERSIZED_WEBHOOK_REQUEST_ID);
         } finally {
             RequestIdHolder.clear();
         }
     }
 
     private static MockHttpServletRequest webhookRequest(byte[] body) {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", WEBHOOK_PATH);
+        MockHttpServletRequest request = new MockHttpServletRequest(METHOD_POST, WEBHOOK_PATH);
         request.setContent(body);
         return request;
+    }
+
+    private RejectedRequest reject(MockHttpServletRequest request) throws IOException, ServletException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        TrackingFilterChain chain = new TrackingFilterChain(false);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(413);
+        return new RejectedRequest(response, chain);
+    }
+
+    private static MockHttpServletRequest declaredLengthRequest(String path, long contentLength) {
+        return new DeclaredLengthRequest(METHOD_POST, path, contentLength);
+    }
+
+    private static MockHttpServletRequest unknownLengthRequest(String path) {
+        return new UnknownLengthRequest(METHOD_POST, path);
     }
 
     private void assertPayloadTooLargeEnvelope(MockHttpServletResponse response) throws Exception {
@@ -125,10 +129,11 @@ class StripeWebhookPayloadSizeFilterTests {
         assertThat(response.getHeader("Pragma")).isEqualTo("no-cache");
         JsonNode body = objectMapper.readTree(response.getContentAsString());
         assertThat(body.path("success").asBoolean()).isFalse();
-        assertThat(body.path("message").asText()).isEqualTo(
-                "The file is too large. Please choose a smaller file and try again.");
+        assertThat(body.path("message").asText()).isEqualTo(TOO_LARGE_MESSAGE);
         assertThat(body.path("errors").get(0).asText()).isEqualTo(body.path("message").asText());
     }
+
+    private record RejectedRequest(MockHttpServletResponse response, TrackingFilterChain chain) {}
 
     private static final class UnknownLengthRequest extends MockHttpServletRequest {
 

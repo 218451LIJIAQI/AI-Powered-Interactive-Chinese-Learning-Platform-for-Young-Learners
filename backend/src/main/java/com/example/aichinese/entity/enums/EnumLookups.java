@@ -32,10 +32,7 @@ final class EnumLookups {
     }
 
     static <E extends Enum<E>> Optional<E> tryFrom(Map<String, E> lookup, String value) {
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(lookup.get(value.strip().toUpperCase(Locale.ROOT)));
+        return normalizeKey(value).map(lookup::get);
     }
 
     static <E extends Enum<E>> E fromValue(
@@ -43,10 +40,19 @@ final class EnumLookups {
             String value,
             String missingMessage,
             Supplier<String> invalidMessage) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(missingMessage);
+        String key = normalizeKey(value)
+                .orElseThrow(() -> new IllegalArgumentException(missingMessage));
+        E resolved = lookup.get(key);
+        if (resolved == null) {
+            throw new IllegalArgumentException(invalidMessage.get());
         }
-        return tryFrom(lookup, value)
-                .orElseThrow(() -> new IllegalArgumentException(invalidMessage.get()));
+        return resolved;
+    }
+
+    private static Optional<String> normalizeKey(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(value.strip().toUpperCase(Locale.ROOT));
     }
 }

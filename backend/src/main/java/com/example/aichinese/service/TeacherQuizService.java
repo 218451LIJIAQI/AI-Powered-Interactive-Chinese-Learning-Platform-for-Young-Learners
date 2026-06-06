@@ -25,6 +25,7 @@ import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
+import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.QuizQuestionType;
@@ -70,6 +71,20 @@ public class TeacherQuizService {
     private static final int MAX_ANSWER_TEXT_LENGTH = 1000;
     private static final int MAX_OPTION_TEXT_LENGTH = 1000;
     private static final int MAX_EXPLANATION_LENGTH = 2000;
+    private static final int MAX_OPTIONS_PER_QUESTION = 200;
+    private static final int DEFAULT_SORT_ORDER = 0;
+    private static final String QUIZ_REQUEST_REQUIRED = "Quiz request is required.";
+    private static final String QUESTION_REQUEST_REQUIRED = "Quiz question request is required.";
+    private static final String QUIZ_NOT_FOUND = "Requested quiz was not found.";
+    private static final String QUESTION_NOT_FOUND = "Requested quiz question was not found.";
+    private static final String AUDIT_TARGET_QUIZ = "Quiz";
+    private static final String AUDIT_TARGET_QUESTION = "QuizQuestion";
+    private static final String ACTION_QUIZ_CREATE = "TEACHER_QUIZ_CREATE";
+    private static final String ACTION_QUIZ_UPDATE = "TEACHER_QUIZ_UPDATE";
+    private static final String ACTION_QUIZ_ARCHIVE = "TEACHER_QUIZ_ARCHIVE";
+    private static final String ACTION_QUESTION_CREATE = "TEACHER_QUIZ_QUESTION_CREATE";
+    private static final String ACTION_QUESTION_UPDATE = "TEACHER_QUIZ_QUESTION_UPDATE";
+    private static final String ACTION_QUESTION_DELETE = "TEACHER_QUIZ_QUESTION_DELETE";
 
     private final TeacherContentAccessService teacherContentAccessService;
     private final TeacherLessonService teacherLessonService;
@@ -124,7 +139,7 @@ public class TeacherQuizService {
     @Transactional
     public TeacherQuizResponse createQuiz(SecurityUserDetails currentUser, Long lessonId, CreateQuizRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Quiz request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, QUIZ_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Lesson lesson = requireEditableOwnedLesson(currentUser, lessonId);
@@ -132,14 +147,12 @@ public class TeacherQuizService {
         Quiz quiz = new Quiz();
         quiz.setLesson(lesson);
         quiz.setTeacher(teacherProfile);
-        quiz.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_QUIZ_TITLE_LENGTH, "Quiz title is required."));
-        quiz.setDescription(contentSafetyService.optionalSafeText(request.description(), MAX_QUIZ_DESCRIPTION_LENGTH));
-        quiz.setTimeLimitMinutes(request.timeLimitMinutes());
+        applyQuizMetadata(quiz, QuizMetadata.from(request));
         quiz.setContentStatus(lesson.getContentStatus());
         quiz.setTotalPoints(0);
 
         Quiz saved = quizRepository.save(quiz);
-        auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_CREATE", "Quiz", saved.getId(),
+        auditLogService.record(teacherProfile.getUser(), ACTION_QUIZ_CREATE, AUDIT_TARGET_QUIZ, saved.getId(),
                 "Teacher created a quiz.");
         return toTeacherQuizResponse(saved);
     }
@@ -147,17 +160,15 @@ public class TeacherQuizService {
     @Transactional
     public TeacherQuizResponse updateQuiz(SecurityUserDetails currentUser, Long quizId, UpdateQuizRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Quiz request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, QUIZ_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
 
-        quiz.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_QUIZ_TITLE_LENGTH, "Quiz title is required."));
-        quiz.setDescription(contentSafetyService.optionalSafeText(request.description(), MAX_QUIZ_DESCRIPTION_LENGTH));
-        quiz.setTimeLimitMinutes(request.timeLimitMinutes());
+        applyQuizMetadata(quiz, QuizMetadata.from(request));
         Quiz saved = quizRepository.save(quiz);
-        auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_UPDATE", "Quiz", saved.getId(),
+        auditLogService.record(teacherProfile.getUser(), ACTION_QUIZ_UPDATE, AUDIT_TARGET_QUIZ, saved.getId(),
                 "Teacher updated a quiz.");
         return toTeacherQuizResponse(saved);
     }
@@ -172,7 +183,7 @@ public class TeacherQuizService {
         }
         quiz.setContentStatus(ContentStatus.ARCHIVED);
         quizRepository.save(quiz);
-        auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_ARCHIVE", "Quiz", quiz.getId(),
+        auditLogService.record(teacherProfile.getUser(), ACTION_QUIZ_ARCHIVE, AUDIT_TARGET_QUIZ, quiz.getId(),
                 "Teacher archived a quiz.");
     }
 
@@ -180,7 +191,7 @@ public class TeacherQuizService {
     public TeacherQuizResponse addQuizQuestion(
             SecurityUserDetails currentUser, Long quizId, CreateQuizQuestionRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Quiz question request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, QUESTION_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
@@ -191,7 +202,7 @@ public class TeacherQuizService {
         applyQuizQuestion(question, request.questionType(), request.questionText(), request.correctAnswerText(),
                 request.points(), request.displayOrder(), request.options(), request.explanation());
         recomputeQuizTotalPoints(quiz);
-        auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_QUESTION_CREATE", "Quiz", quiz.getId(),
+        auditLogService.record(teacherProfile.getUser(), ACTION_QUESTION_CREATE, AUDIT_TARGET_QUIZ, quiz.getId(),
                 "Teacher added a quiz question.");
         return toTeacherQuizResponse(quiz);
     }
@@ -200,17 +211,16 @@ public class TeacherQuizService {
     public TeacherQuizResponse updateQuizQuestion(
             SecurityUserDetails currentUser, Long questionId, UpdateQuizQuestionRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Quiz question request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, QUESTION_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
-        QuizQuestion question = quizQuestionRepository.findByIdAndQuizTeacherUserId(questionId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested quiz question was not found."));
+        QuizQuestion question = findOwnedQuestion(currentUser, questionId);
         teacherContentAccessService.validateEditableStatus(question.getQuiz().getLesson().getContentStatus(), "Lesson");
         ensureQuizQuestionsEditable(question.getQuiz().getId());
         applyQuizQuestion(question, request.questionType(), request.questionText(), request.correctAnswerText(), request.points(),
                 request.displayOrder(), request.options(), request.explanation());
         recomputeQuizTotalPoints(question.getQuiz());
-        auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_QUESTION_UPDATE", "QuizQuestion", question.getId(),
+        auditLogService.record(teacherProfile.getUser(), ACTION_QUESTION_UPDATE, AUDIT_TARGET_QUESTION, question.getId(),
                 "Teacher updated a quiz question.");
         return toTeacherQuizResponse(question.getQuiz());
     }
@@ -218,15 +228,14 @@ public class TeacherQuizService {
     @Transactional
     public TeacherQuizResponse deleteQuizQuestion(SecurityUserDetails currentUser, Long questionId) {
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
-        QuizQuestion question = quizQuestionRepository.findByIdAndQuizTeacherUserId(questionId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested quiz question was not found."));
+        QuizQuestion question = findOwnedQuestion(currentUser, questionId);
         teacherContentAccessService.validateEditableStatus(question.getQuiz().getLesson().getContentStatus(), "Lesson");
         Quiz quiz = question.getQuiz();
         ensureQuizQuestionsEditable(quiz.getId());
         quizOptionRepository.deleteByQuestionId(question.getId());
         quizQuestionRepository.delete(question);
         recomputeQuizTotalPoints(quiz);
-        auditLogService.record(teacherProfile.getUser(), "TEACHER_QUIZ_QUESTION_DELETE", "QuizQuestion", questionId,
+        auditLogService.record(teacherProfile.getUser(), ACTION_QUESTION_DELETE, AUDIT_TARGET_QUESTION, questionId,
                 "Teacher deleted a quiz question.");
         return toTeacherQuizResponse(quiz);
     }
@@ -254,18 +263,20 @@ public class TeacherQuizService {
     }
 
     private boolean hasCurrentAttemptAccess(QuizAttempt attempt) {
+        Quiz quiz = attempt.getQuiz();
+        Lesson lesson = quiz == null ? null : quiz.getLesson();
         return attempt.getStudent() == null
-                || attempt.getQuiz() == null
-                || attempt.getQuiz().getLesson() == null
-                || studentLearningAccessService.hasLessonAccess(attempt.getStudent(), attempt.getQuiz().getLesson());
+                || lesson == null
+                || studentLearningAccessService.hasLessonAccess(attempt.getStudent(), lesson);
     }
 
     private TeacherQuizAttemptSummaryResponse toTeacherQuizAttemptSummaryResponse(QuizAttempt attempt) {
+        StudentProfile student = attempt.getStudent();
         return new TeacherQuizAttemptSummaryResponse(
                 attempt.getId(),
-                attempt.getStudent().getId(),
-                attempt.getStudent().getUser() != null
-                        ? attempt.getStudent().getUser().getDisplayName()
+                student == null ? null : student.getId(),
+                student != null && student.getUser() != null
+                        ? student.getUser().getDisplayName()
                         : "Student",
                 attempt.getScore(),
                 attempt.getMaxScore(),
@@ -280,13 +291,29 @@ public class TeacherQuizService {
 
     private Quiz findOwnedQuiz(SecurityUserDetails currentUser, Long quizId) {
         return quizRepository.findByIdAndTeacherUserId(quizId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested quiz was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, QUIZ_NOT_FOUND));
+    }
+
+    private QuizQuestion findOwnedQuestion(SecurityUserDetails currentUser, Long questionId) {
+        return quizQuestionRepository.findByIdAndQuizTeacherUserId(questionId, currentUser.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, QUESTION_NOT_FOUND));
     }
 
     private void ensureQuizQuestionsEditable(Long quizId) {
         if (quizAttemptRepository.existsByQuizIdAndSubmittedTrue(quizId)) {
             throw new ResponseStatusException(BAD_REQUEST, "Quiz questions cannot be changed after students have submitted attempts.");
         }
+    }
+
+    private void applyQuizMetadata(Quiz quiz, QuizMetadata request) {
+        quiz.setTitle(contentSafetyService.requireSafeText(
+                request.title(),
+                MAX_QUIZ_TITLE_LENGTH,
+                "Quiz title is required."));
+        quiz.setDescription(contentSafetyService.optionalSafeText(
+                request.description(),
+                MAX_QUIZ_DESCRIPTION_LENGTH));
+        quiz.setTimeLimitMinutes(request.timeLimitMinutes());
     }
 
     private void applyQuizQuestion(
@@ -308,34 +335,14 @@ public class TeacherQuizService {
         if (displayOrder != null && displayOrder < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Question display order must be greater than or equal to 0.");
         }
-        question.setSortOrder(displayOrder == null ? 0 : displayOrder);
+        question.setSortOrder(Objects.requireNonNullElse(displayOrder, DEFAULT_SORT_ORDER));
         question.setExplanation(contentSafetyService.optionalSafeText(explanation, MAX_EXPLANATION_LENGTH));
 
-        List<QuizOptionRequest> safeOptions = options == null ? List.of() : options;
-        if (safeOptions.size() > 200) {
-            throw new ResponseStatusException(BAD_REQUEST, "A quiz question cannot contain more than 200 options.");
-        }
-        if (safeOptions.stream().anyMatch(Objects::isNull)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Quiz option must not be null.");
-        }
+        List<QuizOptionRequest> safeOptions = validateOptions(options);
         boolean optionBased = questionType.isOptionBased();
         if (optionBased) {
-            if (safeOptions.isEmpty()) {
-                throw new ResponseStatusException(BAD_REQUEST, "At least one answer option is required.");
-            }
-            long correctCount = safeOptions.stream().filter(QuizOptionRequest::correctOption).count();
-            if (correctCount != 1) {
-                throw new ResponseStatusException(BAD_REQUEST, "Exactly one correct answer option is required.");
-            }
-            question.setCorrectAnswerText(safeOptions.stream()
-                    .filter(QuizOptionRequest::correctOption)
-                    .findFirst()
-                    .map(QuizOptionRequest::optionText)
-                    .map(optionText -> contentSafetyService.requireSafeText(
-                            optionText,
-                            MAX_OPTION_TEXT_LENGTH,
-                            "Correct answer option text is required."))
-                    .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Correct answer option text is required.")));
+            validateOptionBasedQuestion(safeOptions);
+            question.setCorrectAnswerText(correctOptionText(safeOptions));
         } else if (correctAnswerText == null || correctAnswerText.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, "Correct answer text is required for this question type.");
         } else {
@@ -348,21 +355,57 @@ public class TeacherQuizService {
         QuizQuestion savedQuestion = quizQuestionRepository.save(question);
         quizOptionRepository.deleteByQuestionId(savedQuestion.getId());
         if (optionBased) {
-            safeOptions.forEach(option -> {
-                if (option.displayOrder() != null && option.displayOrder() < 0) {
-                    throw new ResponseStatusException(BAD_REQUEST, "Option display order must be greater than or equal to 0.");
-                }
-                QuizOption quizOption = new QuizOption();
-                quizOption.setQuestion(savedQuestion);
-                quizOption.setOptionText(contentSafetyService.requireSafeText(
-                        option.optionText(),
-                        MAX_OPTION_TEXT_LENGTH,
-                        "Option text is required."));
-                quizOption.setCorrectOption(option.correctOption());
-                quizOption.setSortOrder(option.displayOrder() == null ? 0 : option.displayOrder());
-                quizOptionRepository.save(quizOption);
-            });
+            safeOptions.forEach(option -> quizOptionRepository.save(newQuizOption(savedQuestion, option)));
         }
+    }
+
+    private static List<QuizOptionRequest> validateOptions(List<QuizOptionRequest> options) {
+        List<QuizOptionRequest> safeOptions = options == null ? List.of() : options;
+        if (safeOptions.size() > MAX_OPTIONS_PER_QUESTION) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "A quiz question cannot contain more than " + MAX_OPTIONS_PER_QUESTION + " options.");
+        }
+        if (safeOptions.stream().anyMatch(Objects::isNull)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Quiz option must not be null.");
+        }
+        return safeOptions;
+    }
+
+    private static void validateOptionBasedQuestion(List<QuizOptionRequest> options) {
+        if (options.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "At least one answer option is required.");
+        }
+        long correctCount = options.stream().filter(QuizOptionRequest::correctOption).count();
+        if (correctCount != 1) {
+            throw new ResponseStatusException(BAD_REQUEST, "Exactly one correct answer option is required.");
+        }
+    }
+
+    private String correctOptionText(List<QuizOptionRequest> options) {
+        return options.stream()
+                .filter(QuizOptionRequest::correctOption)
+                .findFirst()
+                .map(QuizOptionRequest::optionText)
+                .map(optionText -> contentSafetyService.requireSafeText(
+                        optionText,
+                        MAX_OPTION_TEXT_LENGTH,
+                        "Correct answer option text is required."))
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Correct answer option text is required."));
+    }
+
+    private QuizOption newQuizOption(QuizQuestion question, QuizOptionRequest option) {
+        if (option.displayOrder() != null && option.displayOrder() < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Option display order must be greater than or equal to 0.");
+        }
+        QuizOption quizOption = new QuizOption();
+        quizOption.setQuestion(question);
+        quizOption.setOptionText(contentSafetyService.requireSafeText(
+                option.optionText(),
+                MAX_OPTION_TEXT_LENGTH,
+                "Option text is required."));
+        quizOption.setCorrectOption(option.correctOption());
+        quizOption.setSortOrder(Objects.requireNonNullElse(option.displayOrder(), DEFAULT_SORT_ORDER));
+        return quizOption;
     }
 
     private void recomputeQuizTotalPoints(Quiz quiz) {
@@ -387,5 +430,25 @@ public class TeacherQuizService {
                 quiz,
                 questions,
                 quizMapper.groupOptionsByQuestionId(options));
+    }
+
+    private record QuizMetadata(
+            String title,
+            String description,
+            Integer timeLimitMinutes) {
+
+        private static QuizMetadata from(CreateQuizRequest request) {
+            return new QuizMetadata(
+                    request.title(),
+                    request.description(),
+                    request.timeLimitMinutes());
+        }
+
+        private static QuizMetadata from(UpdateQuizRequest request) {
+            return new QuizMetadata(
+                    request.title(),
+                    request.description(),
+                    request.timeLimitMinutes());
+        }
     }
 }

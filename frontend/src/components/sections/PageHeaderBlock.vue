@@ -10,20 +10,15 @@
         <p>{{ description }}</p>
       </div>
     </div>
-    <div v-if="$slots.actions" class="page-header-actions">
+    <div v-if="hasActions" class="page-header-actions">
       <slot name="actions" />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-/**
- * Standardised page header used at the top of every dashboard page:
- * icon badge + optional eyebrow + title + supporting description on
- * the left, action slot on the right for primary CTAs ("Create
- * lesson", "Export CSV", etc.). Centralising it ensures every page
- * lands with the same visual rhythm.
- */
+import { useSlots } from 'vue'
+
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 interface Props {
@@ -34,4 +29,7 @@ interface Props {
 }
 
 defineProps<Props>()
+
+const slots = useSlots()
+const hasActions = Boolean(slots.actions)
 </script>

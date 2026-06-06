@@ -38,6 +38,7 @@ import com.example.aichinese.repository.PaymentRecordRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.CartService;
+import com.example.aichinese.service.CommerceMoneyService;
 import com.example.aichinese.service.EntitlementService;
 import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.PaymentProviderService;
@@ -45,12 +46,45 @@ import com.example.aichinese.service.PaymentService;
 import com.example.aichinese.service.TeacherEarningService;
 
 /**
- * Unit coverage for {@code PaymentService} — pins the lifecycle
- * state machine (PENDING → SUCCESS / FAILED), webhook idempotency
+ * Unit coverage for {@code PaymentService} - pins the lifecycle
+ * state machine (PENDING -> SUCCESS / FAILED), webhook idempotency
  * under retry, cancellation synchronisation with provider terminal
  * states, and the entitlement-creation side-effect on success.
  */
 class PaymentServiceTests {
+
+    private static final long PAYMENT_ID = 10L;
+    private static final long SECOND_PAYMENT_ID = 11L;
+    private static final long STUDENT_USER_ID = 99L;
+    private static final long STUDENT_PROFILE_ID = 199L;
+    private static final long ORDER_ID = 500L;
+    private static final long SECOND_ORDER_ID = 501L;
+    private static final long FIRST_ORDER_ITEM_ID = 1L;
+    private static final long SECOND_ORDER_ITEM_ID = 2L;
+    private static final String STUDENT_EMAIL = "student@example.com";
+    private static final String STUDENT_NAME = "Student Example";
+    private static final String PASSWORD_HASH = "password-hash";
+    private static final String ORDER_NUMBER = "ORD-TEST";
+    private static final String SECOND_ORDER_NUMBER = "ORD-TEST-2";
+    private static final String CURRENCY = "MYR";
+    private static final String PROVIDER_NAME = "provider";
+    private static final String STRIPE_PROVIDER = "stripe";
+    private static final String PROVIDER_REFERENCE = "provider-ref";
+    private static final String STRIPE_PAID_REFERENCE = "cs_test_paid";
+    private static final String MISSING_PROVIDER_REFERENCE = "cs_missing";
+    private static final String PROVIDER_CREATED_STATUS = "CREATED";
+    private static final String EXISTING_PAYMENT_METHOD = "EXISTING_METHOD";
+    private static final String PAYMENT_REPLAY_REFERENCE = "REPLAY";
+    private static final String PROVIDER_PAID_STATUS = "PROVIDER_PAID";
+    private static final String STRIPE_PAID_PROVIDER_STATUS = "CHECKOUT_SESSION_COMPLETED:COMPLETE:PAID";
+    private static final String PAYMENT_UNAVAILABLE_MESSAGE =
+            "Payment service is currently unavailable. Please try again later.";
+    private static final String SUCCESS_URL = "https://app.example.com/payment/success?paymentId=10";
+    private static final String CANCEL_URL = "https://app.example.com/payment/cancel?paymentId=10&cancelled=true";
+    private static final BigDecimal RAW_ORDER_AMOUNT = new BigDecimal("29.999");
+    private static final BigDecimal ORDER_AMOUNT = new BigDecimal("29.90");
+    private static final BigDecimal NORMALIZED_ORDER_AMOUNT = new BigDecimal("30.00");
+    private static final BigDecimal ORDER_ITEM_AMOUNT = new BigDecimal("10.00");
 
     @Test
     void verifyPaymentStatusSynchronizesCancelledProviderTerminalState() {
@@ -64,31 +98,20 @@ class PaymentServiceTests {
 
     @Test
     void createPendingPaymentNormalizesOrderAmountBeforePersistingPaymentRecord() {
-        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-        OrderRepository orderRepository = mock(OrderRepository.class);
-        OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-        PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-        EntitlementService entitlementService = mock(EntitlementService.class);
-        TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+        ServiceFixture fixture = fixture();
         Order order = new Order();
         StudentProfile student = new StudentProfile();
 
-        order.setTotalAmount(new BigDecimal("29.999"));
-        order.setCurrencyCode("MYR");
-        when(providerClient.providerName()).thenReturn("provider");
-        when(paymentRecordRepository.save(any(PaymentRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        order.setTotalAmount(RAW_ORDER_AMOUNT);
+        order.setCurrencyCode(CURRENCY);
+        when(fixture.providerClient().providerName()).thenReturn(PROVIDER_NAME);
+        when(fixture.paymentRecordRepository().save(any(PaymentRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        PaymentRecord paymentRecord = service(
-                providerClient,
-                paymentRecordRepository,
-                orderRepository,
-                orderItemRepository,
-                entitlementService,
-                teacherEarningService)
-                .createPendingPayment(order, student);
+        PaymentRecord paymentRecord = fixture.service().createPendingPayment(order, student);
 
-        assertThat(paymentRecord.getAmount()).isEqualByComparingTo("30.00");
-        assertThat(paymentRecord.getCurrencyCode()).isEqualTo("MYR");
+        assertThat(paymentRecord.getAmount()).isEqualByComparingTo(NORMALIZED_ORDER_AMOUNT);
+        assertThat(paymentRecord.getCurrencyCode()).isEqualTo(CURRENCY);
         assertThat(paymentRecord.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
     }
 
@@ -105,16 +128,17 @@ class PaymentServiceTests {
         NotificationService notificationService = mock(NotificationService.class);
         AuditLogService auditLogService = mock(AuditLogService.class);
         PaymentRecord paymentRecord = pendingPaymentRecord();
-        paymentRecord.setProviderName("stripe");
+        paymentRecord.setProviderName(STRIPE_PROVIDER);
         Order order = Objects.requireNonNull(paymentRecord.getOrder());
-        List<OrderItem> orderItems = List.of(orderItem(order, 1L));
+        List<OrderItem> orderItems = List.of(orderItem(order, FIRST_ORDER_ITEM_ID));
 
         when(paymentProviderService.getClient()).thenReturn(providerClient);
         when(providerClient.createCheckoutSession(any()))
                 .thenReturn(PaymentProviderCheckoutResult.unavailable(
-                        "stripe",
-                        "Payment service is currently unavailable. Please try again later."));
-        when(paymentRecordRepository.save(any(PaymentRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                        STRIPE_PROVIDER,
+                        PAYMENT_UNAVAILABLE_MESSAGE));
+        when(paymentRecordRepository.save(any(PaymentRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         PaymentService paymentService = new PaymentService(
                 paymentRecordRepository,
@@ -126,7 +150,7 @@ class PaymentServiceTests {
                 teacherEarningService,
                 notificationService,
                 auditLogService,
-                new com.example.aichinese.service.CommerceMoneyService());
+                new CommerceMoneyService());
 
         CheckoutResponse response = paymentService.startCheckout(
                 currentUser(),
@@ -134,8 +158,8 @@ class PaymentServiceTests {
                 order,
                 paymentRecord,
                 orderItems,
-                "https://app.example.com/payment/success?paymentId=10",
-                "https://app.example.com/payment/cancel?paymentId=10&cancelled=true");
+                SUCCESS_URL,
+                CANCEL_URL);
 
         assertThat(response.paymentAvailable()).isFalse();
         assertThat(response.checkoutUrl()).isNull();
@@ -153,72 +177,56 @@ class PaymentServiceTests {
         // re-listing its members so the coverage self-updates if a new
         // terminal status is ever introduced on the enum.
         for (PaymentStatus status : PaymentStatus.TERMINAL) {
-            PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-            OrderRepository orderRepository = mock(OrderRepository.class);
-            OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-            PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-            EntitlementService entitlementService = mock(EntitlementService.class);
-            TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+            ServiceFixture fixture = fixture();
             PaymentRecord paymentRecord = paymentRecord(status);
 
-            when(paymentRecordRepository.findByIdAndStudentUserId(10L, 99L)).thenReturn(Optional.of(paymentRecord));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(500L)).thenReturn(List.of());
+            when(fixture.paymentRecordRepository().findByIdAndStudentUserId(PAYMENT_ID, STUDENT_USER_ID))
+                    .thenReturn(Optional.of(paymentRecord));
+            when(fixture.orderItemRepository().findByOrderIdOrderByCreatedAtAsc(ORDER_ID)).thenReturn(List.of());
 
-            PaymentService paymentService = service(
-                    providerClient,
-                    paymentRecordRepository,
-                    orderRepository,
-                    orderItemRepository,
-                    entitlementService,
-                    teacherEarningService);
-
-            StudentPaymentRecordResponse response = paymentService.verifyPaymentStatus(currentUser(), 10L);
+            StudentPaymentRecordResponse response = fixture.service().verifyPaymentStatus(currentUser(), PAYMENT_ID);
 
             assertThat(response.paymentStatus()).isEqualTo(status);
-            assertThat(response.providerStatus()).isEqualTo("EXISTING_" + status.name());
+            assertThat(response.providerStatus()).isEqualTo(existingProviderStatus(status));
             assertThat(paymentRecord.getPaymentStatus()).isEqualTo(status);
-            verifyNoInteractions(providerClient, orderRepository, entitlementService, teacherEarningService);
-            verify(paymentRecordRepository, never()).save(paymentRecord);
+            verifyNoInteractions(
+                    fixture.providerClient(),
+                    fixture.orderRepository(),
+                    fixture.entitlementService(),
+                    fixture.teacherEarningService());
+            verify(fixture.paymentRecordRepository(), never()).save(paymentRecord);
         }
     }
 
     @Test
     void studentPaymentListBatchLoadsOrderItemsForPage() {
-        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-        OrderRepository orderRepository = mock(OrderRepository.class);
-        OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-        PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-        EntitlementService entitlementService = mock(EntitlementService.class);
-        TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+        ServiceFixture fixture = fixture();
         PaymentRecord firstPayment = paymentRecord(PaymentStatus.PAID);
         PaymentRecord secondPayment = paymentRecord(PaymentStatus.PAID);
-        secondPayment.setId(11L);
-        secondPayment.getOrder().setId(501L);
-        secondPayment.getOrder().setOrderNumber("ORD-TEST-2");
-        OrderItem firstOrderItem = orderItem(firstPayment.getOrder(), 1L);
-        OrderItem secondOrderItem = orderItem(secondPayment.getOrder(), 2L);
+        secondPayment.setId(SECOND_PAYMENT_ID);
+        secondPayment.getOrder().setId(SECOND_ORDER_ID);
+        secondPayment.getOrder().setOrderNumber(SECOND_ORDER_NUMBER);
+        OrderItem firstOrderItem = orderItem(firstPayment.getOrder(), FIRST_ORDER_ITEM_ID);
+        OrderItem secondOrderItem = orderItem(secondPayment.getOrder(), SECOND_ORDER_ITEM_ID);
 
-        when(paymentRecordRepository.findByStudentUserIdOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(fixture.paymentRecordRepository().findByStudentUserIdOrderByCreatedAtDesc(any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(firstPayment, secondPayment)));
-        when(orderItemRepository.findByOrderIdInOrderByOrderIdAscCreatedAtAsc(List.of(500L, 501L)))
+        when(fixture.orderItemRepository().findByOrderIdInOrderByOrderIdAscCreatedAtAsc(List.of(
+                ORDER_ID,
+                SECOND_ORDER_ID)))
                 .thenReturn(List.of(firstOrderItem, secondOrderItem));
 
-        PaymentService paymentService = service(
-                providerClient,
-                paymentRecordRepository,
-                orderRepository,
-                orderItemRepository,
-                entitlementService,
-                teacherEarningService);
-
-        PageResponse<StudentPaymentRecordResponse> response = paymentService.getStudentPayments(currentUser(), 0, 20);
+        PageResponse<StudentPaymentRecordResponse> response = fixture.service()
+                .getStudentPayments(currentUser(), 0, 20);
 
         assertThat(response.items()).hasSize(2);
         assertThat(response.items().get(0).items()).hasSize(1);
         assertThat(response.items().get(1).items()).hasSize(1);
-        verify(orderItemRepository, times(1)).findByOrderIdInOrderByOrderIdAscCreatedAtAsc(List.of(500L, 501L));
-        verify(orderItemRepository, never()).findByOrderIdOrderByCreatedAtAsc(500L);
-        verify(orderItemRepository, never()).findByOrderIdOrderByCreatedAtAsc(501L);
+        verify(fixture.orderItemRepository(), times(1)).findByOrderIdInOrderByOrderIdAscCreatedAtAsc(List.of(
+                ORDER_ID,
+                SECOND_ORDER_ID));
+        verify(fixture.orderItemRepository(), never()).findByOrderIdOrderByCreatedAtAsc(ORDER_ID);
+        verify(fixture.orderItemRepository(), never()).findByOrderIdOrderByCreatedAtAsc(SECOND_ORDER_ID);
     }
 
     @Test
@@ -227,153 +235,120 @@ class PaymentServiceTests {
         // regression guard automatically expands when a new terminal status
         // is introduced (e.g. a hypothetical PARTIALLY_REFUNDED).
         for (PaymentStatus status : PaymentStatus.TERMINAL) {
-            PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-            OrderRepository orderRepository = mock(OrderRepository.class);
-            OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-            PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-            EntitlementService entitlementService = mock(EntitlementService.class);
-            TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+            ServiceFixture fixture = fixture();
             PaymentRecord paymentRecord = paymentRecord(status);
-            when(paymentRecordRepository.findLockedById(10L)).thenReturn(Optional.of(paymentRecord));
+            when(fixture.paymentRecordRepository().findLockedById(PAYMENT_ID)).thenReturn(Optional.of(paymentRecord));
             LocalDateTime paidAt = paymentRecord.getPaidAt();
 
-            PaymentService paymentService = service(
-                    providerClient,
-                    paymentRecordRepository,
-                    orderRepository,
-                    orderItemRepository,
-                    entitlementService,
-                    teacherEarningService);
-
-            paymentService.markPaymentPaid(paymentRecord, "REPLAY", "PROVIDER_PAID");
+            fixture.service().markPaymentPaid(paymentRecord, PAYMENT_REPLAY_REFERENCE, PROVIDER_PAID_STATUS);
 
             assertThat(paymentRecord.getPaymentStatus()).isEqualTo(status);
-            assertThat(paymentRecord.getProviderStatus()).isEqualTo("EXISTING_" + status.name());
-            assertThat(paymentRecord.getPaymentMethod()).isEqualTo("EXISTING_METHOD");
+            assertThat(paymentRecord.getProviderStatus()).isEqualTo(existingProviderStatus(status));
+            assertThat(paymentRecord.getPaymentMethod()).isEqualTo(EXISTING_PAYMENT_METHOD);
             assertThat(paymentRecord.getPaidAt()).isEqualTo(paidAt);
-            verifyNoInteractions(orderRepository, entitlementService, teacherEarningService);
+            verifyNoInteractions(
+                    fixture.orderRepository(),
+                    fixture.entitlementService(),
+                    fixture.teacherEarningService());
         }
     }
 
     @Test
     void applyProviderPaymentStatusMarksMatchingPendingStripePaymentPaid() {
-        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-        OrderRepository orderRepository = mock(OrderRepository.class);
-        OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-        PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-        EntitlementService entitlementService = mock(EntitlementService.class);
-        TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+        ServiceFixture fixture = fixture();
         PaymentRecord paymentRecord = pendingPaymentRecord();
-        paymentRecord.setProviderName("stripe");
-        paymentRecord.setProviderReference("cs_test_paid");
-        when(paymentRecordRepository.findLockedByProviderNameAndProviderReference("stripe", "cs_test_paid"))
+        paymentRecord.setProviderName(STRIPE_PROVIDER);
+        paymentRecord.setProviderReference(STRIPE_PAID_REFERENCE);
+        when(fixture.paymentRecordRepository().findLockedByProviderNameAndProviderReference(
+                STRIPE_PROVIDER,
+                STRIPE_PAID_REFERENCE))
                 .thenReturn(Optional.of(paymentRecord));
-        when(paymentRecordRepository.findLockedById(10L)).thenReturn(Optional.of(paymentRecord));
+        when(fixture.paymentRecordRepository().findLockedById(PAYMENT_ID)).thenReturn(Optional.of(paymentRecord));
 
-        PaymentService paymentService = service(
-                providerClient,
-                paymentRecordRepository,
-                orderRepository,
-                orderItemRepository,
-                entitlementService,
-                teacherEarningService);
-
-        Optional<StripeWebhookResultResponse> response = paymentService.applyProviderPaymentStatus(
-                "stripe",
-                "cs_test_paid",
+        Optional<StripeWebhookResultResponse> response = fixture.service().applyProviderPaymentStatus(
+                STRIPE_PROVIDER,
+                STRIPE_PAID_REFERENCE,
                 new PaymentProviderStatusResult(
                         true,
-                        "stripe",
-                        "cs_test_paid",
+                        STRIPE_PROVIDER,
+                        STRIPE_PAID_REFERENCE,
                         PaymentStatus.PAID,
-                        "CHECKOUT_SESSION_COMPLETED:COMPLETE:PAID",
+                        STRIPE_PAID_PROVIDER_STATUS,
                         "Paid via Stripe webhook."));
 
         assertThat(response).isPresent();
         assertThat(response.orElseThrow().processed()).isTrue();
-        assertThat(response.orElseThrow().paymentId()).isEqualTo(10L);
+        assertThat(response.orElseThrow().paymentId()).isEqualTo(PAYMENT_ID);
         assertThat(paymentRecord.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(paymentRecord.getProviderStatus()).isEqualTo("CHECKOUT_SESSION_COMPLETED:COMPLETE:PAID");
-        verify(entitlementService).grantAccessAfterPayment(paymentRecord.getOrder(), paymentRecord);
-        verify(teacherEarningService).createEarningsForOrder(500L);
+        assertThat(paymentRecord.getProviderStatus()).isEqualTo(STRIPE_PAID_PROVIDER_STATUS);
+        verify(fixture.entitlementService()).grantAccessAfterPayment(paymentRecord.getOrder(), paymentRecord);
+        verify(fixture.teacherEarningService()).createEarningsForOrder(ORDER_ID);
     }
 
     @Test
     void applyProviderPaymentStatusIgnoresUnknownProviderReference() {
-        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-        OrderRepository orderRepository = mock(OrderRepository.class);
-        OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-        PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-        EntitlementService entitlementService = mock(EntitlementService.class);
-        TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
-        when(paymentRecordRepository.findLockedByProviderNameAndProviderReference("stripe", "cs_missing"))
+        ServiceFixture fixture = fixture();
+        when(fixture.paymentRecordRepository().findLockedByProviderNameAndProviderReference(
+                STRIPE_PROVIDER,
+                MISSING_PROVIDER_REFERENCE))
                 .thenReturn(Optional.empty());
 
-        PaymentService paymentService = service(
-                providerClient,
-                paymentRecordRepository,
-                orderRepository,
-                orderItemRepository,
-                entitlementService,
-                teacherEarningService);
-
-        Optional<StripeWebhookResultResponse> response = paymentService.applyProviderPaymentStatus(
-                "stripe",
-                "cs_missing",
+        Optional<StripeWebhookResultResponse> response = fixture.service().applyProviderPaymentStatus(
+                STRIPE_PROVIDER,
+                MISSING_PROVIDER_REFERENCE,
                 new PaymentProviderStatusResult(
                         true,
-                        "stripe",
-                        "cs_missing",
+                        STRIPE_PROVIDER,
+                        MISSING_PROVIDER_REFERENCE,
                         PaymentStatus.PAID,
-                        "CHECKOUT_SESSION_COMPLETED:COMPLETE:PAID",
+                        STRIPE_PAID_PROVIDER_STATUS,
                         "Paid via Stripe webhook."));
 
         assertThat(response).isEmpty();
-        verifyNoInteractions(orderRepository, entitlementService, teacherEarningService);
+        verifyNoInteractions(fixture.orderRepository(), fixture.entitlementService(), fixture.teacherEarningService());
     }
 
     private void assertTerminalProviderStatusIsSynchronized(PaymentStatus terminalStatus) {
-        PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);
-        OrderRepository orderRepository = mock(OrderRepository.class);
-        OrderItemRepository orderItemRepository = mock(OrderItemRepository.class);
-        PaymentProviderClient providerClient = mock(PaymentProviderClient.class);
-        EntitlementService entitlementService = mock(EntitlementService.class);
-        TeacherEarningService teacherEarningService = mock(TeacherEarningService.class);
+        ServiceFixture fixture = fixture();
         PaymentRecord paymentRecord = pendingPaymentRecord();
 
-        when(paymentRecordRepository.findByIdAndStudentUserId(10L, 99L)).thenReturn(Optional.of(paymentRecord));
-        when(paymentRecordRepository.findLockedByIdAndStudentUserId(10L, 99L)).thenReturn(Optional.of(paymentRecord));
-        when(paymentRecordRepository.findLockedById(10L)).thenReturn(Optional.of(paymentRecord));
-        when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(500L)).thenReturn(List.of());
-        when(providerClient.getPaymentStatus("provider-ref")).thenReturn(new PaymentProviderStatusResult(
+        when(fixture.paymentRecordRepository().findByIdAndStudentUserId(PAYMENT_ID, STUDENT_USER_ID))
+                .thenReturn(Optional.of(paymentRecord));
+        when(fixture.paymentRecordRepository().findLockedByIdAndStudentUserId(PAYMENT_ID, STUDENT_USER_ID))
+                .thenReturn(Optional.of(paymentRecord));
+        when(fixture.paymentRecordRepository().findLockedById(PAYMENT_ID)).thenReturn(Optional.of(paymentRecord));
+        when(fixture.orderItemRepository().findByOrderIdOrderByCreatedAtAsc(ORDER_ID)).thenReturn(List.of());
+        when(fixture.providerClient().getPaymentStatus(PROVIDER_REFERENCE)).thenReturn(new PaymentProviderStatusResult(
                 true,
-                "provider",
-                "provider-ref",
+                PROVIDER_NAME,
+                PROVIDER_REFERENCE,
                 terminalStatus,
                 "PROVIDER_" + terminalStatus.name(),
                 "Terminal payment status."));
 
-        PaymentService paymentService = service(
-                providerClient,
-                paymentRecordRepository,
-                orderRepository,
-                orderItemRepository,
-                entitlementService,
-                teacherEarningService);
-
-        StudentPaymentRecordResponse response = paymentService.verifyPaymentStatus(currentUser(), 10L);
+        StudentPaymentRecordResponse response = fixture.service().verifyPaymentStatus(currentUser(), PAYMENT_ID);
 
         assertThat(response.paymentStatus()).isEqualTo(terminalStatus);
         assertThat(response.providerStatus()).isEqualTo("PROVIDER_" + terminalStatus.name());
         assertThat(paymentRecord.getPaymentStatus()).isEqualTo(terminalStatus);
         Order order = Objects.requireNonNull(paymentRecord.getOrder());
         assertThat(order.getPaymentStatus()).isEqualTo(terminalStatus);
-        verify(orderRepository).save(order);
-        verify(paymentRecordRepository).save(paymentRecord);
-        verifyNoInteractions(entitlementService, teacherEarningService);
+        verify(fixture.orderRepository()).save(order);
+        verify(fixture.paymentRecordRepository()).save(paymentRecord);
+        verifyNoInteractions(fixture.entitlementService(), fixture.teacherEarningService());
     }
 
-    private PaymentService service(
+    private ServiceFixture fixture() {
+        return new ServiceFixture(
+                mock(PaymentRecordRepository.class),
+                mock(OrderRepository.class),
+                mock(OrderItemRepository.class),
+                mock(PaymentProviderClient.class),
+                mock(EntitlementService.class),
+                mock(TeacherEarningService.class));
+    }
+
+    private static PaymentService service(
             PaymentProviderClient providerClient,
             PaymentRecordRepository paymentRecordRepository,
             OrderRepository orderRepository,
@@ -392,7 +367,26 @@ class PaymentServiceTests {
                 teacherEarningService,
                 mock(NotificationService.class),
                 mock(AuditLogService.class),
-                new com.example.aichinese.service.CommerceMoneyService());
+                new CommerceMoneyService());
+    }
+
+    private record ServiceFixture(
+            PaymentRecordRepository paymentRecordRepository,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            PaymentProviderClient providerClient,
+            EntitlementService entitlementService,
+            TeacherEarningService teacherEarningService) {
+
+        PaymentService service() {
+            return PaymentServiceTests.service(
+                    providerClient,
+                    paymentRecordRepository,
+                    orderRepository,
+                    orderItemRepository,
+                    entitlementService,
+                    teacherEarningService);
+        }
     }
 
     private PaymentRecord pendingPaymentRecord() {
@@ -401,36 +395,38 @@ class PaymentServiceTests {
 
     private PaymentRecord paymentRecord(PaymentStatus paymentStatus) {
         User user = new User();
-        user.setId(99L);
-        user.setEmail("student@example.com");
-        user.setDisplayName("Student Example");
-        user.setPasswordHash("password-hash");
+        user.setId(STUDENT_USER_ID);
+        user.setEmail(STUDENT_EMAIL);
+        user.setDisplayName(STUDENT_NAME);
+        user.setPasswordHash(PASSWORD_HASH);
         user.setActive(true);
 
         StudentProfile student = new StudentProfile();
-        student.setId(199L);
+        student.setId(STUDENT_PROFILE_ID);
         student.setUser(user);
 
         Order order = new Order();
-        order.setId(500L);
+        order.setId(ORDER_ID);
         order.setStudent(student);
-        order.setOrderNumber("ORD-TEST");
+        order.setOrderNumber(ORDER_NUMBER);
         order.setPaymentStatus(paymentStatus);
-        order.setTotalAmount(new BigDecimal("29.90"));
-        order.setCurrencyCode("MYR");
+        order.setTotalAmount(ORDER_AMOUNT);
+        order.setCurrencyCode(CURRENCY);
 
         PaymentRecord paymentRecord = new PaymentRecord();
-        paymentRecord.setId(10L);
+        paymentRecord.setId(PAYMENT_ID);
         paymentRecord.setOrder(order);
         paymentRecord.setStudent(student);
-        paymentRecord.setProviderName("provider");
-        paymentRecord.setProviderReference("provider-ref");
-        paymentRecord.setProviderStatus(paymentStatus == PaymentStatus.PENDING ? "CREATED" : "EXISTING_" + paymentStatus.name());
+        paymentRecord.setProviderName(PROVIDER_NAME);
+        paymentRecord.setProviderReference(PROVIDER_REFERENCE);
+        paymentRecord.setProviderStatus(paymentStatus == PaymentStatus.PENDING
+                ? PROVIDER_CREATED_STATUS
+                : existingProviderStatus(paymentStatus));
         paymentRecord.setPaymentStatus(paymentStatus);
-        paymentRecord.setPaymentMethod(paymentStatus == PaymentStatus.PENDING ? null : "EXISTING_METHOD");
+        paymentRecord.setPaymentMethod(paymentStatus == PaymentStatus.PENDING ? null : EXISTING_PAYMENT_METHOD);
         paymentRecord.setPaidAt(paymentStatus == PaymentStatus.PAID ? LocalDateTime.now().minusDays(1) : null);
-        paymentRecord.setAmount(new BigDecimal("29.90"));
-        paymentRecord.setCurrencyCode("MYR");
+        paymentRecord.setAmount(ORDER_AMOUNT);
+        paymentRecord.setCurrencyCode(CURRENCY);
         return paymentRecord;
     }
 
@@ -442,18 +438,22 @@ class PaymentServiceTests {
         orderItem.setItemId(100L + id);
         orderItem.setItemTitleSnapshot("Lesson " + id);
         orderItem.setQuantity(1);
-        orderItem.setUnitPrice(new BigDecimal("10.00"));
-        orderItem.setLineTotal(new BigDecimal("10.00"));
+        orderItem.setUnitPrice(ORDER_ITEM_AMOUNT);
+        orderItem.setLineTotal(ORDER_ITEM_AMOUNT);
         return orderItem;
     }
 
     private SecurityUserDetails currentUser() {
         User user = new User();
-        user.setId(99L);
-        user.setEmail("student@example.com");
-        user.setDisplayName("Student Example");
-        user.setPasswordHash("password-hash");
+        user.setId(STUDENT_USER_ID);
+        user.setEmail(STUDENT_EMAIL);
+        user.setDisplayName(STUDENT_NAME);
+        user.setPasswordHash(PASSWORD_HASH);
         user.setActive(true);
         return new SecurityUserDetails(user);
+    }
+
+    private static String existingProviderStatus(PaymentStatus status) {
+        return "EXISTING_" + status.name();
     }
 }

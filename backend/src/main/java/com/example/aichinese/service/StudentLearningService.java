@@ -62,9 +62,17 @@ import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class StudentLearningService {
+
+    private static final int QUIZ_PASS_PERCENT = 60;
+    private static final int COMPLETE_PERCENT = 100;
+    private static final String QUIZ_ATTEMPT_NOT_FOUND = "Quiz attempt was not found.";
+    private static final String PAID_CONTENT_LOCKED = "Paid content is locked until payment is completed.";
+    private static final String RECORDED_VIDEO_STREAM_PATH = "/api/v1/students/recorded-videos/";
+    private static final String RECORDED_VIDEO_STREAM_SUFFIX = "/stream";
 
     private final StudentLearningAccessService studentLearningAccessService;
     private final StudentLearningProgressService studentLearningProgressService;
@@ -123,7 +131,7 @@ public class StudentLearningService {
                 lesson.getLessonContent(),
                 lesson.getEstimatedDurationMinutes(),
                 completionPercent,
-                completionPercent >= 100,
+                completionPercent >= COMPLETE_PERCENT,
                 false,
                 lesson.getLearningType() == null ? null : lesson.getLearningType().name(),
                 buildLessonLiveClasses(student, lesson),
@@ -179,58 +187,36 @@ public class StudentLearningService {
         if (request == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Quiz submission request is required.");
         }
+        if (request.answers().isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "At least one answer is required.");
+        }
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
         if (questions.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Quiz must contain at least one question.");
         }
 
-        Set<Long> quizQuestionIds = questions.stream()
-                .map(QuizQuestion::getId)
-                .collect(Collectors.toSet());
-        Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId = new LinkedHashMap<>();
-        for (QuizSubmissionAnswerRequest answer : request.answers()) {
-            if (answer == null) {
-                throw new ResponseStatusException(BAD_REQUEST, "Quiz answer must not be null.");
-            }
-            Long questionId = answer.questionId();
-            if (!quizQuestionIds.contains(questionId)) {
-                throw new ResponseStatusException(BAD_REQUEST, "Submitted answer does not belong to this quiz.");
-            }
-            if (answerByQuestionId.putIfAbsent(questionId, answer) != null) {
-                throw new ResponseStatusException(BAD_REQUEST, "Duplicate answers for the same quiz question are not allowed.");
-            }
-        }
-
-        if (answerByQuestionId.isEmpty()) {
-            throw new ResponseStatusException(BAD_REQUEST, "At least one answer is required.");
-        }
-
-        QuizAttempt attempt = new QuizAttempt();
-        LocalDateTime now = LocalDateTime.now();
-        attempt.setQuiz(quiz);
-        attempt.setStudent(student);
-        attempt.setStartedAt(now);
-        attempt.setSubmitted(true);
-        attempt.setCompletedAt(now);
+        Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId =
+                validateAndIndexAnswers(request.answers(), questions);
 
         int score = 0;
         int maxScore = 0;
         int correctCount = 0;
         List<QuizAttemptResultQuestionResponse> answerResults = new ArrayList<>();
 
-        QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
+        QuizAttempt savedAttempt = quizAttemptRepository.save(newSubmittedAttempt(student, quiz));
 
         for (QuizQuestion question : questions) {
-            maxScore += question.getPoints() == null ? 0 : question.getPoints();
+            int questionPoints = points(question);
+            maxScore += questionPoints;
             QuizSubmissionAnswerRequest answerRequest = answerByQuestionId.get(question.getId());
             if (answerRequest == null) {
                 throw new ResponseStatusException(BAD_REQUEST, "Every quiz question requires an answer.");
             }
 
-            String submittedAnswer = answerRequest.answerText() == null ? "" : answerRequest.answerText().trim();
+            String submittedAnswer = normalizeAnswerText(answerRequest.answerText());
             boolean correct = isCorrectAnswer(question, answerRequest.answerText());
             if (correct) {
-                score += question.getPoints() == null ? 0 : question.getPoints();
+                score += questionPoints;
                 correctCount++;
             }
 
@@ -260,20 +246,14 @@ public class StudentLearningService {
         StudentLearningProgressService.CompletionOutcome completionOutcome =
                 studentLearningProgressService.completeQuiz(student, quiz, percentage);
 
-        return new QuizAttemptResultResponse(
-                savedAttempt.getId(),
-                quiz.getId(),
-                quiz.getTitle(),
+        return toQuizAttemptResultResponse(
+                savedAttempt,
                 score,
                 maxScore,
                 questions.size(),
                 correctCount,
-                Math.max(0, questions.size() - correctCount),
                 completionOutcome.earnedPoints(),
                 completionOutcome.totalPoints(),
-                percentage >= 60,
-                savedAttempt.getStartedAt(),
-                savedAttempt.getCompletedAt(),
                 answerResults.stream()
                         .sorted(Comparator.comparing(QuizAttemptResultQuestionResponse::questionId))
                         .toList());
@@ -283,7 +263,7 @@ public class StudentLearningService {
     public QuizAttemptResultResponse getQuizAttempt(SecurityUserDetails currentUser, Long attemptId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         QuizAttempt attempt = quizAttemptRepository.findByIdAndStudentUserId(attemptId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quiz attempt was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, QUIZ_ATTEMPT_NOT_FOUND));
         if (!Objects.equals(attempt.getStudent().getId(), student.getId())) {
             throw new ResponseStatusException(FORBIDDEN, "You do not have access to this quiz attempt.");
         }
@@ -298,22 +278,15 @@ public class StudentLearningService {
         int totalQuestions = answers.size();
         int score = attempt.getScore() == null ? 0 : attempt.getScore();
         int maxScore = attempt.getMaxScore() == null ? 0 : attempt.getMaxScore();
-        int percentage = percentageScore(score, maxScore);
 
-        return new QuizAttemptResultResponse(
-                attempt.getId(),
-                attempt.getQuiz().getId(),
-                attempt.getQuiz().getTitle(),
+        return toQuizAttemptResultResponse(
+                attempt,
                 score,
                 maxScore,
                 totalQuestions,
                 correctCount,
-                Math.max(0, totalQuestions - correctCount),
                 0,
-                attempt.getStudent().getTotalPoints() == null ? 0 : attempt.getStudent().getTotalPoints(),
-                percentage >= 60,
-                attempt.getStartedAt(),
-                attempt.getCompletedAt(),
+                pointsTotal(attempt.getStudent()),
                 answerResponses);
     }
 
@@ -339,16 +312,7 @@ public class StudentLearningService {
         QuizAttemptResultResponse attempt = getQuizAttempt(currentUser, attemptId);
         return attempt.answers().stream()
                 .filter(answer -> !answer.correct())
-                .map(answer -> new WrongAnswerResponse(
-                        attemptId,
-                        answer.questionId(),
-                        attempt.quizTitle(),
-                        answer.questionText(),
-                        answer.questionType(),
-                        answer.studentAnswer(),
-                        answer.correctAnswer(),
-                        answer.explanation(),
-                        attempt.submittedAt()))
+                .map(answer -> toWrongAnswerResponse(attempt, answer))
                 .toList();
     }
 
@@ -384,15 +348,16 @@ public class StudentLearningService {
 
     private void ensureQuizAttemptStillAccessible(StudentProfile student, QuizAttempt attempt) {
         if (!isQuizAttemptStillAccessible(student, attempt)) {
-            throw new ResponseStatusException(FORBIDDEN, "Paid content is locked until payment is completed.");
+            throw new ResponseStatusException(FORBIDDEN, PAID_CONTENT_LOCKED);
         }
     }
 
     private boolean isQuizAttemptStillAccessible(StudentProfile student, QuizAttempt attempt) {
-        if (attempt == null || attempt.getQuiz() == null || attempt.getQuiz().getLesson() == null) {
+        Quiz quiz = attempt == null ? null : attempt.getQuiz();
+        Lesson lesson = quiz == null ? null : quiz.getLesson();
+        if (lesson == null) {
             return false;
         }
-        Lesson lesson = attempt.getQuiz().getLesson();
         return lesson.getContentStatus() == ContentStatus.PUBLISHED
                 && studentLearningAccessService.hasLessonAccess(student, lesson);
     }
@@ -467,8 +432,82 @@ public class StudentLearningService {
     }
 
     private static boolean isCorrectAnswer(QuizQuestion question, String answerText) {
-        String submitted = answerText == null ? "" : answerText.trim();
-        return normalize(submitted).equals(normalize(question.getCorrectAnswerText()));
+        return normalize(answerText).equals(normalize(question.getCorrectAnswerText()));
+    }
+
+    private static Map<Long, QuizSubmissionAnswerRequest> validateAndIndexAnswers(
+            List<QuizSubmissionAnswerRequest> answers,
+            List<QuizQuestion> questions) {
+        Set<Long> quizQuestionIds = questions.stream()
+                .map(QuizQuestion::getId)
+                .collect(Collectors.toSet());
+        Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId = new LinkedHashMap<>();
+        for (QuizSubmissionAnswerRequest answer : answers) {
+            if (answer == null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Quiz answer must not be null.");
+            }
+            Long questionId = answer.questionId();
+            if (!quizQuestionIds.contains(questionId)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Submitted answer does not belong to this quiz.");
+            }
+            if (answerByQuestionId.putIfAbsent(questionId, answer) != null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Duplicate answers for the same quiz question are not allowed.");
+            }
+        }
+        return answerByQuestionId;
+    }
+
+    private static QuizAttempt newSubmittedAttempt(StudentProfile student, Quiz quiz) {
+        LocalDateTime now = LocalDateTime.now();
+        QuizAttempt attempt = new QuizAttempt();
+        attempt.setQuiz(quiz);
+        attempt.setStudent(student);
+        attempt.setStartedAt(now);
+        attempt.setSubmitted(true);
+        attempt.setCompletedAt(now);
+        return attempt;
+    }
+
+    private static QuizAttemptResultResponse toQuizAttemptResultResponse(
+            QuizAttempt attempt,
+            int score,
+            int maxScore,
+            int totalQuestions,
+            int correctCount,
+            int earnedPoints,
+            int totalPoints,
+            List<QuizAttemptResultQuestionResponse> answerResponses) {
+        int percentage = percentageScore(score, maxScore);
+        return new QuizAttemptResultResponse(
+                attempt.getId(),
+                attempt.getQuiz().getId(),
+                attempt.getQuiz().getTitle(),
+                score,
+                maxScore,
+                totalQuestions,
+                correctCount,
+                Math.max(0, totalQuestions - correctCount),
+                earnedPoints,
+                totalPoints,
+                percentage >= QUIZ_PASS_PERCENT,
+                attempt.getStartedAt(),
+                attempt.getCompletedAt(),
+                answerResponses);
+    }
+
+    private static WrongAnswerResponse toWrongAnswerResponse(
+            QuizAttemptResultResponse attempt,
+            QuizAttemptResultQuestionResponse answer) {
+        return new WrongAnswerResponse(
+                attempt.attemptId(),
+                answer.questionId(),
+                attempt.quizTitle(),
+                answer.questionText(),
+                answer.questionType(),
+                answer.studentAnswer(),
+                answer.correctAnswer(),
+                answer.explanation(),
+                attempt.submittedAt());
     }
 
     private static QuizAttemptResultQuestionResponse toQuizAttemptResultQuestionResponse(QuizAttemptAnswer answer) {
@@ -500,12 +539,20 @@ public class StudentLearningService {
     }
 
     private static int percentageScore(int score, int maxScore) {
-        return maxScore == 0 ? 0 : (int) Math.round((score * 100.0) / maxScore);
+        return maxScore == 0 ? 0 : (int) Math.round(score * 100.0 / maxScore);
+    }
+
+    private static int points(QuizQuestion question) {
+        return question.getPoints() == null ? 0 : question.getPoints();
+    }
+
+    private static int pointsTotal(StudentProfile student) {
+        return student.getTotalPoints() == null ? 0 : student.getTotalPoints();
     }
 
     private static String studentRecordedVideoStreamUrl(RecordedLessonVideo video) {
         return video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
-                ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
+                ? RECORDED_VIDEO_STREAM_PATH + video.getId() + RECORDED_VIDEO_STREAM_SUFFIX
                 : null;
     }
 
@@ -514,6 +561,10 @@ public class StudentLearningService {
     }
 
     private static String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return normalizeAnswerText(value).toLowerCase(Locale.ROOT);
+    }
+
+    private static String normalizeAnswerText(String value) {
+        return Objects.requireNonNullElse(TextUtils.trimToNull(value), "");
     }
 }

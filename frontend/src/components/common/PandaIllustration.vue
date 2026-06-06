@@ -1,13 +1,5 @@
 <template>
-  <div
-    class="panda-illustration"
-    :class="[`is-${pose}`, compact ? 'is-compact' : '']"
-    :style="{
-      '--panda-size': `${size}px`,
-      '--panda-outfit': outfit,
-      '--panda-accent': accent,
-    }"
-  >
+  <div class="panda-illustration" :class="pandaClass" :style="pandaStyle">
     <span class="panda-shadow" />
     <span class="panda-ear panda-ear--left" />
     <span class="panda-ear panda-ear--right" />
@@ -34,19 +26,8 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Pure-CSS panda mascot, the platform's friendly face. Lives on
- * the public landing hero, auth chrome, achievement empty states,
- * and various dashboard celebration cards. Built from CSS shapes
- * + custom properties rather than an SVG so it stays crisp at
- * any size and can be themed (outfit + accent colours) per
- * surface without re-exporting graphics.
- *
- * Poses change subtle pose details so multiple pandas on the
- * same page don't look like clones. The `compact` flag
- * collapses the bottom half so the panda fits cleanly inside a
- * small badge.
- */
+import { computed, type StyleValue } from 'vue'
+
 type PandaPose = 'wave' | 'stand'
 
 interface Props {
@@ -57,13 +38,24 @@ interface Props {
   compact?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   size: 140,
   pose: 'wave',
   outfit: '#ef6b40',
   accent: '#f6c24d',
   compact: false,
 })
+
+const pandaClass = computed(() => ({
+  [`is-${props.pose}`]: true,
+  'is-compact': props.compact,
+}))
+
+const pandaStyle = computed<StyleValue>(() => ({
+  '--panda-accent': props.accent,
+  '--panda-outfit': props.outfit,
+  '--panda-size': `${props.size}px`,
+}))
 </script>
 
 <style scoped>

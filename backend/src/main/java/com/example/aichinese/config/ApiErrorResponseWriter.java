@@ -1,6 +1,7 @@
 package com.example.aichinese.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 
@@ -35,7 +36,7 @@ final class ApiErrorResponseWriter {
 
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
         objectMapper.writeValue(response.getOutputStream(), ApiResponse.failure(message, List.of(message)));

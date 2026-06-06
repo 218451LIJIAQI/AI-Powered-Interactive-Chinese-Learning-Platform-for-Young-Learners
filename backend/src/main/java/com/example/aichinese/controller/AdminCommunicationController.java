@@ -1,5 +1,7 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +34,8 @@ import jakarta.validation.constraints.Size;
 @RequestMapping("/api/v1/admin")
 public class AdminCommunicationController {
 
+    private static final String MODERATION_ACTION_APPLIED = "Moderation action applied successfully.";
+
     private final NotificationService notificationService;
     private final ContentModerationService contentModerationService;
     private final AuditLogService auditLogService;
@@ -42,10 +46,10 @@ public class AdminCommunicationController {
             ContentModerationService contentModerationService,
             AuditLogService auditLogService,
             AiResponseReportService aiResponseReportService) {
-        this.notificationService = notificationService;
-        this.contentModerationService = contentModerationService;
-        this.auditLogService = auditLogService;
-        this.aiResponseReportService = aiResponseReportService;
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
+        this.contentModerationService = Objects.requireNonNull(contentModerationService, "contentModerationService");
+        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.aiResponseReportService = Objects.requireNonNull(aiResponseReportService, "aiResponseReportService");
     }
 
     @GetMapping("/notifications")
@@ -107,7 +111,7 @@ public class AdminCommunicationController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateModerationActionRequest request) {
         return ApiResponse.success(
-                "Moderation action applied successfully.",
+                MODERATION_ACTION_APPLIED,
                 contentModerationService.hide(currentUser, request));
     }
 
@@ -116,7 +120,7 @@ public class AdminCommunicationController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateModerationActionRequest request) {
         return ApiResponse.success(
-                "Moderation action applied successfully.",
+                MODERATION_ACTION_APPLIED,
                 contentModerationService.unpublish(currentUser, request));
     }
 
@@ -125,7 +129,7 @@ public class AdminCommunicationController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateModerationActionRequest request) {
         return ApiResponse.success(
-                "Moderation action applied successfully.",
+                MODERATION_ACTION_APPLIED,
                 contentModerationService.archive(currentUser, request));
     }
 
@@ -134,7 +138,7 @@ public class AdminCommunicationController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateModerationActionRequest request) {
         return ApiResponse.success(
-                "Moderation action applied successfully.",
+                MODERATION_ACTION_APPLIED,
                 contentModerationService.requestRevision(currentUser, request));
     }
 
@@ -143,7 +147,7 @@ public class AdminCommunicationController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateModerationActionRequest request) {
         return ApiResponse.success(
-                "Moderation action applied successfully.",
+                MODERATION_ACTION_APPLIED,
                 contentModerationService.restore(currentUser, request));
     }
 

@@ -11,6 +11,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.dto.system.AdminPlatformSettingsResponse;
@@ -19,7 +20,7 @@ import com.example.aichinese.dto.system.PublicPlatformSettingsResponse;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.security.SecurityUserDetails;
-import org.springframework.web.server.ResponseStatusException;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class PlatformSettingsService {
@@ -86,7 +87,10 @@ public class PlatformSettingsService {
             throw new ResponseStatusException(BAD_REQUEST, "Platform settings update request is required.");
         }
         String platformName = stringSetting(PLATFORM_NAME_KEY);
-        String normalizedDisclaimerText = request.aiDisclaimerText().trim();
+        String normalizedDisclaimerText = TextUtils.trimToNull(request.aiDisclaimerText());
+        if (normalizedDisclaimerText == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "AI disclaimer text is required.");
+        }
 
         upsertSetting(AI_DISCLAIMER_TEXT_KEY, normalizedDisclaimerText);
         upsertSetting(EMAIL_NOTIFICATIONS_KEY, Boolean.toString(request.emailNotifications()));
@@ -98,7 +102,7 @@ public class PlatformSettingsService {
 
         log.info("Platform settings updated by adminUserId={}", currentUser.getUserId());
         auditLogService.record(
-                currentUser.getUser(),
+                currentUser,
                 "ADMIN_PLATFORM_SETTINGS_UPDATED",
                 "SYSTEM_SETTING",
                 null,
@@ -135,8 +139,8 @@ public class PlatformSettingsService {
     private String stringSetting(String key) {
         return systemSettingRepository.findBySettingKey(key)
                 .map(SystemSetting::getSettingValue)
-                .filter(value -> !value.isBlank())
-                .map(String::trim)
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
                 .orElseGet(() -> definitionFor(key).defaultValue());
     }
 

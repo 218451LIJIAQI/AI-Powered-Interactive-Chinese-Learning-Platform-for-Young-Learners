@@ -16,10 +16,6 @@ public final class DtoNormalization {
         return stripped == null || stripped.isEmpty() ? null : stripped;
     }
 
-    public static <T> List<T> immutableListOrNull(List<T> values) {
-        return values == null ? null : values.stream().toList();
-    }
-
     public static <T> List<T> immutableListOrEmpty(List<T> values) {
         return values == null ? List.of() : values.stream().toList();
     }

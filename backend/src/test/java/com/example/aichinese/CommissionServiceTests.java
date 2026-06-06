@@ -23,47 +23,55 @@ import com.example.aichinese.service.CommerceSettingsService;
 import com.example.aichinese.service.CommissionService;
 
 /**
- * Unit coverage for {@code CommissionService} — pins the
+ * Unit coverage for {@code CommissionService}: pins the
  * fallback-to-default behaviour when the {@code platform_commission_rate}
  * system setting row is missing, plus the audit trail emitted on every
  * write.
  */
 class CommissionServiceTests {
 
+    private static final String COMMISSION_KEY = CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY;
+    private static final BigDecimal DEFAULT_RATE = new BigDecimal("0.20");
+    private static final BigDecimal UPDATED_RATE = new BigDecimal("0.15");
+
     @Test
     void getCommissionSettingFallsBackWhenSettingRowIsMissing() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        when(repository.findBySettingKey(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY)).thenReturn(Optional.empty());
+        SystemSettingRepository repository = repositoryWithoutCommissionSetting();
         CommissionService service = service(repository);
 
         CommissionSettingResponse response = service.getCommissionSetting();
 
-        assertThat(response.commissionRate()).isEqualByComparingTo("0.20");
-        assertThat(response.settingKey()).isEqualTo(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY);
+        assertThat(response.commissionRate()).isEqualByComparingTo(DEFAULT_RATE);
+        assertThat(response.settingKey()).isEqualTo(COMMISSION_KEY);
         assertThat(response.description()).isEqualTo("Editable platform commission rate represented as a decimal.");
     }
 
     @Test
     void updateCommissionSettingCreatesMissingSettingRow() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        when(repository.findBySettingKey(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY)).thenReturn(Optional.empty());
+        SystemSettingRepository repository = repositoryWithoutCommissionSetting();
         when(repository.save(any(SystemSetting.class))).thenAnswer(invocation -> invocation.getArgument(0));
         CommissionService service = service(repository);
 
-        CommissionSettingResponse response = service.updateCommissionSetting(currentUser(), new CommissionSettingRequest(new BigDecimal("0.15")));
+        CommissionSettingResponse response = service.updateCommissionSetting(currentUser(), new CommissionSettingRequest(UPDATED_RATE));
 
-        assertThat(response.commissionRate()).isEqualByComparingTo("0.15");
-        assertThat(response.settingKey()).isEqualTo(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY);
+        assertThat(response.commissionRate()).isEqualByComparingTo(UPDATED_RATE);
+        assertThat(response.settingKey()).isEqualTo(COMMISSION_KEY);
         verify(repository).save(any(SystemSetting.class));
     }
 
-    private CommissionService service(SystemSettingRepository repository) {
+    private static SystemSettingRepository repositoryWithoutCommissionSetting() {
+        SystemSettingRepository repository = mock(SystemSettingRepository.class);
+        when(repository.findBySettingKey(COMMISSION_KEY)).thenReturn(Optional.empty());
+        return repository;
+    }
+
+    private static CommissionService service(SystemSettingRepository repository) {
         CommerceMoneyService moneyService = new CommerceMoneyService();
         CommerceSettingsService settingsService = new CommerceSettingsService(repository, moneyService);
         return new CommissionService(repository, settingsService, mock(AuditLogService.class));
     }
 
-    private SecurityUserDetails currentUser() {
+    private static SecurityUserDetails currentUser() {
         User user = new User();
         user.setEmail("admin@example.com");
         user.setPasswordHash("password-hash");

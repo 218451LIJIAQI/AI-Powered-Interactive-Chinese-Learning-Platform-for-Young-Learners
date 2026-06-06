@@ -11,16 +11,16 @@
           class="teacher-sample-link"
           type="button"
           :disabled="teacherApprovalLocked"
-          @click="showComposer = !showComposer"
+          @click="toggleComposer"
         >
-          {{ teacherApprovalLocked ? 'Verification pending' : showComposer ? 'Close scheduler' : 'Schedule class' }}
+          {{ composerToggleLabel }}
         </button>
       </template>
     </PageHeaderBlock>
 
     <DataNotice
       :using-fallback="usingFallback"
-      :error="actionError || pageError"
+      :error="noticeError"
       :success="actionSuccess"
       fallback-title="Preview teaching workspace"
       fallback-message="Live classes, enrolments, recordings, and attendance are showing safe preview data for this preview session."
@@ -40,7 +40,7 @@
               class="student-link-button teacher-classes-head-link"
               type="button"
               :disabled="teacherApprovalLocked"
-              @click="showComposer = true"
+              @click="openComposer"
             >
               Open scheduler
             </button>
@@ -93,7 +93,7 @@
                   Open Meeting Link
                 </button>
                 <button class="teacher-outline-button" type="button" @click="selectClass(item.id)">
-                  {{ selectedClassId === item.id ? 'Editing' : 'Edit Class' }}
+                  {{ item.editLabel }}
                 </button>
                 <button class="teacher-outline-button" type="button" @click="loadEnrolments(item.id)">
                   View Roster
@@ -125,7 +125,7 @@
               class="teacher-guide-button"
               type="button"
               :disabled="teacherApprovalLocked"
-              @click="showComposer = true"
+              @click="openComposer"
             >
               Open scheduler
             </button>
@@ -137,7 +137,7 @@
         <article class="panel teacher-classes-editor-card">
           <div class="row-between teacher-classes-section-head">
             <div class="student-section-heading">
-              <strong>{{ selectedLiveClass ? 'Edit Live Class' : 'Schedule Live Class' }}</strong>
+              <strong>{{ composerTitle }}</strong>
             </div>
             <button v-if="selectedLiveClass" class="student-link-button" type="button" @click="resetComposer">
               New class
@@ -278,22 +278,14 @@
                   :disabled="classesReadOnly || submittingCancel"
                   @click="cancelSelectedClass"
                 >
-                  {{ submittingCancel ? 'Cancelling...' : 'Cancel class' }}
+                  {{ cancelClassButtonLabel }}
                 </button>
                 <button
                   class="btn btn-primary"
                   type="submit"
                   :disabled="classesReadOnly || submittingCreate || submittingUpdate"
                 >
-                  {{
-                    selectedLiveClass
-                      ? submittingUpdate
-                        ? 'Saving...'
-                        : 'Save changes'
-                      : submittingCreate
-                        ? 'Creating...'
-                        : 'Create class'
-                  }}
+                  {{ submitClassButtonLabel }}
                 </button>
               </div>
             </div>
@@ -332,7 +324,7 @@
             <div class="student-section-heading">
               <strong>Class Library &amp; Recordings</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/content')">View All</button>
+            <button class="student-link-button" type="button" @click="openContent">View All</button>
           </div>
 
           <div class="teacher-classes-library-list">
@@ -346,12 +338,12 @@
               </div>
               <div class="teacher-classes-library-side">
                 <strong>{{ item.lengthLabel }}</strong>
-                <button class="teacher-play-button" type="button" @click="router.push('/teacher/content')">Open</button>
+                <button class="teacher-play-button" type="button" @click="openContent">Open</button>
               </div>
             </article>
           </div>
 
-          <button class="teacher-footer-cta" type="button" @click="router.push('/teacher/content')">
+          <button class="teacher-footer-cta" type="button" @click="openContent">
             <span>Browse all recordings</span>
             <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
           </button>
@@ -393,7 +385,7 @@
               <div class="student-section-heading">
                 <strong>Class Follow-ups</strong>
               </div>
-              <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+              <button class="student-link-button" type="button" @click="openStudents">
                 Open Students
               </button>
             </div>
@@ -419,7 +411,7 @@
               <div class="student-section-heading">
                 <strong>Learning Follow-ups</strong>
               </div>
-              <button class="student-link-button" type="button" @click="router.push('/teacher/content')">
+              <button class="student-link-button" type="button" @click="openContent">
                 Open Content
               </button>
             </div>
@@ -474,22 +466,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher live classes hub — create, edit, cancel, list, and
- * schedule live sessions while reviewing rosters, recordings, and
- * attendance context.
- *
- * <h2>Gating</h2>
- * <p>All write actions are blocked by {@code useTeacherAccess()}
- * banner when the teacher's verification status is not APPROVED —
- * the page stays read-only with a friendly "verification pending"
- * panel so the teacher still sees their existing classes.</p>
- *
- * <h2>Live session times</h2>
- * <p>The live-class API stores a LocalDateTime wall-clock value; the
- * page keeps the teacher's datetime-local selection stable instead
- * of shifting it through UTC.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -624,6 +600,7 @@ const pageError = computed(
     recordedResource.error.value ||
     progressResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(
   () =>
     liveClassesResource.usingFallback.value ||
@@ -642,12 +619,25 @@ const classesReadOnly = computed(
     packagesResource.usingFallback.value,
 )
 const classComposerDisabled = computed(() => classesReadOnly.value || submittingCreate.value || submittingUpdate.value)
+const composerToggleLabel = computed(() => {
+  if (teacherApprovalLocked.value) return 'Verification pending'
+  return showComposer.value ? 'Close scheduler' : 'Schedule class'
+})
+const composerTitle = computed(() => (selectedLiveClass.value ? 'Edit Live Class' : 'Schedule Live Class'))
+const cancelClassButtonLabel = computed(() => (submittingCancel.value ? 'Cancelling...' : 'Cancel class'))
+const submitClassButtonLabel = computed(() => {
+  if (selectedLiveClass.value) {
+    return submittingUpdate.value ? 'Saving...' : 'Save changes'
+  }
+
+  return submittingCreate.value ? 'Creating...' : 'Create class'
+})
 const classesNoticeDetail = computed(() => {
   if (teacherApprovalLocked.value) {
     return teacherApprovalMessage.value
   }
 
-  if (actionError.value || pageError.value) {
+  if (noticeError.value) {
     return selectedClassId.value
       ? 'The selected class context stays visible so you can retry without losing your place.'
       : 'Open a class again once the live endpoints respond.'
@@ -722,9 +712,10 @@ const liveClassCards = computed(() =>
       platform: platformLabel,
       platformMeta,
       meetingLink: item.meetingLink,
-      platformTone: platform === 'GOOGLE_MEET' ? 'green' : 'blue',
-      art: ['purple', 'orange', 'festival'][index % 3],
-      tone: index === 0 ? 'purple' : index === 1 ? 'orange' : 'blue',
+      editLabel: selectedClassId.value === item.id ? 'Editing' : 'Edit Class',
+      platformTone: platformToneFor(platform),
+      art: rotatingClassArt(index),
+      tone: liveClassTone(index),
     }
   }),
 )
@@ -739,7 +730,7 @@ const recordingCards = computed(() =>
       meta: `Lesson ${item.lessonId} - ${formatDate(item.createdAt)}`,
       lengthLabel:
         durationSeconds > 0 ? `${Math.max(1, nonNegativeInteger(durationSeconds / 60))}m` : 'Duration unavailable',
-      art: ['purple', 'orange', 'festival'][index % 3],
+      art: rotatingClassArt(index),
     }
   }),
 )
@@ -752,6 +743,7 @@ const cancelledCount = computed(() => enrolments.value.filter((item) => item.enr
 const totalRosterCount = computed(() => enrolments.value.length)
 const presentCount = computed(() => attendedCount.value)
 const attendanceRate = computed(() => ratioPercent(presentCount.value, totalRosterCount.value))
+const pendingCheckInTone = computed(() => (pendingCheckInCount.value > 0 ? 'orange' : 'green'))
 
 const attendanceLegend = computed(() => {
   const total = Math.max(totalRosterCount.value, 1)
@@ -798,7 +790,7 @@ const reminderCards = computed(() => {
       copy: `${pendingCheckInCount.value} learner(s) still have no attendance timestamp in the loaded roster.`,
       badge: `${enrolments.value.length} roster`,
       icon: 'alert',
-      tone: pendingCheckInCount.value > 0 ? 'orange' : 'green',
+      tone: pendingCheckInTone.value,
     },
   ]
 })
@@ -849,47 +841,56 @@ const quickActions = [
     title: 'Create New Class',
     icon: 'classes',
     tone: 'purple',
-    action: () => {
-      resetComposer()
-      showComposer.value = true
-    },
+    action: createNewClass,
   },
   {
     title: 'Schedule Class',
     icon: 'calendar',
     tone: 'orange',
-    action: () => {
-      showComposer.value = true
-    },
+    action: openComposer,
   },
   {
     title: 'Create Content',
     icon: 'content',
     tone: 'green',
-    action: () => router.push('/teacher/content'),
+    action: openContent,
   },
   {
     title: 'Send Feedback',
     icon: 'help',
     tone: 'blue',
-    action: () => router.push('/teacher/feedback'),
+    action: openFeedback,
   },
 ]
 
-function toInputDateTime(value: string) {
+function platformToneFor(platform: MeetingPlatformValue): string {
+  return platform === 'GOOGLE_MEET' ? 'green' : 'blue'
+}
+
+function liveClassTone(index: number): string {
+  if (index === 0) return 'purple'
+  if (index === 1) return 'orange'
+  return 'blue'
+}
+
+function rotatingClassArt(index: number): string {
+  return ['purple', 'orange', 'festival'][index % 3]
+}
+
+function toInputDateTime(value: string): string {
   const date = new Date(value)
   const offset = date.getTimezoneOffset()
   const local = new Date(date.getTime() - offset * 60_000)
   return local.toISOString().slice(0, 16)
 }
 
-function toApiDateTime(value: string) {
+function toApiDateTime(value: string): string {
   // The live-class API stores a LocalDateTime wall-clock value. Converting
   // datetime-local to UTC before removing the zone shifts the selected time.
   return value.length === 16 ? `${value}:00` : value
 }
 
-function meetingCodeFromLink(link?: string | null) {
+function meetingCodeFromLink(link?: string | null): string {
   if (!link) return 'External link'
 
   return (
@@ -904,7 +905,7 @@ function meetingCodeFromLink(link?: string | null) {
   )
 }
 
-function formatClassDate(date: Date) {
+function formatClassDate(date: Date): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -912,7 +913,7 @@ function formatClassDate(date: Date) {
   }).format(date)
 }
 
-function formatStatus(status: string) {
+function formatStatus(status: string): string {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
@@ -933,11 +934,11 @@ function normalizeMeetingPlatform(value: string | null | undefined): MeetingPlat
   return 'OTHER'
 }
 
-function formatMeetingPlatform(value: string | null | undefined) {
+function formatMeetingPlatform(value: string | null | undefined): string {
   return formatStatus(normalizeMeetingPlatform(value))
 }
 
-function applyClassToForm(item: (typeof liveClasses.value)[number]) {
+function applyClassToForm(item: (typeof liveClasses.value)[number]): void {
   classForm.title = item.title
   classForm.description = item.description ?? ''
   classForm.lessonId = item.lesson?.lessonId ?? 0
@@ -952,7 +953,7 @@ function applyClassToForm(item: (typeof liveClasses.value)[number]) {
   classForm.maxParticipants = item.maxParticipants ?? 20
 }
 
-function resetComposer() {
+function resetComposer(): void {
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   tomorrow.setHours(17, 0, 0, 0)
@@ -974,7 +975,32 @@ function resetComposer() {
   classForm.maxParticipants = 20
 }
 
-async function selectClass(classId: number) {
+function openComposer(): void {
+  showComposer.value = true
+}
+
+function toggleComposer(): void {
+  showComposer.value = !showComposer.value
+}
+
+function createNewClass(): void {
+  resetComposer()
+  openComposer()
+}
+
+function openContent(): void {
+  void router.push('/teacher/content')
+}
+
+function openFeedback(): void {
+  void router.push('/teacher/feedback')
+}
+
+function openStudents(): void {
+  void router.push('/teacher/students')
+}
+
+async function selectClass(classId: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   selectedClassId.value = classId
@@ -987,7 +1013,7 @@ async function selectClass(classId: number) {
   await loadDependentResources(classId, item?.lesson?.lessonId ?? null)
 }
 
-async function submitClass() {
+async function submitClass(): Promise<void> {
   if (submittingCreate.value || submittingUpdate.value || submittingCancel.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -1041,7 +1067,7 @@ async function submitClass() {
   }
 }
 
-async function cancelSelectedClass() {
+async function cancelSelectedClass(): Promise<void> {
   if (submittingCancel.value || submittingCreate.value || submittingUpdate.value) return
   if (!selectedLiveClass.value) return
   if (classesReadOnly.value) {
@@ -1065,7 +1091,7 @@ async function cancelSelectedClass() {
   }
 }
 
-async function loadEnrolments(classId: number, announceSuccess = true) {
+async function loadEnrolments(classId: number, announceSuccess = true): Promise<void> {
   if (announceSuccess) {
     actionError.value = null
     actionSuccess.value = null
@@ -1086,7 +1112,7 @@ async function loadEnrolments(classId: number, announceSuccess = true) {
   }
 }
 
-async function loadRecordedResources(lessonId: number | null) {
+async function loadRecordedResources(lessonId: number | null): Promise<void> {
   if (!lessonId) {
     recordedResource.data.value = recordedResource.usingFallback.value ? teacherRecordedVideos : []
     progressResource.data.value = progressResource.usingFallback.value ? teacherVideoProgress : []
@@ -1116,12 +1142,12 @@ async function loadRecordedResources(lessonId: number | null) {
   }
 }
 
-async function loadDependentResources(classId: number, lessonId: number | null) {
+async function loadDependentResources(classId: number, lessonId: number | null): Promise<void> {
   await loadEnrolments(classId, false)
   await loadRecordedResources(lessonId)
 }
 
-function openMeeting(link?: string | null) {
+function openMeeting(link?: string | null): void {
   if (link) {
     if (openSafeHttpUrl(link)) {
       actionError.value = null
@@ -1136,7 +1162,7 @@ function openMeeting(link?: string | null) {
   actionError.value = 'No meeting link is available for this class.'
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void liveClassesResource.reload()
   void analyticsResource.reload()
   void lessonsResource.reload()

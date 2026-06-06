@@ -35,7 +35,7 @@
         v-if="showNotifications"
         :to="notificationPath"
         class="topbar-icon-button hidden-mobile"
-        :aria-label="notificationCount > 0 ? `Notifications — ${notificationCount} unread` : 'Notifications'"
+        :aria-label="notificationAriaLabel"
       >
         <IconGlyph name="bell" :size="18" class="topbar-icon-glyph" />
         <span v-if="notificationCount" class="topbar-notification-badge" aria-hidden="true">{{
@@ -51,7 +51,7 @@
         :aria-busy="signingOut"
         @click="handleSignOut"
       >
-        {{ signingOut ? 'Signing out...' : 'Sign out' }}
+        {{ signOutLabel }}
       </button>
 
       <RouterLink :to="profilePath" class="topbar-user">
@@ -67,19 +67,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Authenticated topbar — page context, notification bell,
- * learning streak, language switcher, sign-out action, and the
- * profile link.
- *
- * Polls the unread-notification count and listens for the
- * `mandarin-spark:notification-read` custom event so the badge
- * decrements in real time when the user opens an item, without
- * a full refresh.
- *
- * The notification listener is wired in onMounted / detached in
- * onBeforeUnmount so route changes do not leak handlers.
- */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -91,12 +78,66 @@ import { useResource } from '@/composables/useResource'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/api'
 
+interface RoleTopbarCopy {
+  readonly tone: string
+  readonly label: string
+  readonly icon: string
+  readonly profileLabel: string
+  readonly defaultDisplayName: string
+  readonly contextTitle: string
+  readonly contextSubtitle: string
+}
+
+const ROLE_TOPBAR_COPY: Record<UserRole, RoleTopbarCopy> = {
+  ADMIN: {
+    tone: 'admin',
+    label: 'Admin hub',
+    icon: 'verification',
+    profileLabel: 'Platform owner',
+    defaultDisplayName: 'Admin',
+    contextTitle: 'Keep operations clear and safe',
+    contextSubtitle: 'Queue health, moderation, finance, and audit context stay one glance away.',
+  },
+  TEACHER: {
+    tone: 'teacher',
+    label: 'Teacher workspace',
+    icon: 'classes',
+    profileLabel: 'Teaching profile',
+    defaultDisplayName: 'Li Wei',
+    contextTitle: 'Guide each learner with clarity',
+    contextSubtitle: 'Lessons, classes, and feedback stay connected across your teaching flow.',
+  },
+  STUDENT: {
+    tone: 'student',
+    label: 'Student journey',
+    icon: 'learn',
+    profileLabel: 'Learner profile',
+    defaultDisplayName: 'Learner',
+    contextTitle: 'Learning dashboard',
+    contextSubtitle: 'Lessons, rewards, classes, and AI help are tuned for young Mandarin learners.',
+  },
+}
+
+const GUEST_TOPBAR_COPY = {
+  tone: 'guest',
+  label: 'Guest preview',
+  icon: 'courses',
+  profileLabel: 'Preview workspace',
+  displayName: 'Browse as guest',
+  contextTitle: 'Explore lessons before you commit',
+  contextSubtitle: 'Catalog, pricing, and support are visible without sign-in.',
+} as const
+
+const EMPTY_STREAK = { currentStreak: 0, bestStreak: 0, lastLearningDate: null } as const
+const NOTIFICATION_READ_EVENT = 'mandarin-spark:notification-read'
+
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
 const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
 const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
+const activeRoleCopy = computed(() => ROLE_TOPBAR_COPY[role.value])
 const unreadResource = useResource(
   () => (showNotifications.value ? notificationsApi.unreadCount() : Promise.resolve({ unreadCount: 0 })),
   { unreadCount: 0 },
@@ -106,40 +147,29 @@ const streakResource = useResource(
   () =>
     role.value === 'STUDENT' && !isGuestCatalog.value && !auth.isPreviewSession
       ? studentApi.streak()
-      : Promise.resolve({ currentStreak: 0, bestStreak: 0, lastLearningDate: null }),
+      : Promise.resolve(EMPTY_STREAK),
   undefined,
 )
 const streakCount = computed(() => (role.value === 'STUDENT' ? (streakResource.data.value?.currentStreak ?? 0) : 0))
-const roleTone = computed(() => {
-  if (isGuestCatalog.value) return 'guest'
-  if (role.value === 'ADMIN') return 'admin'
-  if (role.value === 'TEACHER') return 'teacher'
-  return 'student'
-})
-const roleLabel = computed(() => {
-  if (isGuestCatalog.value) return 'Guest preview'
-  if (role.value === 'ADMIN') return 'Admin hub'
-  if (role.value === 'TEACHER') return 'Teacher workspace'
-  return 'Student journey'
-})
-const roleIcon = computed(() => {
-  if (isGuestCatalog.value) return 'courses'
-  if (role.value === 'ADMIN') return 'verification'
-  if (role.value === 'TEACHER') return 'classes'
-  return 'learn'
-})
+const roleTone = computed(() => (isGuestCatalog.value ? GUEST_TOPBAR_COPY.tone : activeRoleCopy.value.tone))
+const roleLabel = computed(() => (isGuestCatalog.value ? GUEST_TOPBAR_COPY.label : activeRoleCopy.value.label))
+const roleIcon = computed(() => (isGuestCatalog.value ? GUEST_TOPBAR_COPY.icon : activeRoleCopy.value.icon))
+
+function firstDisplayNamePart(name: string): string | null {
+  return name.trim().split(/\s+/)[0] || null
+}
 
 const displayName = computed(() => {
-  if (isGuestCatalog.value) return 'Browse as guest'
+  if (isGuestCatalog.value) return GUEST_TOPBAR_COPY.displayName
   if (role.value === 'STUDENT') {
-    return auth.currentUser?.studentProfile?.displayName ?? auth.displayName.split(' ')[0] ?? 'Learner'
+    return (
+      auth.currentUser?.studentProfile?.displayName ??
+      firstDisplayNamePart(auth.displayName) ??
+      activeRoleCopy.value.defaultDisplayName
+    )
   }
 
-  if (role.value === 'ADMIN') {
-    return 'Admin'
-  }
-
-  return auth.displayName || 'Li Wei'
+  return auth.displayName || activeRoleCopy.value.defaultDisplayName
 })
 
 const userPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() =>
@@ -161,26 +191,20 @@ const profilePath = computed(() => {
 const notificationPath = computed(() =>
   role.value === 'ADMIN' ? '/admin/settings?section=support' : profilePath.value,
 )
-const profileLabel = computed(() => {
-  if (isGuestCatalog.value) return 'Preview workspace'
-  if (role.value === 'ADMIN') return 'Platform owner'
-  if (role.value === 'TEACHER') return 'Teaching profile'
-  return 'Learner profile'
-})
+const profileLabel = computed(() =>
+  isGuestCatalog.value ? GUEST_TOPBAR_COPY.profileLabel : activeRoleCopy.value.profileLabel,
+)
 const contextTitle = computed(() => {
-  if (isGuestCatalog.value) return 'Explore lessons before you commit'
+  if (isGuestCatalog.value) return GUEST_TOPBAR_COPY.contextTitle
   if (role.value === 'ADMIN')
-    return route.path.includes('/analytics') ? 'Monitor platform signals' : 'Keep operations clear and safe'
+    return route.path.includes('/analytics') ? 'Monitor platform signals' : activeRoleCopy.value.contextTitle
   if (role.value === 'TEACHER')
-    return route.path.includes('/classes') ? 'Run live classes with confidence' : 'Guide each learner with clarity'
-  return route.path.includes('/profile') ? 'Celebrate steady progress' : 'Learning dashboard'
+    return route.path.includes('/classes') ? 'Run live classes with confidence' : activeRoleCopy.value.contextTitle
+  return route.path.includes('/profile') ? 'Celebrate steady progress' : activeRoleCopy.value.contextTitle
 })
-const contextSubtitle = computed(() => {
-  if (isGuestCatalog.value) return 'Catalog, pricing, and support are visible without sign-in.'
-  if (role.value === 'ADMIN') return 'Queue health, moderation, finance, and audit context stay one glance away.'
-  if (role.value === 'TEACHER') return 'Lessons, classes, and feedback stay connected across your teaching flow.'
-  return 'Lessons, rewards, classes, and AI help are tuned for young Mandarin learners.'
-})
+const contextSubtitle = computed(() =>
+  isGuestCatalog.value ? GUEST_TOPBAR_COPY.contextSubtitle : activeRoleCopy.value.contextSubtitle,
+)
 
 const isDashboardHome = computed(() => route.path.endsWith('/dashboard'))
 const showNotifications = computed(() => {
@@ -205,8 +229,12 @@ const dateLabel = computed<string>(() => dateFormatter.format(new Date()))
 const notificationCount = computed<number>(() =>
   showNotifications.value ? (unreadResource.data.value?.unreadCount ?? 0) : 0,
 )
+const notificationAriaLabel = computed<string>(() =>
+  notificationCount.value > 0 ? `Notifications - ${notificationCount.value} unread` : 'Notifications',
+)
 const showSessionAction = computed<boolean>(() => auth.isAuthenticated && !isGuestCatalog.value)
 const signingOut = ref<boolean>(false)
+const signOutLabel = computed<string>(() => (signingOut.value ? 'Signing out...' : 'Sign out'))
 
 function refreshUnreadCount(): void {
   if (!showNotifications.value) return
@@ -229,7 +257,7 @@ async function handleSignOut(): Promise<void> {
 
 onMounted(() => {
   refreshUnreadCount()
-  window.addEventListener('mandarin-spark:notification-read', refreshUnreadCount)
+  window.addEventListener(NOTIFICATION_READ_EVENT, refreshUnreadCount)
 })
 
 watch(showNotifications, (visible) => {
@@ -239,6 +267,6 @@ watch(showNotifications, (visible) => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('mandarin-spark:notification-read', refreshUnreadCount)
+  window.removeEventListener(NOTIFICATION_READ_EVENT, refreshUnreadCount)
 })
 </script>

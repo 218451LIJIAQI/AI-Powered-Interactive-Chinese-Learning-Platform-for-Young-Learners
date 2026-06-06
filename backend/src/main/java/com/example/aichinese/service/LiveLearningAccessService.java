@@ -30,6 +30,7 @@ import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
 import com.example.aichinese.entity.enums.MeetingPlatform;
 import com.example.aichinese.entity.enums.PackageItemType;
+import com.example.aichinese.entity.enums.PurchasableItemType;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
@@ -45,6 +46,8 @@ import com.example.aichinese.security.SecurityUserDetails;
 public class LiveLearningAccessService {
 
     private static final Set<LiveClassStatus> JOINABLE_STATUSES = LiveClassStatus.JOINABLE;
+    private static final Set<LiveClassStatus> CANCELLABLE_STATUSES =
+            Set.of(LiveClassStatus.SCHEDULED, LiveClassStatus.RESCHEDULED);
     private static final int JOIN_WINDOW_LEAD_MINUTES = 15;
 
     private final StudentProfileRepository studentProfileRepository;
@@ -215,8 +218,7 @@ public class LiveLearningAccessService {
                 && liveClass.getScheduledStartAt() != null
                 && LocalDateTime.now().isBefore(liveClass.getScheduledStartAt());
         boolean isOpenForCancellation = liveClass != null
-                && (liveClass.getLiveClassStatus() == LiveClassStatus.SCHEDULED
-                        || liveClass.getLiveClassStatus() == LiveClassStatus.RESCHEDULED);
+                && CANCELLABLE_STATUSES.contains(liveClass.getLiveClassStatus());
 
         if (enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.ENROLLED
                 || !isFutureClass
@@ -274,9 +276,15 @@ public class LiveLearningAccessService {
             return true;
         }
 
-        boolean directLessonAccess = entitlementService.hasAccessToItem(student.getId(), "LESSON", lesson.getId());
+        boolean directLessonAccess = entitlementService.hasAccessToItem(
+                student.getId(),
+                PurchasableItemType.LESSON.name(),
+                lesson.getId());
         boolean moduleAccess = lesson.getModule() != null
-                && entitlementService.hasAccessToItem(student.getId(), "MODULE", lesson.getModule().getId());
+                && entitlementService.hasAccessToItem(
+                        student.getId(),
+                        PurchasableItemType.MODULE.name(),
+                        lesson.getModule().getId());
         return directLessonAccess || moduleAccess;
     }
 
@@ -286,7 +294,10 @@ public class LiveLearningAccessService {
             return true;
         }
 
-        return entitlementService.hasAccessToItem(student.getId(), "PACKAGE", coursePackage.getId());
+        return entitlementService.hasAccessToItem(
+                student.getId(),
+                PurchasableItemType.PACKAGE.name(),
+                coursePackage.getId());
     }
 
     @Transactional(readOnly = true)
@@ -321,23 +332,16 @@ public class LiveLearningAccessService {
         if (value == null || value.isBlank()) {
             return fallback;
         }
-
-        try {
-            return LiveClassStatus.valueOf(value.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Live class status is invalid.");
-        }
+        return LiveClassStatus.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Live class status is invalid."));
     }
 
     public RecordedVideoSourceType parseRecordedVideoSourceType(String value) {
         if (value == null || value.isBlank()) {
             throw new ResponseStatusException(BAD_REQUEST, "Recorded video source type is required.");
         }
-        try {
-            return RecordedVideoSourceType.valueOf(value.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Recorded video source type is invalid.");
-        }
+        return RecordedVideoSourceType.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Recorded video source type is invalid."));
     }
 
     public String validateMeetingLink(String meetingLink) {
@@ -423,8 +427,7 @@ public class LiveLearningAccessService {
     }
 
     private void ensureLiveClassVisibleToStudents(LiveClass liveClass) {
-        if (!JOINABLE_STATUSES.contains(liveClass.getLiveClassStatus())
-                && liveClass.getLiveClassStatus() != LiveClassStatus.RESCHEDULED) {
+        if (!liveClass.getLiveClassStatus().isStudentVisible()) {
             throw new ResponseStatusException(FORBIDDEN, "This live class is not available.");
         }
 

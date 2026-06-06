@@ -35,6 +35,9 @@ public record RegisterTeacherRequest(
         }
         if (bio != null) {
             bio = bio.strip();
+            if (bio.isEmpty()) {
+                bio = null;
+            }
         }
     }
 
@@ -51,6 +54,10 @@ public record RegisterTeacherRequest(
                 + ", email=" + email
                 + ", password=***REDACTED***"
                 + ", confirmPassword=***REDACTED***"
-                + ", bio=" + bio + "]";
+                + ", bio=" + redactLength(bio) + "]";
+    }
+
+    private static String redactLength(String value) {
+        return value == null ? "null" : "<redacted:" + value.length() + ">";
     }
 }

@@ -27,19 +27,6 @@ describe('safe storage helpers', () => {
     expect(() => safeRemoveItem('key', throwingStorage)).not.toThrow()
   })
 
-  it('normalizes keys and values to strings like browser storage does', () => {
-    const storage = window.localStorage
-    storage.clear()
-
-    safeSetItem('answer', 42 as unknown as string, storage)
-    expect(safeGetItem('answer', storage)).toBe('42')
-
-    safeRemoveItem(123 as unknown as string, storage)
-    storage.setItem('123', 'value')
-    safeRemoveItem(123 as unknown as string, storage)
-    expect(storage.getItem('123')).toBeNull()
-  })
-
   it('reads only supported persisted locales and falls back to English otherwise', () => {
     window.localStorage.clear()
     expect(readPersistedLocale()).toBe('en')

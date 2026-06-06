@@ -9,6 +9,9 @@ vi.mock('virtual:pwa-register', () => ({
 }))
 
 describe('pwa helpers', () => {
+  const managedCacheNames = ['mandarin-spark-static-v1', 'workbox-precache-v2']
+  const unmanagedCacheName = 'third-party-cache'
+
   beforeEach(() => {
     vi.resetModules()
     mocks.registerSW.mockReset()
@@ -29,7 +32,7 @@ describe('pwa helpers', () => {
     const deleted: string[] = []
     Object.defineProperty(window, 'caches', {
       value: {
-        keys: vi.fn().mockResolvedValue(['mandarin-spark-static-v1', 'workbox-precache-v2', 'third-party-cache']),
+        keys: vi.fn().mockResolvedValue([...managedCacheNames, unmanagedCacheName]),
         delete: vi.fn(async (name: string) => {
           deleted.push(name)
           return true
@@ -41,6 +44,6 @@ describe('pwa helpers', () => {
     const { clearOfflineCaches } = await import('./pwa')
     await clearOfflineCaches()
 
-    expect(deleted).toEqual(['mandarin-spark-static-v1', 'workbox-precache-v2'])
+    expect(deleted).toEqual(managedCacheNames)
   })
 })

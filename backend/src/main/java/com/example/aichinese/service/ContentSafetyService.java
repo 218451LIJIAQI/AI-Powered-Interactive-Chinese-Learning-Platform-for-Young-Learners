@@ -22,6 +22,7 @@ public class ContentSafetyService {
 
     private static final String UNSAFE_CONTENT_MESSAGE = "Content contains language that is not suitable for young learners.";
     private static final String SEPARATORS = "[\\p{Z}\\p{Punct}\\p{S}_]*";
+    private static final String REQUIRED_SEPARATOR = "[\\p{Z}\\p{Punct}\\p{S}_]+";
     private static final List<Pattern> SENSITIVE_PATTERNS = List.of(
             sensitivePattern("fuck"),
             sensitivePattern("shit"),
@@ -65,7 +66,7 @@ public class ContentSafetyService {
     }
 
     public String requireSafeText(String value, int maxLength, String requiredMessage) {
-        String sanitized = sanitize(value, maxLength);
+        String sanitized = AiInputSanitizer.sanitize(value, maxLength);
         if (sanitized == null) {
             throw new ResponseStatusException(BAD_REQUEST, requiredMessage);
         }
@@ -74,7 +75,7 @@ public class ContentSafetyService {
     }
 
     public String optionalSafeText(String value, int maxLength) {
-        String sanitized = sanitize(value, maxLength);
+        String sanitized = AiInputSanitizer.sanitize(value, maxLength);
         if (sanitized != null) {
             requireSafeContent(sanitized);
         }
@@ -100,10 +101,6 @@ public class ContentSafetyService {
         }
     }
 
-    private String sanitize(String value, int maxLength) {
-        return AiInputSanitizer.sanitize(value, maxLength);
-    }
-
     private static String normalize(String value) {
         return Normalizer.normalize(value, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
     }
@@ -121,7 +118,7 @@ public class ContentSafetyService {
                     pattern.append(SEPARATORS);
                 }
             } else {
-                pattern.append("[\\p{Z}\\p{Punct}\\p{S}_]+");
+                pattern.append(REQUIRED_SEPARATOR);
             }
         }
         pattern.append("(?![\\p{L}\\p{N}])");

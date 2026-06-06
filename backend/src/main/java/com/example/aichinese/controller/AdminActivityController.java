@@ -1,6 +1,7 @@
 package com.example.aichinese.controller;
 
 import java.util.Optional;
+import java.util.Objects;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -46,7 +47,7 @@ public class AdminActivityController {
     private final AdminActivityService adminActivityService;
 
     public AdminActivityController(AdminActivityService adminActivityService) {
-        this.adminActivityService = adminActivityService;
+        this.adminActivityService = Objects.requireNonNull(adminActivityService, "adminActivityService");
     }
 
     @GetMapping
@@ -502,7 +503,7 @@ public class AdminActivityController {
         return ApiResponse.success("Story activity deleted successfully.", null);
     }
 
-    private ActivityFilter buildFilter(
+    private static ActivityFilter buildFilter(
             String status,
             Integer hskLevel,
             String ageBand,

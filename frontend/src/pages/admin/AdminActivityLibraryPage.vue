@@ -13,7 +13,7 @@
           :disabled="pageBusy || previewReadOnly"
         >
           <IconGlyph name="refresh" :size="16" />
-          <span>{{ previewReadOnly ? 'Preview feed' : pageBusy ? 'Refreshing...' : 'Refresh feed' }}</span>
+          <span>{{ refreshFeedLabel }}</span>
         </button>
       </template>
     </PageHeaderBlock>
@@ -204,19 +204,15 @@
             </label>
 
             <label class="field">
-              <span>{{ form.type === 'FLASHCARD' ? 'Title (optional)' : 'Title' }}</span>
-              <input
-                v-model="form.title"
-                class="input"
-                :placeholder="form.type === 'FLASHCARD' ? 'Optional flashcard title' : 'Activity title'"
-              />
+              <span>{{ titleFieldLabel }}</span>
+              <input v-model="form.title" class="input" :placeholder="titleFieldPlaceholder" />
             </label>
 
             <label class="field">
               <span>HSK level</span>
               <select v-model="form.hskLevel" class="select">
                 <option :value="null">Not set</option>
-                <option v-for="level in [1, 2, 3, 4, 5, 6]" :key="level" :value="level">HSK {{ level }}</option>
+                <option v-for="level in hskLevels" :key="level" :value="level">HSK {{ level }}</option>
               </select>
             </label>
 
@@ -583,7 +579,7 @@
                 @click="deleteActivity"
                 :disabled="!hasSelectedRecord || formBusy"
               >
-                {{ deleting ? 'Deleting...' : 'Delete' }}
+                {{ deleteButtonLabel }}
               </button>
             </div>
           </div>
@@ -594,18 +590,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin activity library editor — six interactive activity types
- * (flashcards, matching, listening, tracing, drag-drop, story)
- * curated centrally by admins.
- *
- * <h2>Why admin-curated</h2>
- * <p>The activity library is intentionally separated from teacher
- * lessons so the company can guarantee quality for the early
- * learner demographic. Teachers see activities from this library
- * surfaced in the student practice page based on age-band match.</p>
- *
- */
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
@@ -728,6 +712,8 @@ const difficultyOptions: Array<{ value: ActivityDifficulty; label: string }> = [
   { value: 'HARD', label: 'Hard' },
 ]
 
+const hskLevels = [1, 2, 3, 4, 5, 6] as const
+
 const filters = reactive({
   type: '' as AdminActivityType | '',
   status: '' as ContentStatus | '',
@@ -776,9 +762,15 @@ const formBusy = computed(() => saving.value || deleting.value || detailLoading.
 const pageError = computed(() => actionError.value || feedResource.error.value)
 const statCards = computed(() => {
   const pageItems = feed.value.items
-  const published = pageItems.filter((item) => item.status === 'PUBLISHED').length
-  const drafts = pageItems.filter((item) => item.status === 'DRAFT').length
-  const archived = pageItems.filter((item) => item.status === 'ARCHIVED').length
+  const statusCounts = feed.value.items.reduce(
+    (counts, item) => {
+      if (item.status === 'PUBLISHED') counts.published += 1
+      else if (item.status === 'DRAFT') counts.drafts += 1
+      else if (item.status === 'ARCHIVED') counts.archived += 1
+      return counts
+    },
+    { published: 0, drafts: 0, archived: 0 },
+  )
   const typeCount = new Set(pageItems.map((item) => item.type)).size
 
   return [
@@ -791,21 +783,21 @@ const statCards = computed(() => {
     },
     {
       label: 'Published',
-      value: formatNumber(published),
+      value: formatNumber(statusCounts.published),
       copy: 'Published items on the current page.',
       icon: 'status',
       tone: 'green',
     },
     {
       label: 'Drafts',
-      value: formatNumber(drafts),
+      value: formatNumber(statusCounts.drafts),
       copy: 'Draft items ready for curation.',
       icon: 'content',
       tone: 'blue',
     },
     {
       label: 'Archived',
-      value: formatNumber(archived),
+      value: formatNumber(statusCounts.archived),
       copy: 'Archived items still tracked for audit.',
       icon: 'history',
       tone: 'orange',
@@ -831,6 +823,15 @@ const editorSubtitle = computed(() => {
 })
 const saveButtonLabel = computed(() =>
   saving.value ? 'Saving...' : hasSelectedRecord.value ? 'Save changes' : 'Create activity',
+)
+const deleteButtonLabel = computed(() => (deleting.value ? 'Deleting...' : 'Delete'))
+const refreshFeedLabel = computed(() => {
+  if (previewReadOnly.value) return 'Preview feed'
+  return pageBusy.value ? 'Refreshing...' : 'Refresh feed'
+})
+const titleFieldLabel = computed(() => (form.type === 'FLASHCARD' ? 'Title (optional)' : 'Title'))
+const titleFieldPlaceholder = computed(() =>
+  form.type === 'FLASHCARD' ? 'Optional flashcard title' : 'Activity title',
 )
 
 onMounted(() => {
@@ -905,42 +906,42 @@ function createEmptyForm(type: AdminActivityType): ActivityEditorForm {
   }
 }
 
-function applyFormState(next: ActivityEditorForm) {
+function applyFormState(next: ActivityEditorForm): void {
   Object.assign(form, next)
 }
 
-function optionalString(value: string) {
+function optionalString(value: string): string | null {
   const trimmed = value.trim()
   return trimmed ? trimmed : null
 }
 
-function optionalNumber(value: number | null) {
+function optionalNumber(value: number | null): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function parseTags() {
+function parseTags(): string[] {
   return form.tagsText
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
 }
 
-function activityTypeLabel(type: AdminActivityType) {
+function activityTypeLabel(type: AdminActivityType): string {
   return activityTypeOptions.find((item) => item.value === type)?.label ?? humanizeEnum(type)
 }
 
-function fallbackActivityTitle(type: AdminActivityType) {
+function fallbackActivityTitle(type: AdminActivityType): string {
   return `${activityTypeLabel(type)} draft`
 }
 
-function humanizeEnum(value: string) {
+function humanizeEnum(value: string): string {
   return value
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function statusTone(status: ContentStatus) {
+function statusTone(status: ContentStatus): 'danger' | 'info' | 'primary' | 'success' | 'warning' {
   if (status === 'PUBLISHED') return 'success'
   if (status === 'ARCHIVED') return 'primary'
   if (status === 'REJECTED') return 'danger'
@@ -948,7 +949,7 @@ function statusTone(status: ContentStatus) {
   return 'info'
 }
 
-function activitySummaryMeta(item: AdminActivitySummaryResponse) {
+function activitySummaryMeta(item: AdminActivitySummaryResponse): string {
   const parts = [item.topic?.trim() || 'No topic']
   if (item.hskLevel) parts.push(`HSK ${item.hskLevel}`)
   if (item.ageBand) parts.push(humanizeEnum(item.ageBand))
@@ -957,7 +958,7 @@ function activitySummaryMeta(item: AdminActivitySummaryResponse) {
   return parts.join(' · ')
 }
 
-function resetFilters() {
+function resetFilters(): void {
   filters.type = ''
   filters.status = ''
   filters.ageBand = ''
@@ -972,7 +973,7 @@ function resetFilters() {
   }
 }
 
-function applyFilters() {
+function applyFilters(): void {
   currentPage.value = 1
   actionError.value = null
   actionSuccess.value = null
@@ -981,46 +982,46 @@ function applyFilters() {
   }
 }
 
-function goToPage(page: number) {
+function goToPage(page: number): void {
   currentPage.value = page
   void reloadFeed('first')
 }
 
-function changeDraftType() {
+function changeDraftType(): void {
   if (hasSelectedRecord.value) {
     return
   }
   startNewDraft(form.type)
 }
 
-function addMatchingItem() {
+function addMatchingItem(): void {
   form.matchingItems.push(createEmptyMatchingItem(form.matchingItems.length))
 }
 
-function removeMatchingItem(index: number) {
+function removeMatchingItem(index: number): void {
   if (form.matchingItems.length <= 1) return
   form.matchingItems.splice(index, 1)
 }
 
-function addDragItem() {
+function addDragItem(): void {
   form.dragItems.push(createEmptyDragItem(form.dragItems.length))
 }
 
-function removeDragItem(index: number) {
+function removeDragItem(index: number): void {
   if (form.dragItems.length <= 1) return
   form.dragItems.splice(index, 1)
 }
 
-function addStoryQuestion() {
+function addStoryQuestion(): void {
   form.storyQuestions.push(createEmptyStoryQuestion(form.storyQuestions.length))
 }
 
-function removeStoryQuestion(index: number) {
+function removeStoryQuestion(index: number): void {
   if (form.storyQuestions.length <= 1) return
   form.storyQuestions.splice(index, 1)
 }
 
-function startNewDraft(type: AdminActivityType = 'FLASHCARD') {
+function startNewDraft(type: AdminActivityType = 'FLASHCARD'): void {
   selectedId.value = null
   selectedType.value = type
   applyFormState(createEmptyForm(type))
@@ -1028,7 +1029,9 @@ function startNewDraft(type: AdminActivityType = 'FLASHCARD') {
   actionSuccess.value = null
 }
 
-async function reloadFeed(selection: 'first' | 'keep' | { id: number; type: AdminActivityType } = 'keep') {
+async function reloadFeed(
+  selection: 'first' | 'keep' | { id: number; type: AdminActivityType } = 'keep',
+): Promise<void> {
   if (previewReadOnly.value) {
     actionError.value = null
     actionSuccess.value = 'Preview mode is read-only. Sign in as an admin to refresh the live activity feed.'
@@ -1072,7 +1075,7 @@ async function reloadFeed(selection: 'first' | 'keep' | { id: number; type: Admi
   await selectActivity(items[0].type, items[0].id)
 }
 
-async function selectActivity(type: AdminActivityType, id: number) {
+async function selectActivity(type: AdminActivityType, id: number): Promise<void> {
   detailLoading.value = true
   actionError.value = null
   actionSuccess.value = null
@@ -1235,19 +1238,17 @@ async function selectActivity(type: AdminActivityType, id: number) {
   }
 }
 
-function optionsPayloadToText(payload: string) {
+function optionsPayloadToText(payload: string): string {
   try {
     const parsed = JSON.parse(payload) as unknown
     if (Array.isArray(parsed)) {
       return parsed.map((item) => String(item)).join('\n')
     }
-  } catch {
-    // Preserve the raw payload when it is not JSON.
-  }
+  } catch {}
   return payload
 }
 
-function optionsTextToPayload(text: string) {
+function optionsTextToPayload(text: string): string {
   const options = text
     .split('\n')
     .map((item) => item.trim())
@@ -1255,7 +1256,7 @@ function optionsTextToPayload(text: string) {
   return JSON.stringify(options)
 }
 
-function validateForm() {
+function validateForm(): string | null {
   if (form.type !== 'FLASHCARD' && !form.title.trim()) {
     return 'Activity title is required.'
   }
@@ -1424,7 +1425,7 @@ function buildStoryPayload(): AdminStoryActivityPayload {
   }
 }
 
-async function saveActivity() {
+async function saveActivity(): Promise<void> {
   if (saving.value || deleting.value) return
   if (previewReadOnly.value) {
     actionError.value = 'Activity library changes are read-only while preview data is active.'
@@ -1520,7 +1521,7 @@ async function saveActivity() {
   }
 }
 
-async function updateStatus(status: StatusMutation) {
+async function updateStatus(status: StatusMutation): Promise<void> {
   if (saving.value || deleting.value) return
   if (!hasSelectedRecord.value || selectedId.value == null) {
     return
@@ -1576,7 +1577,7 @@ async function updateStatus(status: StatusMutation) {
   }
 }
 
-async function deleteActivity() {
+async function deleteActivity(): Promise<void> {
   if (deleting.value || saving.value) return
   if (!hasSelectedRecord.value || selectedId.value == null) {
     return
@@ -1632,7 +1633,7 @@ async function deleteActivity() {
   }
 }
 
-function confirmActivityMutation(message: string) {
+function confirmActivityMutation(message: string): boolean {
   const confirmed = window.confirm(`${message}\n\nThis changes the live activity library for students.`)
   if (!confirmed) {
     actionSuccess.value = null

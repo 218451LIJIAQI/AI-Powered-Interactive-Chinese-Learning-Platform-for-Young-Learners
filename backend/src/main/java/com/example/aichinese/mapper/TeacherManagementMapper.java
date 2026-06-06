@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -41,7 +42,6 @@ public class TeacherManagementMapper {
             TeacherProfile profile,
             List<TeacherVerificationDocument> documents) {
         User user = profile.getUser();
-        List<TeacherVerificationDocument> safeDocuments = documents == null ? List.of() : documents;
         return new TeacherProfileResponse(
                 user.getId(),
                 user.getDisplayName(),
@@ -52,7 +52,7 @@ public class TeacherManagementMapper {
                 splitCategories(profile.getTeachingCategories()),
                 profile.getTeacherStatus(),
                 profile.getRejectionReason(),
-                safeDocuments.stream().map(this::toDocumentSummary).toList(),
+                mapList(documents, this::toDocumentSummary),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
@@ -105,9 +105,6 @@ public class TeacherManagementMapper {
             List<TeacherVerificationReview> reviews,
             List<AuditLog> auditLogs) {
         User user = profile.getUser();
-        List<TeacherVerificationDocument> safeDocuments = documents == null ? List.of() : documents;
-        List<TeacherVerificationReview> safeReviews = reviews == null ? List.of() : reviews;
-        List<AuditLog> safeAuditLogs = auditLogs == null ? List.of() : auditLogs;
         return new AdminTeacherDetailResponse(
                 profile.getId(),
                 user.getId(),
@@ -119,9 +116,9 @@ public class TeacherManagementMapper {
                 profile.getTeacherStatus(),
                 profile.getRejectionReason(),
                 profile.getVerifiedAt(),
-                safeDocuments.stream().map(this::toDocumentSummary).toList(),
-                safeReviews.stream().map(this::toReviewSummary).toList(),
-                safeAuditLogs.stream().map(this::toAuditSummary).toList(),
+                mapList(documents, this::toDocumentSummary),
+                mapList(reviews, this::toReviewSummary),
+                mapList(auditLogs, TeacherManagementMapper::toAuditSummary),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
@@ -166,7 +163,7 @@ public class TeacherManagementMapper {
                 courseCount);
     }
 
-    private AdminAuditSummaryResponse toAuditSummary(AuditLog auditLog) {
+    private static AdminAuditSummaryResponse toAuditSummary(AuditLog auditLog) {
         return new AdminAuditSummaryResponse(
                 auditLog.getId(),
                 auditLog.getActionType(),
@@ -191,13 +188,19 @@ public class TeacherManagementMapper {
         return joined.isEmpty() ? null : joined;
     }
 
-    private List<String> splitCategories(String categories) {
+    private static List<String> splitCategories(String categories) {
         if (categories == null || categories.isBlank()) {
             return List.of();
         }
         return Arrays.stream(categories.split(","))
                 .map(TextUtils::trimToNull)
                 .filter(value -> value != null)
+                .toList();
+    }
+
+    private static <T, R> List<R> mapList(List<T> source, Function<? super T, R> mapper) {
+        return (source == null ? List.<T>of() : source).stream()
+                .map(mapper)
                 .toList();
     }
 }

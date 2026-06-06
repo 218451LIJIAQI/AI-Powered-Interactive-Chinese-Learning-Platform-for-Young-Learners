@@ -65,67 +65,68 @@ public class PurchasableItemService {
     private ResolvedPurchasableItem resolveLesson(Long itemId) {
         Lesson lesson = lessonRepository.findByIdAndContentStatus(itemId, ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published lesson was not found."));
-        validatePaidContent(lesson.getAccessType(), lesson.getPrice());
+        ResolvedPricing pricing = resolvePricing(lesson.getAccessType(), lesson.getPrice());
         return new ResolvedPurchasableItem(
                 PurchasableItemType.LESSON,
                 lesson.getId(),
                 lesson.getTitle(),
-                commerceMoneyService.normalize(defaultPrice(lesson.getPrice())),
+                pricing.unitPrice(),
                 commerceSettingsService.getDefaultCurrency(),
                 lesson.getTeacher(),
-                isFree(lesson.getPrice()),
+                pricing.freeItem(),
                 null);
     }
 
     private ResolvedPurchasableItem resolveModule(Long itemId) {
         LearningModule module = learningModuleRepository.findByIdAndContentStatus(itemId, ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published module was not found."));
-        validatePaidContent(module.getAccessType(), module.getPrice());
+        ResolvedPricing pricing = resolvePricing(module.getAccessType(), module.getPrice());
         return new ResolvedPurchasableItem(
                 PurchasableItemType.MODULE,
                 module.getId(),
                 module.getTitle(),
-                commerceMoneyService.normalize(defaultPrice(module.getPrice())),
+                pricing.unitPrice(),
                 commerceSettingsService.getDefaultCurrency(),
                 module.getTeacher(),
-                isFree(module.getPrice()),
+                pricing.freeItem(),
                 null);
     }
 
     private ResolvedPurchasableItem resolvePackage(Long itemId) {
         CoursePackage coursePackage = coursePackageRepository.findByIdAndContentStatus(itemId, ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published package was not found."));
-        validatePaidContent(coursePackage.getAccessType(), coursePackage.getPrice());
+        ResolvedPricing pricing = resolvePricing(coursePackage.getAccessType(), coursePackage.getPrice());
         return new ResolvedPurchasableItem(
                 PurchasableItemType.PACKAGE,
                 coursePackage.getId(),
                 coursePackage.getTitle(),
-                commerceMoneyService.normalize(defaultPrice(coursePackage.getPrice())),
+                pricing.unitPrice(),
                 commerceSettingsService.getDefaultCurrency(),
                 coursePackage.getTeacher(),
-                isFree(coursePackage.getPrice()),
+                pricing.freeItem(),
                 null);
     }
 
-    private static void validatePaidContent(AccessType accessType, BigDecimal price) {
+    private ResolvedPricing resolvePricing(AccessType accessType, BigDecimal price) {
         if (accessType == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Purchasable content is missing its access type.");
         }
 
         if (accessType == AccessType.FREE) {
-            return;
+            return new ResolvedPricing(commerceMoneyService.normalize(BigDecimal.ZERO), true);
         }
 
-        if (price == null || price.signum() <= 0) {
+        BigDecimal normalizedPrice = commerceMoneyService.normalize(defaultPrice(price));
+        if (normalizedPrice.signum() <= 0) {
             throw new ResponseStatusException(BAD_REQUEST, "Purchasable content has an invalid price.");
         }
+        return new ResolvedPricing(normalizedPrice, false);
     }
 
     private static BigDecimal defaultPrice(BigDecimal price) {
         return price == null ? BigDecimal.ZERO : price;
     }
 
-    private static boolean isFree(BigDecimal price) {
-        return defaultPrice(price).compareTo(BigDecimal.ZERO) <= 0;
+    private record ResolvedPricing(BigDecimal unitPrice, boolean freeItem) {
     }
 }

@@ -25,16 +25,4 @@ public enum ManagedContentType {
                 "Content type is required.",
                 () -> "Invalid content type. Allowed values are MODULE, LESSON, or PACKAGE.");
     }
-
-    public boolean isModule() {
-        return this == MODULE;
-    }
-
-    public boolean isLesson() {
-        return this == LESSON;
-    }
-
-    public boolean isPackage() {
-        return this == PACKAGE;
-    }
 }

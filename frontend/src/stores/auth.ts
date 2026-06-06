@@ -1,36 +1,3 @@
-/**
- * Pinia store for authentication state — token, current user profile,
- * and the optional read-only "preview role" used for FYP demos.
- *
- * <h2>Three session modes</h2>
- * <ul>
- *   <li><b>Authenticated:</b> {@code token} present, {@code currentUser}
- *       hydrated from {@code /api/v1/auth/me}, {@code previewRole}
- *       always null.</li>
- *   <li><b>Preview:</b> only available when both
- *       {@code VITE_USE_DEMO_DATA=true} and
- *       {@code VITE_ENABLE_PREVIEW_MODE=true}. A synthetic role
- *       (STUDENT / TEACHER / ADMIN) is selected from the role picker
- *       and the dashboards render against {@code demoUsers} fixtures.
- *       Preview cannot coexist with a real token.</li>
- *   <li><b>Anonymous:</b> neither token nor preview role; the public
- *       catalogue is the only accessible surface.</li>
- * </ul>
- *
- * <h2>Storage hardening</h2>
- * <p>The access token lives in memory only and is restored by calling
- * {@code /api/v1/auth/refresh} with the HttpOnly refresh-token cookie.
- * Legacy {@code localStorage}/{@code sessionStorage} bearer tokens are
- * cleared on every auth state change. Preview role remains
- * session-scoped because it is an explicit synthetic state that should
- * not silently persist.</p>
- *
- * <h2>Failure-tolerant logout</h2>
- * <p>{@code logout} falls back to local session clearing when the
- * backend is unreachable so sign-out stays responsive — the backend
- * still enforces true revocation via session-version when it can
- * be reached.</p>
- */
 import { defineStore } from 'pinia'
 
 import { setAccessToken } from '@/api/http'
@@ -41,7 +8,7 @@ import { clearOfflineCaches } from '@/plugins/pwa'
 import type { CurrentUserResponse, UserRole } from '@/types/api'
 import { getSessionStorage, safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
 
-function canUsePreviewMode() {
+function canUsePreviewMode(): boolean {
   return appEnv.useDemoData && appEnv.enablePreviewMode
 }
 
@@ -49,38 +16,43 @@ function isUserRole(value: string | null): value is UserRole {
   return value === 'STUDENT' || value === 'TEACHER' || value === 'ADMIN'
 }
 
-function readPersistedPreviewRole() {
+function readPersistedPreviewRole(): UserRole | null {
   if (!canUsePreviewMode()) {
     return null
   }
 
-  const role = safeGetItem(storageKeys.previewRole, getSessionStorage())
+  const sessionStorage = getSessionStorage()
+  const role = safeGetItem(storageKeys.previewRole, sessionStorage)
   if (isUserRole(role)) {
     return role
   }
 
-  // Preview mode is intentionally ephemeral: it represents a synthetic
-  // read-only role simulation, not a real authenticated session. Remove any
-  // legacy localStorage value so preview access does not silently survive a
-  // browser restart after the session-only hardening pass.
   safeRemoveItem(storageKeys.previewRole)
-  safeRemoveItem(storageKeys.previewRole, getSessionStorage())
+  safeRemoveItem(storageKeys.previewRole, sessionStorage)
   return null
 }
 
-function persistToken(token: string | null) {
+function persistToken(token: string | null): void {
+  const sessionStorage = getSessionStorage()
+
   safeRemoveItem(storageKeys.token)
-  safeRemoveItem(storageKeys.token, getSessionStorage())
+  safeRemoveItem(storageKeys.token, sessionStorage)
   setAccessToken(token)
 }
 
-function persistPreviewRole(role: UserRole | null) {
+function persistPreviewRole(role: UserRole | null): void {
+  const sessionStorage = getSessionStorage()
+
   safeRemoveItem(storageKeys.previewRole)
-  safeRemoveItem(storageKeys.previewRole, getSessionStorage())
+  safeRemoveItem(storageKeys.previewRole, sessionStorage)
 
   if (role && canUsePreviewMode()) {
-    safeSetItem(storageKeys.previewRole, role, getSessionStorage())
+    safeSetItem(storageKeys.previewRole, role, sessionStorage)
   }
+}
+
+function clearPersistedPreviewRole(): void {
+  persistPreviewRole(null)
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -121,20 +93,20 @@ export const useAuthStore = defineStore('auth', {
       (canUsePreviewMode() && !state.token && state.previewRole === role),
   },
   actions: {
-    async bootstrap() {
+    async bootstrap(): Promise<void> {
       if (this.bootstrapped) return
 
       this.loading = true
 
       if (!canUsePreviewMode()) {
         this.previewRole = null
-        persistPreviewRole(null)
+        clearPersistedPreviewRole()
       }
 
       if (this.token) {
         if (this.previewRole) {
           this.previewRole = null
-          persistPreviewRole(null)
+          clearPersistedPreviewRole()
         }
 
         persistToken(this.token)
@@ -159,7 +131,7 @@ export const useAuthStore = defineStore('auth', {
           this.token = response.token
           persistToken(response.token)
           this.previewRole = null
-          persistPreviewRole(null)
+          clearPersistedPreviewRole()
           try {
             this.currentUser = await authApi.me()
           } catch {
@@ -173,7 +145,7 @@ export const useAuthStore = defineStore('auth', {
       this.bootstrapped = true
       this.loading = false
     },
-    async login(email: string, password: string) {
+    async login(email: string, password: string): Promise<void> {
       this.loading = true
 
       try {
@@ -181,7 +153,7 @@ export const useAuthStore = defineStore('auth', {
         this.token = response.token
         this.previewRole = null
         persistToken(response.token)
-        persistPreviewRole(null)
+        clearPersistedPreviewRole()
 
         try {
           this.currentUser = await authApi.me()
@@ -193,10 +165,10 @@ export const useAuthStore = defineStore('auth', {
         this.loading = false
       }
     },
-    setPreviewRole(role: UserRole | null) {
+    setPreviewRole(role: UserRole | null): void {
       if (this.token) {
         this.previewRole = null
-        persistPreviewRole(null)
+        clearPersistedPreviewRole()
         return
       }
 
@@ -204,24 +176,17 @@ export const useAuthStore = defineStore('auth', {
       this.currentUser = this.previewRole ? demoUsers[this.previewRole] : null
       persistPreviewRole(this.previewRole)
     },
-    clearSession() {
+    clearSession(): void {
       this.token = null
       this.currentUser = null
       this.previewRole = null
       persistToken(null)
-      persistPreviewRole(null)
+      clearPersistedPreviewRole()
       void clearOfflineCaches()
     },
-    async logout() {
+    async logout(): Promise<void> {
       if (this.token) {
-        try {
-          await authApi.logout()
-        } catch {
-          // Fall back to local session clearing when the backend is already
-          // unavailable or the token has expired. This keeps sign-out
-          // responsive for the current browser while the backend enforces
-          // true token invalidation whenever it can be reached.
-        }
+        await authApi.logout().catch(() => undefined)
       }
 
       this.clearSession()

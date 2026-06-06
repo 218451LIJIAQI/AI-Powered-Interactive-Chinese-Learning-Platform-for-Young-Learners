@@ -8,7 +8,7 @@
 
     <DataNotice
       :using-fallback="usingFallback"
-      :error="actionError || pageError"
+      :error="noticeError"
       :success="actionSuccess"
       :detail="feedbackNoticeDetail"
     />
@@ -21,7 +21,7 @@
           class="teacher-feedback-tab"
           :class="{ 'is-active': activeTab === tab }"
           type="button"
-          @click="activeTab = tab"
+          @click="selectTab(tab)"
         >
           {{ tab }}
         </button>
@@ -31,7 +31,7 @@
         <article class="panel teacher-feedback-queue-card">
           <div class="row-between teacher-feedback-card-head">
             <div class="student-section-heading">
-              <strong>{{ activeTab === 'History' ? 'Feedback History' : 'Create Feedback' }}</strong>
+              <strong>{{ queueTitle }}</strong>
             </div>
             <div class="row teacher-feedback-queue-actions">
               <span class="teacher-feedback-queue-count">{{ filteredFeedbackItems.length }}</span>
@@ -48,7 +48,7 @@
             </div>
           </div>
 
-          <div v-if="activeTab === 'History' && filteredFeedbackItems.length" class="teacher-feedback-queue-list">
+          <div v-if="isHistoryTab && filteredFeedbackItems.length" class="teacher-feedback-queue-list">
             <button
               v-for="item in filteredFeedbackItems"
               :key="item.id"
@@ -74,7 +74,7 @@
             </button>
           </div>
 
-          <div v-else-if="activeTab === 'History'">
+          <div v-else-if="isHistoryTab">
             <StatePanel icon="help" title="No feedback found" message="No saved feedback matches the current filter." />
           </div>
 
@@ -91,14 +91,14 @@
           </div>
 
           <button class="teacher-footer-link" type="button" @click="toggleTab">
-            <span>{{ activeTab === 'History' ? 'Switch to create mode' : 'Open feedback history' }}</span>
+            <span>{{ tabToggleLabel }}</span>
             <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
           </button>
         </article>
 
         <div class="teacher-feedback-main-column">
           <article class="panel teacher-feedback-detail-card">
-            <template v-if="activeTab === 'History' && selectedFeedbackItem">
+            <template v-if="isHistoryTab && selectedFeedbackItem">
               <div class="teacher-feedback-detail-head">
                 <div class="teacher-feedback-profile">
                   <PortraitAvatar :size="68" rounded="soft" :kind="selectedFeedbackItem.avatarKind" />
@@ -160,7 +160,7 @@
                 <article class="teacher-feedback-detail-panel">
                   <div class="row-between teacher-feedback-card-head">
                     <strong>Linked Student Snapshot</strong>
-                    <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+                    <button class="student-link-button" type="button" @click="openStudents">
                       View Students
                     </button>
                   </div>
@@ -253,7 +253,7 @@
                     class="select"
                     :disabled="feedbackFormDisabled || !commentForm.lessonId || loadingQuizzes"
                   >
-                    <option :value="0">{{ loadingQuizzes ? 'Loading quizzes...' : 'No quiz context' }}</option>
+                    <option :value="0">{{ quizPlaceholder }}</option>
                     <option v-for="quiz in quizOptions" :key="quiz.id" :value="quiz.id">
                       {{ quiz.title }}
                     </option>
@@ -269,7 +269,7 @@
                     :disabled="feedbackFormDisabled || !selectedQuizId || loadingQuizAttempts"
                   >
                     <option :value="0">
-                      {{ loadingQuizAttempts ? 'Loading attempts...' : 'No quiz attempt selected' }}
+                      {{ quizAttemptPlaceholder }}
                     </option>
                     <option v-for="attempt in quizAttemptOptions" :key="attempt.attemptId" :value="attempt.attemptId">
                       {{ attempt.studentName }} · {{ attempt.score }}/{{ attempt.maxScore }} ·
@@ -284,7 +284,7 @@
           <section class="teacher-feedback-bottom-grid">
             <article class="panel teacher-feedback-comment-card">
               <div class="teacher-feedback-card-head">
-                <strong>{{ activeTab === 'History' ? 'Edit Message' : 'Teacher Comment' }}</strong>
+                <strong>{{ commentCardTitle }}</strong>
               </div>
 
               <textarea
@@ -344,15 +344,7 @@
                   :disabled="feedbackReadOnly || submittingCreate || submittingUpdate"
                   @click="submitFeedback"
                 >
-                  {{
-                    isEditingExistingFeedback
-                      ? submittingUpdate
-                        ? 'Saving...'
-                        : 'Save Feedback'
-                      : submittingCreate
-                        ? 'Sending...'
-                        : 'Send Feedback'
-                  }}
+                  {{ submitFeedbackLabel }}
                 </button>
                 <button
                   class="teacher-outline-button teacher-feedback-action-alt"
@@ -390,17 +382,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher feedback surface — review saved feedback, create or edit
- * narrative comments, and optionally attach lesson or quiz-attempt
- * context for linked learners.
- *
- * <p>Scopes student lookups to the teacher's own classroom — the
- * backend further enforces this in
- * {@code TeacherFeedbackService.assertTeachesStudent()} so a
- * malicious teacher cannot leave feedback for a student outside
- * their roster.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -527,6 +508,7 @@ const pageLoading = computed(
 const pageError = computed(
   () => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(
   () =>
     feedbackResource.usingFallback.value || studentsResource.usingFallback.value || lessonsResource.usingFallback.value,
@@ -534,6 +516,21 @@ const usingFallback = computed(
 const feedbackReadOnly = computed(() => teacherApprovalLocked.value || usingFallback.value)
 const feedbackFormDisabled = computed(() => feedbackReadOnly.value || submittingCreate.value || submittingUpdate.value)
 const feedbackNoticeDetail = computed(() => (teacherApprovalLocked.value ? teacherApprovalMessage.value : null))
+const isHistoryTab = computed(() => activeTab.value === 'History')
+const queueTitle = computed(() => (isHistoryTab.value ? 'Feedback History' : 'Create Feedback'))
+const tabToggleLabel = computed(() => (isHistoryTab.value ? 'Switch to create mode' : 'Open feedback history'))
+const commentCardTitle = computed(() => (isHistoryTab.value ? 'Edit Message' : 'Teacher Comment'))
+const quizPlaceholder = computed(() => (loadingQuizzes.value ? 'Loading quizzes...' : 'No quiz context'))
+const quizAttemptPlaceholder = computed(() =>
+  loadingQuizAttempts.value ? 'Loading attempts...' : 'No quiz attempt selected',
+)
+const submitFeedbackLabel = computed(() => {
+  if (isEditingExistingFeedback.value) {
+    return submittingUpdate.value ? 'Saving...' : 'Save Feedback'
+  }
+
+  return submittingCreate.value ? 'Sending...' : 'Send Feedback'
+})
 
 const commentForm = reactive({
   studentId: 0,
@@ -546,8 +543,7 @@ const commentForm = reactive({
 const feedbackItems = computed<FeedbackQueueItem[]>(() =>
   feedback.value.map((item: TeacherFeedbackResponse, index: number) => {
     const linkedStudent = studentOptions.value.find((student: StudentOption) => student.studentId === item.studentId)
-    const category: FeedbackQueueItem['category'] =
-      item.quizAttemptId != null ? 'QUIZ' : item.lessonId != null ? 'LESSON' : 'GENERAL'
+    const category = feedbackCategory(item)
     const quizAverage =
       linkedStudent?.quizAveragePercent == null
         ? 'No quiz data'
@@ -560,20 +556,15 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
       studentName: item.studentName,
       studentMeta: linkedStudent?.meta || 'Linked learner',
       title: item.quizTitle || item.lessonTitle || formatTeacherFeedbackType(item.feedbackType),
-      contextLine: item.quizTitle
-        ? `Quiz attempt ${item.quizAttemptId ?? '--'}`
-        : item.lessonTitle
-          ? `Lesson ${item.lessonId ?? '--'}`
-          : 'General teacher feedback',
+      contextLine: feedbackContextLine(item),
       message: item.message,
-      typeLabel: category === 'QUIZ' ? 'Quiz' : category === 'LESSON' ? 'Lesson' : 'General',
-      typeDisplay:
-        category === 'QUIZ' ? 'Quiz Feedback' : category === 'LESSON' ? 'Lesson Feedback' : 'General Feedback',
+      typeLabel: feedbackCategoryLabel(category),
+      typeDisplay: feedbackCategoryDisplay(category),
       feedbackTypeLabel: formatTeacherFeedbackType(item.feedbackType),
       createdLabel: formatDateTime(item.createdAt),
       createdExact: formatDateTime(item.createdAt),
-      priority: index === 0 ? 'Recent' : index === 1 ? 'Follow-up' : 'Saved',
-      priorityTone: index === 0 ? 'high' : index === 1 ? 'medium' : 'low',
+      priority: feedbackPriorityLabel(index),
+      priorityTone: feedbackPriorityTone(index),
       avatarKind: linkedStudent?.avatarKind || (['student', 'male', 'female', 'hijab'] as const)[index % 4],
       lessonId: item.lessonId,
       quizAttemptId: item.quizAttemptId,
@@ -725,7 +716,43 @@ watch(
   { immediate: true },
 )
 
-async function loadQuizzesForLesson(lessonId: number) {
+function feedbackCategory(item: TeacherFeedbackResponse): FeedbackQueueItem['category'] {
+  if (item.quizAttemptId != null) return 'QUIZ'
+  if (item.lessonId != null) return 'LESSON'
+  return 'GENERAL'
+}
+
+function feedbackContextLine(item: TeacherFeedbackResponse): string {
+  if (item.quizTitle) return `Quiz attempt ${item.quizAttemptId ?? '--'}`
+  if (item.lessonTitle) return `Lesson ${item.lessonId ?? '--'}`
+  return 'General teacher feedback'
+}
+
+function feedbackCategoryLabel(category: FeedbackQueueItem['category']): string {
+  if (category === 'QUIZ') return 'Quiz'
+  if (category === 'LESSON') return 'Lesson'
+  return 'General'
+}
+
+function feedbackCategoryDisplay(category: FeedbackQueueItem['category']): string {
+  if (category === 'QUIZ') return 'Quiz Feedback'
+  if (category === 'LESSON') return 'Lesson Feedback'
+  return 'General Feedback'
+}
+
+function feedbackPriorityLabel(index: number): string {
+  if (index === 0) return 'Recent'
+  if (index === 1) return 'Follow-up'
+  return 'Saved'
+}
+
+function feedbackPriorityTone(index: number): FeedbackQueueItem['priorityTone'] {
+  if (index === 0) return 'high'
+  if (index === 1) return 'medium'
+  return 'low'
+}
+
+async function loadQuizzesForLesson(lessonId: number): Promise<void> {
   if (teacherApprovalLocked.value) {
     quizzes.value = []
     return
@@ -744,7 +771,7 @@ async function loadQuizzesForLesson(lessonId: number) {
   }
 }
 
-async function loadQuizAttempts(quizId: number) {
+async function loadQuizAttempts(quizId: number): Promise<void> {
   if (teacherApprovalLocked.value) {
     quizAttempts.value = []
     return
@@ -761,7 +788,7 @@ async function loadQuizAttempts(quizId: number) {
   }
 }
 
-function syncCommentFormFromExisting() {
+function syncCommentFormFromExisting(): void {
   const item = selectedExistingFeedback.value
   if (!item) {
     return
@@ -774,18 +801,26 @@ function syncCommentFormFromExisting() {
   commentForm.message = item.message
 }
 
-function selectFeedback(id: number) {
+function selectTab(tab: FeedbackTab): void {
+  activeTab.value = tab
+}
+
+function selectFeedback(id: number): void {
   selectedFeedbackId.value = id
   activeTab.value = 'History'
   syncCommentFormFromExisting()
 }
 
-function prepareEditFromSelected() {
+function prepareEditFromSelected(): void {
   activeTab.value = 'History'
   syncCommentFormFromExisting()
 }
 
-function openCreateForSelectedStudent() {
+function openStudents(): void {
+  void router.push('/teacher/students')
+}
+
+function openCreateForSelectedStudent(): void {
   activeTab.value = 'Create'
   const candidateStudentId = selectedFeedbackItem.value?.studentId ?? studentOptions.value[0]?.studentId ?? 0
   commentForm.studentId = candidateStudentId
@@ -798,11 +833,11 @@ function openCreateForSelectedStudent() {
   commentForm.message = ''
 }
 
-function regenerateSuggestion() {
+function regenerateSuggestion(): void {
   draftSeed.value += 1
 }
 
-function useSuggestedDraft() {
+function useSuggestedDraft(): void {
   commentForm.message = commentForm.message.trim()
     ? `${commentForm.message.trim()} ${draftGuidance.value}`
     : draftGuidance.value
@@ -810,7 +845,7 @@ function useSuggestedDraft() {
   actionSuccess.value = 'Draft guidance added to the feedback message.'
 }
 
-function prepareRetryMessage() {
+function prepareRetryMessage(): void {
   commentForm.feedbackType = 'CORRECTIVE'
   commentForm.message =
     'Please review the key pattern once more and try again. You are close, and one careful retry will help.'
@@ -818,8 +853,8 @@ function prepareRetryMessage() {
   actionSuccess.value = 'Retry note drafted for review.'
 }
 
-function toggleTab() {
-  activeTab.value = activeTab.value === 'History' ? 'Create' : 'History'
+function toggleTab(): void {
+  selectTab(isHistoryTab.value ? 'Create' : 'History')
   if (activeTab.value === 'Create') {
     openCreateForSelectedStudent()
   } else if (selectedExistingFeedback.value) {
@@ -827,7 +862,7 @@ function toggleTab() {
   }
 }
 
-async function submitFeedback() {
+async function submitFeedback(): Promise<void> {
   if (submittingCreate.value || submittingUpdate.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -886,7 +921,7 @@ async function submitFeedback() {
   }
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void feedbackResource.reload()
   void studentsResource.reload()
   void lessonsResource.reload()

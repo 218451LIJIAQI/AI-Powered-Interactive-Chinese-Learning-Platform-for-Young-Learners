@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.util.Locale;
 import java.util.Objects;
 
 import org.springframework.stereotype.Service;
@@ -20,6 +19,8 @@ import com.example.aichinese.repository.TeacherProfileRepository;
 
 @Service
 public class CommunicationTargetResolver {
+
+    private static final String TARGET_ID_REQUIRED = "Target id is required.";
 
     private final LessonRepository lessonRepository;
     private final CoursePackageRepository coursePackageRepository;
@@ -55,38 +56,33 @@ public class CommunicationTargetResolver {
     }
 
     private Lesson requireLesson(Long lessonId) {
-        if (lessonId == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Target id is required.");
-        }
-        return lessonRepository.findById(lessonId)
+        return lessonRepository.findById(requireTargetId(lessonId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Lesson was not found."));
     }
 
     private CoursePackage requirePackage(Long packageId) {
-        if (packageId == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Target id is required.");
-        }
-        return coursePackageRepository.findById(packageId)
+        return coursePackageRepository.findById(requireTargetId(packageId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Package was not found."));
     }
 
     private TeacherProfile requireTeacherProfile(Long teacherId) {
-        if (teacherId == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Target id is required.");
-        }
-        return teacherProfileRepository.findDetailedById(teacherId)
+        return teacherProfileRepository.findDetailedById(requireTargetId(teacherId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile was not found."));
     }
 
-    private ContentModerationTargetType parseModerationTargetType(String rawTargetType) {
-        if (rawTargetType == null || rawTargetType.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, "Moderation target type is required.");
+    private static Long requireTargetId(Long targetId) {
+        if (targetId == null) {
+            throw new ResponseStatusException(BAD_REQUEST, TARGET_ID_REQUIRED);
         }
-        try {
-            return ContentModerationTargetType.valueOf(rawTargetType.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid moderation target type.");
+        if (targetId <= 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Target id must be positive.");
         }
+        return targetId;
+    }
+
+    private static ContentModerationTargetType parseModerationTargetType(String rawTargetType) {
+        return ContentModerationTargetType.tryFrom(rawTargetType)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid moderation target type."));
     }
 
     public record ResolvedTarget(
@@ -97,5 +93,29 @@ public class CommunicationTargetResolver {
             Lesson lesson,
             CoursePackage coursePackage,
             TeacherProfile teacherProfile) {
+
+        public ResolvedTarget {
+            targetType = requireText(targetType, "targetType");
+            if (targetId != null && targetId <= 0) {
+                throw new IllegalArgumentException("targetId must be positive when provided.");
+            }
+            targetTitle = optionalText(targetTitle);
+        }
+
+        private static String requireText(String value, String fieldName) {
+            String stripped = Objects.requireNonNull(value, fieldName).strip();
+            if (stripped.isEmpty()) {
+                throw new IllegalArgumentException(fieldName + " must not be blank.");
+            }
+            return stripped;
+        }
+
+        private static String optionalText(String value) {
+            if (value == null) {
+                return null;
+            }
+            String stripped = value.strip();
+            return stripped.isEmpty() ? null : stripped;
+        }
     }
 }

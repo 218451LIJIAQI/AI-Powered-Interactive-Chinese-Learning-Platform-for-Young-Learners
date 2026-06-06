@@ -8,7 +8,7 @@
       <template #actions>
         <StatusPill
           :label="teacherStatusLabel"
-          :tone="dashboard.teacherStatus === 'APPROVED' ? 'success' : 'warning'"
+          :tone="teacherStatusTone"
         />
       </template>
     </PageHeaderBlock>
@@ -35,7 +35,7 @@
             <div class="student-section-heading">
               <strong>Content Snapshot</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/content')">
+            <button class="student-link-button" type="button" @click="openContent">
               Manage Content
             </button>
           </div>
@@ -88,7 +88,7 @@
               class="student-link-button"
               type="button"
               :disabled="teacherApprovalLocked"
-              @click="router.push('/teacher/classes')"
+              @click="openClasses"
             >
               Open Calendar
             </button>
@@ -110,7 +110,7 @@
                 <strong>{{ item.title }}</strong>
                 <span>{{ classContextLabel(item) }}</span>
               </div>
-              <StatusPill :label="formatStatus(item.liveClassStatus)" :tone="item.canJoin ? 'success' : 'warning'" />
+              <StatusPill :label="formatStatus(item.liveClassStatus)" :tone="classJoinTone(item.canJoin)" />
             </article>
           </div>
           <StatePanel
@@ -126,7 +126,7 @@
             <div class="student-section-heading">
               <strong>Recent Quiz Results</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+            <button class="student-link-button" type="button" @click="openStudents">
               Open Students
             </button>
           </div>
@@ -158,7 +158,7 @@
             <div class="student-section-heading">
               <strong>Recent Notifications</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/profile')">
+            <button class="student-link-button" type="button" @click="openProfile">
               Open Profile
             </button>
           </div>
@@ -195,7 +195,7 @@
             <div class="student-section-heading">
               <strong>Teaching Operations</strong>
             </div>
-            <button class="student-link-button" type="button" @click="router.push('/teacher/students')">
+            <button class="student-link-button" type="button" @click="openStudents">
               Open Learners
             </button>
           </div>
@@ -241,7 +241,7 @@
               :key="item.label"
               class="teacher-dashboard-action"
               type="button"
-              @click="router.push(item.to)"
+              @click="item.action"
             >
               <IconGlyph :name="item.icon" :size="18" />
               <span>{{ item.label }}</span>
@@ -254,14 +254,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher dashboard — verification + classroom + earnings hero.
- *
- * <p>Combines verification status, class lineup, analytics, quiz
- * results, notifications, and earnings into a read-only landing
- * backed by the teacher dashboard, analytics, and live-class
- * resources.</p>
- */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -368,6 +360,7 @@ function markTeacherNotificationRead(notificationId: number) {
 
 const teacherName = computed(() => dashboard.value.fullName || 'Teacher')
 const teacherStatusLabel = computed(() => formatStatus(dashboard.value.teacherStatus))
+const teacherStatusTone = computed(() => (dashboard.value.teacherStatus === 'APPROVED' ? 'success' : 'warning'))
 
 const statCards = computed(() => [
   {
@@ -420,10 +413,10 @@ const upcomingClasses = computed(() =>
 const contentBreakdownRows = computed(() => withPercentages(analytics.value.contentStatusBreakdown))
 
 const quickActions = [
-  { label: 'Create Content', icon: 'content', to: '/teacher/content' },
-  { label: 'Manage Classes', icon: 'classes', to: '/teacher/classes' },
-  { label: 'Review Students', icon: 'students', to: '/teacher/students' },
-  { label: 'Open Feedback', icon: 'help', to: '/teacher/feedback' },
+  { label: 'Create Content', icon: 'content', action: openContent },
+  { label: 'Manage Classes', icon: 'classes', action: openClasses },
+  { label: 'Review Students', icon: 'students', action: openStudents },
+  { label: 'Open Feedback', icon: 'help', action: openFeedback },
 ]
 
 function withPercentages(items: AnalyticsBreakdownItem[]) {
@@ -442,7 +435,7 @@ function withPercentages(items: AnalyticsBreakdownItem[]) {
   })
 }
 
-function formatStatus(status: string | null | undefined) {
+function formatStatus(status: string | null | undefined): string {
   if (!status) return 'Unknown'
   return status
     .replaceAll('_', ' ')
@@ -450,11 +443,11 @@ function formatStatus(status: string | null | undefined) {
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function scoreLabel(score: number, maxScore: number) {
+function scoreLabel(score: number, maxScore: number): string {
   return `${score}/${maxScore}`
 }
 
-function classContextLabel(item: LiveClassResponse) {
+function classContextLabel(item: LiveClassResponse): string {
   if (item.lesson?.lessonTitle) {
     return `${item.lesson.lessonTitle} • ${item.enrolledCount} enrolment(s)`
   }
@@ -466,7 +459,11 @@ function classContextLabel(item: LiveClassResponse) {
   return `${item.enrolledCount} enrolment(s)`
 }
 
-function timeRange(startTime: string, endTime: string) {
+function classJoinTone(canJoin: boolean): 'success' | 'warning' {
+  return canJoin ? 'success' : 'warning'
+}
+
+function timeRange(startTime: string, endTime: string): string {
   const formatter = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -475,7 +472,27 @@ function timeRange(startTime: string, endTime: string) {
   return `${formatter.format(new Date(startTime))} - ${formatter.format(new Date(endTime))}`
 }
 
-function reloadAll() {
+function openContent(): void {
+  void router.push('/teacher/content')
+}
+
+function openClasses(): void {
+  void router.push('/teacher/classes')
+}
+
+function openStudents(): void {
+  void router.push('/teacher/students')
+}
+
+function openFeedback(): void {
+  void router.push('/teacher/feedback')
+}
+
+function openProfile(): void {
+  void router.push('/teacher/profile')
+}
+
+function reloadAll(): void {
   void dashboardResource.reload()
   void analyticsResource.reload()
   void liveClassesResource.reload()

@@ -22,6 +22,8 @@ import com.example.aichinese.repository.AiUsageLogRepository;
 @Service
 public class AiLogService {
 
+    private static final int ERROR_SUMMARY_LIMIT = 255;
+
     private final AiUsageLogRepository aiUsageLogRepository;
     private final AiFeedbackRecordRepository aiFeedbackRecordRepository;
     private final AiChatSessionRepository aiChatSessionRepository;
@@ -105,7 +107,7 @@ public class AiLogService {
         usageLog.setTokenCount(tokenCount);
         usageLog.setInputSummary(contentMetadata(inputSummary));
         usageLog.setOutputSummary(contentMetadata(outputSummary));
-        usageLog.setErrorSummary(summarize(errorSummary, 255));
+        usageLog.setErrorSummary(summarize(errorSummary, ERROR_SUMMARY_LIMIT));
         usageLog.setRelatedEntityType(relatedEntityType);
         usageLog.setRelatedEntityId(relatedEntityId);
         return aiUsageLogRepository.save(usageLog);
@@ -119,12 +121,8 @@ public class AiLogService {
     }
 
     private static String summarize(String value, int limit) {
-        if (value == null) {
-            return null;
-        }
-
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
             return null;
         }
 
@@ -139,15 +137,19 @@ public class AiLogService {
     }
 
     private static String contentMetadata(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
             return null;
         }
 
         return "content_length=" + trimmed.length();
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

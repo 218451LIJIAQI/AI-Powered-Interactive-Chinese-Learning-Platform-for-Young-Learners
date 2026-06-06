@@ -15,20 +15,24 @@ public record EmailProperties(
     private static final int MAX_URL_LENGTH = 2048;
 
     public String resolveFrom(String fallbackEmail) {
-        if (from != null && !from.isBlank()) {
+        if (hasText(from)) {
             return sanitizeHeaderValue(from, "Email from address");
         }
-        if (fallbackEmail != null && !fallbackEmail.isBlank()) {
+        if (hasText(fallbackEmail)) {
             return sanitizeHeaderValue(fallbackEmail, "SMTP username fallback email");
         }
         return DEFAULT_FROM;
     }
 
     public String resolvePasswordResetBaseUrl() {
-        if (passwordResetBaseUrl != null && !passwordResetBaseUrl.isBlank()) {
-            return validateHttpUrl(passwordResetBaseUrl.strip(), "Password reset base URL");
+        if (hasText(passwordResetBaseUrl)) {
+            return validateHttpUrl(passwordResetBaseUrl.trim(), "Password reset base URL");
         }
         return DEFAULT_RESET_URL;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String sanitizeHeaderValue(String value, String label) {

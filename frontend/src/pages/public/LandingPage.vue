@@ -24,13 +24,13 @@
           <p>MandarinSpark makes learning Mandarin fun, effective, and safe for young learners anywhere, anytime.</p>
 
           <div class="public-hero-actions">
-            <button class="btn btn-primary public-hero-button" type="button" @click="router.push('/courses')">
+            <button class="btn btn-primary public-hero-button" type="button" @click="openCatalog">
               <span>Explore Courses</span>
             </button>
             <button
               class="btn btn-accent public-hero-button public-hero-button--gold"
               type="button"
-              @click="router.push('/auth')"
+              @click="openAuth"
             >
               <span>Start Learning</span>
             </button>
@@ -92,7 +92,7 @@
         <section class="panel public-home-panel">
           <div class="public-section-head">
             <h2>Featured Courses</h2>
-            <button class="public-link-button" type="button" @click="router.push('/courses')">View All Courses</button>
+            <button class="public-link-button" type="button" @click="openCatalog">View All Courses</button>
           </div>
 
           <div v-if="featuredCourses.length" class="public-featured-grid">
@@ -177,9 +177,7 @@
           <span class="legal-eyebrow">Support</span>
           <h2>Need help using MandarinSpark?</h2>
         </div>
-        <button class="btn btn-primary" type="button" @click="router.push({ path: '/auth', query: { tab: 'signin' } })">
-          Sign in for support
-        </button>
+        <button class="btn btn-primary" type="button" @click="openSupportSignIn">Sign in for support</button>
       </div>
       <div class="public-support-grid">
         <article v-for="item in supportOptions" :key="item.title" class="public-support-card">
@@ -198,7 +196,7 @@
       <div class="public-footer-links">
         <div class="public-footer-column">
           <strong>Explore</strong>
-          <a href="/courses" @click.prevent="router.push('/courses')">Courses</a>
+          <a href="/courses" @click.prevent="openCatalog">Courses</a>
           <a href="#how-it-works">How It Works</a>
         </div>
         <div class="public-footer-column">
@@ -209,8 +207,8 @@
         <div class="public-footer-column">
           <strong>Safety</strong>
           <a href="#safety">Child Safety</a>
-          <a href="/privacy" @click.prevent="router.push('/privacy')">Privacy Policy</a>
-          <a href="/terms" @click.prevent="router.push('/terms')">Terms</a>
+          <a href="/privacy" @click.prevent="openPrivacy">Privacy Policy</a>
+          <a href="/terms" @click.prevent="openTerms">Terms</a>
         </div>
         <div class="public-footer-column">
           <strong>Support</strong>
@@ -230,19 +228,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Marketing landing page — the unauthenticated home route.
- *
- * <p>Composed entirely of {@link PublicFeatureCard},
- * {@link PublicInfoBanner}, {@link PandaIllustration} and other
- * pure-CSS visuals so the initial paint stays light and there are
- * no remote image dependencies for the first impression.</p>
- *
- * <p>Routes new visitors into {@link CatalogPage} for discovery and
- * {@link AuthPage} for sign-up / sign-in. The page is purely
- * presentational apart from a lightweight featured-course fetch
- * via {@link useResource} — no router-guard handshake.</p>
- */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -259,6 +244,7 @@ import { publicCourses } from '@/demo/data'
 import type { PublicCourseSummary } from '@/types/api'
 
 type CourseSceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
+type FeatureTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink' | 'purple'
 
 const router = useRouter()
 const copyrightYear = new Date().getFullYear()
@@ -285,39 +271,39 @@ const featureStrip = [
     icon: 'status',
     title: 'Beginner Mandarin Made Easy',
     description: 'Start from the basics with step-by-step lessons.',
-    tone: 'purple' as const,
+    tone: 'purple',
   },
   {
     icon: 'play',
     title: 'Interactive Activities',
     description: 'Fun games and quizzes that build real skills.',
-    tone: 'green' as const,
+    tone: 'green',
   },
   {
     icon: 'ai',
     title: 'AI-Assisted Support',
     description: 'Get help anytime with SparkBot AI Helper.',
-    tone: 'blue' as const,
+    tone: 'blue',
   },
   {
     icon: 'live',
     title: 'Live & Recorded Learning',
     description: 'Join live classes or learn at your own pace.',
-    tone: 'orange' as const,
+    tone: 'orange',
   },
   {
     icon: 'trophy',
     title: 'Progress Tracking & Rewards',
     description: 'Earn stars, badges, and celebrate your growth.',
-    tone: 'gold' as const,
+    tone: 'gold',
   },
   {
     icon: 'teacher',
     title: 'Teacher-Guided Learning',
     description: 'Learn with verified teachers who care about you.',
-    tone: 'pink' as const,
+    tone: 'pink',
   },
-]
+] satisfies Array<{ icon: string; title: string; description: string; tone: FeatureTone }>
 
 const heroProof = [
   { value: 'Live + recorded', label: 'Flexible learning paths for families' },
@@ -358,20 +344,40 @@ const supportOptions = [
   },
 ]
 
-function viewCourse(id: string) {
-  router.push(`/courses/${id}`)
+function viewCourse(id: string): void {
+  void router.push(`/courses/${id}`)
 }
 
-const featuredThumbs: CourseSceneVariant[] = ['panda', 'family', 'pagoda']
+const featuredThumbs = ['panda', 'family', 'pagoda'] as const
 
 function featuredThumb(index: number): CourseSceneVariant {
-  return featuredThumbs[index % featuredThumbs.length] ?? 'panda'
+  return featuredThumbs[index % featuredThumbs.length]
 }
 
-function featuredCopy(course: PublicCourseSummary) {
+function featuredCopy(course: PublicCourseSummary): string {
   return (
     course.shortDescription?.trim() ||
     `${course.teacher.displayName} teaches this ${course.category.name.toLowerCase()} course.`
   )
+}
+
+function openCatalog(): void {
+  void router.push('/courses')
+}
+
+function openAuth(): void {
+  void router.push('/auth')
+}
+
+function openSupportSignIn(): void {
+  void router.push({ path: '/auth', query: { tab: 'signin' } })
+}
+
+function openPrivacy(): void {
+  void router.push('/privacy')
+}
+
+function openTerms(): void {
+  void router.push('/terms')
 }
 </script>

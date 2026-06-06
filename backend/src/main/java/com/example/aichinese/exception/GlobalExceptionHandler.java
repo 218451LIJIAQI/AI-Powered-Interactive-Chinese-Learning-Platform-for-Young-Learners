@@ -1,6 +1,8 @@
 package com.example.aichinese.exception;
 
 import java.util.IdentityHashMap;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,9 +81,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadableException(
             HttpMessageNotReadableException exception) {
         Throwable cause = exception.getMostSpecificCause();
-        String causeSummary = cause == null
-                ? exception.getClass().getSimpleName()
-                : cause.getClass().getSimpleName();
+        String causeSummary = cause.getClass().getSimpleName();
         log.warn("Malformed or unreadable request body rejected with HTTP 400 [requestId={}]: {}",
                 requestId(), causeSummary);
         return badRequest(FriendlyErrorMessageResolver.invalidRequestMessage());
@@ -174,7 +174,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(RuntimeException exception) {
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(AccessDeniedException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(failure(FriendlyErrorMessageResolver.permissionDeniedMessage()));
     }
@@ -205,7 +205,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(RuntimeException exception) {
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(
+            OptimisticLockingFailureException exception) {
         log.warn("Concurrent update rejected request [requestId={}]: {}",
                 requestId(), rootCauseClassName(exception));
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -287,7 +288,7 @@ public class GlobalExceptionHandler {
         if (safeField == null || message == null || message.isBlank()) {
             return;
         }
-        fieldErrors.computeIfAbsent(safeField, ignored -> new java.util.ArrayList<>())
+        fieldErrors.computeIfAbsent(safeField, ignored -> new ArrayList<>())
                 .add(message.strip());
     }
 
@@ -301,8 +302,9 @@ public class GlobalExceptionHandler {
     }
 
     private static String fieldName(String fallback, MessageSourceResolvable error) {
-        if (error != null && error.getCodes() != null) {
-            for (String code : error.getCodes()) {
+        String[] codes = error == null ? null : error.getCodes();
+        if (codes != null) {
+            for (String code : codes) {
                 String safeCode = normalizeFieldKey(code);
                 if (safeCode != null) {
                     return safeCode;
@@ -360,7 +362,7 @@ public class GlobalExceptionHandler {
         }
         Map<String, List<String>> copied = new LinkedHashMap<>();
         source.forEach((field, messages) -> copied.put(field, List.copyOf(messages)));
-        return java.util.Collections.unmodifiableMap(copied);
+        return Collections.unmodifiableMap(copied);
     }
 
     private static boolean shouldExposeFieldErrors() {
@@ -401,7 +403,7 @@ public class GlobalExceptionHandler {
     }
 
     private static Set<Throwable> newIdentitySet() {
-        return java.util.Collections.newSetFromMap(new IdentityHashMap<>(8));
+        return Collections.newSetFromMap(new IdentityHashMap<>(8));
     }
 
     private static String requestId() {

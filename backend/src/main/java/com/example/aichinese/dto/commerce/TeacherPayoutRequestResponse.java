@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.entity.enums.PayoutStatus;
 
 @JsonPropertyOrder({

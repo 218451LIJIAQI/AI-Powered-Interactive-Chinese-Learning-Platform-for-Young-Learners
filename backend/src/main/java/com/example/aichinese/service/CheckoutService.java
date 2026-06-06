@@ -63,14 +63,10 @@ public class CheckoutService {
     public CheckoutResponse checkoutCart(SecurityUserDetails currentUser) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         List<CartItem> cartItems = cartService.getCartItems(currentUser);
-        if (cartItems == null || cartItems.isEmpty()) {
+        if (cartItems.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Cart is empty.");
         }
-        if (cartItems.size() > MAX_CHECKOUT_ITEMS) {
-            throw new ResponseStatusException(
-                    BAD_REQUEST,
-                    "Checkout can contain at most " + MAX_CHECKOUT_ITEMS + " items.");
-        }
+        enforceCheckoutSize(cartItems.size());
 
         List<ResolvedPurchasableItem> resolvedItems = cartItems.stream()
                 .map(this::resolveCartCheckoutItem)
@@ -96,33 +92,7 @@ public class CheckoutService {
             StudentProfile student,
             CheckoutSource source,
             List<ResolvedPurchasableItem> items) {
-        if (items == null || items.isEmpty()) {
-            throw new ResponseStatusException(BAD_REQUEST, "At least one item is required for checkout.");
-        }
-        if (items.size() > MAX_CHECKOUT_ITEMS) {
-            throw new ResponseStatusException(
-                    BAD_REQUEST,
-                    "Checkout can contain at most " + MAX_CHECKOUT_ITEMS + " items.");
-        }
-        Set<String> seenItems = new HashSet<>(items.size());
-        for (ResolvedPurchasableItem item : items) {
-            if (item == null) {
-                throw new ResponseStatusException(BAD_REQUEST, "Checkout item must not be null.");
-            }
-            if (item.itemType() == null || item.itemId() == null) {
-                throw new ResponseStatusException(BAD_REQUEST, "Checkout item is missing its identity.");
-            }
-            if (!seenItems.add(item.itemType().name() + ":" + item.itemId())) {
-                throw new ResponseStatusException(BAD_REQUEST, "Checkout contains duplicate items.");
-            }
-            if (item.unitPrice() == null || item.unitPrice().signum() < 0) {
-                throw new ResponseStatusException(BAD_REQUEST, "Checkout item has an invalid price.");
-            }
-            if (entitlementService.hasAccessToPurchasableItem(student, item)) {
-                throw new ResponseStatusException(BAD_REQUEST,
-                        "You already have access to: " + item.title());
-            }
-        }
+        validateCheckoutItems(student, items);
 
         Order order = orderService.createOrder(student, source, items);
         List<OrderItem> orderItems = orderService.createOrderItems(order, items);
@@ -132,49 +102,108 @@ public class CheckoutService {
             paymentService.markPaymentPaid(paymentRecord, "FREE", "FREE_UNLOCK");
             log.info("Free checkout completed: orderId={}, userId={}, items={}",
                     order.getId(), student.getUser().getId(), items.size());
-            return new CheckoutResponse(
-                    order.getId(),
-                    order.getOrderNumber(),
-                    paymentRecord.getId(),
-                    paymentRecord.getPaymentStatus(),
-                    paymentRecord.getAmount(),
-                    paymentRecord.getCurrencyCode(),
-                    null,
-                    paymentRecord.getProviderName(),
-                    paymentRecord.getProviderStatus(),
-                    true,
-                    "Free item unlocked successfully.",
-                    orderItems.stream()
-                            .map(item -> new CartItemResponse(
-                                    null,
-                                    item.getItemType(),
-                                    item.getItemId(),
-                                    item.getItemTitleSnapshot(),
-                                    item.getUnitPrice(),
-                                    order.getCurrencyCode(),
-                                    item.getQuantity(),
-                                    item.getLineTotal(),
-                                    item.getTeacher() != null))
-                            .toList());
+            return freeCheckoutResponse(order, paymentRecord, orderItems);
         }
-
-        String successUrl = UriComponentsBuilder
-                .fromUriString(paymentProperties.successUrl())
-                .queryParam("paymentId", paymentRecord.getId())
-                .build().toUriString();
-        String cancelUrl = UriComponentsBuilder
-                .fromUriString(paymentProperties.cancelUrl())
-                .queryParam("paymentId", paymentRecord.getId())
-                .queryParam("cancelled", true)
-                .build().toUriString();
 
         log.info("Starting paid checkout: orderId={}, paymentId={}, userId={}, amount={}",
                 order.getId(), paymentRecord.getId(),
                 student.getUser().getId(), order.getTotalAmount());
+        PaymentRedirectUrls redirectUrls = paymentRedirectUrls(paymentRecord);
 
         return paymentService.startCheckout(
                 currentUser, student, order, paymentRecord, orderItems,
-                successUrl, cancelUrl);
+                redirectUrls.successUrl(), redirectUrls.cancelUrl());
+    }
+
+    private void validateCheckoutItems(StudentProfile student, List<ResolvedPurchasableItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "At least one item is required for checkout.");
+        }
+        enforceCheckoutSize(items.size());
+
+        Set<String> seenItems = new HashSet<>(items.size());
+        for (ResolvedPurchasableItem item : items) {
+            validateCheckoutItem(student, item, seenItems);
+        }
+    }
+
+    private void validateCheckoutItem(
+            StudentProfile student,
+            ResolvedPurchasableItem item,
+            Set<String> seenItems) {
+        if (item == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout item must not be null.");
+        }
+        if (item.itemType() == null || item.itemId() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout item is missing its identity.");
+        }
+        if (!seenItems.add(item.itemType().name() + ":" + item.itemId())) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout contains duplicate items.");
+        }
+        if (item.unitPrice() == null || item.unitPrice().signum() < 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "Checkout item has an invalid price.");
+        }
+        if (entitlementService.hasAccessToPurchasableItem(student, item)) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "You already have access to: " + item.title());
+        }
+    }
+
+    private void enforceCheckoutSize(int size) {
+        if (size > MAX_CHECKOUT_ITEMS) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Checkout can contain at most " + MAX_CHECKOUT_ITEMS + " items.");
+        }
+    }
+
+    private CheckoutResponse freeCheckoutResponse(
+            Order order,
+            PaymentRecord paymentRecord,
+            List<OrderItem> orderItems) {
+        return new CheckoutResponse(
+                order.getId(),
+                order.getOrderNumber(),
+                paymentRecord.getId(),
+                paymentRecord.getPaymentStatus(),
+                paymentRecord.getAmount(),
+                paymentRecord.getCurrencyCode(),
+                null,
+                paymentRecord.getProviderName(),
+                paymentRecord.getProviderStatus(),
+                true,
+                "Free item unlocked successfully.",
+                orderItems.stream()
+                        .map(item -> orderItemResponse(item, order.getCurrencyCode()))
+                        .toList());
+    }
+
+    private CartItemResponse orderItemResponse(OrderItem item, String currencyCode) {
+        return new CartItemResponse(
+                null,
+                item.getItemType(),
+                item.getItemId(),
+                item.getItemTitleSnapshot(),
+                item.getUnitPrice(),
+                currencyCode,
+                item.getQuantity(),
+                item.getLineTotal(),
+                item.getTeacher() != null);
+    }
+
+    private PaymentRedirectUrls paymentRedirectUrls(PaymentRecord paymentRecord) {
+        String successUrl = UriComponentsBuilder
+                .fromUriString(paymentProperties.successUrl())
+                .queryParam("paymentId", paymentRecord.getId())
+                .build()
+                .toUriString();
+        String cancelUrl = UriComponentsBuilder
+                .fromUriString(paymentProperties.cancelUrl())
+                .queryParam("paymentId", paymentRecord.getId())
+                .queryParam("cancelled", true)
+                .build()
+                .toUriString();
+        return new PaymentRedirectUrls(successUrl, cancelUrl);
     }
 
     private ResolvedPurchasableItem resolveCartCheckoutItem(CartItem cartItem) {
@@ -197,5 +226,8 @@ public class CheckoutService {
                 currentItem.teacher(),
                 false,
                 currentItem.relatedFeatureKey());
+    }
+
+    private record PaymentRedirectUrls(String successUrl, String cancelUrl) {
     }
 }

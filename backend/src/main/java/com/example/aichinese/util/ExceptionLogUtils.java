@@ -24,8 +24,8 @@ public final class ExceptionLogUtils {
         if (exception == null) {
             return null;
         }
-        String message = exception.getMessage();
-        if (message == null || message.isBlank()) {
+        String message = TextUtils.trimToNull(exception.getMessage());
+        if (message == null) {
             return null;
         }
         String redacted = SensitiveDataRedactor.redactText(message);

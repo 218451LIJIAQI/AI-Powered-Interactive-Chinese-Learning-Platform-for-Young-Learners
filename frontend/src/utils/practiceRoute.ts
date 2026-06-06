@@ -1,7 +1,5 @@
 import type { AdminActivityType } from '@/types/api'
 
-export type StudentPracticeActivityType = AdminActivityType
-
 const PRACTICE_ACTIVITY_TYPES = [
   'FLASHCARD',
   'MATCHING_GAME',
@@ -9,7 +7,16 @@ const PRACTICE_ACTIVITY_TYPES = [
   'TRACING_EXERCISE',
   'DRAG_DROP_ACTIVITY',
   'STORY_ACTIVITY',
-] as const satisfies readonly StudentPracticeActivityType[]
+] as const satisfies readonly AdminActivityType[]
+
+export type StudentPracticeActivityType = (typeof PRACTICE_ACTIVITY_TYPES)[number]
+
+type StudentPracticeRoute = {
+  name: 'student-practice'
+  query?: {
+    activity: string
+  }
+}
 
 const PRACTICE_ACTIVITY_ALIASES: Record<string, StudentPracticeActivityType> = {
   card: 'FLASHCARD',
@@ -39,12 +46,18 @@ const PRACTICE_ACTIVITY_ALIASES: Record<string, StudentPracticeActivityType> = {
   'story-activity': 'STORY_ACTIVITY',
 }
 
-function normalizeAliasKey(value: string) {
+const PRACTICE_ACTIVITY_TYPE_SET: ReadonlySet<string> = new Set(PRACTICE_ACTIVITY_TYPES)
+
+function normalizeAliasKey(value: string): string {
   return value.trim().toLowerCase().replaceAll('_', '-').replace(/\s+/g, '-')
 }
 
-function practiceActivityQueryValue(type: StudentPracticeActivityType) {
+function practiceActivityQueryValue(type: StudentPracticeActivityType): string {
   return type.toLowerCase().replaceAll('_', '-')
+}
+
+function isStudentPracticeActivityType(value: string): value is StudentPracticeActivityType {
+  return PRACTICE_ACTIVITY_TYPE_SET.has(value)
 }
 
 export function normalizePracticeActivity(value: unknown): StudentPracticeActivityType | null {
@@ -54,14 +67,14 @@ export function normalizePracticeActivity(value: unknown): StudentPracticeActivi
   }
 
   const normalized = rawValue.trim().toUpperCase().replaceAll('-', '_').replaceAll(' ', '_')
-  if (PRACTICE_ACTIVITY_TYPES.includes(normalized as StudentPracticeActivityType)) {
-    return normalized as StudentPracticeActivityType
+  if (isStudentPracticeActivityType(normalized)) {
+    return normalized
   }
 
   return PRACTICE_ACTIVITY_ALIASES[normalizeAliasKey(rawValue)] ?? null
 }
 
-export function practiceRoute(activity?: unknown) {
+export function practiceRoute(activity?: unknown): StudentPracticeRoute {
   const normalized = normalizePracticeActivity(activity)
   return {
     name: 'student-practice',

@@ -89,7 +89,7 @@ final class UploadStorageSupport {
     }
 
     static String normalizeContentType(String contentType) {
-        return contentType == null ? "" : contentType.trim().toLowerCase(Locale.ROOT);
+        return contentType == null ? "" : contentType.strip().toLowerCase(Locale.ROOT);
     }
 
     static String buildStoredFileName(String extension) {
@@ -234,7 +234,10 @@ final class UploadStorageSupport {
             String storedFileName,
             HttpStatus invalidStatus,
             String invalidMessage) {
-        Path targetPath = baseDirectory.resolve(storedFileName).normalize();
+        if (storedFileName == null || storedFileName.isBlank()) {
+            throw new ResponseStatusException(invalidStatus, invalidMessage);
+        }
+        Path targetPath = baseDirectory.resolve(storedFileName.strip()).normalize();
         if (!targetPath.startsWith(baseDirectory)) {
             throw new ResponseStatusException(invalidStatus, invalidMessage);
         }

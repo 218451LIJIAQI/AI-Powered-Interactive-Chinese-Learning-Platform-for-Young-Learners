@@ -6,7 +6,7 @@
       icon="students"
     />
 
-    <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="teacher-students-stats">
@@ -55,7 +55,7 @@
               type="button"
               class="teacher-students-directory-item"
               :class="{ 'is-active': selectedStudent?.studentId === student.studentId }"
-              @click="selectedStudentId = student.studentId"
+              @click="selectStudent(student.studentId)"
             >
               <PortraitAvatar :size="52" rounded="soft" :kind="student.avatarKind" />
               <div class="teacher-students-directory-copy">
@@ -64,12 +64,12 @@
                     <strong>{{ student.displayName }}</strong>
                     <span>{{ student.levelLabel }}</span>
                   </div>
-                  <strong class="teacher-students-directory-progress" :class="`is-${student.atRisk ? 'risk' : 'good'}`">
+                  <strong class="teacher-students-directory-progress" :class="`is-${riskTone(student.atRisk)}`">
                     {{ student.progressPercent }}%
                   </strong>
                 </div>
                 <div class="row-between">
-                  <small>{{ student.atRisk ? 'Needs attention' : 'On track' }}</small>
+                  <small>{{ riskStatusLabel(student.atRisk) }}</small>
                   <span class="teacher-students-directory-more">{{ student.quizAverageLabel }}</span>
                 </div>
               </div>
@@ -93,7 +93,7 @@
                   <div class="stack u-gap-4">
                     <div class="row u-wrap">
                       <strong>{{ selectedStudent.displayName }}</strong>
-                      <span class="teacher-students-star">{{ selectedStudent.atRisk ? 'Alert' : 'Active' }}</span>
+                      <span class="teacher-students-star">{{ selectedStudentBadgeLabel }}</span>
                     </div>
                     <span>{{ selectedStudent.levelLabel }}</span>
                     <small>{{ selectedJoinedLabel }}</small>
@@ -109,7 +109,7 @@
               <div class="teacher-students-contact-grid">
                 <article>
                   <small>Email</small>
-                  <strong>{{ selectedStudent.email || '--' }}</strong>
+                  <strong>{{ selectedStudentEmailLabel }}</strong>
                 </article>
                 <article>
                   <small>Quiz Average</small>
@@ -153,7 +153,7 @@
                 </article>
                 <article class="teacher-students-mini-stat">
                   <small>Risk Status</small>
-                  <strong>{{ selectedStudent.atRisk ? 'At Risk' : 'Stable' }}</strong>
+                  <strong>{{ selectedRiskStatusLabel }}</strong>
                   <span>{{ selectedRiskSummary }}</span>
                 </article>
               </div>
@@ -174,7 +174,7 @@
               </div>
               <p v-else class="teacher-students-empty-copy">No weak areas are recorded yet for this learner.</p>
 
-              <button class="teacher-footer-link" type="button" @click="router.push('/teacher/feedback')">
+              <button class="teacher-footer-link" type="button" @click="openFeedback">
                 <span>Open feedback center</span>
                 <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
               </button>
@@ -201,7 +201,7 @@
           <article class="panel teacher-students-feedback-card">
             <div class="row-between teacher-students-card-head">
               <strong>Recent Feedback</strong>
-              <button class="student-link-button" type="button" @click="router.push('/teacher/feedback')">
+              <button class="student-link-button" type="button" @click="openFeedback">
                 View All
               </button>
             </div>
@@ -277,7 +277,7 @@
                 :disabled="feedbackReadOnly || submittingFollowUp || !selectedStudent"
                 @click="submitFollowUpFeedback"
               >
-                {{ submittingFollowUp ? 'Sending...' : 'Send Feedback Now' }}
+                {{ sendFeedbackLabel }}
               </button>
             </div>
           </article>
@@ -288,21 +288,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher students roster + progress drill-down.
- *
- * <h2>Scope</h2>
- * <p>The roster endpoint returns only students enrolled in the
- * teacher's classes (server-side filter). The teacher can drill
- * into a student card to see attempt history and assign feedback,
- * which jumps to {@link TeacherFeedbackPage}.</p>
- *
- * <h2>PII boundary</h2>
- * <p>The teacher sees the learner profile fields returned by the
- * roster mapper, including email when available, so this page treats
- * student details as classroom-scoped data and avoids export or bulk
- * sharing controls.</p>
- */
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -362,9 +347,11 @@ const feedback = computed<TeacherFeedbackResponse[]>(
 
 const pageLoading = computed(() => studentsResource.loading.value || feedbackResource.loading.value)
 const pageError = computed(() => studentsResource.error.value || feedbackResource.error.value)
+const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(() => studentsResource.usingFallback.value || feedbackResource.usingFallback.value)
 const feedbackReadOnly = computed(() => usingFallback.value)
 const followUpDisabled = computed(() => feedbackReadOnly.value || submittingFollowUp.value || !selectedStudent.value)
+const sendFeedbackLabel = computed(() => (submittingFollowUp.value ? 'Sending...' : 'Send Feedback Now'))
 
 const filteredStudents = computed(() => {
   const keyword = searchTerm.value.trim().toLowerCase()
@@ -416,9 +403,7 @@ const summaryCards = computed(() => {
       icon: 'students',
       tone: 'purple',
       actionLabel: 'View list',
-      action: () => {
-        selectedStudentId.value = filteredStudents.value[0]?.studentId ?? null
-      },
+      action: selectFirstFilteredStudent,
     },
     {
       label: 'Average Progress',
@@ -427,9 +412,7 @@ const summaryCards = computed(() => {
       icon: 'progress',
       tone: 'purple-soft',
       actionLabel: 'Open student',
-      action: () => {
-        selectedStudentId.value = filteredStudents.value[0]?.studentId ?? null
-      },
+      action: selectFirstFilteredStudent,
     },
     {
       label: 'At Risk',
@@ -438,10 +421,7 @@ const summaryCards = computed(() => {
       icon: 'alert',
       tone: 'orange',
       actionLabel: 'Filter mentally',
-      action: () => {
-        const target = filteredStudents.value.find((item) => item.atRisk)
-        if (target) selectedStudentId.value = target.studentId
-      },
+      action: selectFirstAtRiskStudent,
     },
     {
       label: 'Quiz Average',
@@ -450,9 +430,7 @@ const summaryCards = computed(() => {
       icon: 'quiz',
       tone: 'green',
       actionLabel: 'Feedback center',
-      action: () => {
-        void router.push('/teacher/feedback')
-      },
+      action: openFeedback,
     },
   ]
 })
@@ -538,6 +516,9 @@ const selectedLatestFeedbackLabel = computed(() => {
 const selectedRiskSummary = computed(() =>
   selectedStudent.value?.atRisk ? 'Progress or accuracy needs closer follow-up' : 'No current risk signal',
 )
+const selectedRiskStatusLabel = computed(() => (selectedStudent.value?.atRisk ? 'At Risk' : 'Stable'))
+const selectedStudentBadgeLabel = computed(() => (selectedStudent.value?.atRisk ? 'Alert' : 'Active'))
+const selectedStudentEmailLabel = computed(() => selectedStudent.value?.email || '--')
 const selectedStudentFirstName = computed(() => selectedStudent.value?.displayName.split(' ')[0] ?? 'student')
 const sortModeLabel = computed(() => (sortMode.value === 'progress' ? 'Progress' : 'Name'))
 
@@ -594,17 +575,42 @@ watch(
   { immediate: true },
 )
 
-function cycleSort() {
+function selectStudent(studentId: number): void {
+  selectedStudentId.value = studentId
+}
+
+function selectFirstFilteredStudent(): void {
+  selectedStudentId.value = filteredStudents.value[0]?.studentId ?? null
+}
+
+function selectFirstAtRiskStudent(): void {
+  const target = filteredStudents.value.find((item) => item.atRisk)
+  if (target) selectedStudentId.value = target.studentId
+}
+
+function openFeedback(): void {
+  void router.push('/teacher/feedback')
+}
+
+function riskTone(atRisk: boolean): string {
+  return atRisk ? 'risk' : 'good'
+}
+
+function riskStatusLabel(atRisk: boolean): string {
+  return atRisk ? 'Needs attention' : 'On track'
+}
+
+function cycleSort(): void {
   sortMode.value = sortMode.value === 'progress' ? 'name' : 'progress'
 }
 
-function resetFollowUpDraft() {
+function resetFollowUpDraft(): void {
   followUpMessage.value = manualFollowupDraft.value
   actionError.value = null
   actionSuccess.value = 'Draft reset from the selected learner context.'
 }
 
-async function submitFollowUpFeedback() {
+async function submitFollowUpFeedback(): Promise<void> {
   if (submittingFollowUp.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -641,7 +647,7 @@ async function submitFollowUpFeedback() {
   }
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void studentsResource.reload()
   void feedbackResource.reload()
 }

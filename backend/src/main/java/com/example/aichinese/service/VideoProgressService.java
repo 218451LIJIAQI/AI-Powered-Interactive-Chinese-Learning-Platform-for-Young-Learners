@@ -16,6 +16,7 @@ import com.example.aichinese.dto.learning.VideoProgressRequest;
 import com.example.aichinese.dto.learning.VideoProgressResponse;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
+import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.VideoProgress;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.repository.VideoProgressRepository;
@@ -41,6 +42,14 @@ import com.example.aichinese.util.PaginationUtils;
 @Service
 public class VideoProgressService {
 
+    private static final int ZERO_PROGRESS = 0;
+    private static final int COMPLETE_PROGRESS = 100;
+    private static final String VIDEO_PROGRESS_REQUEST_REQUIRED = "Video progress request is required.";
+    private static final String TARGET_RECORDED_VIDEO = "RecordedLessonVideo";
+    private static final String TARGET_TYPE_RECORDED_VIDEO = "RECORDED_VIDEO";
+    private static final String ACTION_VIDEO_COMPLETE = "STUDENT_RECORDED_VIDEO_COMPLETE";
+    private static final String TEACHER_CLASSES_PATH = "/teacher/classes";
+
     private final VideoProgressRepository videoProgressRepository;
     private final LiveLearningAccessService liveLearningAccessService;
     private final LiveLearningMapper liveLearningMapper;
@@ -63,10 +72,7 @@ public class VideoProgressService {
     @Transactional(readOnly = true)
     public VideoProgressResponse getProgress(SecurityUserDetails currentUser, Long videoId) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
-        RecordedLessonVideo video = liveLearningAccessService.requireAccessibleRecordedVideo(
-                currentUser,
-                liveLearningAccessService.requireActiveRecordedVideo(videoId).getLesson().getId(),
-                videoId);
+        RecordedLessonVideo video = requireAccessibleVideo(currentUser, videoId);
         VideoProgress progress = videoProgressRepository.findByStudentIdAndRecordedVideoId(student.getId(), video.getId())
                 .orElseGet(() -> createDefaultProgress(student, video));
         return liveLearningMapper.toVideoProgressResponse(progress);
@@ -75,13 +81,10 @@ public class VideoProgressService {
     @Transactional
     public VideoProgressResponse upsertProgress(SecurityUserDetails currentUser, Long videoId, VideoProgressRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Video progress request is required.");
+            throw new ResponseStatusException(BAD_REQUEST, VIDEO_PROGRESS_REQUEST_REQUIRED);
         }
         StudentProfile student = liveLearningAccessService.requireLockedStudent(currentUser);
-        RecordedLessonVideo video = liveLearningAccessService.requireAccessibleRecordedVideo(
-                currentUser,
-                liveLearningAccessService.requireActiveRecordedVideo(videoId).getLesson().getId(),
-                videoId);
+        RecordedLessonVideo video = requireAccessibleVideo(currentUser, videoId);
         validateRequest(request);
 
         VideoProgress progress = videoProgressRepository.findLockedByStudentIdAndRecordedVideoId(student.getId(), video.getId())
@@ -99,18 +102,18 @@ public class VideoProgressService {
 
         if (saved.isCompleted() && !wasAlreadyCompleted) {
             notificationService.safeCreateNotification(
-                    video.getLesson().getTeacher().getUser(),
+                    teacherUser(video),
                     NotificationType.PROGRESS_UPDATE,
                     "Recorded video completed",
-                    student.getUser().getDisplayName() + " completed " + video.getTitle() + ".",
-                    "RECORDED_VIDEO",
+                    studentDisplayName(student) + " completed " + video.getTitle() + ".",
+                    TARGET_TYPE_RECORDED_VIDEO,
                     video.getId(),
-                    "/teacher/classes",
+                    TEACHER_CLASSES_PATH,
                     student.getUser());
             auditLogService.record(
                     student.getUser(),
-                    "STUDENT_RECORDED_VIDEO_COMPLETE",
-                    "RecordedLessonVideo",
+                    ACTION_VIDEO_COMPLETE,
+                    TARGET_RECORDED_VIDEO,
                     video.getId(),
                     "Student completed a recorded video.");
         }
@@ -121,8 +124,8 @@ public class VideoProgressService {
     @Transactional
     public VideoProgressResponse completeVideo(SecurityUserDetails currentUser, Long videoId) {
         RecordedLessonVideo video = liveLearningAccessService.requireActiveRecordedVideo(videoId);
-        Integer totalSeconds = video.getDurationSeconds() == null ? 0 : video.getDurationSeconds();
-        return upsertProgress(currentUser, videoId, new VideoProgressRequest(totalSeconds, totalSeconds, 100, true));
+        int totalSeconds = Objects.requireNonNullElse(video.getDurationSeconds(), ZERO_PROGRESS);
+        return upsertProgress(currentUser, videoId, new VideoProgressRequest(totalSeconds, totalSeconds, COMPLETE_PROGRESS, true));
     }
 
     @Transactional(readOnly = true)
@@ -163,6 +166,30 @@ public class VideoProgressService {
         return lessonAccess && packageAccess;
     }
 
+    private RecordedLessonVideo requireAccessibleVideo(SecurityUserDetails currentUser, Long videoId) {
+        RecordedLessonVideo video = liveLearningAccessService.requireActiveRecordedVideo(videoId);
+        return liveLearningAccessService.requireAccessibleRecordedVideo(
+                currentUser,
+                video.getLesson().getId(),
+                videoId);
+    }
+
+    private static String studentDisplayName(StudentProfile student) {
+        if (student.getUser() != null && student.getUser().getDisplayName() != null
+                && !student.getUser().getDisplayName().isBlank()) {
+            return student.getUser().getDisplayName();
+        }
+        return student.getDisplayName() == null || student.getDisplayName().isBlank()
+                ? "Student"
+                : student.getDisplayName();
+    }
+
+    private static User teacherUser(RecordedLessonVideo video) {
+        return video.getLesson() != null && video.getLesson().getTeacher() != null
+                ? video.getLesson().getTeacher().getUser()
+                : null;
+    }
+
     private static LessonVideoProgressSummaryResponse toLessonVideoProgressSummary(VideoProgress progress) {
         StudentProfile student = progress.getStudent();
         RecordedLessonVideo video = progress.getRecordedVideo();
@@ -187,9 +214,9 @@ public class VideoProgressService {
         progress.setStudent(student);
         progress.setLesson(video.getLesson());
         progress.setRecordedVideo(video);
-        progress.setWatchedSeconds(0);
-        progress.setTotalSeconds(video.getDurationSeconds() == null ? 0 : video.getDurationSeconds());
-        progress.setProgressPercentage(0);
+        progress.setWatchedSeconds(ZERO_PROGRESS);
+        progress.setTotalSeconds(Objects.requireNonNullElse(video.getDurationSeconds(), ZERO_PROGRESS));
+        progress.setProgressPercentage(ZERO_PROGRESS);
         progress.setCompleted(false);
         progress.setLastWatchedAt(null);
         return progress;
@@ -204,18 +231,23 @@ public class VideoProgressService {
 
         if (progressPercentage == null) {
             if (Boolean.TRUE.equals(request.completed())) {
-                progressPercentage = 100;
+                progressPercentage = COMPLETE_PROGRESS;
             } else if (watchedSeconds != null && totalSeconds != null && totalSeconds > 0) {
-                progressPercentage = Math.min(100, Math.max(0, (int) Math.round((watchedSeconds * 100.0) / totalSeconds)));
+                progressPercentage = Math.min(
+                        COMPLETE_PROGRESS,
+                        Math.max(ZERO_PROGRESS, (int) Math.round(watchedSeconds * 100.0 / totalSeconds)));
             } else {
-                progressPercentage = progress.getProgressPercentage() == null ? 0 : progress.getProgressPercentage();
+                progressPercentage = Objects.requireNonNullElse(progress.getProgressPercentage(), ZERO_PROGRESS);
             }
         }
 
-        boolean completed = Boolean.TRUE.equals(request.completed()) || progressPercentage >= 100;
-        progress.setWatchedSeconds(watchedSeconds == null ? 0 : watchedSeconds);
-        progress.setTotalSeconds(totalSeconds == null ? 0 : totalSeconds);
-        progress.setProgressPercentage(completed ? 100 : progressPercentage);
+        boolean completed = Boolean.TRUE.equals(request.completed()) || progressPercentage >= COMPLETE_PROGRESS;
+        if (completed) {
+            progressPercentage = COMPLETE_PROGRESS;
+        }
+        progress.setWatchedSeconds(Objects.requireNonNullElse(watchedSeconds, ZERO_PROGRESS));
+        progress.setTotalSeconds(Objects.requireNonNullElse(totalSeconds, ZERO_PROGRESS));
+        progress.setProgressPercentage(progressPercentage);
         progress.setCompleted(completed);
         progress.setLastWatchedAt(LocalDateTime.now());
     }
@@ -233,7 +265,7 @@ public class VideoProgressService {
             throw new ResponseStatusException(BAD_REQUEST, "Watched seconds must not exceed total seconds.");
         }
         if (request.progressPercentage() != null
-                && (request.progressPercentage() < 0 || request.progressPercentage() > 100)) {
+                && (request.progressPercentage() < ZERO_PROGRESS || request.progressPercentage() > COMPLETE_PROGRESS)) {
             throw new ResponseStatusException(BAD_REQUEST, "Progress percentage must be between 0 and 100.");
         }
     }

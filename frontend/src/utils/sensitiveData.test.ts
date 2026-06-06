@@ -103,4 +103,11 @@ describe('sensitive data scrubbing', () => {
       self: '[Filtered]',
     })
   })
+
+  it('redacts sensitive values in Error objects', () => {
+    expect(scrubSensitiveUnknown(new Error('Reset failed for parent@example.com token=raw-token'))).toEqual({
+      name: 'Error',
+      message: 'Reset failed for [Filtered] token=[Filtered]',
+    })
+  })
 })

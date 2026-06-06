@@ -6,7 +6,6 @@ import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 import java.math.BigDecimal;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.entity.enums.AccessType;
 
 import jakarta.validation.constraints.DecimalMin;

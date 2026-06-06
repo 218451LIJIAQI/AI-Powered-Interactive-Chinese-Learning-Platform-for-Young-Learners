@@ -25,20 +25,4 @@ public enum TeacherStatus {
                 "Teacher status is required.",
                 () -> "Invalid teacher status. Allowed values are PENDING, APPROVED, or REJECTED.");
     }
-
-    public boolean isPending() {
-        return this == PENDING;
-    }
-
-    public boolean isApproved() {
-        return this == APPROVED;
-    }
-
-    public boolean isRejected() {
-        return this == REJECTED;
-    }
-
-    public boolean canResubmit() {
-        return this == REJECTED;
-    }
 }

@@ -23,10 +23,16 @@ public class JwtProductionGuard {
     public JwtProductionGuard(Environment environment, SecurityProperties securityProperties) {
         Objects.requireNonNull(environment, "environment");
         Objects.requireNonNull(securityProperties, "securityProperties");
-        if (environment.acceptsProfiles(PROD_PROFILES) && isPlaceholder(securityProperties.secret())) {
+        if (usesPlaceholderSecretInProduction(environment, securityProperties)) {
             throw new IllegalStateException(
                     "JWT_SECRET must not use a placeholder value when the prod profile is active.");
         }
+    }
+
+    private static boolean usesPlaceholderSecretInProduction(
+            Environment environment,
+            SecurityProperties securityProperties) {
+        return environment.acceptsProfiles(PROD_PROFILES) && isPlaceholder(securityProperties.secret());
     }
 
     private static boolean isPlaceholder(String value) {

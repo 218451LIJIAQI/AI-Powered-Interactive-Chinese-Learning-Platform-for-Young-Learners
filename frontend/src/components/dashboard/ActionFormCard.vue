@@ -1,5 +1,5 @@
 <template>
-  <form class="panel form-grid" @submit.prevent="$emit('submit')">
+  <form class="panel form-grid" @submit.prevent="emit('submit')">
     <div class="card-section-head">
       <div class="card-section-title">
         <div class="media-badge small">
@@ -13,20 +13,15 @@
       <slot name="header-end" />
     </div>
     <slot />
-    <button class="btn btn-primary" type="submit" :disabled="submitting || disabled">
-      {{ submitting ? submittingLabel : submitLabel }}
+    <button class="btn btn-primary" type="submit" :disabled="submitDisabled">
+      {{ currentSubmitLabel }}
     </button>
   </form>
 </template>
 
 <script setup lang="ts">
-/**
- * Themed card wrapping a form inside a dashboard page. Standardises
- * the header (icon badge + title + optional subtitle), the body
- * slot, and the primary submit button with its `submitting` /
- * `disabled` states — keeping the look of every "add lesson",
- * "edit profile", "send notification" form consistent.
- */
+import { computed } from 'vue'
+
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 interface Props {
@@ -39,7 +34,7 @@ interface Props {
   disabled?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   subtitle: '',
   icon: 'dashboard',
   submitLabel: 'Save',
@@ -48,7 +43,10 @@ withDefaults(defineProps<Props>(), {
   disabled: false,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   submit: []
 }>()
+
+const currentSubmitLabel = computed(() => (props.submitting ? props.submittingLabel : props.submitLabel))
+const submitDisabled = computed(() => props.submitting || props.disabled)
 </script>

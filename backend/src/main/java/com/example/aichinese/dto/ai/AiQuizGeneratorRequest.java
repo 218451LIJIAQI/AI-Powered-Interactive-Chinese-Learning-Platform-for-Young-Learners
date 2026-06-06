@@ -1,7 +1,8 @@
 package com.example.aichinese.dto.ai;
 
-import static com.example.aichinese.dto.DtoNormalization.immutableListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import java.util.List;
 
@@ -41,10 +42,10 @@ public record AiQuizGeneratorRequest(
 
     public AiQuizGeneratorRequest {
         topic = strip(topic);
-        level = strip(level);
-        category = strip(category);
-        questionTypes = immutableListOrNull(questionTypes);
-        targetRoleContext = strip(targetRoleContext);
-        languagePreference = strip(languagePreference);
+        level = stripToNull(level);
+        category = stripToNull(category);
+        questionTypes = strippedStringListOrNull(questionTypes);
+        targetRoleContext = stripToNull(targetRoleContext);
+        languagePreference = stripToNull(languagePreference);
     }
 }

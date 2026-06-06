@@ -23,12 +23,4 @@ public enum TeacherEarningStatus {
                 "Teacher earning status is required.",
                 () -> "Invalid teacher earning status. Allowed values are AVAILABLE or REFUNDED.");
     }
-
-    public boolean isAvailable() {
-        return this == AVAILABLE;
-    }
-
-    public boolean isRefunded() {
-        return this == REFUNDED;
-    }
 }

@@ -1,8 +1,11 @@
 package com.example.aichinese.util;
 
 import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -89,29 +92,40 @@ public final class SensitiveDataRedactor {
     }
 
     public static Object redactObject(Object value, String replacement) {
-        return redactObject(value, marker(replacement), 0, java.util.Collections.newSetFromMap(new IdentityHashMap<>()));
+        return redactObject(value, marker(replacement), 0, newSeenSet());
     }
 
-    public static <T> Map<String, T> redactMap(Map<String, T> values, String replacement) {
+    public static Map<String, Object> redactMap(Map<String, ?> values, String replacement) {
         if (values == null) {
             return null;
         }
 
         String marker = marker(replacement);
-        Map<String, T> redacted = new LinkedHashMap<>(values.size());
-        Set<Object> seen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        Map<String, Object> redacted = new LinkedHashMap<>(values.size());
+        Set<Object> seen = newSeenSet();
         seen.add(values);
-        for (Map.Entry<String, T> entry : values.entrySet()) {
+        for (Map.Entry<String, ?> entry : values.entrySet()) {
             Object value = isSensitiveKey(entry.getKey())
                     ? marker
                     : redactObject(entry.getValue(), marker, 0, seen);
-            redacted.put(entry.getKey(), cast(value));
+            redacted.put(entry.getKey(), value);
         }
         return redacted;
     }
 
     public static Map<String, String> redactStringMap(Map<String, String> values, String replacement) {
-        return redactMap(values, replacement);
+        if (values == null) {
+            return null;
+        }
+
+        String marker = marker(replacement);
+        Map<String, String> redacted = new LinkedHashMap<>(values.size());
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            redacted.put(
+                    entry.getKey(),
+                    isSensitiveKey(entry.getKey()) ? marker : redactText(entry.getValue(), marker));
+        }
+        return redacted;
     }
 
     private static Object redactObject(Object value, String marker, int depth, Set<Object> seen) {
@@ -125,37 +139,40 @@ public final class SensitiveDataRedactor {
             return marker;
         }
         seen.add(value);
-
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> redacted = new LinkedHashMap<>(map.size());
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String key = String.valueOf(entry.getKey());
-                Object nested = isSensitiveKey(key)
-                        ? marker
-                        : redactObject(entry.getValue(), marker, depth + 1, seen);
-                redacted.put(key, nested);
+        try {
+            if (value instanceof Map<?, ?> map) {
+                Map<String, Object> redacted = new LinkedHashMap<>(map.size());
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    String key = String.valueOf(entry.getKey());
+                    Object nested = isSensitiveKey(key)
+                            ? marker
+                            : redactObject(entry.getValue(), marker, depth + 1, seen);
+                    redacted.put(key, nested);
+                }
+                return redacted;
             }
-            return redacted;
-        }
 
-        if (value instanceof Iterable<?> iterable) {
-            java.util.List<Object> redacted = new java.util.ArrayList<>();
-            for (Object entry : iterable) {
-                redacted.add(redactObject(entry, marker, depth + 1, seen));
+            if (value instanceof Iterable<?> iterable) {
+                List<Object> redacted = new ArrayList<>();
+                for (Object entry : iterable) {
+                    redacted.add(redactObject(entry, marker, depth + 1, seen));
+                }
+                return redacted;
             }
-            return redacted;
-        }
 
-        if (value.getClass().isArray()) {
-            int length = Array.getLength(value);
-            java.util.List<Object> redacted = new java.util.ArrayList<>(length);
-            for (int index = 0; index < length; index++) {
-                redacted.add(redactObject(Array.get(value, index), marker, depth + 1, seen));
+            if (value.getClass().isArray()) {
+                int length = Array.getLength(value);
+                List<Object> redacted = new ArrayList<>(length);
+                for (int index = 0; index < length; index++) {
+                    redacted.add(redactObject(Array.get(value, index), marker, depth + 1, seen));
+                }
+                return redacted;
             }
-            return redacted;
-        }
 
-        return redactText(value.toString(), marker);
+            return redactText(value.toString(), marker);
+        } finally {
+            seen.remove(value);
+        }
     }
 
     private static boolean isScalar(Object value) {
@@ -166,11 +183,12 @@ public final class SensitiveDataRedactor {
     }
 
     private static String marker(String replacement) {
-        return replacement == null || replacement.isBlank() ? REDACTED : replacement;
+        String normalized = TextUtils.trimToNull(replacement);
+        return normalized == null ? REDACTED : normalized;
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> T cast(Object value) {
-        return (T) value;
+    private static Set<Object> newSeenSet() {
+        return Collections.newSetFromMap(new IdentityHashMap<>());
     }
+
 }

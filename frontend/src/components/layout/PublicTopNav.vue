@@ -31,18 +31,10 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Sticky top navigation for unauthenticated routes (landing,
- * catalogue, course detail, terms / privacy). Shows the brand,
- * the public nav items, a language switcher, and sign-in /
- * account-creation CTAs.
- *
- * Hidden by the parent {@link PublicLayout} for the auth pages
- * themselves so the auth chrome has the full viewport.
- */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { publicNav } from '@/config/navigation'
@@ -54,6 +46,9 @@ interface LocalizedNavItem {
   readonly to: string
 }
 
+const SIGN_IN_ROUTE = { path: '/auth', query: { tab: 'signin' } } satisfies RouteLocationRaw
+const SIGN_UP_ROUTE = { path: '/auth', query: { tab: 'register', role: 'student' } } satisfies RouteLocationRaw
+
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -61,26 +56,33 @@ const { t } = useI18n()
 const items = computed<LocalizedNavItem[]>(() => publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })))
 
 function openSignIn(): void {
-  void router.push({ path: '/auth', query: { tab: 'signin' } })
+  void router.push(SIGN_IN_ROUTE)
 }
 
 function openSignUp(): void {
-  void router.push({ path: '/auth', query: { tab: 'register', role: 'student' } })
+  void router.push(SIGN_UP_ROUTE)
+}
+
+function parseNavTarget(to: string): { path: string; hash: string } {
+  const hashIdx = to.indexOf('#')
+
+  return {
+    path: (hashIdx >= 0 ? to.slice(0, hashIdx) : to) || '/',
+    hash: hashIdx >= 0 ? to.slice(hashIdx) : '',
+  }
 }
 
 function isNavActive(to: string): boolean {
-  const hashIdx = to.indexOf('#')
-  const targetPath = (hashIdx >= 0 ? to.slice(0, hashIdx) : to) || '/'
-  const targetHash = hashIdx >= 0 ? to.slice(hashIdx) : ''
+  const { path, hash } = parseNavTarget(to)
 
-  if (targetHash) {
-    return route.path === targetPath && route.hash === targetHash
+  if (hash) {
+    return route.path === path && route.hash === hash
   }
 
-  if (targetPath === '/') {
+  if (path === '/') {
     return route.path === '/' && !route.hash
   }
 
-  return route.path === targetPath || route.path.startsWith(`${targetPath}/`)
+  return route.path === path || route.path.startsWith(`${path}/`)
 }
 </script>

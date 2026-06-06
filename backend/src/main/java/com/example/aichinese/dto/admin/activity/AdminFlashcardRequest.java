@@ -39,13 +39,13 @@ public record AdminFlashcardRequest(
 
         @Pattern(
                 regexp = AdminFlashcardRequest.HTTP_URL_PATTERN,
-                message = "Image URL must start with http:// or https://.")
+                message = "Image URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Image URL must not exceed 255 characters.")
         String imageUrl,
 
         @Pattern(
                 regexp = AdminFlashcardRequest.HTTP_URL_PATTERN,
-                message = "Audio URL must start with http:// or https://.")
+                message = "Audio URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Audio URL must not exceed 255 characters.")
         String audioUrl,
 
@@ -95,5 +95,5 @@ public record AdminFlashcardRequest(
         tags = strippedStringListOrNull(tags);
     }
 
-    static final String HTTP_URL_PATTERN = "^(https?://.+)?$";
+    static final String HTTP_URL_PATTERN = "^(https?://\\S+)?$";
 }

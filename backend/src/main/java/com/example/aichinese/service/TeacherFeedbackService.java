@@ -3,9 +3,10 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,16 @@ public class TeacherFeedbackService {
     private static final Logger log = LoggerFactory.getLogger(TeacherFeedbackService.class);
 
     private static final int MAX_FEEDBACK_MESSAGE_LENGTH = 2000;
+    private static final String FEEDBACK_NOT_FOUND = "Feedback was not found.";
+    private static final String TEACHER_PROFILE_NOT_FOUND = "Teacher profile could not be found.";
+    private static final String STUDENT_PROFILE_NOT_FOUND = "Student profile could not be found.";
+    private static final String LESSON_NOT_FOUND = "Lesson was not found.";
+    private static final String QUIZ_ATTEMPT_NOT_FOUND = "Quiz attempt was not found.";
+    private static final String TEACHER_FEEDBACK_TARGET = "TEACHER_FEEDBACK";
+    private static final String ACTION_TEACHER_FEEDBACK_CREATED = "TEACHER_FEEDBACK_CREATED";
+    private static final String ACTION_TEACHER_FEEDBACK_UPDATED = "TEACHER_FEEDBACK_UPDATED";
+    private static final Set<LiveClassEnrolmentStatus> FEEDBACK_ELIGIBLE_ENROLMENT_STATUSES =
+            EnumSet.of(LiveClassEnrolmentStatus.ENROLLED, LiveClassEnrolmentStatus.ATTENDED);
 
     private final TeacherFeedbackRepository teacherFeedbackRepository;
     private final TeacherProfileRepository teacherProfileRepository;
@@ -101,14 +112,15 @@ public class TeacherFeedbackService {
         StudentProfile student = requireStudent(request.studentId());
         Lesson lesson = request.lessonId() != null ? requireTeacherLesson(request.lessonId(), currentUser.getUserId()) : null;
         QuizAttempt quizAttempt = request.quizAttemptId() != null ? requireTeacherQuizAttempt(request.quizAttemptId(), currentUser.getUserId()) : null;
+        Lesson linkedLesson = linkedLesson(lesson, quizAttempt);
 
         validateRelationship(student, currentUser.getUserId(), lesson, quizAttempt);
-        ensureStudentCanReceiveFeedback(student, currentUser.getUserId(), linkedLesson(lesson, quizAttempt));
+        ensureStudentCanReceiveFeedback(student, currentUser.getUserId(), linkedLesson);
 
         TeacherFeedback feedback = new TeacherFeedback();
         feedback.setTeacher(teacher);
         feedback.setStudent(student);
-        feedback.setLesson(lesson != null ? lesson : quizAttempt != null && quizAttempt.getQuiz() != null ? quizAttempt.getQuiz().getLesson() : null);
+        feedback.setLesson(linkedLesson);
         feedback.setQuizAttempt(quizAttempt);
         feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
         feedback.setFeedbackMessage(contentSafetyService.requireSafeText(
@@ -124,15 +136,15 @@ public class TeacherFeedbackService {
                 NotificationType.TEACHER_FEEDBACK,
                 "New teacher feedback",
                 "Your teacher has shared new learning feedback.",
-                "TEACHER_FEEDBACK",
+                TEACHER_FEEDBACK_TARGET,
                 saved.getId(),
                 "/student/profile",
                 teacher.getUser());
 
         auditLogService.safeRecord(
                 teacher.getUser(),
-                "TEACHER_FEEDBACK_CREATED",
-                "TEACHER_FEEDBACK",
+                ACTION_TEACHER_FEEDBACK_CREATED,
+                TEACHER_FEEDBACK_TARGET,
                 saved.getId(),
                 "Teacher created student feedback.",
                 null);
@@ -179,9 +191,9 @@ public class TeacherFeedbackService {
     public StudentTeacherFeedbackResponse getStudentFeedbackById(SecurityUserDetails currentUser, Long feedbackId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         TeacherFeedback feedback = teacherFeedbackRepository.findByIdAndStudentUserId(feedbackId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Feedback was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, FEEDBACK_NOT_FOUND));
         if (!isStudentFeedbackCurrentlyAccessible(student, feedback)) {
-            throw new ResponseStatusException(NOT_FOUND, "Feedback was not found.");
+            throw new ResponseStatusException(NOT_FOUND, FEEDBACK_NOT_FOUND);
         }
         return communicationMapper.toStudentTeacherFeedbackResponse(feedback);
     }
@@ -192,7 +204,7 @@ public class TeacherFeedbackService {
             throw new ResponseStatusException(BAD_REQUEST, "Teacher feedback update request is required.");
         }
         TeacherFeedback feedback = teacherFeedbackRepository.findByIdAndTeacherUserId(feedbackId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Feedback was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, FEEDBACK_NOT_FOUND));
         feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
         feedback.setFeedbackMessage(contentSafetyService.requireSafeText(
                 request.message(),
@@ -200,8 +212,8 @@ public class TeacherFeedbackService {
                 "Feedback message is required."));
         auditLogService.safeRecord(
                 feedback.getTeacher() != null ? feedback.getTeacher().getUser() : null,
-                "TEACHER_FEEDBACK_UPDATED",
-                "TEACHER_FEEDBACK",
+                ACTION_TEACHER_FEEDBACK_UPDATED,
+                TEACHER_FEEDBACK_TARGET,
                 feedback.getId(),
                 "Teacher updated feedback content.",
                 null);
@@ -209,21 +221,41 @@ public class TeacherFeedbackService {
     }
 
     private void validateRelationship(StudentProfile student, Long teacherUserId, Lesson lesson, QuizAttempt quizAttempt) {
-        boolean allowed = quizAttempt != null
-                ? isSameId(quizAttempt.getStudent().getId(), student.getId())
-                        && (lesson == null || (quizAttempt.getQuiz() != null
-                                && quizAttempt.getQuiz().getLesson() != null
-                                && isSameId(quizAttempt.getQuiz().getLesson().getId(), lesson.getId())))
-                : lesson != null
-                        ? lessonProgressRepository.existsByStudentIdAndLessonIdAndLessonTeacherUserId(student.getId(), lesson.getId(), teacherUserId)
-                                || liveClassEnrolmentRepository.existsByStudentIdAndLiveClassLessonIdAndLiveClassTeacherUserId(student.getId(), lesson.getId(), teacherUserId)
-                                || quizAttemptRepository.existsByStudentIdAndQuizLessonIdAndQuizTeacherUserId(student.getId(), lesson.getId(), teacherUserId)
-                        : lessonProgressRepository.existsByStudentIdAndLessonTeacherUserId(student.getId(), teacherUserId)
-                                || liveClassEnrolmentRepository.existsByStudentIdAndLiveClassTeacherUserId(student.getId(), teacherUserId)
-                                || quizAttemptRepository.existsByStudentIdAndQuizTeacherUserId(student.getId(), teacherUserId);
-        if (!allowed) {
+        if (!hasFeedbackRelationship(student, teacherUserId, lesson, quizAttempt)) {
             throw new ResponseStatusException(BAD_REQUEST, "Feedback can only be created for students linked to your content.");
         }
+    }
+
+    private boolean hasFeedbackRelationship(StudentProfile student, Long teacherUserId, Lesson lesson, QuizAttempt quizAttempt) {
+        if (quizAttempt != null) {
+            return isQuizAttemptForStudentAndLesson(quizAttempt, student, lesson);
+        }
+        if (lesson != null) {
+            return hasLessonRelationship(student.getId(), lesson.getId(), teacherUserId);
+        }
+        return hasAnyTeacherRelationship(student.getId(), teacherUserId);
+    }
+
+    private boolean isQuizAttemptForStudentAndLesson(QuizAttempt quizAttempt, StudentProfile student, Lesson lesson) {
+        if (quizAttempt.getStudent() == null || !isSameId(quizAttempt.getStudent().getId(), student.getId())) {
+            return false;
+        }
+        Lesson quizLesson = linkedLesson(null, quizAttempt);
+        return lesson == null || (quizLesson != null && isSameId(quizLesson.getId(), lesson.getId()));
+    }
+
+    private boolean hasLessonRelationship(Long studentId, Long lessonId, Long teacherUserId) {
+        return lessonProgressRepository.existsByStudentIdAndLessonIdAndLessonTeacherUserId(studentId, lessonId, teacherUserId)
+                || liveClassEnrolmentRepository.existsByStudentIdAndLiveClassLessonIdAndLiveClassTeacherUserId(
+                        studentId, lessonId, teacherUserId)
+                || quizAttemptRepository.existsByStudentIdAndQuizLessonIdAndQuizTeacherUserId(
+                        studentId, lessonId, teacherUserId);
+    }
+
+    private boolean hasAnyTeacherRelationship(Long studentId, Long teacherUserId) {
+        return lessonProgressRepository.existsByStudentIdAndLessonTeacherUserId(studentId, teacherUserId)
+                || liveClassEnrolmentRepository.existsByStudentIdAndLiveClassTeacherUserId(studentId, teacherUserId)
+                || quizAttemptRepository.existsByStudentIdAndQuizTeacherUserId(studentId, teacherUserId);
     }
 
     private void ensureStudentCanReceiveFeedback(StudentProfile student, Long teacherUserId, Lesson lesson) {
@@ -253,26 +285,20 @@ public class TeacherFeedbackService {
         boolean quizAttemptAccess = quizAttemptRepository.findByStudentIdOrderByCompletedAtDescCreatedAtDesc(student.getId()).stream()
                 .map(quizAttempt -> linkedLesson(null, quizAttempt))
                 .anyMatch(lesson -> isTeacherLesson(lesson, teacherUserId) && studentLearningAccessService.hasLessonAccess(student, lesson));
-        boolean enrolledLiveClassAccess = hasAccessibleLiveClassRelationship(
-                student,
-                teacherUserId,
-                LiveClassEnrolmentStatus.ENROLLED);
-        boolean attendedLiveClassAccess = hasAccessibleLiveClassRelationship(
-                student,
-                teacherUserId,
-                LiveClassEnrolmentStatus.ATTENDED);
-        return lessonProgressAccess || quizAttemptAccess || enrolledLiveClassAccess || attendedLiveClassAccess;
+        return lessonProgressAccess
+                || quizAttemptAccess
+                || hasAccessibleLiveClassRelationship(student, teacherUserId);
     }
 
     private boolean hasAccessibleLiveClassRelationship(
             StudentProfile student,
-            Long teacherUserId,
-            LiveClassEnrolmentStatus status) {
-        return liveClassEnrolmentRepository
-                .findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(student.getId(), status).stream()
-                .map(LiveClassEnrolment::getLiveClass)
-                .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId)
-                        && hasCurrentLiveClassAccess(student, liveClass));
+            Long teacherUserId) {
+        return FEEDBACK_ELIGIBLE_ENROLMENT_STATUSES.stream()
+                .anyMatch(status -> liveClassEnrolmentRepository
+                        .findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(student.getId(), status).stream()
+                        .map(LiveClassEnrolment::getLiveClass)
+                        .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId)
+                                && hasCurrentLiveClassAccess(student, liveClass)));
     }
 
     private boolean hasCurrentLiveClassAccess(StudentProfile student, LiveClass liveClass) {
@@ -322,33 +348,30 @@ public class TeacherFeedbackService {
 
     private TeacherProfile requireTeacher(Long teacherUserId) {
         return teacherProfileRepository.findDetailedByUserId(teacherUserId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, TEACHER_PROFILE_NOT_FOUND));
     }
 
     private StudentProfile requireStudent(Long studentId) {
         return studentProfileRepository.findById(studentId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Student profile could not be found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, STUDENT_PROFILE_NOT_FOUND));
     }
 
     private Lesson requireTeacherLesson(Long lessonId, Long teacherUserId) {
         return lessonRepository.findByIdAndTeacherUserId(lessonId, teacherUserId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Lesson was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, LESSON_NOT_FOUND));
     }
 
     private QuizAttempt requireTeacherQuizAttempt(Long attemptId, Long teacherUserId) {
         return quizAttemptRepository.findByIdAndQuizTeacherUserId(attemptId, teacherUserId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quiz attempt was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, QUIZ_ATTEMPT_NOT_FOUND));
     }
 
     private static TeacherFeedbackType parseFeedbackType(String rawType) {
         if (rawType == null || rawType.isBlank()) {
             return TeacherFeedbackType.GENERAL;
         }
-        try {
-            return TeacherFeedbackType.valueOf(rawType.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid feedback type.");
-        }
+        return TeacherFeedbackType.tryFrom(rawType)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid feedback type."));
     }
 
 }

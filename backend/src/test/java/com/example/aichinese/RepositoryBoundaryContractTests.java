@@ -32,78 +32,88 @@ import com.example.aichinese.repository.TeacherVerificationDocumentRepository;
  */
 class RepositoryBoundaryContractTests {
 
+    private static final long LESSON_ID = 10L;
+    private static final long PACKAGE_ID = 20L;
+    private static final long TEACHER_ID = 10L;
+    private static final long DOCUMENT_COUNT = 2L;
+
+    private static final List<Long> PACKAGE_IDS = List.of(PACKAGE_ID);
+    private static final List<Long> TEACHER_IDS = List.of(TEACHER_ID);
+    private static final Set<PayoutStatus> PAYOUT_STATUSES = PayoutStatus.COMMITTED;
+    private static final BigDecimal PAYOUT_TOTAL = new BigDecimal("12.34");
+
     @Test
     void liveClassRelatedLookupFallsBackToDirectLessonQueryWhenPackageIdsAreMissing() {
-        LiveClassRepository repository = mock(LiveClassRepository.class, CALLS_REAL_METHODS);
+        LiveClassRepository repository = liveClassRepository();
         LiveClass liveClass = new LiveClass();
-        when(repository.findRelatedToLesson(10L)).thenReturn(List.of(liveClass));
+        when(repository.findRelatedToLesson(LESSON_ID)).thenReturn(List.of(liveClass));
 
-        assertThat(repository.findRelatedToLessonOrPackages(10L, null)).containsExactly(liveClass);
-        assertThat(repository.findRelatedToLessonOrPackages(10L, List.of())).containsExactly(liveClass);
+        assertThat(repository.findRelatedToLessonOrPackages(LESSON_ID, null)).containsExactly(liveClass);
+        assertThat(repository.findRelatedToLessonOrPackages(LESSON_ID, List.of())).containsExactly(liveClass);
 
-        verify(repository, never()).findRelatedToLessonOrPackagesInternal(eq(10L), anyCollection());
+        verify(repository, never()).findRelatedToLessonOrPackagesInternal(eq(LESSON_ID), anyCollection());
     }
 
     @Test
     void liveClassRelatedLookupUsesPackageAwareQueryWhenPackageIdsExist() {
-        LiveClassRepository repository = mock(LiveClassRepository.class, CALLS_REAL_METHODS);
+        LiveClassRepository repository = liveClassRepository();
         LiveClass liveClass = new LiveClass();
-        when(repository.findRelatedToLessonOrPackagesInternal(10L, List.of(20L)))
+        when(repository.findRelatedToLessonOrPackagesInternal(LESSON_ID, PACKAGE_IDS))
                 .thenReturn(List.of(liveClass));
 
-        assertThat(repository.findRelatedToLessonOrPackages(10L, List.of(20L))).containsExactly(liveClass);
+        assertThat(repository.findRelatedToLessonOrPackages(LESSON_ID, PACKAGE_IDS)).containsExactly(liveClass);
 
-        verify(repository, never()).findRelatedToLesson(10L);
+        verify(repository, never()).findRelatedToLesson(LESSON_ID);
     }
 
     @Test
     void recordedVideoRelatedLookupFallsBackToDirectLessonQueryWhenPackageIdsAreMissing() {
-        RecordedLessonVideoRepository repository = mock(RecordedLessonVideoRepository.class, CALLS_REAL_METHODS);
+        RecordedLessonVideoRepository repository = recordedLessonVideoRepository();
         RecordedLessonVideo video = new RecordedLessonVideo();
-        when(repository.findActiveRelatedToLesson(10L)).thenReturn(List.of(video));
+        when(repository.findActiveRelatedToLesson(LESSON_ID)).thenReturn(List.of(video));
 
-        assertThat(repository.findActiveRelatedToLessonOrPackages(10L, null)).containsExactly(video);
-        assertThat(repository.findActiveRelatedToLessonOrPackages(10L, List.of())).containsExactly(video);
+        assertThat(repository.findActiveRelatedToLessonOrPackages(LESSON_ID, null)).containsExactly(video);
+        assertThat(repository.findActiveRelatedToLessonOrPackages(LESSON_ID, List.of())).containsExactly(video);
 
-        verify(repository, never()).findActiveRelatedToLessonOrPackagesInternal(eq(10L), anyCollection());
+        verify(repository, never()).findActiveRelatedToLessonOrPackagesInternal(eq(LESSON_ID), anyCollection());
     }
 
     @Test
     void recordedVideoRelatedLookupUsesPackageAwareQueryWhenPackageIdsExist() {
-        RecordedLessonVideoRepository repository = mock(RecordedLessonVideoRepository.class, CALLS_REAL_METHODS);
+        RecordedLessonVideoRepository repository = recordedLessonVideoRepository();
         RecordedLessonVideo video = new RecordedLessonVideo();
-        when(repository.findActiveRelatedToLessonOrPackagesInternal(10L, List.of(20L)))
+        when(repository.findActiveRelatedToLessonOrPackagesInternal(LESSON_ID, PACKAGE_IDS))
                 .thenReturn(List.of(video));
 
-        assertThat(repository.findActiveRelatedToLessonOrPackages(10L, List.of(20L))).containsExactly(video);
+        assertThat(repository.findActiveRelatedToLessonOrPackages(LESSON_ID, PACKAGE_IDS)).containsExactly(video);
 
-        verify(repository, never()).findActiveRelatedToLesson(10L);
+        verify(repository, never()).findActiveRelatedToLesson(LESSON_ID);
     }
 
     @Test
     void payoutSumReturnsZeroForMissingStatusSet() {
-        PayoutRequestRepository repository = mock(PayoutRequestRepository.class, CALLS_REAL_METHODS);
+        PayoutRequestRepository repository = payoutRequestRepository();
 
-        assertThat(repository.sumAmountByTeacherIdAndPayoutStatusIn(10L, null)).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(repository.sumAmountByTeacherIdAndPayoutStatusIn(10L, Set.of())).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(repository.sumAmountByTeacherIdAndPayoutStatusIn(null, PayoutStatus.COMMITTED)).isEqualByComparingTo(BigDecimal.ZERO);
+        assertPayoutSumIsZero(repository.sumAmountByTeacherIdAndPayoutStatusIn(TEACHER_ID, null));
+        assertPayoutSumIsZero(repository.sumAmountByTeacherIdAndPayoutStatusIn(TEACHER_ID, Set.of()));
+        assertPayoutSumIsZero(repository.sumAmountByTeacherIdAndPayoutStatusIn(null, PAYOUT_STATUSES));
 
-        verify(repository, never()).sumAmountByTeacherIdAndPayoutStatusInInternal(eq(10L), anySet());
+        verify(repository, never()).sumAmountByTeacherIdAndPayoutStatusInInternal(eq(TEACHER_ID), anySet());
     }
 
     @Test
     void payoutSumDelegatesWhenStatusesExist() {
-        PayoutRequestRepository repository = mock(PayoutRequestRepository.class, CALLS_REAL_METHODS);
-        when(repository.sumAmountByTeacherIdAndPayoutStatusInInternal(10L, PayoutStatus.COMMITTED))
-                .thenReturn(new BigDecimal("12.34"));
+        PayoutRequestRepository repository = payoutRequestRepository();
+        when(repository.sumAmountByTeacherIdAndPayoutStatusInInternal(TEACHER_ID, PAYOUT_STATUSES))
+                .thenReturn(PAYOUT_TOTAL);
 
-        assertThat(repository.sumAmountByTeacherIdAndPayoutStatusIn(10L, PayoutStatus.COMMITTED))
-                .isEqualByComparingTo("12.34");
+        assertThat(repository.sumAmountByTeacherIdAndPayoutStatusIn(TEACHER_ID, PAYOUT_STATUSES))
+                .isEqualByComparingTo(PAYOUT_TOTAL);
     }
 
     @Test
     void teacherDocumentCountReturnsEmptyRowsForMissingTeacherIds() {
-        TeacherVerificationDocumentRepository repository = mock(TeacherVerificationDocumentRepository.class, CALLS_REAL_METHODS);
+        TeacherVerificationDocumentRepository repository = teacherVerificationDocumentRepository();
 
         assertThat(repository.countByTeacherIdIn(null)).isEmpty();
         assertThat(repository.countByTeacherIdIn(List.of())).isEmpty();
@@ -113,10 +123,30 @@ class RepositoryBoundaryContractTests {
 
     @Test
     void teacherDocumentCountDelegatesWhenTeacherIdsExist() {
-        TeacherVerificationDocumentRepository repository = mock(TeacherVerificationDocumentRepository.class, CALLS_REAL_METHODS);
-        Object[] row = new Object[] { 10L, 2L };
-        when(repository.countByTeacherIdInInternal(List.of(10L))).thenReturn(List.<Object[]>of(row));
+        TeacherVerificationDocumentRepository repository = teacherVerificationDocumentRepository();
+        Object[] row = new Object[] { TEACHER_ID, DOCUMENT_COUNT };
+        when(repository.countByTeacherIdInInternal(TEACHER_IDS)).thenReturn(List.<Object[]>of(row));
 
-        assertThat(repository.countByTeacherIdIn(List.of(10L))).containsExactly(row);
+        assertThat(repository.countByTeacherIdIn(TEACHER_IDS)).containsExactly(row);
+    }
+
+    private static LiveClassRepository liveClassRepository() {
+        return mock(LiveClassRepository.class, CALLS_REAL_METHODS);
+    }
+
+    private static RecordedLessonVideoRepository recordedLessonVideoRepository() {
+        return mock(RecordedLessonVideoRepository.class, CALLS_REAL_METHODS);
+    }
+
+    private static PayoutRequestRepository payoutRequestRepository() {
+        return mock(PayoutRequestRepository.class, CALLS_REAL_METHODS);
+    }
+
+    private static TeacherVerificationDocumentRepository teacherVerificationDocumentRepository() {
+        return mock(TeacherVerificationDocumentRepository.class, CALLS_REAL_METHODS);
+    }
+
+    private static void assertPayoutSumIsZero(BigDecimal amount) {
+        assertThat(amount).isEqualByComparingTo(BigDecimal.ZERO);
     }
 }

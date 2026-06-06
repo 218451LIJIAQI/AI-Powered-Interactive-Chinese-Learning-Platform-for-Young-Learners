@@ -10,7 +10,11 @@ import com.example.aichinese.dto.communication.TeacherFeedbackResponse;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.ContentModerationRecord;
 import com.example.aichinese.entity.Notification;
+import com.example.aichinese.entity.QuizAttempt;
+import com.example.aichinese.entity.StudentProfile;
+import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.TeacherFeedback;
+import com.example.aichinese.entity.User;
 
 @Component
 public class CommunicationMapper {
@@ -33,19 +37,13 @@ public class CommunicationMapper {
         return new TeacherFeedbackResponse(
                 feedback.getId(),
                 feedback.getTeacher() != null ? feedback.getTeacher().getId() : null,
-                feedback.getTeacher() != null && feedback.getTeacher().getUser() != null
-                        ? feedback.getTeacher().getUser().getDisplayName()
-                        : null,
+                displayName(feedback.getTeacher()),
                 feedback.getStudent() != null ? feedback.getStudent().getId() : null,
-                feedback.getStudent() != null && feedback.getStudent().getUser() != null
-                        ? feedback.getStudent().getUser().getDisplayName()
-                        : null,
+                displayName(feedback.getStudent()),
                 feedback.getLesson() != null ? feedback.getLesson().getId() : null,
                 feedback.getLesson() != null ? feedback.getLesson().getTitle() : null,
                 feedback.getQuizAttempt() != null ? feedback.getQuizAttempt().getId() : null,
-                feedback.getQuizAttempt() != null && feedback.getQuizAttempt().getQuiz() != null
-                        ? feedback.getQuizAttempt().getQuiz().getTitle()
-                        : null,
+                quizTitle(feedback.getQuizAttempt()),
                 feedback.getFeedbackType(),
                 feedback.getFeedbackMessage(),
                 feedback.getCreatedAt(),
@@ -55,15 +53,11 @@ public class CommunicationMapper {
     public StudentTeacherFeedbackResponse toStudentTeacherFeedbackResponse(TeacherFeedback feedback) {
         return new StudentTeacherFeedbackResponse(
                 feedback.getId(),
-                feedback.getTeacher() != null && feedback.getTeacher().getUser() != null
-                        ? feedback.getTeacher().getUser().getDisplayName()
-                        : null,
+                displayName(feedback.getTeacher()),
                 feedback.getLesson() != null ? feedback.getLesson().getId() : null,
                 feedback.getLesson() != null ? feedback.getLesson().getTitle() : null,
                 feedback.getQuizAttempt() != null ? feedback.getQuizAttempt().getId() : null,
-                feedback.getQuizAttempt() != null && feedback.getQuizAttempt().getQuiz() != null
-                        ? feedback.getQuizAttempt().getQuiz().getTitle()
-                        : null,
+                quizTitle(feedback.getQuizAttempt()),
                 feedback.getFeedbackType(),
                 feedback.getFeedbackMessage(),
                 feedback.getCreatedAt(),
@@ -81,9 +75,7 @@ public class CommunicationMapper {
                 record.getAdminUser() != null ? record.getAdminUser().getId() : null,
                 record.getAdminUser() != null ? record.getAdminUser().getDisplayName() : null,
                 record.getRelatedTeacher() != null ? record.getRelatedTeacher().getId() : null,
-                record.getRelatedTeacher() != null && record.getRelatedTeacher().getUser() != null
-                        ? record.getRelatedTeacher().getUser().getDisplayName()
-                        : null,
+                displayName(record.getRelatedTeacher()),
                 record.getCreatedAt());
     }
 
@@ -99,5 +91,23 @@ public class CommunicationMapper {
                 auditLog.getIpAddress(),
                 auditLog.getRequestId(),
                 auditLog.getCreatedAt());
+    }
+
+    private static String displayName(TeacherProfile teacher) {
+        return displayName(teacher == null ? null : teacher.getUser());
+    }
+
+    private static String displayName(StudentProfile student) {
+        return displayName(student == null ? null : student.getUser());
+    }
+
+    private static String displayName(User user) {
+        return user == null ? null : user.getDisplayName();
+    }
+
+    private static String quizTitle(QuizAttempt quizAttempt) {
+        return quizAttempt == null || quizAttempt.getQuiz() == null
+                ? null
+                : quizAttempt.getQuiz().getTitle();
     }
 }

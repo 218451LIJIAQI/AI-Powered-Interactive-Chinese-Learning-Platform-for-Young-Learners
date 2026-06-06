@@ -159,14 +159,7 @@ public class AdminTeacherManagementService {
         teacherProfile.setVerifiedAt(LocalDateTime.now());
         teacherProfileRepository.save(teacherProfile);
 
-        TeacherVerificationReview review = new TeacherVerificationReview();
-        review.setTeacher(teacherProfile);
-        review.setDocument(teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(teacherId).orElse(null));
-        review.setReviewerUser(adminUser);
-        review.setDecisionStatus(TeacherStatus.APPROVED);
-        review.setReviewNote(normalizedNote);
-        review.setReviewedAt(LocalDateTime.now());
-        teacherVerificationReviewRepository.save(review);
+        recordReview(teacherProfile, adminUser, TeacherStatus.APPROVED, normalizedNote);
 
         notificationService.safeCreateNotification(
                 teacherProfile.getUser(),
@@ -186,10 +179,6 @@ public class AdminTeacherManagementService {
         User adminUser = findActor(currentUser);
         TeacherProfile teacherProfile = findTeacherProfile(teacherId);
 
-        if (reason == null || reason.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, "Rejection reason is required.");
-        }
-
         if (teacherProfile.getTeacherStatus() == TeacherStatus.REJECTED) {
             return buildTeacherDetail(teacherProfile);
         }
@@ -204,14 +193,7 @@ public class AdminTeacherManagementService {
         teacherProfile.setVerifiedAt(null);
         teacherProfileRepository.save(teacherProfile);
 
-        TeacherVerificationReview review = new TeacherVerificationReview();
-        review.setTeacher(teacherProfile);
-        review.setDocument(teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(teacherId).orElse(null));
-        review.setReviewerUser(adminUser);
-        review.setDecisionStatus(TeacherStatus.REJECTED);
-        review.setReviewNote(trimmedReason);
-        review.setReviewedAt(LocalDateTime.now());
-        teacherVerificationReviewRepository.save(review);
+        recordReview(teacherProfile, adminUser, TeacherStatus.REJECTED, trimmedReason);
 
         notificationService.safeCreateNotification(
                 teacherProfile.getUser(),
@@ -303,10 +285,27 @@ public class AdminTeacherManagementService {
         }
 
         try {
-            return TeacherStatus.valueOf(status.strip().toUpperCase(Locale.ROOT));
+            return TeacherStatus.fromValue(status);
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid teacher status filter.");
         }
+    }
+
+    private void recordReview(
+            TeacherProfile teacherProfile,
+            User adminUser,
+            TeacherStatus decisionStatus,
+            String note) {
+        TeacherVerificationReview review = new TeacherVerificationReview();
+        review.setTeacher(teacherProfile);
+        review.setDocument(teacherVerificationDocumentRepository
+                .findTopByTeacherIdOrderBySubmittedAtDesc(teacherProfile.getId())
+                .orElse(null));
+        review.setReviewerUser(adminUser);
+        review.setDecisionStatus(decisionStatus);
+        review.setReviewNote(note);
+        review.setReviewedAt(LocalDateTime.now());
+        teacherVerificationReviewRepository.save(review);
     }
 
     private Sort resolveTeacherSort(String sort) {

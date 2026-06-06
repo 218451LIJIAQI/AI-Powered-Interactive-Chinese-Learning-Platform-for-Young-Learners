@@ -1,7 +1,6 @@
 package com.example.aichinese.controller;
 
 import java.time.Instant;
-import java.util.Map;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,12 +13,12 @@ import com.example.aichinese.dto.ApiResponse;
 public class HealthController {
 
     @GetMapping
-    public ApiResponse<Map<String, Object>> getHealth() {
+    public ApiResponse<HealthResponse> getHealth() {
         return ApiResponse.success(
                 "Service is running",
-                Map.of(
-                        "status", "UP",
-                        "service", "backend",
-                        "timestamp", Instant.now().toString()));
+                new HealthResponse("UP", "backend", Instant.now()));
+    }
+
+    public record HealthResponse(String status, String service, Instant timestamp) {
     }
 }

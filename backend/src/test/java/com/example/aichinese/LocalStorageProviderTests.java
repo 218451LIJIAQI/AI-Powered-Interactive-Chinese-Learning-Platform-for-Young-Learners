@@ -17,23 +17,32 @@ import com.example.aichinese.service.storage.StoredObject;
 @ExtendWith(OutputCaptureExtension.class)
 class LocalStorageProviderTests {
 
+    private static final String SENSITIVE_DIRECTORY = "sensitive-server-root";
+    private static final String STORED_FILE_NAME = "stored.pdf";
+    private static final String CHILD_FILE_NAME = "child.txt";
+    private static final String CHILD_FILE_CONTENT = "keeps the directory non-empty";
+    private static final String SAFE_ROLLBACK_LOG =
+            "Failed to delete stored object during upload rollback for name " + STORED_FILE_NAME;
+
     @TempDir
     Path tempDir;
 
+    private final LocalStorageProvider storageProvider = new LocalStorageProvider();
+
     @Test
     void deleteQuietlyDoesNotExposeAbsolutePathWhenCleanupFails(CapturedOutput output) throws Exception {
-        Path managedDirectory = tempDir.resolve("sensitive-server-root").resolve("stored.pdf");
+        Path managedDirectory = tempDir.resolve(SENSITIVE_DIRECTORY).resolve(STORED_FILE_NAME);
         Files.createDirectories(managedDirectory);
-        Files.writeString(managedDirectory.resolve("child.txt"), "keeps the directory non-empty");
+        Files.writeString(managedDirectory.resolve(CHILD_FILE_NAME), CHILD_FILE_CONTENT);
 
-        new LocalStorageProvider().deleteQuietly(new StoredObject(managedDirectory));
+        storageProvider.deleteQuietly(new StoredObject(managedDirectory));
 
         assertThat(output)
-                .contains("Failed to delete stored object during upload rollback for name stored.pdf")
+                .contains(SAFE_ROLLBACK_LOG)
                 .contains("Exception")
                 .doesNotContain(tempDir.toString())
-                .doesNotContain("sensitive-server-root")
-                .doesNotContain("child.txt")
+                .doesNotContain(SENSITIVE_DIRECTORY)
+                .doesNotContain(CHILD_FILE_NAME)
                 .doesNotContain("at com.example.aichinese");
     }
 }

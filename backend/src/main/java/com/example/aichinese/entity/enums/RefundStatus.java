@@ -55,20 +55,4 @@ public enum RefundStatus {
                 () -> "Invalid refund status. Allowed values are PENDING, APPROVED, REJECTED, "
                         + "or REFUNDED.");
     }
-
-    public boolean isPending() {
-        return this == PENDING;
-    }
-
-    public boolean isTerminal() {
-        return TERMINAL.contains(this);
-    }
-
-    public boolean isActionable() {
-        return ACTIONABLE.contains(this);
-    }
-
-    public boolean isRefunded() {
-        return this == REFUNDED;
-    }
 }

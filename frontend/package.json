@@ -6,6 +6,11 @@
   "engines": {
     "node": ">=22 <23"
   },
+  "knip": {
+    "ignore": [
+      "src/types/pwa.d.ts"
+    ]
+  },
   "scripts": {
     "dev": "vite",
     "lint": "eslint . --max-warnings 0",

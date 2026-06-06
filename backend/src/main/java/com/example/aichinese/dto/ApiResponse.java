@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.util.RequestIdHolder;
 
 @JsonPropertyOrder({ "success", "message", "data", "errors", "fieldErrors", "requestId" })
@@ -19,6 +18,8 @@ public record ApiResponse<T>(
         List<String> errors,
         Map<String, List<String>> fieldErrors,
         String requestId) {
+
+    private static final int MAX_FIELD_KEY_LENGTH = 80;
 
     public ApiResponse {
         message = Objects.requireNonNull(message, "ApiResponse message must not be null").strip();
@@ -108,7 +109,7 @@ public record ApiResponse<T>(
     }
 
     private static boolean isSafeFieldKey(String key) {
-        if (key == null || key.length() > 80) {
+        if (key == null || key.length() > MAX_FIELD_KEY_LENGTH) {
             return false;
         }
         for (int index = 0; index < key.length(); index++) {

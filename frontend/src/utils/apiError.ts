@@ -1,20 +1,3 @@
-/**
- * Centralised translation of `axios`-style error payloads into
- * learner-friendly text. Every API caller funnels through
- * {@link resolveApiError} so the same error shape always produces the
- * same on-screen message — preventing inconsistent tone across pages.
- *
- * The resolution order is:
- * 1. Backend-supplied {@code response.data.message} (sanitised by the
- *    {@code GlobalExceptionHandler}'s {@code FriendlyErrorMessageResolver}).
- * 2. First entry in {@code response.data.errors[]} (validation case).
- * 3. HTTP-status-based fallbacks (401, 403, 404, 5xx).
- * 4. Timeout / network detection from axios codes.
- * 5. Caller-supplied {@code fallback} string.
- *
- * Strings like {@code "Request failed"} and {@code "Network Error"}
- * are dropped because they leak axios internals to learners.
- */
 type ApiErrorPayload = {
   response?: {
     status?: number
@@ -30,21 +13,25 @@ type ApiErrorPayload = {
 
 const MAX_USER_MESSAGE_LENGTH = 280
 const UNSAFE_MESSAGE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g
+const TRANSPORT_INTERNAL_MESSAGES = new Set(['Request failed', 'Network Error'])
 
-function cleanServerMessage(value: unknown) {
+function cleanServerMessage(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
 
   const trimmed = value.replace(UNSAFE_MESSAGE_CHARACTERS, ' ').replace(/\s+/g, ' ').trim()
-  if (!trimmed || trimmed === 'Request failed' || trimmed === 'Network Error') {
+  if (!trimmed || TRANSPORT_INTERNAL_MESSAGES.has(trimmed)) {
     return null
   }
 
   return trimmed.length > MAX_USER_MESSAGE_LENGTH ? `${trimmed.slice(0, MAX_USER_MESSAGE_LENGTH - 3)}...` : trimmed
 }
 
-export function resolveApiError(reason: unknown, fallback = 'We could not complete that request. Please try again.') {
+export function resolveApiError(
+  reason: unknown,
+  fallback = 'We could not complete that request. Please try again.',
+): string {
   const payload = reason as ApiErrorPayload | null
   const serverMessage = cleanServerMessage(payload?.response?.data?.message)
   const serverError = cleanServerMessage(payload?.response?.data?.errors?.[0])
@@ -69,6 +56,6 @@ export function resolveApiError(reason: unknown, fallback = 'We could not comple
   return fallback
 }
 
-export function isUnauthorizedApiError(reason: unknown) {
+export function isUnauthorizedApiError(reason: unknown): boolean {
   return (reason as ApiErrorPayload | null)?.response?.status === 401
 }

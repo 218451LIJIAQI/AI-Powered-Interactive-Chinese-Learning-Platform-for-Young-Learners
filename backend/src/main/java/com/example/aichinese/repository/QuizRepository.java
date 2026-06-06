@@ -15,7 +15,10 @@ import com.example.aichinese.entity.enums.ContentStatus;
 public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
     @EntityGraph(attributePaths = { "lesson", "lesson.teacher", "lesson.teacher.user", "teacher", "teacher.user" })
-    Page<Quiz> findByLessonIdAndContentStatusNotOrderByCreatedAtAsc(Long lessonId, ContentStatus contentStatus, Pageable pageable);
+    Page<Quiz> findByLessonIdAndContentStatusNotOrderByCreatedAtAsc(
+            Long lessonId,
+            ContentStatus contentStatus,
+            Pageable pageable);
 
     long countByLessonId(Long lessonId);
 

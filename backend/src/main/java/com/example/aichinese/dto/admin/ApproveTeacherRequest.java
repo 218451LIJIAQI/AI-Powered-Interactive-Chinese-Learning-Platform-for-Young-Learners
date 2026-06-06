@@ -1,6 +1,6 @@
 package com.example.aichinese.dto.admin;
 
-import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -12,6 +12,6 @@ public record ApproveTeacherRequest(
         String note) {
 
     public ApproveTeacherRequest {
-        note = strip(note);
+        note = stripToNull(note);
     }
 }

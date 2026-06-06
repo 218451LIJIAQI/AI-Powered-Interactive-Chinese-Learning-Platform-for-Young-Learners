@@ -1,7 +1,7 @@
 package com.example.aichinese.dto.ai;
 
-import static com.example.aichinese.dto.DtoNormalization.immutableListOrNull;
-import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import java.util.List;
 
@@ -36,11 +36,11 @@ public record AiLearningRecommendationRequest(
         String languagePreference) {
 
     public AiLearningRecommendationRequest {
-        currentLevel = strip(currentLevel);
-        recentQuizResults = immutableListOrNull(recentQuizResults);
-        wrongAnswers = immutableListOrNull(wrongAnswers);
-        weakAreas = immutableListOrNull(weakAreas);
-        completedLessons = immutableListOrNull(completedLessons);
-        languagePreference = strip(languagePreference);
+        currentLevel = stripToNull(currentLevel);
+        recentQuizResults = strippedStringListOrNull(recentQuizResults);
+        wrongAnswers = strippedStringListOrNull(wrongAnswers);
+        weakAreas = strippedStringListOrNull(weakAreas);
+        completedLessons = strippedStringListOrNull(completedLessons);
+        languagePreference = stripToNull(languagePreference);
     }
 }

@@ -58,6 +58,9 @@ import com.example.aichinese.util.TextUtils;
 public class AuthService {
 
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(60);
+    private static final int RESET_TOKEN_GENERATION_ATTEMPTS = 3;
+    private static final String GENERIC_RESET_TOKEN_INVALID_MESSAGE =
+            "Reset token is invalid or has already been used.";
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -111,7 +114,7 @@ public class AuthService {
         Role studentRole = getRole(RoleName.STUDENT);
 
         User user = new User();
-        user.setDisplayName(request.fullName().trim());
+        user.setDisplayName(requireDisplayName(request.fullName()));
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setPreferredLanguage(normalizePreferredLanguage(request.preferredLanguage()));
@@ -136,7 +139,7 @@ public class AuthService {
         Role teacherRole = getRole(RoleName.TEACHER);
 
         User user = new User();
-        user.setDisplayName(request.fullName().trim());
+        user.setDisplayName(requireDisplayName(request.fullName()));
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setPreferredLanguage("en");
@@ -300,7 +303,7 @@ public class AuthService {
         }
 
         PasswordResetToken token = passwordResetTokenRepository.findByTokenHash(hashResetToken(rawToken))
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Reset token is invalid or has already been used."));
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, GENERIC_RESET_TOKEN_INVALID_MESSAGE));
 
         LocalDateTime now = LocalDateTime.now();
         if (token.getUsedAt() != null) {
@@ -312,12 +315,12 @@ public class AuthService {
 
         User user = token.getUser();
         if (user == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Reset token is invalid or has already been used.");
+            throw new ResponseStatusException(BAD_REQUEST, GENERIC_RESET_TOKEN_INVALID_MESSAGE);
         }
 
         int consumed = passwordResetTokenRepository.consumeActiveToken(token.getId(), now);
         if (consumed != 1) {
-            throw new ResponseStatusException(BAD_REQUEST, "Reset token is invalid or has already been used.");
+            throw new ResponseStatusException(BAD_REQUEST, GENERIC_RESET_TOKEN_INVALID_MESSAGE);
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -335,7 +338,7 @@ public class AuthService {
     }
 
     private String generateUniqueToken() {
-        for (int attempt = 0; attempt < 3; attempt++) {
+        for (int attempt = 0; attempt < RESET_TOKEN_GENERATION_ATTEMPTS; attempt++) {
             String candidate = (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "");
             if (passwordResetTokenRepository.findByTokenHash(hashResetToken(candidate)).isEmpty()) {
                 return candidate;
@@ -373,7 +376,8 @@ public class AuthService {
     }
 
     private void rotateSessionVersion(User user) {
-        user.setSessionVersion(user.getSessionVersion() + 1);
+        long currentVersion = user.getSessionVersion();
+        user.setSessionVersion(currentVersion + 1);
     }
 
     private void ensureEmailIsAvailable(String email) {
@@ -391,6 +395,11 @@ public class AuthService {
     private Role getRole(RoleName roleName) {
         return roleRepository.findByName(roleName)
                 .orElseThrow(() -> new IllegalStateException(roleName + " role is not available."));
+    }
+
+    private String requireDisplayName(String fullName) {
+        return TextUtils.trimToOptional(fullName)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Full name is required."));
     }
 
     private RegistrationResponse toRegistrationResponse(User user, TeacherStatus teacherStatus) {

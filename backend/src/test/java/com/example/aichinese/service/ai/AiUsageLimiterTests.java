@@ -34,6 +34,24 @@ import com.example.aichinese.repository.UserRepository;
 @ActiveProfiles("test")
 class AiUsageLimiterTests {
 
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-05-25T01:00:00Z");
+    private static final LocalDateTime FIXED_LOCAL_DATE_TIME = LocalDateTime.of(2026, 5, 25, 1, 0);
+    private static final LocalDate FIXED_USAGE_DAY = LocalDate.of(2026, 5, 25);
+    private static final long MOCK_USER_ID = 99L;
+    private static final int MINUTE_QUOTA = 2;
+    private static final int DAILY_QUOTA = 1;
+    private static final int GENEROUS_QUOTA = 10;
+    private static final int STALE_COUNTER_VALUE = 99;
+    private static final String MINUTE_QUOTA_PREFIX = "minute-quota";
+    private static final String FIRST_QUOTA_PREFIX = "first-quota";
+    private static final String SECOND_QUOTA_PREFIX = "second-quota";
+    private static final String DAILY_QUOTA_PREFIX = "daily-quota";
+    private static final String SPRING_MANAGED_QUOTA_PREFIX = "spring-managed-quota";
+    private static final String PASSWORD_HASH = "password-hash";
+    private static final String EMAIL_DOMAIN = "@example.com";
+    private static final String MINUTE_LIMIT_MESSAGE = "Please wait a minute";
+    private static final String DAILY_LIMIT_MESSAGE = "Daily AI request limit reached";
+
     @Autowired
     private UserRepository userRepository;
 
@@ -48,26 +66,26 @@ class AiUsageLimiterTests {
 
     @Test
     void rejectsRequestsPastMinuteQuotaAndPersistsCounter() {
-        AiUsageLimiter limiter = limiterAt("2026-05-25T01:00:00Z", 2, 10);
-        User user = createUser("minute-quota");
+        AiUsageLimiter limiter = limiterAtFixedInstant(MINUTE_QUOTA, GENEROUS_QUOTA);
+        User user = createUser(MINUTE_QUOTA_PREFIX);
 
         allow(limiter, user.getId());
         allow(limiter, user.getId());
 
         assertThatThrownBy(() -> allow(limiter, user.getId()))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Please wait a minute");
+                .hasMessageContaining(MINUTE_LIMIT_MESSAGE);
 
-        AiUsageQuotaCounter counter = transactionTemplate.execute(status -> quotaCounterRepository.findLockedByUserId(user.getId()).orElseThrow());
-        assertThat(counter.getMinuteCount()).isEqualTo(2);
-        assertThat(counter.getDayCount()).isEqualTo(2);
+        AiUsageQuotaCounter counter = persistedCounter(user.getId());
+        assertThat(counter.getMinuteCount()).isEqualTo(MINUTE_QUOTA);
+        assertThat(counter.getDayCount()).isEqualTo(MINUTE_QUOTA);
     }
 
     @Test
     void maintainsIndependentQuotasPerStudentInSharedStore() {
-        AiUsageLimiter limiter = limiterAt("2026-05-25T01:00:00Z", 1, 1);
-        User first = createUser("first-quota");
-        User second = createUser("second-quota");
+        AiUsageLimiter limiter = limiterAtFixedInstant(DAILY_QUOTA, DAILY_QUOTA);
+        User first = createUser(FIRST_QUOTA_PREFIX);
+        User second = createUser(SECOND_QUOTA_PREFIX);
 
         allow(limiter, first.getId());
 
@@ -76,71 +94,98 @@ class AiUsageLimiterTests {
 
     @Test
     void rejectsRequestsPastDailyQuota() {
-        AiUsageLimiter limiter = limiterAt("2026-05-25T01:00:00Z", 10, 1);
-        User user = createUser("daily-quota");
+        AiUsageLimiter limiter = limiterAtFixedInstant(GENEROUS_QUOTA, DAILY_QUOTA);
+        User user = createUser(DAILY_QUOTA_PREFIX);
 
         allow(limiter, user.getId());
 
         assertThatThrownBy(() -> allow(limiter, user.getId()))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Daily AI request limit reached");
+                .hasMessageContaining(DAILY_LIMIT_MESSAGE);
     }
 
     @Test
     void springManagedLimiterOpensItsOwnTransaction() {
-        User user = createUser("spring-managed-quota");
+        User user = createUser(SPRING_MANAGED_QUOTA_PREFIX);
 
-        assertThatCode(() -> springManagedLimiter.checkProviderCallAllowed(user.getId())).doesNotThrowAnyException();
+        assertThatCode(() -> springManagedLimiter.checkProviderCallAllowed(user.getId()))
+                .doesNotThrowAnyException();
     }
 
     @Test
     void repairsMissingWindowFieldsOnExistingCounter() {
         UserRepository userRepository = mock(UserRepository.class);
         AiUsageQuotaCounterRepository quotaCounterRepository = mock(AiUsageQuotaCounterRepository.class);
-        User user = new User();
-        user.setId(99L);
-        AiUsageQuotaCounter counter = new AiUsageQuotaCounter();
-        counter.setUser(user);
-        counter.setMinuteStartedAt(null);
-        counter.setMinuteCount(99);
-        counter.setUsageDay(null);
-        counter.setDayCount(99);
-        when(userRepository.findLockedById(99L)).thenReturn(Optional.of(user));
-        when(quotaCounterRepository.findLockedByUserId(99L)).thenReturn(Optional.of(counter));
-        when(quotaCounterRepository.save(any(AiUsageQuotaCounter.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        AiUsageLimiter limiter = new AiUsageLimiter(
-                Clock.fixed(Instant.parse("2026-05-25T01:00:00Z"), ZoneOffset.UTC),
-                10,
-                10,
-                userRepository,
-                quotaCounterRepository);
+        User user = user(MOCK_USER_ID);
+        AiUsageQuotaCounter counter = staleCounter(user);
+        when(userRepository.findLockedById(MOCK_USER_ID)).thenReturn(Optional.of(user));
+        when(quotaCounterRepository.findLockedByUserId(MOCK_USER_ID)).thenReturn(Optional.of(counter));
+        when(quotaCounterRepository.save(any(AiUsageQuotaCounter.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        AiUsageLimiter limiter = mockBackedLimiter(userRepository, quotaCounterRepository);
 
-        limiter.checkProviderCallAllowed(99L);
+        limiter.checkProviderCallAllowed(MOCK_USER_ID);
 
-        assertThat(counter.getMinuteStartedAt()).isEqualTo(LocalDateTime.of(2026, 5, 25, 1, 0));
+        assertThat(counter.getMinuteStartedAt()).isEqualTo(FIXED_LOCAL_DATE_TIME);
         assertThat(counter.getMinuteCount()).isEqualTo(1);
-        assertThat(counter.getUsageDay()).isEqualTo(LocalDate.of(2026, 5, 25));
+        assertThat(counter.getUsageDay()).isEqualTo(FIXED_USAGE_DAY);
         assertThat(counter.getDayCount()).isEqualTo(1);
     }
 
-    private AiUsageLimiter limiterAt(String instant, int requestsPerMinute, int requestsPerDay) {
+    private AiUsageLimiter limiterAtFixedInstant(int requestsPerMinute, int requestsPerDay) {
         return new AiUsageLimiter(
-                Clock.fixed(Instant.parse(instant), ZoneOffset.UTC),
+                fixedClock(),
                 requestsPerMinute,
                 requestsPerDay,
                 userRepository,
                 quotaCounterRepository);
     }
 
+    private static AiUsageLimiter mockBackedLimiter(
+            UserRepository userRepository,
+            AiUsageQuotaCounterRepository quotaCounterRepository) {
+        return new AiUsageLimiter(
+                fixedClock(),
+                GENEROUS_QUOTA,
+                GENEROUS_QUOTA,
+                userRepository,
+                quotaCounterRepository);
+    }
+
+    private static Clock fixedClock() {
+        return Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
+    }
+
+    private AiUsageQuotaCounter persistedCounter(Long userId) {
+        return transactionTemplate.execute(status -> quotaCounterRepository.findLockedByUserId(userId)
+                .orElseThrow());
+    }
+
     private User createUser(String prefix) {
         return transactionTemplate.execute(status -> {
-            User user = new User();
-            user.setEmail(prefix + "-" + UUID.randomUUID() + "@example.com");
+            User user = user(null);
+            user.setEmail(prefix + "-" + UUID.randomUUID() + EMAIL_DOMAIN);
             user.setDisplayName(prefix);
-            user.setPasswordHash("password-hash");
-            user.setActive(true);
             return userRepository.saveAndFlush(user);
         });
+    }
+
+    private static User user(Long id) {
+        User user = new User();
+        user.setId(id);
+        user.setPasswordHash(PASSWORD_HASH);
+        user.setActive(true);
+        return user;
+    }
+
+    private static AiUsageQuotaCounter staleCounter(User user) {
+        AiUsageQuotaCounter counter = new AiUsageQuotaCounter();
+        counter.setUser(user);
+        counter.setMinuteStartedAt(null);
+        counter.setMinuteCount(STALE_COUNTER_VALUE);
+        counter.setUsageDay(null);
+        counter.setDayCount(STALE_COUNTER_VALUE);
+        return counter;
     }
 
     private void allow(AiUsageLimiter limiter, Long userId) {

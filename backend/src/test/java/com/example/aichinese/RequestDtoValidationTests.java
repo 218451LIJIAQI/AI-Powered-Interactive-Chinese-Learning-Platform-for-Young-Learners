@@ -3,31 +3,32 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.dto.admin.ApproveTeacherRequest;
 import com.example.aichinese.dto.admin.RejectTeacherRequest;
+import com.example.aichinese.dto.admin.activity.AdminDragDropActivityRequest;
+import com.example.aichinese.dto.admin.activity.AdminFlashcardRequest;
+import com.example.aichinese.dto.admin.activity.AdminStoryActivityRequest;
+import com.example.aichinese.dto.admin.activity.ActivityType;
 import com.example.aichinese.dto.ai.AiChatRequest;
 import com.example.aichinese.dto.ai.AiLearningRecommendationRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiSentencePracticeRequest;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
-import com.example.aichinese.dto.admin.activity.AdminDragDropActivityRequest;
-import com.example.aichinese.dto.admin.activity.ActivityType;
-import com.example.aichinese.dto.admin.activity.AdminFlashcardRequest;
-import com.example.aichinese.dto.admin.activity.AdminStoryActivityRequest;
-import com.example.aichinese.dto.commerce.CheckoutSessionRequest;
-import com.example.aichinese.dto.commerce.CheckoutSessionRequest.CheckoutSource;
 import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
 import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
 import com.example.aichinese.dto.commerce.CartItemRequest;
+import com.example.aichinese.dto.commerce.CheckoutSessionRequest;
+import com.example.aichinese.dto.commerce.CheckoutSessionRequest.CheckoutSource;
 import com.example.aichinese.dto.communication.CreateTeacherFeedbackRequest;
 import com.example.aichinese.dto.content.ContentApprovalRequest;
 import com.example.aichinese.dto.content.CreateLessonRequest;
@@ -39,10 +40,11 @@ import com.example.aichinese.dto.learning.QuizSubmissionAnswerRequest;
 import com.example.aichinese.dto.learning.RecordedLessonVideoRequest;
 import com.example.aichinese.dto.learning.SubmitQuizAttemptRequest;
 import com.example.aichinese.dto.learning.UpdateLiveClassStatusRequest;
-import com.example.aichinese.dto.learning.UpdateQuizQuestionRequest;
 import com.example.aichinese.dto.learning.UpdateLiveClassRequest;
+import com.example.aichinese.dto.learning.UpdateQuizQuestionRequest;
 import com.example.aichinese.dto.learning.UpdateQuizRequest;
 import com.example.aichinese.dto.system.AdminPlatformSettingsUpdateRequest;
+import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
 import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -50,6 +52,7 @@ import com.example.aichinese.entity.enums.LearningType;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 
 /**
  * Pins the Jakarta Validation annotations declared on every public
@@ -60,7 +63,19 @@ import jakarta.validation.Validator;
  */
 class RequestDtoValidationTests {
 
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private static final ValidatorFactory VALIDATOR_FACTORY = Validation.buildDefaultValidatorFactory();
+    private static final Validator VALIDATOR = VALIDATOR_FACTORY.getValidator();
+
+    private static final String IDEOGRAPHIC_SPACE = "\u3000";
+    private static final String MULTIPLE_CHOICE = "MULTIPLE_CHOICE";
+    private static final String QUESTION_PROMPT = "Choose the correct answer.";
+    private static final String UNSAFE_MEETING_LINK = "javascript:alert(1)";
+    private static final int TOO_MANY_CHILDREN = 201;
+
+    @AfterAll
+    static void closeValidatorFactory() {
+        VALIDATOR_FACTORY.close();
+    }
 
     @Test
     void contentRequestIdsMustBePositive() {
@@ -77,9 +92,7 @@ class RequestDtoValidationTests {
                 "Content",
                 null);
 
-        assertThat(validator.validate(request))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("moduleId", "levelId", "categoryId");
+        assertViolationPathsContain(request, "moduleId", "levelId", "categoryId");
     }
 
     @Test
@@ -95,12 +108,8 @@ class RequestDtoValidationTests {
                 null,
                 "Response snapshot");
 
-        assertThat(validator.validate(chatRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("sessionId", "relatedLessonId");
-        assertThat(validator.validate(reportRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("aiUsageLogId", "chatSessionId", "chatMessageId");
+        assertViolationPathsContain(chatRequest, "sessionId", "relatedLessonId");
+        assertViolationPathsContain(reportRequest, "aiUsageLogId", "chatSessionId", "chatMessageId");
     }
 
     @Test
@@ -113,12 +122,8 @@ class RequestDtoValidationTests {
                 "Z".repeat(31),
                 "Useful feedback message");
 
-        assertThat(validator.validate(cartItemRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("itemType", "itemId", "featureKey");
-        assertThat(validator.validate(feedbackRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("studentId", "lessonId", "quizAttemptId", "feedbackType");
+        assertViolationPathsContain(cartItemRequest, "itemType", "itemId", "featureKey");
+        assertViolationPathsContain(feedbackRequest, "studentId", "lessonId", "quizAttemptId", "feedbackType");
     }
 
     @Test
@@ -131,63 +136,60 @@ class RequestDtoValidationTests {
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(1).plusHours(1),
                 "X".repeat(65),
-                "javascript:alert(1)",
+                UNSAFE_MEETING_LINK,
                 "M".repeat(81),
                 "S".repeat(31),
                 10);
         QuizSubmissionAnswerRequest answerRequest = new QuizSubmissionAnswerRequest(0L, "A".repeat(2001));
 
-        assertThat(validator.validate(liveClassRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("lessonId", "packageId", "timeZone", "meetingLink", "meetingPlatform", "status");
-        assertThat(validator.validate(answerRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("questionId", "answerText");
+        assertViolationPathsContain(
+                liveClassRequest,
+                "lessonId",
+                "packageId",
+                "timeZone",
+                "meetingLink",
+                "meetingPlatform",
+                "status");
+        assertViolationPathsContain(answerRequest, "questionId", "answerText");
     }
 
     @Test
     void quizAggregateRequestsRejectUnboundedChildCollections() {
-        List<QuizSubmissionAnswerRequest> answers = IntStream.rangeClosed(1, 201)
+        List<QuizSubmissionAnswerRequest> answers = IntStream.rangeClosed(1, TOO_MANY_CHILDREN)
                 .mapToObj(index -> new QuizSubmissionAnswerRequest((long) index, "answer"))
                 .toList();
-        List<QuizOptionRequest> options = IntStream.rangeClosed(1, 201)
+        List<QuizOptionRequest> options = IntStream.rangeClosed(1, TOO_MANY_CHILDREN)
                 .mapToObj(index -> new QuizOptionRequest("Option " + index, index == 1, index))
                 .toList();
 
         SubmitQuizAttemptRequest attemptRequest = new SubmitQuizAttemptRequest(answers);
         CreateQuizQuestionRequest createQuestionRequest = new CreateQuizQuestionRequest(
-                "MULTIPLE_CHOICE",
-                "Choose the correct answer.",
+                MULTIPLE_CHOICE,
+                QUESTION_PROMPT,
                 null,
                 5,
                 0,
                 options,
                 null);
         UpdateQuizQuestionRequest updateQuestionRequest = new UpdateQuizQuestionRequest(
-                "MULTIPLE_CHOICE",
-                "Choose the correct answer.",
+                MULTIPLE_CHOICE,
+                QUESTION_PROMPT,
                 null,
                 5,
                 0,
                 options,
                 null);
 
-        assertThat(validator.validate(attemptRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("answers");
-        assertThat(validator.validate(createQuestionRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("options");
-        assertThat(validator.validate(updateQuestionRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("options");
+        assertViolationPathsContain(attemptRequest, "answers");
+        assertViolationPathsContain(createQuestionRequest, "options");
+        assertViolationPathsContain(updateQuestionRequest, "options");
     }
 
     @Test
     void dtoConstructorsNormalizeBoundaryTextBeforeValidation() {
         CreateLessonRequest lessonRequest = new CreateLessonRequest(
-                "\u3000Lesson title\u3000",
-                "\u3000",
+                ideographicWrapped("Lesson title"),
+                IDEOGRAPHIC_SPACE,
                 null,
                 1L,
                 1L,
@@ -196,71 +198,81 @@ class RequestDtoValidationTests {
                 BigDecimal.ZERO,
                 10,
                 "  Lesson body  ",
-                "\u3000");
-        ContentApprovalRequest approvalRequest = new ContentApprovalRequest("\u3000Needs review\u3000");
+                IDEOGRAPHIC_SPACE);
+        ContentApprovalRequest approvalRequest = new ContentApprovalRequest(ideographicWrapped("Needs review"));
         CreateTeacherFeedbackRequest feedbackRequest = new CreateTeacherFeedbackRequest(
                 1L,
                 null,
                 null,
-                "\u3000quiz\u3000",
-                "\u3000Thoughtful feedback\u3000");
-        ApproveTeacherRequest approveTeacherRequest = new ApproveTeacherRequest("\u3000Ready\u3000");
-        RejectTeacherRequest rejectTeacherRequest = new RejectTeacherRequest("\u3000Missing certificate\u3000");
-        AiChatRequest chatRequest = new AiChatRequest("\u3000你好\u3000", "\u3000zh\u3000", null, "\u3000Lesson 1\u3000", null);
+                ideographicWrapped("quiz"),
+                ideographicWrapped("Thoughtful feedback"));
+        ApproveTeacherRequest approveTeacherRequest = new ApproveTeacherRequest(ideographicWrapped("Ready"));
+        RejectTeacherRequest rejectTeacherRequest = new RejectTeacherRequest(ideographicWrapped("Missing certificate"));
+        AiChatRequest chatRequest = new AiChatRequest(
+                ideographicWrapped("你好"),
+                ideographicWrapped("zh"),
+                null,
+                ideographicWrapped("Lesson 1"),
+                null);
         AiSentencePracticeRequest sentencePracticeRequest = new AiSentencePracticeRequest(
-                "\u3000我喜欢中文\u3000",
-                "\u3000beginner\u3000",
-                "\u3000en\u3000");
+                ideographicWrapped("我喜欢中文"),
+                ideographicWrapped("beginner"),
+                ideographicWrapped("en"));
         AiStoryGeneratorRequest storyGeneratorRequest = new AiStoryGeneratorRequest(
-                "\u3000food\u3000",
-                "\u3000HSK 1\u3000",
-                "\u3000en\u3000",
-                "\u3000short\u3000");
+                ideographicWrapped("food"),
+                ideographicWrapped("HSK 1"),
+                ideographicWrapped("en"),
+                ideographicWrapped("short"));
         AiVocabularyHelperRequest vocabularyHelperRequest = new AiVocabularyHelperRequest(
-                "\u3000apple\u3000",
-                "\u3000en\u3000",
-                "\u3000zh\u3000",
-                "\u3000beginner\u3000",
-                "\u3000ms\u3000");
+                ideographicWrapped("apple"),
+                ideographicWrapped("en"),
+                ideographicWrapped("zh"),
+                ideographicWrapped("beginner"),
+                ideographicWrapped("ms"));
         CreateAiResponseReportRequest aiReportRequest = new CreateAiResponseReportRequest(
                 null,
                 null,
                 null,
-                "\u3000CHAT_TUTOR\u3000",
-                "\u3000OTHER\u3000",
-                "\u3000Description\u3000",
-                "\u3000Prompt\u3000",
-                "\u3000Response\u3000");
+                ideographicWrapped("CHAT_TUTOR"),
+                ideographicWrapped("OTHER"),
+                ideographicWrapped("Description"),
+                ideographicWrapped("Prompt"),
+                ideographicWrapped("Response"));
         ReviewAiResponseReportRequest reportReviewRequest = new ReviewAiResponseReportRequest(
-                "\u3000RESOLVED\u3000",
-                "\u3000Handled\u3000");
+                ideographicWrapped("RESOLVED"),
+                ideographicWrapped("Handled"));
         CreateLiveClassRequest createLiveClassRequest = new CreateLiveClassRequest(
-                "\u3000Tone practice\u3000",
-                "\u3000",
+                ideographicWrapped("Tone practice"),
+                IDEOGRAPHIC_SPACE,
                 null,
                 null,
                 LocalDateTime.now().plusDays(2),
                 LocalDateTime.now().plusDays(2).plusHours(1),
-                "\u3000Asia/Singapore\u3000",
-                "\u3000https://example.com/class\u3000",
-                "\u3000zoom\u3000",
-                "\u3000",
+                ideographicWrapped("Asia/Singapore"),
+                ideographicWrapped("https://example.com/class"),
+                ideographicWrapped("zoom"),
+                IDEOGRAPHIC_SPACE,
                 10);
-        UpdateLiveClassStatusRequest liveClassStatusRequest = new UpdateLiveClassStatusRequest("\u3000ONGOING\u3000");
-        CreateQuizRequest createQuizRequest = new CreateQuizRequest("\u3000Quiz 1\u3000", "\u3000", 0);
-        UpdateQuizRequest updateQuizRequest = new UpdateQuizRequest("\u3000Quiz 2\u3000", "\u3000Updated\u3000", 5);
-        QuizOptionRequest optionRequest = new QuizOptionRequest("\u3000Option A\u3000", true, 0);
-        QuizSubmissionAnswerRequest quizAnswerRequest = new QuizSubmissionAnswerRequest(1L, "\u3000Answer A\u3000");
+        UpdateLiveClassStatusRequest liveClassStatusRequest =
+                new UpdateLiveClassStatusRequest(ideographicWrapped("ONGOING"));
+        CreateQuizRequest createQuizRequest = new CreateQuizRequest(ideographicWrapped("Quiz 1"), IDEOGRAPHIC_SPACE, 0);
+        UpdateQuizRequest updateQuizRequest = new UpdateQuizRequest(
+                ideographicWrapped("Quiz 2"),
+                ideographicWrapped("Updated"),
+                5);
+        QuizOptionRequest optionRequest = new QuizOptionRequest(ideographicWrapped("Option A"), true, 0);
+        QuizSubmissionAnswerRequest quizAnswerRequest =
+                new QuizSubmissionAnswerRequest(1L, ideographicWrapped("Answer A"));
         RecordedLessonVideoRequest recordedVideoRequest = new RecordedLessonVideoRequest(
-                "\u3000Video 1\u3000",
-                "\u3000",
+                ideographicWrapped("Video 1"),
+                IDEOGRAPHIC_SPACE,
                 null,
-                "\u3000EXTERNAL_URL\u3000",
-                "\u3000https://example.com/video\u3000",
+                ideographicWrapped("EXTERNAL_URL"),
+                ideographicWrapped("https://example.com/video"),
                 null,
                 0);
         AdminPlatformSettingsUpdateRequest settingsRequest = new AdminPlatformSettingsUpdateRequest(
-                "\u3000AI can make mistakes\u3000",
+                ideographicWrapped("AI can make mistakes"),
                 true,
                 true,
                 false,
@@ -307,14 +319,14 @@ class RequestDtoValidationTests {
         assertThat(recordedVideoRequest.sourceType()).isEqualTo("EXTERNAL_URL");
         assertThat(recordedVideoRequest.externalVideoUrl()).isEqualTo("https://example.com/video");
         assertThat(settingsRequest.aiDisclaimerText()).isEqualTo("AI can make mistakes");
-        assertThat(ActivityType.parseLenient("\u3000matching-game\u3000")).contains(ActivityType.MATCHING_GAME);
+        assertThat(ActivityType.parseLenient(ideographicWrapped("matching-game"))).contains(ActivityType.MATCHING_GAME);
     }
 
     @Test
     void listBackedRequestDtosAreDefensivelyCopiedAndImmutable() {
-        List<String> tags = new ArrayList<>(List.of("\u3000tone\u3000", "pinyin"));
+        List<String> tags = mutableList(ideographicWrapped("tone"), "pinyin");
         AdminFlashcardRequest flashcardRequest = new AdminFlashcardRequest(
-                "\u3000",
+                IDEOGRAPHIC_SPACE,
                 "  你  ",
                 "  you  ",
                 null,
@@ -338,13 +350,12 @@ class RequestDtoValidationTests {
         assertThat(flashcardRequest.backText()).isEqualTo("you");
         assertThat(flashcardRequest.topic()).isEqualTo("greetings");
         assertThat(flashcardRequest.tags()).containsExactly("tone", "pinyin");
-        assertThatThrownBy(() -> flashcardRequest.tags().add("blocked"))
-                .isInstanceOf(UnsupportedOperationException.class);
+        assertListIsImmutable(flashcardRequest.tags());
 
-        List<String> questionTypes = new ArrayList<>(List.of("MULTIPLE_CHOICE"));
+        List<String> questionTypes = mutableList(spaced(MULTIPLE_CHOICE));
         AiQuizGeneratorRequest quizGeneratorRequest = new AiQuizGeneratorRequest(
-                "\u3000tones\u3000",
-                "\u3000beginner\u3000",
+                ideographicWrapped("tones"),
+                ideographicWrapped("beginner"),
                 null,
                 3,
                 questionTypes,
@@ -354,11 +365,10 @@ class RequestDtoValidationTests {
 
         assertThat(quizGeneratorRequest.topic()).isEqualTo("tones");
         assertThat(quizGeneratorRequest.level()).isEqualTo("beginner");
-        assertThat(quizGeneratorRequest.questionTypes()).containsExactly("MULTIPLE_CHOICE");
-        assertThatThrownBy(() -> quizGeneratorRequest.questionTypes().add("FILL_BLANK"))
-                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(quizGeneratorRequest.questionTypes()).containsExactly(MULTIPLE_CHOICE);
+        assertListIsImmutable(quizGeneratorRequest.questionTypes());
 
-        List<String> recentQuizResults = new ArrayList<>(List.of("Quiz 1: 80%"));
+        List<String> recentQuizResults = mutableList("  Quiz 1: 80%  ");
         AiLearningRecommendationRequest recommendationRequest = new AiLearningRecommendationRequest(
                 1L,
                 " HSK 1 ",
@@ -372,22 +382,37 @@ class RequestDtoValidationTests {
         assertThat(recommendationRequest.currentLevel()).isEqualTo("HSK 1");
         assertThat(recommendationRequest.languagePreference()).isEqualTo("zh");
         assertThat(recommendationRequest.recentQuizResults()).containsExactly("Quiz 1: 80%");
+
+        List<String> teachingCategories = mutableList("  HSK 1  ", "  ");
+        UpdateTeacherProfileRequest teacherProfileRequest = new UpdateTeacherProfileRequest(
+                "  Teacher Example  ",
+                "  ",
+                IDEOGRAPHIC_SPACE,
+                teachingCategories);
+        teachingCategories.add("late mutation");
+
+        assertThat(teacherProfileRequest.fullName()).isEqualTo("Teacher Example");
+        assertThat(teacherProfileRequest.bio()).isNull();
+        assertThat(teacherProfileRequest.shortIntroduction()).isNull();
+        assertThat(teacherProfileRequest.teachingCategories()).containsExactly("HSK 1", "");
+        assertViolationPathStartsWith(teacherProfileRequest, "teachingCategories");
+        assertListIsImmutable(teacherProfileRequest.teachingCategories());
     }
 
     @Test
     void aggregateRequestsRejectNullChildElementsThroughBeanValidation() {
         SubmitQuizAttemptRequest attemptRequest = new SubmitQuizAttemptRequest(nullElementList());
         CreateQuizQuestionRequest createQuestionRequest = new CreateQuizQuestionRequest(
-                "MULTIPLE_CHOICE",
-                "Choose the correct answer.",
+                MULTIPLE_CHOICE,
+                QUESTION_PROMPT,
                 null,
                 5,
                 0,
                 nullElementList(),
                 null);
         UpdateQuizQuestionRequest updateQuestionRequest = new UpdateQuizQuestionRequest(
-                "MULTIPLE_CHOICE",
-                "Choose the correct answer.",
+                MULTIPLE_CHOICE,
+                QUESTION_PROMPT,
                 null,
                 5,
                 0,
@@ -423,24 +448,41 @@ class RequestDtoValidationTests {
                 null,
                 nullElementList());
 
-        assertThat(validator.validate(attemptRequest))
+        assertViolationPathStartsWith(attemptRequest, "answers");
+        assertViolationPathStartsWith(createQuestionRequest, "options");
+        assertViolationPathStartsWith(updateQuestionRequest, "options");
+        assertViolationPathStartsWith(checkoutRequest, "items");
+        assertViolationPathStartsWith(dragDropRequest, "items");
+        assertViolationPathStartsWith(storyRequest, "questions");
+    }
+
+    private static void assertViolationPathsContain(Object request, String... paths) {
+        assertThat(VALIDATOR.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith("answers"));
-        assertThat(validator.validate(createQuestionRequest))
+                .contains(paths);
+    }
+
+    private static void assertViolationPathStartsWith(Object request, String prefix) {
+        assertThat(VALIDATOR.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith("options"));
-        assertThat(validator.validate(updateQuestionRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith("options"));
-        assertThat(validator.validate(checkoutRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith("items"));
-        assertThat(validator.validate(dragDropRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith("items"));
-        assertThat(validator.validate(storyRequest))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith("questions"));
+                .anyMatch(path -> path.startsWith(prefix));
+    }
+
+    private static void assertListIsImmutable(List<String> values) {
+        assertThatThrownBy(() -> values.add("blocked"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    private static List<String> mutableList(String... values) {
+        return new ArrayList<>(List.of(values));
+    }
+
+    private static String ideographicWrapped(String value) {
+        return IDEOGRAPHIC_SPACE + value + IDEOGRAPHIC_SPACE;
+    }
+
+    private static String spaced(String value) {
+        return "  " + value + "  ";
     }
 
     private static <T> List<T> nullElementList() {

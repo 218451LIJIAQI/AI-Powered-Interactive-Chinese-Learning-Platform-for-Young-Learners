@@ -1,11 +1,12 @@
 package com.example.aichinese.controller;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 import org.springframework.core.io.Resource;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -67,13 +68,19 @@ public class AdminController {
             AdminContentReviewService adminContentReviewService,
             AiService aiService,
             LiveClassService liveClassService) {
-        this.dashboardService = dashboardService;
-        this.analyticsService = analyticsService;
-        this.adminTeacherManagementService = adminTeacherManagementService;
-        this.adminUserManagementService = adminUserManagementService;
-        this.adminContentReviewService = adminContentReviewService;
-        this.aiService = aiService;
-        this.liveClassService = liveClassService;
+        this.dashboardService = Objects.requireNonNull(dashboardService, "dashboardService");
+        this.analyticsService = Objects.requireNonNull(analyticsService, "analyticsService");
+        this.adminTeacherManagementService = Objects.requireNonNull(
+                adminTeacherManagementService,
+                "adminTeacherManagementService");
+        this.adminUserManagementService = Objects.requireNonNull(
+                adminUserManagementService,
+                "adminUserManagementService");
+        this.adminContentReviewService = Objects.requireNonNull(
+                adminContentReviewService,
+                "adminContentReviewService");
+        this.aiService = Objects.requireNonNull(aiService, "aiService");
+        this.liveClassService = Objects.requireNonNull(liveClassService, "liveClassService");
     }
 
     @GetMapping("/dashboard")
@@ -149,7 +156,7 @@ public class AdminController {
             @Valid @RequestBody(required = false) ApproveTeacherRequest request) {
         return ApiResponse.success(
                 "Teacher approved successfully.",
-                adminTeacherManagementService.approveTeacher(currentUser, id, request != null ? request.note() : null));
+                adminTeacherManagementService.approveTeacher(currentUser, id, noteOf(request)));
     }
 
     @PostMapping("/teachers/{id}/reject")
@@ -262,6 +269,14 @@ public class AdminController {
                         currentUser,
                         ManagedContentType.fromValue(contentType),
                         id,
-                        request != null ? request.note() : null));
+                        noteOf(request)));
+    }
+
+    private static String noteOf(ApproveTeacherRequest request) {
+        return request == null ? null : request.note();
+    }
+
+    private static String noteOf(ContentApprovalRequest request) {
+        return request == null ? null : request.note();
     }
 }

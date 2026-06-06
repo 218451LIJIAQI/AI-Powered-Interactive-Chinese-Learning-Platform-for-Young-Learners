@@ -6,7 +6,7 @@
 
     <DataNotice
       :using-fallback="resource.usingFallback.value"
-      :error="actionError || resource.error.value"
+      :error="noticeError"
       :success="actionSuccess"
     />
 
@@ -45,17 +45,11 @@
           <div class="public-course-detail-price-card">
             <div class="row-between">
               <strong>Teacher</strong>
-              <StatusPill :label="course.teacher.verified ? 'Verified' : 'Public'" tone="success" />
+              <StatusPill :label="teacherVerificationLabel" tone="success" />
             </div>
             <p>{{ course.teacher.displayName }}</p>
-            <strong>{{
-              course.accessType === 'FREE' ? 'Free' : formatCurrency(course.price, course.currencyCode)
-            }}</strong>
-            <span>{{
-              course.accessType === 'FREE'
-                ? 'Start learning after signing in.'
-                : 'Secure checkout unlocks student access.'
-            }}</span>
+            <strong>{{ priceLabel }}</strong>
+            <span>{{ priceHelp }}</span>
           </div>
         </div>
       </div>
@@ -85,7 +79,7 @@
             class="list-item public-course-detail-item"
           >
             <div class="row">
-              <IconGlyph :name="item.type === 'MODULE' ? 'content' : 'learn'" :size="18" />
+              <IconGlyph :name="packageItemIcon(item.type)" :size="18" />
               <div class="stack">
                 <strong>{{ item.title }}</strong>
                 <span class="muted">Included item {{ item.displayOrder }}</span>
@@ -114,7 +108,7 @@
           <strong>Need more support?</strong>
           <p>AI helper suggestions are optional and student-facing only.</p>
           <button class="btn btn-primary" type="button" :disabled="studentOnlyViewer" @click="goToAiHelperSignIn">
-            {{ studentOnlyViewer ? 'Student AI only' : 'Open AI Helper' }}
+            {{ aiHelperButtonLabel }}
           </button>
         </div>
       </aside>
@@ -123,21 +117,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Single course / module / package detail page accessible from the
- * catalogue or a marketing link.
- *
- * <h2>Visibility</h2>
- * <p>The endpoint returns content only for PUBLISHED items authored
- * by APPROVED teachers — so an unauthenticated visitor cannot see
- * draft or hidden material via URL guessing.</p>
- *
- * <h2>Paid vs. free</h2>
- * <p>The frontend renders the public detail payload returned by the
- * API, then routes unauthenticated paid actions through
- * {@link AuthPage} and authenticated student purchases through the
- * checkout flow.</p>
- */
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -165,7 +144,9 @@ const submittingCart = ref(false)
 const studentOnlyViewer = computed(() => auth.isAuthenticated && !auth.hasRole('STUDENT'))
 const canUseStudentActions = computed(() => auth.isAuthenticated && auth.hasRole('STUDENT'))
 
-function readDemoCourseDetail() {
+type PackageItemIcon = 'content' | 'learn'
+
+function readDemoCourseDetail(): PublicCourseDetail | null {
   return publicCourseDetails[courseId.value] ?? null
 }
 
@@ -214,6 +195,7 @@ const resource = useResource(
 )
 
 const course = computed(() => resource.data.value ?? emptyCourse.value)
+const noticeError = computed(() => actionError.value || resource.error.value)
 const displayedCallToAction = computed(() => {
   if (canUseStudentActions.value) {
     return course.value.accessType === 'FREE'
@@ -223,7 +205,7 @@ const displayedCallToAction = computed(() => {
   if (studentOnlyViewer.value) return 'Students can enrol and purchase through a student account.'
   return course.value.callToAction || 'Begin with one lesson, one activity, and one confident step at a time.'
 })
-const courseSceneVariant = computed(() => {
+const courseSceneVariant = computed<'family' | 'general' | 'pagoda' | 'panda' | 'travel'>(() => {
   const title = course.value.title.toLowerCase()
   if (title.includes('family')) return 'family'
   if (title.includes('travel')) return 'travel'
@@ -231,11 +213,21 @@ const courseSceneVariant = computed(() => {
   if (title.includes('panda')) return 'panda'
   return 'general'
 })
+const teacherVerificationLabel = computed(() => (course.value.teacher.verified ? 'Verified' : 'Public'))
+const priceLabel = computed(() =>
+  course.value.accessType === 'FREE' ? 'Free' : formatCurrency(course.value.price, course.value.currencyCode),
+)
+const priceHelp = computed(() =>
+  course.value.accessType === 'FREE'
+    ? 'Start learning after signing in.'
+    : 'Secure checkout unlocks student access.',
+)
+const aiHelperButtonLabel = computed(() => (studentOnlyViewer.value ? 'Student AI only' : 'Open AI Helper'))
 const summaryCards = computed(() => [
   { icon: 'trophy', label: 'Level', value: course.value.level.name },
   { icon: 'globe', label: 'Category', value: course.value.category.name },
   { icon: 'content', label: 'Included items', value: String(course.value.packageItems.length) },
-  { icon: 'teacher', label: 'Teacher', value: course.value.teacher.verified ? 'Verified' : 'Public' },
+  { icon: 'teacher', label: 'Teacher', value: teacherVerificationLabel.value },
 ])
 const primaryActionLabel = computed(() => {
   if (studentOnlyViewer.value)
@@ -258,15 +250,15 @@ const secondaryActionDisabled = computed(
 )
 const courseReadOnly = computed(() => resource.usingFallback.value)
 
-function goToAuth() {
-  router.push({ name: 'auth', query: { redirect: route.fullPath } })
+function goToAuth(): void {
+  void router.push({ name: 'auth', query: { redirect: route.fullPath } })
 }
 
-function goToStudentLearn() {
-  router.push({ name: 'student-learn' })
+function goToStudentLearn(): void {
+  void router.push({ name: 'student-learn' })
 }
 
-function goBackToCatalog() {
+function goBackToCatalog(): void {
   if (window.history.length > 1) {
     router.back()
   } else {
@@ -274,7 +266,7 @@ function goBackToCatalog() {
   }
 }
 
-function handleCheckoutResponse(response: CheckoutResponse) {
+function handleCheckoutResponse(response: CheckoutResponse): void {
   if (!response.paymentAvailable) {
     actionError.value = response.message || 'Payment provider is unavailable. Please try again later.'
     return
@@ -287,14 +279,14 @@ function handleCheckoutResponse(response: CheckoutResponse) {
   }
 
   if (response.paymentId != null) {
-    void router.push({ name: 'payment-success', query: { paymentId: String(response.paymentId) } })
+    openPaymentSuccess(response.paymentId)
     return
   }
 
   actionError.value = 'Checkout completed but no redirect or payment reference was returned. Please contact support.'
 }
 
-async function handlePrimaryAction() {
+async function handlePrimaryAction(): Promise<void> {
   if (submittingBuyNow.value || submittingCart.value) return
 
   actionError.value = null
@@ -327,7 +319,7 @@ async function handlePrimaryAction() {
   }
 }
 
-async function handleSecondaryAction() {
+async function handleSecondaryAction(): Promise<void> {
   if (submittingBuyNow.value || submittingCart.value) return
 
   actionError.value = null
@@ -360,14 +352,26 @@ async function handleSecondaryAction() {
   }
 }
 
-function goToAiHelperSignIn() {
+function goToAiHelperSignIn(): void {
   if (studentOnlyViewer.value) return
 
   if (canUseStudentActions.value) {
-    router.push('/student/ai-helper')
+    openStudentAiHelper()
     return
   }
 
-  router.push({ name: 'auth', query: { redirect: '/student/ai-helper' } })
+  void router.push({ name: 'auth', query: { redirect: '/student/ai-helper' } })
+}
+
+function openStudentAiHelper(): void {
+  void router.push('/student/ai-helper')
+}
+
+function openPaymentSuccess(paymentId: number): void {
+  void router.push({ name: 'payment-success', query: { paymentId: String(paymentId) } })
+}
+
+function packageItemIcon(type: string): PackageItemIcon {
+  return type === 'MODULE' ? 'content' : 'learn'
 }
 </script>

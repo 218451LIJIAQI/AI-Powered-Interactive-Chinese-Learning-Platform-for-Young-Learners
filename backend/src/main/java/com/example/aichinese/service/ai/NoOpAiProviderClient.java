@@ -5,6 +5,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.AiProperties;
+import com.example.aichinese.util.TextUtils;
 
 @Component
 public class NoOpAiProviderClient implements AiProviderClient {
@@ -20,7 +21,7 @@ public class NoOpAiProviderClient implements AiProviderClient {
         Objects.requireNonNull(prompt, "prompt");
         return AiProviderResult.failure(
                 AiProviderSupport.normalizeProvider(aiProperties.getProvider()),
-                aiProperties.getModelName(),
+                TextUtils.trimToNull(aiProperties.getModelName()),
                 "AI provider is currently disabled or unavailable.");
     }
 }

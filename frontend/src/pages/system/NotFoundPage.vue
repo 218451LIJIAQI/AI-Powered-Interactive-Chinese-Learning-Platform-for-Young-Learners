@@ -43,10 +43,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * 404 — final catch-all route. Friendly copy plus home, catalog,
- * and sign-in links keep a failed deep link from stranding the user.
- */
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'

@@ -43,6 +43,7 @@ describe('format numeric helpers', () => {
   it('clamps arbitrary numeric ranges', () => {
     expect(clampNumber(90, 10, 78)).toBe(78)
     expect(clampNumber(4, 10, 78)).toBe(10)
+    expect(clampNumber(42, 78, 10)).toBe(42)
     expect(clampNumber(Number.POSITIVE_INFINITY, 10, 78)).toBe(10)
   })
 })

@@ -15,16 +15,19 @@ class SecurityConfigTests {
     @Test
     void jwtFilterServletAutoRegistrationIsDisabledBecauseSecurityChainOwnsIt() {
         JwtAuthenticationFilter jwtFilter = mock(JwtAuthenticationFilter.class);
-        SecurityConfig config = new SecurityConfig(
+
+        FilterRegistrationBean<JwtAuthenticationFilter> registration =
+                securityConfig(jwtFilter).jwtAuthenticationFilterRegistration(jwtFilter);
+
+        assertThat(registration.isEnabled()).isFalse();
+        assertThat(registration.getFilter()).isSameAs(jwtFilter);
+    }
+
+    private static SecurityConfig securityConfig(JwtAuthenticationFilter jwtFilter) {
+        return new SecurityConfig(
                 jwtFilter,
                 mock(JwtAuthenticationEntryPoint.class),
                 mock(JwtAccessDeniedHandler.class),
                 request -> null);
-
-        FilterRegistrationBean<JwtAuthenticationFilter> registration =
-                config.jwtAuthenticationFilterRegistration(jwtFilter);
-
-        assertThat(registration.isEnabled()).isFalse();
-        assertThat(registration.getFilter()).isSameAs(jwtFilter);
     }
 }

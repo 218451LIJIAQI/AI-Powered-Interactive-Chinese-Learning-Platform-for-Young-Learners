@@ -32,6 +32,19 @@ import com.example.aichinese.service.TeacherContentAccessService;
 
 class LiveLearningAccessServiceTests {
 
+    private static final String INVALID_MEETING_LINK_MESSAGE = "Meeting link must be a valid URL.";
+    private static final String PLATFORM_HOST_MISMATCH_MESSAGE =
+            "Meeting link host does not match the selected meeting platform.";
+    private static final String UPLOADED_VIDEO_REQUIRED_MESSAGE = "Uploaded recorded video file is required.";
+    private static final String CANCELLATION_REJECTED_MESSAGE =
+            "Only an enrolled future live class can be cancelled.";
+    private static final String CANONICAL_MEETING_LINK = "HTTPS://example.com/class?room=1";
+    private static final String EXTERNAL_VIDEO_URL = "https://video.example.com/course/../lesson.mp4?quality=hd";
+    private static final String CANONICAL_EXTERNAL_VIDEO_URL = "https://video.example.com/lesson.mp4?quality=hd";
+    private static final long CANCELLABLE_LIVE_CLASS_ID = 10L;
+    private static final long STARTED_LIVE_CLASS_ID = 11L;
+    private static final long STUDENT_ID = 20L;
+
     private final LiveClassEnrolmentRepository liveClassEnrolmentRepository = mock(LiveClassEnrolmentRepository.class);
 
     private final LiveLearningAccessService service = new LiveLearningAccessService(
@@ -49,7 +62,7 @@ class LiveLearningAccessServiceTests {
     @Test
     void validateMeetingLinkReturnsCanonicalSafeHttpUrl() {
         assertThat(service.validateMeetingLink("  HTTPS://example.com/live/../class?room=1  "))
-                .isEqualTo("HTTPS://example.com/class?room=1");
+                .isEqualTo(CANONICAL_MEETING_LINK);
     }
 
     @Test
@@ -81,16 +94,16 @@ class LiveLearningAccessServiceTests {
                 "https://evil.example.com/google-meet-lookalike",
                 MeetingPlatform.GOOGLE_MEET))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Meeting link host does not match the selected meeting platform.");
+                .hasMessageContaining(PLATFORM_HOST_MISMATCH_MESSAGE);
     }
 
     @Test
     void validateRecordedVideoSourceReturnsCanonicalExternalUrl() {
         assertThat(service.validateRecordedVideoSource(
                 RecordedVideoSourceType.EXTERNAL_URL,
-                "https://video.example.com/course/../lesson.mp4?quality=hd",
+                EXTERNAL_VIDEO_URL,
                 null))
-                .isEqualTo("https://video.example.com/lesson.mp4?quality=hd");
+                .isEqualTo(CANONICAL_EXTERNAL_VIDEO_URL);
     }
 
     @Test
@@ -100,7 +113,7 @@ class LiveLearningAccessServiceTests {
                 null,
                 null))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Uploaded recorded video file is required.");
+                .hasMessageContaining(UPLOADED_VIDEO_REQUIRED_MESSAGE);
 
         assertThat(service.validateRecordedVideoSource(
                 RecordedVideoSourceType.UPLOADED_FILE,
@@ -111,50 +124,48 @@ class LiveLearningAccessServiceTests {
 
     @Test
     void requireCancellableEnrolmentAllowsOnlyEnrolledFutureClasses() {
+        LocalDateTime now = LocalDateTime.now();
         LiveClassEnrolment enrolment = enrolment(
                 LiveClassEnrolmentStatus.ENROLLED,
                 LiveClassStatus.SCHEDULED,
-                LocalDateTime.now().plusHours(1));
-        when(liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(10L, 20L))
-                .thenReturn(Optional.of(enrolment));
+                now.plusHours(1));
+        stubEnrolment(CANCELLABLE_LIVE_CLASS_ID, enrolment);
 
-        assertThat(service.requireCancellableEnrolment(10L, 20L)).isSameAs(enrolment);
+        assertThat(service.requireCancellableEnrolment(CANCELLABLE_LIVE_CLASS_ID, STUDENT_ID))
+                .isSameAs(enrolment);
     }
 
     @Test
     void requireCancellableEnrolmentRejectsAttendedOrStartedClasses() {
-        when(liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(10L, 20L))
-                .thenReturn(Optional.of(enrolment(
-                        LiveClassEnrolmentStatus.ATTENDED,
-                        LiveClassStatus.SCHEDULED,
-                        LocalDateTime.now().plusHours(1))));
-        when(liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(11L, 20L))
-                .thenReturn(Optional.of(enrolment(
-                        LiveClassEnrolmentStatus.ENROLLED,
-                        LiveClassStatus.ONGOING,
-                        LocalDateTime.now().minusMinutes(5))));
+        LocalDateTime now = LocalDateTime.now();
+        stubEnrolment(CANCELLABLE_LIVE_CLASS_ID, enrolment(
+                LiveClassEnrolmentStatus.ATTENDED,
+                LiveClassStatus.SCHEDULED,
+                now.plusHours(1)));
+        stubEnrolment(STARTED_LIVE_CLASS_ID, enrolment(
+                LiveClassEnrolmentStatus.ENROLLED,
+                LiveClassStatus.ONGOING,
+                now.minusMinutes(5)));
 
-        assertThatThrownBy(() -> service.requireCancellableEnrolment(10L, 20L))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Only an enrolled future live class can be cancelled.");
-        assertThatThrownBy(() -> service.requireCancellableEnrolment(11L, 20L))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Only an enrolled future live class can be cancelled.");
+        assertCancellationRejected(CANCELLABLE_LIVE_CLASS_ID);
+        assertCancellationRejected(STARTED_LIVE_CLASS_ID);
     }
 
     @Test
     void joinWindowOpensFifteenMinutesBeforeStartAndClosesAfterEnd() {
+        LocalDateTime now = LocalDateTime.now();
+
         assertThat(service.isJoinWindowOpen(scheduledClass(
-                LocalDateTime.now().plusMinutes(16),
-                LocalDateTime.now().plusHours(1))))
+                now.plusMinutes(16),
+                now.plusHours(1))))
                 .isFalse();
         assertThat(service.isJoinWindowOpen(scheduledClass(
-                LocalDateTime.now().plusMinutes(10),
-                LocalDateTime.now().plusHours(1))))
+                now.plusMinutes(10),
+                now.plusHours(1))))
                 .isTrue();
         assertThat(service.isJoinWindowOpen(scheduledClass(
-                LocalDateTime.now().minusHours(1),
-                LocalDateTime.now().minusMinutes(1))))
+                now.minusHours(1),
+                now.minusMinutes(1))))
                 .isFalse();
     }
 
@@ -182,6 +193,17 @@ class LiveLearningAccessServiceTests {
     private void assertUnsafeMeetingUrl(String value) {
         assertThatThrownBy(() -> service.validateMeetingLink(value))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Meeting link must be a valid URL.");
+                .hasMessageContaining(INVALID_MEETING_LINK_MESSAGE);
+    }
+
+    private void stubEnrolment(Long liveClassId, LiveClassEnrolment enrolment) {
+        when(liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(liveClassId, STUDENT_ID))
+                .thenReturn(Optional.of(enrolment));
+    }
+
+    private void assertCancellationRejected(Long liveClassId) {
+        assertThatThrownBy(() -> service.requireCancellableEnrolment(liveClassId, STUDENT_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(CANCELLATION_REJECTED_MESSAGE);
     }
 }

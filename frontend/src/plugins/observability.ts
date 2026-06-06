@@ -15,7 +15,7 @@ import {
 
 type SentryQueryParams = NonNullable<NonNullable<Event['request']>['query_string']>
 
-export function initObservability(app: App, router: Router) {
+export function initObservability(app: App, router: Router): void {
   if (!appEnv.sentryDsn) {
     return
   }
@@ -84,19 +84,20 @@ function scrubQueryParams(query: SentryQueryParams | undefined): SentryQueryPara
   }
 
   if (Array.isArray(query)) {
-    return query.map(([key, value]): [string, string] => [
-      key,
-      isSensitiveKey(key) ? FILTERED : scrubSensitiveValue(value),
-    ])
+    return query.map(([key, value]): [string, string] => [key, scrubQueryValue(key, value)])
   }
 
   if (query) {
     return Object.fromEntries(
-      Object.entries(query).map(([key, value]) => [key, isSensitiveKey(key) ? FILTERED : scrubSensitiveValue(value)]),
+      Object.entries(query).map(([key, value]) => [key, scrubQueryValue(key, value)]),
     )
   }
 
   return query
+}
+
+function scrubQueryValue(key: string, value: string): string {
+  return isSensitiveKey(key) ? FILTERED : scrubSensitiveValue(value)
 }
 
 function scrubSentryUser(user: User | undefined): User | undefined {

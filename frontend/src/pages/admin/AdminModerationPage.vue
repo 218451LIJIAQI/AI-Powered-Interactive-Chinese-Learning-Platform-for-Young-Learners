@@ -8,7 +8,7 @@
 
     <DataNotice
       :using-fallback="moderationResource.usingFallback.value"
-      :error="actionError || moderationResource.error.value || aiReportsResource.error.value"
+      :error="pageError"
       :success="actionSuccess"
     />
 
@@ -171,14 +171,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin moderation queue — inspect recorded moderation actions and
- * review flagged student AI responses.
- *
- * <p>AI report reviews require a reviewer note, block writes while
- * preview data is active, and reload the server-owned report queue
- * after each successful update.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 
 import { adminApi } from '@/api/services'
@@ -194,6 +186,10 @@ import { useResource } from '@/composables/useResource'
 import { adminAiReports, adminModerationRecords } from '@/demo/data'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+
+type PillTone = 'info' | 'primary' | 'success' | 'warning'
+
+const DEFAULT_REVIEWER_NOTE = 'Checked the report evidence and documented the next moderation action.'
 
 const moderationResource = useResource(() => adminApi.moderationRecords(), adminModerationRecords)
 const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
@@ -212,7 +208,7 @@ const reviewForm = reactive<{
   reviewerNote: string
 }>({
   status: 'IN_REVIEW',
-  reviewerNote: 'Checked the report evidence and documented the next moderation action.',
+  reviewerNote: DEFAULT_REVIEWER_NOTE,
 })
 
 const reviewStatusOptions: Array<{ value: AiResponseReportReviewStatus; label: string }> = [
@@ -224,6 +220,7 @@ const reviewStatusOptions: Array<{ value: AiResponseReportReviewStatus; label: s
 const submittingReview = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
+const pageError = computed(() => actionError.value || moderationResource.error.value || aiReportsResource.error.value)
 
 const openReportCount = computed(
   () => aiReports.value.filter((item) => item.status === 'PENDING_REVIEW' || item.status === 'IN_REVIEW').length,
@@ -266,18 +263,17 @@ watch(
   (report) => {
     if (!report) {
       reviewForm.status = 'IN_REVIEW'
-      reviewForm.reviewerNote = 'Checked the report evidence and documented the next moderation action.'
+      reviewForm.reviewerNote = DEFAULT_REVIEWER_NOTE
       return
     }
 
     reviewForm.status = report.status === 'IN_REVIEW' ? 'RESOLVED' : 'IN_REVIEW'
-    reviewForm.reviewerNote =
-      report.reviewerNote || 'Checked the report evidence and documented the next moderation action.'
+    reviewForm.reviewerNote = report.reviewerNote || DEFAULT_REVIEWER_NOTE
   },
   { immediate: true },
 )
 
-async function reviewAiReport() {
+async function reviewAiReport(): Promise<void> {
   if (submittingReview.value) return
   if (reviewReadOnly.value) {
     actionError.value = 'AI response reports cannot be reviewed while preview data is active.'
@@ -321,22 +317,22 @@ async function reviewAiReport() {
   }
 }
 
-function formatStatus(status: string) {
+function formatStatus(status: string): string {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function formatFeatureKey(featureKey: string) {
+function formatFeatureKey(featureKey: string): string {
   return formatStatus(featureKey)
 }
 
-function formatReportReason(reason: string) {
+function formatReportReason(reason: string): string {
   return formatStatus(reason)
 }
 
-function reportStatusTone(status: string) {
+function reportStatusTone(status: string): PillTone {
   switch (status) {
     case 'PENDING_REVIEW':
       return 'warning' as const
@@ -351,11 +347,11 @@ function reportStatusTone(status: string) {
   }
 }
 
-function isClosedStatus(status?: string | null) {
+function isClosedStatus(status?: string | null): boolean {
   return status === 'RESOLVED' || status === 'DISMISSED'
 }
 
-function chatEvidenceLabel(report: AdminAiResponseReportResponse) {
+function chatEvidenceLabel(report: AdminAiResponseReportResponse): string {
   if (report.chatSessionId && report.chatMessageId) {
     return `Chat #${report.chatSessionId} / message #${report.chatMessageId}`
   }
@@ -365,7 +361,7 @@ function chatEvidenceLabel(report: AdminAiResponseReportResponse) {
   return 'No chat message linked'
 }
 
-function reviewerLabel(report: AdminAiResponseReportResponse) {
+function reviewerLabel(report: AdminAiResponseReportResponse): string {
   if (report.reviewerName && report.reviewedAt) {
     return `Reviewed by ${report.reviewerName} on ${formatDateTime(report.reviewedAt)}`
   }

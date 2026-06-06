@@ -1,9 +1,9 @@
 <template>
   <div
     class="panel state-panel"
-    :class="`is-${tone}`"
-    :role="tone === 'error' ? 'alert' : 'status'"
-    :aria-live="tone === 'error' ? 'assertive' : 'polite'"
+    :class="toneClass"
+    :role="panelRole"
+    :aria-live="panelLive"
     aria-atomic="true"
   >
     <span class="state-panel-orb" />
@@ -22,14 +22,8 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Standardised empty / loading / error / neutral panel rendered
- * across the app whenever a data list has nothing to show or is
- * still loading. Centralising the layout + ARIA semantics (`role`
- * and `aria-live`) per tone keeps screen-reader announcements
- * consistent — error panels announce assertively, empty / loading
- * panels announce politely.
- */
+import { computed } from 'vue'
+
 import IconGlyph from './IconGlyph.vue'
 
 type PanelTone = 'neutral' | 'loading' | 'error' | 'empty'
@@ -42,9 +36,14 @@ interface Props {
   tone?: PanelTone
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   icon: 'help',
   eyebrow: '',
   tone: 'empty',
 })
+
+const isError = computed(() => props.tone === 'error')
+const panelLive = computed<'assertive' | 'polite'>(() => (isError.value ? 'assertive' : 'polite'))
+const panelRole = computed<'alert' | 'status'>(() => (isError.value ? 'alert' : 'status'))
+const toneClass = computed(() => `is-${props.tone}`)
 </script>

@@ -44,6 +44,8 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
     private static final String DEFAULT_CURRENCY = "myr";
     private static final String DEFAULT_PRODUCT_NAME = "MandarinSpark course";
     private static final String DEFAULT_FALLBACK_PRODUCT_NAME = "MandarinSpark order";
+    private static final String CHECKOUT_CREATED_MESSAGE = "Stripe checkout session created successfully.";
+    private static final String STATUS_RETRIEVED_MESSAGE = "Stripe payment status retrieved successfully.";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(20);
     private static final BigDecimal MINOR_UNIT_MULTIPLIER = BigDecimal.valueOf(100);
@@ -113,7 +115,7 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
                     sessionId,
                     checkoutUrl,
                     status,
-                    "Stripe checkout session created successfully.");
+                    CHECKOUT_CREATED_MESSAGE);
         } catch (RuntimeException exception) {
             logProviderFailure("Stripe checkout session creation failed", exception);
             return PaymentProviderCheckoutResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
@@ -151,8 +153,8 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
                     PROVIDER_NAME,
                     sessionId == null ? normalizedReference : sessionId,
                     mapPaymentStatus(sessionStatus, paymentStatus),
-                    sessionStatus + ":" + paymentStatus,
-                    "Stripe payment status retrieved successfully.");
+                    providerStatusDetail(sessionStatus, paymentStatus),
+                    STATUS_RETRIEVED_MESSAGE);
         } catch (RuntimeException exception) {
             logProviderFailure("Stripe payment status retrieval failed", exception);
             return PaymentProviderStatusResult.unavailable(PROVIDER_NAME, PAYMENT_UNAVAILABLE_MESSAGE);
@@ -348,6 +350,10 @@ public class StripePaymentProviderClient implements PaymentProviderClient {
             return PaymentStatus.FAILED;
         }
         return PaymentStatus.PENDING;
+    }
+
+    private static String providerStatusDetail(String sessionStatus, String paymentStatus) {
+        return sessionStatus + ":" + paymentStatus;
     }
 
     private static String normalizeStatus(String value) {

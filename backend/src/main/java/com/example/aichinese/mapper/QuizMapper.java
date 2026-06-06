@@ -1,9 +1,10 @@
 package com.example.aichinese.mapper;
 
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -51,7 +52,6 @@ public class QuizMapper {
 
     private TeacherQuizQuestionResponse toTeacherQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
         Objects.requireNonNull(question, "question");
-        List<QuizOption> safeOptions = options == null ? List.of() : options;
         return new TeacherQuizQuestionResponse(
                 question.getId(),
                 question.getQuestionType(),
@@ -60,7 +60,7 @@ public class QuizMapper {
                 question.getPoints(),
                 question.getSortOrder(),
                 question.getExplanation(),
-                safeOptions.stream().map(QuizMapper::toTeacherQuizOption).toList());
+                mapOptions(options, QuizMapper::toTeacherQuizOption));
     }
 
     public StudentQuizResponse toStudentQuizResponse(
@@ -88,14 +88,13 @@ public class QuizMapper {
 
     public StudentQuizQuestionResponse toStudentQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
         Objects.requireNonNull(question, "question");
-        List<QuizOption> safeOptions = options == null ? List.of() : options;
         return new StudentQuizQuestionResponse(
                 question.getId(),
                 question.getQuestionType(),
                 question.getQuestionText(),
                 question.getPoints(),
                 question.getSortOrder(),
-                safeOptions.stream().map(QuizMapper::toStudentQuizOption).toList());
+                mapOptions(options, QuizMapper::toStudentQuizOption));
     }
 
     public StudentQuizSummaryResponse toStudentQuizSummaryResponse(Quiz quiz, int questionCount) {
@@ -137,5 +136,13 @@ public class QuizMapper {
                 option.getId(),
                 option.getOptionText(),
                 option.getSortOrder());
+    }
+
+    private static <R> List<R> mapOptions(
+            List<QuizOption> options,
+            Function<? super QuizOption, R> mapper) {
+        return (options == null ? List.<QuizOption>of() : options).stream()
+                .map(mapper)
+                .toList();
     }
 }

@@ -32,11 +32,15 @@ import com.example.aichinese.repository.PaymentRecordRepository;
 import com.example.aichinese.repository.RefundRequestRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class RefundService {
 
     private static final Logger log = LoggerFactory.getLogger(RefundService.class);
+    private static final String REFUND_REQUEST_TARGET = "REFUND_REQUEST";
+    private static final String STUDENT_PROFILE_PATH = "/student/profile";
+    private static final String PROVIDER_STATUS_REFUNDED = "REFUNDED";
 
     private final StudentLearningAccessService studentLearningAccessService;
     private final OrderRepository orderRepository;
@@ -99,10 +103,10 @@ public class RefundService {
                 student.getUser(),
                 "Refund request submitted",
                 "Your refund request has been submitted for review.",
-                "/student/profile");
+                STUDENT_PROFILE_PATH);
         log.info("Refund request created: refundId={}, orderId={}, amount={}",
                 saved.getId(), order.getId(), saved.getAmount());
-        auditLogService.record(currentUser.getUser(), "REFUND_REQUESTED", "REFUND_REQUEST", saved.getId(),
+        auditLogService.record(currentUser, "REFUND_REQUESTED", REFUND_REQUEST_TARGET, saved.getId(),
                 "Refund request submitted for " + saved.getAmount().toPlainString());
         return mapStudentRefund(saved);
     }
@@ -135,7 +139,7 @@ public class RefundService {
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund approved", "Your refund request has been approved.");
         log.info("Refund approved: refundId={}, amount={}", refundId, saved.getAmount());
-        auditLogService.record(currentUser.getUser(), "REFUND_APPROVED", "REFUND_REQUEST", refundId,
+        auditLogService.record(currentUser, "REFUND_APPROVED", REFUND_REQUEST_TARGET, refundId,
                 "Refund approved for " + saved.getAmount().toPlainString());
         return mapAdminRefund(saved);
     }
@@ -150,13 +154,14 @@ public class RefundService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Refund request was not found."));
         requireTransition(refundRequest.getRefundStatus(), RefundStatus.PENDING, "rejected");
         refundRequest.setRefundStatus(RefundStatus.REJECTED);
-        refundRequest.setDecisionReason(request.reason());
+        String reason = TextUtils.trimToNull(request.reason());
+        refundRequest.setDecisionReason(reason);
         RefundRequest saved = refundRequestRepository.save(refundRequest);
         notifyRefundStatus(saved, "Refund rejected", "Your refund request was rejected.");
-        log.info("Refund rejected: refundId={}, amount={}, reason={}", refundId, saved.getAmount(), request.reason());
-        auditLogService.record(currentUser.getUser(), "REFUND_REJECTED", "REFUND_REQUEST", refundId,
+        log.info("Refund rejected: refundId={}, amount={}, reason={}", refundId, saved.getAmount(), reason);
+        auditLogService.record(currentUser, "REFUND_REJECTED", REFUND_REQUEST_TARGET, refundId,
                 "Refund rejected for " + saved.getAmount().toPlainString()
-                        + (request.reason() != null ? ". Reason: " + request.reason() : ""));
+                        + (reason == null ? "" : ". Reason: " + reason));
         return mapAdminRefund(saved);
     }
 
@@ -172,7 +177,7 @@ public class RefundService {
             refundRequest.getOrder().setPaymentStatus(PaymentStatus.REFUNDED);
             for (PaymentRecord paymentRecord : paymentRecordRepository.findByOrderId(orderId)) {
                 paymentRecord.setPaymentStatus(PaymentStatus.REFUNDED);
-                paymentRecord.setProviderStatus("REFUNDED");
+                paymentRecord.setProviderStatus(PROVIDER_STATUS_REFUNDED);
             }
             entitlementService.revokeAccessAfterRefund(refundRequest.getOrder());
             teacherEarningService.markRefundedForOrder(orderId);
@@ -181,7 +186,7 @@ public class RefundService {
         notifyRefundStatus(saved, "Refund completed", "Your refund has been marked as completed.");
         log.info("Refund completed: refundId={}, orderId={}, amount={}",
                 id, refundRequest.getOrder() != null ? refundRequest.getOrder().getId() : null, saved.getAmount());
-        auditLogService.record(currentUser.getUser(), "REFUND_MARKED_REFUNDED", "REFUND_REQUEST", id,
+        auditLogService.record(currentUser, "REFUND_MARKED_REFUNDED", REFUND_REQUEST_TARGET, id,
                 "Refund marked refunded for " + saved.getAmount().toPlainString());
         return mapAdminRefund(saved);
     }
@@ -231,12 +236,8 @@ public class RefundService {
                 refundRequest.getOrder() != null ? refundRequest.getOrder().getId() : null,
                 refundRequest.getOrder() != null ? refundRequest.getOrder().getOrderNumber() : null,
                 refundRequest.getStudent() != null ? refundRequest.getStudent().getId() : null,
-                refundRequest.getStudent() != null && refundRequest.getStudent().getUser() != null
-                        ? refundRequest.getStudent().getUser().getDisplayName()
-                        : refundRequest.getStudent() != null ? refundRequest.getStudent().getDisplayName() : null,
-                refundRequest.getStudent() != null && refundRequest.getStudent().getUser() != null
-                        ? refundRequest.getStudent().getUser().getEmail()
-                        : null,
+                studentDisplayName(refundRequest),
+                studentEmail(refundRequest),
                 commerceMoneyService.normalize(refundRequest.getAmount()),
                 refundRequest.getReason(),
                 refundRequest.getDecisionReason(),
@@ -246,7 +247,26 @@ public class RefundService {
 
     private void notifyRefundStatus(RefundRequest refundRequest, String title, String message) {
         if (refundRequest.getStudent() != null && refundRequest.getStudent().getUser() != null) {
-            notificationService.safeCreateNotification(refundRequest.getStudent().getUser(), title, message, "/student/profile");
+            notificationService.safeCreateNotification(
+                    refundRequest.getStudent().getUser(),
+                    title,
+                    message,
+                    STUDENT_PROFILE_PATH);
         }
+    }
+
+    private static String studentDisplayName(RefundRequest refundRequest) {
+        if (refundRequest.getStudent() == null) {
+            return null;
+        }
+        return refundRequest.getStudent().getUser() == null
+                ? refundRequest.getStudent().getDisplayName()
+                : refundRequest.getStudent().getUser().getDisplayName();
+    }
+
+    private static String studentEmail(RefundRequest refundRequest) {
+        return refundRequest.getStudent() != null && refundRequest.getStudent().getUser() != null
+                ? refundRequest.getStudent().getUser().getEmail()
+                : null;
     }
 }

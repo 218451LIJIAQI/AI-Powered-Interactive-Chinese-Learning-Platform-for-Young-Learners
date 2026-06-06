@@ -1,11 +1,11 @@
 package com.example.aichinese.controller;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -36,17 +36,16 @@ import com.example.aichinese.dto.learning.VideoProgressRequest;
 import com.example.aichinese.dto.learning.VideoProgressResponse;
 import com.example.aichinese.dto.learning.WrongAnswerResponse;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.AnalyticsService;
 import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.RecordedLessonService;
-import com.example.aichinese.service.AnalyticsService;
 import com.example.aichinese.service.StoredFileDownload;
 import com.example.aichinese.service.StudentLearningService;
 import com.example.aichinese.service.VideoProgressService;
 
 import jakarta.validation.Valid;
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/students")
 public class StudentController {
@@ -65,12 +64,12 @@ public class StudentController {
             LiveClassService liveClassService,
             RecordedLessonService recordedLessonService,
             VideoProgressService videoProgressService) {
-        this.dashboardService = dashboardService;
-        this.analyticsService = analyticsService;
-        this.studentLearningService = studentLearningService;
-        this.liveClassService = liveClassService;
-        this.recordedLessonService = recordedLessonService;
-        this.videoProgressService = videoProgressService;
+        this.dashboardService = Objects.requireNonNull(dashboardService, "dashboardService");
+        this.analyticsService = Objects.requireNonNull(analyticsService, "analyticsService");
+        this.studentLearningService = Objects.requireNonNull(studentLearningService, "studentLearningService");
+        this.liveClassService = Objects.requireNonNull(liveClassService, "liveClassService");
+        this.recordedLessonService = Objects.requireNonNull(recordedLessonService, "recordedLessonService");
+        this.videoProgressService = Objects.requireNonNull(videoProgressService, "videoProgressService");
     }
 
     @GetMapping("/dashboard")

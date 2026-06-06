@@ -1,6 +1,7 @@
 package com.example.aichinese.security;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 
@@ -43,12 +44,15 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                     authException == null ? "AuthenticationException" : authException.getClass().getSimpleName());
         }
 
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        writeFailure(response, HttpStatus.UNAUTHORIZED, FriendlyErrorMessageResolver.sessionExpiredMessage());
+    }
+
+    private void writeFailure(HttpServletResponse response, HttpStatus status, String message) throws IOException {
+        response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
-        String message = FriendlyErrorMessageResolver.sessionExpiredMessage();
         ApiResponse<Void> body = ApiResponse.failure(message, List.of(message));
         objectMapper.writeValue(response.getOutputStream(), body);
     }

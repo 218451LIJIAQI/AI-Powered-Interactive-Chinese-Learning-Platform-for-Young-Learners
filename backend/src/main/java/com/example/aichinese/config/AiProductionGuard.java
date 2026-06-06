@@ -54,7 +54,7 @@ public class AiProductionGuard {
      * profile is active. Uses {@link Environment#acceptsProfiles(Profiles)}
      * so that {@code spring.profiles.default=prod} (a common Kubernetes
      * pattern where no profile is explicitly listed) also triggers the
-     * guard \u2014 unlike a manual scan of {@code getActiveProfiles()}.
+     * guard, unlike a manual scan of {@code getActiveProfiles()}.
      */
     private boolean isProductionProfileActive() {
         return environment.acceptsProfiles(PROD_PROFILES);

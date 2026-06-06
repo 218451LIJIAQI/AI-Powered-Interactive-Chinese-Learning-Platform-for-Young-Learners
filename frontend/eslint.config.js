@@ -3,6 +3,48 @@ import prettier from 'eslint-config-prettier'
 import vue from 'eslint-plugin-vue'
 import tseslint from 'typescript-eslint'
 
+const readonlyGlobals = (names) => Object.fromEntries(names.map((name) => [name, 'readonly']))
+
+const allowEmptyCatch = ['error', { allowEmptyCatch: true }]
+const baseSourceRules = {
+  '@typescript-eslint/no-unused-vars': 'error',
+  'no-empty': allowEmptyCatch,
+  'no-undef': 'off',
+}
+
+const browserGlobals = readonlyGlobals([
+  'Blob',
+  'clearTimeout',
+  'console',
+  'CustomEvent',
+  'document',
+  'Event',
+  'File',
+  'FormData',
+  'HTMLInputElement',
+  'navigator',
+  'setTimeout',
+  'SpeechSynthesisUtterance',
+  'Storage',
+  'URL',
+  'URLSearchParams',
+  'window',
+])
+
+const configGlobals = readonlyGlobals([
+  '__dirname',
+  'Blob',
+  'Buffer',
+  'clearTimeout',
+  'console',
+  'fetch',
+  'FormData',
+  'process',
+  'setTimeout',
+  'URL',
+  'WebSocket',
+])
+
 export default tseslint.config(
   {
     ignores: ['dist/**', 'coverage/**', 'node_modules/**'],
@@ -18,32 +60,13 @@ export default tseslint.config(
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
-      globals: {
-        window: 'readonly',
-        document: 'readonly',
-        CustomEvent: 'readonly',
-        FormData: 'readonly',
-        Blob: 'readonly',
-        Event: 'readonly',
-        File: 'readonly',
-        HTMLInputElement: 'readonly',
-        URL: 'readonly',
-        URLSearchParams: 'readonly',
-        Storage: 'readonly',
-        SpeechSynthesisUtterance: 'readonly',
-        navigator: 'readonly',
-        setTimeout: 'readonly',
-        clearTimeout: 'readonly',
-        console: 'readonly',
-      },
+      globals: browserGlobals,
     },
     rules: {
+      ...baseSourceRules,
       'no-control-regex': 'off',
-      'no-empty': ['error', { allowEmptyCatch: true }],
-      'no-undef': 'off',
       'no-console': ['error', { allow: ['warn', 'error'] }],
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': 'error',
       'vue/multi-word-component-names': 'off',
       'vue/attributes-order': 'off',
       'vue/no-v-html': 'error',
@@ -52,26 +75,12 @@ export default tseslint.config(
   {
     files: ['*.config.*'],
     languageOptions: {
-      globals: {
-        Blob: 'readonly',
-        Buffer: 'readonly',
-        FormData: 'readonly',
-        URL: 'readonly',
-        WebSocket: 'readonly',
-        clearTimeout: 'readonly',
-        console: 'readonly',
-        fetch: 'readonly',
-        process: 'readonly',
-        setTimeout: 'readonly',
-        __dirname: 'readonly',
-      },
+      globals: configGlobals,
     },
     rules: {
-      'no-empty': ['error', { allowEmptyCatch: true }],
-      'no-undef': 'off',
+      ...baseSourceRules,
       'no-useless-assignment': 'error',
       '@typescript-eslint/no-unused-expressions': 'error',
-      '@typescript-eslint/no-unused-vars': 'error',
     },
   },
   prettier,

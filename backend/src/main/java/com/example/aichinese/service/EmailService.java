@@ -10,6 +10,7 @@ import com.example.aichinese.util.TextUtils;
 public interface EmailService {
 
     Logger log = LoggerFactory.getLogger(EmailService.class);
+    String BLANK_LINE = System.lineSeparator() + System.lineSeparator();
 
     void sendEmail(User recipient, String subject, String body);
 
@@ -19,7 +20,7 @@ public interface EmailService {
                 recipient,
                 "Teacher approval update",
                 "Your teacher account has been approved."
-                        + (normalizedNote == null ? "" : System.lineSeparator() + System.lineSeparator() + "Note: " + normalizedNote));
+                        + optionalParagraph("Note: ", normalizedNote));
     }
 
     default void safeSendTeacherApprovalNotice(User recipient, String note) {
@@ -32,9 +33,7 @@ public interface EmailService {
                 recipient,
                 "Teacher verification update",
                 "Your teacher account verification was not approved."
-                        + (normalizedReason == null
-                                ? ""
-                                : System.lineSeparator() + System.lineSeparator() + "Reason: " + normalizedReason));
+                        + optionalParagraph("Reason: ", normalizedReason));
     }
 
     default void safeSendTeacherRejectionNotice(User recipient, String reason) {
@@ -56,13 +55,17 @@ public interface EmailService {
                 recipient,
                 "Password reset request",
                 "We received a request to reset the password for your account."
-                        + System.lineSeparator() + System.lineSeparator()
+                        + BLANK_LINE
                         + "Click the link below to set a new password (link expires in 60 minutes):"
                         + System.lineSeparator() + resetLink
-                        + System.lineSeparator() + System.lineSeparator()
+                        + BLANK_LINE
                         + "If the link does not work, you can paste this token into the reset form: "
                         + rawToken
-                        + System.lineSeparator() + System.lineSeparator()
+                        + BLANK_LINE
                         + "If you did not request a password reset, you can safely ignore this email.");
+    }
+
+    private String optionalParagraph(String prefix, String value) {
+        return value == null ? "" : BLANK_LINE + prefix + value;
     }
 }

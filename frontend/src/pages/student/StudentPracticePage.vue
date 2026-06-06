@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack student-practice-page">
-    <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="student-practice-layout">
@@ -65,9 +65,9 @@
               <span class="student-practice-flower is-right" />
 
               <div v-if="selectedActivityType === 'FLASHCARD'" class="student-practice-flashcard">
-                <span class="student-practice-flashcard-badge">{{ flashcard.topic || 'Vocabulary' }}</span>
+                <span class="student-practice-flashcard-badge">{{ flashcardTopic }}</span>
                 <strong>{{ flashcard.frontText }}</strong>
-                <span>{{ flashcard.pinyin || 'Pinyin unavailable' }}</span>
+                <span>{{ flashcardPinyin }}</span>
                 <b>{{ translationLine }}</b>
               </div>
 
@@ -143,10 +143,10 @@
                   type="button"
                   class="student-practice-circle"
                   :disabled="!flashcardAvailable"
-                  :aria-label="showMalayMeaning ? 'Show English meaning' : 'Show Malay meaning'"
+                  :aria-label="translationToggleAriaLabel"
                   @click="toggleTranslation"
                 >
-                  {{ showMalayMeaning ? 'EN' : 'BM' }}
+                  {{ translationToggleLabel }}
                 </button>
               </div>
             </div>
@@ -287,7 +287,7 @@
                 <span class="student-practice-progress-icon"><IconGlyph name="quiz" :size="18" /></span>
                 <strong>Recent Quiz Attempts</strong>
               </div>
-              <button type="button" class="student-link-button" @click="router.push('/student/quiz')">View All</button>
+              <button type="button" class="student-link-button" @click="openQuiz">View All</button>
             </div>
 
             <div class="student-practice-attempts">
@@ -315,18 +315,6 @@
   </div>
 </template>
 <script setup lang="ts">
-/**
- * Practice studio surface — six interactive activity types
- * (flashcards, matching, listening, tracing, drag-drop, story)
- * curated by admins, surfaced to the right age band based on the
- * student's profile. Completion writes through to the streak / XP
- * pipeline without advancing lesson progress (platform-library
- * decoupling).
- *
- * <p>The page intentionally re-uses the shared resource and notice
- * components so loading, retry, fallback, and error states stay
- * consistent with other student dashboards.</p>
- */
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -483,6 +471,7 @@ const pageError = computed(
     dashboardResource.error.value ||
     progressResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
 
 const totalPracticeItems = computed(() => Math.max(activities.value.items.length, 1))
 const completedActivities = computed(() => activities.value.items.filter((item) => item.completed).length)
@@ -526,6 +515,12 @@ const flashcardProgressLabel = computed(() => {
   return flashcard.value.completed ? 'Flashcard completed' : 'Flashcard review'
 })
 const flashcardPrimaryButtonLabel = computed(() => (hasMultipleLevels.value ? 'Next Level' : 'I know this'))
+const flashcardTopic = computed(() => flashcard.value.topic || 'Vocabulary')
+const flashcardPinyin = computed(() => flashcard.value.pinyin || 'Pinyin unavailable')
+const translationToggleAriaLabel = computed(() =>
+  showMalayMeaning.value ? 'Show English meaning' : 'Show Malay meaning',
+)
+const translationToggleLabel = computed(() => (showMalayMeaning.value ? 'EN' : 'BM'))
 
 const selectedActivityHskLevel = computed(() =>
   selectedActivityType.value === 'FLASHCARD' ? flashcard.value.hskLevel : selectedActivity.value?.hskLevel,
@@ -593,7 +588,7 @@ const activityOptions = computed(() => [
     icon: 'quiz',
     tint: '#ffad50',
     active: false,
-    action: () => router.push('/student/quiz'),
+    action: openQuiz,
   },
   {
     title: 'Matching',
@@ -614,7 +609,7 @@ const activityOptions = computed(() => [
     icon: 'moderation',
     tint: '#6573a7',
     active: false,
-    action: () => router.push('/student/ai-helper'),
+    action: openAiHelper,
   },
   {
     title: 'Character Writing',
@@ -649,9 +644,9 @@ const quizAttemptCards = computed(() =>
       dateLabel: formatDate(result.completedAt, { month: 'short', day: 'numeric', year: 'numeric' }),
       levelLabel: `${result.score} / ${result.maxScore}`,
       scoreLabel: `${scorePercent}%`,
-      scoreTone: scorePercent >= 80 ? 'is-green' : scorePercent >= 70 ? 'is-yellow' : 'is-red',
+      scoreTone: scoreTone(scorePercent),
       quizId: result.quizId,
-      icon: scorePercent >= 80 ? 'status' : scorePercent >= 70 ? 'clip' : 'refresh',
+      icon: scoreIcon(scorePercent),
     }
   }),
 )
@@ -667,7 +662,7 @@ const reviewCards = computed(() => {
     visualIcon: 'quiz',
     visualTone: 'purple',
     cta: 'Practice Again',
-    action: () => router.push('/student/quiz'),
+    action: openQuiz,
   }))
 
   const fillerCards = progress.value.weakAreas.slice(0, Math.max(0, 3 - directCards.length)).map((area, index) => {
@@ -680,22 +675,22 @@ const reviewCards = computed(() => {
       primary: 'Targeted practice is suggested because your recent progress shows this area needs extra review.',
       secondary: 'Open practice mode to reinforce vocabulary, listening, or character recall.',
       visualIcon: activityIcon(activityType),
-      visualTone: index === 0 ? 'gold' : index === 1 ? 'peach' : 'mint',
+      visualTone: focusVisualTone(index),
       cta: `Open ${activityLabel(activityType)}`,
-      action: () => router.push(practiceRoute(activityType)),
+      action: () => openPracticeRoute(activityType),
     }
   })
 
   return [...directCards, ...fillerCards]
 })
-function activityLabel(type: PracticeActivityType) {
+function activityLabel(type: PracticeActivityType): string {
   return type
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function activityIcon(type: PracticeActivityType) {
+function activityIcon(type: PracticeActivityType): string {
   switch (type) {
     case 'FLASHCARD':
       return 'file'
@@ -710,6 +705,21 @@ function activityIcon(type: PracticeActivityType) {
     case 'STORY_ACTIVITY':
       return 'learn'
   }
+}
+
+function scoreTone(scorePercent: number): string {
+  if (scorePercent >= 80) return 'is-green'
+  return scorePercent >= 70 ? 'is-yellow' : 'is-red'
+}
+
+function scoreIcon(scorePercent: number): string {
+  if (scorePercent >= 80) return 'status'
+  return scorePercent >= 70 ? 'clip' : 'refresh'
+}
+
+function focusVisualTone(index: number): string {
+  if (index === 0) return 'gold'
+  return index === 1 ? 'peach' : 'mint'
 }
 
 watch(selectedFlashcardId, () => {
@@ -739,7 +749,7 @@ watch(
   },
 )
 
-function activitiesByType(type: PracticeActivityType) {
+function activitiesByType(type: PracticeActivityType): StudentActivitySummaryResponse[] {
   return activities.value.items.filter((item) => item.type === type)
 }
 
@@ -751,14 +761,14 @@ function selectedActivityForType(type: PracticeActivityType): StudentActivitySum
   return items[index] ?? null
 }
 
-function clampSelectedActivityIndexes() {
+function clampSelectedActivityIndexes(): void {
   ;(Object.keys(selectedActivityIndexByType.value) as PracticeActivityType[]).forEach((type) => {
     const maxIndex = Math.max(activitiesByType(type).length - 1, 0)
     selectedActivityIndexByType.value[type] = Math.min(Math.max(selectedActivityIndexByType.value[type], 0), maxIndex)
   })
 }
 
-function resetActivityDetails() {
+function resetActivityDetails(): void {
   matchingDetail.value = null
   listeningDetail.value = null
   tracingDetail.value = null
@@ -770,7 +780,7 @@ function previewFlashcardDetail(id: number | null) {
   return flashcardActivities.find((activity) => activity.id === id) ?? flashcardActivities[0] ?? null
 }
 
-function applyPreviewActivityDetail(type: PracticeActivityType, id: number) {
+function applyPreviewActivityDetail(type: PracticeActivityType, id: number): void {
   if (type === 'MATCHING_GAME')
     matchingDetail.value = matchingActivities.find((activity) => activity.id === id) ?? matchingActivity
   if (type === 'LISTENING_EXERCISE')
@@ -783,7 +793,7 @@ function applyPreviewActivityDetail(type: PracticeActivityType, id: number) {
     storyDetail.value = storyActivities.find((activity) => activity.id === id) ?? storyActivity
 }
 
-function hasLoadedActivityDetail(type: PracticeActivityType) {
+function hasLoadedActivityDetail(type: PracticeActivityType): boolean {
   if (type === 'MATCHING_GAME') return Boolean(matchingDetail.value)
   if (type === 'LISTENING_EXERCISE') return Boolean(listeningDetail.value)
   if (type === 'TRACING_EXERCISE') return Boolean(tracingDetail.value)
@@ -792,7 +802,7 @@ function hasLoadedActivityDetail(type: PracticeActivityType) {
   return true
 }
 
-function openActivityType(type: PracticeActivityType) {
+function openActivityType(type: PracticeActivityType): void {
   const target = practiceRoute(type)
   if (normalizePracticeActivity(route.query.activity) === type) {
     void selectActivityType(type)
@@ -802,7 +812,7 @@ function openActivityType(type: PracticeActivityType) {
   void router.push(target)
 }
 
-async function selectActivityType(type: PracticeActivityType, options: { preserveNotice?: boolean } = {}) {
+async function selectActivityType(type: PracticeActivityType, options: { preserveNotice?: boolean } = {}): Promise<void> {
   selectedActivityType.value = type
   if (!options.preserveNotice) {
     actionError.value = null
@@ -842,7 +852,7 @@ async function selectActivityType(type: PracticeActivityType, options: { preserv
   }
 }
 
-function moveActivityLevel(type: PracticeActivityType, direction: 1 | -1) {
+function moveActivityLevel(type: PracticeActivityType, direction: 1 | -1): boolean {
   const items = activitiesByType(type)
   if (!items.length) return false
 
@@ -852,7 +862,7 @@ function moveActivityLevel(type: PracticeActivityType, direction: 1 | -1) {
   return nextIndex !== currentIndex || items.length === 1
 }
 
-function goToPreviousActivityLevel(options: { preserveNotice?: boolean } = {}) {
+function goToPreviousActivityLevel(options: { preserveNotice?: boolean } = {}): void {
   if (!options.preserveNotice) {
     actionError.value = null
     actionSuccess.value = null
@@ -868,7 +878,7 @@ function goToPreviousActivityLevel(options: { preserveNotice?: boolean } = {}) {
   void selectActivityType(selectedActivityType.value, options)
 }
 
-function goToNextActivityLevel(options: { preserveNotice?: boolean } = {}) {
+function goToNextActivityLevel(options: { preserveNotice?: boolean } = {}): void {
   if (!options.preserveNotice) {
     actionError.value = null
     actionSuccess.value = null
@@ -884,7 +894,7 @@ function goToNextActivityLevel(options: { preserveNotice?: boolean } = {}) {
   void selectActivityType(selectedActivityType.value, options)
 }
 
-function handleFlashcardPrimaryAction() {
+async function handleFlashcardPrimaryAction(): Promise<void> {
   if (hasMultipleLevels.value) {
     if (flashcardResource.usingFallback.value) {
       actionError.value = null
@@ -893,15 +903,14 @@ function handleFlashcardPrimaryAction() {
       return
     }
 
-    void markFlashcardDone().then(() => {
-      if (!actionError.value) {
-        goToNextActivityLevel({ preserveNotice: true })
-      }
-    })
+    await markFlashcardDone()
+    if (!actionError.value) {
+      goToNextActivityLevel({ preserveNotice: true })
+    }
     return
   }
 
-  void markFlashcardDone()
+  await markFlashcardDone()
 }
 
 async function completeActivity(type: PracticeActivityType, id: number): Promise<StudentActivityCompletionResponse> {
@@ -913,11 +922,11 @@ async function completeActivity(type: PracticeActivityType, id: number): Promise
   return studentApi.completeFlashcard(id)
 }
 
-async function refreshPracticeProgress() {
+async function refreshPracticeProgress(): Promise<void> {
   await Promise.all([activitiesResource.reload(), dashboardResource.reload(), progressResource.reload()])
 }
 
-async function completeSelectedActivity() {
+async function completeSelectedActivity(): Promise<void> {
   if (submittingActivity.value) return
   const activity = selectedActivity.value
   if (!activity) {
@@ -958,7 +967,7 @@ async function completeSelectedActivity() {
   }
 }
 
-async function markFlashcardDone() {
+async function markFlashcardDone(): Promise<void> {
   if (submittingActivity.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -984,9 +993,9 @@ async function markFlashcardDone() {
   actionSuccess.value = 'Flashcard progress saved. Keep going!'
 }
 
-function openQuizAttempt(quizId: number | null) {
+function openQuizAttempt(quizId: number | null): void {
   if (!quizId) {
-    void router.push('/student/quiz')
+    openQuiz()
     return
   }
 
@@ -996,13 +1005,13 @@ function openQuizAttempt(quizId: number | null) {
   })
 }
 
-function toggleTranslation() {
+function toggleTranslation(): void {
   showMalayMeaning.value = !showMalayMeaning.value
   actionError.value = null
   actionSuccess.value = showMalayMeaning.value ? 'Bahasa Melayu meaning shown.' : 'English meaning shown.'
 }
 
-function playCardPronunciation() {
+function playCardPronunciation(): void {
   actionError.value = null
   actionSuccess.value = null
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -1017,12 +1026,24 @@ function playCardPronunciation() {
   actionSuccess.value = 'Playing Mandarin pronunciation.'
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void activitiesResource.reload()
   void wrongAnswersResource.reload()
   void flashcardResource.reload()
   void dashboardResource.reload()
   void progressResource.reload()
+}
+
+function openQuiz(): void {
+  void router.push('/student/quiz')
+}
+
+function openAiHelper(): void {
+  void router.push('/student/ai-helper')
+}
+
+function openPracticeRoute(type: PracticeActivityType): void {
+  void router.push(practiceRoute(type))
 }
 </script>
 

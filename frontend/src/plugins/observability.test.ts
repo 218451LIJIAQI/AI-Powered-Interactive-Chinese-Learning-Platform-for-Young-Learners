@@ -90,13 +90,18 @@ describe('sanitizeSentryEvent', () => {
 
     const sanitized = sanitizeSentryEvent(event)
     const serialized = JSON.stringify(sanitized)
+    const sensitiveValues = [
+      'raw-token',
+      'raw-bearer',
+      'raw-refresh-cookie',
+      'parent@example.com',
+      'new-password',
+      'raw-session',
+    ]
 
-    expect(serialized).not.toContain('raw-token')
-    expect(serialized).not.toContain('raw-bearer')
-    expect(serialized).not.toContain('raw-refresh-cookie')
-    expect(serialized).not.toContain('parent@example.com')
-    expect(serialized).not.toContain('new-password')
-    expect(serialized).not.toContain('raw-session')
+    sensitiveValues.forEach((sensitiveValue) => {
+      expect(serialized).not.toContain(sensitiveValue)
+    })
     expect(sanitized.request?.headers?.['X-Request-Name']).toBe('reset')
     expect(sanitized.request?.query_string).toContainEqual(['tab', 'account'])
     expect(sanitized.user).toEqual({ role: 'STUDENT', sessionId: '[Filtered]' })

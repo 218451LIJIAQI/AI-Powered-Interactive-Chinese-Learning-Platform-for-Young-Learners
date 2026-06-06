@@ -29,6 +29,21 @@ import type {
 import { http } from './http'
 import type { AdminPlatformSettingsUpdateRequest } from '@/types/api'
 
+const BAD_REQUEST_STATUS = 400
+const DEFAULT_PAGE_RESPONSE = { items: [] }
+const DEFAULT_SUCCESS_DATA = { ok: true }
+const LIST_ITEMS = [{ id: 11 }, { id: 12 }]
+const LEARNER_EMAIL = 'learner@example.com'
+const PASSWORD = 'Password123!'
+const PDF_CONTENT_TYPE = 'application/pdf'
+const STUDENT_EMAIL = 'student@example.com'
+const SUCCESS_STATUS = 200
+const SUCCESS_STATUS_TEXT = 'OK'
+const TEACHER_DOCUMENT_CONTENT_DISPOSITION = "attachment; filename*=UTF-8''teacher%20document.pdf"
+const TEACHER_DOCUMENT_FILENAME = 'teacher document.pdf'
+const TEACHER_EMAIL = 'teacher@example.com'
+const UNEXPECTED_FORMAT_MESSAGE = 'The server returned an unexpected response format.'
+
 const originalAdapter = http.defaults.adapter
 
 interface CapturedRequest {
@@ -64,14 +79,14 @@ function response<T>(config: InternalAxiosRequestConfig, data: T): AxiosResponse
       success: true,
       data,
     },
-    status: 200,
-    statusText: 'OK',
+    status: SUCCESS_STATUS,
+    statusText: SUCCESS_STATUS_TEXT,
     headers: {},
     config,
   }
 }
 
-function installCaptureAdapter(data: unknown = { ok: true }) {
+function installCaptureAdapter(data: unknown = DEFAULT_SUCCESS_DATA) {
   const calls: CapturedRequest[] = []
   http.defaults.adapter = (async (config) => {
     calls.push({
@@ -87,14 +102,64 @@ function installCaptureAdapter(data: unknown = { ok: true }) {
   return calls
 }
 
+function requestMapping({ method, url }: Pick<CapturedRequest, 'method' | 'url'>) {
+  return { method, url }
+}
+
 async function expectWrapperMappings(cases: WrapperCase[]) {
-  const calls = installCaptureAdapter({ items: [] })
+  const calls = installCaptureAdapter(DEFAULT_PAGE_RESPONSE)
 
   for (const wrapperCase of cases) {
     await wrapperCase.run()
   }
 
-  expect(calls.map(({ method, url }) => ({ method, url }))).toEqual(cases.map(({ method, url }) => ({ method, url })))
+  expect(calls.map(requestMapping)).toEqual(cases.map(requestMapping))
+}
+
+function backendErrorResponse(config: InternalAxiosRequestConfig): AxiosResponse {
+  return {
+    data: { success: false, message: 'Nope', errors: ['Bad input'] },
+    status: BAD_REQUEST_STATUS,
+    statusText: 'Bad Request',
+    headers: {},
+    config,
+  }
+}
+
+function malformedEnvelopeResponse(config: InternalAxiosRequestConfig): AxiosResponse {
+  return {
+    data: { unexpected: true },
+    status: SUCCESS_STATUS,
+    statusText: SUCCESS_STATUS_TEXT,
+    headers: {},
+    config,
+  }
+}
+
+function downloadResponse(config: InternalAxiosRequestConfig, blob: Blob): AxiosResponse<Blob> {
+  return {
+    data: blob,
+    status: SUCCESS_STATUS,
+    statusText: SUCCESS_STATUS_TEXT,
+    headers: {
+      'content-disposition': TEACHER_DOCUMENT_CONTENT_DISPOSITION,
+      'content-type': PDF_CONTENT_TYPE,
+    },
+    config,
+  }
+}
+
+function loginPayload(email = LEARNER_EMAIL) {
+  return { email, password: PASSWORD }
+}
+
+function registrationPayload(email: string) {
+  return {
+    fullName: email === STUDENT_EMAIL ? 'Student User' : 'Teacher User',
+    email,
+    password: PASSWORD,
+    confirmPassword: PASSWORD,
+  }
 }
 
 describe('REST API wrappers', () => {
@@ -103,18 +168,12 @@ describe('REST API wrappers', () => {
   })
 
   it('unwraps successful envelopes and rejects malformed envelopes', async () => {
-    http.defaults.adapter = (async (config) => ({
-      data: { unexpected: true },
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-    })) satisfies AxiosAdapter
+    http.defaults.adapter = (async (config) => malformedEnvelopeResponse(config)) satisfies AxiosAdapter
 
     await expect(systemApi.health()).rejects.toMatchObject({
       response: {
         data: {
-          message: 'The server returned an unexpected response format.',
+          message: UNEXPECTED_FORMAT_MESSAGE,
         },
       },
     })
@@ -122,22 +181,22 @@ describe('REST API wrappers', () => {
 
   it('turns backend rejection envelopes into friendly errors', async () => {
     http.defaults.adapter = (async (config) => {
-      throw new AxiosError('Request failed with status code 400', AxiosError.ERR_BAD_REQUEST, config, undefined, {
-        data: { success: false, message: 'Nope', errors: ['Bad input'] },
-        status: 400,
-        statusText: 'Bad Request',
-        headers: {},
+      throw new AxiosError(
+        `Request failed with status code ${BAD_REQUEST_STATUS}`,
+        AxiosError.ERR_BAD_REQUEST,
         config,
-      })
+        undefined,
+        backendErrorResponse(config),
+      )
     }) satisfies AxiosAdapter
 
-    await expect(systemApi.health()).rejects.toMatchObject({ response: { status: 400 } })
+    await expect(systemApi.health()).rejects.toMatchObject({ response: { status: BAD_REQUEST_STATUS } })
   })
 
   it('maps auth, public, notification, system, student, payment, teacher, and admin endpoints', async () => {
     const calls = installCaptureAdapter({ items: [{ id: 1 }] })
 
-    await authApi.login({ email: 'learner@example.com', password: 'Password123!' })
+    await authApi.login(loginPayload())
     await publicApi.listCourses({ keyword: 'pinyin', page: 1 })
     await notificationsApi.markAllRead()
     await systemApi.health()
@@ -147,7 +206,7 @@ describe('REST API wrappers', () => {
     await adminApi.approveTeacher(7, 'Looks good')
 
     expect(calls).toEqual([
-      { method: 'POST', url: '/auth/login', data: { email: 'learner@example.com', password: 'Password123!' } },
+      { method: 'POST', url: '/auth/login', data: loginPayload() },
       { method: 'GET', url: '/public/courses', params: { keyword: 'pinyin', page: 1 } },
       { method: 'PATCH', url: '/notifications/read-all' },
       { method: 'GET', url: '/health' },
@@ -163,37 +222,28 @@ describe('REST API wrappers', () => {
   })
 
   it('extracts safe download metadata from teacher and admin document responses', async () => {
-    const blob = new Blob(['pdf'], { type: 'application/pdf' })
-    http.defaults.adapter = (async (config) => ({
-      data: blob,
-      status: 200,
-      statusText: 'OK',
-      headers: {
-        'content-disposition': "attachment; filename*=UTF-8''teacher%20document.pdf",
-        'content-type': 'application/pdf',
-      },
-      config,
-    })) satisfies AxiosAdapter
+    const blob = new Blob(['pdf'], { type: PDF_CONTENT_TYPE })
+    http.defaults.adapter = (async (config) => downloadResponse(config, blob)) satisfies AxiosAdapter
 
     await expect(teacherApi.downloadVerificationDocument(4)).resolves.toEqual({
       blob,
-      fileName: 'teacher document.pdf',
-      contentType: 'application/pdf',
+      fileName: TEACHER_DOCUMENT_FILENAME,
+      contentType: PDF_CONTENT_TYPE,
     })
     await expect(adminApi.downloadTeacherDocument(5)).resolves.toEqual({
       blob,
-      fileName: 'teacher document.pdf',
-      contentType: 'application/pdf',
+      fileName: TEACHER_DOCUMENT_FILENAME,
+      contentType: PDF_CONTENT_TYPE,
     })
   })
 
   it('unwraps paged list endpoints to plain item arrays where wrappers promise arrays', async () => {
-    const calls = installCaptureAdapter({ items: [{ id: 11 }, { id: 12 }] })
+    const calls = installCaptureAdapter({ items: LIST_ITEMS })
 
-    await expect(notificationsApi.list({ status: 'UNREAD' })).resolves.toEqual([{ id: 11 }, { id: 12 }])
-    await expect(studentApi.badges()).resolves.toEqual([{ id: 11 }, { id: 12 }])
-    await expect(teacherApi.liveClasses()).resolves.toEqual([{ id: 11 }, { id: 12 }])
-    await expect(adminApi.moderationRecords({ status: 'OPEN' })).resolves.toEqual([{ id: 11 }, { id: 12 }])
+    await expect(notificationsApi.list({ status: 'UNREAD' })).resolves.toEqual(LIST_ITEMS)
+    await expect(studentApi.badges()).resolves.toEqual(LIST_ITEMS)
+    await expect(teacherApi.liveClasses()).resolves.toEqual(LIST_ITEMS)
+    await expect(adminApi.moderationRecords({ status: 'OPEN' })).resolves.toEqual(LIST_ITEMS)
 
     expect(calls).toEqual([
       { method: 'GET', url: '/notifications', params: { status: 'UNREAD' } },
@@ -204,7 +254,7 @@ describe('REST API wrappers', () => {
   })
 
   it('maps AI, student commerce, teacher content, and admin moderation commands', async () => {
-    const calls = installCaptureAdapter({ items: [] })
+    const calls = installCaptureAdapter(DEFAULT_PAGE_RESPONSE)
 
     await aiApi.quizGenerator({ topic: 'tones', numberOfQuestions: 3 })
     await studentApi.buyNow({ itemType: 'LESSON', itemId: 42, featureKey: 'recording' })
@@ -253,12 +303,7 @@ describe('REST API wrappers', () => {
       {
         name: 'auth register student',
         run: () =>
-          authApi.registerStudent({
-            fullName: 'Student User',
-            email: 'student@example.com',
-            password: 'Password123!',
-            confirmPassword: 'Password123!',
-          }),
+          authApi.registerStudent(registrationPayload(STUDENT_EMAIL)),
         method: 'POST',
         url: '/auth/register/student',
       },
@@ -266,10 +311,7 @@ describe('REST API wrappers', () => {
         name: 'auth register teacher',
         run: () =>
           authApi.registerTeacher({
-            fullName: 'Teacher User',
-            email: 'teacher@example.com',
-            password: 'Password123!',
-            confirmPassword: 'Password123!',
+            ...registrationPayload(TEACHER_EMAIL),
             bio: 'Experienced Mandarin teacher.',
           }),
         method: 'POST',
@@ -279,13 +321,13 @@ describe('REST API wrappers', () => {
       { name: 'auth logout', run: () => authApi.logout(), method: 'POST', url: '/auth/logout' },
       {
         name: 'auth forgot password',
-        run: () => authApi.forgotPassword('student@example.com'),
+        run: () => authApi.forgotPassword(STUDENT_EMAIL),
         method: 'POST',
         url: '/auth/forgot-password',
       },
       {
         name: 'auth reset password',
-        run: () => authApi.resetPassword({ token: 'reset', password: 'Password123!', confirmPassword: 'Password123!' }),
+        run: () => authApi.resetPassword({ token: 'reset', password: PASSWORD, confirmPassword: PASSWORD }),
         method: 'POST',
         url: '/auth/reset-password',
       },

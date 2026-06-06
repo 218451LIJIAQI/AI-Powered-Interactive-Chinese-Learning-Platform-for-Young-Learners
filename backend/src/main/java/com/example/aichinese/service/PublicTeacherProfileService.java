@@ -44,7 +44,10 @@ public class PublicTeacherProfileService {
 
         long courseCount = lessonRepository.countByTeacherIdAndContentStatus(teacherId, ContentStatus.PUBLISHED)
                 + coursePackageRepository.countByTeacherIdAndContentStatus(teacherId, ContentStatus.PUBLISHED);
-        int safeCourseCount = courseCount > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) courseCount;
-        return teacherManagementMapper.toPublicTeacherProfileResponse(teacherProfile, safeCourseCount);
+        return teacherManagementMapper.toPublicTeacherProfileResponse(teacherProfile, clampToInt(courseCount));
+    }
+
+    private static int clampToInt(long value) {
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
     }
 }

@@ -35,12 +35,8 @@ class AiLogServiceTests {
     @Test
     void appendChatMessageUsesTypedSenderRoleContract() {
         AiChatMessageRepository aiChatMessageRepository = mock(AiChatMessageRepository.class);
-        when(aiChatMessageRepository.save(any(AiChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        AiLogService aiLogService = new AiLogService(
-                mock(AiUsageLogRepository.class),
-                mock(AiFeedbackRecordRepository.class),
-                mock(AiChatSessionRepository.class),
-                aiChatMessageRepository);
+        saveArgument(aiChatMessageRepository);
+        AiLogService aiLogService = aiLogService(aiChatMessageRepository);
         AiChatSession session = new AiChatSession();
         session.setId(123L);
 
@@ -58,12 +54,8 @@ class AiLogServiceTests {
     @Test
     void usageLogStoresContentLengthMetadataInsteadOfPromptOrResponseText() {
         AiUsageLogRepository aiUsageLogRepository = mock(AiUsageLogRepository.class);
-        when(aiUsageLogRepository.save(any(AiUsageLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        AiLogService aiLogService = new AiLogService(
-                aiUsageLogRepository,
-                mock(AiFeedbackRecordRepository.class),
-                mock(AiChatSessionRepository.class),
-                mock(AiChatMessageRepository.class));
+        saveArgument(aiUsageLogRepository);
+        AiLogService aiLogService = aiLogService(aiUsageLogRepository);
         User user = new User();
         user.setId(10L);
 
@@ -91,14 +83,9 @@ class AiLogServiceTests {
 
     @Test
     void feedbackRecordStoresOnlyMinimalMetadataForSensitiveAiContent() {
-        AiUsageLogRepository aiUsageLogRepository = mock(AiUsageLogRepository.class);
         AiFeedbackRecordRepository aiFeedbackRecordRepository = mock(AiFeedbackRecordRepository.class);
-        when(aiFeedbackRecordRepository.save(any(AiFeedbackRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        AiLogService aiLogService = new AiLogService(
-                aiUsageLogRepository,
-                aiFeedbackRecordRepository,
-                mock(AiChatSessionRepository.class),
-                mock(AiChatMessageRepository.class));
+        saveArgument(aiFeedbackRecordRepository);
+        AiLogService aiLogService = aiLogService(aiFeedbackRecordRepository);
         User user = new User();
         user.setId(11L);
         UploadedFile uploadedFile = new UploadedFile();
@@ -119,5 +106,41 @@ class AiLogServiceTests {
         assertThat(saved.getUploadedFile()).isSameAs(uploadedFile);
         assertThat(saved.getInputFileUrl()).isNull();
         verify(aiFeedbackRecordRepository).save(any(AiFeedbackRecord.class));
+    }
+
+    private static AiLogService aiLogService(AiUsageLogRepository aiUsageLogRepository) {
+        return new AiLogService(
+                aiUsageLogRepository,
+                mock(AiFeedbackRecordRepository.class),
+                mock(AiChatSessionRepository.class),
+                mock(AiChatMessageRepository.class));
+    }
+
+    private static AiLogService aiLogService(AiFeedbackRecordRepository aiFeedbackRecordRepository) {
+        return new AiLogService(
+                mock(AiUsageLogRepository.class),
+                aiFeedbackRecordRepository,
+                mock(AiChatSessionRepository.class),
+                mock(AiChatMessageRepository.class));
+    }
+
+    private static AiLogService aiLogService(AiChatMessageRepository aiChatMessageRepository) {
+        return new AiLogService(
+                mock(AiUsageLogRepository.class),
+                mock(AiFeedbackRecordRepository.class),
+                mock(AiChatSessionRepository.class),
+                aiChatMessageRepository);
+    }
+
+    private static void saveArgument(AiUsageLogRepository repository) {
+        when(repository.save(any(AiUsageLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private static void saveArgument(AiFeedbackRecordRepository repository) {
+        when(repository.save(any(AiFeedbackRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private static void saveArgument(AiChatMessageRepository repository) {
+        when(repository.save(any(AiChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

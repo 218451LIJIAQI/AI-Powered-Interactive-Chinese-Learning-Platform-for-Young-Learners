@@ -16,7 +16,7 @@ import com.example.aichinese.service.CommerceMoneyService;
 import com.example.aichinese.service.CommerceSettingsService;
 
 /**
- * Unit coverage for {@code CommerceSettingsService} — pins the
+ * Unit coverage for {@code CommerceSettingsService}: pins the
  * three-letter ISO-4217 currency validation, the {@code [0, 1]}
  * commission-rate range guard, and the {@code DECIMAL(N, 4)}
  * normalisation rules used by every commerce surface.
@@ -25,18 +25,18 @@ class CommerceSettingsServiceTests {
 
     @Test
     void defaultCurrencyIsUppercaseIso4217Code() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        SystemSetting setting = setting(CommerceSettingsService.DEFAULT_CURRENCY_KEY, " myr ");
-        when(repository.findBySettingKey(CommerceSettingsService.DEFAULT_CURRENCY_KEY)).thenReturn(Optional.of(setting));
+        SystemSettingRepository repository = repositoryWithSetting(
+                CommerceSettingsService.DEFAULT_CURRENCY_KEY,
+                " myr ");
 
         assertThat(service(repository).getDefaultCurrency()).isEqualTo("MYR");
     }
 
     @Test
     void defaultCurrencyRejectsInvalidCodesInsteadOfPersistingAmbiguousValues() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        SystemSetting setting = setting(CommerceSettingsService.DEFAULT_CURRENCY_KEY, "RINGGIT");
-        when(repository.findBySettingKey(CommerceSettingsService.DEFAULT_CURRENCY_KEY)).thenReturn(Optional.of(setting));
+        SystemSettingRepository repository = repositoryWithSetting(
+                CommerceSettingsService.DEFAULT_CURRENCY_KEY,
+                "RINGGIT");
 
         assertThatThrownBy(() -> service(repository).getDefaultCurrency())
                 .isInstanceOf(IllegalStateException.class)
@@ -45,18 +45,18 @@ class CommerceSettingsServiceTests {
 
     @Test
     void platformCommissionRateUsesFourDecimalRateScale() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        SystemSetting setting = setting(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY, "0.15555");
-        when(repository.findBySettingKey(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY)).thenReturn(Optional.of(setting));
+        SystemSettingRepository repository = repositoryWithSetting(
+                CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY,
+                "0.15555");
 
         assertThat(service(repository).getPlatformCommissionRate()).isEqualByComparingTo("0.1556");
     }
 
     @Test
     void platformCommissionRateRejectsOutOfRangeValues() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        SystemSetting setting = setting(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY, "1.01");
-        when(repository.findBySettingKey(CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY)).thenReturn(Optional.of(setting));
+        SystemSettingRepository repository = repositoryWithSetting(
+                CommerceSettingsService.PLATFORM_COMMISSION_RATE_KEY,
+                "1.01");
 
         assertThatThrownBy(() -> service(repository).getPlatformCommissionRate())
                 .isInstanceOf(IllegalArgumentException.class)
@@ -71,11 +71,17 @@ class CommerceSettingsServiceTests {
                 .isEqualByComparingTo("15.55");
     }
 
-    private CommerceSettingsService service(SystemSettingRepository repository) {
+    private static CommerceSettingsService service(SystemSettingRepository repository) {
         return new CommerceSettingsService(repository, new CommerceMoneyService());
     }
 
-    private SystemSetting setting(String key, String value) {
+    private static SystemSettingRepository repositoryWithSetting(String key, String value) {
+        SystemSettingRepository repository = mock(SystemSettingRepository.class);
+        when(repository.findBySettingKey(key)).thenReturn(Optional.of(setting(key, value)));
+        return repository;
+    }
+
+    private static SystemSetting setting(String key, String value) {
         SystemSetting setting = new SystemSetting();
         setting.setSettingKey(key);
         setting.setSettingValue(value);

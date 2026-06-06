@@ -1,5 +1,8 @@
 package com.example.aichinese.security;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +34,7 @@ public class LoginAttemptLimiter {
     static final int MAX_TRACKED_ATTEMPT_RECORDS = 10_000;
     private static final int MAX_EMAIL_KEY_LENGTH = 320;
     private static final int MAX_IP_KEY_LENGTH = 64;
+    private static final int ANONYMIZED_KEY_BYTES = 8;
 
     private final Cache<String, AttemptRecord> attempts;
     private final Cache<String, Instant> lockouts;
@@ -175,7 +179,13 @@ public class LoginAttemptLimiter {
     }
 
     private String anonymizedKey(String email, String clientIp) {
-        return HexFormat.of().toHexDigits(key(email, clientIp).hashCode());
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(key(email, clientIp).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, ANONYMIZED_KEY_BYTES);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 digest is unavailable.", exception);
+        }
     }
 
     private record AttemptRecord(Instant firstFailureAt, int failedAttempts) {

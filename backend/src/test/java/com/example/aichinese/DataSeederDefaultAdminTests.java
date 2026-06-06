@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.UserRepository;
@@ -17,23 +18,28 @@ import com.example.aichinese.repository.UserRepository;
  * role and the supplied credentials, ready for first-run login.
  */
 @SpringBootTest(properties = {
-        "DEFAULT_ADMIN_EMAIL=admin@example.com",
-        "DEFAULT_ADMIN_PASSWORD=SuperSecure123!"
+        DataSeederDefaultAdminTests.DEFAULT_ADMIN_EMAIL_PROPERTY,
+        DataSeederDefaultAdminTests.DEFAULT_ADMIN_PASSWORD_PROPERTY
 })
 @ActiveProfiles("test")
 class DataSeederDefaultAdminTests {
+
+    private static final String DEFAULT_ADMIN_EMAIL = "admin@example.com";
+    static final String DEFAULT_ADMIN_EMAIL_PROPERTY = "DEFAULT_ADMIN_EMAIL=" + DEFAULT_ADMIN_EMAIL;
+    static final String DEFAULT_ADMIN_PASSWORD_PROPERTY = "DEFAULT_ADMIN_PASSWORD=SuperSecure123!";
+    private static final String DEFAULT_ADMIN_DISPLAY_NAME = "Platform Administrator";
 
     @Autowired
     private UserRepository userRepository;
 
     @Test
     void shouldCreateDefaultAdminWhenEnvironmentVariablesAreProvided() {
-        User admin = userRepository.findByEmailWithRoles("admin@example.com").orElseThrow();
+        User admin = userRepository.findByEmailWithRoles(DEFAULT_ADMIN_EMAIL).orElseThrow();
 
-        assertThat(admin.getDisplayName()).isEqualTo("Platform Administrator");
+        assertThat(admin.getDisplayName()).isEqualTo(DEFAULT_ADMIN_DISPLAY_NAME);
         assertThat(admin.getPasswordHash()).isNotBlank();
         assertThat(admin.getRoles())
-                .extracting(role -> role.getName())
+                .extracting(Role::getName)
                 .contains(RoleName.ADMIN);
     }
 }

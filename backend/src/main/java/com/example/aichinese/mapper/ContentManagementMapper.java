@@ -2,6 +2,7 @@ package com.example.aichinese.mapper;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Component;
 
@@ -44,7 +45,7 @@ public class ContentManagementMapper {
 
     private static final String PACKAGE_CTA = "Register to start learning";
 
-    private LearningLevelResponse toLevelResponse(LearningLevel level) {
+    private static LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
             return null;
         }
@@ -52,7 +53,7 @@ public class ContentManagementMapper {
         return new LearningLevelResponse(level.getId(), level.getName(), level.getDescription());
     }
 
-    private LearningCategoryResponse toCategoryResponse(LearningCategory category) {
+    private static LearningCategoryResponse toCategoryResponse(LearningCategory category) {
         if (category == null) {
             return null;
         }
@@ -60,7 +61,7 @@ public class ContentManagementMapper {
         return new LearningCategoryResponse(category.getId(), category.getName(), category.getDescription());
     }
 
-    private TeacherOwnerSummaryResponse toTeacherSummary(TeacherProfile teacherProfile) {
+    private static TeacherOwnerSummaryResponse toTeacherSummary(TeacherProfile teacherProfile) {
         if (teacherProfile == null || teacherProfile.getUser() == null) {
             return null;
         }
@@ -296,7 +297,7 @@ public class ContentManagementMapper {
                 coursePackage.getUpdatedAt());
     }
 
-    private PublicTeacherSummaryResponse toPublicTeacherSummary(TeacherProfile teacherProfile) {
+    private static PublicTeacherSummaryResponse toPublicTeacherSummary(TeacherProfile teacherProfile) {
         if (teacherProfile == null || teacherProfile.getUser() == null) {
             return null;
         }
@@ -384,7 +385,6 @@ public class ContentManagementMapper {
         if (coursePackage == null) {
             return null;
         }
-        List<PackageItem> safeItems = items == null ? List.of() : items;
         boolean locked = coursePackage.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
                 PACKAGE_ID_PREFIX + coursePackage.getId(),
@@ -403,10 +403,7 @@ public class ContentManagementMapper {
                 locked,
                 coursePackage.getContentStatus(),
                 null,
-                safeItems.stream()
-                        .filter(Objects::nonNull)
-                        .map(this::toPublicCourseItemSummary)
-                        .toList(),
+                mapItems(items, this::toPublicCourseItemSummary),
                 PACKAGE_CTA,
                 locked ? PAID_LOCKED_REASON : null);
     }
@@ -420,12 +417,16 @@ public class ContentManagementMapper {
     }
 
     private List<PackageItemResponse> mapPackageItems(List<PackageItem> items) {
+        return mapItems(items, this::toPackageItemResponse);
+    }
+
+    private static <R> List<R> mapItems(List<PackageItem> items, Function<? super PackageItem, R> mapper) {
         if (items == null || items.isEmpty()) {
             return List.of();
         }
         return items.stream()
                 .filter(Objects::nonNull)
-                .map(this::toPackageItemResponse)
+                .map(mapper)
                 .toList();
     }
 

@@ -2,6 +2,7 @@ package com.example.aichinese.config;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
@@ -41,6 +42,7 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
     private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
     private static final String REFRESH_PATH = "/api/v1/auth/refresh";
+    private static final String SEC_FETCH_SITE = "Sec-Fetch-Site";
     private static final String SAME_ORIGIN_FETCH = "same-origin";
 
     private final ObjectMapper objectMapper;
@@ -94,7 +96,7 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
         // For this cookie-authenticated endpoint, only same-origin browser
         // requests may proceed without Origin/Referer. Same-site is not enough:
         // a sibling subdomain can be same-site but still untrusted.
-        String fetchSite = request.getHeader("Sec-Fetch-Site");
+        String fetchSite = request.getHeader(SEC_FETCH_SITE);
         return fetchSite == null || SAME_ORIGIN_FETCH.equalsIgnoreCase(fetchSite.strip());
     }
 
@@ -108,16 +110,16 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
         if (contextPath != null && !contextPath.isBlank() && requestUri.startsWith(contextPath)) {
             return requestUri.substring(contextPath.length());
         }
-        return requestUri;
+        return requestUri == null ? "" : requestUri;
     }
 
     private static String requestOrigin(HttpServletRequest request) {
         String scheme = request.getScheme() == null
                 ? ""
-                : request.getScheme().toLowerCase(java.util.Locale.ROOT);
+                : request.getScheme().toLowerCase(Locale.ROOT);
         String host = request.getServerName() == null
                 ? ""
-                : request.getServerName().toLowerCase(java.util.Locale.ROOT);
+                : request.getServerName().toLowerCase(Locale.ROOT);
         int port = request.getServerPort();
         boolean defaultPort = ("http".equals(scheme) && port == 80) || ("https".equals(scheme) && port == 443);
         String hostPart = host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host;

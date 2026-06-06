@@ -17,6 +17,18 @@ const teacherPreviewUser: CurrentUserResponse = {
   roles: ['TEACHER'],
 }
 
+function authSessionFor(user: CurrentUserResponse, token: string): AuthResponse {
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      roles: user.roles,
+    },
+  }
+}
+
 const mocks = vi.hoisted(() => ({
   setAccessToken: vi.fn(),
   refresh: vi.fn(),
@@ -119,15 +131,7 @@ describe('auth store token storage', () => {
   })
 
   it('clears the refreshed access token when current-user hydration fails', async () => {
-    const session: AuthResponse = {
-      token: 'rotated-access-token',
-      user: {
-        id: studentUser.id,
-        email: studentUser.email,
-        fullName: studentUser.fullName,
-        roles: studentUser.roles,
-      },
-    }
+    const session = authSessionFor(studentUser, 'rotated-access-token')
     mocks.refresh.mockResolvedValue(session)
     mocks.me.mockRejectedValue(new Error('me failed'))
 
@@ -145,15 +149,7 @@ describe('auth store token storage', () => {
   })
 
   it('hydrates the current user after a successful cookie refresh', async () => {
-    const session: AuthResponse = {
-      token: 'rotated-access-token',
-      user: {
-        id: studentUser.id,
-        email: studentUser.email,
-        fullName: studentUser.fullName,
-        roles: studentUser.roles,
-      },
-    }
+    const session = authSessionFor(studentUser, 'rotated-access-token')
     mocks.refresh.mockResolvedValue(session)
     mocks.me.mockResolvedValue(studentUser)
 
@@ -232,15 +228,7 @@ describe('auth store token storage', () => {
     expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBe('TEACHER')
 
-    const session: AuthResponse = {
-      token: 'real-access-token',
-      user: {
-        id: studentUser.id,
-        email: studentUser.email,
-        fullName: studentUser.fullName,
-        roles: studentUser.roles,
-      },
-    }
+    const session = authSessionFor(studentUser, 'real-access-token')
     mocks.login.mockResolvedValue(session)
     mocks.me.mockResolvedValue(studentUser)
 

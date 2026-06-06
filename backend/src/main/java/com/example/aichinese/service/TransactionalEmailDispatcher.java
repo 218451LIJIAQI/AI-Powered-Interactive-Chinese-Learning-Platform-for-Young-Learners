@@ -32,23 +32,24 @@ public class TransactionalEmailDispatcher {
     }
 
     public void enqueuePasswordReset(User recipient, String resetLink, String rawToken) {
-        eventPublisher.publishEvent(new EmailDeliveryRequested(
-                EmailDeliveryType.PASSWORD_RESET, EmailRecipientSnapshot.from(recipient), resetLink, rawToken));
+        publish(EmailDeliveryType.PASSWORD_RESET, recipient, resetLink, rawToken);
     }
 
     public void enqueueTeacherApproval(User recipient, String note) {
-        eventPublisher.publishEvent(new EmailDeliveryRequested(
-                EmailDeliveryType.TEACHER_APPROVAL, EmailRecipientSnapshot.from(recipient), note, null));
+        publish(EmailDeliveryType.TEACHER_APPROVAL, recipient, note, null);
     }
 
     public void enqueueTeacherRejection(User recipient, String reason) {
-        eventPublisher.publishEvent(new EmailDeliveryRequested(
-                EmailDeliveryType.TEACHER_REJECTION, EmailRecipientSnapshot.from(recipient), reason, null));
+        publish(EmailDeliveryType.TEACHER_REJECTION, recipient, reason, null);
     }
 
     @Async(AsyncConfig.APPLICATION_TASK_EXECUTOR)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void deliver(EmailDeliveryRequested event) {
+        if (event == null) {
+            log.warn("Asynchronous email delivery skipped because the delivery event was null.");
+            return;
+        }
         try {
             User recipient = event.recipient().toUser();
             switch (event.type()) {
@@ -60,10 +61,22 @@ public class TransactionalEmailDispatcher {
                         emailService.safeSendTeacherRejectionNotice(recipient, event.primaryContent());
             }
         } catch (Exception exception) {
-            Long recipientId = event.recipient() == null ? null : event.recipient().id();
+            Long recipientId = recipientId(event);
             log.warn("Asynchronous email delivery failed for user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
             log.debug("Asynchronous email delivery stack trace for user id {}.", recipientId, exception);
         }
+    }
+
+    private void publish(EmailDeliveryType type, User recipient, String primaryContent, String secondaryContent) {
+        eventPublisher.publishEvent(new EmailDeliveryRequested(
+                type,
+                EmailRecipientSnapshot.from(recipient),
+                primaryContent,
+                secondaryContent));
+    }
+
+    private static Long recipientId(EmailDeliveryRequested event) {
+        return event.recipient() == null ? null : event.recipient().id();
     }
 
     private enum EmailDeliveryType {

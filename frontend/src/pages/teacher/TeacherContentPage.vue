@@ -8,7 +8,7 @@
 
     <DataNotice
       :using-fallback="usingFallback"
-      :error="pageError"
+      :error="noticeError"
       :success="actionSuccess"
       :detail="teacherContentDetail"
     />
@@ -20,7 +20,7 @@
         class="teacher-content-tab"
         :class="{ 'is-active': tab.key === activeSurfaceTab }"
         type="button"
-        @click="activeSurfaceTab = tab.key"
+        @click="selectSurfaceTab(tab.key)"
       >
         <IconGlyph :name="tab.icon" :size="18" />
         <span>{{ tab.label }}</span>
@@ -50,7 +50,7 @@
             :key="item.id"
             class="teacher-course-item"
             :class="{ 'is-active': item.id === selectedCourse.id }"
-            @click="selectedPackageId = item.id"
+            @click="selectCourse(item.id)"
           >
             <CourseSceneThumb class="teacher-course-thumb" :variant="courseThumbVariant(item.id)" />
             <div class="stack teacher-course-copy">
@@ -108,7 +108,7 @@
                 :disabled="!selectedCourse.source || previewReadOnly || packageBusy"
                 @click="archiveSelectedPackage"
               >
-                {{ packageBusy ? 'Working...' : 'Archive' }}
+                {{ packageArchiveLabel }}
               </button>
             </div>
           </div>
@@ -164,7 +164,7 @@
                     :disabled="!selectedCourse.source || previewReadOnly || packageItemRemovingId === item.id"
                     @click="removePackageItem(item.id)"
                   >
-                    {{ packageItemRemovingId === item.id ? 'Removing...' : 'Remove' }}
+                    {{ packageItemRemoveLabel(item.id) }}
                   </button>
                 </div>
               </div>
@@ -230,7 +230,7 @@
               type="submit"
               :disabled="!selectedCourse.source || previewReadOnly || submitting.packageItem"
             >
-              {{ submitting.packageItem ? 'Saving...' : 'Add to Course' }}
+              {{ packageItemSubmitLabel }}
             </button>
           </form>
 
@@ -276,7 +276,7 @@
                     :disabled="!module.source || previewReadOnly || moduleBusyId === module.id"
                     @click="archiveModule(module.source ?? undefined)"
                   >
-                    {{ moduleBusyId === module.id ? 'Working...' : 'Archive' }}
+                    {{ moduleArchiveLabel(module.id) }}
                   </button>
                 </div>
               </div>
@@ -307,7 +307,7 @@
                       :disabled="!lesson.source || previewReadOnly || lessonBusyId === lesson.id"
                       @click="archiveLesson(lesson.source ?? undefined)"
                     >
-                      {{ lessonBusyId === lesson.id ? 'Working...' : 'Archive' }}
+                      {{ lessonArchiveLabel(lesson.id) }}
                     </button>
                   </div>
                 </div>
@@ -374,7 +374,7 @@
                     :disabled="previewReadOnly || archivingResourceId === video.id"
                     @click="archiveRecordedResource(video.id)"
                   >
-                    {{ archivingResourceId === video.id ? 'Working...' : 'Archive' }}
+                    {{ resourceArchiveLabel(video.id) }}
                   </button>
                 </div>
               </div>
@@ -382,13 +382,13 @@
               <div class="teacher-overview-grid">
                 <div>
                   <strong>Resource Details</strong>
-                  <p class="muted">{{ video.description || 'No description provided.' }}</p>
+                  <p class="muted">{{ descriptionLabel(video.description) }}</p>
                 </div>
 
                 <div class="teacher-overview-meta">
                   <div>
                     <span class="muted">Active</span>
-                    <strong>{{ video.active ? 'Yes' : 'No' }}</strong>
+                    <strong>{{ yesNoLabel(video.active) }}</strong>
                   </div>
                   <div>
                     <span class="muted">Updated</span>
@@ -431,8 +431,8 @@
                 <div class="row teacher-module-right">
                   <span class="muted">{{ progressRow.recordedVideoTitle }}</span>
                   <StatusPill
-                    :label="progressRow.completed ? 'Completed' : 'Watching'"
-                    :tone="progressRow.completed ? 'success' : 'warning'"
+                    :label="videoProgressStatusLabel(progressRow.completed)"
+                    :tone="videoProgressStatusTone(progressRow.completed)"
                   />
                 </div>
               </div>
@@ -449,9 +449,7 @@
                 <div class="teacher-overview-meta">
                   <div>
                     <span class="muted">Last Watched</span>
-                    <strong>{{
-                      progressRow.lastWatchedAt ? formatDate(progressRow.lastWatchedAt, shortDateOptions) : '--'
-                    }}</strong>
+                    <strong>{{ lastWatchedLabel(progressRow.lastWatchedAt) }}</strong>
                   </div>
                 </div>
               </div>
@@ -526,7 +524,7 @@
                     :disabled="previewReadOnly || quizDeleteId === quiz.id"
                     @click="deleteQuiz(quiz.id)"
                   >
-                    {{ quizDeleteId === quiz.id ? 'Working...' : 'Delete' }}
+                    {{ quizDeleteLabel(quiz.id) }}
                   </button>
                 </div>
               </div>
@@ -534,7 +532,7 @@
               <div class="teacher-overview-grid">
                 <div>
                   <strong>{{ quiz.lessonTitle }}</strong>
-                  <p class="muted">{{ quiz.description || 'No description provided.' }}</p>
+                  <p class="muted">{{ descriptionLabel(quiz.description) }}</p>
                 </div>
 
                 <div class="teacher-overview-meta">
@@ -548,7 +546,7 @@
                   </div>
                   <div>
                     <span class="muted">Time Limit</span>
-                    <strong>{{ quiz.timeLimitMinutes ? `${quiz.timeLimitMinutes} min` : 'None' }}</strong>
+                    <strong>{{ quizTimeLimitLabel(quiz.timeLimitMinutes) }}</strong>
                   </div>
                 </div>
               </div>
@@ -598,7 +596,7 @@
                       :disabled="previewReadOnly || questionDeleteId === question.id"
                       @click="deleteQuestion(question.id)"
                     >
-                      {{ questionDeleteId === question.id ? 'Working...' : 'Delete' }}
+                      {{ questionDeleteLabel(question.id) }}
                     </button>
                   </div>
                 </div>
@@ -607,7 +605,7 @@
                   <div>
                     <strong>Answer</strong>
                     <p class="muted">
-                      {{ question.correctAnswerText || 'Use the options below to mark a correct answer.' }}
+                      {{ questionAnswerLabel(question) }}
                     </p>
                     <p v-if="question.explanation" class="muted">{{ question.explanation }}</p>
                   </div>
@@ -633,8 +631,8 @@
 
                     <div class="row teacher-lesson-actions">
                       <StatusPill
-                        :label="option.correctOption ? 'Correct' : 'Distractor'"
-                        :tone="option.correctOption ? 'success' : 'info'"
+                        :label="questionOptionStatusLabel(option.correctOption)"
+                        :tone="questionOptionStatusTone(option.correctOption)"
                       />
                     </div>
                   </div>
@@ -714,7 +712,7 @@
                   <strong>{{ category.name }}</strong>
                 </div>
               </div>
-              <p class="muted">{{ category.description || 'No description available.' }}</p>
+              <p class="muted">{{ descriptionLabel(category.description, 'No description available.') }}</p>
             </article>
           </div>
 
@@ -738,7 +736,7 @@
                   <strong>{{ level.name }}</strong>
                 </div>
               </div>
-              <p class="muted">{{ level.description || 'No description available.' }}</p>
+              <p class="muted">{{ descriptionLabel(level.description, 'No description available.') }}</p>
             </article>
           </div>
 
@@ -759,13 +757,9 @@
         </div>
 
         <div v-if="previewReadOnly" class="teacher-builder-helper">
-          <strong>{{ teacherApprovalLocked ? 'Verification pending.' : 'Preview mode is read-only.' }}</strong>
+          <strong>{{ readOnlyTitle }}</strong>
           <span class="muted">
-            {{
-              teacherApprovalLocked
-                ? teacherApprovalMessage
-                : 'Sign in as an approved teacher to save content, upload files, package lessons, and manage quizzes.'
-            }}
+            {{ readOnlyMessage }}
           </span>
         </div>
 
@@ -1404,22 +1398,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher content authoring hub — courses, modules, lessons,
- * quizzes, recorded resources, package items, and learner progress.
- *
- * <h2>Why one page</h2>
- * <p>The author workflow benefits from in-place context (the lesson
- * you're editing sits next to its parent module and the course's
- * existing materials). Sub-views are tabs inside this page rather
- * than separate routes so authors can switch without losing draft
- * state.</p>
- *
- * <h2>Write gating</h2>
- * <p>Write actions are denied when the teacher is not approved, when
- * preview/fallback data is active, or when the required form fields
- * for the selected content type are missing.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 
 import { publicApi, teacherApi } from '@/api/services'
@@ -1722,16 +1700,24 @@ const usingFallback = computed(
     categoriesResource.usingFallback.value,
 )
 const teacherContentDetail = computed(() => (teacherApprovalLocked.value ? teacherApprovalMessage.value : null))
+const packageArchiveLabel = computed(() => (packageBusy.value ? 'Working...' : 'Archive'))
+const packageItemSubmitLabel = computed(() => (submitting.packageItem ? 'Saving...' : 'Add to Course'))
+const readOnlyTitle = computed(() => (teacherApprovalLocked.value ? 'Verification pending.' : 'Preview mode is read-only.'))
+const readOnlyMessage = computed(() =>
+  teacherApprovalLocked.value
+    ? teacherApprovalMessage.value
+    : 'Sign in as an approved teacher to save content, upload files, package lessons, and manage quizzes.',
+)
 
 const pageError = computed(
   () =>
-    actionError.value ||
     packagesResource.error.value ||
     lessonsResource.error.value ||
     modulesResource.error.value ||
     levelsResource.error.value ||
     categoriesResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
 
 const showCourseWorkspace = computed(
   () =>
@@ -1998,11 +1984,11 @@ function defaultQuestionOptions(): QuestionOptionDraft[] {
   ]
 }
 
-function formatPrice(value: number) {
+function formatPrice(value: number): string {
   return `RM ${Number(value || 0).toFixed(2)}`
 }
 
-function formatDuration(value: number | null | undefined) {
+function formatDuration(value: number | null | undefined): string {
   const safeSeconds = nonNegativeInteger(value)
   if (safeSeconds <= 0) return '0s'
   const hours = Math.floor(safeSeconds / 3600)
@@ -2013,7 +1999,67 @@ function formatDuration(value: number | null | undefined) {
   return `${seconds}s`
 }
 
-function normalizeStatus(status: ContentStatus | string) {
+function descriptionLabel(value: string | null | undefined, fallback = 'No description provided.'): string {
+  return value || fallback
+}
+
+function yesNoLabel(value: boolean): string {
+  return value ? 'Yes' : 'No'
+}
+
+function packageItemRemoveLabel(packageItemId: number): string {
+  return packageItemRemovingId.value === packageItemId ? 'Removing...' : 'Remove'
+}
+
+function moduleArchiveLabel(moduleId: number): string {
+  return moduleBusyId.value === moduleId ? 'Working...' : 'Archive'
+}
+
+function lessonArchiveLabel(lessonId: number): string {
+  return lessonBusyId.value === lessonId ? 'Working...' : 'Archive'
+}
+
+function resourceArchiveLabel(videoId: number): string {
+  return archivingResourceId.value === videoId ? 'Working...' : 'Archive'
+}
+
+function quizDeleteLabel(quizId: number): string {
+  return quizDeleteId.value === quizId ? 'Working...' : 'Delete'
+}
+
+function questionDeleteLabel(questionId: number): string {
+  return questionDeleteId.value === questionId ? 'Working...' : 'Delete'
+}
+
+function videoProgressStatusLabel(completed: boolean): string {
+  return completed ? 'Completed' : 'Watching'
+}
+
+function videoProgressStatusTone(completed: boolean): 'success' | 'warning' {
+  return completed ? 'success' : 'warning'
+}
+
+function lastWatchedLabel(value: string | null | undefined): string {
+  return value ? formatDate(value, shortDateOptions) : '--'
+}
+
+function quizTimeLimitLabel(value: number | null | undefined): string {
+  return value ? `${value} min` : 'None'
+}
+
+function questionAnswerLabel(question: TeacherQuizQuestionResponse): string {
+  return question.correctAnswerText || 'Use the options below to mark a correct answer.'
+}
+
+function questionOptionStatusLabel(correct: boolean | null | undefined): string {
+  return correct ? 'Correct' : 'Distractor'
+}
+
+function questionOptionStatusTone(correct: boolean | null | undefined): 'success' | 'info' {
+  return correct ? 'success' : 'info'
+}
+
+function normalizeStatus(status: ContentStatus | string): string {
   switch (status) {
     case 'PUBLISHED':
       return 'Published'
@@ -2047,26 +2093,26 @@ function contentStatusTone(status: string): 'success' | 'warning' | 'danger' | '
   }
 }
 
-function courseThumbVariant(id: number) {
+function courseThumbVariant(id: number): 'panda' | 'family' | 'pagoda' | 'travel' {
   const thumbs = ['panda', 'family', 'pagoda', 'travel'] as const
   return thumbs[Math.max(id - 1, 0) % thumbs.length]
 }
 
-function ensureLiveWrite(feature: string) {
+function ensureLiveWrite(feature: string): boolean {
   if (!previewReadOnly.value) return true
   actionError.value = `${feature} is read-only while preview data is active.`
   actionSuccess.value = null
   return false
 }
 
-function clearActionFeedback() {
+function clearActionFeedback(): void {
   actionError.value = null
   actionSuccess.value = null
 }
 
 function seedSharedContentFields<
   T extends { levelId: number; categoryId: number; accessType: 'FREE' | 'PAID'; price?: number | null },
->(target: T) {
+>(target: T): void {
   if (!selectedCourse.value.source) return
   target.levelId = selectedCourse.value.source.level.id
   target.categoryId = selectedCourse.value.source.category.id
@@ -2076,7 +2122,7 @@ function seedSharedContentFields<
   }
 }
 
-function resetPackageForm() {
+function resetPackageForm(): void {
   editingPackageId.value = null
   packageForm.title = ''
   packageForm.description = ''
@@ -2088,7 +2134,7 @@ function resetPackageForm() {
   packageForm.coverImageUrl = selectedCourse.value.source?.coverImageUrl ?? ''
 }
 
-function resetModuleForm() {
+function resetModuleForm(): void {
   editingModuleId.value = null
   moduleForm.title = ''
   moduleForm.description = ''
@@ -2100,7 +2146,7 @@ function resetModuleForm() {
   seedSharedContentFields(moduleForm)
 }
 
-function resetLessonForm(moduleId = 0) {
+function resetLessonForm(moduleId = 0): void {
   editingLessonId.value = null
   lessonForm.title = ''
   lessonForm.description = ''
@@ -2116,7 +2162,7 @@ function resetLessonForm(moduleId = 0) {
   seedSharedContentFields(lessonForm)
 }
 
-function resetResourceForm(lessonId = 0) {
+function resetResourceForm(lessonId = 0): void {
   editingResourceId.value = null
   resourceForm.lessonId = lessonId
   resourceForm.packageId = 0
@@ -2130,7 +2176,7 @@ function resetResourceForm(lessonId = 0) {
   }
 }
 
-function resetQuizForm(lessonId = 0) {
+function resetQuizForm(lessonId = 0): void {
   editingQuizId.value = null
   quizForm.lessonId = lessonId
   quizForm.title = ''
@@ -2138,7 +2184,7 @@ function resetQuizForm(lessonId = 0) {
   quizForm.timeLimitMinutes = 0
 }
 
-function resetQuestionForm() {
+function resetQuestionForm(): void {
   editingQuestionId.value = null
   questionForm.questionType = 'MULTIPLE_CHOICE'
   questionForm.questionText = ''
@@ -2149,7 +2195,15 @@ function resetQuestionForm() {
   questionForm.options = defaultQuestionOptions()
 }
 
-function openPackageBuilder(item?: CoursePackageResponse, preserveFeedback = false) {
+function selectSurfaceTab(tab: SurfaceTab): void {
+  activeSurfaceTab.value = tab
+}
+
+function selectCourse(courseId: number): void {
+  selectedPackageId.value = courseId
+}
+
+function openPackageBuilder(item?: CoursePackageResponse, preserveFeedback = false): void {
   activeSurfaceTab.value = 'courses'
   activeBuilder.value = 'package'
   if (!preserveFeedback) clearActionFeedback()
@@ -2170,7 +2224,7 @@ function openPackageBuilder(item?: CoursePackageResponse, preserveFeedback = fal
   packageForm.coverImageUrl = item.coverImageUrl ?? ''
 }
 
-function openModuleBuilder(item?: LearningModuleResponse | null, preserveFeedback = false) {
+function openModuleBuilder(item?: LearningModuleResponse | null, preserveFeedback = false): void {
   activeSurfaceTab.value = 'modules'
   activeBuilder.value = 'module'
   if (!preserveFeedback) clearActionFeedback()
@@ -2190,7 +2244,7 @@ function openModuleBuilder(item?: LearningModuleResponse | null, preserveFeedbac
   moduleForm.coverImageUrl = item.coverImageUrl ?? ''
 }
 
-function openLessonBuilder(item?: LessonResponse | null, moduleId = 0, preserveFeedback = false) {
+function openLessonBuilder(item?: LessonResponse | null, moduleId = 0, preserveFeedback = false): void {
   activeSurfaceTab.value = 'lessons'
   activeBuilder.value = 'lesson'
   if (!preserveFeedback) clearActionFeedback()
@@ -2214,7 +2268,7 @@ function openLessonBuilder(item?: LessonResponse | null, moduleId = 0, preserveF
   lessonForm.coverImageUrl = item.coverImageUrl ?? ''
 }
 
-function openResourceBuilder(item?: RecordedLessonVideoResponse | null) {
+function openResourceBuilder(item?: RecordedLessonVideoResponse | null): void {
   activeSurfaceTab.value = 'resources'
   activeBuilder.value = 'resource'
   clearActionFeedback()
@@ -2238,7 +2292,7 @@ function openResourceBuilder(item?: RecordedLessonVideoResponse | null) {
   }
 }
 
-function openQuizBuilder(item?: TeacherQuizResponse | null) {
+function openQuizBuilder(item?: TeacherQuizResponse | null): void {
   activeSurfaceTab.value = 'activity-types'
   activeBuilder.value = 'quiz'
   clearActionFeedback()
@@ -2257,7 +2311,7 @@ function openQuizBuilder(item?: TeacherQuizResponse | null) {
   selectedQuizId.value = item.id
 }
 
-function openQuestionBuilder(question?: TeacherQuizQuestionResponse | null) {
+function openQuestionBuilder(question?: TeacherQuizQuestionResponse | null): void {
   activeSurfaceTab.value = 'activity-types'
   activeBuilder.value = 'quiz'
   clearActionFeedback()
@@ -2283,7 +2337,7 @@ function openQuestionBuilder(question?: TeacherQuizQuestionResponse | null) {
     : defaultQuestionOptions()
 }
 
-function openBuilderForActiveSurface() {
+function openBuilderForActiveSurface(): void {
   switch (activeSurfaceTab.value) {
     case 'modules':
       openModuleBuilder()
@@ -2302,14 +2356,14 @@ function openBuilderForActiveSurface() {
   }
 }
 
-function showAllCourses() {
+function showAllCourses(): void {
   clearActionFeedback()
   selectedPackageId.value = displayCourses.value[0]?.id ?? 0
   activeSurfaceTab.value = 'courses'
   actionSuccess.value = 'Showing all available courses from the current teacher content list.'
 }
 
-async function loadResourceInsights(lessonId: number) {
+async function loadResourceInsights(lessonId: number): Promise<void> {
   loadingResourceInsights.value = true
   try {
     const [videos, progressRows] = await Promise.all([
@@ -2325,7 +2379,7 @@ async function loadResourceInsights(lessonId: number) {
   }
 }
 
-async function loadQuizzesForLesson(lessonId: number, preferredQuizId?: number | null) {
+async function loadQuizzesForLesson(lessonId: number, preferredQuizId?: number | null): Promise<void> {
   loadingQuizzes.value = true
   try {
     const items = await teacherApi.lessonQuizzes(lessonId)
@@ -2349,7 +2403,7 @@ async function loadQuizzesForLesson(lessonId: number, preferredQuizId?: number |
   }
 }
 
-async function loadQuizAttempts(quizId: number) {
+async function loadQuizAttempts(quizId: number): Promise<void> {
   loadingQuizAttempts.value = true
   try {
     quizAttempts.value = await teacherApi.quizAttempts(quizId)
@@ -2361,11 +2415,11 @@ async function loadQuizAttempts(quizId: number) {
   }
 }
 
-function selectQuiz(quizId: number) {
+function selectQuiz(quizId: number): void {
   void loadQuizAttempts(quizId)
 }
 
-async function reloadAll() {
+async function reloadAll(): Promise<void> {
   clearActionFeedback()
   await Promise.all([
     packagesResource.reload(),
@@ -2383,7 +2437,7 @@ async function reloadAll() {
   }
 }
 
-async function archiveSelectedPackage() {
+async function archiveSelectedPackage(): Promise<void> {
   if (packageBusy.value) return
   if (!selectedCourse.value.source || !ensureLiveWrite('Course management')) return
   if (
@@ -2406,7 +2460,7 @@ async function archiveSelectedPackage() {
   }
 }
 
-async function archiveModule(item?: LearningModuleResponse | null) {
+async function archiveModule(item?: LearningModuleResponse | null): Promise<void> {
   if (moduleBusyId.value) return
   if (!item || !ensureLiveWrite('Module management')) return
   if (
@@ -2429,7 +2483,7 @@ async function archiveModule(item?: LearningModuleResponse | null) {
   }
 }
 
-async function archiveLesson(item?: LessonResponse | null) {
+async function archiveLesson(item?: LessonResponse | null): Promise<void> {
   if (lessonBusyId.value) return
   if (!item || !ensureLiveWrite('Lesson management')) return
   if (!confirmTeacherContentMutation(`Archive the lesson "${item.title}"? Learners may lose access to its materials.`))
@@ -2448,7 +2502,7 @@ async function archiveLesson(item?: LessonResponse | null) {
   }
 }
 
-async function submitPackageItem() {
+async function submitPackageItem(): Promise<void> {
   if (submitting.packageItem) return
   if (!selectedCourse.value.source) {
     actionError.value = 'Select a live course package before attaching items.'
@@ -2481,7 +2535,7 @@ async function submitPackageItem() {
   }
 }
 
-async function removePackageItem(packageItemId: number) {
+async function removePackageItem(packageItemId: number): Promise<void> {
   if (packageItemRemovingId.value) return
   if (!selectedCourse.value.source || !ensureLiveWrite('Course packaging')) return
   if (!confirmTeacherContentMutation('Remove this item from the course package?')) return
@@ -2499,7 +2553,7 @@ async function removePackageItem(packageItemId: number) {
   }
 }
 
-async function submitPackage() {
+async function submitPackage(): Promise<void> {
   if (submitting.package) return
   if (!ensureLiveWrite('Course management')) return
   if (!packageForm.title.trim()) {
@@ -2545,7 +2599,7 @@ async function submitPackage() {
   }
 }
 
-async function submitModule() {
+async function submitModule(): Promise<void> {
   if (submitting.module) return
   if (!ensureLiveWrite('Module management')) return
   if (!moduleForm.title.trim()) {
@@ -2586,7 +2640,7 @@ async function submitModule() {
   }
 }
 
-async function submitLesson() {
+async function submitLesson(): Promise<void> {
   if (submitting.lesson) return
   if (!ensureLiveWrite('Lesson management')) return
   if (!lessonForm.title.trim()) {
@@ -2638,7 +2692,7 @@ async function submitLesson() {
   }
 }
 
-async function submitRecordedResource() {
+async function submitRecordedResource(): Promise<void> {
   if (submitting.resource) return
   if (!ensureLiveWrite('Recorded lesson management')) return
   if (!resourceForm.lessonId || resourceForm.lessonId <= 0) {
@@ -2703,7 +2757,7 @@ async function submitRecordedResource() {
   }
 }
 
-async function archiveRecordedResource(videoId: number) {
+async function archiveRecordedResource(videoId: number): Promise<void> {
   if (archivingResourceId.value) return
   if (!ensureLiveWrite('Recorded lesson management') || resourceLessonId.value <= 0) return
   if (!confirmTeacherContentMutation('Archive this recorded lesson resource? Learners may lose access to the video.'))
@@ -2725,7 +2779,7 @@ async function archiveRecordedResource(videoId: number) {
   }
 }
 
-async function submitQuiz() {
+async function submitQuiz(): Promise<void> {
   if (submitting.quiz) return
   if (!ensureLiveWrite('Quiz management')) return
   if (!quizForm.lessonId || quizForm.lessonId <= 0) {
@@ -2776,7 +2830,7 @@ function buildQuestionOptions(): TeacherQuizOptionPayload[] | null {
   return options.length ? options : null
 }
 
-async function submitQuestion() {
+async function submitQuestion(): Promise<void> {
   if (submitting.question) return
   if (!ensureLiveWrite('Quiz question management')) return
   if (!selectedQuiz.value) {
@@ -2831,7 +2885,7 @@ async function submitQuestion() {
   }
 }
 
-async function deleteQuiz(quizId: number) {
+async function deleteQuiz(quizId: number): Promise<void> {
   if (quizDeleteId.value) return
   if (!ensureLiveWrite('Quiz management')) return
   if (
@@ -2858,7 +2912,7 @@ async function deleteQuiz(quizId: number) {
   }
 }
 
-async function deleteQuestion(questionId: number) {
+async function deleteQuestion(questionId: number): Promise<void> {
   if (questionDeleteId.value) return
   if (!ensureLiveWrite('Quiz question management')) return
   if (!confirmTeacherContentMutation('Delete this quiz question? This cannot be undone.')) return
@@ -2880,7 +2934,7 @@ async function deleteQuestion(questionId: number) {
   }
 }
 
-function addQuestionOption() {
+function addQuestionOption(): void {
   questionForm.options.push({
     optionText: '',
     correctOption: false,
@@ -2888,7 +2942,7 @@ function addQuestionOption() {
   })
 }
 
-function removeQuestionOption(index: number) {
+function removeQuestionOption(index: number): void {
   if (questionForm.options.length <= 1) return
   questionForm.options.splice(index, 1)
   questionForm.options.forEach((option, optionIndex) => {
@@ -2896,7 +2950,7 @@ function removeQuestionOption(index: number) {
   })
 }
 
-function confirmTeacherContentMutation(message: string) {
+function confirmTeacherContentMutation(message: string): boolean {
   const confirmed = window.confirm(`${message}\n\nThis updates live teaching content.`)
   if (!confirmed) {
     actionSuccess.value = null

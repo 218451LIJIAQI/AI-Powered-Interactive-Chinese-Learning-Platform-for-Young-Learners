@@ -1,10 +1,12 @@
 package com.example.aichinese.controller;
 
 import java.io.IOException;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,9 +15,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -29,9 +31,9 @@ import com.example.aichinese.dto.ai.AiLearningRecommendationResponse;
 import com.example.aichinese.dto.ai.AiPronunciationFeedbackResponse;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorResponse;
-import com.example.aichinese.dto.ai.StudentAiResponseReportResponse;
 import com.example.aichinese.dto.ai.AiSentencePracticeRequest;
 import com.example.aichinese.dto.ai.AiSentencePracticeResponse;
+import com.example.aichinese.dto.ai.StudentAiResponseReportResponse;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
 import com.example.aichinese.dto.ai.AiStoryGeneratorResponse;
 import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
@@ -41,6 +43,7 @@ import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.AiService;
+import com.example.aichinese.util.RequestIdHolder;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -55,6 +58,10 @@ public class AiController {
 
     private static final Logger log = LoggerFactory.getLogger(AiController.class);
 
+    private static final String SSE_DELTA_EVENT = "delta";
+    private static final String SSE_COMPLETE_EVENT = "complete";
+    private static final String SSE_ERROR_EVENT = "error";
+    private static final String MDC_REQUEST_ID = "requestId";
     private static final long CHAT_STREAM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
     private static final int STREAM_CHUNK_SIZE = 24;
 
@@ -64,8 +71,8 @@ public class AiController {
     public AiController(
             AiService aiService,
             AiResponseReportService aiResponseReportService) {
-        this.aiService = aiService;
-        this.aiResponseReportService = aiResponseReportService;
+        this.aiService = Objects.requireNonNull(aiService, "aiService");
+        this.aiResponseReportService = Objects.requireNonNull(aiResponseReportService, "aiResponseReportService");
     }
 
     @GetMapping("/availability")
@@ -109,13 +116,14 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiChatRequest request) {
         SseEmitter emitter = new SseEmitter(CHAT_STREAM_TIMEOUT_MS);
-        emitter.onTimeout(emitter::complete);
-        Thread.startVirtualThread(() -> {
+        String requestId = RequestIdHolder.get();
+        Thread worker = Thread.ofVirtual().unstarted(() -> {
+            bindRequestContext(requestId);
             try {
                 AiChatResponse response = aiService.chat(currentUser, request);
                 sendChunkedText(emitter, response.aiResponse());
                 emitter.send(SseEmitter.event()
-                        .name("complete")
+                        .name(SSE_COMPLETE_EVENT)
                         .data(response, MediaType.APPLICATION_JSON));
                 emitter.complete();
             } catch (Exception exception) {
@@ -123,8 +131,17 @@ public class AiController {
                         currentUser == null ? null : currentUser.getUserId(),
                         exception.getClass().getSimpleName());
                 completeWithSafeError(emitter);
+            } finally {
+                clearRequestContext();
             }
         });
+        emitter.onCompletion(worker::interrupt);
+        emitter.onError(ignored -> worker.interrupt());
+        emitter.onTimeout(() -> {
+            worker.interrupt();
+            emitter.complete();
+        });
+        worker.start();
         return emitter;
     }
 
@@ -242,18 +259,31 @@ public class AiController {
                 emittedCodePoints++;
             }
             emitter.send(SseEmitter.event()
-                    .name("delta")
+                    .name(SSE_DELTA_EVENT)
                     .data(safeText.substring(start, end)));
             start = end;
         }
     }
 
+    private static void bindRequestContext(String requestId) {
+        if (requestId == null) {
+            return;
+        }
+        RequestIdHolder.set(requestId);
+        MDC.put(MDC_REQUEST_ID, requestId);
+    }
+
+    private static void clearRequestContext() {
+        MDC.remove(MDC_REQUEST_ID);
+        RequestIdHolder.clear();
+    }
+
     private static void completeWithSafeError(SseEmitter emitter) {
         try {
             emitter.send(SseEmitter.event()
-                    .name("error")
+                    .name(SSE_ERROR_EVENT)
                     .data("AI chat stream failed. Please try again."));
-        } catch (IOException ignored) {
+        } catch (IOException | IllegalStateException ignored) {
             // Client may have disconnected; the caller already logged a safe failure summary.
         }
         emitter.complete();

@@ -49,9 +49,9 @@
               class="btn btn-primary public-filter-button"
               type="button"
               :aria-expanded="filtersOpen"
-              @click="filtersOpen = !filtersOpen"
+              @click="toggleFilters"
             >
-              {{ filtersOpen ? 'Hide filters' : 'Show filters' }}
+              {{ filterToggleLabel }}
             </button>
             <button class="public-clear-button" type="button" @click="clearFilters">Clear All</button>
           </div>
@@ -144,7 +144,7 @@
             :key="course.id"
             :course="course"
             :action-label="courseActionLabel(course)"
-            @view="router.push(`/courses/${course.id}`)"
+            @view="openCourseDetail(course.id)"
             @action="handleCourseAction(course)"
           />
 
@@ -256,27 +256,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Unauthenticated course catalogue — the main discovery surface.
- *
- * <h2>Filters</h2>
- * <p>Search keyword, learning level, category, access type
- * (free / paid), learning type (live / recorded / hybrid) and sort
- * order are all mirrored into the URL via Vue Router so a filtered
- * view can be shared / bookmarked. Reactive {@code watch} on the
- * filter object debounces requests so each keystroke does not
- * spam the backend.</p>
- *
- * <h2>Pagination</h2>
- * <p>Hard-clamped page size so a malicious caller cannot ask for
- * 10 000 rows at once — the actual cap is enforced server-side by
- * {@code PaginationUtils}.</p>
- *
- * <h2>CTA behaviour</h2>
- * <p>"View details" routes to {@link CourseDetailPage}; paid
- * "Enroll" routes through the auth flow first if the visitor is
- * unauthenticated, then through checkout once signed in.</p>
- */
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -300,13 +279,21 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
+type CatalogSort = 'newest' | 'title'
+type LearningTypeFilter = '' | 'RECORDED' | 'LIVE' | 'HYBRID'
+type AccessTypeFilter = '' | 'FREE' | 'PAID'
+type CartThumbVariant = 'family' | 'general' | 'panda'
+
+const learningTypeOptions: readonly Exclude<LearningTypeFilter, ''>[] = ['RECORDED', 'LIVE', 'HYBRID']
+const accessTypeOptions: readonly Exclude<AccessTypeFilter, ''>[] = ['FREE', 'PAID']
+
 const filters = reactive({
   keyword: queryText(route.query.keyword),
   sort: validSort(queryText(route.query.sort)),
   levelId: validPositiveIdQuery(route.query.levelId),
   categoryId: validPositiveIdQuery(route.query.categoryId),
-  learningType: validEnumQuery(route.query.learningType, ['RECORDED', 'LIVE', 'HYBRID']),
-  accessType: validEnumQuery(route.query.accessType, ['FREE', 'PAID']),
+  learningType: validEnumQuery(route.query.learningType, learningTypeOptions),
+  accessType: validEnumQuery(route.query.accessType, accessTypeOptions),
 })
 const filtersOpen = ref(true)
 const cartSuccess = ref<string | null>(null)
@@ -407,14 +394,7 @@ const filteredCourses = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
 
   return courses.value
-    .filter((course) => {
-      if (keyword && !`${course.title} ${course.shortDescription ?? ''}`.toLowerCase().includes(keyword)) return false
-      if (filters.levelId && String(course.level.id) !== filters.levelId) return false
-      if (filters.categoryId && String(course.category.id) !== filters.categoryId) return false
-      if (filters.learningType && course.learningType !== filters.learningType) return false
-      if (filters.accessType && course.accessType !== filters.accessType) return false
-      return true
-    })
+    .filter((course) => courseMatchesFallbackFilters(course, keyword))
     .sort((left, right) => {
       if (filters.sort === 'title') return left.title.localeCompare(right.title)
       return right.contentId - left.contentId
@@ -453,6 +433,7 @@ const cartCheckoutLabel = computed(() => {
   if (!cart.value?.items.length) return 'Cart empty'
   return 'Checkout'
 })
+const filterToggleLabel = computed(() => (filtersOpen.value ? 'Hide filters' : 'Show filters'))
 
 const cartActionDisabled = computed(
   () =>
@@ -485,7 +466,7 @@ const cartAccessDescription = computed(() =>
     : 'Sign in as a student to save courses, manage checkout, and return to lessons after payment.',
 )
 
-function courseActionLabel(course: PublicCourseSummary) {
+function courseActionLabel(course: PublicCourseSummary): string {
   if (signedInWithoutStudentRole.value) return 'View course'
   if (!canUseCart.value) return 'Sign in'
   if (auth.isPreviewSession && !auth.isAuthenticated) return 'Preview'
@@ -493,9 +474,9 @@ function courseActionLabel(course: PublicCourseSummary) {
   return 'Add to cart'
 }
 
-function handleCourseAction(course: PublicCourseSummary) {
+function handleCourseAction(course: PublicCourseSummary): void {
   if (signedInWithoutStudentRole.value) {
-    router.push(`/courses/${course.id}`)
+    openCourseDetail(course.id)
     return
   }
 
@@ -505,122 +486,75 @@ function handleCourseAction(course: PublicCourseSummary) {
   }
 
   if (auth.isPreviewSession && !auth.isAuthenticated) {
-    router.push(`/courses/${course.id}`)
+    openCourseDetail(course.id)
     return
   }
 
   if (course.accessType === 'FREE') {
-    router.push(`/courses/${course.id}`)
+    openCourseDetail(course.id)
     return
   }
 
   void addCourseToCart(course)
 }
 
-async function addCourseToCart(course: PublicCourseSummary) {
+async function addCourseToCart(course: PublicCourseSummary): Promise<void> {
+  await mutateCart(
+    () => studentApi.addCartItem({ itemType: course.type, itemId: course.contentId }),
+    `${course.title} was added to your cart.`,
+    'Unable to add this course to the cart.',
+  )
+}
+
+async function removeCartItem(cartItemId: number): Promise<void> {
+  await mutateCart(
+    () => studentApi.removeCartItem(cartItemId),
+    'The course was removed from your cart.',
+    'Unable to remove this item right now.',
+  )
+}
+
+async function clearCart(): Promise<void> {
+  await mutateCart(() => studentApi.clearCart(), 'Your cart is now empty.', 'Unable to clear your cart right now.')
+}
+
+function canStartCartAction(fallbackMessage: string): boolean {
   if (!isStudentShopper.value) {
-    if (signedInWithoutStudentRole.value) return
-    goToAuth()
-    return
+    if (!signedInWithoutStudentRole.value) goToAuth()
+    return false
   }
 
-  if (cartBusy.value) return
+  if (cartBusy.value) return false
 
   if (cartResource.usingFallback.value) {
     cartSuccess.value = null
-    cartResource.error.value = 'Cart preview data is read-only. Refresh live cart data before changing it.'
-    return
+    cartResource.error.value = fallbackMessage
+    return false
   }
+
+  return true
+}
+
+async function mutateCart(action: () => Promise<unknown>, successMessage: string, errorMessage: string): Promise<void> {
+  if (!canStartCartAction('Cart preview data is read-only. Refresh live cart data before changing it.')) return
 
   cartBusy.value = true
   try {
     cartSuccess.value = null
     cartResource.error.value = null
-    await studentApi.addCartItem({ itemType: course.type, itemId: course.contentId })
+    await action()
     await cartResource.reload()
-    cartSuccess.value = `${course.title} was added to your cart.`
+    cartSuccess.value = successMessage
   } catch (reason) {
     cartSuccess.value = null
-    cartResource.error.value = resolveApiError(reason, 'Unable to add this course to the cart.')
+    cartResource.error.value = resolveApiError(reason, errorMessage)
   } finally {
     cartBusy.value = false
   }
 }
 
-async function removeCartItem(cartItemId: number) {
-  if (!isStudentShopper.value) {
-    if (signedInWithoutStudentRole.value) return
-    goToAuth()
-    return
-  }
-
-  if (cartBusy.value) return
-
-  if (cartResource.usingFallback.value) {
-    cartSuccess.value = null
-    cartResource.error.value = 'Cart preview data is read-only. Refresh live cart data before changing it.'
-    return
-  }
-
-  cartBusy.value = true
-  try {
-    cartSuccess.value = null
-    cartResource.error.value = null
-    await studentApi.removeCartItem(cartItemId)
-    await cartResource.reload()
-    cartSuccess.value = 'The course was removed from your cart.'
-  } catch (reason) {
-    cartSuccess.value = null
-    cartResource.error.value = resolveApiError(reason, 'Unable to remove this item right now.')
-  } finally {
-    cartBusy.value = false
-  }
-}
-
-async function clearCart() {
-  if (!isStudentShopper.value) {
-    if (signedInWithoutStudentRole.value) return
-    goToAuth()
-    return
-  }
-
-  if (cartBusy.value) return
-
-  if (cartResource.usingFallback.value) {
-    cartSuccess.value = null
-    cartResource.error.value = 'Cart preview data is read-only. Refresh live cart data before changing it.'
-    return
-  }
-
-  cartBusy.value = true
-  try {
-    cartSuccess.value = null
-    cartResource.error.value = null
-    await studentApi.clearCart()
-    await cartResource.reload()
-    cartSuccess.value = 'Your cart is now empty.'
-  } catch (reason) {
-    cartSuccess.value = null
-    cartResource.error.value = resolveApiError(reason, 'Unable to clear your cart right now.')
-  } finally {
-    cartBusy.value = false
-  }
-}
-
-async function checkoutCart() {
-  if (!isStudentShopper.value) {
-    if (signedInWithoutStudentRole.value) return
-    goToAuth()
-    return
-  }
-
-  if (cartBusy.value) return
-
-  if (cartResource.usingFallback.value) {
-    cartSuccess.value = null
-    cartResource.error.value = 'Cart preview data cannot be checked out. Refresh live cart data first.'
-    return
-  }
+async function checkoutCart(): Promise<void> {
+  if (!canStartCartAction('Cart preview data cannot be checked out. Refresh live cart data first.')) return
 
   if (!cart.value?.items.length) {
     return
@@ -643,7 +577,7 @@ async function checkoutCart() {
     }
 
     if (response.paymentId != null) {
-      void router.push({ name: 'payment-success', query: { paymentId: String(response.paymentId) } })
+      openPaymentSuccess(response.paymentId)
       return
     }
 
@@ -656,7 +590,7 @@ async function checkoutCart() {
   }
 }
 
-function clearFilters() {
+function clearFilters(): void {
   cartSuccess.value = null
   filters.keyword = ''
   filters.sort = 'newest'
@@ -666,19 +600,19 @@ function clearFilters() {
   filters.accessType = ''
 }
 
-function goToCoursePage(page: number) {
+function goToCoursePage(page: number): void {
   const lastPage = Math.max(0, courseTotalPages.value - 1)
   currentPage.value = Math.min(Math.max(page, 0), lastPage)
 }
 
-function scheduleCourseReload() {
+function scheduleCourseReload(): void {
   if (courseReloadTimer != null) window.clearTimeout(courseReloadTimer)
   courseReloadTimer = window.setTimeout(() => {
     void coursesResource.reload()
   }, 250)
 }
 
-function syncCatalogQuery() {
+function syncCatalogQuery(): void {
   const query: Record<string, string> = {}
   if (filters.keyword.trim()) query.keyword = filters.keyword.trim()
   if (filters.sort !== 'newest') query.sort = filters.sort
@@ -690,53 +624,74 @@ function syncCatalogQuery() {
   void router.replace({ query })
 }
 
-function queryText(value: unknown) {
+function queryText(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function validSort(value: string) {
+function validSort(value: string): CatalogSort {
   return value === 'title' ? 'title' : 'newest'
 }
 
-function validPositiveIdQuery(value: unknown) {
+function validPositiveIdQuery(value: unknown): string {
   const text = queryText(value)
   return optionalPositiveId(text) == null ? '' : text
 }
 
-function optionalPositiveId(value: string) {
+function optionalPositiveId(value: string): number | undefined {
   const numeric = Number(value)
   return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : undefined
 }
 
-function validEnumQuery(value: unknown, validValues: readonly string[]) {
+function validEnumQuery<T extends string>(value: unknown, validValues: readonly T[]): T | '' {
   const text = queryText(value)
-  return validValues.includes(text) ? text : ''
+  return validValues.includes(text as T) ? (text as T) : ''
 }
 
-function validPageQuery(value: unknown) {
+function validPageQuery(value: unknown): number {
   const numeric = Number(queryText(value))
   return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0
 }
 
-function goToAuth() {
-  router.push({ name: 'auth', query: { redirect: '/courses' } })
+function toggleFilters(): void {
+  filtersOpen.value = !filtersOpen.value
 }
 
-function goToAiHelperSignIn() {
-  router.push({ name: 'auth', query: { redirect: '/student/ai-helper' } })
+function openCourseDetail(courseId: string): void {
+  void router.push(`/courses/${courseId}`)
 }
 
-function cartThumb(title: string) {
+function openPaymentSuccess(paymentId: number): void {
+  void router.push({ name: 'payment-success', query: { paymentId: String(paymentId) } })
+}
+
+function goToAuth(): void {
+  void router.push({ name: 'auth', query: { redirect: '/courses' } })
+}
+
+function goToAiHelperSignIn(): void {
+  void router.push({ name: 'auth', query: { redirect: '/student/ai-helper' } })
+}
+
+function cartThumb(title: string): CartThumbVariant {
   if (title.includes('Mandarin')) return 'panda'
   if (title.includes('Everyday')) return 'family'
   return 'general'
 }
 
-function cartMetaTags(item: CartItemResponse) {
+function cartMetaTags(item: CartItemResponse): string[] {
   return [formatCartItemType(item.itemType), item.teacherOwned ? 'Teacher content' : 'Platform content']
 }
 
-function formatCartItemType(itemType: string) {
+function courseMatchesFallbackFilters(course: PublicCourseSummary, keyword: string): boolean {
+  if (keyword && !`${course.title} ${course.shortDescription ?? ''}`.toLowerCase().includes(keyword)) return false
+  if (filters.levelId && String(course.level.id) !== filters.levelId) return false
+  if (filters.categoryId && String(course.category.id) !== filters.categoryId) return false
+  if (filters.learningType && course.learningType !== filters.learningType) return false
+  if (filters.accessType && course.accessType !== filters.accessType) return false
+  return true
+}
+
+function formatCartItemType(itemType: string): string {
   return itemType
     .toLowerCase()
     .split('_')

@@ -23,12 +23,4 @@ public enum RecordedVideoSourceType {
                 "Recorded video source type is required.",
                 () -> "Invalid recorded video source type. Allowed values are UPLOADED_FILE or EXTERNAL_URL.");
     }
-
-    public boolean isUploadedFile() {
-        return this == UPLOADED_FILE;
-    }
-
-    public boolean isExternalUrl() {
-        return this == EXTERNAL_URL;
-    }
 }

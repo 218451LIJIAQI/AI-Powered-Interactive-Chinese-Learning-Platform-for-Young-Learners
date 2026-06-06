@@ -85,18 +85,11 @@ public final class TextUtils {
      * @throws IllegalArgumentException if {@code maxLength} is less than 1
      */
     public static String safeTruncate(String value, int maxLength) {
-        if (maxLength < 1) {
-            throw new IllegalArgumentException("maxLength must be positive.");
-        }
+        requirePositiveMaxLength(maxLength);
         if (value == null || value.length() <= maxLength) {
             return value;
         }
-        int seam = maxLength;
-        if (Character.isHighSurrogate(value.charAt(seam - 1))
-                && seam < value.length()
-                && Character.isLowSurrogate(value.charAt(seam))) {
-            seam--;
-        }
+        int seam = truncationEnd(value, maxLength);
         return value.substring(0, seam);
     }
 
@@ -106,9 +99,7 @@ public final class TextUtils {
      * {@code null} or blank input.
      */
     public static String truncateWithEllipsis(String value, int maxLength) {
-        if (maxLength < 1) {
-            throw new IllegalArgumentException("maxLength must be positive.");
-        }
+        requirePositiveMaxLength(maxLength);
         String normalized = collapseWhitespaceToNull(value);
         if (normalized == null || normalized.length() <= maxLength) {
             return normalized;
@@ -119,5 +110,21 @@ public final class TextUtils {
         int contentLength = maxLength - ELLIPSIS.length();
         String truncated = safeTruncate(normalized, contentLength).stripTrailing();
         return truncated.isEmpty() ? safeTruncate(ELLIPSIS, maxLength) : truncated + ELLIPSIS;
+    }
+
+    private static void requirePositiveMaxLength(int maxLength) {
+        if (maxLength < 1) {
+            throw new IllegalArgumentException("maxLength must be positive.");
+        }
+    }
+
+    private static int truncationEnd(String value, int maxLength) {
+        return splitsSurrogatePair(value, maxLength) ? maxLength - 1 : maxLength;
+    }
+
+    private static boolean splitsSurrogatePair(String value, int seam) {
+        return Character.isHighSurrogate(value.charAt(seam - 1))
+                && seam < value.length()
+                && Character.isLowSurrogate(value.charAt(seam));
     }
 }

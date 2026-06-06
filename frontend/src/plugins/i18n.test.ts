@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest'
 
 import { i18n } from './i18n'
 
+const supportedLocales = ['en', 'ms', 'zh'] as const
+
+function sortedNavigationKeys(locale: (typeof supportedLocales)[number]): string[] {
+  return Object.keys(i18n.global.messages.value[locale].nav).sort()
+}
+
 describe('i18n navigation messages', () => {
   it('ships complete navigation translations for every supported locale', () => {
-    const locales = ['en', 'ms', 'zh'] as const
-    const englishKeys = Object.keys(i18n.global.messages.value.en.nav)
+    const englishKeys = sortedNavigationKeys('en')
 
-    locales.forEach((locale) => {
-      expect(Object.keys(i18n.global.messages.value[locale].nav).sort()).toEqual([...englishKeys].sort())
+    supportedLocales.forEach((locale) => {
+      expect(sortedNavigationKeys(locale)).toEqual(englishKeys)
     })
   })
 

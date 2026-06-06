@@ -11,11 +11,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -58,6 +60,7 @@ import com.example.aichinese.repository.TracingExerciseRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.StudentLearningProgressService.PlatformActivityOutcome;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -70,6 +73,16 @@ public class StudentActivityLibraryService {
     private static final String SOURCE_TRACING_EXERCISE = "PLATFORM_TRACING_EXERCISE";
     private static final String SOURCE_DRAG_DROP_ACTIVITY = "PLATFORM_DRAG_DROP_ACTIVITY";
     private static final String SOURCE_STORY_ACTIVITY = "PLATFORM_STORY_ACTIVITY";
+    private static final String UNTITLED_LABEL = "(untitled)";
+    private static final int AGE_BAND_MAX_LENGTH = 40;
+    private static final int DIFFICULTY_MAX_LENGTH = 40;
+    private static final int TOPIC_MAX_LENGTH = 200;
+    private static final int TAG_MAX_LENGTH = 100;
+    private static final int MAX_MERGED_FEED_WINDOW = 1_000;
+    private static final String ACTIVITY_PAGE_TOO_DEEP_MESSAGE =
+            "Requested activity page is too deep. Please use filters or a smaller page.";
+    private static final int KEYWORD_MAX_LENGTH = 200;
+    private static final int TYPE_MAX_LENGTH = 60;
 
     private static final Comparator<LocalDateTime> NEWEST_TIMESTAMP_FIRST =
             Comparator.nullsLast(Comparator.reverseOrder());
@@ -125,83 +138,25 @@ public class StudentActivityLibraryService {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        long requestedWindow = ((long) safePage + 1L) * safeSize;
-        if (requestedWindow > Integer.MAX_VALUE) {
-            throw new ResponseStatusException(BAD_REQUEST, "Requested activity page is too large.");
-        }
-        int perTypeLimit = (int) requestedWindow;
+        int perTypeLimit = mergedPageFetchLimit(safePage, safeSize);
         Pageable slice = PageRequest.of(0, perTypeLimit, Sort.by(Sort.Order.desc("updatedAt")));
 
         List<ActivityFeedItem> merged = new ArrayList<>();
         long totalItems = 0;
         ActivityType requestedType = filter == null ? null : filter.type();
 
-        if (requestedType == null || requestedType == ActivityType.FLASHCARD) {
-            var pageResult = flashcardRepository.findAll(StudentActivityLibraryService.<Flashcard>filterSpec(filter), slice);
-            totalItems += pageResult.getTotalElements();
-            pageResult.getContent()
-                    .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.FLASHCARD,
-                            preferredTitle(e.getTitle(), e.getFrontText()),
-                            e.getHskLevel(), e.getAgeBand(), e.getDifficulty(), e.getTopic(),
-                            e.getTags(), e.getXpReward(), e.getEstimatedSeconds(),
-                            e.getCreatedAt(), e.getUpdatedAt(),
-                            isCompleted(student, SOURCE_FLASHCARD, e.getId()))));
-        }
-        if (requestedType == null || requestedType == ActivityType.MATCHING_GAME) {
-            var pageResult = matchingGameRepository.findAll(StudentActivityLibraryService.<MatchingGame>filterSpec(filter), slice);
-            totalItems += pageResult.getTotalElements();
-            pageResult.getContent()
-                    .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.MATCHING_GAME,
-                            e.getTitle(),
-                            e.getHskLevel(), e.getAgeBand(), e.getDifficulty(), e.getTopic(),
-                            e.getTags(), e.getXpReward(), e.getEstimatedSeconds(),
-                            e.getCreatedAt(), e.getUpdatedAt(),
-                            isCompleted(student, SOURCE_MATCHING_GAME, e.getId()))));
-        }
-        if (requestedType == null || requestedType == ActivityType.LISTENING_EXERCISE) {
-            var pageResult = listeningExerciseRepository.findAll(StudentActivityLibraryService.<ListeningExercise>filterSpec(filter), slice);
-            totalItems += pageResult.getTotalElements();
-            pageResult.getContent()
-                    .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.LISTENING_EXERCISE,
-                            e.getTitle(),
-                            e.getHskLevel(), e.getAgeBand(), e.getDifficulty(), e.getTopic(),
-                            e.getTags(), e.getXpReward(), e.getEstimatedSeconds(),
-                            e.getCreatedAt(), e.getUpdatedAt(),
-                            isCompleted(student, SOURCE_LISTENING_EXERCISE, e.getId()))));
-        }
-        if (requestedType == null || requestedType == ActivityType.TRACING_EXERCISE) {
-            var pageResult = tracingExerciseRepository.findAll(StudentActivityLibraryService.<TracingExercise>filterSpec(filter), slice);
-            totalItems += pageResult.getTotalElements();
-            pageResult.getContent()
-                    .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.TRACING_EXERCISE,
-                            e.getTitle(),
-                            e.getHskLevel(), e.getAgeBand(), e.getDifficulty(), e.getTopic(),
-                            e.getTags(), e.getXpReward(), e.getEstimatedSeconds(),
-                            e.getCreatedAt(), e.getUpdatedAt(),
-                            isCompleted(student, SOURCE_TRACING_EXERCISE, e.getId()))));
-        }
-        if (requestedType == null || requestedType == ActivityType.DRAG_DROP_ACTIVITY) {
-            var pageResult = dragDropActivityRepository.findAll(StudentActivityLibraryService.<DragDropActivity>filterSpec(filter), slice);
-            totalItems += pageResult.getTotalElements();
-            pageResult.getContent()
-                    .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.DRAG_DROP_ACTIVITY,
-                            e.getTitle(),
-                            e.getHskLevel(), e.getAgeBand(), e.getDifficulty(), e.getTopic(),
-                            e.getTags(), e.getXpReward(), e.getEstimatedSeconds(),
-                            e.getCreatedAt(), e.getUpdatedAt(),
-                            isCompleted(student, SOURCE_DRAG_DROP_ACTIVITY, e.getId()))));
-        }
-        if (requestedType == null || requestedType == ActivityType.STORY_ACTIVITY) {
-            var pageResult = storyActivityRepository.findAll(StudentActivityLibraryService.<StoryActivity>filterSpec(filter), slice);
-            totalItems += pageResult.getTotalElements();
-            pageResult.getContent()
-                    .forEach(e -> merged.add(activityFeedItem(e.getId(), ActivityType.STORY_ACTIVITY,
-                            e.getTitle(),
-                            e.getHskLevel(), e.getAgeBand(), e.getDifficulty(), e.getTopic(),
-                            e.getTags(), e.getXpReward(), e.getEstimatedSeconds(),
-                            e.getCreatedAt(), e.getUpdatedAt(),
-                            isCompleted(student, SOURCE_STORY_ACTIVITY, e.getId()))));
-        }
+        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+                ActivityType.FLASHCARD, flashcardRepository, this::toFlashcardFeedItem);
+        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+                ActivityType.MATCHING_GAME, matchingGameRepository, this::toMatchingGameFeedItem);
+        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+                ActivityType.LISTENING_EXERCISE, listeningExerciseRepository, this::toListeningExerciseFeedItem);
+        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+                ActivityType.TRACING_EXERCISE, tracingExerciseRepository, this::toTracingExerciseFeedItem);
+        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+                ActivityType.DRAG_DROP_ACTIVITY, dragDropActivityRepository, this::toDragDropActivityFeedItem);
+        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+                ActivityType.STORY_ACTIVITY, storyActivityRepository, this::toStoryActivityFeedItem);
 
         List<StudentActivitySummaryResponse> sorted = merged.stream()
                 .sorted(ACTIVITY_FEED_ORDER)
@@ -213,6 +168,14 @@ public class StudentActivityLibraryService {
         List<StudentActivitySummaryResponse> windowed = sorted.subList(fromIndex, toIndex);
         int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
         return new PageResponse<>(windowed, safePage, safeSize, totalItems, totalPages);
+    }
+
+    private static int mergedPageFetchLimit(int safePage, int safeSize) {
+        long requestedWindow = ((long) safePage + 1L) * safeSize;
+        if (requestedWindow > MAX_MERGED_FEED_WINDOW) {
+            throw new ResponseStatusException(BAD_REQUEST, ACTIVITY_PAGE_TOO_DEEP_MESSAGE);
+        }
+        return (int) requestedWindow;
     }
 
     @Transactional(readOnly = true)
@@ -249,14 +212,9 @@ public class StudentActivityLibraryService {
                 student,
                 SOURCE_FLASHCARD,
                 entity.getId(),
-                Optional.ofNullable(entity.getXpReward()).orElse(0),
-                "Completed flashcard: " + flashcardLabel(entity));
-        return new StudentActivityCompletionResponse(
-                entity.getId(),
-                ActivityType.FLASHCARD,
-                outcome.earnedPoints(),
-                outcome.totalPoints(),
-                outcome.firstCompletion());
+                xpReward(entity.getXpReward()),
+                completionMessage("flashcard", preferredTitle(entity.getTitle(), entity.getFrontText())));
+        return completionResponse(entity.getId(), ActivityType.FLASHCARD, outcome);
     }
 
     private Flashcard requirePublishedFlashcard(Long id) {
@@ -264,13 +222,6 @@ public class StudentActivityLibraryService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Flashcard not found."));
         ensurePublished(entity.getContentStatus(), "Flashcard");
         return entity;
-    }
-
-    private static String flashcardLabel(Flashcard entity) {
-        if (entity.getTitle() != null && !entity.getTitle().isBlank()) {
-            return entity.getTitle();
-        }
-        return entity.getFrontText() == null ? "(untitled)" : entity.getFrontText();
     }
 
     @Transactional(readOnly = true)
@@ -303,14 +254,9 @@ public class StudentActivityLibraryService {
                 student,
                 SOURCE_MATCHING_GAME,
                 entity.getId(),
-                Optional.ofNullable(entity.getXpReward()).orElse(0),
-                "Completed matching game: " + entity.getTitle());
-        return new StudentActivityCompletionResponse(
-                entity.getId(),
-                ActivityType.MATCHING_GAME,
-                outcome.earnedPoints(),
-                outcome.totalPoints(),
-                outcome.firstCompletion());
+                xpReward(entity.getXpReward()),
+                completionMessage("matching game", entity.getTitle()));
+        return completionResponse(entity.getId(), ActivityType.MATCHING_GAME, outcome);
     }
 
     private MatchingGame requirePublishedMatchingGame(Long id) {
@@ -358,14 +304,9 @@ public class StudentActivityLibraryService {
                 student,
                 SOURCE_LISTENING_EXERCISE,
                 entity.getId(),
-                Optional.ofNullable(entity.getXpReward()).orElse(0),
-                "Completed listening exercise: " + entity.getTitle());
-        return new StudentActivityCompletionResponse(
-                entity.getId(),
-                ActivityType.LISTENING_EXERCISE,
-                outcome.earnedPoints(),
-                outcome.totalPoints(),
-                outcome.firstCompletion());
+                xpReward(entity.getXpReward()),
+                completionMessage("listening exercise", entity.getTitle()));
+        return completionResponse(entity.getId(), ActivityType.LISTENING_EXERCISE, outcome);
     }
 
     private ListeningExercise requirePublishedListeningExercise(Long id) {
@@ -405,14 +346,9 @@ public class StudentActivityLibraryService {
                 student,
                 SOURCE_TRACING_EXERCISE,
                 entity.getId(),
-                Optional.ofNullable(entity.getXpReward()).orElse(0),
-                "Completed tracing exercise: " + entity.getTitle());
-        return new StudentActivityCompletionResponse(
-                entity.getId(),
-                ActivityType.TRACING_EXERCISE,
-                outcome.earnedPoints(),
-                outcome.totalPoints(),
-                outcome.firstCompletion());
+                xpReward(entity.getXpReward()),
+                completionMessage("tracing exercise", entity.getTitle()));
+        return completionResponse(entity.getId(), ActivityType.TRACING_EXERCISE, outcome);
     }
 
     private TracingExercise requirePublishedTracingExercise(Long id) {
@@ -453,14 +389,9 @@ public class StudentActivityLibraryService {
                 student,
                 SOURCE_DRAG_DROP_ACTIVITY,
                 entity.getId(),
-                Optional.ofNullable(entity.getXpReward()).orElse(0),
-                "Completed drag-drop activity: " + entity.getTitle());
-        return new StudentActivityCompletionResponse(
-                entity.getId(),
-                ActivityType.DRAG_DROP_ACTIVITY,
-                outcome.earnedPoints(),
-                outcome.totalPoints(),
-                outcome.firstCompletion());
+                xpReward(entity.getXpReward()),
+                completionMessage("drag-drop activity", entity.getTitle()));
+        return completionResponse(entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, outcome);
     }
 
     private DragDropActivity requirePublishedDragDropActivity(Long id) {
@@ -515,14 +446,9 @@ public class StudentActivityLibraryService {
                 student,
                 SOURCE_STORY_ACTIVITY,
                 entity.getId(),
-                Optional.ofNullable(entity.getXpReward()).orElse(0),
-                "Completed story activity: " + entity.getTitle());
-        return new StudentActivityCompletionResponse(
-                entity.getId(),
-                ActivityType.STORY_ACTIVITY,
-                outcome.earnedPoints(),
-                outcome.totalPoints(),
-                outcome.firstCompletion());
+                xpReward(entity.getXpReward()),
+                completionMessage("story activity", entity.getTitle()));
+        return completionResponse(entity.getId(), ActivityType.STORY_ACTIVITY, outcome);
     }
 
     private StoryActivity requirePublishedStoryActivity(Long id) {
@@ -551,21 +477,114 @@ public class StudentActivityLibraryService {
         return studentLearningProgressService.isPlatformActivityCompleted(student, sourceType, sourceId);
     }
 
+    private static int xpReward(Integer xpReward) {
+        return xpReward == null ? 0 : xpReward;
+    }
+
+    private static StudentActivityCompletionResponse completionResponse(
+            Long id,
+            ActivityType type,
+            PlatformActivityOutcome outcome) {
+        return new StudentActivityCompletionResponse(
+                id,
+                type,
+                outcome.earnedPoints(),
+                outcome.totalPoints(),
+                outcome.firstCompletion());
+    }
+
+    private static String completionMessage(String activityLabel, String title) {
+        return "Completed " + activityLabel + ": " + preferredTitle(title, null);
+    }
+
     private static List<String> splitTags(String tags) {
-        if (tags == null || tags.isBlank()) {
+        String normalized = TextUtils.trimToNull(tags);
+        if (normalized == null) {
             return List.of();
         }
-        return Arrays.stream(tags.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
+        return Arrays.stream(normalized.split(","))
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
                 .toList();
     }
 
     private static String preferredTitle(String primary, String fallback) {
-        if (primary != null && !primary.isBlank()) {
-            return primary;
+        String normalizedPrimary = TextUtils.trimToNull(primary);
+        return normalizedPrimary != null
+                ? normalizedPrimary
+                : Optional.ofNullable(TextUtils.trimToNull(fallback)).orElse(UNTITLED_LABEL);
+    }
+
+    private <T> long appendFeedItems(
+            List<ActivityFeedItem> target,
+            StudentProfile student,
+            ActivityFilter filter,
+            Pageable slice,
+            ActivityType requestedType,
+            ActivityType candidateType,
+            JpaSpecificationExecutor<T> repository,
+            BiFunction<T, StudentProfile, ActivityFeedItem> mapper) {
+        if (requestedType != null && requestedType != candidateType) {
+            return 0L;
         }
-        return fallback == null ? "(untitled)" : fallback;
+        var pageResult = repository.findAll(StudentActivityLibraryService.<T>filterSpec(filter), slice);
+        pageResult.getContent().forEach(entity -> target.add(mapper.apply(entity, student)));
+        return pageResult.getTotalElements();
+    }
+
+    private ActivityFeedItem toFlashcardFeedItem(Flashcard entity, StudentProfile student) {
+        return activityFeedItem(
+                entity.getId(), ActivityType.FLASHCARD,
+                preferredTitle(entity.getTitle(), entity.getFrontText()),
+                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                isCompleted(student, SOURCE_FLASHCARD, entity.getId()));
+    }
+
+    private ActivityFeedItem toMatchingGameFeedItem(MatchingGame entity, StudentProfile student) {
+        return activityFeedItem(
+                entity.getId(), ActivityType.MATCHING_GAME, entity.getTitle(),
+                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                isCompleted(student, SOURCE_MATCHING_GAME, entity.getId()));
+    }
+
+    private ActivityFeedItem toListeningExerciseFeedItem(ListeningExercise entity, StudentProfile student) {
+        return activityFeedItem(
+                entity.getId(), ActivityType.LISTENING_EXERCISE, entity.getTitle(),
+                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                isCompleted(student, SOURCE_LISTENING_EXERCISE, entity.getId()));
+    }
+
+    private ActivityFeedItem toTracingExerciseFeedItem(TracingExercise entity, StudentProfile student) {
+        return activityFeedItem(
+                entity.getId(), ActivityType.TRACING_EXERCISE, entity.getTitle(),
+                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                isCompleted(student, SOURCE_TRACING_EXERCISE, entity.getId()));
+    }
+
+    private ActivityFeedItem toDragDropActivityFeedItem(DragDropActivity entity, StudentProfile student) {
+        return activityFeedItem(
+                entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, entity.getTitle(),
+                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                isCompleted(student, SOURCE_DRAG_DROP_ACTIVITY, entity.getId()));
+    }
+
+    private ActivityFeedItem toStoryActivityFeedItem(StoryActivity entity, StudentProfile student) {
+        return activityFeedItem(
+                entity.getId(), ActivityType.STORY_ACTIVITY, entity.getTitle(),
+                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                isCompleted(student, SOURCE_STORY_ACTIVITY, entity.getId()));
     }
 
     private static ActivityFeedItem activityFeedItem(
@@ -583,7 +602,7 @@ public class StudentActivityLibraryService {
             LocalDateTime updatedAt,
             boolean completed) {
         StudentActivitySummaryResponse summary = new StudentActivitySummaryResponse(
-                id, type, title, hskLevel, ageBand, difficulty,
+                id, type, preferredTitle(title, null), hskLevel, ageBand, difficulty,
                 topic, splitTags(tagsCsv), xpReward, estimatedSeconds, updatedAt, completed);
         return new ActivityFeedItem(summary, createdAt, updatedAt);
     }
@@ -610,20 +629,25 @@ public class StudentActivityLibraryService {
             if (filter.difficulty() != null) {
                 predicates.add(cb.equal(root.get("difficulty"), filter.difficulty()));
             }
-            if (filter.topic() != null && !filter.topic().isBlank()) {
-                predicates.add(cb.equal(cb.lower(root.get("topic")),
-                        filter.topic().trim().toLowerCase(Locale.ROOT)));
+            if (filter.topic() != null) {
+                predicates.add(cb.equal(cb.lower(root.get("topic")), lower(filter.topic())));
             }
-            if (filter.tag() != null && !filter.tag().isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("tags")),
-                        "%" + filter.tag().trim().toLowerCase(Locale.ROOT) + "%"));
+            if (filter.tag() != null) {
+                predicates.add(cb.like(cb.lower(root.get("tags")), likePattern(filter.tag())));
             }
-            if (filter.keyword() != null && !filter.keyword().isBlank()) {
-                String pattern = "%" + filter.keyword().trim().toLowerCase(Locale.ROOT) + "%";
-                predicates.add(cb.like(cb.lower(root.get("title")), pattern));
+            if (filter.keyword() != null) {
+                predicates.add(cb.like(cb.lower(root.get("title")), likePattern(filter.keyword())));
             }
             return cb.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    private static String lower(String value) {
+        return value.toLowerCase(Locale.ROOT);
+    }
+
+    private static String likePattern(String value) {
+        return "%" + lower(value) + "%";
     }
 
     public record ActivityFilter(
@@ -645,44 +669,41 @@ public class StudentActivityLibraryService {
                 Optional<String> type) {
             return new ActivityFilter(
                     hskLevel.orElse(null),
-                    ageBand.map(value -> requireMaxLength(value, 40, "ageBand")).map(ActivityFilter::parseAgeBand).orElse(null),
-                    difficulty.map(value -> requireMaxLength(value, 40, "difficulty")).map(ActivityFilter::parseDifficulty).orElse(null),
-                    topic.map(value -> requireMaxLength(value, 200, "topic")).orElse(null),
-                    tag.map(value -> requireMaxLength(value, 100, "tag")).orElse(null),
-                    keyword.map(value -> requireMaxLength(value, 200, "keyword")).orElse(null),
-                    type.map(value -> requireMaxLength(value, 60, "type")).map(ActivityFilter::parseType).orElse(null));
+                    ageBand.map(value -> requireMaxLength(value, AGE_BAND_MAX_LENGTH, "ageBand"))
+                            .map(ActivityFilter::parseAgeBand)
+                            .orElse(null),
+                    difficulty.map(value -> requireMaxLength(value, DIFFICULTY_MAX_LENGTH, "difficulty"))
+                            .map(ActivityFilter::parseDifficulty)
+                            .orElse(null),
+                    topic.map(value -> requireMaxLength(value, TOPIC_MAX_LENGTH, "topic")).orElse(null),
+                    tag.map(value -> requireMaxLength(value, TAG_MAX_LENGTH, "tag")).orElse(null),
+                    keyword.map(value -> requireMaxLength(value, KEYWORD_MAX_LENGTH, "keyword")).orElse(null),
+                    type.map(value -> requireMaxLength(value, TYPE_MAX_LENGTH, "type"))
+                            .map(ActivityFilter::parseType)
+                            .orElse(null));
         }
 
         private static String requireMaxLength(String raw, int maxLength, String fieldName) {
-            String trimmed = raw.trim();
-            if (trimmed.length() > maxLength) {
+            String normalized = TextUtils.trimToNull(raw);
+            if (normalized != null && normalized.length() > maxLength) {
                 throw new ResponseStatusException(BAD_REQUEST, fieldName + " is too long.");
             }
-            return trimmed;
+            return normalized;
         }
 
         private static AgeBand parseAgeBand(String raw) {
-            try {
-                return AgeBand.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException ex) {
-                throw new ResponseStatusException(BAD_REQUEST, "Unknown ageBand: " + raw);
-            }
+            return AgeBand.tryFrom(raw)
+                    .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown ageBand: " + raw));
         }
 
         private static ActivityDifficulty parseDifficulty(String raw) {
-            try {
-                return ActivityDifficulty.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException ex) {
-                throw new ResponseStatusException(BAD_REQUEST, "Unknown difficulty: " + raw);
-            }
+            return ActivityDifficulty.tryFrom(raw)
+                    .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown difficulty: " + raw));
         }
 
         private static ActivityType parseType(String raw) {
-            try {
-                return ActivityType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException ex) {
-                throw new ResponseStatusException(BAD_REQUEST, "Unknown activity type: " + raw);
-            }
+            return ActivityType.parseLenient(raw)
+                    .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown activity type: " + raw));
         }
     }
 

@@ -1,6 +1,5 @@
 package com.example.aichinese.config.seed;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +32,82 @@ import com.example.aichinese.repository.UserRepository;
 public class DataSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
+    private static final Map<RoleName, String> ROLE_DESCRIPTIONS = Map.of(
+            RoleName.STUDENT, "Student role for learners using the platform.",
+            RoleName.TEACHER, "Teacher role for educators creating and managing learning content.",
+            RoleName.ADMIN, "Admin role for platform management and moderation.");
+    private static final List<String> LEARNING_LEVELS = List.of("Beginner", "Intermediate", "Advanced");
+    private static final List<String> LEARNING_CATEGORIES = List.of(
+            "Pinyin",
+            "Tones",
+            "Vocabulary",
+            "Chinese Characters",
+            "Listening",
+            "Reading",
+            "Writing / Tracing",
+            "Daily Conversation",
+            "Numbers",
+            "Colours",
+            "Animals",
+            "Family",
+            "School",
+            "Food",
+            "Greetings");
+    private static final List<BadgeSeed> BADGES = List.of(
+            new BadgeSeed("First Steps", "Awarded for starting the learning journey.", "badge-first-steps"),
+            new BadgeSeed("Quiz Explorer", "Awarded for completing early quiz practice.", "badge-quiz-explorer"),
+            new BadgeSeed("Daily Spark", "Awarded for building a learning streak.", "badge-daily-spark"));
+    private static final List<SettingSeed> SYSTEM_SETTINGS = List.of(
+            new SettingSeed(
+                    "platform_name",
+                    "AI-Powered Interactive Chinese Learning Platform for Young Learners",
+                    "Displayed platform name.",
+                    false),
+            new SettingSeed(
+                    "default_currency",
+                    "MYR",
+                    "Default currency for the Malaysian deployment context.",
+                    true),
+            new SettingSeed(
+                    "platform_commission_rate",
+                    "0.20",
+                    "Editable platform commission rate represented as a decimal.",
+                    true),
+            new SettingSeed(
+                    "ai_disclaimer_text",
+                    "AI-generated content may not always be accurate. Please review before use.",
+                    "Shown on AI-powered learning experiences.",
+                    true),
+            new SettingSeed(
+                    "admin_email_notifications_enabled",
+                    "true",
+                    "Enable email notifications for admin workflows.",
+                    true),
+            new SettingSeed(
+                    "admin_in_app_notifications_enabled",
+                    "true",
+                    "Enable in-app notifications for admin workflows.",
+                    true),
+            new SettingSeed(
+                    "admin_daily_summary_enabled",
+                    "false",
+                    "Enable daily admin summary delivery.",
+                    true),
+            new SettingSeed(
+                    "strict_content_filtering_enabled",
+                    "true",
+                    "Enable strict content filtering for safety-sensitive flows.",
+                    true),
+            new SettingSeed(
+                    "sensitive_word_filter_enabled",
+                    "true",
+                    "Enable profanity and sensitive word filtering.",
+                    true),
+            new SettingSeed(
+                    "ai_safety_check_enabled",
+                    "true",
+                    "Enable AI safety checks before AI guidance is shown.",
+                    true));
 
     private final RoleRepository roleRepository;
     private final LearningLevelRepository learningLevelRepository;
@@ -77,12 +152,7 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedRoles() {
-        Map<RoleName, String> roles = Map.of(
-                RoleName.STUDENT, "Student role for learners using the platform.",
-                RoleName.TEACHER, "Teacher role for educators creating and managing learning content.",
-                RoleName.ADMIN, "Admin role for platform management and moderation.");
-
-        roles.forEach((name, description) -> roleRepository.findByName(name).orElseGet(() -> {
+        ROLE_DESCRIPTIONS.forEach((name, description) -> roleRepository.findByName(name).orElseGet(() -> {
             Role role = new Role();
             role.setName(name);
             role.setDescription(description);
@@ -91,9 +161,8 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedLearningLevels() {
-        List<String> levels = List.of("Beginner", "Intermediate", "Advanced");
-        for (int i = 0; i < levels.size(); i++) {
-            String name = levels.get(i);
+        for (int i = 0; i < LEARNING_LEVELS.size(); i++) {
+            String name = LEARNING_LEVELS.get(i);
             int sortOrder = i + 1;
             learningLevelRepository.findByName(name).orElseGet(() -> {
                 LearningLevel level = new LearningLevel();
@@ -106,25 +175,8 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedLearningCategories() {
-        List<String> categories = List.of(
-                "Pinyin",
-                "Tones",
-                "Vocabulary",
-                "Chinese Characters",
-                "Listening",
-                "Reading",
-                "Writing / Tracing",
-                "Daily Conversation",
-                "Numbers",
-                "Colours",
-                "Animals",
-                "Family",
-                "School",
-                "Food",
-                "Greetings");
-
-        for (int i = 0; i < categories.size(); i++) {
-            String name = categories.get(i);
+        for (int i = 0; i < LEARNING_CATEGORIES.size(); i++) {
+            String name = LEARNING_CATEGORIES.get(i);
             int sortOrder = i + 1;
             learningCategoryRepository.findByName(name).orElseGet(() -> {
                 LearningCategory category = new LearningCategory();
@@ -137,72 +189,21 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedBadges() {
-        String[][] badges = {
-                {"First Steps", "Awarded for starting the learning journey.", "badge-first-steps"},
-                {"Quiz Explorer", "Awarded for completing early quiz practice.", "badge-quiz-explorer"},
-                {"Daily Spark", "Awarded for building a learning streak.", "badge-daily-spark"}
-        };
-
-        for (String[] item : badges) {
-            String name = item[0];
-            String description = item[1];
-            String iconKey = item[2];
-            badgeRepository.findByName(name).orElseGet(() -> {
+        for (BadgeSeed seed : BADGES) {
+            badgeRepository.findByName(seed.name()).orElseGet(() -> {
                 Badge badge = new Badge();
-                badge.setName(name);
-                badge.setDescription(description);
-                badge.setIconKey(iconKey);
+                badge.setName(seed.name());
+                badge.setDescription(seed.description());
+                badge.setIconKey(seed.iconKey());
                 return badgeRepository.save(badge);
             });
         }
     }
 
     private void seedSystemSettings() {
-        Map<String, SettingSeed> settings = new LinkedHashMap<>();
-        addSetting(settings, "platform_name",
-                "AI-Powered Interactive Chinese Learning Platform for Young Learners",
-                "Displayed platform name.",
-                false);
-        addSetting(settings, "default_currency",
-                "MYR",
-                "Default currency for the Malaysian deployment context.",
-                true);
-        addSetting(settings, "platform_commission_rate",
-                "0.20",
-                "Editable platform commission rate represented as a decimal.",
-                true);
-        addSetting(settings, "ai_disclaimer_text",
-                "AI-generated content may not always be accurate. Please review before use.",
-                "Shown on AI-powered learning experiences.",
-                true);
-        addSetting(settings, "admin_email_notifications_enabled",
-                "true",
-                "Enable email notifications for admin workflows.",
-                true);
-        addSetting(settings, "admin_in_app_notifications_enabled",
-                "true",
-                "Enable in-app notifications for admin workflows.",
-                true);
-        addSetting(settings, "admin_daily_summary_enabled",
-                "false",
-                "Enable daily admin summary delivery.",
-                true);
-        addSetting(settings, "strict_content_filtering_enabled",
-                "true",
-                "Enable strict content filtering for safety-sensitive flows.",
-                true);
-        addSetting(settings, "sensitive_word_filter_enabled",
-                "true",
-                "Enable profanity and sensitive word filtering.",
-                true);
-        addSetting(settings, "ai_safety_check_enabled",
-                "true",
-                "Enable AI safety checks before AI guidance is shown.",
-                true);
-
-        settings.forEach((key, seed) -> systemSettingRepository.findBySettingKey(key).orElseGet(() -> {
+        SYSTEM_SETTINGS.forEach(seed -> systemSettingRepository.findBySettingKey(seed.key()).orElseGet(() -> {
             SystemSetting setting = new SystemSetting();
-            setting.setSettingKey(key);
+            setting.setSettingKey(seed.key());
             setting.setSettingValue(seed.value());
             setting.setDescription(seed.description());
             setting.setEditable(seed.editable());
@@ -210,21 +211,14 @@ public class DataSeeder implements CommandLineRunner {
         }));
     }
 
-    private static void addSetting(
-            Map<String, SettingSeed> settings,
-            String key,
-            String value,
-            String description,
-            boolean editable) {
-        settings.put(key, new SettingSeed(value, description, editable));
+    private record BadgeSeed(String name, String description, String iconKey) {
     }
 
-    private record SettingSeed(String value, String description, boolean editable) {
+    private record SettingSeed(String key, String value, String description, boolean editable) {
     }
 
     private void seedDefaultAdmin() {
-        if (defaultAdminEmail == null || defaultAdminEmail.isBlank()
-                || defaultAdminPassword == null || defaultAdminPassword.isBlank()) {
+        if (isBlank(defaultAdminEmail) || isBlank(defaultAdminPassword)) {
             log.warn("Default admin credentials are not configured. Skipping default admin creation safely.");
             return;
         }
@@ -248,5 +242,9 @@ public class DataSeeder implements CommandLineRunner {
         userRepository.save(admin);
 
         log.info("Default admin account created.");
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

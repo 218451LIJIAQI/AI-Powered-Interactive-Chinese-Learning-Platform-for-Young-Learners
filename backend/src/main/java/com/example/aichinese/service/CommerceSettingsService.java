@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class CommerceSettingsService {
@@ -23,6 +24,7 @@ public class CommerceSettingsService {
     public static final String DEFAULT_CURRENCY_KEY = "default_currency";
     public static final String PLATFORM_COMMISSION_RATE_KEY = "platform_commission_rate";
 
+    private static final String FALLBACK_CURRENCY = "MYR";
     private static final Pattern ISO_4217_PATTERN = Pattern.compile("[A-Z]{3}");
     private static final BigDecimal DEFAULT_COMMISSION_RATE = new BigDecimal("0.20");
     private static final BigDecimal MIN_COMMISSION_RATE = BigDecimal.ZERO;
@@ -43,11 +45,12 @@ public class CommerceSettingsService {
     public String getDefaultCurrency() {
         return systemSettingRepository.findBySettingKey(DEFAULT_CURRENCY_KEY)
                 .map(SystemSetting::getSettingValue)
-                .filter(value -> !value.isBlank())
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
                 .map(this::requireIsoCurrencyCode)
                 .orElseGet(() -> {
-                    log.debug("No '{}' setting found; defaulting to MYR", DEFAULT_CURRENCY_KEY);
-                    return "MYR";
+                    log.debug("No '{}' setting found; defaulting to {}", DEFAULT_CURRENCY_KEY, FALLBACK_CURRENCY);
+                    return FALLBACK_CURRENCY;
                 });
     }
 
@@ -56,7 +59,8 @@ public class CommerceSettingsService {
     public BigDecimal getPlatformCommissionRate() {
         return systemSettingRepository.findBySettingKey(PLATFORM_COMMISSION_RATE_KEY)
                 .map(SystemSetting::getSettingValue)
-                .filter(value -> !value.isBlank())
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
                 .map(this::requireCommissionRate)
                 .orElseGet(() -> {
                     log.debug("No '{}' setting found; defaulting to {}",
@@ -74,7 +78,7 @@ public class CommerceSettingsService {
     }
 
     private String requireIsoCurrencyCode(String value) {
-        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        String normalized = value.toUpperCase(Locale.ROOT);
         if (!ISO_4217_PATTERN.matcher(normalized).matches()) {
             throw new IllegalStateException("Default currency must be a three-letter ISO 4217 code.");
         }
@@ -83,7 +87,7 @@ public class CommerceSettingsService {
 
     private BigDecimal requireCommissionRate(String value) {
         try {
-            return normalizeCommissionRate(new BigDecimal(value.trim()));
+            return normalizeCommissionRate(new BigDecimal(value));
         } catch (NumberFormatException exception) {
             throw new IllegalStateException("Platform commission rate must be numeric.", exception);
         }

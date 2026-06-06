@@ -19,11 +19,13 @@ describe('practiceRoute helpers', () => {
     expect(practiceRoute('not-a-real-activity')).toEqual({ name: 'student-practice' })
   })
 
-  it('infers useful practice modes from weak areas and recommendation copy', () => {
-    expect(inferPracticeActivityFromText('Tone distinction and listening speed')).toBe('LISTENING_EXERCISE')
-    expect(inferPracticeActivityFromText('Character tracing and stroke order')).toBe('TRACING_EXERCISE')
-    expect(inferPracticeActivityFromText('Match words with meanings')).toBe('MATCHING_GAME')
-    expect(inferPracticeActivityFromText('Build a story comprehension habit')).toBe('STORY_ACTIVITY')
-    expect(inferPracticeActivityFromText('Keep reviewing starter vocabulary')).toBe('FLASHCARD')
+  it.each([
+    ['Tone distinction and listening speed', 'LISTENING_EXERCISE'],
+    ['Character tracing and stroke order', 'TRACING_EXERCISE'],
+    ['Match words with meanings', 'MATCHING_GAME'],
+    ['Build a story comprehension habit', 'STORY_ACTIVITY'],
+    ['Keep reviewing starter vocabulary', 'FLASHCARD'],
+  ])('infers %s as %s', (text, activity) => {
+    expect(inferPracticeActivityFromText(text)).toBe(activity)
   })
 })

@@ -14,6 +14,9 @@ final class HttpUrlValidation {
     }
 
     static URI requireAbsoluteHttpUrl(String value, String label) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(label + " must be configured.");
+        }
         URI uri = parseStrict(value, label);
         String scheme = normalizeScheme(uri.getScheme());
         if (!("http".equals(scheme) || "https".equals(scheme)) || normalizeHost(uri.getHost()).isBlank()) {
@@ -31,17 +34,12 @@ final class HttpUrlValidation {
         }
         URI uri;
         try {
-            uri = parseStrict(value, label);
+            uri = requireAbsoluteHttpUrl(value, label);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException(
-                    label + " must be a valid HTTPS URL " + productionContext + ".",
-                    exception);
+            throw new IllegalStateException(label + " must be a valid HTTPS URL " + productionContext + ".", exception);
         }
         String scheme = normalizeScheme(uri.getScheme());
         String host = normalizeHost(uri.getHost());
-        if (uri.getUserInfo() != null) {
-            throw new IllegalStateException(label + " must not contain embedded credentials " + productionContext + ".");
-        }
         if (!"https".equals(scheme)) {
             throw new IllegalStateException(label + " must use HTTPS " + productionContext + ".");
         }

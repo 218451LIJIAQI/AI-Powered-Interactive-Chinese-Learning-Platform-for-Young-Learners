@@ -19,6 +19,9 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 @EnableCaching
 public class CacheConfig {
 
+    private static final int MAX_CACHE_ENTRIES = 128;
+    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
+
     public static final String ADMIN_PLATFORM_SETTINGS = "adminPlatformSettings";
     public static final String PUBLIC_PLATFORM_SETTINGS = "publicPlatformSettings";
     public static final String DEFAULT_CURRENCY = "defaultCurrency";
@@ -38,8 +41,8 @@ public class CacheConfig {
                 PUBLIC_CATEGORIES,
                 SENSITIVE_WORD_FILTER_ENABLED);
         cacheManager.setCaffeine(Caffeine.newBuilder()
-                .maximumSize(128)
-                .expireAfterWrite(Duration.ofMinutes(5))
+                .maximumSize(MAX_CACHE_ENTRIES)
+                .expireAfterWrite(CACHE_TTL)
                 .recordStats());
         return cacheManager;
     }

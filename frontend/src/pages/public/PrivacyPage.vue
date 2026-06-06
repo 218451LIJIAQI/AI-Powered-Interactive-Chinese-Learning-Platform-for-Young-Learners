@@ -21,16 +21,11 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Static privacy policy page. Authored copy lives in this route
- * component so legal review can diff it cleanly per release — no
- * CMS, no markdown loader, no remote data.
- */
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-function goBack() {
+function goBack(): void {
   if (window.history.length > 1) {
     router.back()
   } else {
@@ -59,5 +54,5 @@ const sections = [
     title: 'Your choices',
     copy: 'Signed-in users can review account/profile areas, notifications, payments, refunds, teacher verification status, and support pathways according to their role.',
   },
-]
+] as const
 </script>

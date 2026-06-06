@@ -7,25 +7,40 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
 /**
- * Unit coverage for {@code PaymentProductionGuard} — pins the
- * fail-fast behaviour for payment provider configuration in
- * production: Stripe live-mode requires a {@code sk_live_*} key and
- * the canonical {@code api.stripe.com} base URL; mock provider is
- * refused outside dev/test profiles so a deployment cannot
- * accidentally accept fake payments.
+ * Unit coverage for {@code PaymentProductionGuard} - pins the fail-fast behaviour for
+ * payment provider configuration in production: Stripe live-mode requires a
+ * {@code sk_live_*} key and the canonical {@code api.stripe.com} base URL; mock
+ * provider is refused outside dev/test profiles so a deployment cannot accidentally
+ * accept fake payments.
  */
 class PaymentProductionGuardTests {
 
+    private static final String PROD_PROFILE = "prod";
+    private static final String LOCAL_SUCCESS_URL = "http://localhost:5174/payment/success";
+    private static final String LOCAL_CANCEL_URL = "http://localhost:5174/payment/cancel";
+    private static final String SUCCESS_URL = "https://app.example.com/payment/success";
+    private static final String CANCEL_URL = "https://app.example.com/payment/cancel";
+    private static final String STRIPE_PROVIDER = "stripe";
+    private static final String NO_OP_PROVIDER = "no-op";
+    private static final String STRIPE_API_BASE_URL = "https://api.stripe.com";
+    private static final String NON_STRIPE_API_BASE_URL = "https://payments.example.com";
+    private static final String NON_HTTPS_STRIPE_API_BASE_URL = "http://stripe.example.test";
+    private static final String LIVE_STRIPE_API_KEY = "sk_live_example";
+    private static final String TEST_STRIPE_API_KEY = "sk_test_example";
+    private static final String PLACEHOLDER_STRIPE_API_KEY = "replace-with-your-stripe-secret-key";
+    private static final String LIVE_STRIPE_WEBHOOK_SECRET = "whsec_live_example";
+    private static final String PLACEHOLDER_STRIPE_WEBHOOK_SECRET =
+            "replace-with-your-stripe-webhook-signing-secret";
+
     @Test
     void allowsDevProfileToUseNoOpProvider() {
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "http://localhost:5174/payment/success",
-                "http://localhost:5174/payment/cancel",
-                false,
-                "no-op",
-                "https://api.stripe.com",
-                "",
-                "");
+        PaymentProperties paymentProperties = paymentProperties()
+                .successUrl(LOCAL_SUCCESS_URL)
+                .cancelUrl(LOCAL_CANCEL_URL)
+                .provider(NO_OP_PROVIDER)
+                .stripeApiKey("")
+                .stripeWebhookSecret("")
+                .build();
 
         assertThatCode(() -> new PaymentProductionGuard(new MockEnvironment(), paymentProperties))
                 .doesNotThrowAnyException();
@@ -33,186 +48,143 @@ class PaymentProductionGuardTests {
 
     @Test
     void prodProfileRequiresStripeProvider() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "no-op",
-                "https://api.stripe.com",
-                "sk_live_example",
-                "whsec_live_example");
-
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, paymentProperties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("PAYMENT_PROVIDER");
+        assertProductionRejected(
+                paymentProperties().provider(NO_OP_PROVIDER).build(),
+                "PAYMENT_PROVIDER");
     }
 
     @Test
     void prodProfileRejectsMockSuccessMode() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                true,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_live_example",
-                "whsec_live_example");
-
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, paymentProperties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("PAYMENT_MOCK_SUCCESS_ENABLED");
+        assertProductionRejected(
+                paymentProperties().mockSuccessEnabled(true).build(),
+                "PAYMENT_MOCK_SUCCESS_ENABLED");
     }
 
     @Test
     void prodProfileRejectsMissingStripeSecret() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "",
-                "whsec_live_example");
-
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, paymentProperties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("STRIPE_API_KEY");
+        assertProductionRejected(
+                paymentProperties().stripeApiKey("").build(),
+                "STRIPE_API_KEY");
     }
 
     @Test
     void prodProfileRejectsTestModeOrUnknownStripeApiKeys() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
+        assertProductionRejected(
+                paymentProperties().stripeApiKey(TEST_STRIPE_API_KEY).build(),
+                "live-mode Stripe secret key");
 
-        PaymentProperties testModeKey = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_test_example",
-                "whsec_live_example");
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, testModeKey))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("live-mode Stripe secret key");
-
-        PaymentProperties unknownKeyPrefix = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "replace-with-your-stripe-secret-key",
-                "whsec_live_example");
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, unknownKeyPrefix))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("sk_live_ or rk_live_");
+        assertProductionRejected(
+                paymentProperties().stripeApiKey(PLACEHOLDER_STRIPE_API_KEY).build(),
+                "sk_live_ or rk_live_");
     }
 
     @Test
     void prodProfileRejectsMissingStripeWebhookSecret() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_live_example",
-                "");
-
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, paymentProperties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("STRIPE_WEBHOOK_SECRET");
+        assertProductionRejected(
+                paymentProperties().stripeWebhookSecret("").build(),
+                "STRIPE_WEBHOOK_SECRET");
     }
 
     @Test
     void prodProfileRejectsMalformedStripeWebhookSecret() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_live_example",
-                "replace-with-your-stripe-webhook-signing-secret");
-
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, paymentProperties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Stripe webhook signing secret");
+        assertProductionRejected(
+                paymentProperties().stripeWebhookSecret(PLACEHOLDER_STRIPE_WEBHOOK_SECRET).build(),
+                "Stripe webhook signing secret");
     }
 
     @Test
     void prodProfileRejectsLoopbackOrNonHttpsPaymentUrls() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
+        assertProductionRejected(
+                paymentProperties().successUrl("https://localhost:5174/payment/success").build(),
+                "PAYMENT_SUCCESS_URL");
 
-        PaymentProperties localhostUrls = new PaymentProperties(
-                "https://localhost:5174/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_live_example",
-                "whsec_live_example");
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, localhostUrls))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("PAYMENT_SUCCESS_URL");
-
-        PaymentProperties nonHttpsStripeEndpoint = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "http://stripe.example.test",
-                "sk_live_example",
-                "whsec_live_example");
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, nonHttpsStripeEndpoint))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("STRIPE_API_BASE_URL");
+        assertProductionRejected(
+                paymentProperties().stripeApiBaseUrl(NON_HTTPS_STRIPE_API_BASE_URL).build(),
+                "STRIPE_API_BASE_URL");
     }
 
     @Test
     void prodProfileRejectsNonStripeApiBaseUrl() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://payments.example.com",
-                "sk_live_example",
-                "whsec_live_example");
-
-        assertThatThrownBy(() -> new PaymentProductionGuard(environment, paymentProperties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("https://api.stripe.com");
+        assertProductionRejected(
+                paymentProperties().stripeApiBaseUrl(NON_STRIPE_API_BASE_URL).build(),
+                STRIPE_API_BASE_URL);
     }
 
     @Test
     void prodProfileAllowsRealStripeConfiguration() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        PaymentProperties paymentProperties = new PaymentProperties(
-                "https://app.example.com/payment/success",
-                "https://app.example.com/payment/cancel",
-                false,
-                "stripe",
-                "https://api.stripe.com",
-                "sk_live_example",
-                "whsec_live_example");
-
-        assertThatCode(() -> new PaymentProductionGuard(environment, paymentProperties))
+        assertThatCode(() -> new PaymentProductionGuard(productionEnvironment(), paymentProperties().build()))
                 .doesNotThrowAnyException();
+    }
+
+    private static void assertProductionRejected(PaymentProperties paymentProperties, String expectedMessage) {
+        assertThatThrownBy(() -> new PaymentProductionGuard(productionEnvironment(), paymentProperties))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(expectedMessage);
+    }
+
+    private static MockEnvironment productionEnvironment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles(PROD_PROFILE);
+        return environment;
+    }
+
+    private static PaymentPropertiesBuilder paymentProperties() {
+        return new PaymentPropertiesBuilder();
+    }
+
+    private static final class PaymentPropertiesBuilder {
+        private String successUrl = SUCCESS_URL;
+        private String cancelUrl = CANCEL_URL;
+        private boolean mockSuccessEnabled;
+        private String provider = STRIPE_PROVIDER;
+        private String stripeApiBaseUrl = STRIPE_API_BASE_URL;
+        private String stripeApiKey = LIVE_STRIPE_API_KEY;
+        private String stripeWebhookSecret = LIVE_STRIPE_WEBHOOK_SECRET;
+
+        private PaymentPropertiesBuilder successUrl(String successUrl) {
+            this.successUrl = successUrl;
+            return this;
+        }
+
+        private PaymentPropertiesBuilder cancelUrl(String cancelUrl) {
+            this.cancelUrl = cancelUrl;
+            return this;
+        }
+
+        private PaymentPropertiesBuilder mockSuccessEnabled(boolean mockSuccessEnabled) {
+            this.mockSuccessEnabled = mockSuccessEnabled;
+            return this;
+        }
+
+        private PaymentPropertiesBuilder provider(String provider) {
+            this.provider = provider;
+            return this;
+        }
+
+        private PaymentPropertiesBuilder stripeApiBaseUrl(String stripeApiBaseUrl) {
+            this.stripeApiBaseUrl = stripeApiBaseUrl;
+            return this;
+        }
+
+        private PaymentPropertiesBuilder stripeApiKey(String stripeApiKey) {
+            this.stripeApiKey = stripeApiKey;
+            return this;
+        }
+
+        private PaymentPropertiesBuilder stripeWebhookSecret(String stripeWebhookSecret) {
+            this.stripeWebhookSecret = stripeWebhookSecret;
+            return this;
+        }
+
+        private PaymentProperties build() {
+            return new PaymentProperties(
+                    successUrl,
+                    cancelUrl,
+                    mockSuccessEnabled,
+                    provider,
+                    stripeApiBaseUrl,
+                    stripeApiKey,
+                    stripeWebhookSecret);
+        }
     }
 }

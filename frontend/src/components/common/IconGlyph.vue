@@ -1,20 +1,8 @@
 <template>
-  <component :is="resolved" :size="size" :stroke-width="2.2" class="icon-glyph" />
+  <component :is="resolved" :size="size" :stroke-width="ICON_STROKE_WIDTH" class="icon-glyph" />
 </template>
 
 <script setup lang="ts">
-/**
- * App-wide icon component that resolves a semantic name
- * (e.g. `"learn"`, `"trophy"`, `"moderation"`) into a Lucide Vue
- * icon. Centralising the lookup table means swapping the icon set
- * (or adjusting a single icon) happens in one place — every
- * component just references `<IconGlyph name="..." />`.
- *
- * Names are kebab-or-camelCase semantic terms rather than the
- * Lucide internal name, so a Lucide rename doesn't require touching
- * every call site. Unknown names fall back to `BookOpen` to avoid
- * a runtime crash on a typo.
- */
 import {
   BadgeHelp,
   Banknote,
@@ -76,6 +64,10 @@ import {
   Zap,
 } from '@lucide/vue'
 import { computed, type Component } from 'vue'
+
+const DEFAULT_ICON = BookOpen
+const ICON_STROKE_WIDTH = 2.2
+const warnedUnknownIcons = new Set<string>()
 
 const iconMap: Readonly<Record<string, Component>> = {
   home: House,
@@ -149,12 +141,21 @@ const props = withDefaults(defineProps<Props>(), {
   size: 20,
 })
 
+function warnUnknownIconName(name: string): void {
+  if (!import.meta.env.DEV || warnedUnknownIcons.has(name)) {
+    return
+  }
+
+  warnedUnknownIcons.add(name)
+  console.warn(`[IconGlyph] Unknown icon name: "${name}". Falling back to BookOpen.`)
+}
+
 const resolved = computed<Component>(() => {
   const icon = iconMap[props.name]
-  if (!icon && import.meta.env.DEV) {
-    console.warn(`[IconGlyph] Unknown icon name: "${props.name}". Falling back to BookOpen.`)
+  if (!icon) {
+    warnUnknownIconName(props.name)
   }
-  return icon ?? BookOpen
+  return icon ?? DEFAULT_ICON
 })
 </script>
 

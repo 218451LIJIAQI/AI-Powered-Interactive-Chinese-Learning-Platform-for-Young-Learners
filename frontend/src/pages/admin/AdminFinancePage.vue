@@ -180,17 +180,13 @@
 
     <section v-if="pendingFinanceDecision" class="two-col admin-finance-grid">
       <ActionFormCard
-        :title="pendingFinanceDecision.kind === 'refund' ? 'Reject refund request' : 'Reject payout request'"
-        :subtitle="
-          pendingFinanceDecision.kind === 'refund'
-            ? 'A real decision reason is required before rejecting the refund.'
-            : 'A real decision reason is required before rejecting the payout.'
-        "
+        :title="financeRejectionTitle"
+        :subtitle="financeRejectionSubtitle"
         icon="help"
         submit-label="Submit rejection"
         submitting-label="Submitting..."
         :submitting="financeActionBusy"
-        :disabled="pendingFinanceDecision.kind === 'refund' ? refundReadOnly : payoutReadOnly"
+        :disabled="financeRejectionReadOnly"
         @submit="submitFinanceRejection"
       >
         <div class="field">
@@ -201,9 +197,7 @@
             class="textarea"
             maxlength="1000"
             placeholder="Explain why this request is being rejected."
-            :disabled="
-              financeActionBusy || (pendingFinanceDecision.kind === 'refund' ? refundReadOnly : payoutReadOnly)
-            "
+            :disabled="financeActionBusy || financeRejectionReadOnly"
           />
         </div>
         <div class="list-action-row">
@@ -222,15 +216,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Admin finance hub — payments ledger, refunds queue, payouts
- * approval, revenue summary.
- *
- * <h2>Money-handling safety</h2>
- * <p>Live finance mutations are guarded behind preview-data checks,
- * explicit browser confirmations, and required rejection reasons.
- * The backend records finance decisions for auditability.</p>
- */
 import { computed, ref, watch } from 'vue'
 
 import { adminApi } from '@/api/services'
@@ -247,6 +232,8 @@ import { adminPayments, adminPayouts, adminRefunds, commissionSetting } from '@/
 import type { AdminPayoutRequestResponse, AdminRefundRequestResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampNumber, clampPercent, formatCurrency, toFiniteNumber } from '@/utils/format'
+
+type PillTone = 'danger' | 'info' | 'primary' | 'success' | 'warning'
 
 const paymentsResource = useResource(() => adminApi.payments(), adminPayments)
 const refundsResource = useResource(() => adminApi.refunds(), adminRefunds)
@@ -315,6 +302,18 @@ const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const pendingFinanceDecision = ref<{ kind: 'refund' | 'payout'; id: number } | null>(null)
 const financeDecisionReason = ref('')
+const financeRejectionIsRefund = computed(() => pendingFinanceDecision.value?.kind === 'refund')
+const financeRejectionTitle = computed(() =>
+  financeRejectionIsRefund.value ? 'Reject refund request' : 'Reject payout request',
+)
+const financeRejectionSubtitle = computed(() =>
+  financeRejectionIsRefund.value
+    ? 'A real decision reason is required before rejecting the refund.'
+    : 'A real decision reason is required before rejecting the payout.',
+)
+const financeRejectionReadOnly = computed(() =>
+  financeRejectionIsRefund.value ? refundReadOnly.value : payoutReadOnly.value,
+)
 
 watch(
   commission,
@@ -324,7 +323,7 @@ watch(
   { immediate: true },
 )
 
-function paymentTone(status: string) {
+function paymentTone(status: string): PillTone {
   switch (status) {
     case 'PAID':
       return 'success'
@@ -337,7 +336,7 @@ function paymentTone(status: string) {
   }
 }
 
-function refundTone(status: string) {
+function refundTone(status: string): PillTone {
   switch (status) {
     case 'PENDING':
       return 'warning'
@@ -352,7 +351,7 @@ function refundTone(status: string) {
   }
 }
 
-function payoutTone(status: string) {
+function payoutTone(status: string): PillTone {
   switch (status) {
     case 'PENDING':
       return 'warning'
@@ -367,14 +366,14 @@ function payoutTone(status: string) {
   }
 }
 
-function refundDescription(refund: AdminRefundRequestResponse) {
+function refundDescription(refund: AdminRefundRequestResponse): string {
   const decision = refund.decisionReason?.trim()
   const owner = `${refund.studentName} • ${refund.studentEmail}`
   const base = `${owner} • ${refund.reason}`
   return decision ? `${base} • Decision: ${decision}` : base
 }
 
-function payoutDescription(payout: AdminPayoutRequestResponse) {
+function payoutDescription(payout: AdminPayoutRequestResponse): string {
   const requestedNote = payout.requestedNote?.trim() || 'No note provided.'
   const decision = payout.decisionReason?.trim()
   const owner = `${payout.teacherName} • ${payout.teacherEmail}`
@@ -382,66 +381,62 @@ function payoutDescription(payout: AdminPayoutRequestResponse) {
   return decision ? `${base} • Decision: ${decision}` : base
 }
 
-function canApproveRefund(status: string) {
+function canApproveRefund(status: string): boolean {
   return status === 'PENDING'
 }
 
-function canRejectRefund(status: string) {
+function canRejectRefund(status: string): boolean {
   return status === 'PENDING'
 }
 
-function canMarkRefunded(status: string) {
+function canMarkRefunded(status: string): boolean {
   return status === 'APPROVED'
 }
 
-function canApprovePayout(status: string) {
+function canApprovePayout(status: string): boolean {
   return status === 'PENDING'
 }
 
-function canRejectPayout(status: string) {
+function canRejectPayout(status: string): boolean {
   return status === 'PENDING'
 }
 
-function canMarkPaid(status: string) {
+function canMarkPaid(status: string): boolean {
   return status === 'APPROVED'
 }
 
-function openRefundReject(id: number) {
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.'))
-    return
+function openRefundReject(id: number): void {
+  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
   pendingFinanceDecision.value = { kind: 'refund', id }
   financeDecisionReason.value = ''
   actionError.value = null
   actionSuccess.value = null
 }
 
-function openPayoutReject(id: number) {
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.'))
-    return
+function openPayoutReject(id: number): void {
+  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
   pendingFinanceDecision.value = { kind: 'payout', id }
   financeDecisionReason.value = ''
   actionError.value = null
   actionSuccess.value = null
 }
 
-function cancelFinanceDecision() {
+function cancelFinanceDecision(): void {
   pendingFinanceDecision.value = null
   financeDecisionReason.value = ''
   actionError.value = null
 }
 
-async function approveRefund(id: number) {
+async function approveRefund(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.'))
-    return
+  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Approve this refund request?')) return
   await runFinanceAction(() => adminApi.approveRefund(id), refundsResource.reload, 'Unable to approve this refund.')
 }
 
-async function markRefunded(id: number) {
+async function markRefunded(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.'))
-    return
+  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Mark this refund as refunded? Confirm only after the provider refund has been completed.'))
     return
   await runFinanceAction(
@@ -451,18 +446,16 @@ async function markRefunded(id: number) {
   )
 }
 
-async function approvePayout(id: number) {
+async function approvePayout(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.'))
-    return
+  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Approve this teacher payout request?')) return
   await runFinanceAction(() => adminApi.approvePayout(id), payoutsResource.reload, 'Unable to approve this payout.')
 }
 
-async function markPaid(id: number) {
+async function markPaid(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.'))
-    return
+  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
   if (!confirmFinanceAction('Mark this payout as paid? Confirm only after funds have been sent.')) return
   await runFinanceAction(
     () => adminApi.markPayoutPaid(id),
@@ -471,7 +464,7 @@ async function markPaid(id: number) {
   )
 }
 
-async function submitFinanceRejection() {
+async function submitFinanceRejection(): Promise<void> {
   if (financeActionBusy.value) return
   const pendingDecision = pendingFinanceDecision.value
   if (!pendingDecision) {
@@ -503,7 +496,7 @@ async function submitFinanceRejection() {
   )
 }
 
-async function saveCommission() {
+async function saveCommission(): Promise<void> {
   if (submittingCommission.value) return
   if (
     !ensureFinanceLive(commissionReadOnly.value, 'Commission settings cannot be changed while preview data is active.')
@@ -525,7 +518,11 @@ async function saveCommission() {
   }
 }
 
-async function runFinanceAction(action: () => Promise<unknown>, reload: () => Promise<unknown>, fallback: string) {
+async function runFinanceAction(
+  action: () => Promise<unknown>,
+  reload: () => Promise<unknown>,
+  fallback: string,
+): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   financeActionBusy.value = true
@@ -542,18 +539,18 @@ async function runFinanceAction(action: () => Promise<unknown>, reload: () => Pr
   }
 }
 
-function ensureFinanceLive(readOnly: boolean, message: string) {
+function ensureFinanceLive(readOnly: boolean, message: string): boolean {
   if (!readOnly) return true
   actionSuccess.value = null
   actionError.value = message
   return false
 }
 
-function clampCommissionRate(value: number) {
+function clampCommissionRate(value: number): number {
   return clampNumber(value, 0, 1)
 }
 
-function confirmFinanceAction(message: string) {
+function confirmFinanceAction(message: string): boolean {
   const confirmed = window.confirm(`${message}\n\nThis updates live finance records.`)
   if (!confirmed) {
     actionSuccess.value = null

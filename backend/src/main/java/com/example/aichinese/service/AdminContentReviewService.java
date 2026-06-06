@@ -236,7 +236,7 @@ public class AdminContentReviewService {
         return response;
     }
 
-    private void requireNotAlreadyArchived(ContentStatus currentStatus, String entityName) {
+    private static void requireNotAlreadyArchived(ContentStatus currentStatus, String entityName) {
         if (currentStatus == ContentStatus.ARCHIVED) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
@@ -250,7 +250,7 @@ public class AdminContentReviewService {
         }
 
         try {
-            return ContentStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+            return ContentStatus.fromValue(status);
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Invalid content status filter.");
         }

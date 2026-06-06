@@ -19,6 +19,12 @@ import com.example.aichinese.repository.TeacherEarningRepository;
 public class TeacherEarningService {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherEarningService.class);
+    private static final String GROSS_AMOUNT_TOO_LARGE =
+            "Order item amount is too large for teacher earning settlement.";
+    private static final String COMMISSION_AMOUNT_TOO_LARGE =
+            "Commission amount is too large for teacher earning settlement.";
+    private static final String NET_AMOUNT_TOO_LARGE =
+            "Net earning amount is too large for teacher earning settlement.";
 
     private final OrderItemRepository orderItemRepository;
     private final TeacherEarningRepository teacherEarningRepository;
@@ -47,20 +53,7 @@ public class TeacherEarningService {
                 continue;
             }
 
-            TeacherEarning earning = new TeacherEarning();
-            earning.setTeacher(orderItem.getTeacher());
-            earning.setOrderItem(orderItem);
-            earning.setGrossAmount(commerceMoneyService.normalizePersistableAmount(
-                    orderItem.getLineTotal(),
-                    "Order item amount is too large for teacher earning settlement."));
-            earning.setCommissionAmount(commerceMoneyService.normalizePersistableAmount(
-                    commerceMoneyService.percentage(orderItem.getLineTotal(), commissionRate),
-                    "Commission amount is too large for teacher earning settlement."));
-            earning.setNetAmount(commerceMoneyService.normalizePersistableAmount(
-                    commerceMoneyService.subtract(earning.getGrossAmount(), earning.getCommissionAmount()),
-                    "Net earning amount is too large for teacher earning settlement."));
-            earning.setEarningStatus(TeacherEarningStatus.AVAILABLE);
-            teacherEarningRepository.save(earning);
+            teacherEarningRepository.save(newTeacherEarning(orderItem, commissionRate));
             created++;
         }
         if (created > 0) {
@@ -74,7 +67,7 @@ public class TeacherEarningService {
         int refunded = 0;
         for (OrderItem orderItem : orderItems) {
             TeacherEarning earning = teacherEarningRepository.findByOrderItemId(orderItem.getId()).orElse(null);
-            if (earning == null) {
+            if (earning == null || earning.getEarningStatus() == TeacherEarningStatus.REFUNDED) {
                 continue;
             }
             earning.setEarningStatus(TeacherEarningStatus.REFUNDED);
@@ -83,5 +76,25 @@ public class TeacherEarningService {
         if (refunded > 0) {
             log.info("Marked {} teacher earning(s) as REFUNDED for orderId={}", refunded, orderId);
         }
+    }
+
+    private TeacherEarning newTeacherEarning(OrderItem orderItem, BigDecimal commissionRate) {
+        BigDecimal grossAmount = commerceMoneyService.normalizePersistableAmount(
+                orderItem.getLineTotal(),
+                GROSS_AMOUNT_TOO_LARGE);
+        BigDecimal commissionAmount = commerceMoneyService.normalizePersistableAmount(
+                commerceMoneyService.percentage(orderItem.getLineTotal(), commissionRate),
+                COMMISSION_AMOUNT_TOO_LARGE);
+
+        TeacherEarning earning = new TeacherEarning();
+        earning.setTeacher(orderItem.getTeacher());
+        earning.setOrderItem(orderItem);
+        earning.setGrossAmount(grossAmount);
+        earning.setCommissionAmount(commissionAmount);
+        earning.setNetAmount(commerceMoneyService.normalizePersistableAmount(
+                commerceMoneyService.subtract(grossAmount, commissionAmount),
+                NET_AMOUNT_TOO_LARGE));
+        earning.setEarningStatus(TeacherEarningStatus.AVAILABLE);
+        return earning;
     }
 }

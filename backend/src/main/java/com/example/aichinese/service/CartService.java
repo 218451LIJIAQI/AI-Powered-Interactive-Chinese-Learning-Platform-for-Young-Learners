@@ -148,32 +148,12 @@ public class CartService {
         String currencyCode = commerceSettingsService.getDefaultCurrency();
 
         for (CartItem cartItem : cartItems) {
-            ResolvedPurchasableItem resolved;
-            try {
-                resolved = purchasableItemService.resolve(
-                        cartItem.getItemType(), cartItem.getItemId(), null);
-            } catch (ResponseStatusException ex) {
-                cartItemRepository.delete(cartItem);
-                log.warn("Removing stale cart item id={} (type={}, itemId={}): {}",
-                        cartItem.getId(), cartItem.getItemType(),
-                        cartItem.getItemId(), ex.getReason());
+            CartItemResponse item = buildCartItemResponse(cartItem, currencyCode);
+            if (item == null) {
                 continue;
             }
-
-            BigDecimal capturedPrice = cartItem.getUnitPrice();
-            BigDecimal subtotal = commerceMoneyService.multiply(
-                    capturedPrice, BigDecimal.valueOf(cartItem.getQuantity()));
-            totalAmount = commerceMoneyService.add(totalAmount, subtotal);
-            items.add(new CartItemResponse(
-                    cartItem.getId(),
-                    resolved.itemType().name(),
-                    resolved.itemId(),
-                    resolved.title(),
-                    capturedPrice,
-                    currencyCode,
-                    cartItem.getQuantity(),
-                    subtotal,
-                    resolved.teacher() != null));
+            totalAmount = commerceMoneyService.add(totalAmount, item.subtotal());
+            items.add(item);
         }
 
         return new CartResponse(
@@ -182,6 +162,46 @@ public class CartService {
                 commerceMoneyService.normalize(totalAmount),
                 currencyCode,
                 items.isEmpty());
+    }
+
+    private CartItemResponse buildCartItemResponse(CartItem cartItem, String currencyCode) {
+        ResolvedPurchasableItem resolved = resolveCartItem(cartItem);
+        if (resolved == null) {
+            return null;
+        }
+
+        BigDecimal capturedPrice = cartItem.getUnitPrice();
+        BigDecimal subtotal = commerceMoneyService.multiply(
+                capturedPrice,
+                BigDecimal.valueOf(cartItem.getQuantity()));
+        return new CartItemResponse(
+                cartItem.getId(),
+                resolved.itemType().name(),
+                resolved.itemId(),
+                resolved.title(),
+                capturedPrice,
+                currencyCode,
+                cartItem.getQuantity(),
+                subtotal,
+                resolved.teacher() != null);
+    }
+
+    private ResolvedPurchasableItem resolveCartItem(CartItem cartItem) {
+        try {
+            return purchasableItemService.resolve(cartItem.getItemType(), cartItem.getItemId(), null);
+        } catch (ResponseStatusException ex) {
+            removeStaleCartItem(cartItem, ex);
+            return null;
+        }
+    }
+
+    private void removeStaleCartItem(CartItem cartItem, ResponseStatusException exception) {
+        cartItemRepository.delete(cartItem);
+        log.warn("Removing stale cart item id={} (type={}, itemId={}): {}",
+                cartItem.getId(),
+                cartItem.getItemType(),
+                cartItem.getItemId(),
+                exception.getReason());
     }
 
     private void enforceCartCapacity(Cart cart) {

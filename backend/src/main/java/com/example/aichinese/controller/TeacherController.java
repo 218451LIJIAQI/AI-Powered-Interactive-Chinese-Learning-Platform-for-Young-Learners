@@ -1,12 +1,14 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,8 +53,8 @@ import com.example.aichinese.dto.teacher.TeacherStudentSummaryResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationStatusResponse;
 import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
 import com.example.aichinese.security.SecurityUserDetails;
-import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.AnalyticsService;
+import com.example.aichinese.service.DashboardService;
 import com.example.aichinese.service.LiveClassService;
 import com.example.aichinese.service.RecordedLessonService;
 import com.example.aichinese.service.StoredFileDownload;
@@ -101,17 +103,17 @@ public class TeacherController {
             LiveClassService liveClassService,
             RecordedLessonService recordedLessonService,
             VideoProgressService videoProgressService) {
-        this.dashboardService = dashboardService;
-        this.analyticsService = analyticsService;
-        this.teacherManagementService = teacherManagementService;
-        this.teacherModuleService = teacherModuleService;
-        this.teacherLessonService = teacherLessonService;
-        this.teacherPackageService = teacherPackageService;
-        this.teacherQuizService = teacherQuizService;
-        this.teacherStudentService = teacherStudentService;
-        this.liveClassService = liveClassService;
-        this.recordedLessonService = recordedLessonService;
-        this.videoProgressService = videoProgressService;
+        this.dashboardService = Objects.requireNonNull(dashboardService, "dashboardService");
+        this.analyticsService = Objects.requireNonNull(analyticsService, "analyticsService");
+        this.teacherManagementService = Objects.requireNonNull(teacherManagementService, "teacherManagementService");
+        this.teacherModuleService = Objects.requireNonNull(teacherModuleService, "teacherModuleService");
+        this.teacherLessonService = Objects.requireNonNull(teacherLessonService, "teacherLessonService");
+        this.teacherPackageService = Objects.requireNonNull(teacherPackageService, "teacherPackageService");
+        this.teacherQuizService = Objects.requireNonNull(teacherQuizService, "teacherQuizService");
+        this.teacherStudentService = Objects.requireNonNull(teacherStudentService, "teacherStudentService");
+        this.liveClassService = Objects.requireNonNull(liveClassService, "liveClassService");
+        this.recordedLessonService = Objects.requireNonNull(recordedLessonService, "recordedLessonService");
+        this.videoProgressService = Objects.requireNonNull(videoProgressService, "videoProgressService");
     }
 
     @GetMapping("/dashboard")
@@ -441,7 +443,10 @@ public class TeacherController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long lessonId,
             @PathVariable Long videoId) {
-        StoredFileDownload download = recordedLessonService.loadTeacherRecordedVideoDownload(currentUser, lessonId, videoId);
+        StoredFileDownload download = recordedLessonService.loadTeacherRecordedVideoDownload(
+                currentUser,
+                lessonId,
+                videoId);
         return FileDownloadResponseBuilder.buildInlineDownloadResponse(download);
     }
 

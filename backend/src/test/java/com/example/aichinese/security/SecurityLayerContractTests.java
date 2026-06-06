@@ -21,9 +21,23 @@ import com.example.aichinese.repository.UserRepository;
 
 class SecurityLayerContractTests {
 
+    private static final long USER_ID = 1L;
+    private static final long PERSISTED_USER_ID = 42L;
+    private static final String TEACHER_EMAIL = "teacher@example.com";
+    private static final String SAME_EMAIL = "same@example.com";
+    private static final String DISPLAY_NAME = "Security Test User";
+    private static final String PASSWORD_HASH = "$2a$10$abcdefghijklmnopqrstuv";
+    private static final String IDEOGRAPHIC_SPACE = "\u3000";
+    private static final String ADMIN_ROLE_NAME = "ADMIN";
+    private static final String TEACHER_ROLE_NAME = "TEACHER";
+    private static final String ADMIN_AUTHORITY = "ROLE_ADMIN";
+    private static final String TEACHER_AUTHORITY = "ROLE_TEACHER";
+    private static final String TEACHER_EMAIL_WITH_IDEOGRAPHIC_SPACES =
+            IDEOGRAPHIC_SPACE + TEACHER_EMAIL + IDEOGRAPHIC_SPACE;
+
     @Test
     void securityUserDetailsFiltersNullAndDuplicateRoles() {
-        User user = user(1L, "teacher@example.com");
+        User user = user(USER_ID, TEACHER_EMAIL);
         user.setRoles(new HashSet<>(Set.of(
                 role(RoleName.TEACHER),
                 role(RoleName.ADMIN),
@@ -33,16 +47,16 @@ class SecurityLayerContractTests {
 
         SecurityUserDetails details = new SecurityUserDetails(user);
 
-        assertThat(details.getRoleNames()).containsExactly("ADMIN", "TEACHER");
+        assertThat(details.getRoleNames()).containsExactly(ADMIN_ROLE_NAME, TEACHER_ROLE_NAME);
         assertThat(details.getAuthorities())
                 .extracting(authority -> authority.getAuthority())
-                .containsExactly("ROLE_ADMIN", "ROLE_TEACHER");
+                .containsExactly(ADMIN_AUTHORITY, TEACHER_AUTHORITY);
     }
 
     @Test
     void transientSecurityUserDetailsDoNotCompareEqual() {
-        SecurityUserDetails first = new SecurityUserDetails(user(null, "same@example.com"));
-        SecurityUserDetails second = new SecurityUserDetails(user(null, "same@example.com"));
+        SecurityUserDetails first = new SecurityUserDetails(user(null, SAME_EMAIL));
+        SecurityUserDetails second = new SecurityUserDetails(user(null, SAME_EMAIL));
 
         assertThat(first).isNotEqualTo(second);
         assertThat(first).isEqualTo(first);
@@ -51,22 +65,21 @@ class SecurityLayerContractTests {
     @Test
     void customUserDetailsServiceNormalizesUsernameBeforeRepositoryLookup() {
         UserRepository repository = mock(UserRepository.class);
-        User persistedUser = user(42L, "teacher@example.com");
-        when(repository.findByEmailWithRoles("teacher@example.com")).thenReturn(Optional.of(persistedUser));
+        User persistedUser = user(PERSISTED_USER_ID, TEACHER_EMAIL);
+        when(repository.findByEmailWithRoles(TEACHER_EMAIL)).thenReturn(Optional.of(persistedUser));
 
-        CustomUserDetailsService service = new CustomUserDetailsService(repository);
-        SecurityUserDetails details = (SecurityUserDetails) service.loadUserByUsername("\u3000teacher@example.com\u3000");
+        SecurityUserDetails details = (SecurityUserDetails) new CustomUserDetailsService(repository)
+                .loadUserByUsername(TEACHER_EMAIL_WITH_IDEOGRAPHIC_SPACES);
 
-        assertThat(details.getUserId()).isEqualTo(42L);
-        verify(repository).findByEmailWithRoles("teacher@example.com");
+        assertThat(details.getUserId()).isEqualTo(PERSISTED_USER_ID);
+        verify(repository).findByEmailWithRoles(TEACHER_EMAIL);
     }
 
     @Test
     void customUserDetailsServiceRejectsBlankUsernameWithoutRepositoryLookup() {
         UserRepository repository = mock(UserRepository.class);
-        CustomUserDetailsService service = new CustomUserDetailsService(repository);
 
-        assertThatThrownBy(() -> service.loadUserByUsername("\u3000"))
+        assertThatThrownBy(() -> new CustomUserDetailsService(repository).loadUserByUsername(IDEOGRAPHIC_SPACE))
                 .isInstanceOf(UsernameNotFoundException.class);
         verifyNoInteractions(repository);
     }
@@ -75,8 +88,8 @@ class SecurityLayerContractTests {
         User user = new User();
         user.setId(id);
         user.setEmail(email);
-        user.setDisplayName("Security Test User");
-        user.setPasswordHash("$2a$10$abcdefghijklmnopqrstuv");
+        user.setDisplayName(DISPLAY_NAME);
+        user.setPasswordHash(PASSWORD_HASH);
         user.setActive(true);
         return user;
     }

@@ -77,20 +77,22 @@ public class PublicContentService {
         String normalizedKeyword = TextUtils.trimToOptional(keyword)
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElse(null);
+        PublicCourseFilters filters = new PublicCourseFilters(
+                levelId,
+                categoryId,
+                accessTypeFilter,
+                learningTypeFilter,
+                normalizedKeyword);
 
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         String currencyCode = commerceSettingsService.getDefaultCurrency();
-        long totalItems = countPublicCourses(levelId, categoryId, accessTypeFilter, learningTypeFilter, normalizedKeyword);
+        long totalItems = countPublicCourses(filters);
         long offset = (long) safePage * safeSize;
         List<PublicCourseSummaryResponse> items = offset >= totalItems
                 ? List.of()
                 : loadCourseSummaries(findPublicCourseKeys(
-                        levelId,
-                        categoryId,
-                        accessTypeFilter,
-                        learningTypeFilter,
-                        normalizedKeyword,
+                        filters,
                         sort,
                         offset,
                         safeSize),
@@ -134,39 +136,22 @@ public class PublicContentService {
     }
 
     private long countPublicCourses(
-            Long levelId,
-            Long categoryId,
-            AccessType accessTypeFilter,
-            LearningType learningTypeFilter,
-            String normalizedKeyword) {
+            PublicCourseFilters filters) {
         Query query = entityManager.createNativeQuery(
-                "select count(*) from (" + publicCourseUnionSql(
-                        levelId,
-                        categoryId,
-                        accessTypeFilter,
-                        learningTypeFilter,
-                        normalizedKeyword) + ") public_courses");
-        bindPublicCourseParams(query, levelId, categoryId, accessTypeFilter, learningTypeFilter, normalizedKeyword);
+                "select count(*) from (" + publicCourseUnionSql(filters) + ") public_courses");
+        bindPublicCourseParams(query, filters);
         return ((Number) query.getSingleResult()).longValue();
     }
 
     private List<CourseKey> findPublicCourseKeys(
-            Long levelId,
-            Long categoryId,
-            AccessType accessTypeFilter,
-            LearningType learningTypeFilter,
-            String normalizedKeyword,
+            PublicCourseFilters filters,
             String sort,
             long offset,
             int size) {
         Query query = entityManager.createNativeQuery(
-                "select item_type, item_id from (" + publicCourseUnionSql(
-                        levelId,
-                        categoryId,
-                        accessTypeFilter,
-                        learningTypeFilter,
-                        normalizedKeyword) + ") public_courses" + publicCourseOrderClause(sort));
-        bindPublicCourseParams(query, levelId, categoryId, accessTypeFilter, learningTypeFilter, normalizedKeyword);
+                "select item_type, item_id from (" + publicCourseUnionSql(filters)
+                        + ") public_courses" + publicCourseOrderClause(sort));
+        bindPublicCourseParams(query, filters);
         query.setFirstResult(offset > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) offset);
         query.setMaxResults(size);
 
@@ -229,12 +214,7 @@ public class PublicContentService {
         return items;
     }
 
-    private static String publicCourseUnionSql(
-            Long levelId,
-            Long categoryId,
-            AccessType accessTypeFilter,
-            LearningType learningTypeFilter,
-            String normalizedKeyword) {
+    private static String publicCourseUnionSql(PublicCourseFilters filters) {
         StringBuilder lessonSql = new StringBuilder("""
                 select 'LESSON' as item_type, l.id as item_id, l.title as title
                 from lessons l
@@ -243,8 +223,8 @@ public class PublicContentService {
                   and tp.teacher_status = 'APPROVED'
                   and tp.public_visible = true
                 """);
-        appendPublicCourseFilters(lessonSql, "l", levelId, categoryId, accessTypeFilter, learningTypeFilter);
-        if (normalizedKeyword != null) {
+        appendPublicCourseFilters(lessonSql, "l", filters);
+        if (filters.keyword() != null) {
             lessonSql.append(" and (lower(l.title) like :keyword or lower(coalesce(l.summary, '')) like :keyword)");
         }
 
@@ -256,8 +236,8 @@ public class PublicContentService {
                   and tp.teacher_status = 'APPROVED'
                   and tp.public_visible = true
                 """);
-        appendPublicCourseFilters(packageSql, "p", levelId, categoryId, accessTypeFilter, learningTypeFilter);
-        if (normalizedKeyword != null) {
+        appendPublicCourseFilters(packageSql, "p", filters);
+        if (filters.keyword() != null) {
             packageSql.append(" and (lower(p.title) like :keyword or lower(coalesce(p.description, '')) like :keyword)");
         }
 
@@ -267,45 +247,36 @@ public class PublicContentService {
     private static void appendPublicCourseFilters(
             StringBuilder sql,
             String alias,
-            Long levelId,
-            Long categoryId,
-            AccessType accessTypeFilter,
-            LearningType learningTypeFilter) {
-        if (levelId != null) {
+            PublicCourseFilters filters) {
+        if (filters.levelId() != null) {
             sql.append(" and ").append(alias).append(".level_id = :levelId");
         }
-        if (categoryId != null) {
+        if (filters.categoryId() != null) {
             sql.append(" and ").append(alias).append(".category_id = :categoryId");
         }
-        if (accessTypeFilter != null) {
+        if (filters.accessType() != null) {
             sql.append(" and ").append(alias).append(".access_type = :accessType");
         }
-        if (learningTypeFilter != null) {
+        if (filters.learningType() != null) {
             sql.append(" and ").append(alias).append(".learning_type = :learningType");
         }
     }
 
-    private static void bindPublicCourseParams(
-            Query query,
-            Long levelId,
-            Long categoryId,
-            AccessType accessTypeFilter,
-            LearningType learningTypeFilter,
-            String normalizedKeyword) {
-        if (levelId != null) {
-            query.setParameter("levelId", levelId);
+    private static void bindPublicCourseParams(Query query, PublicCourseFilters filters) {
+        if (filters.levelId() != null) {
+            query.setParameter("levelId", filters.levelId());
         }
-        if (categoryId != null) {
-            query.setParameter("categoryId", categoryId);
+        if (filters.categoryId() != null) {
+            query.setParameter("categoryId", filters.categoryId());
         }
-        if (accessTypeFilter != null) {
-            query.setParameter("accessType", accessTypeFilter.name());
+        if (filters.accessType() != null) {
+            query.setParameter("accessType", filters.accessType().name());
         }
-        if (learningTypeFilter != null) {
-            query.setParameter("learningType", learningTypeFilter.name());
+        if (filters.learningType() != null) {
+            query.setParameter("learningType", filters.learningType().name());
         }
-        if (normalizedKeyword != null) {
-            query.setParameter("keyword", "%" + normalizedKeyword + "%");
+        if (filters.keyword() != null) {
+            query.setParameter("keyword", "%" + filters.keyword() + "%");
         }
     }
 
@@ -323,11 +294,8 @@ public class PublicContentService {
             return null;
         }
 
-        try {
-            return AccessType.valueOf(accessType.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid access type filter.");
-        }
+        return AccessType.tryFrom(accessType)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid access type filter."));
     }
 
     private static LearningType parseLearningType(String learningType) {
@@ -335,11 +303,8 @@ public class PublicContentService {
             return null;
         }
 
-        try {
-            return LearningType.valueOf(learningType.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid learning type filter.");
-        }
+        return LearningType.tryFrom(learningType)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid learning type filter."));
     }
 
     private static CourseKey parseCourseKey(String id) {
@@ -364,5 +329,13 @@ public class PublicContentService {
     }
 
     private record CourseKey(ManagedContentType type, Long id) {
+    }
+
+    private record PublicCourseFilters(
+            Long levelId,
+            Long categoryId,
+            AccessType accessType,
+            LearningType learningType,
+            String keyword) {
     }
 }

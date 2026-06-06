@@ -19,7 +19,8 @@ import com.example.aichinese.entity.enums.TeacherStatus;
 
 import jakarta.persistence.LockModeType;
 
-public interface TeacherProfileRepository extends JpaRepository<TeacherProfile, Long>, JpaSpecificationExecutor<TeacherProfile> {
+public interface TeacherProfileRepository
+        extends JpaRepository<TeacherProfile, Long>, JpaSpecificationExecutor<TeacherProfile> {
 
     Optional<TeacherProfile> findByUserId(Long userId);
 

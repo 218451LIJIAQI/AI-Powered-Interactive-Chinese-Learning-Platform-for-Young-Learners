@@ -47,6 +47,12 @@ public class LiveClassService {
     private static final Set<LiveClassStatus> STUDENT_VISIBLE_STATUSES = LiveClassStatus.STUDENT_VISIBLE;
     private static final int MAX_LIVE_CLASS_TITLE_LENGTH = 200;
     private static final int MAX_LIVE_CLASS_DESCRIPTION_LENGTH = 1000;
+    private static final String LIVE_CLASS_TARGET_TYPE = "LIVE_CLASS";
+    private static final String LIVE_CLASS_AUDIT_TARGET_TYPE = "LiveClass";
+    private static final String STUDENT_CLASSES_PATH = "/student/classes";
+    private static final String TEACHER_CLASSES_PATH = "/teacher/classes";
+    private static final Set<LiveClassStatus> TERMINAL_STATUSES =
+            Set.of(LiveClassStatus.COMPLETED, LiveClassStatus.CANCELLED);
 
     private final LiveClassRepository liveClassRepository;
     private final LiveClassEnrolmentRepository liveClassEnrolmentRepository;
@@ -80,16 +86,14 @@ public class LiveClassService {
     public LiveClassResponse createLiveClass(SecurityUserDetails currentUser, CreateLiveClassRequest request) {
         TeacherProfile teacher = liveLearningAccessService.requireApprovedTeacher(currentUser);
         LiveClass liveClass = new LiveClass();
-        applyLiveClassUpdate(currentUser, liveClass, request.title(), request.description(), request.lessonId(), request.packageId(),
-                request.startTime(), request.endTime(), request.timeZone(), request.meetingLink(), request.meetingPlatform(),
-                request.status(), request.maxParticipants());
+        applyLiveClassUpdate(currentUser, liveClass, LiveClassUpdate.from(request));
         liveClass.setTeacher(teacher);
         LiveClass saved = liveClassRepository.save(liveClass);
 
         auditLogService.record(
                 teacher.getUser(),
                 "TEACHER_LIVE_CLASS_CREATE",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 saved.getId(),
                 "Teacher created a live class.");
 
@@ -100,15 +104,13 @@ public class LiveClassService {
     public LiveClassResponse updateLiveClass(SecurityUserDetails currentUser, Long liveClassId, UpdateLiveClassRequest request) {
         LiveClass liveClass = liveLearningAccessService.requireTeacherOwnedLiveClass(currentUser, liveClassId);
         ensureLiveClassEditable(liveClass);
-        applyLiveClassUpdate(currentUser, liveClass, request.title(), request.description(), request.lessonId(), request.packageId(),
-                request.startTime(), request.endTime(), request.timeZone(), request.meetingLink(), request.meetingPlatform(),
-                request.status(), request.maxParticipants());
+        applyLiveClassUpdate(currentUser, liveClass, LiveClassUpdate.from(request));
         LiveClass saved = liveClassRepository.save(liveClass);
 
         auditLogService.record(
                 saved.getTeacher().getUser(),
                 "TEACHER_LIVE_CLASS_UPDATE",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 saved.getId(),
                 "Teacher updated a live class.");
 
@@ -128,7 +130,7 @@ public class LiveClassService {
         auditLogService.record(
                 saved.getTeacher().getUser(),
                 "TEACHER_LIVE_CLASS_STATUS",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 saved.getId(),
                 "Teacher updated a live class status to " + saved.getLiveClassStatus().name() + ".");
 
@@ -143,12 +145,12 @@ public class LiveClassService {
             return toTeacherResponse(liveClass);
         }
         LiveClass saved = liveClassRepository.save(liveClass);
-        notifyEnrolledStudents(saved, "Live class cancelled", saved.getTitle() + " has been cancelled.", "/student/classes");
+        notifyEnrolledStudents(saved, "Live class cancelled", saved.getTitle() + " has been cancelled.", STUDENT_CLASSES_PATH);
 
         auditLogService.record(
                 saved.getTeacher().getUser(),
                 "TEACHER_LIVE_CLASS_CANCEL",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 saved.getId(),
                 "Teacher cancelled a live class.");
 
@@ -164,12 +166,12 @@ public class LiveClassService {
         liveClass.setScheduledEndAt(request.endTime());
         liveClass.setTimeZone(resolveTimeZone(request.timeZone()));
         LiveClass saved = liveClassRepository.save(liveClass);
-        notifyEnrolledStudents(saved, "Live class rescheduled", saved.getTitle() + " has a new schedule.", "/student/classes");
+        notifyEnrolledStudents(saved, "Live class rescheduled", saved.getTitle() + " has a new schedule.", STUDENT_CLASSES_PATH);
 
         auditLogService.record(
                 saved.getTeacher().getUser(),
                 "TEACHER_LIVE_CLASS_RESCHEDULE",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 saved.getId(),
                 "Teacher rescheduled a live class.");
 
@@ -263,15 +265,15 @@ public class LiveClassService {
                 NotificationType.LIVE_CLASS_REMINDER,
                 "Student enrolled in live class",
                 student.getUser().getDisplayName() + " enrolled in " + liveClass.getTitle() + ".",
-                "LIVE_CLASS",
+                LIVE_CLASS_TARGET_TYPE,
                 liveClass.getId(),
-                "/teacher/classes",
+                TEACHER_CLASSES_PATH,
                 student.getUser());
 
         auditLogService.record(
                 student.getUser(),
                 "STUDENT_LIVE_CLASS_ENROL",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 liveClass.getId(),
                 "Student enrolled in a live class.");
 
@@ -293,15 +295,15 @@ public class LiveClassService {
                 NotificationType.LIVE_CLASS_REMINDER,
                 "Student cancelled enrolment",
                 student.getUser().getDisplayName() + " cancelled enrolment for " + enrolment.getLiveClass().getTitle() + ".",
-                "LIVE_CLASS",
+                LIVE_CLASS_TARGET_TYPE,
                 liveClassId,
-                "/teacher/classes",
+                TEACHER_CLASSES_PATH,
                 student.getUser());
 
         auditLogService.record(
                 student.getUser(),
                 "STUDENT_LIVE_CLASS_CANCEL_ENROLMENT",
-                "LiveClass",
+                LIVE_CLASS_AUDIT_TARGET_TYPE,
                 liveClassId,
                 "Student cancelled live class enrolment.");
 
@@ -337,23 +339,13 @@ public class LiveClassService {
     private void applyLiveClassUpdate(
             SecurityUserDetails currentUser,
             LiveClass liveClass,
-            String title,
-            String description,
-            Long lessonId,
-            Long packageId,
-            LocalDateTime startTime,
-            LocalDateTime endTime,
-            String timeZone,
-            String meetingLink,
-            String meetingPlatform,
-            String statusValue,
-            Integer maxParticipants) {
-        liveLearningAccessService.validateLiveClassTiming(startTime, endTime);
-        var parsedMeetingPlatform = liveLearningAccessService.parseMeetingPlatform(meetingPlatform);
-        String normalizedMeetingLink = liveLearningAccessService.validateMeetingLink(meetingLink, parsedMeetingPlatform);
+            LiveClassUpdate update) {
+        liveLearningAccessService.validateLiveClassTiming(update.startTime(), update.endTime());
+        var parsedMeetingPlatform = liveLearningAccessService.parseMeetingPlatform(update.meetingPlatform());
+        String normalizedMeetingLink = liveLearningAccessService.validateMeetingLink(update.meetingLink(), parsedMeetingPlatform);
 
-        Lesson lesson = lessonId == null ? null : liveLearningAccessService.requireOwnedLesson(currentUser, lessonId);
-        CoursePackage coursePackage = packageId == null ? null : liveLearningAccessService.requireOwnedPackage(currentUser, packageId);
+        Lesson lesson = update.lessonId() == null ? null : liveLearningAccessService.requireOwnedLesson(currentUser, update.lessonId());
+        CoursePackage coursePackage = update.packageId() == null ? null : liveLearningAccessService.requireOwnedPackage(currentUser, update.packageId());
 
         if (lesson == null && coursePackage == null) {
             throw new ResponseStatusException(BAD_REQUEST, "A live class must be linked to a lesson or package.");
@@ -361,21 +353,21 @@ public class LiveClassService {
 
         liveClass.setLesson(lesson);
         liveClass.setCoursePackage(coursePackage);
-        liveClass.setTitle(contentSafetyService.requireSafeText(title, MAX_LIVE_CLASS_TITLE_LENGTH, "Title is required."));
-        liveClass.setDescription(contentSafetyService.optionalSafeText(description, MAX_LIVE_CLASS_DESCRIPTION_LENGTH));
-        liveClass.setScheduledStartAt(startTime);
-        liveClass.setScheduledEndAt(endTime);
-        liveClass.setTimeZone(resolveTimeZone(timeZone));
+        liveClass.setTitle(contentSafetyService.requireSafeText(update.title(), MAX_LIVE_CLASS_TITLE_LENGTH, "Title is required."));
+        liveClass.setDescription(contentSafetyService.optionalSafeText(update.description(), MAX_LIVE_CLASS_DESCRIPTION_LENGTH));
+        liveClass.setScheduledStartAt(update.startTime());
+        liveClass.setScheduledEndAt(update.endTime());
+        liveClass.setTimeZone(resolveTimeZone(update.timeZone()));
         liveClass.setMeetingLink(normalizedMeetingLink);
         liveClass.setMeetingPlatform(parsedMeetingPlatform);
-        LiveClassStatus requestedStatus = liveLearningAccessService.parseLiveClassStatus(statusValue, liveClass.getLiveClassStatus());
+        LiveClassStatus requestedStatus = liveLearningAccessService.parseLiveClassStatus(update.status(), liveClass.getLiveClassStatus());
         if (liveClass.getId() == null) {
             validateInitialLiveClassStatus(requestedStatus);
         } else {
             validateLiveClassStatusTransition(liveClass.getLiveClassStatus(), requestedStatus);
         }
         liveClass.setLiveClassStatus(requestedStatus);
-        liveClass.setMaxParticipants(maxParticipants);
+        liveClass.setMaxParticipants(update.maxParticipants());
     }
 
     private boolean applyLiveClassStatusTransition(LiveClass liveClass, LiveClassStatus requestedStatus) {
@@ -430,7 +422,7 @@ public class LiveClassService {
     }
 
     private boolean isTerminalStatus(LiveClassStatus status) {
-        return status == LiveClassStatus.COMPLETED || status == LiveClassStatus.CANCELLED;
+        return TERMINAL_STATUSES.contains(status);
     }
 
     private String resolveTimeZone(String timeZone) {
@@ -535,6 +527,7 @@ public class LiveClassService {
     private void notifyEnrolledStudents(LiveClass liveClass, String title, String message, String targetPath) {
         for (LiveClassEnrolment enrolment : liveClassEnrolmentRepository.findByLiveClassIdOrderByEnrolledAtAsc(liveClass.getId())) {
             if (enrolment.getEnrolmentStatus() == LiveClassEnrolmentStatus.ENROLLED
+                    && enrolment.getStudent() != null
                     && enrolment.getStudent().getUser() != null
                     && hasCurrentEnrolmentAccess(enrolment)) {
                 notificationService.safeCreateNotification(
@@ -542,11 +535,55 @@ public class LiveClassService {
                         NotificationType.LIVE_CLASS_REMINDER,
                         title,
                         message,
-                        "LIVE_CLASS",
+                        LIVE_CLASS_TARGET_TYPE,
                         liveClass.getId(),
                         targetPath,
                         liveClass.getTeacher().getUser());
             }
+        }
+    }
+
+    private record LiveClassUpdate(
+            String title,
+            String description,
+            Long lessonId,
+            Long packageId,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String timeZone,
+            String meetingLink,
+            String meetingPlatform,
+            String status,
+            Integer maxParticipants) {
+
+        private static LiveClassUpdate from(CreateLiveClassRequest request) {
+            return new LiveClassUpdate(
+                    request.title(),
+                    request.description(),
+                    request.lessonId(),
+                    request.packageId(),
+                    request.startTime(),
+                    request.endTime(),
+                    request.timeZone(),
+                    request.meetingLink(),
+                    request.meetingPlatform(),
+                    request.status(),
+                    request.maxParticipants());
+        }
+
+        private static LiveClassUpdate from(UpdateLiveClassRequest request) {
+            return new LiveClassUpdate(
+                    request.title(),
+                    request.description(),
+                    request.lessonId(),
+                    request.packageId(),
+                    request.startTime(),
+                    request.endTime(),
+                    request.timeZone(),
+                    request.meetingLink(),
+                    request.meetingPlatform(),
+                    request.status(),
+                    request.maxParticipants());
         }
     }
 }

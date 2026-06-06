@@ -59,6 +59,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @ActiveProfiles("test")
 class AdminTeacherManagementIntegrationTests {
 
+    private static final String ADMIN_EMAIL = "admin@example.com";
+    private static final String ADMIN_PASSWORD = "SuperSecure123!";
+    private static final String DEFAULT_PASSWORD = "Password123!";
+    private static final String AUTHORIZATION = "Authorization";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -91,7 +96,7 @@ class AdminTeacherManagementIntegrationTests {
 
         mockMvc.perform(get("/api/v1/admin/teachers/pending")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.size").value(100))
@@ -106,9 +111,9 @@ class AdminTeacherManagementIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/teachers/" + profile.getId() + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("note", "Documents verified."))))
+                .content(json(Map.of("note", "Documents verified."))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.teacherStatus").value("APPROVED"));
 
@@ -126,7 +131,7 @@ class AdminTeacherManagementIntegrationTests {
                 .contains("ADMIN_TEACHER_APPROVE");
 
         mockMvc.perform(get("/api/v1/admin/teachers/" + profile.getId())
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.verificationDocuments.length()").value(1))
                 .andExpect(jsonPath("$.data.verificationReviewHistory.length()").value(1));
@@ -140,9 +145,9 @@ class AdminTeacherManagementIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/teachers/" + profile.getId() + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("note", "Attempting approval without evidence."))))
+                .content(json(Map.of("note", "Attempting approval without evidence."))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errors[0]").value("At least one verification document is required before approving a teacher."));
@@ -160,9 +165,9 @@ class AdminTeacherManagementIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/teachers/" + profile.getId() + "/reject")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("reason", "Document is too blurry."))))
+                .content(json(Map.of("reason", "Document is too blurry."))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.teacherStatus").value("REJECTED"))
                 .andExpect(jsonPath("$.data.rejectionReason").value("Document is too blurry."));
@@ -180,9 +185,9 @@ class AdminTeacherManagementIntegrationTests {
 
         mockMvc.perform(post("/api/v1/admin/teachers/" + profile.getId() + "/reject")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken())
+                .header(AUTHORIZATION, bearer(adminToken()))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("reason", ""))))
+                .content(json(Map.of("reason", ""))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -191,13 +196,13 @@ class AdminTeacherManagementIntegrationTests {
     void nonAdminShouldNotApproveTeacher() throws Exception {
         String teacherEmail = uniqueEmail("teacher-forbidden");
         TeacherProfile profile = registerTeacherWithDocument(teacherEmail);
-        String teacherToken = loginAndExtractToken(teacherEmail, "Password123!");
+        String teacherToken = loginAndExtractToken(teacherEmail, DEFAULT_PASSWORD);
 
         mockMvc.perform(post("/api/v1/admin/teachers/" + profile.getId() + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken)
+                .header(AUTHORIZATION, bearer(teacherToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("note", "Nope"))))
+                .content(json(Map.of("note", "Nope"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -208,7 +213,7 @@ class AdminTeacherManagementIntegrationTests {
         String studentToken = registerStudentAndLogin(studentEmail);
 
         mockMvc.perform(get("/api/v1/admin/teachers/pending")
-                .header("Authorization", "Bearer " + studentToken))
+                .header(AUTHORIZATION, bearer(studentToken)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -230,9 +235,9 @@ class AdminTeacherManagementIntegrationTests {
         TeacherProfile approvedProfile = registerTeacherWithDocument(approvedEmail);
         mockMvc.perform(post("/api/v1/admin/teachers/" + approvedProfile.getId() + "/approve")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken())
+                .header(AUTHORIZATION, bearer(adminToken()))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("note", "Approved for public profile"))))
+                .content(json(Map.of("note", "Approved for public profile"))))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/public/teachers/" + approvedProfile.getId()))
@@ -260,7 +265,7 @@ class AdminTeacherManagementIntegrationTests {
                 .param("role", "TEACHER")
                 .param("status", "PENDING")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andExpect(jsonPath("$.data.items[0].roles[0]").value("TEACHER"))
@@ -269,7 +274,7 @@ class AdminTeacherManagementIntegrationTests {
 
         MvcResult studentsResult = mockMvc.perform(get("/api/v1/admin/students")
                 .param("size", "100000")
-                .header("Authorization", "Bearer " + adminToken))
+                .header(AUTHORIZATION, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.size").value(100))
                 .andReturn();
@@ -288,54 +293,54 @@ class AdminTeacherManagementIntegrationTests {
 
         mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("active", false))))
+                .content(json(Map.of("active", false))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.active").value(false));
 
         assertThat(userRepository.findById(studentUser.getId()).orElseThrow().isActive()).isFalse();
 
         mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + originalToken))
+                .header(AUTHORIZATION, bearer(originalToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
 
         mockMvc.perform(post("/api/v1/auth/login")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", studentEmail,
-                        "password", "Password123!"))))
+                        "password", DEFAULT_PASSWORD))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
 
         mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
+                .header(AUTHORIZATION, bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("active", true))))
+                .content(json(Map.of("active", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.active").value(true));
 
         assertThat(userRepository.findById(studentUser.getId()).orElseThrow().isActive()).isTrue();
-        assertThat(loginAndExtractToken(studentEmail, "Password123!")).isNotBlank();
+        assertThat(loginAndExtractToken(studentEmail, DEFAULT_PASSWORD)).isNotBlank();
 
         mockMvc.perform(get("/api/v1/auth/me")
-                .header("Authorization", "Bearer " + originalToken))
+                .header(AUTHORIZATION, bearer(originalToken)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
     void adminShouldNotDeactivateOwnAccount() throws Exception {
-        User adminUser = userRepository.findByEmailWithRoles("admin@example.com").orElseThrow();
+        User adminUser = userRepository.findByEmailWithRoles(ADMIN_EMAIL).orElseThrow();
 
         mockMvc.perform(patch("/api/v1/admin/users/" + adminUser.getId() + "/status")
                 .with(csrf())
-                .header("Authorization", "Bearer " + adminToken())
+                .header(AUTHORIZATION, bearer(adminToken()))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("active", false))))
+                .content(json(Map.of("active", false))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errors[0]").value("You cannot deactivate your own admin account."));
@@ -350,7 +355,7 @@ class AdminTeacherManagementIntegrationTests {
                 .getId();
 
         mockMvc.perform(get("/api/v1/admin/teacher-documents/" + documentId)
-                .header("Authorization", "Bearer " + adminToken()))
+                .header(AUTHORIZATION, bearer(adminToken())))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Disposition", startsWith("attachment;")))
                 .andExpect(header().string("Cache-Control", "no-store"));
@@ -358,7 +363,7 @@ class AdminTeacherManagementIntegrationTests {
 
     private TeacherProfile registerTeacherWithDocument(String email) throws Exception {
         TeacherProfile profile = registerTeacherWithoutDocument(email);
-        String teacherToken = loginAndExtractToken(email, "Password123!");
+        String teacherToken = loginAndExtractToken(email, DEFAULT_PASSWORD);
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "qualification.pdf",
@@ -370,7 +375,7 @@ class AdminTeacherManagementIntegrationTests {
                 .param("documentType", "QUALIFICATION")
                 .param("description", "Qualification proof")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION, bearer(teacherToken)))
                 .andExpect(status().isOk());
 
         return teacherProfileRepository.findDetailedById(profile.getId()).orElseThrow();
@@ -380,11 +385,11 @@ class AdminTeacherManagementIntegrationTests {
         mockMvc.perform(post("/api/v1/auth/register/teacher")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Teacher " + email,
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", DEFAULT_PASSWORD,
+                        "confirmPassword", DEFAULT_PASSWORD,
                         "bio", "Teacher bio"))))
                 .andExpect(status().isOk());
 
@@ -396,26 +401,26 @@ class AdminTeacherManagementIntegrationTests {
         mockMvc.perform(post("/api/v1/auth/register/student")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "fullName", "Student " + email,
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
+                        "password", DEFAULT_PASSWORD,
+                        "confirmPassword", DEFAULT_PASSWORD,
                         "preferredLanguage", "en"))))
                 .andExpect(status().isOk());
 
-        return loginAndExtractToken(email, "Password123!");
+        return loginAndExtractToken(email, DEFAULT_PASSWORD);
     }
 
     private String adminToken() throws Exception {
-        return loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        return loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
     }
 
     private String loginAndExtractToken(String email, String password) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+                .content(json(Map.of(
                         "email", email,
                         "password", password))))
                 .andExpect(status().isOk())
@@ -427,5 +432,13 @@ class AdminTeacherManagementIntegrationTests {
 
     private String uniqueEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
+    }
+
+    private String json(Object value) throws Exception {
+        return objectMapper.writeValueAsString(value);
+    }
+
+    private static String bearer(String token) {
+        return "Bearer " + token;
     }
 }

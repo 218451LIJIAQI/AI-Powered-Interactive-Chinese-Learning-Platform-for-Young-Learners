@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -37,12 +38,33 @@ import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.TeacherEarningService;
 
 /**
- * Unit coverage for {@code RefundService} — pins the
+ * Unit coverage for {@code RefundService}. It pins the
  * lock-order-before-active-check ordering, the one-way state machine
- * (PENDING → APPROVED → COMPLETED / REJECTED), and the entitlement
+ * (PENDING -> APPROVED -> COMPLETED / REJECTED), and the entitlement
  * revocation + teacher earning refund side-effects on approval.
  */
 class RefundServiceTests {
+
+    private static final long ADMIN_USER_ID = 1L;
+    private static final long REFUND_REQUEST_ID = 10L;
+    private static final long STUDENT_USER_ID = 99L;
+    private static final long STUDENT_PROFILE_ID = 199L;
+    private static final long ORDER_ID = 500L;
+
+    private static final String ADMIN_EMAIL = "admin@example.com";
+    private static final String ADMIN_DISPLAY_NAME = "Admin Example";
+    private static final String STUDENT_EMAIL = "student@example.com";
+    private static final String STUDENT_DISPLAY_NAME = "Student Example";
+    private static final String PASSWORD_HASH = "password-hash";
+    private static final String ORDER_NUMBER = "ORD-TEST";
+    private static final String REFUND_REASON = "Refund reason";
+    private static final String DUPLICATE_REFUND_REASON = "Duplicate active refund";
+    private static final String REJECTION_REASON = "Too late";
+    private static final String ACTIVE_REFUND_MESSAGE = "already active";
+    private static final String APPROVED_STATE_MESSAGE = "currently APPROVED";
+    private static final String REJECTED_STATE_MESSAGE = "currently REJECTED";
+
+    private static final BigDecimal ORDER_TOTAL = BigDecimal.TEN;
 
     @Test
     void createRefundRequestUsesLockedOrderLookupBeforeActiveRefundCheck() {
@@ -51,84 +73,76 @@ class RefundServiceTests {
         StudentProfile student = student();
         Order order = paidOrder(student);
         when(fixture.studentLearningAccessService.requireStudent(currentUser)).thenReturn(student);
-        when(fixture.orderRepository.findLockedByIdAndStudentUserId(500L, currentUser.getUserId()))
+        when(fixture.orderRepository.findLockedByIdAndStudentUserId(ORDER_ID, currentUser.getUserId()))
                 .thenReturn(Optional.of(order));
         when(fixture.refundRequestRepository.existsByOrderIdAndRefundStatusIn(
-                eq(500L),
+                eq(ORDER_ID),
                 any()))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> fixture.refundService.createRefundRequest(
+        assertResponseReasonContains(() -> fixture.refundService.createRefundRequest(
                 currentUser,
-                new RefundRequestCreateRequest(500L, "Duplicate active refund")))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> assertThat(exception.getReason())
-                        .contains("already active"));
+                new RefundRequestCreateRequest(ORDER_ID, DUPLICATE_REFUND_REASON)), ACTIVE_REFUND_MESSAGE);
 
-        verify(fixture.orderRepository).findLockedByIdAndStudentUserId(500L, currentUser.getUserId());
+        verify(fixture.orderRepository).findLockedByIdAndStudentUserId(ORDER_ID, currentUser.getUserId());
         verify(fixture.refundRequestRepository, never()).save(any(RefundRequest.class));
-        verifyNoInteractions(
-                fixture.entitlementService,
-                fixture.teacherEarningService,
-                fixture.notificationService,
-                fixture.auditLogService);
+        verifyNoRefundSideEffects(fixture);
     }
 
     @Test
     void rejectRefundRejectsApprovedRequestWithoutSideEffects() {
         Fixture fixture = fixture();
         RefundRequest refundRequest = refundRequest(RefundStatus.APPROVED);
-        when(fixture.refundRequestRepository.findLockedById(10L)).thenReturn(Optional.of(refundRequest));
+        when(fixture.refundRequestRepository.findLockedById(REFUND_REQUEST_ID)).thenReturn(Optional.of(refundRequest));
 
-        assertThatThrownBy(() -> fixture.refundService.rejectRefund(
+        assertResponseReasonContains(() -> fixture.refundService.rejectRefund(
                 currentUser(),
-                10L,
-                new RefundDecisionRequest("Too late")))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> assertThat(exception.getReason())
-                        .contains("currently APPROVED"));
+                REFUND_REQUEST_ID,
+                new RefundDecisionRequest(REJECTION_REASON)), APPROVED_STATE_MESSAGE);
 
         assertThat(refundRequest.getRefundStatus()).isEqualTo(RefundStatus.APPROVED);
         assertThat(refundRequest.getDecisionReason()).isNull();
         verify(fixture.refundRequestRepository, never()).save(any(RefundRequest.class));
-        verifyNoInteractions(
-                fixture.paymentRecordRepository,
-                fixture.entitlementService,
-                fixture.teacherEarningService,
-                fixture.notificationService,
-                fixture.auditLogService);
+        verifyNoRefundSideEffects(fixture);
     }
 
     @Test
     void approveRefundRejectsRejectedRequestWithoutSideEffects() {
         Fixture fixture = fixture();
         RefundRequest refundRequest = refundRequest(RefundStatus.REJECTED);
-        when(fixture.refundRequestRepository.findLockedById(10L)).thenReturn(Optional.of(refundRequest));
+        when(fixture.refundRequestRepository.findLockedById(REFUND_REQUEST_ID)).thenReturn(Optional.of(refundRequest));
 
-        assertThatThrownBy(() -> fixture.refundService.approveRefund(currentUser(), 10L))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> assertThat(exception.getReason())
-                        .contains("currently REJECTED"));
+        assertResponseReasonContains(
+                () -> fixture.refundService.approveRefund(currentUser(), REFUND_REQUEST_ID),
+                REJECTED_STATE_MESSAGE);
 
         assertThat(refundRequest.getRefundStatus()).isEqualTo(RefundStatus.REJECTED);
         verify(fixture.refundRequestRepository, never()).save(any(RefundRequest.class));
-        verifyNoInteractions(
-                fixture.paymentRecordRepository,
-                fixture.entitlementService,
-                fixture.teacherEarningService,
-                fixture.notificationService,
-                fixture.auditLogService);
+        verifyNoRefundSideEffects(fixture);
     }
 
     @Test
     void markRefundedRejectsRejectedRequestWithoutSideEffects() {
         Fixture fixture = fixture();
         RefundRequest refundRequest = refundRequest(RefundStatus.REJECTED);
-        when(fixture.refundRequestRepository.findLockedById(10L)).thenReturn(Optional.of(refundRequest));
+        when(fixture.refundRequestRepository.findLockedById(REFUND_REQUEST_ID)).thenReturn(Optional.of(refundRequest));
 
-        assertThatThrownBy(() -> fixture.refundService.markRefunded(currentUser(), 10L))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> assertThat(exception.getReason())
-                        .contains("currently REJECTED"));
+        assertResponseReasonContains(
+                () -> fixture.refundService.markRefunded(currentUser(), REFUND_REQUEST_ID),
+                REJECTED_STATE_MESSAGE);
 
         assertThat(refundRequest.getRefundStatus()).isEqualTo(RefundStatus.REJECTED);
         verify(fixture.refundRequestRepository, never()).save(any(RefundRequest.class));
+        verifyNoRefundSideEffects(fixture);
+    }
+
+    private static void assertResponseReasonContains(ThrowingCallable action, String reason) {
+        assertThatThrownBy(action)
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> assertThat(exception.getReason())
+                        .contains(reason));
+    }
+
+    private static void verifyNoRefundSideEffects(Fixture fixture) {
         verifyNoInteractions(
                 fixture.paymentRecordRepository,
                 fixture.entitlementService,
@@ -137,54 +151,54 @@ class RefundServiceTests {
                 fixture.auditLogService);
     }
 
-    private RefundRequest refundRequest(RefundStatus status) {
+    private static RefundRequest refundRequest(RefundStatus status) {
         StudentProfile student = student();
         Order order = paidOrder(student);
 
         RefundRequest refundRequest = new RefundRequest();
-        refundRequest.setId(10L);
+        refundRequest.setId(REFUND_REQUEST_ID);
         refundRequest.setStudent(student);
         refundRequest.setOrder(order);
-        refundRequest.setReason("Refund reason");
+        refundRequest.setReason(REFUND_REASON);
         refundRequest.setRefundStatus(status);
         return refundRequest;
     }
 
-    private StudentProfile student() {
+    private static StudentProfile student() {
         User studentUser = new User();
-        studentUser.setId(99L);
-        studentUser.setEmail("student@example.com");
-        studentUser.setDisplayName("Student Example");
-        studentUser.setPasswordHash("password-hash");
+        studentUser.setId(STUDENT_USER_ID);
+        studentUser.setEmail(STUDENT_EMAIL);
+        studentUser.setDisplayName(STUDENT_DISPLAY_NAME);
+        studentUser.setPasswordHash(PASSWORD_HASH);
         studentUser.setActive(true);
 
         StudentProfile student = new StudentProfile();
-        student.setId(199L);
+        student.setId(STUDENT_PROFILE_ID);
         student.setUser(studentUser);
         return student;
     }
 
-    private Order paidOrder(StudentProfile student) {
+    private static Order paidOrder(StudentProfile student) {
         Order order = new Order();
-        order.setId(500L);
+        order.setId(ORDER_ID);
         order.setStudent(student);
-        order.setOrderNumber("ORD-TEST");
-        order.setTotalAmount(BigDecimal.TEN);
+        order.setOrderNumber(ORDER_NUMBER);
+        order.setTotalAmount(ORDER_TOTAL);
         order.setPaymentStatus(PaymentStatus.PAID);
         return order;
     }
 
-    private SecurityUserDetails currentUser() {
+    private static SecurityUserDetails currentUser() {
         User user = new User();
-        user.setId(1L);
-        user.setEmail("admin@example.com");
-        user.setDisplayName("Admin Example");
-        user.setPasswordHash("password-hash");
+        user.setId(ADMIN_USER_ID);
+        user.setEmail(ADMIN_EMAIL);
+        user.setDisplayName(ADMIN_DISPLAY_NAME);
+        user.setPasswordHash(PASSWORD_HASH);
         user.setActive(true);
         return new SecurityUserDetails(user);
     }
 
-    private Fixture fixture() {
+    private static Fixture fixture() {
         StudentLearningAccessService studentLearningAccessService = mock(StudentLearningAccessService.class);
         OrderRepository orderRepository = mock(OrderRepository.class);
         PaymentRecordRepository paymentRecordRepository = mock(PaymentRecordRepository.class);

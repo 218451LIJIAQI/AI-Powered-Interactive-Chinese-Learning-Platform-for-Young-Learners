@@ -2,18 +2,17 @@ package com.example.aichinese.config;
 
 import java.util.Objects;
 
-import jakarta.servlet.DispatcherType;
-
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +24,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import com.example.aichinese.security.JwtAccessDeniedHandler;
 import com.example.aichinese.security.JwtAuthenticationEntryPoint;
 import com.example.aichinese.security.JwtAuthenticationFilter;
+
+import jakarta.servlet.DispatcherType;
 
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
@@ -50,6 +51,28 @@ public class SecurityConfig {
                     + "form-action 'self'; img-src 'self' data: https:; font-src 'self' data:; "
                     + "script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'";
 
+    private static final String[] HEALTH_ENDPOINTS = {
+            "/api/v1/health",
+            "/actuator/health",
+            "/actuator/health/**",
+            "/actuator/info"
+    };
+    private static final String[] API_DOC_ENDPOINTS = {
+            "/v3/api-docs",
+            "/v3/api-docs/**",
+            "/v3/api-docs.yaml",
+            "/swagger-ui.html",
+            "/swagger-ui/**"
+    };
+    private static final String[] PUBLIC_AUTH_POST_ENDPOINTS = {
+            "/api/v1/auth/register/student",
+            "/api/v1/auth/register/teacher",
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/reset-password"
+    };
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
@@ -70,7 +93,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers
                         .contentTypeOptions(Customizer.withDefaults())
@@ -88,24 +111,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
-                        .requestMatchers("/api/v1/health").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
-                        .permitAll()
-                        .requestMatchers(
-                                "/v3/api-docs",
-                                "/v3/api-docs/**",
-                                "/v3/api-docs.yaml",
-                                "/swagger-ui.html",
-                                "/swagger-ui/**")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST,
-                                "/api/v1/auth/register/student",
-                                "/api/v1/auth/register/teacher",
-                                "/api/v1/auth/login",
-                                "/api/v1/auth/refresh",
-                                "/api/v1/auth/forgot-password",
-                                "/api/v1/auth/reset-password")
-                        .permitAll()
+                        .requestMatchers(HEALTH_ENDPOINTS).permitAll()
+                        .requestMatchers(API_DOC_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/stripe").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").authenticated()

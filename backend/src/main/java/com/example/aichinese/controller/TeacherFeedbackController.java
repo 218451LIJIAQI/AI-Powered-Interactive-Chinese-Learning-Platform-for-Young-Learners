@@ -1,7 +1,8 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,7 +22,6 @@ import com.example.aichinese.service.TeacherFeedbackService;
 
 import jakarta.validation.Valid;
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/teachers/feedback")
 public class TeacherFeedbackController {
@@ -29,7 +29,7 @@ public class TeacherFeedbackController {
     private final TeacherFeedbackService teacherFeedbackService;
 
     public TeacherFeedbackController(TeacherFeedbackService teacherFeedbackService) {
-        this.teacherFeedbackService = teacherFeedbackService;
+        this.teacherFeedbackService = Objects.requireNonNull(teacherFeedbackService, "teacherFeedbackService");
     }
 
     @PostMapping

@@ -3,8 +3,8 @@ package com.example.aichinese.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.File;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -23,80 +23,79 @@ import com.example.aichinese.entity.UploadedFile;
 
 class UploadStorageSupportTests {
 
+    private static final String ORIGINAL_FILE_NAME = "lesson.pdf";
+    private static final String CONTENT_TYPE = "application/pdf";
+    private static final String CONTENT = "demo";
+    private static final String STORED_FILE_NAME = "stored.pdf";
+    private static final String ESCAPING_FILE_NAME = "../outside.pdf";
+    private static final String BLANK_STORED_FILE_NAME = " ";
+    private static final String INVALID_TARGET_MESSAGE = "Invalid target.";
+    private static final String STORAGE_FAILED_MESSAGE = "Storage failed.";
+    private static final String FILE_NOT_FOUND_MESSAGE = "File not found.";
+    private static final String INVALID_FILE_NAME_MESSAGE = "Invalid file name.";
+
     @TempDir
     Path tempDir;
 
     @Test
     void storeMultipartFileClosesTheUploadStreamAfterCopying() throws IOException {
-        CloseTrackingMultipartFile multipartFile = new CloseTrackingMultipartFile("lesson.pdf", "application/pdf", "demo");
+        CloseTrackingMultipartFile multipartFile = multipartFile();
 
         Path storedPath = UploadStorageSupport.storeMultipartFile(
                 multipartFile,
                 tempDir,
-                "stored.pdf",
-                "Invalid target.",
-                "Storage failed.");
+                STORED_FILE_NAME,
+                INVALID_TARGET_MESSAGE,
+                STORAGE_FAILED_MESSAGE);
 
-        assertThat(Files.readString(storedPath, StandardCharsets.UTF_8)).isEqualTo("demo");
+        assertThat(Files.readString(storedPath, StandardCharsets.UTF_8)).isEqualTo(CONTENT);
         assertThat(multipartFile.openedStreams()).hasSize(1);
         assertThat(multipartFile.openedStreams().getFirst().closed()).isTrue();
     }
 
     @Test
     void storeMultipartFileRejectsManagedPathEscape() {
-        CloseTrackingMultipartFile multipartFile = new CloseTrackingMultipartFile("lesson.pdf", "application/pdf", "demo");
+        CloseTrackingMultipartFile multipartFile = multipartFile();
 
         assertThatThrownBy(() -> UploadStorageSupport.storeMultipartFile(
                 multipartFile,
                 tempDir,
-                "../outside.pdf",
-                "Invalid target.",
-                "Storage failed."))
+                ESCAPING_FILE_NAME,
+                INVALID_TARGET_MESSAGE,
+                STORAGE_FAILED_MESSAGE))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Invalid target.");
+                .hasMessageContaining(INVALID_TARGET_MESSAGE);
 
         assertThat(multipartFile.openedStreams()).isEmpty();
     }
 
     @Test
     void loadManagedFileReturnsNotFoundForMissingOrBlankMetadata() {
-        assertThatThrownBy(() -> UploadStorageSupport.loadManagedFile(tempDir.toString(), null, "File not found."))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
-                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-                    assertThat(exception.getReason()).isEqualTo("File not found.");
-                });
+        assertNotFoundWhenLoading(null);
 
         UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setStoredFileName(" ");
+        uploadedFile.setStoredFileName(BLANK_STORED_FILE_NAME);
 
-        assertThatThrownBy(() -> UploadStorageSupport.loadManagedFile(tempDir.toString(), uploadedFile, "File not found."))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
-                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-                    assertThat(exception.getReason()).isEqualTo("File not found.");
-                });
+        assertNotFoundWhenLoading(uploadedFile);
     }
 
     @Test
-    void loadManagedFileReturnsNotFoundForEscapingStoredFileName() throws IOException {
+    void loadManagedFileReturnsNotFoundForEscapingStoredFileName() {
         UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setStoredFileName("../outside.pdf");
+        uploadedFile.setStoredFileName(ESCAPING_FILE_NAME);
 
-        assertThatThrownBy(() -> UploadStorageSupport.loadManagedFile(tempDir.toString(), uploadedFile, "File not found."))
-                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
-                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-                    assertThat(exception.getReason()).isEqualTo("File not found.");
-                });
+        assertNotFoundWhenLoading(uploadedFile);
     }
 
     @Test
     void extractSafeOriginalFileNameNormalizesPathSegmentsAcrossPlatforms() {
         assertThat(UploadStorageSupport.extractSafeOriginalFileName(
                 "C:\\fakepath\\certificate.pdf",
-                "Invalid file name."))
+                INVALID_FILE_NAME_MESSAGE))
                 .isEqualTo("certificate.pdf");
         assertThat(UploadStorageSupport.extractSafeOriginalFileName(
                 "/tmp/uploads/lesson notes.pdf",
-                "Invalid file name."))
+                INVALID_FILE_NAME_MESSAGE))
                 .isEqualTo("lesson notes.pdf");
     }
 
@@ -104,11 +103,11 @@ class UploadStorageSupportTests {
     void extractSafeOriginalFileNameRemovesDangerousCharactersAndLeadingDots() {
         assertThat(UploadStorageSupport.extractSafeOriginalFileName(
                 "folder\\\u202eevil:report?.pdf",
-                "Invalid file name."))
+                INVALID_FILE_NAME_MESSAGE))
                 .isEqualTo("_evil_report_.pdf");
         assertThat(UploadStorageSupport.extractSafeOriginalFileName(
                 "../.env",
-                "Invalid file name."))
+                INVALID_FILE_NAME_MESSAGE))
                 .isEqualTo("env");
     }
 
@@ -116,9 +115,24 @@ class UploadStorageSupportTests {
     void extractSafeOriginalFileNameRejectsBlankPathSegments() {
         assertThatThrownBy(() -> UploadStorageSupport.extractSafeOriginalFileName(
                 "folder\\",
-                "Invalid file name."))
+                INVALID_FILE_NAME_MESSAGE))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Invalid file name.");
+                .hasMessageContaining(INVALID_FILE_NAME_MESSAGE);
+    }
+
+    private void assertNotFoundWhenLoading(UploadedFile uploadedFile) {
+        assertThatThrownBy(() -> UploadStorageSupport.loadManagedFile(
+                tempDir.toString(),
+                uploadedFile,
+                FILE_NOT_FOUND_MESSAGE))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(exception.getReason()).isEqualTo(FILE_NOT_FOUND_MESSAGE);
+                });
+    }
+
+    private static CloseTrackingMultipartFile multipartFile() {
+        return new CloseTrackingMultipartFile(ORIGINAL_FILE_NAME, CONTENT_TYPE, CONTENT);
     }
 
     private static final class CloseTrackingMultipartFile implements MultipartFile {

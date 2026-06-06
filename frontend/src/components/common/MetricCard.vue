@@ -14,12 +14,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Single KPI/metric tile used across every persona dashboard:
- * label on top, big numeric value, supporting subtitle below, and
- * an IconGlyph badge in the corner. Kept presentational —
- * the parent page computes the values and passes them in.
- */
 import IconGlyph from './IconGlyph.vue'
 
 interface Props {

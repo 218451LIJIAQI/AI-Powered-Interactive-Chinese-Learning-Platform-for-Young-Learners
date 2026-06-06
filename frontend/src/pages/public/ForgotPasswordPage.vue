@@ -71,7 +71,7 @@
           </div>
 
           <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmit" type="submit">
-            <span>{{ submitting ? 'Sending reset link...' : 'Send reset link' }}</span>
+            <span>{{ submitLabel }}</span>
             <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
           </button>
         </form>
@@ -114,21 +114,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Step 1 of the password-recovery flow: collect the user's email
- * and ask the backend to send a reset link.
- *
- * <h2>Uniform response</h2>
- * <p>The success message is identical whether or not the email
- * is registered — this is paired with the backend's user-enumeration
- * defence so an attacker cannot use this page to probe for valid
- * accounts.</p>
- *
- * <h2>Rate limit</h2>
- * <p>The backend's {@code PublicAuthRequestLimiter} caps requests
- * per IP+email pair. A 429 is surfaced as a friendly "please wait
- * before trying again" message via {@link resolveApiError}.</p>
- */
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -154,8 +139,9 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizedEmail = computed(() => email.value.trim().toLowerCase())
 const emailValid = computed(() => emailPattern.test(normalizedEmail.value))
 const canSubmit = computed(() => emailValid.value && !submitting.value)
+const submitLabel = computed(() => (submitting.value ? 'Sending reset link...' : 'Send reset link'))
 
-async function submitForgotPassword() {
+async function submitForgotPassword(): Promise<void> {
   if (submitting.value) return
 
   error.value = null
@@ -177,7 +163,7 @@ async function submitForgotPassword() {
   }
 }
 
-function requestAnotherEmail() {
+function requestAnotherEmail(): void {
   success.value = null
   error.value = null
   email.value = ''
@@ -191,7 +177,7 @@ function readInitialRecoveryEmail(): string {
   return queryEmail || storedEmail
 }
 
-function removeSensitiveQueryFromAddressBar() {
+function removeSensitiveQueryFromAddressBar(): void {
   const { changed, query, hash } = removeSensitiveRouteState(route.query, route.hash)
 
   if (changed) {

@@ -1,7 +1,6 @@
 package com.example.aichinese.dto.commerce;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.entity.enums.PaymentStatus;
 
 @JsonPropertyOrder({

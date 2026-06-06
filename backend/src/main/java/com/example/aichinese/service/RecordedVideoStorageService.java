@@ -46,10 +46,8 @@ public class RecordedVideoStorageService {
 
     @Transactional
     public UploadedFile storeRecordedVideo(MultipartFile multipartFile, User ownerUser) {
-        String[] validated = validateMultipartFile(multipartFile);
-        String originalFileName = validated[0];
-        String extension = validated[1];
-        String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
+        ValidatedUpload validated = validateMultipartFile(multipartFile);
+        String storedFileName = UploadStorageSupport.buildStoredFileName(validated.extension());
 
         StoredObject storedObject = storageProvider.store(
                 multipartFile,
@@ -65,7 +63,7 @@ public class RecordedVideoStorageService {
                 storageProvider,
                 storedObject,
                 ownerUser,
-                originalFileName,
+                validated.originalFileName(),
                 storedFileName,
                 multipartFile.getContentType(),
                 multipartFile.getSize());
@@ -78,7 +76,7 @@ public class RecordedVideoStorageService {
                 "Requested video could not be found."));
     }
 
-    private String[] validateMultipartFile(MultipartFile multipartFile) {
+    private ValidatedUpload validateMultipartFile(MultipartFile multipartFile) {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Recorded video file is required.");
         }
@@ -113,10 +111,13 @@ public class RecordedVideoStorageService {
                 ALLOWED_SIGNATURES,
                 "Uploaded video content does not match the declared MP4/WEBM/MOV type.");
 
-        return new String[]{originalFileName, extension};
+        return new ValidatedUpload(originalFileName, extension);
     }
 
     private Path resolveBaseDirectory() {
         return UploadStorageSupport.resolveBaseDirectory(uploadProperties.getRecordedVideoDirectory());
+    }
+
+    private record ValidatedUpload(String originalFileName, String extension) {
     }
 }

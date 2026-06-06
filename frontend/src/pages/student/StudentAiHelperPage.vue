@@ -2,13 +2,7 @@
   <div class="page-stack student-ai-helper-page">
     <DataNotice
       :using-fallback="usingFallback"
-      :error="
-        actionError ||
-        availabilityResource.error.value ||
-        progressResource.error.value ||
-        reportsResource.error.value ||
-        platformSettingsResource.error.value
-      "
+      :error="pageError"
       :success="actionSuccess"
       fallback-title="Preview AI helper"
       fallback-message="SparkBot is showing safe sample guidance. Preview actions do not send live AI requests."
@@ -34,15 +28,15 @@
             <strong>I can help you learn Mandarin in fun and easy ways!</strong>
             <p>Try asking me something like:</p>
             <div class="student-ai-helper-suggestions">
-              <button type="button" @click="chatForm.message = 'How do you say hello?'">
+              <button type="button" @click="fillChatSuggestion('How do you say hello?')">
                 <IconGlyph name="moderation" :size="16" />
                 “你好” 怎么说?
               </button>
-              <button type="button" @click="wordForm.word = '苹果'">
+              <button type="button" @click="fillWordSuggestion('苹果')">
                 <IconGlyph name="learn" :size="16" />
                 “苹果” 是什么意思?
               </button>
-              <button type="button" @click="sentenceForm.sentence = '妈妈 máma'">
+              <button type="button" @click="fillSentenceSuggestion('妈妈 máma')">
                 <IconGlyph name="live" :size="16" />
                 Help me read this sentence
               </button>
@@ -59,7 +53,7 @@
             <button
               type="submit"
               :disabled="submitting.chat"
-              :aria-label="submitting.chat ? 'SparkBot is answering' : 'Send question to SparkBot'"
+              :aria-label="chatSubmitAriaLabel"
             >
               <span v-if="submitting.chat">Thinking</span>
               <IconGlyph v-else name="chevronRight" :size="18" />
@@ -71,10 +65,10 @@
           <div class="student-ai-helper-reply-header">
             <strong>SparkBot</strong>
             <button type="button" :disabled="reportDisabled" @click="submitAiReport">
-              {{ submitting.report ? 'Reporting...' : 'Report response' }}
+              {{ reportButtonLabel }}
             </button>
           </div>
-          <p>{{ streamingChatText || chatReply.aiResponse }}</p>
+          <p>{{ displayedChatReply }}</p>
           <div class="student-ai-helper-report-controls">
             <label for="student-ai-report-reason">Reason</label>
             <select
@@ -203,7 +197,7 @@
             <p>Create a quick self-practice quiz from a topic.</p>
             <input v-model="quizForm.topic" aria-label="Quiz topic" autocomplete="off" placeholder="Greetings" />
             <button type="button" @click="runQuiz" :disabled="submitting.quiz">
-              {{ submitting.quiz ? 'Creating...' : 'Create Quiz' }}
+              {{ quizButtonLabel }}
               <IconGlyph v-if="!submitting.quiz" name="chevronRight" :size="16" />
             </button>
           </article>
@@ -226,7 +220,7 @@
             <small>{{ vocabularyReply.exampleSentence }}</small>
           </div>
           <div v-if="sentenceReply" class="student-ai-helper-result">
-            <strong>{{ sentenceReply.correctedSentence || sentenceReply.originalSentence }}</strong>
+            <strong>{{ sentenceResultTitle }}</strong>
             <p>{{ sentenceReply.improvementExplanation }}</p>
           </div>
           <div v-if="recommendationReply" class="student-ai-helper-result">
@@ -235,21 +229,21 @@
           </div>
           <div v-if="quizReply" class="student-ai-helper-result">
             <strong>{{ quizReply.title }} - {{ quizReply.status }}</strong>
-            <p>{{ quizReply.questions[0]?.questionText || 'Quiz draft is ready.' }}</p>
+            <p>{{ quizFirstQuestion }}</p>
             <small
-              >{{ quizReply.questions.length }} question{{ quizReply.questions.length === 1 ? '' : 's' }} -
+              >{{ quizQuestionCountLabel }} -
               {{ quizReply.usageMode }}</small
             >
           </div>
           <div v-if="pronunciationReply" class="student-ai-helper-result">
             <strong>Pronunciation Feedback - {{ pronunciationReply.status }}</strong>
-            <p>{{ pronunciationReply.feedback || pronunciationReply.pronunciationComment }}</p>
-            <small>{{ pronunciationReply.toneComment || pronunciationReply.improvementTips }}</small>
+            <p>{{ pronunciationFeedbackText }}</p>
+            <small>{{ pronunciationSupportText }}</small>
           </div>
           <div v-if="writingReply" class="student-ai-helper-result">
             <strong>Writing Feedback - {{ writingReply.status }}</strong>
-            <p>{{ writingReply.feedback || writingReply.clarityComment }}</p>
-            <small>{{ writingReply.improvementTips || writingReply.encouragement }}</small>
+            <p>{{ writingFeedbackText }}</p>
+            <small>{{ writingSupportText }}</small>
           </div>
         </section>
 
@@ -295,7 +289,7 @@
             placeholder="Greetings at school"
           />
           <button class="btn btn-primary" type="button" @click="runStory" :disabled="submitting.story">
-            {{ submitting.story ? 'Generating...' : 'Create Story' }}
+            {{ storyButtonLabel }}
           </button>
           <div v-if="storyReply" class="student-ai-helper-story-result">
             <strong>{{ storyReply.title }}</strong>
@@ -320,28 +314,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student-facing AI helper — chat tutor, quiz generator, story
- * generator, vocabulary helper, sentence practice, pronunciation
- * and writing feedback.
- *
- * <h2>Availability gate</h2>
- * <p>The page calls {@code aiApi.availability()} on mount and shows
- * the provider status while disabling upload tools the active
- * provider cannot support. Text-generation endpoints return explicit
- * unavailable responses when the provider is disabled or fails, so a
- * learner sees a safe status instead of a fake success or a raw 500.</p>
- *
- * <h2>Audio / image uploads</h2>
- * <p>Pronunciation + writing feedback include client-side mime +
- * size validation before submission; the backend re-validates with
- * magic-byte sniffing so the client check is purely a UX nicety.</p>
- *
- * <h2>Reporting</h2>
- * <p>"Report this response" submits through
- * {@code aiApi.reportResponse()} — the report goes into the admin
- * AI moderation queue.</p>
- */
 import { computed, reactive, ref } from 'vue'
 
 import { aiApi, publicApi, studentApi } from '@/api/services'
@@ -486,15 +458,27 @@ const wordForm = reactive({ word: '' })
 const sentenceForm = reactive({ sentence: '' })
 const storyForm = reactive({ topic: '' })
 const quizForm = reactive({ topic: 'Greetings' })
-const pronunciationForm = reactive({
+interface PronunciationForm {
+  targetText: string
+  pinyin: string
+  tone: string
+  file: File | null
+}
+
+interface WritingForm {
+  targetCharacter: string
+  file: File | null
+}
+
+const pronunciationForm = reactive<PronunciationForm>({
   targetText: '',
   pinyin: '',
   tone: '',
-  file: null as File | null,
+  file: null,
 })
-const writingForm = reactive({
+const writingForm = reactive<WritingForm>({
   targetCharacter: '',
-  file: null as File | null,
+  file: null,
 })
 
 const chatReply = ref<AiChatResponse | null>(previewFallbackEnabled.value ? aiChatReply : null)
@@ -512,8 +496,8 @@ const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const maxPronunciationFileSize = 10 * 1024 * 1024
 const maxWritingFileSize = 5 * 1024 * 1024
-const pronunciationExtensions = ['.webm', '.wav', '.mp3']
-const writingExtensions = ['.png', '.jpg', '.jpeg']
+const pronunciationExtensions = ['.webm', '.wav', '.mp3'] as const
+const writingExtensions = ['.png', '.jpg', '.jpeg'] as const
 const pronunciationMimeTypes = new Set(['audio/webm', 'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3'])
 const writingMimeTypes = new Set(['image/png', 'image/jpeg'])
 const reportForm = reactive<{
@@ -524,14 +508,49 @@ const reportForm = reactive<{
   description: '',
 })
 const reportDisabled = computed(() => previewFallbackEnabled.value || submitting.report || !chatReply.value)
+const pageError = computed(
+  () =>
+    actionError.value ||
+    availabilityResource.error.value ||
+    progressResource.error.value ||
+    reportsResource.error.value ||
+    platformSettingsResource.error.value,
+)
+const chatSubmitAriaLabel = computed(() =>
+  submitting.chat ? 'SparkBot is answering' : 'Send question to SparkBot',
+)
+const reportButtonLabel = computed(() => (submitting.report ? 'Reporting...' : 'Report response'))
+const displayedChatReply = computed(() => streamingChatText.value || chatReply.value?.aiResponse || '')
+const quizButtonLabel = computed(() => (submitting.quiz ? 'Creating...' : 'Create Quiz'))
+const storyButtonLabel = computed(() => (submitting.story ? 'Generating...' : 'Create Story'))
+const sentenceResultTitle = computed(() => sentenceReply.value?.correctedSentence || sentenceReply.value?.originalSentence || '')
+const quizFirstQuestion = computed(() => quizReply.value?.questions[0]?.questionText || 'Quiz draft is ready.')
+const quizQuestionCountLabel = computed(() => {
+  const count = quizReply.value?.questions.length ?? 0
+  return `${count} question${count === 1 ? '' : 's'}`
+})
+const pronunciationFeedbackText = computed(
+  () => pronunciationReply.value?.feedback || pronunciationReply.value?.pronunciationComment || '',
+)
+const pronunciationSupportText = computed(
+  () => pronunciationReply.value?.toneComment || pronunciationReply.value?.improvementTips || '',
+)
+const writingFeedbackText = computed(() => writingReply.value?.feedback || writingReply.value?.clarityComment || '')
+const writingSupportText = computed(
+  () => writingReply.value?.improvementTips || writingReply.value?.encouragement || '',
+)
 
 type AiResponseStatusCarrier = { status?: string | null }
 
-function aiResponseSucceeded(response: AiResponseStatusCarrier) {
+function aiResponseSucceeded(response: AiResponseStatusCarrier): boolean {
   return response.status?.toUpperCase() === 'SUCCESS'
 }
 
-function applyAiResponseStatus(response: AiResponseStatusCarrier, successMessage: string, unavailableMessage: string) {
+function applyAiResponseStatus(
+  response: AiResponseStatusCarrier,
+  successMessage: string,
+  unavailableMessage: string,
+): void {
   if (aiResponseSucceeded(response)) {
     actionError.value = null
     actionSuccess.value = successMessage
@@ -542,34 +561,34 @@ function applyAiResponseStatus(response: AiResponseStatusCarrier, successMessage
   actionError.value = `${unavailableMessage} Status: ${response.status || 'UNAVAILABLE'}.`
 }
 
-function hasAllowedExtension(file: File, extensions: string[]) {
+function hasAllowedExtension(file: File, extensions: readonly string[]): boolean {
   const name = file.name.toLowerCase()
   return extensions.some((extension) => name.endsWith(extension))
 }
 
-function hasAllowedUploadType(file: File, extensions: string[], mimeTypes: ReadonlySet<string>) {
+function hasAllowedUploadType(file: File, extensions: readonly string[], mimeTypes: ReadonlySet<string>): boolean {
   const mimeType = file.type.trim().toLowerCase()
   if (mimeType) return mimeTypes.has(mimeType)
 
   return hasAllowedExtension(file, extensions)
 }
 
-function showPreviewResponse(message: string) {
+function showPreviewResponse(message: string): void {
   actionError.value = null
   actionSuccess.value = `${message} Preview mode used a safe sample response and did not send a live AI request.`
 }
 
-function selectedFile(event: Event) {
+function selectedFile(event: Event): File | null {
   const input = event.target as HTMLInputElement | null
   return input?.files?.[0] ?? null
 }
 
-function clearFileInput(event: Event) {
+function clearFileInput(event: Event): void {
   const input = event.target as HTMLInputElement | null
   if (input) input.value = ''
 }
 
-function selectPronunciationFile(event: Event) {
+function selectPronunciationFile(event: Event): void {
   actionError.value = null
   const file = selectedFile(event)
 
@@ -591,7 +610,7 @@ function selectPronunciationFile(event: Event) {
   pronunciationForm.file = file
 }
 
-function selectWritingFile(event: Event) {
+function selectWritingFile(event: Event): void {
   actionError.value = null
   const file = selectedFile(event)
 
@@ -610,7 +629,7 @@ function selectWritingFile(event: Event) {
   writingForm.file = file
 }
 
-async function runChat() {
+async function runChat(): Promise<void> {
   if (submitting.chat) return
   actionError.value = null
   actionSuccess.value = null
@@ -657,7 +676,7 @@ async function runChat() {
   }
 }
 
-async function runVocabulary() {
+async function runVocabulary(): Promise<void> {
   if (submitting.vocab) return
   actionError.value = null
   actionSuccess.value = null
@@ -690,7 +709,7 @@ async function runVocabulary() {
   }
 }
 
-async function runSentence() {
+async function runSentence(): Promise<void> {
   if (submitting.sentence) return
   actionError.value = null
   actionSuccess.value = null
@@ -722,7 +741,7 @@ async function runSentence() {
   }
 }
 
-async function runStory() {
+async function runStory(): Promise<void> {
   if (submitting.story) return
   actionError.value = null
   actionSuccess.value = null
@@ -755,7 +774,7 @@ async function runStory() {
   }
 }
 
-async function runRecommendation() {
+async function runRecommendation(): Promise<void> {
   if (submitting.recommendation) return
   actionError.value = null
   actionSuccess.value = null
@@ -784,7 +803,7 @@ async function runRecommendation() {
   }
 }
 
-async function runQuiz() {
+async function runQuiz(): Promise<void> {
   if (submitting.quiz) return
   actionError.value = null
   actionSuccess.value = null
@@ -820,7 +839,7 @@ async function runQuiz() {
   }
 }
 
-async function submitAiReport() {
+async function submitAiReport(): Promise<void> {
   if (submitting.report) return
   actionError.value = null
   actionSuccess.value = null
@@ -851,7 +870,7 @@ async function submitAiReport() {
   }
 }
 
-async function runPronunciation() {
+async function runPronunciation(): Promise<void> {
   if (submitting.pronunciation) return
   actionError.value = null
   actionSuccess.value = null
@@ -898,7 +917,7 @@ async function runPronunciation() {
   }
 }
 
-async function runWriting() {
+async function runWriting(): Promise<void> {
   if (submitting.writing) return
   actionError.value = null
   actionSuccess.value = null
@@ -939,13 +958,30 @@ async function runWriting() {
   }
 }
 
-function formatEnumLabel(value: string) {
+function fillChatSuggestion(message: string): void {
+  chatForm.message = message
+}
+
+function fillWordSuggestion(word: string): void {
+  wordForm.word = word
+}
+
+function fillSentenceSuggestion(sentence: string): void {
+  sentenceForm.sentence = sentence
+}
+
+function formatEnumLabel(value: string): string {
   return value
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-const formatReportReason = formatEnumLabel
-const formatStatus = formatEnumLabel
+function formatReportReason(value: string): string {
+  return formatEnumLabel(value)
+}
+
+function formatStatus(value: string): string {
+  return formatEnumLabel(value)
+}
 </script>

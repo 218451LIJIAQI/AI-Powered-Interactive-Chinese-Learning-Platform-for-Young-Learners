@@ -6,22 +6,18 @@
       icon="profile"
     />
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
 
     <section class="teacher-profile-hero">
       <div class="teacher-profile-hero-copy">
         <span>Teacher identity</span>
-        <h2>{{ profile.fullName || 'Teacher profile' }}</h2>
-        <p>
-          {{
-            profile.shortIntroduction || profile.bio || 'Build a trusted teacher profile for MandarinSpark families.'
-          }}
-        </p>
+        <h2>{{ profileNameLabel }}</h2>
+        <p>{{ profileIntroLabel }}</p>
       </div>
       <div class="teacher-profile-hero-status">
         <StatusPill
           :label="verification.teacherStatus"
-          :tone="verification.teacherStatus === 'APPROVED' ? 'success' : 'warning'"
+          :tone="verificationStatusTone"
         />
         <div class="teacher-profile-hero-stats">
           <article v-for="item in profileHighlights" :key="item.label">
@@ -106,7 +102,7 @@
                     :disabled="profileUsingFallback || downloadingDocumentId === document.id"
                     @click="downloadVerificationDocument(document.id, document.originalFileName)"
                   >
-                    {{ downloadingDocumentId === document.id ? 'Downloading...' : 'Download' }}
+                    {{ documentDownloadLabel(document.id) }}
                   </button>
                 </div>
               </template>
@@ -119,7 +115,7 @@
         <InfoCard title="Verification status" subtitle="Teacher identity protection." icon="verification">
           <StatusPill
             :label="verification.teacherStatus"
-            :tone="verification.teacherStatus === 'APPROVED' ? 'success' : 'warning'"
+            :tone="verificationStatusTone"
           />
           <p class="muted u-m-0">
             {{ verification.latestReviewResult?.note || 'Your current verification state is shown here.' }}
@@ -142,7 +138,7 @@
               :disabled="markingNotificationsRead || !hasUnreadNotifications"
               @click="markAllNotificationsRead"
             >
-              {{ markingNotificationsRead ? 'Marking...' : 'Mark all read' }}
+              {{ markAllNotificationsLabel }}
             </button>
           </template>
 
@@ -159,8 +155,8 @@
                 <template #aside>
                   <div class="list-value-stack">
                     <StatusPill
-                      :label="item.status === 'READ' ? 'Read' : 'Unread'"
-                      :tone="item.status === 'READ' ? 'info' : 'warning'"
+                      :label="notificationStatusLabel(item.status)"
+                      :tone="notificationStatusTone(item.status)"
                     />
                     <span class="muted">{{ formatDateTime(item.createdAt) }}</span>
                   </div>
@@ -226,14 +222,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher self-service profile surface.
- *
- * <p>Edits display name, biography, short introduction, and teaching
- * categories, while handling verification document upload/download,
- * resubmission, and recent notifications from the same profile
- * surface.</p>
- */
 import { computed, reactive, ref, watch } from 'vue'
 
 import { notificationsApi, teacherApi } from '@/api/services'
@@ -250,6 +238,8 @@ import type { TeacherVerificationDocumentType } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
 import { formatDateTime } from '@/utils/format'
+
+type StatusTone = 'success' | 'warning' | 'info'
 
 const profileResource = useResource(() => teacherApi.profile(), teacherProfile)
 const verificationResource = useResource(() => teacherApi.verificationStatus(), teacherVerification)
@@ -296,17 +286,23 @@ const usingFallback = computed(
 )
 const pageError = computed(
   () =>
-    actionError.value ||
     profileResource.error.value ||
     verificationResource.error.value ||
     notificationsResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
+const profileNameLabel = computed(() => profile.value.fullName || 'Teacher profile')
+const profileIntroLabel = computed(
+  () => profile.value.shortIntroduction || profile.value.bio || 'Build a trusted teacher profile for MandarinSpark families.',
+)
+const verificationStatusTone = computed(() => (verification.value.teacherStatus === 'APPROVED' ? 'success' : 'warning'))
 const profileHighlights = computed(() => [
   { label: 'Categories', value: String(profile.value.teachingCategories.length) },
   { label: 'Documents', value: String(profile.value.verificationDocuments.length) },
   { label: 'Status', value: verification.value.teacherStatus },
 ])
 const hasUnreadNotifications = computed(() => notifications.value.some((item) => item.status !== 'READ'))
+const markAllNotificationsLabel = computed(() => (markingNotificationsRead.value ? 'Marking...' : 'Mark all read'))
 const verificationDocumentTypes: Array<{ value: TeacherVerificationDocumentType; label: string }> = [
   { value: 'IDENTITY', label: 'Identity document' },
   { value: 'QUALIFICATION', label: 'Teaching qualification' },
@@ -349,7 +345,7 @@ watch(
   { immediate: true },
 )
 
-function hasAllowedVerificationFileType(file: File) {
+function hasAllowedVerificationFileType(file: File): boolean {
   const fileName = file.name.toLowerCase()
   const contentType = file.type.toLowerCase()
   return (
@@ -358,7 +354,7 @@ function hasAllowedVerificationFileType(file: File) {
   )
 }
 
-function resetVerificationFileInput() {
+function resetVerificationFileInput(): void {
   verificationFile.value = null
 
   if (fileInput.value) {
@@ -366,7 +362,7 @@ function resetVerificationFileInput() {
   }
 }
 
-function selectVerificationFile(event: Event) {
+function selectVerificationFile(event: Event): void {
   actionError.value = null
   actionSuccess.value = null
 
@@ -387,7 +383,19 @@ function selectVerificationFile(event: Event) {
   verificationFile.value = file
 }
 
-async function saveProfile() {
+function documentDownloadLabel(documentId: number): string {
+  return downloadingDocumentId.value === documentId ? 'Downloading...' : 'Download'
+}
+
+function notificationStatusLabel(status: string): string {
+  return status === 'READ' ? 'Read' : 'Unread'
+}
+
+function notificationStatusTone(status: string): StatusTone {
+  return status === 'READ' ? 'info' : 'warning'
+}
+
+async function saveProfile(): Promise<void> {
   if (savingProfile.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
@@ -417,7 +425,7 @@ async function saveProfile() {
   }
 }
 
-async function downloadVerificationDocument(documentId: number, originalFileName: string) {
+async function downloadVerificationDocument(documentId: number, originalFileName: string): Promise<void> {
   if (downloadingDocumentId.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
@@ -440,13 +448,13 @@ async function downloadVerificationDocument(documentId: number, originalFileName
   }
 }
 
-function markTeacherNotificationRead(notificationId: number) {
+function markTeacherNotificationRead(notificationId: number): void {
   notificationsResource.data.value = notifications.value.map((item) =>
     item.id === notificationId ? { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() } : item,
   )
 }
 
-async function markAllNotificationsRead() {
+async function markAllNotificationsRead(): Promise<void> {
   if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionSuccess.value = null
@@ -474,7 +482,7 @@ async function markAllNotificationsRead() {
   }
 }
 
-async function resubmitVerification() {
+async function resubmitVerification(): Promise<void> {
   if (profileUsingFallback.value || verificationResource.usingFallback.value) {
     actionSuccess.value = null
     actionError.value = 'Verification status cannot be resubmitted while preview data is active.'
@@ -492,7 +500,7 @@ async function resubmitVerification() {
   }
 }
 
-async function uploadDocument() {
+async function uploadDocument(): Promise<void> {
   if (uploading.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null

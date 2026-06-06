@@ -8,19 +8,12 @@
     aria-valuemax="100"
     :aria-label="ariaLabel"
   >
-    <span :style="{ width: `${safeProgress}%` }" />
+    <span :style="fillStyle" />
   </div>
 </template>
 
 <script setup lang="ts">
-/**
- * Horizontal progress bar used on student dashboards, lesson cards,
- * and admin analytics. Clamps the input to `[0, 100]` so callers can
- * pass raw percentage math without worrying about overflow, and
- * exposes ARIA `role="progressbar"` + value attributes for assistive
- * tech.
- */
-import { computed } from 'vue'
+import { computed, type StyleValue } from 'vue'
 
 type BarTone = 'primary' | 'success' | 'warning' | 'info'
 
@@ -40,6 +33,7 @@ function clampProgress(value: number): number {
 }
 
 const safeProgress = computed<number>(() => clampProgress(props.progress))
+const fillStyle = computed<StyleValue>(() => ({ width: `${safeProgress.value}%` }))
 const toneClass = computed<string>(() => (props.tone === 'primary' ? '' : props.tone))
 const ariaLabel = computed<string>(() => `${props.label}: ${safeProgress.value}%`)
 </script>

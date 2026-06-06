@@ -1,22 +1,8 @@
-/**
- * Backwards-compatibility shim for deep-links and stored
- * `?redirect=` paths that point at routes the app no longer ships.
- *
- * <h2>What it does</h2>
- * <ul>
- *   <li>Rewrites legacy paths to the current canonical equivalent
- *       (e.g. {@code /student/payments → /student/profile}).</li>
- *   <li>Dynamic-path variants are normalised through
- *       prefix-matching for routes like {@code /student/live-classes/123}.</li>
- *   <li>Validates that the resulting path is a known route so
- *       attacker-controlled redirect query params cannot be used to
- *       break out into unintended app surfaces.</li>
- * </ul>
- *
- * <p>Used by the auth flow when restoring the post-login redirect
- * target and by router guards that need to sanitise deep-links from
- * older email notifications.</p>
- */
+type RouteParts = {
+  basePath: string
+  suffix: string
+}
+
 const legacyRouteMap: Record<string, string> = {
   '/catalog': '/courses',
   '/student/payments': '/student/profile',
@@ -75,7 +61,7 @@ const dynamicRoutePrefixes = ['/courses/', '/student/quiz/']
 
 const UNSAFE_PATH_SEGMENTS = new Set(['.', '..'])
 
-function splitPathAndSuffix(path: string) {
+function splitPathAndSuffix(path: string): RouteParts {
   const queryStart = path.indexOf('?')
   const hashStart = path.indexOf('#')
   const suffixStart = Math.min(queryStart >= 0 ? queryStart : path.length, hashStart >= 0 ? hashStart : path.length)
@@ -86,7 +72,7 @@ function splitPathAndSuffix(path: string) {
   }
 }
 
-function containsUnsafePathSegment(basePath: string) {
+function containsUnsafePathSegment(basePath: string): boolean {
   return basePath.split('/').some((segment) => {
     if (UNSAFE_PATH_SEGMENTS.has(segment)) {
       return true
@@ -100,15 +86,15 @@ function containsUnsafePathSegment(basePath: string) {
   })
 }
 
-function isSafeRedirectCandidate(path: string, basePath: string) {
+function isSafeRedirectCandidate(path: string, basePath: string): boolean {
   return !path.includes('\\') && !/[\u0000-\u001f\u007f]/u.test(path) && !containsUnsafePathSegment(basePath)
 }
 
-function isKnownAppRoute(basePath: string) {
+function isKnownAppRoute(basePath: string): boolean {
   return exactAppRoutes.has(basePath) || dynamicRoutePrefixes.some((prefix) => basePath.startsWith(prefix))
 }
 
-export function normalizeAppRoute(path: string | null | undefined) {
+export function normalizeAppRoute(path: string | null | undefined): string | null {
   if (!path) {
     return null
   }
@@ -123,8 +109,9 @@ export function normalizeAppRoute(path: string | null | undefined) {
     return null
   }
 
-  if (legacyRouteMap[basePath]) {
-    return `${legacyRouteMap[basePath]}${suffix}`
+  const legacyRoute = legacyRouteMap[basePath]
+  if (legacyRoute) {
+    return `${legacyRoute}${suffix}`
   }
 
   if (basePath.startsWith('/student/live-classes/')) {

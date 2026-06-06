@@ -14,8 +14,8 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class AichineseApplicationTests {
 
-	@Test
-	void contextLoads() {
-	}
+    @Test
+    void contextLoads() {
+    }
 
 }

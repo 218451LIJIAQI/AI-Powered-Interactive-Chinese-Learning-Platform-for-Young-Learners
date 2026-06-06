@@ -25,6 +25,7 @@ import com.example.aichinese.service.model.ResolvedPurchasableItem;
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+    private static final String ORDER_NUMBER_PREFIX = "ORD-";
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -46,19 +47,12 @@ public class OrderService {
     public Order createOrder(StudentProfile student, CheckoutSource source, List<ResolvedPurchasableItem> items) {
         Order order = new Order();
         order.setStudent(student);
-        String uuid = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
-        String suffix = uuid.substring(0, 8) + "-" + uuid.substring(8, 16);
-        order.setOrderNumber("ORD-" + suffix);
+        order.setOrderNumber(generateOrderNumber());
         order.setCurrencyCode(commerceSettingsService.getDefaultCurrency());
         order.setPaymentStatus(PaymentStatus.PENDING);
         order.setCheckoutSource(source.name());
-
-        BigDecimal totalAmount = BigDecimal.ZERO;
-        for (ResolvedPurchasableItem item : items) {
-            totalAmount = commerceMoneyService.add(totalAmount, item.unitPrice());
-        }
         order.setTotalAmount(commerceMoneyService.normalizePersistableAmount(
-                totalAmount,
+                totalAmount(items),
                 "Order total amount is too large."));
         Order saved = orderRepository.save(order);
         log.info("Order created: orderId={}, orderNumber={}, userId={}, amount={} {}",
@@ -71,24 +65,40 @@ public class OrderService {
     public List<OrderItem> createOrderItems(Order order, List<ResolvedPurchasableItem> items) {
         List<OrderItem> pending = new ArrayList<>(items.size());
         for (ResolvedPurchasableItem item : items) {
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setItemType(item.itemType().name());
-            orderItem.setItemId(item.itemId());
-            orderItem.setItemTitleSnapshot(item.title());
-            orderItem.setFeatureKey(item.relatedFeatureKey());
-            orderItem.setQuantity(1);
-            BigDecimal normalizedPrice = commerceMoneyService.normalizePersistableAmount(
-                    item.unitPrice(),
-                    "Order item price is too large.");
-            BigDecimal lineTotal = commerceMoneyService.normalizePersistableAmount(
-                    commerceMoneyService.multiply(normalizedPrice, BigDecimal.valueOf(orderItem.getQuantity())),
-                    "Order item line total is too large.");
-            orderItem.setUnitPrice(normalizedPrice);
-            orderItem.setLineTotal(lineTotal);
-            orderItem.setTeacher(item.teacher());
-            pending.add(orderItem);
+            pending.add(toOrderItem(order, item));
         }
         return orderItemRepository.saveAll(pending);
+    }
+
+    private OrderItem toOrderItem(Order order, ResolvedPurchasableItem item) {
+        OrderItem orderItem = new OrderItem();
+        orderItem.setOrder(order);
+        orderItem.setItemType(item.itemType().name());
+        orderItem.setItemId(item.itemId());
+        orderItem.setItemTitleSnapshot(item.title());
+        orderItem.setFeatureKey(item.relatedFeatureKey());
+        orderItem.setQuantity(1);
+        BigDecimal normalizedPrice = commerceMoneyService.normalizePersistableAmount(
+                item.unitPrice(),
+                "Order item price is too large.");
+        orderItem.setUnitPrice(normalizedPrice);
+        orderItem.setLineTotal(commerceMoneyService.normalizePersistableAmount(
+                commerceMoneyService.multiply(normalizedPrice, BigDecimal.valueOf(orderItem.getQuantity())),
+                "Order item line total is too large."));
+        orderItem.setTeacher(item.teacher());
+        return orderItem;
+    }
+
+    private BigDecimal totalAmount(List<ResolvedPurchasableItem> items) {
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (ResolvedPurchasableItem item : items) {
+            totalAmount = commerceMoneyService.add(totalAmount, item.unitPrice());
+        }
+        return totalAmount;
+    }
+
+    private static String generateOrderNumber() {
+        String uuid = UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
+        return ORDER_NUMBER_PREFIX + uuid.substring(0, 8) + "-" + uuid.substring(8, 16);
     }
 }

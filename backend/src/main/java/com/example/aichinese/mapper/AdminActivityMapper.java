@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -57,7 +58,7 @@ public class AdminActivityMapper {
             Comparator.comparing(StoryQuestion::getSortOrder, Comparator.nullsLast(Integer::compareTo))
                     .thenComparing(StoryQuestion::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
 
-    private String joinTags(List<String> tags) {
+    private static String joinTags(List<String> tags) {
         if (tags == null || tags.isEmpty()) {
             return null;
         }
@@ -70,7 +71,7 @@ public class AdminActivityMapper {
         return joined.isEmpty() ? null : joined;
     }
 
-    private List<String> splitTags(String tags) {
+    private static List<String> splitTags(String tags) {
         if (tags == null || tags.isBlank()) {
             return List.of();
         }
@@ -94,6 +95,16 @@ public class AdminActivityMapper {
 
     private static Long creatorId(User user) {
         return user == null ? null : user.getId();
+    }
+
+    private static <T, R> List<R> toSortedResponses(
+            List<T> items,
+            Comparator<? super T> order,
+            Function<? super T, R> mapper) {
+        return (items == null ? List.<T>of() : items).stream()
+                .sorted(order)
+                .map(mapper)
+                .toList();
     }
 
     public Flashcard toEntity(AdminFlashcardRequest request, User admin) {
@@ -209,11 +220,8 @@ public class AdminActivityMapper {
     }
 
     public AdminMatchingGameResponse toResponse(MatchingGame entity, List<MatchingGameItem> items) {
-        List<MatchingGameItem> safeItems = items == null ? List.of() : items;
-        List<AdminMatchingGameItemResponse> itemResponses = safeItems.stream()
-                .sorted(MATCHING_GAME_ITEM_ORDER)
-                .map(this::toResponse)
-                .toList();
+        List<AdminMatchingGameItemResponse> itemResponses =
+                toSortedResponses(items, MATCHING_GAME_ITEM_ORDER, this::toResponse);
         return new AdminMatchingGameResponse(
                 entity.getId(),
                 entity.getTitle(),
@@ -395,11 +403,8 @@ public class AdminActivityMapper {
     }
 
     public AdminDragDropActivityResponse toResponse(DragDropActivity entity, List<DragDropItem> items) {
-        List<DragDropItem> safeItems = items == null ? List.of() : items;
-        List<AdminDragDropItemResponse> itemResponses = safeItems.stream()
-                .sorted(DRAG_DROP_ITEM_ORDER)
-                .map(this::toResponse)
-                .toList();
+        List<AdminDragDropItemResponse> itemResponses =
+                toSortedResponses(items, DRAG_DROP_ITEM_ORDER, this::toResponse);
         return new AdminDragDropActivityResponse(
                 entity.getId(),
                 entity.getTitle(),
@@ -474,11 +479,8 @@ public class AdminActivityMapper {
     }
 
     public AdminStoryActivityResponse toResponse(StoryActivity entity, List<StoryQuestion> questions) {
-        List<StoryQuestion> safeQuestions = questions == null ? List.of() : questions;
-        List<AdminStoryQuestionResponse> questionResponses = safeQuestions.stream()
-                .sorted(STORY_QUESTION_ORDER)
-                .map(this::toResponse)
-                .toList();
+        List<AdminStoryQuestionResponse> questionResponses =
+                toSortedResponses(questions, STORY_QUESTION_ORDER, this::toResponse);
         return new AdminStoryActivityResponse(
                 entity.getId(),
                 entity.getTitle(),

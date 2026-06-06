@@ -5,24 +5,12 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Notification list-item wrapper that:
- *   1. Normalises the stored `targetPath` through
- *      {@link normalizeAppRoute} so stale deep-links from old
- *      backend builds still resolve to a valid current route.
- *   2. Marks the notification read via the API on activation.
- *   3. Broadcasts a `mandarin-spark:notification-read` custom event
- *      so the badge count in DashboardTopbar can decrement
- *      immediately without re-fetching.
- *
- * Failures from the mark-read call are intentionally swallowed —
- * the user-facing navigation still proceeds, and the next page
- * refresh will reconcile the server state.
- */
 import { useRouter } from 'vue-router'
 
 import { notificationsApi } from '@/api/services'
 import { normalizeAppRoute } from '@/utils/routeCompat'
+
+const NOTIFICATION_READ_EVENT = 'mandarin-spark:notification-read'
 
 interface Props {
   notificationId?: number
@@ -38,23 +26,32 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
-function openTarget(): void {
-  const target = normalizeAppRoute(props.targetPath) ?? normalizeAppRoute(props.fallbackTo) ?? '/'
+function notificationTarget(): string {
+  return normalizeAppRoute(props.targetPath) ?? normalizeAppRoute(props.fallbackTo) ?? '/'
+}
 
+function emitRead(notificationId: number): void {
+  emit('read', notificationId)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(NOTIFICATION_READ_EVENT, { detail: { notificationId } }))
+  }
+}
+
+async function markReadInBackground(notificationId: number): Promise<void> {
+  try {
+    await notificationsApi.markAsRead(notificationId)
+    emitRead(notificationId)
+  } catch {
+    // Navigation should not be blocked by a stale notification state.
+  }
+}
+
+function openTarget(): void {
   if (props.notificationId) {
-    const id = props.notificationId
-    notificationsApi
-      .markAsRead(id)
-      .then(() => {
-        emit('read', id)
-        window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { notificationId: id } }))
-      })
-      .catch(() => {
-        /* swallowed — navigation proceeds regardless */
-      })
+    void markReadInBackground(props.notificationId)
   }
 
-  void router.push(target)
+  void router.push(notificationTarget())
 }
 </script>
 

@@ -118,11 +118,19 @@ class AiInputSanitizerTests {
     }
 
     @Test
+    void truncationDoesNotSplitSurrogatePairs() {
+        String sanitized = AiInputSanitizer.sanitize("A😀B", 2);
+        assertThat(sanitized).isEqualTo("A");
+    }
+
+    @Test
     void nonPositiveMaxLengthIsRejected() {
         assertThatThrownBy(() -> AiInputSanitizer.sanitize("anything", 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxLength must be positive.");
         assertThatThrownBy(() -> AiInputSanitizer.sanitize("anything", -1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxLength must be positive.");
     }
 
     @Test

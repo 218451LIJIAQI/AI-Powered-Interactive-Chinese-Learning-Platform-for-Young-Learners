@@ -85,7 +85,7 @@ public class ClientIpResolver {
         if (value == null || value.isBlank()) {
             return "";
         }
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        String normalized = value.strip().toLowerCase(Locale.ROOT);
         if (normalized.startsWith("[") && normalized.endsWith("]") && normalized.length() > 2) {
             return normalized.substring(1, normalized.length() - 1);
         }
@@ -144,17 +144,17 @@ public class ClientIpResolver {
     private record CidrRange(byte[] network, int prefixLength) {
 
         static CidrRange parse(String value) {
-            String[] parts = value.trim().split("/", 2);
+            String[] parts = value.strip().split("/", 2);
             if (parts.length != 2) {
                 throw new IllegalArgumentException("Trusted proxy CIDR must be in address/prefix form: " + value);
             }
 
             try {
-                InetAddress networkAddress = parseNumericAddress(parts[0].trim());
+                InetAddress networkAddress = parseNumericAddress(parts[0].strip());
                 if (networkAddress == null) {
                     throw new IllegalArgumentException("Trusted proxy CIDR contains an invalid address: " + value);
                 }
-                int prefixLength = Integer.parseInt(parts[1].trim());
+                int prefixLength = Integer.parseInt(parts[1].strip());
                 int maxBits = networkAddress.getAddress().length * 8;
                 if (prefixLength < 0 || prefixLength > maxBits) {
                     throw new IllegalArgumentException("Trusted proxy CIDR prefix is out of range: " + value);

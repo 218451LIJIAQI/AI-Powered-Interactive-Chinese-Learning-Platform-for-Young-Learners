@@ -46,6 +46,8 @@ public record AdminAiResponseReportResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
+    private static final String REDACTED = "<redacted>";
+
     @Override
     public String toString() {
         return "AdminAiResponseReportResponse["
@@ -72,7 +74,7 @@ public record AdminAiResponseReportResponse(
     }
 
     private static String redactValue(String value) {
-        return value == null ? "null" : "<redacted>";
+        return value == null ? "null" : REDACTED;
     }
 
     private static String redactLength(String value) {

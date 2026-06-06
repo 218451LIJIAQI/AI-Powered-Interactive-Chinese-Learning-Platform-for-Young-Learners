@@ -2,7 +2,7 @@
   <div class="page-stack student-classes-page">
     <DataNotice
       :using-fallback="liveResource.usingFallback.value"
-      :error="actionError || liveResource.error.value"
+      :error="noticeError"
       :success="actionSuccess"
     />
 
@@ -25,11 +25,11 @@
 
                 <div class="student-live-copy">
                   <h2>{{ upcomingClass.title }}</h2>
-                  <p>{{ upcomingClass.description || 'No class description provided yet.' }}</p>
+                  <p>{{ upcomingClassDescription }}</p>
 
                   <div class="student-live-meta">
                     <span>{{ classTimeRange }}</span>
-                    <span>{{ upcomingClass.durationMinutes || 45 }} min</span>
+                    <span>{{ upcomingClassDurationLabel }}</span>
                     <span>{{ upcomingMeetingPlatformLabel }}</span>
                   </div>
 
@@ -63,17 +63,7 @@
                   :disabled="liveReadOnly || classBusy || waitingForJoinWindow"
                   @click="join(upcomingClass.id)"
                 >
-                  {{
-                    classBusy
-                      ? 'Updating...'
-                      : upcomingClass.canJoin
-                        ? 'Join Class'
-                        : upcomingClass.canEnrol
-                          ? 'Enrol First'
-                          : waitingForJoinWindow
-                            ? 'Starts Later'
-                            : 'Class Locked'
-                  }}
+                  {{ upcomingClassActionLabel }}
                 </button>
                 <button
                   v-if="canCancelUpcomingEnrolment"
@@ -84,7 +74,7 @@
                 >
                   Cancel Enrolment
                 </button>
-                <button class="student-live-setup" type="button" @click="router.push('/student/profile')">
+                <button class="student-live-setup" type="button" @click="openProfile">
                   Open Profile
                 </button>
               </div>
@@ -123,9 +113,7 @@
                 message="Teacher details will appear here when a live class includes teacher information."
               />
 
-              <button class="btn btn-secondary btn-block" type="button" @click="router.push('/student/profile')">
-                View Feedback
-              </button>
+              <button class="btn btn-secondary btn-block" type="button" @click="openProfile">View Feedback</button>
             </article>
 
             <article class="panel student-library-card">
@@ -244,15 +232,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student live-class + recorded-video hub.
- *
- * <p>Lists enrolments, upcoming live sessions, and linked lesson
- * access. The primary class action is disabled outside the join
- * window — the gate is enforced server-side by
- * {@code LiveLearningAccessService} so a leaked meeting URL cannot
- * be reused outside the window.</p>
- */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -280,6 +259,7 @@ const actionSuccess = ref<string | null>(null)
 const classBusy = ref(false)
 const pageLoading = computed(() => liveResource.loading.value)
 const pageError = computed(() => liveResource.error.value)
+const noticeError = computed(() => actionError.value || liveResource.error.value)
 const liveReadOnly = computed(() => liveResource.usingFallback.value)
 
 const upcomingClass = computed(() => liveClasses.value.find((item) => item.canJoin) ?? liveClasses.value[0] ?? null)
@@ -293,6 +273,17 @@ const canCancelUpcomingEnrolment = computed(() => {
 })
 const waitingForJoinWindow = computed(() => canCancelUpcomingEnrolment.value && !upcomingClass.value?.canJoin)
 const primaryTeacherName = computed(() => upcomingClass.value?.teacher?.displayName || 'Teacher unavailable')
+const upcomingClassDescription = computed(
+  () => upcomingClass.value?.description || 'No class description provided yet.',
+)
+const upcomingClassDurationLabel = computed(() => `${upcomingClass.value?.durationMinutes ?? 45} min`)
+const upcomingClassActionLabel = computed(() => {
+  if (classBusy.value) return 'Updating...'
+  if (upcomingClass.value?.canJoin) return 'Join Class'
+  if (upcomingClass.value?.canEnrol) return 'Enrol First'
+  if (waitingForJoinWindow.value) return 'Starts Later'
+  return 'Class Locked'
+})
 const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() => {
   const name = primaryTeacherName.value.toLowerCase()
   if (name.includes('siti')) return 'hijab'
@@ -407,7 +398,16 @@ const reminders = computed(() => {
 
 const upcomingMeetingPlatformLabel = computed(() => formatStatus(upcomingClass.value?.meetingPlatform ?? 'OTHER'))
 
-function recordedRowsFromClass(item: LiveClassResponse) {
+interface RecordedLessonRow {
+  id: string
+  lessonId: number | null
+  packageId: number | null
+  title: string
+  context: string
+  meta: string
+}
+
+function recordedRowsFromClass(item: LiveClassResponse): RecordedLessonRow[] {
   if (item.lesson?.lessonTitle) {
     return [
       {
@@ -437,13 +437,11 @@ function recordedRowsFromClass(item: LiveClassResponse) {
   return []
 }
 
-type RecordedLessonRow = ReturnType<typeof recordedRowsFromClass>[number]
-
-function packageCourseId(packageId: number) {
+function packageCourseId(packageId: number): string {
   return `PACKAGE-${packageId}`
 }
 
-function fallbackLessonIdFromPackage(packageId: number) {
+function fallbackLessonIdFromPackage(packageId: number): number | null {
   return (
     teacherCoursePackages
       .find((item: CoursePackageResponse) => item.id === packageId && item.contentStatus === 'PUBLISHED')
@@ -451,7 +449,7 @@ function fallbackLessonIdFromPackage(packageId: number) {
   )
 }
 
-async function openPackageLinkedContent(packageId: number) {
+async function openPackageLinkedContent(packageId: number): Promise<void> {
   const courseId = packageCourseId(packageId)
 
   try {
@@ -459,21 +457,21 @@ async function openPackageLinkedContent(packageId: number) {
     const lessonId = detail.packageItems.find((item) => item.type === 'LESSON')?.contentId ?? null
 
     if (lessonId) {
-      await router.push({ name: 'student-learn', query: { lessonId: String(lessonId) } })
+      await openStudentLearn(lessonId)
       return
     }
 
-    await router.push({ name: 'course-detail', params: { courseId } })
+    await openCourseDetail(courseId)
   } catch (reason) {
     if (liveResource.usingFallback.value) {
       const fallbackLessonId = fallbackLessonIdFromPackage(packageId)
       if (fallbackLessonId) {
-        await router.push({ name: 'student-learn', query: { lessonId: String(fallbackLessonId) } })
+        await openStudentLearn(fallbackLessonId)
         return
       }
 
       if (publicCourseDetails[courseId]) {
-        await router.push({ name: 'course-detail', params: { courseId } })
+        await openCourseDetail(courseId)
         return
       }
     }
@@ -482,12 +480,12 @@ async function openPackageLinkedContent(packageId: number) {
   }
 }
 
-async function openRecordedLesson(video: RecordedLessonRow) {
+async function openRecordedLesson(video: RecordedLessonRow): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
 
   if (video.lessonId) {
-    await router.push({ name: 'student-learn', query: { lessonId: String(video.lessonId) } })
+    await openStudentLearn(video.lessonId)
     return
   }
 
@@ -499,14 +497,14 @@ async function openRecordedLesson(video: RecordedLessonRow) {
   actionError.value = 'No linked lesson or course is available for this recording yet.'
 }
 
-async function openLinkedLesson() {
+async function openLinkedLesson(): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   const lessonId =
     upcomingClass.value?.lesson?.lessonId ?? recordedLessonRows.value.find((item) => item.lessonId)?.lessonId
 
   if (lessonId) {
-    await router.push({ name: 'student-learn', query: { lessonId: String(lessonId) } })
+    await openStudentLearn(lessonId)
     return
   }
 
@@ -523,7 +521,7 @@ async function openLinkedLesson() {
   actionError.value = 'No linked lesson or course is available for this class yet.'
 }
 
-async function enrol(id: number) {
+async function enrol(id: number): Promise<void> {
   if (classBusy.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -544,7 +542,7 @@ async function enrol(id: number) {
   }
 }
 
-async function cancelEnrolment(id: number) {
+async function cancelEnrolment(id: number): Promise<void> {
   if (classBusy.value) return
   actionError.value = null
   actionSuccess.value = null
@@ -565,7 +563,7 @@ async function cancelEnrolment(id: number) {
   }
 }
 
-async function join(id: number) {
+async function join(id: number): Promise<void> {
   if (classBusy.value) return
   const target = liveClasses.value.find((item) => item.id === id)
   actionError.value = null
@@ -599,15 +597,27 @@ async function join(id: number) {
   actionError.value = 'This class is locked. Open Learn to continue with available lessons first.'
 }
 
-function formatStatus(status: string) {
+function formatStatus(status: string): string {
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function reloadAll() {
+function reloadAll(): void {
   void liveResource.reload()
+}
+
+function openProfile(): void {
+  void router.push('/student/profile')
+}
+
+async function openStudentLearn(lessonId: number): Promise<void> {
+  await router.push({ name: 'student-learn', query: { lessonId: String(lessonId) } })
+}
+
+async function openCourseDetail(courseId: string): Promise<void> {
+  await router.push({ name: 'course-detail', params: { courseId } })
 }
 </script>
 

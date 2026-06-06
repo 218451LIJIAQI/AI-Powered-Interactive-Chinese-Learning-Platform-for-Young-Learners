@@ -24,10 +24,25 @@ class LoginAttemptLimiterTests {
 
     private static final String EMAIL = "user@example.com";
     private static final String IP = "203.0.113.7";
+    private static final String OTHER_EMAIL = "other@example.com";
+    private static final String OTHER_IP = "198.51.100.42";
+    private static final String MIXED_CASE_EMAIL = "Mixed.Case@Example.com";
+    private static final String LOWERCASE_EMAIL = "mixed.case@example.com";
+    private static final String UPPERCASE_EMAIL = "MIXED.CASE@EXAMPLE.COM";
+    private static final String LONG_EMAIL_PREFIX = "a".repeat(400);
+    private static final String LONG_IP_PREFIX = "1".repeat(100);
+    private static final Instant START_TIME = Instant.parse("2025-01-01T00:00:00Z");
+    private static final ZoneId UTC = ZoneId.of("UTC");
+    private static final Duration DEFAULT_ATTEMPT_WINDOW = Duration.ofMinutes(15);
+    private static final Duration DEFAULT_LOCK_DURATION = Duration.ofMinutes(15);
+    private static final int SMALL_CAPACITY = 3;
+    private static final int CUSTOM_CAPACITY = 10;
+    private static final int SPRAY_ATTEMPTS = 20;
+    private static final int LOCKOUT_SPRAY_ATTEMPTS = 30;
 
     @Test
     void allowsLoginWhenNoFailuresRecorded() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC());
+        LoginAttemptLimiter limiter = limiter();
 
         assertThat(limiter.isAllowed(EMAIL, IP)).isTrue();
         assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
@@ -35,7 +50,7 @@ class LoginAttemptLimiterTests {
 
     @Test
     void locksAfterReachingFailureThreshold() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC());
+        LoginAttemptLimiter limiter = limiter();
 
         for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS - 1; i++) {
             boolean nowLocked = limiter.recordFailure(EMAIL, IP);
@@ -52,14 +67,12 @@ class LoginAttemptLimiterTests {
 
     @Test
     void unlocksOnceLockWindowElapses() {
-        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
+        MutableClock clock = mutableClock();
         LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock);
-        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
-            limiter.recordFailure(EMAIL, IP);
-        }
+        recordFailuresUntilLocked(limiter, EMAIL, IP);
         assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
 
-        // Advance the clock past the lock window — the slot should reset.
+        // Advance the clock past the lock window; the slot should reset.
         clock.advance(LoginAttemptLimiter.LOCK_DURATION.plusSeconds(1));
 
         assertThat(limiter.isAllowed(EMAIL, IP)).isTrue();
@@ -68,7 +81,7 @@ class LoginAttemptLimiterTests {
 
     @Test
     void successClearsAccumulatedFailures() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC());
+        LoginAttemptLimiter limiter = limiter();
 
         limiter.recordFailure(EMAIL, IP);
         limiter.recordFailure(EMAIL, IP);
@@ -83,55 +96,43 @@ class LoginAttemptLimiterTests {
 
     @Test
     void differentEmailsAndIpsAreIndependent() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC());
-
-        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
-            limiter.recordFailure(EMAIL, IP);
-        }
+        LoginAttemptLimiter limiter = limiter();
+        recordFailuresUntilLocked(limiter, EMAIL, IP);
 
         // Both axes (email, IP) need to differ to be independent. Using a
         // fresh email or fresh IP must not lock the unrelated bucket.
-        assertThat(limiter.isAllowed("other@example.com", IP)).isTrue();
-        assertThat(limiter.isAllowed(EMAIL, "198.51.100.42")).isTrue();
+        assertThat(limiter.isAllowed(OTHER_EMAIL, IP)).isTrue();
+        assertThat(limiter.isAllowed(EMAIL, OTHER_IP)).isTrue();
     }
 
     @Test
     void emailMatchingIsCaseInsensitive() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC());
-        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
-            limiter.recordFailure("Mixed.Case@Example.com", IP);
-        }
+        LoginAttemptLimiter limiter = limiter();
+        recordFailuresUntilLocked(limiter, MIXED_CASE_EMAIL, IP);
 
         // The login pipeline normalises emails to lowercase before reaching
         // the limiter, but defence in depth: ensure the limiter itself is
         // not fooled by the case of the supplied address.
-        assertThat(limiter.isAllowed("mixed.case@example.com", IP)).isFalse();
-        assertThat(limiter.isAllowed("MIXED.CASE@EXAMPLE.COM", IP)).isFalse();
+        assertThat(limiter.isAllowed(LOWERCASE_EMAIL, IP)).isFalse();
+        assertThat(limiter.isAllowed(UPPERCASE_EMAIL, IP)).isFalse();
     }
 
     @Test
     void trackedAttemptRecordsStayWithinCapacity() {
-        MutableClock clock = new MutableClock(Instant.parse("2025-01-01T00:00:00Z"));
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock, 3);
+        MutableClock clock = mutableClock();
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock, SMALL_CAPACITY);
 
-        for (int i = 0; i < 20; i++) {
-            limiter.recordFailure("spray-" + i + "@example.com", "203.0.113." + i);
-            clock.advance(Duration.ofSeconds(1));
-        }
+        recordFailureSpray(limiter, clock, SPRAY_ATTEMPTS, "203.0.113.");
 
-        assertThat(limiter.trackedAttemptCount()).isLessThanOrEqualTo(3);
+        assertThat(limiter.trackedAttemptCount()).isLessThanOrEqualTo(SMALL_CAPACITY);
     }
 
     @Test
     void activeLockoutIsNotEvictedByFreshFailureKeySpray() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC(), 3);
-        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
-            limiter.recordFailure(EMAIL, IP);
-        }
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC(), SMALL_CAPACITY);
+        recordFailuresUntilLocked(limiter, EMAIL, IP);
 
-        for (int i = 0; i < 30; i++) {
-            limiter.recordFailure("spray-" + i + "@example.com", "198.51.100." + i);
-        }
+        recordFailureSpray(limiter, null, LOCKOUT_SPRAY_ATTEMPTS, "198.51.100.");
 
         assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
         assertThat(limiter.retryAfter(EMAIL, IP)).isPositive();
@@ -140,7 +141,11 @@ class LoginAttemptLimiterTests {
     @Test
     void configurableThresholdOfOneLocksOnFirstFailure() {
         LoginAttemptLimiter limiter = new LoginAttemptLimiter(
-                Clock.systemUTC(), 1, Duration.ofMinutes(15), Duration.ofMinutes(15), 10);
+                Clock.systemUTC(),
+                1,
+                DEFAULT_ATTEMPT_WINDOW,
+                DEFAULT_LOCK_DURATION,
+                CUSTOM_CAPACITY);
 
         assertThat(limiter.recordFailure(EMAIL, IP)).isTrue();
         assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
@@ -148,14 +153,39 @@ class LoginAttemptLimiterTests {
 
     @Test
     void oversizedLimiterKeysAreNormalisedToBoundedEntries() {
-        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC(), 10);
-        String longEmailPrefix = "a".repeat(400);
-        String longIpPrefix = "1".repeat(100);
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(Clock.systemUTC(), CUSTOM_CAPACITY);
 
-        limiter.recordFailure(longEmailPrefix + "first@example.com", longIpPrefix + "1");
-        limiter.recordFailure(longEmailPrefix + "second@example.com", longIpPrefix + "2");
+        limiter.recordFailure(LONG_EMAIL_PREFIX + "first@example.com", LONG_IP_PREFIX + "1");
+        limiter.recordFailure(LONG_EMAIL_PREFIX + "second@example.com", LONG_IP_PREFIX + "2");
 
         assertThat(limiter.trackedAttemptCount()).isEqualTo(1);
+    }
+
+    private static LoginAttemptLimiter limiter() {
+        return new LoginAttemptLimiter(Clock.systemUTC());
+    }
+
+    private static MutableClock mutableClock() {
+        return new MutableClock(START_TIME);
+    }
+
+    private static void recordFailuresUntilLocked(LoginAttemptLimiter limiter, String email, String ip) {
+        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
+            limiter.recordFailure(email, ip);
+        }
+    }
+
+    private static void recordFailureSpray(
+            LoginAttemptLimiter limiter,
+            MutableClock clock,
+            int attempts,
+            String ipPrefix) {
+        for (int i = 0; i < attempts; i++) {
+            limiter.recordFailure("spray-" + i + "@example.com", ipPrefix + i);
+            if (clock != null) {
+                clock.advance(Duration.ofSeconds(1));
+            }
+        }
     }
 
     private static final class MutableClock extends Clock {
@@ -167,7 +197,7 @@ class LoginAttemptLimiterTests {
 
         @Override
         public ZoneId getZone() {
-            return ZoneId.of("UTC");
+            return UTC;
         }
 
         @Override

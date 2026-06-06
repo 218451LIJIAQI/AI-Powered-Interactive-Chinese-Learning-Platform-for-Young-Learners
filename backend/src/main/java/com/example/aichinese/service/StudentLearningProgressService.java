@@ -46,6 +46,13 @@ public class StudentLearningProgressService {
     private static final int QUIZ_COMPLETION_POINTS = 20;
     private static final int QUIZ_BONUS_POINTS = 10;
     private static final int LESSON_COMPLETION_POINTS = 25;
+    private static final int HIGH_QUIZ_SCORE_PERCENT = 80;
+    private static final int POINT_STARTER_THRESHOLD = 50;
+    private static final int STREAK_EXPLORER_DAYS = 3;
+    private static final int POINTS_PER_LEVEL = 100;
+    private static final int RECENT_ACTIVITY_LIMIT = 10;
+    private static final int RECENT_REWARD_LIMIT = 10;
+    private static final int WEAK_AREA_LIMIT = 5;
 
     private static final String SOURCE_QUIZ_COMPLETION = "QUIZ_COMPLETION";
     private static final String SOURCE_QUIZ_BONUS = "QUIZ_BONUS";
@@ -104,7 +111,7 @@ public class StudentLearningProgressService {
                 QUIZ_COMPLETION_POINTS,
                 "Completed quiz");
 
-        if (percentageScore >= 80) {
+        if (percentageScore >= HIGH_QUIZ_SCORE_PERCENT) {
             earnedPoints += awardPointsIfFirst(
                     lockedStudent,
                     SOURCE_QUIZ_BONUS,
@@ -146,7 +153,7 @@ public class StudentLearningProgressService {
     @Transactional(readOnly = true)
     public int lessonCompletionPercent(StudentProfile student, Lesson lesson) {
         return lessonProgressRepository.findByStudentIdAndLessonId(student.getId(), lesson.getId())
-                .map(progress -> progress.getCompletionPercent() == null ? 0 : progress.getCompletionPercent())
+                .map(progress -> Objects.requireNonNullElse(progress.getCompletionPercent(), 0))
                 .orElse(0);
     }
 
@@ -162,13 +169,8 @@ public class StudentLearningProgressService {
 
         List<String> weakAreas = extractWeakAreas(student);
         List<StudentProgressLessonResponse> recentLessons = accessibleLessonProgress.stream()
-                .limit(10)
-                .map(progress -> new StudentProgressLessonResponse(
-                        progress.getLesson().getId(),
-                        progress.getLesson().getTitle(),
-                        progress.getCompletionPercent() == null ? 0 : progress.getCompletionPercent(),
-                        progress.isCompleted(),
-                        progress.getLastAccessedAt()))
+                .limit(RECENT_ACTIVITY_LIMIT)
+                .map(StudentLearningProgressService::toStudentProgressLessonResponse)
                 .toList();
 
         return new StudentProgressSummaryResponse(
@@ -184,16 +186,17 @@ public class StudentLearningProgressService {
     @Transactional(readOnly = true)
     public RewardSummaryResponse getRewardSummary(StudentProfile student) {
         DailyStreak streak = dailyStreakRepository.findByStudentId(student.getId()).orElse(null);
-        List<BadgeSummaryResponse> badges = getBadges(student, 0, 10).items();
+        List<BadgeSummaryResponse> badges = getBadges(student, 0, RECENT_REWARD_LIMIT).items();
 
         List<PointsTransactionResponse> recentPoints = pointsTransactionRepository
-                .findByStudentIdOrderByCreatedAtDesc(student.getId(), PageRequest.of(0, 10)).getContent().stream()
+                .findByStudentIdOrderByCreatedAtDesc(student.getId(), PageRequest.of(0, RECENT_REWARD_LIMIT))
+                .getContent().stream()
                 .map(StudentLearningProgressService::toPointsTransactionResponse)
                 .toList();
 
         int totalPoints = totalPoints(student);
-        int currentLevelNumber = Math.max(1, totalPoints / 100 + 1);
-        int progressToNextLevelPercent = totalPoints % 100;
+        int currentLevelNumber = Math.max(1, totalPoints / POINTS_PER_LEVEL + 1);
+        int progressToNextLevelPercent = totalPoints % POINTS_PER_LEVEL;
 
         return new RewardSummaryResponse(
                 totalPoints,
@@ -288,19 +291,20 @@ public class StudentLearningProgressService {
             return;
         }
 
+        int currentStreak = count(streak.getCurrentStreak());
         if (lastDate != null && lastDate.plusDays(1).equals(today)) {
-            streak.setCurrentStreak(streak.getCurrentStreak() + 1);
+            streak.setCurrentStreak(currentStreak + 1);
         } else {
             streak.setCurrentStreak(1);
         }
 
         streak.setBestStreak(Math.max(
-                streak.getBestStreak() == null ? 0 : streak.getBestStreak(),
+                count(streak.getBestStreak()),
                 streak.getCurrentStreak()));
         streak.setLastLearningDate(today);
         dailyStreakRepository.save(streak);
 
-        if (streak.getCurrentStreak() >= 3) {
+        if (streak.getCurrentStreak() >= STREAK_EXPLORER_DAYS) {
             awardBadgeIfNeeded(student, "Streak Explorer", "Reached a three-day learning streak.", "streak-explorer");
         }
     }
@@ -313,7 +317,7 @@ public class StudentLearningProgressService {
                 .filter(StudentQuizProgress::isCompleted)
                 .count();
 
-        int percent = totalActivities == 0 ? 0 : (int) Math.round((completedActivities * 100.0) / totalActivities);
+        int percent = totalActivities == 0 ? 0 : round(completedActivities * 100.0 / totalActivities);
         boolean completed = totalActivities > 0 && completedActivities >= totalActivities;
 
         LessonProgress lessonProgress = lessonProgressRepository.findLockedByStudentIdAndLessonId(student.getId(), lesson.getId())
@@ -343,23 +347,21 @@ public class StudentLearningProgressService {
     }
 
     private int awardPointsIfFirst(StudentProfile student, String sourceType, Long sourceId, int points, String reason) {
-        StudentProfile lockedStudent = studentProfileRepository.findLockedById(student.getId()).orElse(student);
         if (pointsTransactionRepository.existsByStudentIdAndSourceTypeAndSourceId(student.getId(), sourceType, sourceId)) {
             return 0;
         }
 
         PointsTransaction transaction = new PointsTransaction();
-        transaction.setStudent(lockedStudent);
+        transaction.setStudent(student);
         transaction.setPointsDelta(points);
         transaction.setReason(reason);
         transaction.setSourceType(sourceType);
         transaction.setSourceId(sourceId);
         pointsTransactionRepository.save(transaction);
 
-        lockedStudent.setTotalPoints(totalPoints(lockedStudent) + points);
-        student.setTotalPoints(lockedStudent.getTotalPoints());
-        if (lockedStudent.getTotalPoints() >= 50) {
-            awardBadgeIfNeeded(lockedStudent, "Point Starter", "Collected at least 50 learning points.", "point-starter");
+        student.setTotalPoints(totalPoints(student) + points);
+        if (totalPoints(student) >= POINT_STARTER_THRESHOLD) {
+            awardBadgeIfNeeded(student, "Point Starter", "Collected at least 50 learning points.", "point-starter");
         }
         return points;
     }
@@ -390,6 +392,20 @@ public class StudentLearningProgressService {
         return student.getTotalPoints() == null ? 0 : student.getTotalPoints();
     }
 
+    private static int count(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private static StudentProgressLessonResponse toStudentProgressLessonResponse(LessonProgress progress) {
+        Lesson lesson = progress.getLesson();
+        return new StudentProgressLessonResponse(
+                lesson.getId(),
+                lesson.getTitle(),
+                count(progress.getCompletionPercent()),
+                progress.isCompleted(),
+                progress.getLastAccessedAt());
+    }
+
     private static BadgeSummaryResponse toBadgeSummaryResponse(StudentBadge badge) {
         Badge badgeDetails = badge.getBadge();
         return new BadgeSummaryResponse(
@@ -412,8 +428,8 @@ public class StudentLearningProgressService {
 
     private static DailyStreakResponse toDailyStreakResponse(DailyStreak streak) {
         return new DailyStreakResponse(
-                streak != null && streak.getCurrentStreak() != null ? streak.getCurrentStreak() : 0,
-                streak != null && streak.getBestStreak() != null ? streak.getBestStreak() : 0,
+                streak == null ? 0 : count(streak.getCurrentStreak()),
+                streak == null ? 0 : count(streak.getBestStreak()),
                 streak != null ? streak.getLastLearningDate() : null);
     }
 
@@ -422,13 +438,13 @@ public class StudentLearningProgressService {
     }
 
     private boolean hasCurrentLessonProgressAccess(StudentProfile student, LessonProgress progress) {
-        return progress.getLesson() == null || studentLearningAccessService.hasLessonAccess(student, progress.getLesson());
+        return progress.getLesson() != null && studentLearningAccessService.hasLessonAccess(student, progress.getLesson());
     }
 
     private boolean hasCurrentQuizAttemptAccess(StudentProfile student, QuizAttempt attempt) {
-        return attempt.getQuiz() == null
-                || attempt.getQuiz().getLesson() == null
-                || studentLearningAccessService.hasLessonAccess(student, attempt.getQuiz().getLesson());
+        Quiz quiz = attempt.getQuiz();
+        Lesson lesson = quiz == null ? null : quiz.getLesson();
+        return lesson == null || studentLearningAccessService.hasLessonAccess(student, lesson);
     }
 
     private int averageAccessibleQuizPercentage(StudentProfile student) {
@@ -438,7 +454,7 @@ public class StudentLearningProgressService {
                         && attempt.getScore() != null
                         && attempt.getMaxScore() != null
                         && attempt.getMaxScore() > 0)
-                .map(attempt -> round((attempt.getScore() * 100.0) / attempt.getMaxScore()))
+                .map(attempt -> round(attempt.getScore() * 100.0 / attempt.getMaxScore()))
                 .toList();
         if (percentages.isEmpty()) {
             return 0;
@@ -451,13 +467,12 @@ public class StudentLearningProgressService {
             return 0;
         }
         long completedLessons = lessonProgressList.stream().filter(LessonProgress::isCompleted).count();
-        return round((completedLessons * 100.0) / lessonProgressList.size());
+        return round(completedLessons * 100.0 / lessonProgressList.size());
     }
 
     private static String latestAccessibleActivitySummary(List<LessonProgress> lessonProgressList) {
         return lessonProgressList.stream()
                 .findFirst()
-                .filter(progress -> progress.getLesson() != null)
                 .map(progress -> progress.getLesson().getTitle())
                 .orElse(null);
     }
@@ -468,15 +483,16 @@ public class StudentLearningProgressService {
                 .map(answer -> answer.getQuestion() == null ? null : answer.getQuestion().getQuestionType())
                 .filter(value -> value != null && !value.isBlank())
                 .distinct()
-                .limit(5)
+                .limit(WEAK_AREA_LIMIT)
                 .toList();
     }
 
     private boolean hasCurrentWrongAnswerAccess(StudentProfile student, QuizAttemptAnswer answer) {
-        return answer.getQuestion() != null
-                && answer.getQuestion().getQuiz() != null
-                && answer.getQuestion().getQuiz().getLesson() != null
-                && studentLearningAccessService.hasLessonAccess(student, answer.getQuestion().getQuiz().getLesson());
+        if (answer.getQuestion() == null || answer.getQuestion().getQuiz() == null) {
+            return false;
+        }
+        Lesson lesson = answer.getQuestion().getQuiz().getLesson();
+        return lesson != null && studentLearningAccessService.hasLessonAccess(student, lesson);
     }
 
     public record CompletionOutcome(

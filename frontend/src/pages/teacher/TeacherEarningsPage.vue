@@ -6,7 +6,7 @@
       icon="earnings"
     />
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
 
     <section class="teacher-earnings-hero">
       <div>
@@ -135,15 +135,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Teacher earnings and payout request surface.
- *
- * <p>Shows earnings ledger, current balance, completed payouts, and
- * the in-page form for requesting a new payout. The page never
- * computes balances client-side — all amounts come from
- * {@code teacherApi.earnings()} which derives them from approved
- * payments minus paid-out payouts (single source of truth).</p>
- */
 import { computed, reactive, ref } from 'vue'
 
 import { teacherApi } from '@/api/services'
@@ -160,6 +151,8 @@ import { teacherEarnings, teacherEarningsSummary, teacherPayouts } from '@/demo/
 import type { TeacherPayoutRequestResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatCurrency, formatDateTime } from '@/utils/format'
+
+type PayoutTone = 'warning' | 'info' | 'success' | 'danger' | 'primary'
 
 const earningsResource = useResource(() => teacherApi.earnings(), teacherEarnings)
 const summaryResource = useResource(() => teacherApi.earningsSummary(), teacherEarningsSummary)
@@ -201,8 +194,9 @@ const usingFallback = computed(
     earningsResource.usingFallback.value || summaryResource.usingFallback.value || payoutsResource.usingFallback.value,
 )
 const pageError = computed(
-  () => actionError.value || earningsResource.error.value || summaryResource.error.value || payoutsResource.error.value,
+  () => earningsResource.error.value || summaryResource.error.value || payoutsResource.error.value,
 )
+const noticeError = computed(() => actionError.value || pageError.value)
 
 const payoutForm = reactive({
   amount: 0,
@@ -212,7 +206,7 @@ const submittingPayout = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 
-function payoutTone(status: string) {
+function payoutTone(status: string): PayoutTone {
   switch (status) {
     case 'PENDING':
       return 'warning'
@@ -227,13 +221,13 @@ function payoutTone(status: string) {
   }
 }
 
-function payoutDescription(payout: TeacherPayoutRequestResponse) {
+function payoutDescription(payout: TeacherPayoutRequestResponse): string {
   const requestedNote = payout.requestedNote?.trim() || 'No note provided.'
   const decision = payout.decisionReason?.trim()
   return decision ? `${requestedNote} • Decision: ${decision}` : requestedNote
 }
 
-async function submitPayout() {
+async function submitPayout(): Promise<void> {
   if (submittingPayout.value) return
   if (payoutUsingFallback.value) {
     actionError.value = 'Payout requests are unavailable while using preview data.'

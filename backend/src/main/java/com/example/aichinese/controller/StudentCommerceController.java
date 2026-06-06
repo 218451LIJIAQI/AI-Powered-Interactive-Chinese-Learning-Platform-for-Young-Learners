@@ -1,14 +1,15 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
@@ -18,8 +19,8 @@ import com.example.aichinese.dto.commerce.CartResponse;
 import com.example.aichinese.dto.commerce.CheckoutResponse;
 import com.example.aichinese.dto.commerce.CheckoutSessionItemRequest;
 import com.example.aichinese.dto.commerce.RefundRequestCreateRequest;
-import com.example.aichinese.dto.commerce.StudentRefundRequestResponse;
 import com.example.aichinese.dto.commerce.StudentPaymentRecordResponse;
+import com.example.aichinese.dto.commerce.StudentRefundRequestResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.CartService;
 import com.example.aichinese.service.CheckoutService;
@@ -28,7 +29,6 @@ import com.example.aichinese.service.RefundService;
 
 import jakarta.validation.Valid;
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/students")
 public class StudentCommerceController {
@@ -43,10 +43,10 @@ public class StudentCommerceController {
             CheckoutService checkoutService,
             PaymentService paymentService,
             RefundService refundService) {
-        this.cartService = cartService;
-        this.checkoutService = checkoutService;
-        this.paymentService = paymentService;
-        this.refundService = refundService;
+        this.cartService = Objects.requireNonNull(cartService, "cartService");
+        this.checkoutService = Objects.requireNonNull(checkoutService, "checkoutService");
+        this.paymentService = Objects.requireNonNull(paymentService, "paymentService");
+        this.refundService = Objects.requireNonNull(refundService, "refundService");
     }
 
     @GetMapping("/cart")
@@ -90,14 +90,18 @@ public class StudentCommerceController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
-        return ApiResponse.success("Payments retrieved successfully.", paymentService.getStudentPayments(currentUser, page, size));
+        return ApiResponse.success(
+                "Payments retrieved successfully.",
+                paymentService.getStudentPayments(currentUser, page, size));
     }
 
     @GetMapping("/payments/{paymentId}")
     public ApiResponse<StudentPaymentRecordResponse> getPayment(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long paymentId) {
-        return ApiResponse.success("Payment retrieved successfully.", paymentService.getStudentPayment(currentUser, paymentId));
+        return ApiResponse.success(
+                "Payment retrieved successfully.",
+                paymentService.getStudentPayment(currentUser, paymentId));
     }
 
     @GetMapping("/refund-requests")

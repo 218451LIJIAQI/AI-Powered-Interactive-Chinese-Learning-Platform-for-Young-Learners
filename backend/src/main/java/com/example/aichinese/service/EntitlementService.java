@@ -22,6 +22,7 @@ import com.example.aichinese.repository.OrderItemRepository;
 import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.PaymentEntitlementRepository;
 import com.example.aichinese.service.model.ResolvedPurchasableItem;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class EntitlementService {
@@ -73,37 +74,46 @@ public class EntitlementService {
 
         for (OrderItem orderItem : orderItems) {
             grantItemEntitlement(student, order, paymentRecord, orderItem.getItemType(), orderItem.getItemId(), null);
+            grantPremiumAiEntitlement(student, order, paymentRecord, orderItem);
+            grantPackageEntitlements(student, order, paymentRecord, orderItem);
+        }
+    }
 
-            if (PurchasableItemType.PREMIUM_AI.name().equals(orderItem.getItemType())) {
+    private void grantPremiumAiEntitlement(
+            StudentProfile student,
+            Order order,
+            PaymentRecord paymentRecord,
+            OrderItem orderItem) {
+        if (!PurchasableItemType.PREMIUM_AI.name().equals(orderItem.getItemType())) {
+            return;
+        }
+        grantItemEntitlement(
+                student,
+                order,
+                paymentRecord,
+                orderItem.getItemType(),
+                orderItem.getItemId(),
+                TextUtils.defaultIfBlank(orderItem.getFeatureKey(), "PREMIUM_AI_ACCESS"));
+    }
+
+    private void grantPackageEntitlements(
+            StudentProfile student,
+            Order order,
+            PaymentRecord paymentRecord,
+            OrderItem orderItem) {
+        if (!PurchasableItemType.PACKAGE.name().equals(orderItem.getItemType())) {
+            return;
+        }
+        for (PackageItem packageItem : packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(orderItem.getItemId())) {
+            if (packageItem.getItemType() == PackageItemType.MODULE
+                    || packageItem.getItemType() == PackageItemType.LESSON) {
                 grantItemEntitlement(
                         student,
                         order,
                         paymentRecord,
-                        orderItem.getItemType(),
-                        orderItem.getItemId(),
-                        orderItem.getFeatureKey() == null || orderItem.getFeatureKey().isBlank()
-                                ? "PREMIUM_AI_ACCESS"
-                                : orderItem.getFeatureKey());
-            }
-
-            if (PurchasableItemType.PACKAGE.name().equals(orderItem.getItemType())) {
-                for (PackageItem packageItem : packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(orderItem.getItemId())) {
-                    if (packageItem.getItemType() == null) {
-                        continue;
-                    }
-                    switch (packageItem.getItemType()) {
-                        case MODULE, LESSON -> grantItemEntitlement(
-                                student,
-                                order,
-                                paymentRecord,
-                                packageItem.getItemType().name(),
-                                packageItem.getItemId(),
-                                null);
-                        default -> {
-                            // Activity-level access is reserved for future expansion.
-                        }
-                    }
-                }
+                        packageItem.getItemType().name(),
+                        packageItem.getItemId(),
+                        null);
             }
         }
     }
@@ -154,7 +164,7 @@ public class EntitlementService {
             String itemType,
             Long itemId,
             String featureKey) {
-        String normalisedFeatureKey = featureKey != null && featureKey.isBlank() ? null : featureKey;
+        String normalisedFeatureKey = TextUtils.trimToNull(featureKey);
         if (paymentEntitlementRepository.existsForOrderItem(order.getId(), itemType, itemId, normalisedFeatureKey)) {
             return;
         }

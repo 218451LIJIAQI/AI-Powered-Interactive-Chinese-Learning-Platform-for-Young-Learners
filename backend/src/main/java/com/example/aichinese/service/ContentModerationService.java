@@ -38,6 +38,7 @@ public class ContentModerationService {
     private static final Logger log = LoggerFactory.getLogger(ContentModerationService.class);
 
     private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
+    private static final String TEACHER_FEEDBACK_PATH = "/teacher/feedback";
 
     private final ContentModerationRecordRepository contentModerationRecordRepository;
     private final UserRepository userRepository;
@@ -131,39 +132,62 @@ public class ContentModerationService {
             updateTeacherProfileVisibility(target.teacherProfile(), action);
         }
 
+        ContentModerationRecord saved = saveModerationRecord(admin, target, action, request.reason());
+        log.info("Moderation action applied: action={}, targetType={}, targetId={}, adminUserId={}",
+                action, target.targetType(), target.targetId(), admin.getId());
+
+        notifyTeacher(target, action, admin);
+        auditModerationAction(admin, target, action);
+
+        return communicationMapper.toModerationRecordResponse(saved);
+    }
+
+    private ContentModerationRecord saveModerationRecord(
+            User admin,
+            CommunicationTargetResolver.ResolvedTarget target,
+            ContentModerationAction action,
+            String reason) {
         ContentModerationRecord record = new ContentModerationRecord();
         record.setAdminUser(admin);
         record.setTargetType(target.targetType());
         record.setTargetId(target.targetId());
         record.setTargetTitleSnapshot(target.targetTitle());
         record.setActionTaken(action.name());
-        record.setNote(requireModerationNote(request.reason()));
+        record.setNote(requireModerationNote(reason));
         record.setRelatedTeacher(target.relatedTeacher());
-        ContentModerationRecord saved = contentModerationRecordRepository.save(record);
-        log.info("Moderation action applied: action={}, targetType={}, targetId={}, adminUserId={}",
-                action, target.targetType(), target.targetId(), admin.getId());
+        return contentModerationRecordRepository.save(record);
+    }
 
-        if (target.relatedTeacher() != null && target.relatedTeacher().getUser() != null) {
-            notificationService.safeCreateNotification(
-                    target.relatedTeacher().getUser(),
-                    NotificationType.MODERATION_ACTION,
-                    "Content moderation update",
-                    "An admin has applied a moderation action: " + action.name() + ".",
-                    target.targetType(),
-                    target.targetId(),
-                    "/teacher/feedback",
-                    admin);
+    private void notifyTeacher(
+            CommunicationTargetResolver.ResolvedTarget target,
+            ContentModerationAction action,
+            User admin) {
+        if (target.relatedTeacher() == null || target.relatedTeacher().getUser() == null) {
+            return;
         }
+        notificationService.safeCreateNotification(
+                target.relatedTeacher().getUser(),
+                NotificationType.MODERATION_ACTION,
+                "Content moderation update",
+                "An admin has applied a moderation action: " + action.name() + ".",
+                target.targetType(),
+                target.targetId(),
+                TEACHER_FEEDBACK_PATH,
+                admin);
+    }
 
+    private void auditModerationAction(
+            User admin,
+            CommunicationTargetResolver.ResolvedTarget target,
+            ContentModerationAction action) {
         auditLogService.safeRecord(
                 admin,
                 "MODERATION_" + action.name(),
                 target.targetType(),
                 target.targetId(),
-                "Admin applied moderation action " + action.name() + " to " + target.targetType() + " #" + target.targetId() + ".",
+                "Admin applied moderation action " + action.name()
+                        + " to " + target.targetType() + " #" + target.targetId() + ".",
                 null);
-
-        return communicationMapper.toModerationRecordResponse(saved);
     }
 
     private void updateLessonStatus(Lesson lesson, ContentModerationAction action) {
@@ -201,7 +225,7 @@ public class ContentModerationService {
             case HIDE, UNPUBLISH -> {
                 if (current != ContentStatus.PUBLISHED) {
                     throw new ResponseStatusException(BAD_REQUEST,
-                            "Only published " + entityName + "s can be " + action.name().toLowerCase().replace('_', '-') + ".");
+                            "Only published " + entityName + "s can be " + actionLabel(action) + ".");
                 }
             }
             case ARCHIVE -> {
@@ -222,6 +246,10 @@ public class ContentModerationService {
                 }
             }
         }
+    }
+
+    private static String actionLabel(ContentModerationAction action) {
+        return action.name().toLowerCase().replace('_', '-');
     }
 
     private static void requireValidVisibilityTransition(

@@ -19,107 +19,114 @@ import com.example.aichinese.config.ForwardedHeaderProperties;
  */
 class ClientIpResolverTests {
 
+    private static final String X_FORWARDED_FOR = "X-Forwarded-For";
+    private static final String LOOPBACK_PROXY = "127.0.0.1";
+    private static final String PROXY_IP = "198.51.100.200";
+    private static final String TRUSTED_PROXY_CIDR = "198.51.100.0/24";
+    private static final String TRUSTED_IPV6_PROXY = "2001:db8::10";
+    private static final String EQUIVALENT_TRUSTED_IPV6_PROXY = "2001:db8:0:0:0:0:0:10";
+    private static final String LOCAL_CLIENT_IP = "198.51.100.10";
+    private static final String CLIENT_IP = "203.0.113.9";
+    private static final String SECOND_CLIENT_IP = "203.0.113.10";
+    private static final String SPOOFED_IP = "192.0.2.44";
+    private static final String HOSTNAME_PROXY = "proxy.internal";
+    private static final String INVALID_CIDR_MESSAGE = "Trusted proxy CIDR contains an invalid address";
+    private static final String INVALID_LITERAL_MESSAGE = "Trusted proxy entry contains an invalid address";
+
     @Test
     void trustsLoopbackProxyForLocalDevelopment() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of()));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("127.0.0.1");
-        request.addHeader("X-Forwarded-For", "198.51.100.10, 127.0.0.1");
+        ClientIpResolver resolver = resolver();
+        MockHttpServletRequest request = request(LOOPBACK_PROXY, LOCAL_CLIENT_IP + ", " + LOOPBACK_PROXY);
 
-        assertThat(resolver.resolve(request)).isEqualTo("198.51.100.10");
+        assertThat(resolver.resolve(request)).isEqualTo(LOCAL_CLIENT_IP);
     }
 
     @Test
     void ignoresForwardedHeaderFromUntrustedProxy() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of()));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "203.0.113.9");
+        ClientIpResolver resolver = resolver();
+        MockHttpServletRequest request = request(PROXY_IP, CLIENT_IP);
 
-        assertThat(resolver.resolve(request)).isEqualTo("198.51.100.200");
+        assertThat(resolver.resolve(request)).isEqualTo(PROXY_IP);
     }
 
     @Test
     void trustsExplicitProxyLiteral() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.200")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "203.0.113.9, 198.51.100.200");
+        ClientIpResolver resolver = resolver(PROXY_IP);
+        MockHttpServletRequest request = request(PROXY_IP, CLIENT_IP + ", " + PROXY_IP);
 
-        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.9");
+        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
     }
 
     @Test
     void trustsConfiguredCidrProxyRange() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.0/24")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "203.0.113.10");
+        ClientIpResolver resolver = resolver(TRUSTED_PROXY_CIDR);
+        MockHttpServletRequest request = request(PROXY_IP, SECOND_CLIENT_IP);
 
-        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.10");
+        assertThat(resolver.resolve(request)).isEqualTo(SECOND_CLIENT_IP);
     }
 
     @Test
     void rejectsHostnameBasedTrustedProxyCidrEntries() {
-        assertThatThrownBy(() -> new ClientIpResolver(new ForwardedHeaderProperties(List.of("proxy.internal/24"))))
+        assertThatThrownBy(() -> resolver(HOSTNAME_PROXY + "/24"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Trusted proxy CIDR contains an invalid address");
+                .hasMessageContaining(INVALID_CIDR_MESSAGE);
     }
 
     @Test
     void rejectsHostnameBasedTrustedProxyLiteralEntries() {
-        assertThatThrownBy(() -> new ClientIpResolver(new ForwardedHeaderProperties(List.of("proxy.internal"))))
+        assertThatThrownBy(() -> resolver(HOSTNAME_PROXY))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Trusted proxy entry contains an invalid address");
+                .hasMessageContaining(INVALID_LITERAL_MESSAGE);
     }
 
     @Test
     void selectsRealClientWhenTrustedProxyAppendsAfterSpoofedForwardedValue() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.200")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "192.0.2.44, 203.0.113.9");
+        ClientIpResolver resolver = resolver(PROXY_IP);
+        MockHttpServletRequest request = request(PROXY_IP, SPOOFED_IP + ", " + CLIENT_IP);
 
-        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.9");
+        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
     }
 
     @Test
     void ignoresNonAddressSpoofBeforeRealClientAddress() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.200")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "spoofed.example, 203.0.113.9");
+        ClientIpResolver resolver = resolver(PROXY_IP);
+        MockHttpServletRequest request = request(PROXY_IP, "spoofed.example, " + CLIENT_IP);
 
-        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.9");
+        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
     }
 
     @Test
     void fallsBackToTrustedPeerWhenNearestForwardedHopIsNotAnAddress() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.200")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "203.0.113.9, not-an-address");
+        ClientIpResolver resolver = resolver(PROXY_IP);
+        MockHttpServletRequest request = request(PROXY_IP, CLIENT_IP + ", not-an-address");
 
-        assertThat(resolver.resolve(request)).isEqualTo("198.51.100.200");
+        assertThat(resolver.resolve(request)).isEqualTo(PROXY_IP);
     }
 
     @Test
     void canonicalizesEquivalentClientAddressFormsForStableRateLimitKeys() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("198.51.100.200")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("198.51.100.200");
-        request.addHeader("X-Forwarded-For", "203.000.113.009");
+        ClientIpResolver resolver = resolver(PROXY_IP);
+        MockHttpServletRequest request = request(PROXY_IP, "203.000.113.009");
 
-        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.9");
+        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
     }
 
     @Test
     void trustsEquivalentIpv6LiteralFormsForConfiguredProxy() {
-        ClientIpResolver resolver = new ClientIpResolver(new ForwardedHeaderProperties(List.of("2001:db8::10")));
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr("2001:db8:0:0:0:0:0:10");
-        request.addHeader("X-Forwarded-For", "203.0.113.9");
+        ClientIpResolver resolver = resolver(TRUSTED_IPV6_PROXY);
+        MockHttpServletRequest request = request(EQUIVALENT_TRUSTED_IPV6_PROXY, CLIENT_IP);
 
-        assertThat(resolver.resolve(request)).isEqualTo("203.0.113.9");
+        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
+    }
+
+    private static ClientIpResolver resolver(String... trustedProxies) {
+        return new ClientIpResolver(new ForwardedHeaderProperties(List.of(trustedProxies)));
+    }
+
+    private static MockHttpServletRequest request(String remoteAddr, String forwardedFor) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr(remoteAddr);
+        request.addHeader(X_FORWARDED_FOR, forwardedFor);
+        return request;
     }
 }

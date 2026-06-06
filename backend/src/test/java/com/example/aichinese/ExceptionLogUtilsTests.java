@@ -8,10 +8,11 @@ import com.example.aichinese.util.ExceptionLogUtils;
 
 class ExceptionLogUtilsTests {
 
+    private static final int MAX_SAFE_SUMMARY_LENGTH = 220;
+
     @Test
     void safeSummaryRedactsSensitiveValuesAndCollapsesLayoutControl() {
-        RuntimeException exception = new RuntimeException(
-                "password=secret123\nAuthorization: Bearer abc.def token:reset-token \u202E" + "x".repeat(300));
+        RuntimeException exception = new RuntimeException(sensitiveMessage());
 
         String summary = ExceptionLogUtils.safeSummary(exception);
 
@@ -25,7 +26,7 @@ class ExceptionLogUtilsTests {
                 .doesNotContain("reset-token")
                 .doesNotContain("\n")
                 .doesNotContain("\u202E")
-                .hasSizeLessThanOrEqualTo(220);
+                .hasSizeLessThanOrEqualTo(MAX_SAFE_SUMMARY_LENGTH);
     }
 
     @Test
@@ -34,5 +35,9 @@ class ExceptionLogUtilsTests {
                 .isEqualTo("IllegalStateException");
         assertThat(ExceptionLogUtils.safeSummary(null))
                 .isEqualTo("UnknownException");
+    }
+
+    private static String sensitiveMessage() {
+        return "password=secret123\nAuthorization: Bearer abc.def token:reset-token \u202E" + "x".repeat(300);
     }
 }

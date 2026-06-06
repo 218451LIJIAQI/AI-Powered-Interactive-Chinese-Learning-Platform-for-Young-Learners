@@ -37,8 +37,8 @@ public record AdminStoryActivityRequest(
         String translation,
 
         @Pattern(
-                regexp = "^(https?://.+)?$",
-                message = "Image URL must start with http:// or https://.")
+                regexp = "^(https?://\\S+)?$",
+                message = "Image URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Image URL must not exceed 255 characters.")
         String imageUrl,
 

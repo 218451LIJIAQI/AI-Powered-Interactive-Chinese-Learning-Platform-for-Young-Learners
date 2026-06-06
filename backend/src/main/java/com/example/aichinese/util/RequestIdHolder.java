@@ -45,18 +45,19 @@ public final class RequestIdHolder {
     }
 
     /**
-     * Stores the supplied id on the current thread. A {@code null} value
-     * is treated as a request to clear the binding (see {@link #clear()})
+     * Stores the supplied id on the current thread. A {@code null} or blank
+     * value is treated as a request to clear the binding (see {@link #clear()})
      * so the underlying {@link ThreadLocal} entry is fully detached from
      * the worker thread rather than retaining a phantom {@code null}
      * mapping that would survive until the worker dies.
      */
     public static void set(String requestId) {
-        if (requestId == null) {
-            CURRENT_REQUEST_ID.remove();
+        String normalized = TextUtils.trimToNull(requestId);
+        if (normalized == null) {
+            clear();
             return;
         }
-        CURRENT_REQUEST_ID.set(requestId);
+        CURRENT_REQUEST_ID.set(normalized);
     }
 
     /**

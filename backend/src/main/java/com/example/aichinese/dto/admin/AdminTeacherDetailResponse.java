@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
 import com.example.aichinese.dto.teacher.TeacherVerificationDocumentSummaryResponse;
 import com.example.aichinese.dto.teacher.TeacherVerificationReviewSummaryResponse;
 import com.example.aichinese.entity.enums.TeacherStatus;

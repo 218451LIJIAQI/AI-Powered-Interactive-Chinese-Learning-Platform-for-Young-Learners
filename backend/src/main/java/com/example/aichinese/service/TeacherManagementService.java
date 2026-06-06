@@ -37,6 +37,16 @@ import com.example.aichinese.util.TextUtils;
 public class TeacherManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherManagementService.class);
+    private static final String TEACHER_PROFILE_NOT_FOUND = "Teacher profile could not be found.";
+    private static final String USER_NOT_FOUND = "User could not be found.";
+    private static final String TEACHER_DOCUMENT_NOT_FOUND = "Requested verification document was not found.";
+    private static final String TEACHER_PROFILE_TARGET = "TeacherProfile";
+    private static final String TEACHER_DOCUMENT_TARGET = "TeacherVerificationDocument";
+    private static final String ADMIN_VERIFICATION_PATH = "/admin/teacher-verification";
+    private static final String TEACHER_PROFILE_PATH = "/teacher/profile";
+    private static final String ACTION_DOCUMENT_UPLOAD = "TEACHER_VERIFICATION_DOCUMENT_UPLOAD";
+    private static final String ACTION_DOCUMENT_VIEW = "TEACHER_VERIFICATION_DOCUMENT_VIEW";
+    private static final String ACTION_VERIFICATION_RESUBMIT = "TEACHER_VERIFICATION_RESUBMIT";
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherVerificationDocumentRepository teacherVerificationDocumentRepository;
@@ -69,9 +79,7 @@ public class TeacherManagementService {
     @Transactional(readOnly = true)
     public TeacherProfileResponse getCurrentTeacherProfile(SecurityUserDetails currentUser) {
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
-        List<TeacherVerificationDocument> documents = teacherVerificationDocumentRepository
-                .findByTeacherIdAndCurrentVersionTrueOrderBySubmittedAtDesc(profile.getId());
-        return teacherManagementMapper.toTeacherProfileResponse(profile, documents);
+        return teacherManagementMapper.toTeacherProfileResponse(profile, currentDocuments(profile));
     }
 
     @Transactional
@@ -84,7 +92,8 @@ public class TeacherManagementService {
         User user = getUserById(currentUser.getUserId());
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
 
-        user.setDisplayName(request.fullName() != null ? request.fullName() : user.getDisplayName());
+        String displayName = TextUtils.trimToNull(request.fullName());
+        user.setDisplayName(displayName == null ? user.getDisplayName() : displayName);
         profile.setBio(TextUtils.trimToNull(request.bio()));
         profile.setQualificationSummary(TextUtils.trimToNull(request.shortIntroduction()));
         profile.setTeachingCategories(teacherManagementMapper.joinCategories(request.teachingCategories()));
@@ -93,23 +102,19 @@ public class TeacherManagementService {
         teacherProfileRepository.save(profile);
         log.info("Teacher profile updated: teacherId={}, userId={}", profile.getId(), user.getId());
 
-        List<TeacherVerificationDocument> documents = teacherVerificationDocumentRepository
-                .findByTeacherIdAndCurrentVersionTrueOrderBySubmittedAtDesc(profile.getId());
-        return teacherManagementMapper.toTeacherProfileResponse(profile, documents);
+        return teacherManagementMapper.toTeacherProfileResponse(profile, currentDocuments(profile));
     }
 
     @Transactional(readOnly = true)
     public TeacherVerificationStatusResponse getTeacherVerificationStatus(SecurityUserDetails currentUser) {
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
-        List<TeacherVerificationDocument> documents = teacherVerificationDocumentRepository
-                .findByTeacherIdAndCurrentVersionTrueOrderBySubmittedAtDesc(profile.getId());
         TeacherVerificationReview latestReview = teacherVerificationReviewRepository
                 .findTopByTeacherIdOrderByReviewedAtDesc(profile.getId())
                 .orElse(null);
 
         return new TeacherVerificationStatusResponse(
                 profile.getTeacherStatus(),
-                documents.stream().map(teacherManagementMapper::toDocumentSummary).toList(),
+                currentDocuments(profile).stream().map(teacherManagementMapper::toDocumentSummary).toList(),
                 latestReview != null ? teacherManagementMapper.toReviewSummary(latestReview) : null,
                 profile.getRejectionReason(),
                 profile.getTeacherStatus() == TeacherStatus.REJECTED);
@@ -127,8 +132,7 @@ public class TeacherManagementService {
 
         UploadedFile uploadedFile = fileStorageService.storeVerificationDocument(file, user);
 
-        teacherVerificationDocumentRepository.findByTeacherIdAndCurrentVersionTrueOrderBySubmittedAtDesc(profile.getId())
-                .stream()
+        currentDocuments(profile).stream()
                 .filter(existing -> normalizedDocumentType == existing.getDocumentType())
                 .forEach(existing -> existing.setCurrentVersion(false));
 
@@ -143,10 +147,10 @@ public class TeacherManagementService {
 
         notifyAdmins("Teacher verification document uploaded",
                 user.getDisplayName() + " uploaded a teacher verification document.",
-                "/admin/teacher-verification");
+                ADMIN_VERIFICATION_PATH);
         log.info("Verification document uploaded: docId={}, teacherId={}, type={}",
                 document.getId(), profile.getId(), normalizedDocumentType);
-        auditLogService.record(user, "TEACHER_VERIFICATION_DOCUMENT_UPLOAD", "TeacherVerificationDocument", document.getId(),
+        auditLogService.record(user, ACTION_DOCUMENT_UPLOAD, TEACHER_DOCUMENT_TARGET, document.getId(),
                 "Teacher uploaded a verification document.");
 
         return getTeacherVerificationStatus(currentUser);
@@ -173,14 +177,14 @@ public class TeacherManagementService {
         notifyAdmins(
                 "Teacher verification resubmitted",
                 user.getDisplayName() + " resubmitted teacher verification for review.",
-                "/admin/teacher-verification");
+                ADMIN_VERIFICATION_PATH);
         notificationService.safeCreateNotification(
                 user,
                 "Verification resubmitted",
                 "Your teacher verification has been resubmitted and is now pending admin review.",
-                "/teacher/profile");
+                TEACHER_PROFILE_PATH);
         log.info("Teacher verification resubmitted: teacherId={}, userId={}", profile.getId(), user.getId());
-        auditLogService.record(user, "TEACHER_VERIFICATION_RESUBMIT", "TeacherProfile", profile.getId(),
+        auditLogService.record(user, ACTION_VERIFICATION_RESUBMIT, TEACHER_PROFILE_TARGET, profile.getId(),
                 "Teacher resubmitted verification.");
 
         return getTeacherVerificationStatus(currentUser);
@@ -190,21 +194,21 @@ public class TeacherManagementService {
     public StoredFileDownload getTeacherOwnedDocument(SecurityUserDetails currentUser, Long documentId) {
         TeacherVerificationDocument document = teacherVerificationDocumentRepository
                 .findByIdAndTeacherUserId(documentId, currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested verification document was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, TEACHER_DOCUMENT_NOT_FOUND));
 
-        auditLogService.record(getUserById(currentUser.getUserId()), "TEACHER_VERIFICATION_DOCUMENT_VIEW",
-                "TeacherVerificationDocument", documentId, "Teacher viewed their verification document.");
+        auditLogService.record(getUserById(currentUser.getUserId()), ACTION_DOCUMENT_VIEW,
+                TEACHER_DOCUMENT_TARGET, documentId, "Teacher viewed their verification document.");
         return fileStorageService.loadAsDownload(document.getUploadedFile());
     }
 
     private TeacherProfile getTeacherProfileByUserId(Long userId) {
         return teacherProfileRepository.findDetailedByUserId(userId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, TEACHER_PROFILE_NOT_FOUND));
     }
 
     private User getUserById(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, USER_NOT_FOUND));
     }
 
     private void notifyAdmins(String title, String message, String targetPath) {
@@ -212,5 +216,10 @@ public class TeacherManagementService {
         for (User admin : adminUsers) {
             notificationService.safeCreateNotification(admin, title, message, targetPath);
         }
+    }
+
+    private List<TeacherVerificationDocument> currentDocuments(TeacherProfile profile) {
+        return teacherVerificationDocumentRepository
+                .findByTeacherIdAndCurrentVersionTrueOrderBySubmittedAtDesc(profile.getId());
     }
 }

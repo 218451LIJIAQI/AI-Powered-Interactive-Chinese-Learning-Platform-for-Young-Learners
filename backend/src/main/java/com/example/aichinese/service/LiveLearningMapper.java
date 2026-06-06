@@ -12,10 +12,13 @@ import com.example.aichinese.dto.learning.LiveClassResponse;
 import com.example.aichinese.dto.learning.LiveClassTeacherSummaryResponse;
 import com.example.aichinese.dto.learning.RecordedLessonVideoResponse;
 import com.example.aichinese.dto.learning.VideoProgressResponse;
+import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.RecordedLessonVideo;
+import com.example.aichinese.entity.StudentProfile;
+import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.VideoProgress;
 
 @Component
@@ -29,13 +32,6 @@ public class LiveLearningMapper {
             boolean accessAllowed,
             boolean canJoin,
             boolean showMeetingLink) {
-        Integer durationMinutes = null;
-        if (liveClass.getScheduledStartAt() != null && liveClass.getScheduledEndAt() != null) {
-            durationMinutes = clampDurationMinutes(Duration.between(
-                    liveClass.getScheduledStartAt(),
-                    liveClass.getScheduledEndAt()).toMinutes());
-        }
-
         return new LiveClassResponse(
                 liveClass.getId(),
                 liveClass.getTitle(),
@@ -45,7 +41,7 @@ public class LiveLearningMapper {
                 liveClass.getScheduledStartAt(),
                 liveClass.getScheduledEndAt(),
                 liveClass.getTimeZone(),
-                durationMinutes,
+                durationMinutes(liveClass),
                 liveClass.getMaxParticipants(),
                 enrolledCount,
                 enrolled,
@@ -54,34 +50,9 @@ public class LiveLearningMapper {
                 canJoin,
                 showMeetingLink,
                 showMeetingLink ? liveClass.getMeetingLink() : null,
-                liveClass.getTeacher() == null || liveClass.getTeacher().getUser() == null
-                        ? null
-                        : new LiveClassTeacherSummaryResponse(
-                                liveClass.getTeacher().getId(),
-                                liveClass.getTeacher().getUser().getId(),
-                                liveClass.getTeacher().getUser().getDisplayName()),
-                liveClass.getLesson() == null
-                        ? null
-                        : new LiveClassLessonSummaryResponse(
-                                liveClass.getLesson().getId(),
-                                liveClass.getLesson().getTitle(),
-                                liveClass.getLesson().getLearningType() == null
-                                        ? null
-                                        : liveClass.getLesson().getLearningType().name(),
-                                liveClass.getLesson().getAccessType() == null
-                                        ? null
-                                        : liveClass.getLesson().getAccessType().name()),
-                liveClass.getCoursePackage() == null
-                        ? null
-                        : new LiveClassPackageSummaryResponse(
-                                liveClass.getCoursePackage().getId(),
-                                liveClass.getCoursePackage().getTitle(),
-                                liveClass.getCoursePackage().getLearningType() == null
-                                        ? null
-                                        : liveClass.getCoursePackage().getLearningType().name(),
-                                liveClass.getCoursePackage().getAccessType() == null
-                                        ? null
-                                        : liveClass.getCoursePackage().getAccessType().name()),
+                teacherSummary(liveClass.getTeacher()),
+                lessonSummary(liveClass.getLesson()),
+                packageSummary(liveClass.getCoursePackage()),
                 liveClass.getCreatedAt(),
                 liveClass.getUpdatedAt());
     }
@@ -91,10 +62,8 @@ public class LiveLearningMapper {
                 enrolment.getId(),
                 enrolment.getLiveClass().getId(),
                 enrolment.getStudent().getId(),
-                enrolment.getStudent().getUser() == null
-                        ? enrolment.getStudent().getDisplayName()
-                        : enrolment.getStudent().getUser().getDisplayName(),
-                enrolment.getStudent().getUser() == null ? null : enrolment.getStudent().getUser().getEmail(),
+                studentDisplayName(enrolment.getStudent()),
+                studentEmail(enrolment.getStudent()),
                 enrolment.getEnrolmentStatus() == null ? null : enrolment.getEnrolmentStatus().name(),
                 enrolment.getEnrolledAt(),
                 enrolment.getCancelledAt(),
@@ -150,6 +119,59 @@ public class LiveLearningMapper {
             return 0;
         }
         return (int) minutes;
+    }
+
+    private static Integer durationMinutes(LiveClass liveClass) {
+        if (liveClass.getScheduledStartAt() == null || liveClass.getScheduledEndAt() == null) {
+            return null;
+        }
+        return clampDurationMinutes(Duration.between(
+                liveClass.getScheduledStartAt(),
+                liveClass.getScheduledEndAt()).toMinutes());
+    }
+
+    private static LiveClassTeacherSummaryResponse teacherSummary(TeacherProfile teacher) {
+        if (teacher == null || teacher.getUser() == null) {
+            return null;
+        }
+        return new LiveClassTeacherSummaryResponse(
+                teacher.getId(),
+                teacher.getUser().getId(),
+                teacher.getUser().getDisplayName());
+    }
+
+    private static LiveClassLessonSummaryResponse lessonSummary(Lesson lesson) {
+        if (lesson == null) {
+            return null;
+        }
+        return new LiveClassLessonSummaryResponse(
+                lesson.getId(),
+                lesson.getTitle(),
+                lesson.getLearningType() == null ? null : lesson.getLearningType().name(),
+                lesson.getAccessType() == null ? null : lesson.getAccessType().name());
+    }
+
+    private static LiveClassPackageSummaryResponse packageSummary(CoursePackage coursePackage) {
+        if (coursePackage == null) {
+            return null;
+        }
+        return new LiveClassPackageSummaryResponse(
+                coursePackage.getId(),
+                coursePackage.getTitle(),
+                coursePackage.getLearningType() == null
+                        ? null
+                        : coursePackage.getLearningType().name(),
+                coursePackage.getAccessType() == null
+                        ? null
+                        : coursePackage.getAccessType().name());
+    }
+
+    private static String studentDisplayName(StudentProfile student) {
+        return student.getUser() == null ? student.getDisplayName() : student.getUser().getDisplayName();
+    }
+
+    private static String studentEmail(StudentProfile student) {
+        return student.getUser() == null ? null : student.getUser().getEmail();
     }
 
     private static Long requirePersistedId(VideoProgress progress, String message) {

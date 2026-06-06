@@ -34,113 +34,153 @@ import com.example.aichinese.service.RefreshTokenService;
  */
 class RefreshTokenServiceTests {
 
+    private static final long USER_ID = 10L;
+    private static final long ACTIVE_SESSION_VERSION = 2L;
+    private static final long COMPROMISED_SESSION_VERSION = 4L;
+    private static final long ROTATED_SESSION_VERSION = COMPROMISED_SESSION_VERSION + 1;
+    private static final long TOKEN_ID = 100L;
+    private static final int MAX_RAW_TOKEN_LENGTH = 512;
+    private static final int SURROGATE_SAFE_PREFIX_LENGTH = 254;
+
+    private static final String RAW_REFRESH_TOKEN = "raw-refresh-token";
+    private static final String REPLAYED_REFRESH_TOKEN = "replayed-refresh-token";
+    private static final String CLIENT_IP = "203.0.113.5";
+    private static final String USER_AGENT = "JUnit";
+    private static final String INVALID_REFRESH_MESSAGE = "Refresh session is invalid or expired.";
+    private static final String EXISTING_TOKEN_HASH = "existing-token-hash";
+    private static final String REFRESH_FAMILY_ID = "refresh-family-id";
+    private static final String USER_EMAIL = "refresh@example.com";
+    private static final String DISPLAY_NAME = "Refresh Test User";
+    private static final String PASSWORD_HASH = "password-hash";
+    private static final String HIGH_SURROGATE = "\uD83D";
+    private static final String SURROGATE_PAIR_WITH_TAIL = "\uD83D\uDE00tail";
+    private static final String JWT_SECRET = "RuntimeStyleJwtSecretForRefreshTests1234567890AB";
+    private static final long JWT_EXPIRATION_MS = 3_600_000L;
+    private static final long REFRESH_TOKEN_EXPIRATION_MS = 604_800_000L;
+    private static final String REFRESH_TOKEN_COOKIE_NAME = "mandarin_spark_refresh";
+    private static final String REFRESH_TOKEN_SAME_SITE = "Strict";
+    private static final SecurityProperties SECURITY_PROPERTIES = new SecurityProperties(
+            JWT_SECRET,
+            JWT_EXPIRATION_MS,
+            REFRESH_TOKEN_EXPIRATION_MS,
+            REFRESH_TOKEN_COOKIE_NAME,
+            false,
+            REFRESH_TOKEN_SAME_SITE);
+
     @Test
     void rotateUsesLockedLookupBeforeMintingReplacement() {
-        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
-        UserRepository userRepository = mock(UserRepository.class);
-        User user = activeUser(10L, 2L);
+        ServiceFixture fixture = serviceFixture();
+        User user = activeUser(ACTIVE_SESSION_VERSION);
         RefreshToken current = activeToken(user);
 
-        when(refreshTokenRepository.findLockedByTokenHash(anyString())).thenReturn(Optional.of(current));
-        when(refreshTokenRepository.existsByTokenHash(anyString())).thenReturn(false);
-        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(fixture.refreshTokenRepository().findLockedByTokenHash(anyString())).thenReturn(Optional.of(current));
+        when(fixture.refreshTokenRepository().existsByTokenHash(anyString())).thenReturn(false);
 
-        RefreshTokenService.RefreshSession session = service(refreshTokenRepository, userRepository)
-                .rotate("raw-refresh-token", "203.0.113.5", "JUnit");
+        RefreshTokenService.RefreshSession session = fixture.service()
+                .rotate(RAW_REFRESH_TOKEN, CLIENT_IP, USER_AGENT);
 
         assertThat(session.user()).isSameAs(user);
         assertThat(session.refreshToken().rawToken()).isNotBlank();
         assertThat(current.getRotatedAt()).isNotNull();
         assertThat(current.getRevokedAt()).isNotNull();
         assertThat(current.getReplacedByTokenHash()).isNotBlank();
-        verify(refreshTokenRepository).findLockedByTokenHash(anyString());
+        verify(fixture.refreshTokenRepository()).findLockedByTokenHash(anyString());
     }
 
     @Test
     void rotateRevokesFamilyAndBumpsLockedUserSessionOnConsumedTokenReplay() {
-        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
-        UserRepository userRepository = mock(UserRepository.class);
-        User user = activeUser(10L, 4L);
+        ServiceFixture fixture = serviceFixture();
+        User user = activeUser(COMPROMISED_SESSION_VERSION);
         RefreshToken consumed = activeToken(user);
-        consumed.setRevokedAt(LocalDateTime.now().minusMinutes(1));
+        markConsumed(consumed);
 
-        when(refreshTokenRepository.findLockedByTokenHash(anyString())).thenReturn(Optional.of(consumed));
-        when(userRepository.findLockedById(10L)).thenReturn(Optional.of(user));
+        when(fixture.refreshTokenRepository().findLockedByTokenHash(anyString())).thenReturn(Optional.of(consumed));
+        when(fixture.userRepository().findLockedById(USER_ID)).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> service(refreshTokenRepository, userRepository)
-                .rotate("replayed-refresh-token", "203.0.113.5", "JUnit"))
+        assertThatThrownBy(() -> fixture.service().rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Refresh session is invalid or expired.");
+                .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
-        assertThat(user.getSessionVersion()).isEqualTo(5L);
-        verify(refreshTokenRepository).revokeActiveTokenFamily(anyString(), any(LocalDateTime.class));
-        verify(userRepository).findLockedById(10L);
-        verify(userRepository).save(user);
+        assertThat(user.getSessionVersion()).isEqualTo(ROTATED_SESSION_VERSION);
+        verify(fixture.refreshTokenRepository()).revokeActiveTokenFamily(anyString(), any(LocalDateTime.class));
+        verify(fixture.userRepository()).findLockedById(USER_ID);
+        verify(fixture.userRepository()).save(user);
     }
 
     @Test
     void issueTruncatesUserAgentWithoutSplittingUnicodeSurrogatePair() {
-        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
-        UserRepository userRepository = mock(UserRepository.class);
-        User user = activeUser(10L, 2L);
+        ServiceFixture fixture = serviceFixture();
+        User user = activeUser(ACTIVE_SESSION_VERSION);
         ArgumentCaptor<RefreshToken> savedToken = ArgumentCaptor.forClass(RefreshToken.class);
 
-        when(refreshTokenRepository.existsByTokenHash(anyString())).thenReturn(false);
-        when(refreshTokenRepository.save(any(RefreshToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(fixture.refreshTokenRepository().existsByTokenHash(anyString())).thenReturn(false);
 
-        String userAgent = "a".repeat(254) + "\uD83D\uDE00tail";
-        service(refreshTokenRepository, userRepository).issue(user, "203.0.113.5", userAgent);
+        fixture.service().issue(user, CLIENT_IP, oversizedUserAgentWithSurrogatePair());
 
-        verify(refreshTokenRepository).save(savedToken.capture());
+        verify(fixture.refreshTokenRepository()).save(savedToken.capture());
         assertThat(savedToken.getValue().getUserAgent())
-                .hasSize(254)
-                .doesNotEndWith("\uD83D");
+                .hasSize(SURROGATE_SAFE_PREFIX_LENGTH)
+                .doesNotEndWith(HIGH_SURROGATE);
     }
 
     @Test
     void rotateRejectsOversizedRawTokenBeforeHashLookup() {
-        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
-        UserRepository userRepository = mock(UserRepository.class);
+        ServiceFixture fixture = serviceFixture();
 
-        assertThatThrownBy(() -> service(refreshTokenRepository, userRepository)
-                .rotate("x".repeat(513), "203.0.113.5", "JUnit"))
+        assertThatThrownBy(() -> fixture.service()
+                .rotate(oversizedRawToken(), CLIENT_IP, USER_AGENT))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Refresh session is invalid or expired.");
+                .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
-        verify(refreshTokenRepository, never()).findLockedByTokenHash(anyString());
+        verify(fixture.refreshTokenRepository(), never()).findLockedByTokenHash(anyString());
     }
 
-    private RefreshTokenService service(RefreshTokenRepository refreshTokenRepository, UserRepository userRepository) {
-        return new RefreshTokenService(
+    private static ServiceFixture serviceFixture() {
+        RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        RefreshTokenService service = new RefreshTokenService(
                 refreshTokenRepository,
                 userRepository,
-                new SecurityProperties(
-                        "RuntimeStyleJwtSecretForRefreshTests1234567890AB",
-                        3_600_000L,
-                        604_800_000L,
-                        "mandarin_spark_refresh",
-                        false,
-                        "Strict"));
+                SECURITY_PROPERTIES);
+        return new ServiceFixture(refreshTokenRepository, userRepository, service);
     }
 
     private static RefreshToken activeToken(User user) {
         RefreshToken token = new RefreshToken();
-        token.setId(100L);
+        token.setId(TOKEN_ID);
         token.setUser(user);
-        token.setTokenHash("existing-token-hash");
-        token.setFamilyId("refresh-family-id");
+        token.setTokenHash(EXISTING_TOKEN_HASH);
+        token.setFamilyId(REFRESH_FAMILY_ID);
         token.setExpiresAt(LocalDateTime.now().plusDays(1));
         return token;
     }
 
-    private static User activeUser(Long id, long sessionVersion) {
+    private static User activeUser(long sessionVersion) {
         User user = new User();
-        user.setId(id);
-        user.setEmail("refresh@example.com");
-        user.setDisplayName("Refresh Test User");
-        user.setPasswordHash("password-hash");
+        user.setId(USER_ID);
+        user.setEmail(USER_EMAIL);
+        user.setDisplayName(DISPLAY_NAME);
+        user.setPasswordHash(PASSWORD_HASH);
         user.setActive(true);
         user.setSessionVersion(sessionVersion);
         return user;
+    }
+
+    private static void markConsumed(RefreshToken token) {
+        token.setRevokedAt(LocalDateTime.now().minusMinutes(1));
+    }
+
+    private static String oversizedUserAgentWithSurrogatePair() {
+        return "a".repeat(SURROGATE_SAFE_PREFIX_LENGTH) + SURROGATE_PAIR_WITH_TAIL;
+    }
+
+    private static String oversizedRawToken() {
+        return "x".repeat(MAX_RAW_TOKEN_LENGTH + 1);
+    }
+
+    private record ServiceFixture(
+            RefreshTokenRepository refreshTokenRepository,
+            UserRepository userRepository,
+            RefreshTokenService service) {
     }
 }

@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
+import type { UserRole } from '@/types/api'
 import { defaultRouteForRole } from '@/utils/role'
 
 import { publicNav, roleNavigation } from './navigation'
+import type { NavItem } from './navigation'
+
+const EXPECTED_DEFAULT_ROUTES = {
+  STUDENT: '/student/home',
+  TEACHER: '/teacher/dashboard',
+  ADMIN: '/admin/dashboard',
+} as const satisfies Record<UserRole, string>
+
+function roleEntries(record: Record<UserRole, readonly NavItem[]>): Array<[UserRole, readonly NavItem[]]> {
+  return Object.entries(record) as Array<[UserRole, readonly NavItem[]]>
+}
 
 describe('navigation configuration', () => {
   it('keeps public navigation anchored to safe first-party routes', () => {
@@ -11,19 +23,12 @@ describe('navigation configuration', () => {
   })
 
   it('provides each role with a unique sidebar and matching default landing route', () => {
-    const expectedDefaults = {
-      STUDENT: '/student/home',
-      TEACHER: '/teacher/dashboard',
-      ADMIN: '/admin/dashboard',
-    } as const
-
-    Object.entries(roleNavigation).forEach(([role, items]) => {
+    roleEntries(roleNavigation).forEach(([role, items]) => {
       const paths = items.map((item) => item.to)
+      const defaultRoute = EXPECTED_DEFAULT_ROUTES[role]
 
-      expect(paths).toContain(expectedDefaults[role as keyof typeof expectedDefaults])
-      expect(defaultRouteForRole(role as keyof typeof expectedDefaults)).toBe(
-        expectedDefaults[role as keyof typeof expectedDefaults],
-      )
+      expect(paths).toContain(defaultRoute)
+      expect(defaultRouteForRole(role)).toBe(defaultRoute)
       expect(new Set(paths).size).toBe(paths.length)
       expect(items.every((item) => item.labelKey.startsWith('nav.') && item.icon.trim())).toBe(true)
     })

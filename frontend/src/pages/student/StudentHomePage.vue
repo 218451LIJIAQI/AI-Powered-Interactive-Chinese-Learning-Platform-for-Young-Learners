@@ -75,7 +75,7 @@
                 class="student-hero-check"
                 :class="{ 'student-hero-check--muted': !item.done }"
               >
-                <IconGlyph :name="item.done ? 'status' : 'history'" :size="16" />
+                <IconGlyph :name="completionIcon(item.done)" :size="16" />
                 <span>{{ item.title }}</span>
               </div>
             </div>
@@ -99,7 +99,7 @@
                     :class="{ 'is-complete': node.complete, 'is-current': node.current }"
                     tabindex="0"
                     role="button"
-                    :aria-label="`Learning step ${node.id}: ${node.title}. Status: ${node.complete ? 'Complete' : node.current ? 'Current' : 'Locked'}.`"
+                    :aria-label="pathNodeAriaLabel(node)"
                     @click="clickNode(node)"
                     @keydown.enter.prevent="clickNode(node)"
                     @keydown.space.prevent="clickNode(node)"
@@ -107,9 +107,9 @@
                     <span
                       v-if="node.complete || node.current"
                       class="student-path-node-badge"
-                      :class="node.complete ? 'is-check' : 'is-current'"
+                      :class="pathNodeBadgeClass(node)"
                     >
-                      <IconGlyph :name="node.complete ? 'status' : 'flash'" :size="14" />
+                      <IconGlyph :name="pathNodeBadgeIcon(node)" :size="14" />
                     </span>
                     <div class="student-path-icon" :class="`is-${node.variant}`">
                       <IconGlyph :name="node.icon" :size="28" />
@@ -137,7 +137,7 @@
                   class="student-tool-button"
                   :class="{ 'student-tool-button--wide': tool.wide }"
                   type="button"
-                  @click="router.push(tool.to)"
+                  @click="openPracticeTool(tool.to)"
                 >
                   <span class="student-tool-icon" :style="{ '--tool-color': tool.color }">
                     <IconGlyph :name="tool.icon" :size="24" />
@@ -165,7 +165,7 @@
                   <button
                     class="btn btn-primary student-class-button"
                     type="button"
-                    @click="router.push('/student/classes')"
+                    @click="openClasses"
                   >
                     View Classes
                   </button>
@@ -242,7 +242,7 @@
                 <strong>{{ goal.count }}</strong>
                 <ProgressBar :progress="goal.progress" :tone="goal.tone" />
                 <span class="student-goal-status" :class="{ 'is-done': goal.done }">
-                  <IconGlyph :name="goal.done ? 'status' : 'history'" :size="15" />
+                  <IconGlyph :name="completionIcon(goal.done)" :size="15" />
                 </span>
               </div>
             </div>
@@ -266,7 +266,7 @@
             <div class="student-ai-bubble">
               Hi {{ firstName }}! I can help with tones, words, sentences, and quiz review.
             </div>
-            <button class="btn student-ai-button" type="button" @click="router.push('/student/ai-helper')">
+            <button class="btn student-ai-button" type="button" @click="openAiHelper">
               <IconGlyph name="ai" :size="16" />
               Chat with SparkBot
             </button>
@@ -279,17 +279,8 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Student dashboard hero — the first page a learner sees after sign-in.
- *
- * <p>Aggregates the learner's "what's next" picture: current lesson,
- * progress, practice tools, rewards, quiz snapshot, and study rhythm.
- * Dashboard and progress resources load independently so the page can
- * show precise progress while still falling back safely in preview
- * mode.</p>
- */
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, type RouteLocationRaw } from 'vue-router'
 
 import { studentApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -341,6 +332,33 @@ const pageLoading = computed(() => dashboardResource.loading.value || progressRe
 const pageError = computed(() => dashboardResource.error.value || progressResource.error.value)
 const usingFallback = computed(() => dashboardResource.usingFallback.value || progressResource.usingFallback.value)
 
+type CompletionIcon = 'history' | 'status'
+type LessonVariant = 'family' | 'greeting' | 'listening' | 'numbers' | 'pinyin' | 'tones'
+type PathNodeBadgeClass = 'is-check' | 'is-current'
+type PathNodeBadgeIcon = 'flash' | 'status'
+type ProgressTone = 'info' | 'success' | 'warning'
+
+interface PathNode {
+  id: number
+  title: string
+  icon: string
+  progressPercent: number
+  statusLabel: string
+  complete: boolean
+  current: boolean
+  variant: LessonVariant
+  lessonId: number | null
+}
+
+interface LearningGoal {
+  title: string
+  count: string
+  progress: number
+  tone: ProgressTone
+  icon: string
+  done: boolean
+}
+
 const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || 'Learner').trim())
 const overallProgress = computed(() =>
   safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
@@ -388,7 +406,7 @@ const checklist = computed(() => [
   { title: 'Keep your streak alive', done: nonNegativeInteger(dashboard.value.dailyStreak) > 0 },
 ])
 
-const pathNodes = computed(() => {
+const pathNodes = computed<PathNode[]>(() => {
   const lessons = [
     ...progress.value.recentLessons,
     ...dashboard.value.unfinishedLessons.map((lesson) => ({
@@ -438,13 +456,7 @@ const pathNodes = computed(() => {
       title: normalizeLessonTitle(lesson.lessonTitle) || 'Learning step',
       icon: iconForLesson(lesson.lessonTitle),
       progressPercent: completionPercent,
-      statusLabel: completed
-        ? 'Complete'
-        : current
-          ? `${completionPercent}% in progress`
-          : completionPercent > 0
-            ? `${completionPercent}% started`
-            : 'Up next',
+      statusLabel: lessonStatusLabel(completed, current, completionPercent),
       complete: completed,
       current,
       variant: variantForLesson(lesson.lessonTitle),
@@ -463,7 +475,7 @@ const practiceTools = [
   { title: 'Drag & Drop', icon: 'practice', color: '#00b8d9', to: practiceRoute('DRAG_DROP_ACTIVITY'), wide: true },
 ]
 
-const goals = computed(() => {
+const goals = computed<LearningGoal[]>(() => {
   const completedLessons = nonNegativeInteger(progress.value.completedLessons)
   const started = Math.max(nonNegativeInteger(progress.value.totalLessonsStarted), completedLessons)
   const completedPercent = ratioPercent(completedLessons, started)
@@ -473,7 +485,7 @@ const goals = computed(() => {
       title: 'Complete started lessons',
       count: started ? `${completedLessons} / ${started}` : 'No lessons started',
       progress: completedPercent,
-      tone: 'success' as const,
+      tone: 'success',
       icon: 'learn',
       done: started > 0 && completedLessons >= started,
     },
@@ -481,7 +493,7 @@ const goals = computed(() => {
       title: 'Continue next lesson',
       count: `${nextLesson.value.completionPercent}%`,
       progress: nextLesson.value.completionPercent,
-      tone: 'info' as const,
+      tone: 'info',
       icon: 'live',
       done: nextLesson.value.completionPercent >= 100,
     },
@@ -489,7 +501,7 @@ const goals = computed(() => {
       title: 'Build quiz accuracy',
       count: `${quizAveragePercent.value}%`,
       progress: quizAveragePercent.value,
-      tone: 'warning' as const,
+      tone: 'warning',
       icon: 'clip',
       done: quizAveragePercent.value >= 80,
     },
@@ -503,16 +515,16 @@ const rewards = computed(() => [
   { label: 'Badges', value: nonNegativeInteger(dashboard.value.badgeCount), icon: 'shield' },
 ])
 
-function safePercent(value: number) {
+function safePercent(value: number): number {
   return clampPercent(value)
 }
 
-function formatDayCount(value: number) {
+function formatDayCount(value: number): string {
   const days = nonNegativeInteger(value)
   return `${days} ${days === 1 ? 'day' : 'days'}`
 }
 
-function variantForLesson(title: string) {
+function variantForLesson(title: string): LessonVariant {
   const normalized = title.toLowerCase()
   if (normalized.includes('pinyin')) return 'pinyin'
   if (normalized.includes('tone')) return 'tones'
@@ -522,7 +534,7 @@ function variantForLesson(title: string) {
   return 'greeting'
 }
 
-function iconForLesson(title: string) {
+function iconForLesson(title: string): string {
   const variant = variantForLesson(title)
   if (variant === 'pinyin' || variant === 'tones') return 'language'
   if (variant === 'family') return 'students'
@@ -531,7 +543,7 @@ function iconForLesson(title: string) {
   return 'practice'
 }
 
-function normalizeLessonTitle(title: string) {
+function normalizeLessonTitle(title: string): string {
   return title
     .replace(/\s+\d{6,}\s*$/u, '')
     .replace(/\s+/g, ' ')
@@ -539,44 +551,98 @@ function normalizeLessonTitle(title: string) {
     .slice(0, 72)
 }
 
-function shortenSentence(value: string, limit: number) {
+function shortenSentence(value: string, limit: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
   if (normalized.length <= limit) return normalized
 
   return `${normalized.slice(0, limit - 1).trim()}...`
 }
 
-function continueLearning() {
+function continueLearning(): void {
   if (!nextLesson.value.id) {
-    void router.push('/student/learn')
+    openLearn()
     return
   }
 
+  openStudentLearn(nextLesson.value.id)
+}
+
+function clickNode(node: Pick<PathNode, 'lessonId' | 'title'>): void {
+  if (node.lessonId !== null && node.lessonId > 0) {
+    openStudentLearn(node.lessonId)
+    return
+  }
+
+  openFallbackNodeRoute(node.title)
+}
+
+function reloadAll(): void {
+  void dashboardResource.reload()
+  void progressResource.reload()
+}
+
+function completionIcon(done: boolean): CompletionIcon {
+  return done ? 'status' : 'history'
+}
+
+function lessonStatusLabel(completed: boolean, current: boolean, completionPercent: number): string {
+  if (completed) return 'Complete'
+  if (current) return `${completionPercent}% in progress`
+  return completionPercent > 0 ? `${completionPercent}% started` : 'Up next'
+}
+
+function pathNodeAriaLabel(node: PathNode): string {
+  const state = node.complete ? 'Complete' : node.current ? 'Current' : 'Locked'
+  return `Learning step ${node.id}: ${node.title}. Status: ${state}.`
+}
+
+function pathNodeBadgeClass(node: PathNode): PathNodeBadgeClass {
+  return node.complete ? 'is-check' : 'is-current'
+}
+
+function pathNodeBadgeIcon(node: PathNode): PathNodeBadgeIcon {
+  return node.complete ? 'status' : 'flash'
+}
+
+function openPracticeTool(target: RouteLocationRaw): void {
+  void router.push(target)
+}
+
+function openClasses(): void {
+  void router.push('/student/classes')
+}
+
+function openAiHelper(): void {
+  void router.push('/student/ai-helper')
+}
+
+function openLearn(): void {
+  void router.push('/student/learn')
+}
+
+function openQuiz(): void {
+  void router.push('/student/quiz')
+}
+
+function openStudentLearn(lessonId: number): void {
   void router.push({
     name: 'student-learn',
-    query: { lessonId: String(nextLesson.value.id) },
+    query: { lessonId: String(lessonId) },
   })
 }
 
-function clickNode(node: { lessonId: number | null; title: string }) {
-  if (node.lessonId !== null && node.lessonId > 0) {
-    void router.push({
-      name: 'student-learn',
-      query: { lessonId: String(node.lessonId) },
-    })
-  } else {
-    if (node.title.toLowerCase().includes('quiz')) {
-      void router.push('/student/quiz')
-    } else if (node.title.toLowerCase().includes('listening') || node.title.toLowerCase().includes('practice')) {
-      void router.push(practiceRoute(inferPracticeActivityFromText(node.title)))
-    } else {
-      void router.push('/student/learn')
-    }
+function openFallbackNodeRoute(title: string): void {
+  const normalizedTitle = title.toLowerCase()
+  if (normalizedTitle.includes('quiz')) {
+    openQuiz()
+    return
   }
-}
 
-function reloadAll() {
-  void dashboardResource.reload()
-  void progressResource.reload()
+  if (normalizedTitle.includes('listening') || normalizedTitle.includes('practice')) {
+    openPracticeTool(practiceRoute(inferPracticeActivityFromText(title)))
+    return
+  }
+
+  openLearn()
 }
 </script>

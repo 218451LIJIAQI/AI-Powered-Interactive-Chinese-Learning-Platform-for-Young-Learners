@@ -74,20 +74,4 @@ public enum PayoutStatus {
                 () -> "Invalid payout status. Allowed values are PENDING, APPROVED, REJECTED, "
                         + "or PAID.");
     }
-
-    public boolean isPending() {
-        return this == PENDING;
-    }
-
-    public boolean isTerminal() {
-        return TERMINAL.contains(this);
-    }
-
-    public boolean isPaid() {
-        return this == PAID;
-    }
-
-    public boolean isCommitted() {
-        return COMMITTED.contains(this);
-    }
 }

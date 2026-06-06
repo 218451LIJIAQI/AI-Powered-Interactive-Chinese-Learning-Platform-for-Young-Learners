@@ -14,6 +14,17 @@ describe('resolveApiError', () => {
     ).toBe('Please upload a smaller file.')
   })
 
+  it('uses the first validation error when no backend message is present', () => {
+    expect(
+      resolveApiError({
+        response: {
+          status: 400,
+          data: { errors: ['Email is required.'] },
+        },
+      }),
+    ).toBe('Email is required.')
+  })
+
   it('maps timeout and network failures to learner-friendly messages', () => {
     expect(resolveApiError({ code: 'ECONNABORTED', message: 'timeout of 20000ms exceeded' })).toContain('too long')
     expect(resolveApiError({ request: {} })).toContain('cannot reach')

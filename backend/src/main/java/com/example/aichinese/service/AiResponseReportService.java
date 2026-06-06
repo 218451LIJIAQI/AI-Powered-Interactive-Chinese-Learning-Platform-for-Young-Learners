@@ -5,9 +5,8 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Locale;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -48,6 +47,7 @@ import com.example.aichinese.util.PaginationUtils;
 public class AiResponseReportService {
 
     private static final String TARGET_TYPE = "AI_RESPONSE_REPORT";
+    private static final String RELATED_ENTITY_CHAT_SESSION = "AiChatSession";
     private static final int MAX_REPORT_DESCRIPTION_LENGTH = 1000;
     private static final int MAX_REVIEWER_NOTE_LENGTH = 1000;
     private static final int MAX_REPORT_SNAPSHOT_LENGTH = 4000;
@@ -83,57 +83,20 @@ public class AiResponseReportService {
             CreateAiResponseReportRequest request) {
         requireRole(currentUser, RoleName.STUDENT, "Only students can report AI responses.");
         User student = requireUser(currentUser.getUserId());
-        AiFeatureKey featureKey = parseEnum(AiFeatureKey.class, request.featureKey(), "Invalid AI feature key.");
-        AiResponseReportReason reason = parseEnum(
-                AiResponseReportReason.class,
-                request.reasonCategory(),
-                "Invalid AI report reason category.");
-
-        AiUsageLog usageLog = resolveOwnedUsageLog(student, request.aiUsageLogId(), featureKey);
-        AiChatSession chatSession = resolveOwnedChatSession(student, request.chatSessionId());
-        AiChatMessage chatMessage = resolveOwnedAssistantMessage(student, request.chatMessageId());
-
-        if (usageLog != null
-                && chatSession == null
-                && "AiChatSession".equals(usageLog.getRelatedEntityType())
-                && usageLog.getRelatedEntityId() != null) {
-            chatSession = aiChatSessionRepository.findByIdAndUserId(usageLog.getRelatedEntityId(), student.getId())
-                    .orElse(null);
-        }
-
-        if (chatMessage != null) {
-            if (chatSession != null && !chatMessage.getSession().getId().equals(chatSession.getId())) {
-                throw new ResponseStatusException(BAD_REQUEST, "Chat message does not belong to the selected chat session.");
-            }
-            chatSession = chatMessage.getSession();
-        } else if (chatSession != null) {
-            chatMessage = aiChatMessageRepository
-                    .findFirstBySessionIdAndSenderRoleOrderByIdDesc(chatSession.getId(), AiChatSenderRole.ASSISTANT)
-                    .orElse(null);
-        }
-
-        String promptSnapshot = null;
-        String aiResponseSnapshot = null;
-        if (chatMessage == null) {
-            promptSnapshot = normalizeSnapshot(request.promptSnapshot());
-            aiResponseSnapshot = normalizeSnapshot(request.aiResponseSnapshot());
-            if (aiResponseSnapshot == null) {
-                throw new ResponseStatusException(
-                        BAD_REQUEST,
-                        "AI response snapshot is required when no server-side AI chat message can be resolved.");
-            }
-        }
+        AiFeatureKey featureKey = parseFeatureKey(request.featureKey());
+        AiResponseReportReason reason = parseReportReason(request.reasonCategory());
+        ReportContext context = resolveReportContext(student, request, featureKey);
 
         AiResponseReport report = new AiResponseReport();
         report.setStudentUser(student);
-        report.setAiUsageLog(usageLog);
-        report.setChatSession(chatSession);
-        report.setChatMessage(chatMessage);
+        report.setAiUsageLog(context.usageLog());
+        report.setChatSession(context.chatSession());
+        report.setChatMessage(context.chatMessage());
         report.setFeatureKey(featureKey.name());
         report.setReasonCategory(reason);
         report.setDescription(normalizeReportText(request.description(), MAX_REPORT_DESCRIPTION_LENGTH));
-        report.setPromptSnapshot(promptSnapshot);
-        report.setAiResponseSnapshot(aiResponseSnapshot);
+        report.setPromptSnapshot(context.promptSnapshot());
+        report.setAiResponseSnapshot(context.aiResponseSnapshot());
         report.setStatus(AiResponseReportStatus.PENDING_REVIEW);
 
         AiResponseReport saved = aiResponseReportRepository.save(report);
@@ -182,16 +145,12 @@ public class AiResponseReportService {
             ReviewAiResponseReportRequest request) {
         User reviewer = requireUser(currentUser.getUserId());
         AiResponseReport report = requireLockedReport(id);
-        AiResponseReportStatus newStatus = parseEnum(
-                AiResponseReportStatus.class,
-                request.status(),
-                "Invalid AI report review status.");
+        AiResponseReportStatus newStatus = parseReportStatus(request.status());
 
         if (newStatus == AiResponseReportStatus.PENDING_REVIEW) {
             throw new ResponseStatusException(BAD_REQUEST, "Review status must move the report forward.");
         }
-        if (report.getStatus() == AiResponseReportStatus.RESOLVED
-                || report.getStatus() == AiResponseReportStatus.DISMISSED) {
+        if (isTerminal(report.getStatus())) {
             throw new ResponseStatusException(BAD_REQUEST, "This AI report is already closed.");
         }
 
@@ -211,7 +170,7 @@ public class AiResponseReportService {
                 "Admin reviewed an AI response report with status " + newStatus.name() + ".",
                 null);
 
-        if (newStatus == AiResponseReportStatus.RESOLVED || newStatus == AiResponseReportStatus.DISMISSED) {
+        if (newStatus.isTerminal()) {
             notificationService.safeCreateNotification(
                     report.getStudentUser(),
                     NotificationType.AI_REPORT_REVIEW,
@@ -224,6 +183,63 @@ public class AiResponseReportService {
         }
 
         return toAdminResponse(report);
+    }
+
+    private ReportContext resolveReportContext(
+            User student,
+            CreateAiResponseReportRequest request,
+            AiFeatureKey featureKey) {
+        AiUsageLog usageLog = resolveOwnedUsageLog(student, request.aiUsageLogId(), featureKey);
+        AiChatSession chatSession = resolveOwnedChatSession(student, request.chatSessionId());
+        AiChatMessage chatMessage = resolveOwnedAssistantMessage(student, request.chatMessageId());
+
+        chatSession = resolveUsageLogChatSession(student, usageLog, chatSession);
+        if (chatMessage != null) {
+            chatSession = requireMessageSession(chatMessage, chatSession);
+        } else if (chatSession != null) {
+            chatMessage = findLatestAssistantMessage(chatSession);
+        }
+
+        if (chatMessage != null) {
+            return new ReportContext(usageLog, chatSession, chatMessage, null, null);
+        }
+        return new ReportContext(
+                usageLog,
+                chatSession,
+                null,
+                normalizeSnapshot(request.promptSnapshot()),
+                requireReportText(
+                        request.aiResponseSnapshot(),
+                        MAX_REPORT_SNAPSHOT_LENGTH,
+                        "AI response snapshot is required when no server-side AI chat message can be resolved."));
+    }
+
+    private AiChatSession resolveUsageLogChatSession(
+            User student,
+            AiUsageLog usageLog,
+            AiChatSession selectedChatSession) {
+        if (selectedChatSession != null
+                || usageLog == null
+                || !RELATED_ENTITY_CHAT_SESSION.equals(usageLog.getRelatedEntityType())
+                || usageLog.getRelatedEntityId() == null) {
+            return selectedChatSession;
+        }
+        return aiChatSessionRepository.findByIdAndUserId(usageLog.getRelatedEntityId(), student.getId())
+                .orElse(null);
+    }
+
+    private static AiChatSession requireMessageSession(AiChatMessage chatMessage, AiChatSession selectedChatSession) {
+        AiChatSession messageSession = chatMessage.getSession();
+        if (selectedChatSession != null && !messageSession.getId().equals(selectedChatSession.getId())) {
+            throw new ResponseStatusException(BAD_REQUEST, "Chat message does not belong to the selected chat session.");
+        }
+        return messageSession;
+    }
+
+    private AiChatMessage findLatestAssistantMessage(AiChatSession chatSession) {
+        return aiChatMessageRepository
+                .findFirstBySessionIdAndSenderRoleOrderByIdDesc(chatSession.getId(), AiChatSenderRole.ASSISTANT)
+                .orElse(null);
     }
 
     private AiUsageLog resolveOwnedUsageLog(User student, Long usageLogId, AiFeatureKey featureKey) {
@@ -312,18 +328,27 @@ public class AiResponseReportService {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return parseEnum(AiResponseReportStatus.class, value, "Invalid AI report status.");
+        return AiResponseReportStatus.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report status."));
     }
 
-    private static <T extends Enum<T>> T parseEnum(Class<T> enumType, String value, String message) {
-        if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, message);
-        }
-        try {
-            return Enum.valueOf(enumType, value.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, message);
-        }
+    private static AiFeatureKey parseFeatureKey(String value) {
+        return AiFeatureKey.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI feature key."));
+    }
+
+    private static AiResponseReportReason parseReportReason(String value) {
+        return AiResponseReportReason.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report reason category."));
+    }
+
+    private static AiResponseReportStatus parseReportStatus(String value) {
+        return AiResponseReportStatus.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report review status."));
+    }
+
+    private static boolean isTerminal(AiResponseReportStatus status) {
+        return status != null && status.isTerminal();
     }
 
     private AdminAiResponseReportResponse toAdminResponse(AiResponseReport report) {
@@ -427,6 +452,7 @@ public class AiResponseReportService {
                 .map(AiResponseReport::getChatMessage)
                 .filter(Objects::nonNull)
                 .map(AiChatMessage::getId)
+                .distinct()
                 .toList();
         if (assistantMessageIds.isEmpty()) {
             return Map.of();
@@ -440,5 +466,13 @@ public class AiResponseReportService {
     }
 
     private record ResolvedReportSnapshots(String promptSnapshot, String aiResponseSnapshot) {
+    }
+
+    private record ReportContext(
+            AiUsageLog usageLog,
+            AiChatSession chatSession,
+            AiChatMessage chatMessage,
+            String promptSnapshot,
+            String aiResponseSnapshot) {
     }
 }

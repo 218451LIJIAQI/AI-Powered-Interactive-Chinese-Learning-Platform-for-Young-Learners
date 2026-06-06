@@ -47,10 +47,8 @@ public class FileStorageService {
 
     @Transactional
     public UploadedFile storeVerificationDocument(MultipartFile multipartFile, User ownerUser) {
-        String[] validated = validateMultipartFile(multipartFile);
-        String originalFileName = validated[0];
-        String extension = validated[1];
-        String storedFileName = UploadStorageSupport.buildStoredFileName(extension);
+        ValidatedUpload validated = validateMultipartFile(multipartFile);
+        String storedFileName = UploadStorageSupport.buildStoredFileName(validated.extension());
 
         StoredObject storedObject = storageProvider.store(
                 multipartFile,
@@ -66,7 +64,7 @@ public class FileStorageService {
                 storageProvider,
                 storedObject,
                 ownerUser,
-                originalFileName,
+                validated.originalFileName(),
                 storedFileName,
                 multipartFile.getContentType(),
                 multipartFile.getSize());
@@ -79,7 +77,7 @@ public class FileStorageService {
                 "Requested file could not be found."));
     }
 
-    private String[] validateMultipartFile(MultipartFile multipartFile) {
+    private ValidatedUpload validateMultipartFile(MultipartFile multipartFile) {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Verification document file is required.");
         }
@@ -115,10 +113,13 @@ public class FileStorageService {
                 ALLOWED_SIGNATURES,
                 "Uploaded file content does not match the declared PDF/JPG/PNG type.");
 
-        return new String[]{originalFileName, extension};
+        return new ValidatedUpload(originalFileName, normalizedExtension);
     }
 
     private Path resolveBaseDirectory() {
         return UploadStorageSupport.resolveBaseDirectory(uploadProperties.getDirectory());
+    }
+
+    private record ValidatedUpload(String originalFileName, String extension) {
     }
 }

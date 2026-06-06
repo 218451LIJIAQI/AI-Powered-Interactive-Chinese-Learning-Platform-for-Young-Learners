@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.ai;
 
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -29,9 +30,9 @@ public record AiVocabularyHelperRequest(
 
     public AiVocabularyHelperRequest {
         word = strip(word);
-        inputLanguage = strip(inputLanguage);
-        outputLanguage = strip(outputLanguage);
-        learnerLevel = strip(learnerLevel);
-        languagePreference = strip(languagePreference);
+        inputLanguage = stripToNull(inputLanguage);
+        outputLanguage = stripToNull(outputLanguage);
+        learnerLevel = stripToNull(learnerLevel);
+        languagePreference = stripToNull(languagePreference);
     }
 }

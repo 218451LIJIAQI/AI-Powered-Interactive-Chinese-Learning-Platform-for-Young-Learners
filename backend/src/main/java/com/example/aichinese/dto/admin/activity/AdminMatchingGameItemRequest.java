@@ -20,13 +20,13 @@ public record AdminMatchingGameItemRequest(
 
         @Pattern(
                 regexp = AdminMatchingGameItemRequest.HTTP_URL_PATTERN,
-                message = "Left image URL must start with http:// or https://.")
+                message = "Left image URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Left image URL must not exceed 255 characters.")
         String leftImageUrl,
 
         @Pattern(
                 regexp = AdminMatchingGameItemRequest.HTTP_URL_PATTERN,
-                message = "Right image URL must start with http:// or https://.")
+                message = "Right image URL must start with http:// or https:// and contain no whitespace.")
         @Size(max = 255, message = "Right image URL must not exceed 255 characters.")
         String rightImageUrl,
 
@@ -45,5 +45,5 @@ public record AdminMatchingGameItemRequest(
         pinyin = stripToNull(pinyin);
     }
 
-    static final String HTTP_URL_PATTERN = "^(https?://.+)?$";
+    static final String HTTP_URL_PATTERN = "^(https?://\\S+)?$";
 }

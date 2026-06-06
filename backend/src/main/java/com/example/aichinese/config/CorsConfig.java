@@ -25,6 +25,10 @@ public class CorsConfig {
     private static final Logger log = LoggerFactory.getLogger(CorsConfig.class);
     private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
+    private static final String CORS_ORIGIN_PROPERTY = "APP_CORS_ALLOWED_ORIGINS";
+    private static final String ORIGIN_LABEL = "CORS allowed origin";
+    private static final int VITE_DEV_PORT_START = 5173;
+    private static final int VITE_DEV_PORT_END = 5183;
     private static final Duration PREFLIGHT_CACHE_MAX_AGE = Duration.ofHours(1);
 
     private static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
@@ -54,7 +58,7 @@ public class CorsConfig {
                 productionProfileActive,
                 DEFAULT_LOCAL_DEV_ORIGINS);
 
-        configuration.setAllowedOrigins(new ArrayList<>(exactOrigins));
+        configuration.setAllowedOrigins(List.copyOf(exactOrigins));
         configuration.setAllowedHeaders(ALLOWED_HEADERS);
         configuration.setAllowedMethods(ALLOWED_METHODS);
         configuration.setAllowCredentials(true);
@@ -98,7 +102,8 @@ public class CorsConfig {
 
         if (exactOrigins.isEmpty()) {
             if (productionProfileActive) {
-                throw new IllegalStateException("APP_CORS_ALLOWED_ORIGINS must contain explicit origins when the prod profile is active.");
+                throw new IllegalStateException(
+                        CORS_ORIGIN_PROPERTY + " must contain explicit origins when the prod profile is active.");
             }
             exactOrigins.addAll(fallbackOrigins);
             log.warn("No explicit CORS origins were configured; falling back to local dev origins {}.",
@@ -112,7 +117,7 @@ public class CorsConfig {
         List<String> origins = new ArrayList<>();
         origins.add("http://localhost:4173");
         origins.add("http://127.0.0.1:4173");
-        for (int port = 5173; port <= 5183; port++) {
+        for (int port = VITE_DEV_PORT_START; port <= VITE_DEV_PORT_END; port++) {
             origins.add("http://localhost:" + port);
             origins.add("http://127.0.0.1:" + port);
         }
@@ -120,7 +125,7 @@ public class CorsConfig {
     }
 
     private static String normalizeOrigin(String origin, boolean productionProfileActive) {
-        URI uri = HttpUrlValidation.requireAbsoluteHttpUrl(origin, "CORS allowed origin");
+        URI uri = HttpUrlValidation.requireAbsoluteHttpUrl(origin, ORIGIN_LABEL);
         if (uri.getRawPath() != null && !uri.getRawPath().isBlank() && !"/".equals(uri.getRawPath())) {
             throw new IllegalArgumentException("CORS allowed origin must not include a path.");
         }
@@ -128,7 +133,7 @@ public class CorsConfig {
             throw new IllegalArgumentException("CORS allowed origin must not include a query string or fragment.");
         }
         if (productionProfileActive) {
-            HttpUrlValidation.requirePublicHttpsUrl(origin, "APP_CORS_ALLOWED_ORIGINS", "when the prod profile is active");
+            HttpUrlValidation.requirePublicHttpsUrl(origin, CORS_ORIGIN_PROPERTY, "when the prod profile is active");
         }
 
         String scheme = HttpUrlValidation.normalizeScheme(uri.getScheme());

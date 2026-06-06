@@ -1,25 +1,3 @@
-/**
- * Vue I18n plugin instance shared across the app. Supports the three
- * UI languages exposed via {@link AppLanguage}: English (default),
- * Bahasa Melayu, and simplified Chinese.
- *
- * <h2>Locale resolution</h2>
- * <p>{@code readPersistedLocale} reads the user's preference from
- * {@code localStorage} ({@code mandarin-spark.language}) and falls back
- * to English when the stored value is missing or invalid. The store
- * mirror lives in {@code stores/ui.ts}; both are kept in sync so a
- * SSR-style initial render uses the same locale as the reactive store.</p>
- *
- * <h2>What's translated</h2>
- * <p>Navigation labels, button microcopy, and form titles. Authored
- * content (lesson text, AI prompts, teacher bios) is intentionally
- * NOT translated by the frontend — it is the teacher's choice and the
- * backend stores it as authored.</p>
- *
- * <h2>{@code legacy: false}</h2>
- * <p>We use Composition API mode so {@code locale} is a {@code Ref}
- * that triggers reactivity in `<script setup>` components.</p>
- */
 import { createI18n } from 'vue-i18n'
 
 import { readPersistedLocale } from '@/utils/storage'

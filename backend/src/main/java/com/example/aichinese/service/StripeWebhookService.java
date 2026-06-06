@@ -4,7 +4,9 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE;
 
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,6 +43,9 @@ public class StripeWebhookService {
     public static final int MAX_WEBHOOK_PAYLOAD_BYTES = 256 * 1024;
     private static final int MAX_SIGNATURE_HEADER_LENGTH = 4096;
     private static final int MAX_PROVIDER_STATUS_LENGTH = 100;
+    private static final String STRIPE_PROVIDER = "stripe";
+    private static final String CHECKOUT_SESSION_OBJECT = "checkout.session";
+    private static final String HMAC_SHA256 = "HmacSHA256";
     private static final Set<String> SUPPORTED_CHECKOUT_SESSION_EVENTS = Set.of(
             "CHECKOUT.SESSION.COMPLETED",
             "CHECKOUT.SESSION.ASYNC_PAYMENT_SUCCEEDED",
@@ -67,9 +72,9 @@ public class StripeWebhookService {
         JsonNode root = parsePayload(payload);
         String eventId = text(root, "id");
         String eventType = text(root, "type");
-        JsonNode objectNode = root.path("data").path("object");
-        String stripeSessionStatus = text(objectNode, "status");
-        String stripePaymentStatus = text(objectNode, "payment_status");
+        JsonNode checkoutSession = root.path("data").path("object");
+        String stripeSessionStatus = text(checkoutSession, "status");
+        String stripePaymentStatus = text(checkoutSession, "payment_status");
         if (!isSupportedCheckoutSessionEvent(eventType)) {
             log.debug("Ignoring unsupported Stripe event: type={}, id={}", eventType, eventId);
             return new StripeWebhookResultResponse(
@@ -80,22 +85,19 @@ public class StripeWebhookService {
                     statusSummary(eventType, stripeSessionStatus, stripePaymentStatus),
                     false);
         }
-        if (!"checkout.session".equals(text(objectNode, "object"))) {
+        if (!CHECKOUT_SESSION_OBJECT.equals(text(checkoutSession, "object"))) {
             throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook payload object is not a checkout session.");
         }
-        String sessionId = text(objectNode, "id");
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook payload is missing a checkout session id.");
-        }
+        String sessionId = requireCheckoutSessionId(checkoutSession);
 
         PaymentStatus paymentStatus = mapPaymentStatus(eventType, stripeSessionStatus, stripePaymentStatus);
         String providerStatus = statusSummary(eventType, stripeSessionStatus, stripePaymentStatus);
         Optional<StripeWebhookResultResponse> processed = paymentService.applyProviderPaymentStatus(
-                "stripe",
+                STRIPE_PROVIDER,
                 sessionId,
                 new PaymentProviderStatusResult(
                         true,
-                        "stripe",
+                        STRIPE_PROVIDER,
                         sessionId,
                         paymentStatus,
                         providerStatus,
@@ -183,11 +185,14 @@ public class StripeWebhookService {
 
     private static String hmacSha256Hex(String secret, String signedPayload) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            Mac mac = Mac.getInstance(HMAC_SHA256);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256));
             return HexFormat.of().formatHex(mac.doFinal(signedPayload.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception exception) {
-            throw new ResponseStatusException(SERVICE_UNAVAILABLE, "Stripe webhook signature could not be verified.");
+        } catch (NoSuchAlgorithmException | InvalidKeyException exception) {
+            throw new ResponseStatusException(
+                    SERVICE_UNAVAILABLE,
+                    "Stripe webhook signature could not be verified.",
+                    exception);
         }
     }
 
@@ -235,7 +240,7 @@ public class StripeWebhookService {
 
     private static String statusSummary(String eventType, String sessionStatus, String paymentStatus) {
         String summary = normalize(eventType) + ":" + normalize(sessionStatus) + ":" + normalize(paymentStatus);
-        return summary.length() <= MAX_PROVIDER_STATUS_LENGTH ? summary : summary.substring(0, MAX_PROVIDER_STATUS_LENGTH);
+        return truncate(summary, MAX_PROVIDER_STATUS_LENGTH);
     }
 
     private static String normalize(String value) {
@@ -245,6 +250,24 @@ public class StripeWebhookService {
     private static String text(JsonNode node, String key) {
         JsonNode value = node == null ? null : node.get(key);
         return value == null || value.isNull() ? null : value.asText(null);
+    }
+
+    private static String requireCheckoutSessionId(JsonNode checkoutSession) {
+        String sessionId = text(checkoutSession, "id");
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Stripe webhook payload is missing a checkout session id.");
+        }
+        return sessionId;
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        int end = Character.isHighSurrogate(value.charAt(maxLength - 1))
+                ? maxLength - 1
+                : maxLength;
+        return value.substring(0, end);
     }
 
     private record SignatureHeaderParts(String timestamp, List<String> v1Signatures) {

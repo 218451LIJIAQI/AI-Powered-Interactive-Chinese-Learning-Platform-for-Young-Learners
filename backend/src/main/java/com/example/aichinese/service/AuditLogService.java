@@ -23,10 +23,13 @@ import com.example.aichinese.dto.communication.AuditLogResponse;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.AuditLogRepository;
+import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.RequestIdHolder;
 import com.example.aichinese.util.SensitiveDataRedactor;
+import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -38,12 +41,15 @@ public class AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
     private final CommunicationMapper communicationMapper;
+    private final UserRepository userRepository;
 
     public AuditLogService(
             AuditLogRepository auditLogRepository,
-            CommunicationMapper communicationMapper) {
+            CommunicationMapper communicationMapper,
+            UserRepository userRepository) {
         this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
         this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
     }
 
     @Transactional
@@ -52,10 +58,31 @@ public class AuditLogService {
     }
 
     @Transactional
+    public void record(SecurityUserDetails actor, String actionType, String targetType, Long targetId, String description) {
+        User actorReference = actor == null || actor.getUserId() == null
+                ? null
+                : userRepository.getReferenceById(actor.getUserId());
+        record(actorReference, actor == null ? null : actor.getUsername(),
+                actionType, targetType, targetId, description, null);
+    }
+
+    @Transactional
     public void record(User actor, String actionType, String targetType, Long targetId, String description, String ipAddress) {
+        record(actor, actor == null ? null : actor.getEmail(),
+                actionType, targetType, targetId, description, ipAddress);
+    }
+
+    private void record(
+            User actor,
+            String actorEmail,
+            String actionType,
+            String targetType,
+            Long targetId,
+            String description,
+            String ipAddress) {
         AuditLog auditLog = new AuditLog();
         auditLog.setActorUser(actor);
-        auditLog.setActorEmail(actor != null ? actor.getEmail() : null);
+        auditLog.setActorEmail(actorEmail);
         auditLog.setActionType(actionType);
         auditLog.setTargetType(targetType);
         auditLog.setTargetId(targetId);
@@ -114,24 +141,40 @@ public class AuditLogService {
             return null;
         }
         String normalized = SensitiveDataRedactor.redactText(description);
-        return normalized.length() <= MAX_AUDIT_DESCRIPTION_LENGTH
-                ? normalized
-                : normalized.substring(0, MAX_AUDIT_DESCRIPTION_LENGTH);
+        return truncate(normalized, MAX_AUDIT_DESCRIPTION_LENGTH);
     }
 
     private Specification<AuditLog> auditLogSpecification(String actionType, String targetType, String actor) {
+        String normalizedActionType = normalizeFilter(actionType);
+        String normalizedTargetType = normalizeFilter(targetType);
+        String normalizedActor = normalizeFilter(actor);
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (actionType != null && !actionType.isBlank()) {
-                predicates.add(criteriaBuilder.equal(criteriaBuilder.lower(root.get("actionType")), actionType.trim().toLowerCase(Locale.ROOT)));
+            if (normalizedActionType != null) {
+                predicates.add(criteriaBuilder.equal(criteriaBuilder.lower(root.get("actionType")), normalizedActionType));
             }
-            if (targetType != null && !targetType.isBlank()) {
-                predicates.add(criteriaBuilder.equal(criteriaBuilder.lower(root.get("targetType")), targetType.trim().toLowerCase(Locale.ROOT)));
+            if (normalizedTargetType != null) {
+                predicates.add(criteriaBuilder.equal(criteriaBuilder.lower(root.get("targetType")), normalizedTargetType));
             }
-            if (actor != null && !actor.isBlank()) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("actorEmail")), "%" + actor.trim().toLowerCase(Locale.ROOT) + "%"));
+            if (normalizedActor != null) {
+                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("actorEmail")), "%" + normalizedActor + "%"));
             }
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };
+    }
+
+    private static String normalizeFilter(String value) {
+        String trimmed = TextUtils.trimToNull(value);
+        return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT);
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        int end = Character.isHighSurrogate(value.charAt(maxLength - 1))
+                ? maxLength - 1
+                : maxLength;
+        return value.substring(0, end);
     }
 }

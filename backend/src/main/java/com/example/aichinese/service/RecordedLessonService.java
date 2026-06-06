@@ -32,6 +32,8 @@ public class RecordedLessonService {
     private static final int MAX_VIDEO_TITLE_LENGTH = 200;
     private static final int MAX_VIDEO_DESCRIPTION_LENGTH = 1000;
     private static final int MAX_VIDEO_SORT_ORDER = 10_000;
+    private static final String RECORDED_VIDEO_AUDIT_TARGET = "RecordedLessonVideo";
+    private static final String TEACHER_CLASSES_PATH = "/teacher/classes";
 
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LiveLearningAccessService liveLearningAccessService;
@@ -86,11 +88,11 @@ public class RecordedLessonService {
                 lesson.getTeacher().getUser(),
                 "Recorded lesson video added",
                 "A recorded lesson video was added to " + lesson.getTitle() + ".",
-                "/teacher/classes");
+                TEACHER_CLASSES_PATH);
         auditLogService.record(
                 lesson.getTeacher().getUser(),
                 "TEACHER_RECORDED_VIDEO_CREATE",
-                "RecordedLessonVideo",
+                RECORDED_VIDEO_AUDIT_TARGET,
                 saved.getId(),
                 "Teacher added a recorded lesson video.");
 
@@ -139,7 +141,7 @@ public class RecordedLessonService {
         auditLogService.record(
                 video.getLesson().getTeacher().getUser(),
                 "TEACHER_RECORDED_VIDEO_UPDATE",
-                "RecordedLessonVideo",
+                RECORDED_VIDEO_AUDIT_TARGET,
                 saved.getId(),
                 "Teacher updated a recorded lesson video.");
 
@@ -158,7 +160,7 @@ public class RecordedLessonService {
         auditLogService.record(
                 video.getLesson().getTeacher().getUser(),
                 "TEACHER_RECORDED_VIDEO_ARCHIVE",
-                "RecordedLessonVideo",
+                RECORDED_VIDEO_AUDIT_TARGET,
                 saved.getId(),
                 "Teacher archived a recorded lesson video.");
 
@@ -265,19 +267,28 @@ public class RecordedLessonService {
 
     private RecordedLessonVideoResponse toTeacherResponse(RecordedLessonVideo video) {
         String streamUrl = video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
-                ? "/api/v1/teachers/lessons/" + video.getLesson().getId() + "/recorded-videos/" + video.getId() + "/stream"
+                ? teacherStreamUrl(video)
                 : null;
         return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl(video));
     }
 
     private RecordedLessonVideoResponse toStudentResponse(RecordedLessonVideo video) {
         String streamUrl = video.getSourceType() == RecordedVideoSourceType.UPLOADED_FILE
-                ? "/api/v1/students/recorded-videos/" + video.getId() + "/stream"
+                ? studentStreamUrl(video)
                 : null;
         return liveLearningMapper.toRecordedVideoResponse(video, streamUrl, externalUrl(video));
     }
 
     private static String externalUrl(RecordedLessonVideo video) {
         return video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
+    }
+
+    private static String teacherStreamUrl(RecordedLessonVideo video) {
+        return "/api/v1/teachers/lessons/" + video.getLesson().getId()
+                + "/recorded-videos/" + video.getId() + "/stream";
+    }
+
+    private static String studentStreamUrl(RecordedLessonVideo video) {
+        return "/api/v1/students/recorded-videos/" + video.getId() + "/stream";
     }
 }

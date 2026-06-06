@@ -19,7 +19,8 @@ import com.example.aichinese.entity.StudentProfile;
 
 import jakarta.persistence.LockModeType;
 
-public interface StudentProfileRepository extends JpaRepository<StudentProfile, Long>, JpaSpecificationExecutor<StudentProfile> {
+public interface StudentProfileRepository
+        extends JpaRepository<StudentProfile, Long>, JpaSpecificationExecutor<StudentProfile> {
 
     @EntityGraph(attributePaths = { "currentLevel" })
     Optional<StudentProfile> findByUserId(Long userId);

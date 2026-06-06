@@ -1,22 +1,8 @@
 /**
  * Typed thin-wrappers around every backend REST endpoint, grouped by
- * domain (auth, AI, commerce, content, dashboard, etc.).
- *
- * <h2>Why typed wrappers</h2>
- * <p>Pages call e.g. {@code authApi.login(payload)} instead of
- * {@code http.post('/auth/login', payload)} so:</p>
- * <ul>
- *   <li>URLs are typed and refactor-safe.</li>
- *   <li>Request / response shapes line up with the shared
- *       {@code types/api.ts} contract types.</li>
- *   <li>Cross-cutting behaviour (e.g. unwrapping {@code ApiResponse<T>})
- *       happens in one place.</li>
- * </ul>
- *
- * <h2>Response unwrapping</h2>
- * <p>The backend wraps payloads in {@code { success, message, data }}.
- * Each wrapper reads {@code response.data.data} so call sites work
- * directly with the domain type.</p>
+ * domain. Pages call these methods instead of raw `http.*` calls so
+ * endpoint paths, request shapes, response unwrapping, downloads, and
+ * AI streaming error handling stay in one place.
  */
 import type { AxiosResponse } from 'axios'
 
@@ -25,37 +11,44 @@ import { appEnv } from '@/config/env'
 import type {
   AdminAnalyticsResponse,
   AdminActivitySummaryResponse,
-  AdminPaymentRecordResponse,
-  AdminRefundRequestResponse,
-  AdminPlatformSettingsResponse,
-  AdminPlatformSettingsUpdateRequest,
+  AdminActivityType,
+  AdminAiResponseReportResponse,
   AdminAiUsageLogResponse,
   AdminDragDropActivityResponse,
   AdminFlashcardResponse,
   AdminListeningExerciseResponse,
   AdminMatchingGameResponse,
+  AdminPayoutRequestResponse,
+  AdminPaymentRecordResponse,
+  AdminPlatformSettingsResponse,
+  AdminPlatformSettingsUpdateRequest,
+  AdminRefundRequestResponse,
   AdminStoryActivityResponse,
   AdminDashboardResponse,
   AdminStudentListItemResponse,
   AdminTeacherDetailResponse,
   AdminTeacherListItemResponse,
+  AdminTracingExerciseResponse,
   AdminUserListItemResponse,
   AccessType,
   ActivityDifficulty,
-  AdminActivityType,
   AgeBand,
-  AdminAiResponseReportResponse,
   AiAvailabilityResponse,
   AiChatResponse,
   AiLearningRecommendationResponse,
   AiPronunciationFeedbackResponse,
   AiQuizGeneratorResponse,
+  AiResponseReportReason,
+  AiResponseReportReviewStatus,
   AiSentencePracticeResponse,
   AiStoryGeneratorResponse,
   AiVocabularyHelperResponse,
   AiWritingFeedbackResponse,
+  ApiResponse,
   AuditLogResponse,
   AuthResponse,
+  BadgeSummaryResponse,
+  BulkOperationResponse,
   CartResponse,
   CheckoutResponse,
   CommissionSettingResponse,
@@ -77,7 +70,7 @@ import type {
   NotificationResponse,
   NotificationUnreadCountResponse,
   PageResponse,
-  AdminPayoutRequestResponse,
+  PointsTransactionResponse,
   PublicCourseDetail,
   PublicCourseSummary,
   PublicPlatformSettingsResponse,
@@ -117,22 +110,90 @@ import type {
   WrongAnswerResponse,
   LearningModuleResponse,
   ModerationRecordResponse,
-  BadgeSummaryResponse,
-  PointsTransactionResponse,
-  BulkOperationResponse,
-  AdminTracingExerciseResponse,
-  AiResponseReportReason,
-  AiResponseReportReviewStatus,
   StudentAiResponseReportResponse,
 } from '@/types/api'
-import type { ApiResponse } from '@/types/api'
 
-const AI_STREAM_CONNECT_TIMEOUT_MS = 30000
+const AI_CHAT_STREAM_PATH = '/ai/chat/stream'
+const AI_STREAM_CONNECT_TIMEOUT_MS = 30_000
+const API_BASE_TRAILING_SLASH_PATTERN = /\/$/
+const AUTHORIZATION_HEADER = 'Authorization'
+const CONTENT_DISPOSITION_ASCII_FILENAME_PATTERN = /filename="?([^";]+)"?/i
+const CONTENT_DISPOSITION_UTF8_FILENAME_PATTERN = /filename\*=UTF-8''([^;\s]+)/i
+const CONTENT_TYPE_HEADER = 'content-type'
+const JSON_CONTENT_TYPE = 'application/json'
+const REQUEST_CONTENT_TYPE_HEADER = 'Content-Type'
+const SSE_ACCEPT_HEADER = 'Accept'
+const SSE_CONTENT_TYPE = 'text/event-stream'
+const SSE_DATA_PREFIX = 'data:'
+const SSE_DEFAULT_EVENT = 'message'
+const SSE_DELIMITER_PATTERN = /\r?\n\r?\n/
+const SSE_EVENT_COMPLETE = 'complete'
+const SSE_EVENT_DELTA = 'delta'
+const SSE_EVENT_ERROR = 'error'
+const SSE_EVENT_PREFIX = 'event:'
+const SSE_LINE_PATTERN = /\r?\n/
+
+const API_ENVELOPE_ERROR_MESSAGES = {
+  rejected: 'The request was not accepted by the server.',
+  unexpectedFormat: 'The server returned an unexpected response format.',
+  missingData: 'The server response did not include the expected data payload.',
+} as const
+
+const AI_STREAM_ERROR_MESSAGES = {
+  fallback: 'Unable to get an AI chat response.',
+  incomplete: 'The AI stream ended before the final response arrived.',
+  malformedComplete: 'The AI stream returned a malformed final response.',
+  missingBody: 'The server did not open an AI stream.',
+  rateLimited: 'You are doing that too often. Please wait a moment and try again.',
+  serverTrouble: 'The learning service is having trouble right now. Please try again shortly.',
+  signInAgain: 'Please sign in again to continue.',
+  stopped: 'The AI stream stopped unexpectedly.',
+  timeout: 'The AI stream took too long to respond. Please try again.',
+} as const
+
+type FieldErrors = Record<string, string[]>
+
+type ApiEnvelopeData = {
+  message: string
+  errors: string[]
+  fieldErrors: FieldErrors
+}
+
+type ApiEnvelopeErrorResponse = {
+  status?: number
+  data: ApiEnvelopeData
+}
+
+type AiStreamHandlers = {
+  onDelta?: (chunk: string) => void
+  onComplete?: (payload: AiChatResponse) => void
+}
+
+type DownloadResult = {
+  blob: Blob
+  contentType: string | null
+  fileName: string | null
+}
+
+type ApiRequest<T> = Promise<{ data: ApiResponse<T> }>
+type ContentPublicationStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+type ModerationAction = 'hide' | 'unpublish' | 'archive' | 'request-revision' | 'restore'
+type ModerationPayload = { targetType: string; targetId: number; reason: string }
+type QueryParams = Record<string, unknown>
+type StudentQueryParams = Record<string, string | number | undefined>
+
+const MODERATION_ACTION_ENDPOINTS = {
+  archive: '/admin/moderation/archive',
+  hide: '/admin/moderation/hide',
+  'request-revision': '/admin/moderation/request-revision',
+  restore: '/admin/moderation/restore',
+  unpublish: '/admin/moderation/unpublish',
+} satisfies Record<ModerationAction, string>
 
 class ApiEnvelopeError extends Error {
-  response: { status?: number; data: { message: string; errors: string[]; fieldErrors: Record<string, string[]> } }
+  response: ApiEnvelopeErrorResponse
 
-  constructor(message: string, errors: string[] = [], status?: number, fieldErrors: Record<string, string[]> = {}) {
+  constructor(message: string, errors: string[] = [], status?: number, fieldErrors: FieldErrors = {}) {
     super(message)
     this.name = 'ApiEnvelopeError'
     this.response = {
@@ -156,7 +217,7 @@ function cleanErrorList(value: unknown): string[] {
     : []
 }
 
-function cleanFieldErrors(value: unknown): Record<string, string[]> {
+function cleanFieldErrors(value: unknown): FieldErrors {
   if (!value || typeof value !== 'object') {
     return {}
   }
@@ -169,17 +230,17 @@ function cleanFieldErrors(value: unknown): Record<string, string[]> {
 }
 
 function fallbackSseHttpMessage(status: number): string {
-  if (status === 401) return 'Please sign in again to continue.'
-  if (status === 429) return 'You are doing that too often. Please wait a moment and try again.'
-  if (status >= 500) return 'The learning service is having trouble right now. Please try again shortly.'
-  return 'Unable to get an AI chat response.'
+  if (status === 401) return AI_STREAM_ERROR_MESSAGES.signInAgain
+  if (status === 429) return AI_STREAM_ERROR_MESSAGES.rateLimited
+  if (status >= 500) return AI_STREAM_ERROR_MESSAGES.serverTrouble
+  return AI_STREAM_ERROR_MESSAGES.fallback
 }
 
 async function sseHttpError(response: Response): Promise<ApiEnvelopeError> {
   const fallbackMessage = fallbackSseHttpMessage(response.status)
-  const contentType = response.headers.get('content-type') ?? ''
+  const contentType = response.headers.get(CONTENT_TYPE_HEADER) ?? ''
 
-  if (contentType.toLowerCase().includes('application/json')) {
+  if (contentType.toLowerCase().includes(JSON_CONTENT_TYPE)) {
     try {
       const payload = (await response.json()) as {
         message?: unknown
@@ -202,39 +263,39 @@ async function sseHttpError(response: Response): Promise<ApiEnvelopeError> {
   return new ApiEnvelopeError(fallbackMessage, [], response.status)
 }
 
-async function unwrap<T>(request: Promise<{ data: ApiResponse<T> }>): Promise<T> {
+async function unwrap<T>(request: ApiRequest<T>): Promise<T> {
   const response = await request
   const payload = response.data
 
   if (!payload || typeof payload !== 'object' || !('success' in payload)) {
-    throw new ApiEnvelopeError('The server returned an unexpected response format.')
+    throw new ApiEnvelopeError(API_ENVELOPE_ERROR_MESSAGES.unexpectedFormat)
   }
 
   if (payload.success === false) {
-    throw new ApiEnvelopeError(payload.message || 'The request was not accepted by the server.', payload.errors ?? [])
+    throw new ApiEnvelopeError(payload.message || API_ENVELOPE_ERROR_MESSAGES.rejected, payload.errors ?? [])
   }
 
   if (!('data' in payload)) {
-    throw new ApiEnvelopeError('The server response did not include the expected data payload.')
+    throw new ApiEnvelopeError(API_ENVELOPE_ERROR_MESSAGES.missingData)
   }
 
   return payload.data
 }
 
-function apiUrl(path: string) {
-  const baseUrl = appEnv.apiBaseUrl.replace(/\/$/, '')
+function apiUrl(path: string): string {
+  const baseUrl = appEnv.apiBaseUrl.replace(API_BASE_TRAILING_SLASH_PATTERN, '')
   const suffix = path.startsWith('/') ? path : `/${path}`
   return `${baseUrl}${suffix}`
 }
 
 function parseSseEvent(rawEvent: string): { event: string; data: string } | null {
-  let event = 'message'
+  let event = SSE_DEFAULT_EVENT
   const dataLines: string[] = []
-  rawEvent.split(/\r?\n/).forEach((line) => {
-    if (line.startsWith('event:')) {
-      event = line.slice('event:'.length).trim()
-    } else if (line.startsWith('data:')) {
-      dataLines.push(line.slice('data:'.length).trimStart())
+  rawEvent.split(SSE_LINE_PATTERN).forEach((line) => {
+    if (line.startsWith(SSE_EVENT_PREFIX)) {
+      event = line.slice(SSE_EVENT_PREFIX.length).trim()
+    } else if (line.startsWith(SSE_DATA_PREFIX)) {
+      dataLines.push(line.slice(SSE_DATA_PREFIX.length).trimStart())
     }
   })
   if (!dataLines.length) return null
@@ -245,19 +306,13 @@ function parseSseCompletePayload(data: string): AiChatResponse {
   try {
     return JSON.parse(data) as AiChatResponse
   } catch {
-    throw new ApiEnvelopeError('The AI stream returned a malformed final response.')
+    throw new ApiEnvelopeError(AI_STREAM_ERROR_MESSAGES.malformedComplete)
   }
 }
 
-async function readSseStream(
-  response: Response,
-  handlers: {
-    onDelta?: (chunk: string) => void
-    onComplete?: (payload: AiChatResponse) => void
-  },
-): Promise<AiChatResponse> {
+async function readSseStream(response: Response, handlers: AiStreamHandlers): Promise<AiChatResponse> {
   if (!response.body) {
-    throw new ApiEnvelopeError('The server did not open an AI stream.')
+    throw new ApiEnvelopeError(AI_STREAM_ERROR_MESSAGES.missingBody)
   }
 
   const reader = response.body.getReader()
@@ -269,13 +324,13 @@ async function readSseStream(
     if (!rawEvent.trim()) return
     const parsed = parseSseEvent(rawEvent)
     if (!parsed) return
-    if (parsed.event === 'delta') {
+    if (parsed.event === SSE_EVENT_DELTA) {
       handlers.onDelta?.(parsed.data)
-    } else if (parsed.event === 'complete') {
+    } else if (parsed.event === SSE_EVENT_COMPLETE) {
       finalPayload = parseSseCompletePayload(parsed.data)
       handlers.onComplete?.(finalPayload)
-    } else if (parsed.event === 'error') {
-      throw new ApiEnvelopeError(parsed.data || 'The AI stream stopped unexpectedly.')
+    } else if (parsed.event === SSE_EVENT_ERROR) {
+      throw new ApiEnvelopeError(parsed.data || AI_STREAM_ERROR_MESSAGES.stopped)
     }
   }
 
@@ -283,7 +338,7 @@ async function readSseStream(
     while (true) {
       const { value, done } = await reader.read()
       buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-      const events = buffer.split(/\r?\n\r?\n/)
+      const events = buffer.split(SSE_DELIMITER_PATTERN)
       buffer = events.pop() ?? ''
 
       events.forEach(processEvent)
@@ -299,50 +354,48 @@ async function readSseStream(
   }
 
   if (!finalPayload) {
-    throw new ApiEnvelopeError('The AI stream ended before the final response arrived.')
+    throw new ApiEnvelopeError(AI_STREAM_ERROR_MESSAGES.incomplete)
   }
   return finalPayload
 }
 
-async function postSseChat(
-  payload: AiChatPayload,
-  handlers: {
-    onDelta?: (chunk: string) => void
-    onComplete?: (payload: AiChatResponse) => void
-  } = {},
-) {
-  const sendRequest = async () => {
-    const abortController = new AbortController()
-    const timeoutId = globalThis.setTimeout(() => abortController.abort(), AI_STREAM_CONNECT_TIMEOUT_MS)
-    const headers = new Headers({
-      Accept: 'text/event-stream',
-      'Content-Type': 'application/json',
-    })
-    const token = getAccessToken()
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
-    }
-
-    try {
-      return await fetch(apiUrl('/ai/chat/stream'), {
-        method: 'POST',
-        credentials: 'include',
-        headers,
-        signal: abortController.signal,
-        body: JSON.stringify(payload),
-      })
-    } catch (error) {
-      if (abortController.signal.aborted) {
-        throw new ApiEnvelopeError('The AI stream took too long to respond. Please try again.')
-      }
-
-      throw error
-    } finally {
-      globalThis.clearTimeout(timeoutId)
-    }
+function aiStreamHeaders(): Headers {
+  const headers = new Headers({
+    [SSE_ACCEPT_HEADER]: SSE_CONTENT_TYPE,
+    [REQUEST_CONTENT_TYPE_HEADER]: JSON_CONTENT_TYPE,
+  })
+  const token = getAccessToken()
+  if (token) {
+    headers.set(AUTHORIZATION_HEADER, `Bearer ${token}`)
   }
+  return headers
+}
 
-  let response = await sendRequest()
+async function sendAiChatStreamRequest(payload: AiChatPayload): Promise<Response> {
+  const abortController = new AbortController()
+  const timeoutId = globalThis.setTimeout(() => abortController.abort(), AI_STREAM_CONNECT_TIMEOUT_MS)
+
+  try {
+    return await fetch(apiUrl(AI_CHAT_STREAM_PATH), {
+      method: 'POST',
+      credentials: 'include',
+      headers: aiStreamHeaders(),
+      signal: abortController.signal,
+      body: JSON.stringify(payload),
+    })
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      throw new ApiEnvelopeError(AI_STREAM_ERROR_MESSAGES.timeout)
+    }
+
+    throw error
+  } finally {
+    globalThis.clearTimeout(timeoutId)
+  }
+}
+
+async function postSseChat(payload: AiChatPayload, handlers: AiStreamHandlers = {}): Promise<AiChatResponse> {
+  let response = await sendAiChatStreamRequest(payload)
   if (response.status === 401) {
     const refreshedToken = await refreshAccessToken()
     if (!refreshedToken) {
@@ -350,7 +403,7 @@ async function postSseChat(
       throw await sseHttpError(response)
     }
 
-    response = await sendRequest()
+    response = await sendAiChatStreamRequest(payload)
     if (response.status === 401) {
       invalidateAuthSession()
     }
@@ -363,7 +416,7 @@ async function postSseChat(
   return readSseStream(response, handlers)
 }
 
-async function unwrapPageItems<T>(request: Promise<{ data: ApiResponse<PageResponse<T>> }>): Promise<T[]> {
+async function unwrapPageItems<T>(request: ApiRequest<PageResponse<T>>): Promise<T[]> {
   const page = await unwrap<PageResponse<T>>(request)
   return page?.items ?? []
 }
@@ -373,7 +426,7 @@ function parseContentDispositionFileName(contentDisposition: string | undefined)
     return null
   }
 
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/i)
+  const utf8Match = contentDisposition.match(CONTENT_DISPOSITION_UTF8_FILENAME_PATTERN)
   if (utf8Match?.[1]) {
     try {
       return decodeURIComponent(utf8Match[1])
@@ -382,16 +435,20 @@ function parseContentDispositionFileName(contentDisposition: string | undefined)
     }
   }
 
-  const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  const asciiMatch = contentDisposition.match(CONTENT_DISPOSITION_ASCII_FILENAME_PATTERN)
   return asciiMatch?.[1] ?? null
 }
 
-async function unwrapDownload(request: Promise<AxiosResponse<Blob>>) {
+function headerValue(value: AxiosResponse['headers'][string]): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+async function unwrapDownload(request: Promise<AxiosResponse<Blob>>): Promise<DownloadResult> {
   const response = await request
   return {
     blob: response.data,
-    fileName: parseContentDispositionFileName(response.headers['content-disposition']),
-    contentType: response.headers['content-type'] ?? null,
+    fileName: parseContentDispositionFileName(headerValue(response.headers['content-disposition']) ?? undefined),
+    contentType: headerValue(response.headers[CONTENT_TYPE_HEADER]),
   }
 }
 
@@ -674,7 +731,7 @@ export const publicApi = {
 }
 
 export const notificationsApi = {
-  list(params: Record<string, unknown> = {}) {
+  list(params: QueryParams = {}) {
     return unwrapPageItems<NotificationResponse>(http.get('/notifications', { params }))
   },
   unreadCount() {
@@ -742,7 +799,7 @@ export const studentApi = {
   completeVideo(videoId: number) {
     return unwrap<VideoProgressResponse>(http.post(`/students/video-progress/${videoId}/complete`))
   },
-  quizzes(params: Record<string, string | number | undefined> = {}) {
+  quizzes(params: StudentQueryParams = {}) {
     return unwrap<PageResponse<StudentQuizSummaryResponse>>(http.get('/students/quizzes', { params }))
   },
   quiz(quizId: number) {
@@ -763,7 +820,7 @@ export const studentApi = {
   feedback() {
     return unwrapPageItems<StudentTeacherFeedbackResponse>(http.get('/students/feedback'))
   },
-  activityLibrary(params: Record<string, string | number | undefined> = {}) {
+  activityLibrary(params: StudentQueryParams = {}) {
     return unwrap<PageResponse<StudentActivitySummaryResponse>>(http.get('/students/activities', { params }))
   },
   flashcard(id: number) {
@@ -824,10 +881,10 @@ export const studentApi = {
   buyNow(payload: { itemType: string; itemId: number; featureKey?: string }) {
     return unwrap<CheckoutResponse>(http.post('/students/checkout/buy-now', payload))
   },
-  payments(params: Record<string, unknown> = {}) {
+  payments(params: QueryParams = {}) {
     return unwrapPageItems<StudentPaymentRecordResponse>(http.get('/students/payments', { params }))
   },
-  refunds(params: Record<string, unknown> = {}) {
+  refunds(params: QueryParams = {}) {
     return unwrapPageItems<StudentRefundRequestResponse>(http.get('/students/refund-requests', { params }))
   },
   createRefund(payload: { orderId: number; reason: string }) {
@@ -889,7 +946,7 @@ export const aiApi = {
   writingFeedback(formData: FormData) {
     return unwrap<AiWritingFeedbackResponse>(http.post('/ai/writing-feedback', formData))
   },
-  reports(params: Record<string, unknown> = {}) {
+  reports(params: QueryParams = {}) {
     return unwrapPageItems<StudentAiResponseReportResponse>(http.get('/ai/reports', { params }))
   },
   reportResponse(payload: {
@@ -1054,13 +1111,13 @@ export const teacherApi = {
   updateFeedback(id: number, payload: { feedbackType?: string; message: string }) {
     return unwrap<TeacherFeedbackResponse>(http.put(`/teachers/feedback/${id}`, payload))
   },
-  earnings(params: Record<string, unknown> = {}) {
+  earnings(params: QueryParams = {}) {
     return unwrapPageItems<TeacherEarningResponse>(http.get('/teachers/earnings', { params }))
   },
   earningsSummary() {
     return unwrap<TeacherEarningSummaryResponse>(http.get('/teachers/earnings/summary'))
   },
-  payouts(params: Record<string, unknown> = {}) {
+  payouts(params: QueryParams = {}) {
     return unwrapPageItems<TeacherPayoutRequestResponse>(http.get('/teachers/payout-requests', { params }))
   },
   createPayoutRequest(payload: { amount: number; requestedNote?: string }) {
@@ -1078,19 +1135,19 @@ export const adminApi = {
   liveClasses() {
     return unwrapPageItems<LiveClassResponse>(http.get('/admin/live-classes'))
   },
-  users(params: Record<string, unknown> = {}) {
+  users(params: QueryParams = {}) {
     return unwrap<PageResponse<AdminUserListItemResponse>>(http.get('/admin/users', { params }))
   },
   updateUserStatus(id: number, payload: { active: boolean }) {
     return unwrap<AdminUserListItemResponse>(http.patch(`/admin/users/${id}/status`, payload))
   },
-  students(params: Record<string, unknown> = {}) {
+  students(params: QueryParams = {}) {
     return unwrap<PageResponse<AdminStudentListItemResponse>>(http.get('/admin/students', { params }))
   },
-  teachers(params: Record<string, unknown> = {}) {
+  teachers(params: QueryParams = {}) {
     return unwrap<PageResponse<AdminTeacherListItemResponse>>(http.get('/admin/teachers', { params }))
   },
-  pendingTeachers(params: Record<string, unknown> = {}) {
+  pendingTeachers(params: QueryParams = {}) {
     return unwrapPageItems<AdminTeacherListItemResponse>(http.get('/admin/teachers/pending', { params }))
   },
   teacherDetail(id: number) {
@@ -1108,7 +1165,7 @@ export const adminApi = {
   activityFeed(filters: AdminActivityFilters = {}) {
     return unwrap<PageResponse<AdminActivitySummaryResponse>>(http.get('/admin/activities', { params: filters }))
   },
-  aiUsageLogs(params: Record<string, unknown> = {}) {
+  aiUsageLogs(params: QueryParams = {}) {
     return unwrap<PageResponse<AdminAiUsageLogResponse>>(http.get('/admin/ai/usage-logs', { params }))
   },
   flashcard(id: number) {
@@ -1120,7 +1177,7 @@ export const adminApi = {
   updateFlashcard(id: number, payload: AdminFlashcardPayload) {
     return unwrap<AdminFlashcardResponse>(http.put(`/admin/activities/flashcards/${id}`, payload))
   },
-  updateFlashcardStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
+  updateFlashcardStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminFlashcardResponse>(http.patch(`/admin/activities/flashcards/${id}/status`, { status }))
   },
   deleteFlashcard(id: number) {
@@ -1135,7 +1192,7 @@ export const adminApi = {
   updateMatchingGame(id: number, payload: AdminMatchingGamePayload) {
     return unwrap<AdminMatchingGameResponse>(http.put(`/admin/activities/matching-games/${id}`, payload))
   },
-  updateMatchingGameStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
+  updateMatchingGameStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminMatchingGameResponse>(http.patch(`/admin/activities/matching-games/${id}/status`, { status }))
   },
   deleteMatchingGame(id: number) {
@@ -1150,7 +1207,7 @@ export const adminApi = {
   updateListeningExercise(id: number, payload: AdminListeningExercisePayload) {
     return unwrap<AdminListeningExerciseResponse>(http.put(`/admin/activities/listening-exercises/${id}`, payload))
   },
-  updateListeningExerciseStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
+  updateListeningExerciseStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminListeningExerciseResponse>(
       http.patch(`/admin/activities/listening-exercises/${id}/status`, { status }),
     )
@@ -1167,7 +1224,7 @@ export const adminApi = {
   updateTracingExercise(id: number, payload: AdminTracingExercisePayload) {
     return unwrap<AdminTracingExerciseResponse>(http.put(`/admin/activities/tracing-exercises/${id}`, payload))
   },
-  updateTracingExerciseStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
+  updateTracingExerciseStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminTracingExerciseResponse>(
       http.patch(`/admin/activities/tracing-exercises/${id}/status`, { status }),
     )
@@ -1184,7 +1241,7 @@ export const adminApi = {
   updateDragDropActivity(id: number, payload: AdminDragDropActivityPayload) {
     return unwrap<AdminDragDropActivityResponse>(http.put(`/admin/activities/drag-drop-activities/${id}`, payload))
   },
-  updateDragDropActivityStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
+  updateDragDropActivityStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminDragDropActivityResponse>(
       http.patch(`/admin/activities/drag-drop-activities/${id}/status`, { status }),
     )
@@ -1201,13 +1258,13 @@ export const adminApi = {
   updateStoryActivity(id: number, payload: AdminStoryActivityPayload) {
     return unwrap<AdminStoryActivityResponse>(http.put(`/admin/activities/story-activities/${id}`, payload))
   },
-  updateStoryActivityStatus(id: number, status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED') {
+  updateStoryActivityStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminStoryActivityResponse>(http.patch(`/admin/activities/story-activities/${id}/status`, { status }))
   },
   deleteStoryActivity(id: number) {
     return unwrap<void>(http.delete(`/admin/activities/story-activities/${id}`))
   },
-  content(params: Record<string, unknown> = {}) {
+  content(params: QueryParams = {}) {
     return unwrap<PageResponse<ContentSubmissionResponse>>(http.get('/admin/content/submissions', { params }))
   },
   contentDetail(contentType: string, id: number) {
@@ -1218,10 +1275,10 @@ export const adminApi = {
       http.patch(`/admin/content/${contentType}/${id}/archive`, note ? { note } : {}),
     )
   },
-  moderationRecords(params: Record<string, unknown> = {}) {
+  moderationRecords(params: QueryParams = {}) {
     return unwrapPageItems<ModerationRecordResponse>(http.get('/admin/moderation-records', { params }))
   },
-  aiReports(status?: string, params: Record<string, unknown> = {}) {
+  aiReports(status?: string, params: QueryParams = {}) {
     return unwrapPageItems<AdminAiResponseReportResponse>(
       http.get('/admin/ai-response-reports', { params: { ...params, status } }),
     )
@@ -1230,32 +1287,21 @@ export const adminApi = {
     return unwrap<AdminAiResponseReportResponse>(http.post(`/admin/ai-response-reports/${id}/review`, payload))
   },
   moderationAction(
-    action: 'hide' | 'unpublish' | 'archive' | 'request-revision' | 'restore',
-    payload: { targetType: string; targetId: number; reason: string },
+    action: ModerationAction,
+    payload: ModerationPayload,
   ) {
-    switch (action) {
-      case 'hide':
-        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/hide', payload))
-      case 'unpublish':
-        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/unpublish', payload))
-      case 'archive':
-        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/archive', payload))
-      case 'request-revision':
-        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/request-revision', payload))
-      case 'restore':
-        return unwrap<ModerationRecordResponse>(http.post('/admin/moderation/restore', payload))
-    }
+    return unwrap<ModerationRecordResponse>(http.post(MODERATION_ACTION_ENDPOINTS[action], payload))
   },
-  notifications(params: Record<string, unknown> = {}) {
+  notifications(params: QueryParams = {}) {
     return unwrapPageItems<NotificationResponse>(http.get('/admin/notifications', { params }))
   },
-  auditLogs(params: Record<string, unknown> = {}) {
+  auditLogs(params: QueryParams = {}) {
     return unwrapPageItems<AuditLogResponse>(http.get('/admin/audit-logs', { params }))
   },
-  payments(params: Record<string, unknown> = {}) {
+  payments(params: QueryParams = {}) {
     return unwrapPageItems<AdminPaymentRecordResponse>(http.get('/admin/payments', { params }))
   },
-  refunds(params: Record<string, unknown> = {}) {
+  refunds(params: QueryParams = {}) {
     return unwrapPageItems<AdminRefundRequestResponse>(http.get('/admin/refund-requests', { params }))
   },
   approveRefund(id: number) {
@@ -1267,7 +1313,7 @@ export const adminApi = {
   markRefunded(id: number) {
     return unwrap<AdminRefundRequestResponse>(http.post(`/admin/refund-requests/${id}/mark-refunded`))
   },
-  payouts(params: Record<string, unknown> = {}) {
+  payouts(params: QueryParams = {}) {
     return unwrapPageItems<AdminPayoutRequestResponse>(http.get('/admin/payout-requests', { params }))
   },
   approvePayout(id: number) {

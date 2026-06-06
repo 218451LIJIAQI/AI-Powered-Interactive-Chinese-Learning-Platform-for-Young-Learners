@@ -1,5 +1,6 @@
 package com.example.aichinese.config;
 
+import java.util.Locale;
 import java.util.Objects;
 
 import org.springframework.core.env.Environment;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 public class PaymentProductionGuard {
 
     private static final String STRIPE_API_HOST = "api.stripe.com";
+    private static final String STRIPE_PROVIDER = "stripe";
     private static final String PROD_CONTEXT = "when the prod profile is active";
     private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
@@ -31,16 +33,16 @@ public class PaymentProductionGuard {
             throw new IllegalStateException(
                     "PAYMENT_MOCK_SUCCESS_ENABLED must be false when the prod profile is active.");
         }
-        if (!"stripe".equals(paymentProperties.provider())) {
+        if (!STRIPE_PROVIDER.equals(normalize(paymentProperties.provider()))) {
             throw new IllegalStateException(
                     "PAYMENT_PROVIDER must be set to 'stripe' when the prod profile is active.");
         }
-        if (paymentProperties.stripeApiKey() == null || paymentProperties.stripeApiKey().isBlank()) {
+        if (isBlank(paymentProperties.stripeApiKey())) {
             throw new IllegalStateException(
                     "STRIPE_API_KEY must be configured when PAYMENT_PROVIDER=stripe and the prod profile is active.");
         }
         requireLiveStripeApiKey(paymentProperties.stripeApiKey());
-        if (paymentProperties.stripeWebhookSecret() == null || paymentProperties.stripeWebhookSecret().isBlank()) {
+        if (isBlank(paymentProperties.stripeWebhookSecret())) {
             throw new IllegalStateException(
                     "STRIPE_WEBHOOK_SECRET must be configured when PAYMENT_PROVIDER=stripe and the prod profile is active.");
         }
@@ -85,5 +87,13 @@ public class PaymentProductionGuard {
             throw new IllegalStateException(
                     "STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret when the prod profile is active.");
         }
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

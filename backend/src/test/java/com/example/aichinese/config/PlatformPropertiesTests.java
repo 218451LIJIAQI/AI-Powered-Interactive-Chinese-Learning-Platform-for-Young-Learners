@@ -10,51 +10,91 @@ import com.example.aichinese.service.LocalStorageProvider;
 
 class PlatformPropertiesTests {
 
+    private static final String DEFAULT_TIME_ZONE = "Asia/Singapore";
+    private static final String SINGLE_INSTANCE = "single-instance";
+    private static final String MULTI_INSTANCE = "multi-instance";
+
     @Test
     void normalizesDefaultTimeZoneAndDeploymentMode() {
-        PlatformProperties properties = new PlatformProperties("  Asia/Singapore  ", "  MULTI-INSTANCE  ", true, true);
+        PlatformProperties properties = platformProperties(
+                "  " + DEFAULT_TIME_ZONE + "  ",
+                "  MULTI-INSTANCE  ",
+                true,
+                true);
 
-        assertThat(properties.defaultTimeZone()).isEqualTo("Asia/Singapore");
-        assertThat(properties.defaultZoneId().getId()).isEqualTo("Asia/Singapore");
-        assertThat(properties.deploymentMode()).isEqualTo("multi-instance");
+        assertThat(properties.defaultTimeZone()).isEqualTo(DEFAULT_TIME_ZONE);
+        assertThat(properties.defaultZoneId().getId()).isEqualTo(DEFAULT_TIME_ZONE);
+        assertThat(properties.deploymentMode()).isEqualTo(MULTI_INSTANCE);
         assertThat(properties.sharedAuthRateLimitingEnabled()).isTrue();
         assertThat(properties.isMultiInstance()).isTrue();
     }
 
     @Test
     void rejectsInvalidTimeZoneOrDeploymentMode() {
-        assertThatThrownBy(() -> new PlatformProperties("Mars/Base", "single-instance", false, false))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("APP_DEFAULT_TIME_ZONE");
+        assertInvalidPlatformProperties("Mars/Base", SINGLE_INSTANCE, "APP_DEFAULT_TIME_ZONE");
 
-        assertThatThrownBy(() -> new PlatformProperties("Asia/Singapore", "clustered", false, false))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("APP_DEPLOYMENT_MODE");
+        assertInvalidPlatformProperties(DEFAULT_TIME_ZONE, "clustered", "APP_DEPLOYMENT_MODE");
     }
 
     @Test
     void deploymentGuardRejectsProcessLocalAuthLimitingInMultiInstanceMode() {
-        PlatformProperties multiInstance = new PlatformProperties("Asia/Singapore", "multi-instance", false, true);
-
-        assertThatThrownBy(() -> new DeploymentTopologyGuard(multiInstance, new LocalStorageProvider()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("APP_SHARED_AUTH_RATE_LIMITING_ENABLED");
+        assertDeploymentGuardRejected(
+                platformProperties(MULTI_INSTANCE, false, true),
+                "APP_SHARED_AUTH_RATE_LIMITING_ENABLED");
     }
 
     @Test
     void deploymentGuardRejectsUnreviewedLocalStorageInMultiInstanceMode() {
-        PlatformProperties multiInstance = new PlatformProperties("Asia/Singapore", "multi-instance", true, false);
-
-        assertThatThrownBy(() -> new DeploymentTopologyGuard(multiInstance, new LocalStorageProvider()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("APP_LOCAL_STORAGE_MULTI_INSTANCE_ACKNOWLEDGED");
+        assertDeploymentGuardRejected(
+                platformProperties(MULTI_INSTANCE, true, false),
+                "APP_LOCAL_STORAGE_MULTI_INSTANCE_ACKNOWLEDGED");
     }
 
     @Test
     void deploymentGuardAllowsSingleInstanceLocalStorage() {
-        PlatformProperties singleInstance = new PlatformProperties("Asia/Singapore", "single-instance", false, false);
+        assertDeploymentGuardAllowed(platformProperties(SINGLE_INSTANCE, false, false));
+    }
 
-        assertThatCode(() -> new DeploymentTopologyGuard(singleInstance, new LocalStorageProvider()))
+    private static void assertInvalidPlatformProperties(
+            String defaultTimeZone,
+            String deploymentMode,
+            String expectedMessage) {
+        assertThatThrownBy(() -> platformProperties(defaultTimeZone, deploymentMode, false, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(expectedMessage);
+    }
+
+    private static void assertDeploymentGuardRejected(PlatformProperties properties, String expectedMessage) {
+        assertThatThrownBy(() -> new DeploymentTopologyGuard(properties, new LocalStorageProvider()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(expectedMessage);
+    }
+
+    private static void assertDeploymentGuardAllowed(PlatformProperties properties) {
+        assertThatCode(() -> new DeploymentTopologyGuard(properties, new LocalStorageProvider()))
                 .doesNotThrowAnyException();
+    }
+
+    private static PlatformProperties platformProperties(
+            String deploymentMode,
+            boolean sharedAuthRateLimitingEnabled,
+            boolean localStorageMultiInstanceAcknowledged) {
+        return platformProperties(
+                DEFAULT_TIME_ZONE,
+                deploymentMode,
+                sharedAuthRateLimitingEnabled,
+                localStorageMultiInstanceAcknowledged);
+    }
+
+    private static PlatformProperties platformProperties(
+            String defaultTimeZone,
+            String deploymentMode,
+            boolean sharedAuthRateLimitingEnabled,
+            boolean localStorageMultiInstanceAcknowledged) {
+        return new PlatformProperties(
+                defaultTimeZone,
+                deploymentMode,
+                sharedAuthRateLimitingEnabled,
+                localStorageMultiInstanceAcknowledged);
     }
 }

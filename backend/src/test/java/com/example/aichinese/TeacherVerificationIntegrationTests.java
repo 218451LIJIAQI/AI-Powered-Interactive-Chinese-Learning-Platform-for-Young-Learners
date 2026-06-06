@@ -23,8 +23,8 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-import com.example.aichinese.support.TestUploadFixtures;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.TeacherProfile;
@@ -34,8 +34,8 @@ import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.TeacherVerificationDocumentRepository;
-import com.example.aichinese.repository.TeacherVerificationReviewRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.support.TestUploadFixtures;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -43,7 +43,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * End-to-end MockMvc coverage of the teacher self-service profile +
  * verification document upload surface. Pins the document upload
  * pipeline (extension + content-type + magic-byte verification) and
- * the immutable document storage contract — uploaded blobs are
+ * the immutable document storage contract. Uploaded blobs are
  * referenced rather than duplicated when admin reviews them.
  */
 @SpringBootTest(properties = {
@@ -53,6 +53,51 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class TeacherVerificationIntegrationTests {
+
+    private static final String ADMIN_EMAIL = "admin@example.com";
+    private static final String ADMIN_PASSWORD = "SuperSecure123!";
+    private static final String USER_PASSWORD = "Password123!";
+    private static final String AUTHORIZATION = "Authorization";
+    private static final String BEARER = "Bearer ";
+    private static final String EMAIL_DOMAIN = "@example.com";
+    private static final String APPLICATION_PDF = "application/pdf";
+    private static final String TEACHER_BIO = "Teacher bio";
+    private static final String UPDATED_FULL_NAME = "Updated Teacher";
+    private static final String UPDATED_BIO = "Experienced Malaysian Mandarin teacher";
+    private static final String UPDATED_SHORT_INTRODUCTION = "Primary school learning specialist";
+    private static final String TEACHING_CATEGORY_VOCABULARY = "Vocabulary";
+    private static final String TEACHING_CATEGORY_GREETINGS = "Greetings";
+    private static final String UPLOAD_AUDIT_ACTION = "TEACHER_VERIFICATION_DOCUMENT_UPLOAD";
+    private static final String UPLOAD_NOTIFICATION_TITLE = "Teacher verification document uploaded";
+    private static final String TEACHER_ME_ENDPOINT = "/api/v1/teachers/me";
+    private static final String TEACHER_PROFILE_ENDPOINT = "/api/v1/teachers/me/profile";
+    private static final String TEACHER_DOCUMENTS_ENDPOINT = "/api/v1/teachers/verification-documents";
+    private static final String TEACHER_STATUS_ENDPOINT = "/api/v1/teachers/verification-status";
+    private static final String TEACHER_RESUBMIT_ENDPOINT = "/api/v1/teachers/resubmit-verification";
+    private static final String TEACHER_REGISTER_ENDPOINT = "/api/v1/auth/register/teacher";
+    private static final String LOGIN_ENDPOINT = "/api/v1/auth/login";
+    private static final String ADMIN_TEACHERS_ENDPOINT = "/api/v1/admin/teachers";
+    private static final String PENDING = "PENDING";
+    private static final String REJECTED = "REJECTED";
+    private static final String CERTIFICATE = "CERTIFICATE";
+    private static final String QUALIFICATION = "QUALIFICATION";
+    private static final String OTHER = "OTHER";
+    private static final String CERTIFICATE_FILE_NAME = "certificate.pdf";
+    private static final String VERIFICATION_FILE_NAME = "verification.pdf";
+    private static final String INVALID_FILE_NAME = "script.exe";
+    private static final String LARGE_FILE_NAME = "large.pdf";
+    private static final String OCTET_STREAM = "application/octet-stream";
+    private static final String DOCUMENT_TYPE_PARAM = "documentType";
+    private static final String DESCRIPTION_PARAM = "description";
+    private static final String CONTENT_DISPOSITION = "Content-Disposition";
+    private static final String CACHE_CONTROL = "Cache-Control";
+    private static final String NO_STORE = "no-store";
+    private static final String SPOOFED_CONTENT_MESSAGE =
+            "Uploaded file content does not match the declared PDF/JPG/PNG type.";
+    private static final String TOO_LARGE_MESSAGE =
+            "The file is too large. Please choose a smaller file and try again.";
+    private static final String REJECTION_REASON = "Please provide a clearer qualification document.";
+    private static final int MAX_UPLOAD_BYTES_PLUS_ONE = 6 * 1024 * 1024;
 
     @Autowired
     private MockMvc mockMvc;
@@ -65,9 +110,6 @@ class TeacherVerificationIntegrationTests {
 
     @Autowired
     private TeacherVerificationDocumentRepository teacherVerificationDocumentRepository;
-
-    @Autowired
-    private TeacherVerificationReviewRepository teacherVerificationReviewRepository;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -83,12 +125,11 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-profile");
         String token = registerAndLoginTeacher(email);
 
-        mockMvc.perform(get("/api/v1/teachers/me")
-                .header("Authorization", "Bearer " + token))
+        mockMvc.perform(authenticatedGet(TEACHER_ME_ENDPOINT, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.email").value(email))
-                .andExpect(jsonPath("$.data.teacherStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.teacherStatus").value(PENDING))
                 .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
     }
 
@@ -97,24 +138,23 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-update");
         String token = registerAndLoginTeacher(email);
 
-        mockMvc.perform(put("/api/v1/teachers/me/profile")
-                .with(csrf())
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
-                        "fullName", "Updated Teacher",
-                        "bio", "Experienced Malaysian Mandarin teacher",
-                        "shortIntroduction", "Primary school learning specialist",
-                        "teachingCategories", new String[] { "Vocabulary", "Greetings" }))))
+        mockMvc.perform(authenticatedJsonPut(TEACHER_PROFILE_ENDPOINT, token, Map.of(
+                        "fullName", UPDATED_FULL_NAME,
+                        "bio", UPDATED_BIO,
+                        "shortIntroduction", UPDATED_SHORT_INTRODUCTION,
+                        "teachingCategories", new String[] {
+                                TEACHING_CATEGORY_VOCABULARY,
+                                TEACHING_CATEGORY_GREETINGS
+                        })))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.fullName").value("Updated Teacher"))
-                .andExpect(jsonPath("$.data.bio").value("Experienced Malaysian Mandarin teacher"))
-                .andExpect(jsonPath("$.data.shortIntroduction").value("Primary school learning specialist"))
-                .andExpect(jsonPath("$.data.teachingCategories[0]").value("Vocabulary"));
+                .andExpect(jsonPath("$.data.fullName").value(UPDATED_FULL_NAME))
+                .andExpect(jsonPath("$.data.bio").value(UPDATED_BIO))
+                .andExpect(jsonPath("$.data.shortIntroduction").value(UPDATED_SHORT_INTRODUCTION))
+                .andExpect(jsonPath("$.data.teachingCategories[0]").value(TEACHING_CATEGORY_VOCABULARY));
 
         TeacherProfile profile = teacherProfileRepository.findDetailedByUserId(findUserIdByEmail(email)).orElseThrow();
-        assertThat(profile.getBio()).isEqualTo("Experienced Malaysian Mandarin teacher");
-        assertThat(profile.getQualificationSummary()).isEqualTo("Primary school learning specialist");
+        assertThat(profile.getBio()).isEqualTo(UPDATED_BIO);
+        assertThat(profile.getQualificationSummary()).isEqualTo(UPDATED_SHORT_INTRODUCTION);
     }
 
     @Test
@@ -122,31 +162,27 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-upload");
         String token = registerAndLoginTeacher(email);
 
-        MockMultipartFile file = new MockMultipartFile(
-                "file",
-                "certificate.pdf",
-                "application/pdf",
-                TestUploadFixtures.minimalPdf());
+        MockMultipartFile file = pdfFile(CERTIFICATE_FILE_NAME);
 
-        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart(TEACHER_DOCUMENTS_ENDPOINT)
                 .file(file)
-                .param("documentType", "CERTIFICATE")
-                .param("description", "Bachelor teaching certificate")
+                .param(DOCUMENT_TYPE_PARAM, CERTIFICATE)
+                .param(DESCRIPTION_PARAM, "Bachelor teaching certificate")
                 .with(csrf())
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION, BEARER + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.latestSubmittedDocuments[0].documentType").value("CERTIFICATE"))
-                .andExpect(jsonPath("$.data.latestSubmittedDocuments[0].originalFileName").value("certificate.pdf"));
+                .andExpect(jsonPath("$.data.latestSubmittedDocuments[0].documentType").value(CERTIFICATE))
+                .andExpect(jsonPath("$.data.latestSubmittedDocuments[0].originalFileName").value(CERTIFICATE_FILE_NAME));
 
         TeacherProfile profile = teacherProfileRepository.findDetailedByUserId(findUserIdByEmail(email)).orElseThrow();
         assertThat(teacherVerificationDocumentRepository.countByTeacherId(profile.getId())).isEqualTo(1);
         assertThat(auditLogRepository.findAll())
                 .extracting(AuditLog::getActionType)
-                .contains("TEACHER_VERIFICATION_DOCUMENT_UPLOAD");
+                .contains(UPLOAD_AUDIT_ACTION);
         assertThat(notificationRepository.findAll())
                 .extracting(Notification::getTitle)
-                .contains("Teacher verification document uploaded");
+                .contains(UPLOAD_NOTIFICATION_TITLE);
     }
 
     @Test
@@ -156,15 +192,15 @@ class TeacherVerificationIntegrationTests {
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
-                "script.exe",
-                "application/octet-stream",
+                INVALID_FILE_NAME,
+                OCTET_STREAM,
                 "bad-file".getBytes());
 
-        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart(TEACHER_DOCUMENTS_ENDPOINT)
                 .file(file)
-                .param("documentType", "OTHER")
+                .param(DOCUMENT_TYPE_PARAM, OTHER)
                 .with(csrf())
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION, BEARER + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -176,17 +212,17 @@ class TeacherVerificationIntegrationTests {
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
-                "certificate.pdf",
-                "application/pdf",
+                CERTIFICATE_FILE_NAME,
+                APPLICATION_PDF,
                 "not-a-pdf".getBytes());
 
-        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart(TEACHER_DOCUMENTS_ENDPOINT)
                 .file(file)
-                .param("documentType", "CERTIFICATE")
+                .param(DOCUMENT_TYPE_PARAM, CERTIFICATE)
                 .with(csrf())
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION, BEARER + token))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Uploaded file content does not match the declared PDF/JPG/PNG type."));
+                .andExpect(jsonPath("$.message").value(SPOOFED_CONTENT_MESSAGE));
     }
 
     @Test
@@ -194,19 +230,19 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-large-upload");
         String token = registerAndLoginTeacher(email);
 
-        byte[] payload = new byte[6 * 1024 * 1024];
+        byte[] payload = new byte[MAX_UPLOAD_BYTES_PLUS_ONE];
         MockMultipartFile file = new MockMultipartFile(
                 "file",
-                "large.pdf",
-                "application/pdf",
+                LARGE_FILE_NAME,
+                APPLICATION_PDF,
                 payload);
 
-        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart(TEACHER_DOCUMENTS_ENDPOINT)
                 .file(file)
                 .with(csrf())
-                .header("Authorization", "Bearer " + token))
+                .header(AUTHORIZATION, BEARER + token))
                 .andExpect(status().isPayloadTooLarge())
-                .andExpect(jsonPath("$.message").value("The file is too large. Please choose a smaller file and try again."));
+                .andExpect(jsonPath("$.message").value(TOO_LARGE_MESSAGE));
     }
 
     @Test
@@ -214,28 +250,24 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-resubmit");
         String teacherToken = registerAndLoginTeacher(email);
         TeacherProfile teacherProfile = uploadDocumentForTeacher(email, teacherToken);
-        String adminToken = loginAndExtractToken("admin@example.com", "SuperSecure123!");
+        String adminToken = adminToken();
 
-        mockMvc.perform(post("/api/v1/admin/teachers/" + teacherProfile.getId() + "/reject")
-                .with(csrf())
-                .header("Authorization", "Bearer " + adminToken)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("reason", "Please provide a clearer qualification document."))))
+        mockMvc.perform(authenticatedJsonPost(
+                adminTeacherRejectPath(teacherProfile.getId()),
+                adminToken,
+                Map.of("reason", REJECTION_REASON)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.teacherStatus").value("REJECTED"));
+                .andExpect(jsonPath("$.data.teacherStatus").value(REJECTED));
 
-        mockMvc.perform(get("/api/v1/teachers/verification-status")
-                .header("Authorization", "Bearer " + teacherToken))
+        mockMvc.perform(authenticatedGet(TEACHER_STATUS_ENDPOINT, teacherToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.teacherStatus").value("REJECTED"))
-                .andExpect(jsonPath("$.data.rejectionReason").value("Please provide a clearer qualification document."))
+                .andExpect(jsonPath("$.data.teacherStatus").value(REJECTED))
+                .andExpect(jsonPath("$.data.rejectionReason").value(REJECTION_REASON))
                 .andExpect(jsonPath("$.data.resubmissionAllowed").value(true));
 
-        mockMvc.perform(post("/api/v1/teachers/resubmit-verification")
-                .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+        mockMvc.perform(authenticatedPost(TEACHER_RESUBMIT_ENDPOINT, teacherToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.teacherStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.teacherStatus").value(PENDING))
                 .andExpect(jsonPath("$.data.rejectionReason").doesNotExist());
 
         TeacherProfile refreshed = teacherProfileRepository.findById(teacherProfile.getId()).orElseThrow();
@@ -248,14 +280,11 @@ class TeacherVerificationIntegrationTests {
         String firstEmail = uniqueEmail("teacher-a");
         String firstToken = registerAndLoginTeacher(firstEmail);
         TeacherProfile firstProfile = uploadDocumentForTeacher(firstEmail, firstToken);
-        Long documentId = teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(firstProfile.getId())
-                .orElseThrow()
-                .getId();
+        Long documentId = latestDocumentId(firstProfile);
 
         String secondToken = registerAndLoginTeacher(uniqueEmail("teacher-b"));
 
-        mockMvc.perform(get("/api/v1/teachers/verification-documents/" + documentId)
-                .header("Authorization", "Bearer " + secondToken))
+        mockMvc.perform(authenticatedGet(teacherDocumentPath(documentId), secondToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -265,59 +294,46 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-attachment");
         String token = registerAndLoginTeacher(email);
         TeacherProfile profile = uploadDocumentForTeacher(email, token);
-        Long documentId = teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(profile.getId())
-                .orElseThrow()
-                .getId();
+        Long documentId = latestDocumentId(profile);
 
-        mockMvc.perform(get("/api/v1/teachers/verification-documents/" + documentId)
-                .header("Authorization", "Bearer " + token))
+        mockMvc.perform(authenticatedGet(teacherDocumentPath(documentId), token))
                 .andExpect(status().isOk())
                 .andExpect(header()
-                        .string("Content-Disposition", startsWith("attachment;")))
+                        .string(CONTENT_DISPOSITION, startsWith("attachment;")))
                 .andExpect(header()
-                        .string("Cache-Control", "no-store"));
+                        .string(CACHE_CONTROL, NO_STORE));
     }
 
     private TeacherProfile uploadDocumentForTeacher(String email, String teacherToken) throws Exception {
-        MockMultipartFile file = new MockMultipartFile(
-                "file",
-                "verification.pdf",
-                "application/pdf",
-                TestUploadFixtures.minimalPdf());
+        MockMultipartFile file = pdfFile(VERIFICATION_FILE_NAME);
 
-        mockMvc.perform(multipart("/api/v1/teachers/verification-documents")
+        mockMvc.perform(multipart(TEACHER_DOCUMENTS_ENDPOINT)
                 .file(file)
-                .param("documentType", "QUALIFICATION")
-                .param("description", "Phase 5 qualification proof")
+                .param(DOCUMENT_TYPE_PARAM, QUALIFICATION)
+                .param(DESCRIPTION_PARAM, "Phase 5 qualification proof")
                 .with(csrf())
-                .header("Authorization", "Bearer " + teacherToken))
+                .header(AUTHORIZATION, BEARER + teacherToken))
                 .andExpect(status().isOk());
 
         return teacherProfileRepository.findDetailedByUserId(findUserIdByEmail(email)).orElseThrow();
     }
 
     private String registerAndLoginTeacher(String email) throws Exception {
-        mockMvc.perform(post("/api/v1/auth/register/teacher")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+        mockMvc.perform(jsonPost(TEACHER_REGISTER_ENDPOINT, Map.of(
                         "fullName", "Teacher " + email,
                         "email", email,
-                        "password", "Password123!",
-                        "confirmPassword", "Password123!",
-                        "bio", "Teacher bio"))))
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
+                        "bio", TEACHER_BIO)))
                 .andExpect(status().isOk());
 
-        return loginAndExtractToken(email, "Password123!");
+        return loginAndExtractToken(email, USER_PASSWORD);
     }
 
     private String loginAndExtractToken(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
-                .with(csrf())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of(
+        MvcResult result = mockMvc.perform(jsonPost(LOGIN_ENDPOINT, Map.of(
                         "email", email,
-                        "password", password))))
+                        "password", password)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -330,7 +346,64 @@ class TeacherVerificationIntegrationTests {
         return user.getId();
     }
 
+    private Long latestDocumentId(TeacherProfile profile) {
+        return teacherVerificationDocumentRepository.findTopByTeacherIdOrderBySubmittedAtDesc(profile.getId())
+                .orElseThrow()
+                .getId();
+    }
+
+    private String adminToken() throws Exception {
+        return loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
+    }
+
+    private MockMultipartFile pdfFile(String filename) {
+        return new MockMultipartFile("file", filename, APPLICATION_PDF, TestUploadFixtures.minimalPdf());
+    }
+
+    private MockHttpServletRequestBuilder authenticatedGet(String path, String token) {
+        return get(path).header(AUTHORIZATION, BEARER + token);
+    }
+
+    private MockHttpServletRequestBuilder authenticatedPost(String path, String token) {
+        return post(path).with(csrf()).header(AUTHORIZATION, BEARER + token);
+    }
+
+    private MockHttpServletRequestBuilder authenticatedJsonPost(String path, String token, Object body)
+            throws Exception {
+        return authenticatedPost(path, token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(body));
+    }
+
+    private MockHttpServletRequestBuilder authenticatedJsonPut(String path, String token, Object body)
+            throws Exception {
+        return put(path)
+                .with(csrf())
+                .header(AUTHORIZATION, BEARER + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(body));
+    }
+
+    private MockHttpServletRequestBuilder jsonPost(String path, Object body) throws Exception {
+        return post(path)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(body));
+    }
+
+    private String json(Object body) throws Exception {
+        return objectMapper.writeValueAsString(body);
+    }
+
+    private static String adminTeacherRejectPath(Long teacherId) {
+        return ADMIN_TEACHERS_ENDPOINT + "/" + teacherId + "/reject";
+    }
+
+    private static String teacherDocumentPath(Long documentId) {
+        return TEACHER_DOCUMENTS_ENDPOINT + "/" + documentId;
+    }
+
     private String uniqueEmail(String prefix) {
-        return prefix + "-" + UUID.randomUUID() + "@example.com";
+        return prefix + "-" + UUID.randomUUID() + EMAIL_DOMAIN;
     }
 }

@@ -38,12 +38,4 @@ public enum TeacherFeedbackType {
     public static TeacherFeedbackType fromValueOrGeneral(String value) {
         return tryFrom(value).orElse(GENERAL);
     }
-
-    public boolean isPositive() {
-        return this == ENCOURAGING || this == PROGRESS;
-    }
-
-    public boolean isCorrective() {
-        return this == CORRECTIVE || this == WEAK_AREA;
-    }
 }

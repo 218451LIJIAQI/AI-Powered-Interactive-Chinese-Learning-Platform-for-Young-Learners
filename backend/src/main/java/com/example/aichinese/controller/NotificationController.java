@@ -1,7 +1,8 @@
 package com.example.aichinese.controller;
 
+import java.util.Objects;
+
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,7 +18,6 @@ import com.example.aichinese.dto.communication.NotificationUnreadCountResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.NotificationService;
 
-@Validated
 @RestController
 @RequestMapping("/api/v1/notifications")
 public class NotificationController {
@@ -25,7 +25,7 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     public NotificationController(NotificationService notificationService) {
-        this.notificationService = notificationService;
+        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
     }
 
     @GetMapping

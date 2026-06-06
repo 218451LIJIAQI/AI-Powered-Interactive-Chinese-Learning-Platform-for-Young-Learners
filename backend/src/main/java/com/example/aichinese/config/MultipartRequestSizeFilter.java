@@ -51,7 +51,7 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
             FilterChain filterChain) throws ServletException, IOException {
         long maxRequestBytes = maxRequestBytes(request);
         long contentLength = request.getContentLengthLong();
-        if (maxRequestBytes > 0 && contentLength > maxRequestBytes) {
+        if (exceedsLimit(contentLength, maxRequestBytes)) {
             ApiErrorResponseWriter.write(
                     objectMapper,
                     response,
@@ -60,6 +60,10 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    private static boolean exceedsLimit(long contentLength, long maxRequestBytes) {
+        return maxRequestBytes > 0 && contentLength > maxRequestBytes;
     }
 
     private long maxRequestBytes(HttpServletRequest request) {
@@ -88,7 +92,7 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
     private static boolean isMultipart(HttpServletRequest request) {
         String contentType = request.getHeader(HttpHeaders.CONTENT_TYPE);
         return contentType != null
-                && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/");
+                && contentType.strip().toLowerCase(Locale.ROOT).startsWith("multipart/");
     }
 
     private static String normalizedApplicationPath(HttpServletRequest request) {

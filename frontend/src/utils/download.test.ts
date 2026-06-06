@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { sanitizeDownloadFileName, saveBlobDownload } from './download'
 
-function installObjectUrlMocks() {
+function installObjectUrlMocks(): {
+  createObjectURL: ReturnType<typeof vi.fn>
+  revokeObjectURL: ReturnType<typeof vi.fn>
+} {
   const createObjectURL = vi.fn(() => 'blob:test-download-url')
   const revokeObjectURL = vi.fn()
   Object.defineProperty(URL, 'createObjectURL', {

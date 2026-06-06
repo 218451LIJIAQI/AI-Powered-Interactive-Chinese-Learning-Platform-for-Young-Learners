@@ -3,8 +3,8 @@ package com.example.aichinese.service;
 import java.util.List;
 import java.util.Objects;
 
-import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.config.CacheConfig;
@@ -45,18 +45,10 @@ public class LearningCatalogService {
     }
 
     private static LearningLevelResponse toLevelResponse(LearningLevel level) {
-        if (level == null) {
-            return null;
-        }
-
         return new LearningLevelResponse(level.getId(), level.getName(), level.getDescription());
     }
 
     private static LearningCategoryResponse toCategoryResponse(LearningCategory category) {
-        if (category == null) {
-            return null;
-        }
-
         return new LearningCategoryResponse(category.getId(), category.getName(), category.getDescription());
     }
 }

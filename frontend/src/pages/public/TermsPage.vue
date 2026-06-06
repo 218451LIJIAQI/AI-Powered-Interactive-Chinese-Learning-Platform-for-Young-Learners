@@ -21,16 +21,11 @@
 </template>
 
 <script setup lang="ts">
-/**
- * Static terms-of-service page. Same authoring approach as
- * {@link PrivacyPage} — copy lives in this route component so legal
- * can diff per release without touching any tooling.
- */
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-function goBack() {
+function goBack(): void {
   if (window.history.length > 1) {
     router.back()
   } else {
@@ -59,5 +54,5 @@ const sections = [
     title: 'Support and changes',
     copy: 'Support requests can be started from the public support section or from signed-in notification/profile areas. Platform rules may be updated as the product evolves.',
   },
-]
+] as const
 </script>

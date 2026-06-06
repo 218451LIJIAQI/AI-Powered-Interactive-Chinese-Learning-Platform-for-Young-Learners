@@ -48,6 +48,11 @@ import com.example.aichinese.util.PaginationUtils;
 public class PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+    private static final String PROVIDER_STATUS_CREATED = "CREATED";
+    private static final String PROVIDER_STATUS_UNAVAILABLE = "UNAVAILABLE";
+    private static final String MOCK_CREATED_STATUS = "MOCK_CREATED";
+    private static final String PAYMENT_RECORD_TARGET = "PAYMENT_RECORD";
+    private static final String PAYMENT_SUCCESS_PATH = "/student/profile";
 
     private final PaymentRecordRepository paymentRecordRepository;
     private final OrderRepository orderRepository;
@@ -99,7 +104,7 @@ public class PaymentService {
                 "Payment amount is too large."));
         paymentRecord.setCurrencyCode(order.getCurrencyCode());
         paymentRecord.setPaymentStatus(PaymentStatus.PENDING);
-        paymentRecord.setProviderStatus("CREATED");
+        paymentRecord.setProviderStatus(PROVIDER_STATUS_CREATED);
         return paymentRecordRepository.save(paymentRecord);
     }
 
@@ -148,52 +153,28 @@ public class PaymentService {
         if (!result.available()) {
             markCheckoutUnavailable(paymentRecord, result);
             auditLogService.record(
-                    currentUser.getUser(),
+                    currentUser,
                     "PAYMENT_SESSION_UNAVAILABLE",
-                    "PAYMENT_RECORD",
+                    PAYMENT_RECORD_TARGET,
                     paymentRecord.getId(),
                     "Payment session could not be created for order " + order.getOrderNumber());
-            return new CheckoutResponse(
-                    order.getId(),
-                    order.getOrderNumber(),
-                    paymentRecord.getId(),
-                    paymentRecord.getPaymentStatus(),
-                    paymentRecord.getAmount(),
-                    paymentRecord.getCurrencyCode(),
-                    null,
-                    paymentRecord.getProviderName(),
-                    paymentRecord.getProviderStatus(),
-                    false,
-                    result.message(),
-                    mapOrderItems(orderItems));
+            return checkoutResponse(order, paymentRecord, null, false, result.message(), orderItems);
         }
 
         paymentRecordRepository.save(paymentRecord);
 
-        if ("MOCK_CREATED".equals(result.providerStatus())) {
+        if (MOCK_CREATED_STATUS.equals(result.providerStatus())) {
             markPaymentPaid(paymentRecord, "MOCK", result.providerStatus());
         }
 
         auditLogService.record(
-                currentUser.getUser(),
+                currentUser,
                 "PAYMENT_SESSION_CREATED",
-                "PAYMENT_RECORD",
+                PAYMENT_RECORD_TARGET,
                 paymentRecord.getId(),
                 "Payment session created for order " + order.getOrderNumber());
 
-        return new CheckoutResponse(
-                order.getId(),
-                order.getOrderNumber(),
-                paymentRecord.getId(),
-                paymentRecord.getPaymentStatus(),
-                paymentRecord.getAmount(),
-                paymentRecord.getCurrencyCode(),
-                result.checkoutUrl(),
-                paymentRecord.getProviderName(),
-                paymentRecord.getProviderStatus(),
-                result.available(),
-                result.message(),
-                mapOrderItems(orderItems));
+        return checkoutResponse(order, paymentRecord, result.checkoutUrl(), result.available(), result.message(), orderItems);
     }
 
     @Transactional
@@ -230,7 +211,7 @@ public class PaymentService {
                         || providerStatus.paymentStatus() == PaymentStatus.CANCELLED)) {
             applyTerminalStatus(lockedPaymentRecord, providerStatus);
         } else if (!providerStatus.available()) {
-            lockedPaymentRecord.setProviderStatus("UNAVAILABLE");
+            lockedPaymentRecord.setProviderStatus(PROVIDER_STATUS_UNAVAILABLE);
         } else {
             lockedPaymentRecord.setProviderStatus(providerStatus.providerStatus());
         }
@@ -331,18 +312,18 @@ public class PaymentService {
 
         entitlementService.grantAccessAfterPayment(order, lockedPaymentRecord);
         teacherEarningService.createEarningsForOrder(order.getId());
-        if (CheckoutSource.CART.name().equalsIgnoreCase(order.getCheckoutSource())) {
-            if (order.getStudent() != null && order.getStudent().getUser() != null) {
-                cartService.clearCartIfExists(order.getStudent().getUser().getId());
-            }
+        var student = lockedPaymentRecord.getStudent();
+        var studentUser = student == null ? null : student.getUser();
+        if (CheckoutSource.CART.name().equalsIgnoreCase(order.getCheckoutSource()) && studentUser != null) {
+            cartService.clearCartIfExists(studentUser.getId());
         }
 
-        if (lockedPaymentRecord.getStudent() != null && lockedPaymentRecord.getStudent().getUser() != null) {
+        if (studentUser != null) {
             notificationService.safeCreateNotification(
-                    lockedPaymentRecord.getStudent().getUser(),
+                    studentUser,
                     "Payment successful",
                     "Your payment was successful and access has been unlocked.",
-                    "/student/profile");
+                    PAYMENT_SUCCESS_PATH);
         }
 
         log.info("Payment marked PAID: paymentId={}, orderId={}, amount={} {}, method={}",
@@ -440,12 +421,8 @@ public class PaymentService {
                 paymentRecord.getOrder() != null ? paymentRecord.getOrder().getId() : null,
                 paymentRecord.getOrder() != null ? paymentRecord.getOrder().getOrderNumber() : null,
                 paymentRecord.getStudent() != null ? paymentRecord.getStudent().getId() : null,
-                paymentRecord.getStudent() != null && paymentRecord.getStudent().getUser() != null
-                        ? paymentRecord.getStudent().getUser().getDisplayName()
-                        : null,
-                paymentRecord.getStudent() != null && paymentRecord.getStudent().getUser() != null
-                        ? paymentRecord.getStudent().getUser().getEmail()
-                        : null,
+                studentDisplayName(paymentRecord),
+                studentEmail(paymentRecord),
                 paymentRecord.getProviderName(),
                 paymentRecord.getAmount(),
                 paymentRecord.getCurrencyCode(),
@@ -508,5 +485,39 @@ public class PaymentService {
                         orderItem.getLineTotal(),
                         orderItem.getTeacher() != null))
                 .toList();
+    }
+
+    private CheckoutResponse checkoutResponse(
+            Order order,
+            PaymentRecord paymentRecord,
+            String checkoutUrl,
+            boolean available,
+            String message,
+            List<OrderItem> orderItems) {
+        return new CheckoutResponse(
+                order.getId(),
+                order.getOrderNumber(),
+                paymentRecord.getId(),
+                paymentRecord.getPaymentStatus(),
+                paymentRecord.getAmount(),
+                paymentRecord.getCurrencyCode(),
+                checkoutUrl,
+                paymentRecord.getProviderName(),
+                paymentRecord.getProviderStatus(),
+                available,
+                message,
+                mapOrderItems(orderItems));
+    }
+
+    private static String studentDisplayName(PaymentRecord paymentRecord) {
+        return paymentRecord.getStudent() != null && paymentRecord.getStudent().getUser() != null
+                ? paymentRecord.getStudent().getUser().getDisplayName()
+                : null;
+    }
+
+    private static String studentEmail(PaymentRecord paymentRecord) {
+        return paymentRecord.getStudent() != null && paymentRecord.getStudent().getUser() != null
+                ? paymentRecord.getStudent().getUser().getEmail()
+                : null;
     }
 }

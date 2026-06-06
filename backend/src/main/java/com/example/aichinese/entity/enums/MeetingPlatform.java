@@ -26,28 +26,23 @@ public enum MeetingPlatform {
             buildLookup();
 
     public static Optional<MeetingPlatform> tryFrom(String value) {
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(LOOKUP.get(normalizeLookupKey(value)));
+        return normalizeLookupKey(value).map(LOOKUP::get);
     }
 
     public static MeetingPlatform fromValue(String value) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Meeting platform is required.");
+        String key = normalizeLookupKey(value)
+                .orElseThrow(() -> new IllegalArgumentException("Meeting platform is required."));
+        MeetingPlatform platform = LOOKUP.get(key);
+        if (platform == null) {
+            throw new IllegalArgumentException(
+                    "Invalid meeting platform. Allowed values are ZOOM, GOOGLE_MEET, "
+                            + "MICROSOFT_TEAMS, or OTHER.");
         }
-        return tryFrom(value)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Invalid meeting platform. Allowed values are ZOOM, GOOGLE_MEET, "
-                                + "MICROSOFT_TEAMS, or OTHER."));
+        return platform;
     }
 
     public static MeetingPlatform fromValueOrOther(String value) {
         return tryFrom(value).orElse(OTHER);
-    }
-
-    public boolean isFirstParty() {
-        return this != OTHER;
     }
 
     public boolean allowsHost(String host) {
@@ -65,20 +60,23 @@ public enum MeetingPlatform {
     private static Map<String, MeetingPlatform> buildLookup() {
         Map<String, MeetingPlatform> lookup = new HashMap<>();
         for (MeetingPlatform platform : values()) {
-            lookup.put(normalizeLookupKey(platform.name()), platform);
+            lookup.put(normalizeLookupKey(platform.name()).orElseThrow(), platform);
         }
-        lookup.put(normalizeLookupKey("Zoom"), ZOOM);
-        lookup.put(normalizeLookupKey("Google Meet"), GOOGLE_MEET);
-        lookup.put(normalizeLookupKey("Meet"), GOOGLE_MEET);
-        lookup.put(normalizeLookupKey("Microsoft Teams"), MICROSOFT_TEAMS);
-        lookup.put(normalizeLookupKey("MS Teams"), MICROSOFT_TEAMS);
-        lookup.put(normalizeLookupKey("Teams"), MICROSOFT_TEAMS);
+        lookup.put(normalizeLookupKey("Zoom").orElseThrow(), ZOOM);
+        lookup.put(normalizeLookupKey("Google Meet").orElseThrow(), GOOGLE_MEET);
+        lookup.put(normalizeLookupKey("Meet").orElseThrow(), GOOGLE_MEET);
+        lookup.put(normalizeLookupKey("Microsoft Teams").orElseThrow(), MICROSOFT_TEAMS);
+        lookup.put(normalizeLookupKey("MS Teams").orElseThrow(), MICROSOFT_TEAMS);
+        lookup.put(normalizeLookupKey("Teams").orElseThrow(), MICROSOFT_TEAMS);
         return Map.copyOf(lookup);
     }
 
-    private static String normalizeLookupKey(String value) {
-        return value.strip()
+    private static Optional<String> normalizeLookupKey(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(value.strip()
                 .replaceAll("[\\s-]+", "_")
-                .toUpperCase(Locale.ROOT);
+                .toUpperCase(Locale.ROOT));
     }
 }

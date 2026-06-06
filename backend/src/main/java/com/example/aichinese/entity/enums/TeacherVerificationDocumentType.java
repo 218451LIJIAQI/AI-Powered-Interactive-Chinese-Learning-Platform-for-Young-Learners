@@ -28,16 +28,4 @@ public enum TeacherVerificationDocumentType {
                 "Invalid document type. Allowed values are CERTIFICATE, "
                         + "QUALIFICATION, IDENTITY, or OTHER."));
     }
-
-    public boolean isCertificate() {
-        return this == CERTIFICATE;
-    }
-
-    public boolean isQualification() {
-        return this == QUALIFICATION;
-    }
-
-    public boolean isIdentity() {
-        return this == IDENTITY;
-    }
 }

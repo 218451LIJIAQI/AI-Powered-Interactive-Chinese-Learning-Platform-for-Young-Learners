@@ -42,7 +42,7 @@ import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.StudentLearningAccessService;
 
 /**
- * Unit coverage for {@code NotificationService} — pins row-level
+ * Unit coverage for {@code NotificationService} - pins row-level
  * access (a caller only sees their own notifications), the
  * unread-count badge contract, the bulk mark-all-read transaction
  * isolation (separate transaction so the badge updates promptly),
@@ -50,6 +50,20 @@ import com.example.aichinese.service.StudentLearningAccessService;
  */
 @ExtendWith(OutputCaptureExtension.class)
 class NotificationServiceTests {
+
+    private static final long STUDENT_USER_ID = 1L;
+    private static final long SAFE_CREATE_RECIPIENT_ID = 77L;
+    private static final long LESSON_ID = 10L;
+    private static final long FEEDBACK_ID = 20L;
+    private static final String TITLE = "Title";
+    private static final String MESSAGE = "Message";
+    private static final String STUDENT_PATH = "/student";
+    private static final String STUDENT_PROFILE_PATH = "/student/profile";
+    private static final String TEACHER_FEEDBACK_TARGET = "TEACHER_FEEDBACK";
+    private static final String SECRET_TOKEN = "secret-token";
+    private static final String REDACTED_TOKEN = "token=[REDACTED]";
+    private static final String SANITIZED_FAILURE_LOG =
+            "Notification creation failed for recipient user id " + SAFE_CREATE_RECIPIENT_ID + ": RuntimeException";
 
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
     private final TeacherFeedbackRepository teacherFeedbackRepository = mock(TeacherFeedbackRepository.class);
@@ -59,26 +73,26 @@ class NotificationServiceTests {
     @Test
     void createNotificationRejectsInvalidRequiredFieldsBeforePersistence() {
         NotificationService service = service();
-        User recipient = user(1L, RoleName.STUDENT);
+        User recipient = user(STUDENT_USER_ID, RoleName.STUDENT);
 
-        assertThatThrownBy(() -> service.createNotification(null, "Title", "Message", "/student"))
+        assertThatThrownBy(() -> service.createNotification(null, TITLE, MESSAGE, STUDENT_PATH))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("recipient");
         assertThatThrownBy(() -> service.createNotification(
                 recipient,
                 null,
-                "Title",
-                "Message",
+                TITLE,
+                MESSAGE,
                 null,
                 null,
-                "/student",
+                STUDENT_PATH,
                 null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("type");
-        assertThatThrownBy(() -> service.createNotification(recipient, " ", "Message", "/student"))
+        assertThatThrownBy(() -> service.createNotification(recipient, " ", MESSAGE, STUDENT_PATH))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("title");
-        assertThatThrownBy(() -> service.createNotification(recipient, "Title", "\t", "/student"))
+        assertThatThrownBy(() -> service.createNotification(recipient, TITLE, "\t", STUDENT_PATH))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("message");
     }
@@ -86,7 +100,7 @@ class NotificationServiceTests {
     @Test
     void createNotificationTrimsDisplayFieldsAndOptionalTargets() {
         NotificationService service = service();
-        User recipient = user(1L, RoleName.STUDENT);
+        User recipient = user(STUDENT_USER_ID, RoleName.STUDENT);
         when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.createNotification(
@@ -102,17 +116,17 @@ class NotificationServiceTests {
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(captor.capture());
         Notification saved = captor.getValue();
-        assertThat(saved.getTitle()).isEqualTo("Title");
-        assertThat(saved.getMessage()).isEqualTo("Message");
+        assertThat(saved.getTitle()).isEqualTo(TITLE);
+        assertThat(saved.getMessage()).isEqualTo(MESSAGE);
         assertThat(saved.getTargetType()).isEqualTo("TARGET");
-        assertThat(saved.getTargetPath()).isEqualTo("/student/profile");
+        assertThat(saved.getTargetPath()).isEqualTo(STUDENT_PROFILE_PATH);
     }
 
     @Test
     void safeCreateNotificationDoesNotPropagateNotificationFailures(CapturedOutput output) {
         NotificationRepository notificationRepository = mock(NotificationRepository.class);
         when(notificationRepository.save(any(Notification.class)))
-                .thenThrow(new RuntimeException("notification store failed token=secret-token"));
+                .thenThrow(new RuntimeException("notification store failed token=" + SECRET_TOKEN));
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         TransactionStatus transactionStatus = mock(TransactionStatus.class);
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
@@ -128,7 +142,7 @@ class NotificationServiceTests {
                 mock(LiveLearningAccessService.class));
 
         User recipient = new User();
-        recipient.setId(77L);
+        recipient.setId(SAFE_CREATE_RECIPIENT_ID);
         recipient.setEmail("student@example.com");
         recipient.setDisplayName("Student");
 
@@ -136,61 +150,68 @@ class NotificationServiceTests {
                 recipient,
                 "Test notification",
                 "This notification should fail safely.",
-                "/student/profile"))
+                STUDENT_PROFILE_PATH))
                 .doesNotThrowAnyException();
 
         verify(notificationRepository).save(any(Notification.class));
         verify(transactionManager).rollback(transactionStatus);
-        assertThat(output).contains("Notification creation failed for recipient user id 77: RuntimeException");
-        assertThat(output).contains("token=[REDACTED]");
-        assertThat(output).doesNotContain("secret-token");
+        assertThat(output).contains(SANITIZED_FAILURE_LOG);
+        assertThat(output).contains(REDACTED_TOKEN);
+        assertThat(output).doesNotContain(SECRET_TOKEN);
         assertThat(output).doesNotContain("at com.example.aichinese");
     }
 
     @Test
     void teacherFeedbackNotificationIsHiddenWhenStudentNoLongerHasLessonAccess() {
         NotificationService service = service();
-        User studentUser = user(1L, RoleName.STUDENT);
+        User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
         StudentProfile student = student(studentUser);
-        Lesson lesson = lesson(10L);
+        Lesson lesson = lesson(LESSON_ID);
         TeacherFeedback feedback = new TeacherFeedback();
         feedback.setStudent(student);
         feedback.setLesson(lesson);
-        Notification notification = notification(studentUser, "TEACHER_FEEDBACK", 20L, NotificationStatus.UNREAD);
+        Notification notification = unreadTeacherFeedbackNotification(studentUser);
 
-        when(teacherFeedbackRepository.findByIdAndStudentUserId(20L, 1L)).thenReturn(Optional.of(feedback));
-        when(studentProfileRepository.findByUserId(1L)).thenReturn(Optional.of(student));
+        when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
+                .thenReturn(Optional.of(feedback));
+        when(studentProfileRepository.findByUserId(STUDENT_USER_ID)).thenReturn(Optional.of(student));
         when(studentLearningAccessService.hasLessonAccess(student, lesson)).thenReturn(false);
 
-        assertThat(service.isNotificationCurrentlyAccessible(new SecurityUserDetails(studentUser), notification)).isFalse();
+        assertThat(service.isNotificationCurrentlyAccessible(securityUser(studentUser), notification)).isFalse();
     }
 
     @Test
     void unreadCountExcludesInaccessibleTargetedNotifications() {
         NotificationService service = service();
-        User studentUser = user(1L, RoleName.STUDENT);
-        Notification hidden = notification(studentUser, "TEACHER_FEEDBACK", 20L, NotificationStatus.UNREAD);
+        User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
+        Notification hidden = unreadTeacherFeedbackNotification(studentUser);
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
-        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(1L, NotificationStatus.UNREAD))
+        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(
+                STUDENT_USER_ID,
+                NotificationStatus.UNREAD))
                 .thenReturn(List.of(hidden, visible));
-        when(teacherFeedbackRepository.findByIdAndStudentUserId(20L, 1L)).thenReturn(Optional.empty());
+        when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
+                .thenReturn(Optional.empty());
 
-        assertThat(service.countAccessibleUnreadNotifications(new SecurityUserDetails(studentUser))).isEqualTo(1);
+        assertThat(service.countAccessibleUnreadNotifications(securityUser(studentUser))).isEqualTo(1);
     }
 
     @Test
     void markAllAsReadOnlyCountsAndUpdatesAccessibleNotifications() {
         NotificationService service = service();
-        User studentUser = user(1L, RoleName.STUDENT);
-        Notification hidden = notification(studentUser, "TEACHER_FEEDBACK", 20L, NotificationStatus.UNREAD);
+        User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
+        Notification hidden = unreadTeacherFeedbackNotification(studentUser);
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
-        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(1L, NotificationStatus.UNREAD))
+        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(
+                STUDENT_USER_ID,
+                NotificationStatus.UNREAD))
                 .thenReturn(List.of(hidden, visible));
-        when(teacherFeedbackRepository.findByIdAndStudentUserId(20L, 1L)).thenReturn(Optional.empty());
+        when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
+                .thenReturn(Optional.empty());
 
-        BulkOperationResponse response = service.markAllAsRead(new SecurityUserDetails(studentUser));
+        BulkOperationResponse response = service.markAllAsRead(securityUser(studentUser));
 
         assertThat(response.updatedCount()).isEqualTo(1);
         assertThat(hidden.getNotificationStatus()).isEqualTo(NotificationStatus.UNREAD);
@@ -223,6 +244,10 @@ class NotificationServiceTests {
         return user;
     }
 
+    private static SecurityUserDetails securityUser(User user) {
+        return new SecurityUserDetails(user);
+    }
+
     private static StudentProfile student(User user) {
         StudentProfile student = new StudentProfile();
         student.setId(2L);
@@ -244,5 +269,9 @@ class NotificationServiceTests {
         notification.setTargetId(targetId);
         notification.setNotificationStatus(status);
         return notification;
+    }
+
+    private static Notification unreadTeacherFeedbackNotification(User user) {
+        return notification(user, TEACHER_FEEDBACK_TARGET, FEEDBACK_ID, NotificationStatus.UNREAD);
     }
 }

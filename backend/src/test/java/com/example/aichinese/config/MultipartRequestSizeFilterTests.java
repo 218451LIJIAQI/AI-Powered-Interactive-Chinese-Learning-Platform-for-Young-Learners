@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import java.io.IOException;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.util.unit.DataSize;
@@ -19,29 +20,30 @@ import jakarta.servlet.ServletException;
 
 class MultipartRequestSizeFilterTests {
 
+    private static final String POST = "POST";
+    private static final String MULTIPART_FORM_DATA = "multipart/form-data; boundary=test";
+    private static final String OVERSIZED_UPLOAD_REQUEST_ID = "oversized-upload-request";
+    private static final String TOO_LARGE_MESSAGE =
+            "The file is too large. Please choose a smaller file and try again.";
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final UploadProperties uploadProperties = uploadProperties();
     private final MultipartRequestSizeFilter filter = new MultipartRequestSizeFilter(uploadProperties, objectMapper);
 
     @Test
     void rejectsVerificationDocumentsAboveVerificationLimit() throws Exception {
-        MockHttpServletRequest request = multipartRequest(
-                "/api/v1/teachers/verification-documents",
-                uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        TrackingFilterChain chain = new TrackingFilterChain();
+        RejectedRequest rejected = rejectMultipartRequest(
+                "/api/v1/teachers/verification-documents", overVerificationDocumentLimit());
 
-        assertThatCode(() -> filter.doFilter(request, response, chain)).doesNotThrowAnyException();
-        assertThat(response.getStatus()).isEqualTo(413);
-        assertPayloadTooLargeEnvelope(response);
-        assertThat(chain.invoked).isFalse();
+        assertPayloadTooLargeEnvelope(rejected.response());
+        assertThat(rejected.chain().invoked).isFalse();
     }
 
     @Test
     void allowsRecordedVideoRequestsUpToVideoLimit() throws Exception {
         MockHttpServletRequest request = multipartRequest(
                 "/api/v1/teachers/lessons/1/recorded-videos",
-                uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1);
+                overVerificationDocumentLimit());
         TrackingFilterChain chain = new TrackingFilterChain();
 
         filter.doFilter(request, new MockHttpServletResponse(), chain);
@@ -51,23 +53,17 @@ class MultipartRequestSizeFilterTests {
 
     @Test
     void rejectsAiAudioAboveAudioLimit() throws Exception {
-        MockHttpServletRequest request = multipartRequest(
-                "/api/v1/ai/pronunciation-feedback",
-                uploadProperties.getAiAudioMaxFileSize().toBytes() + 1);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        TrackingFilterChain chain = new TrackingFilterChain();
+        RejectedRequest rejected = rejectMultipartRequest("/api/v1/ai/pronunciation-feedback", overAiAudioLimit());
 
-        assertThatCode(() -> filter.doFilter(request, response, chain)).doesNotThrowAnyException();
-        assertThat(response.getStatus()).isEqualTo(413);
-        assertPayloadTooLargeEnvelope(response);
-        assertThat(chain.invoked).isFalse();
+        assertPayloadTooLargeEnvelope(rejected.response());
+        assertThat(rejected.chain().invoked).isFalse();
     }
 
     @Test
     void appliesRouteSpecificLimitsWhenApplicationRunsUnderContextPath() throws Exception {
         MockHttpServletRequest request = multipartRequest(
                 "/portal/api/v1/teachers/verification-documents",
-                uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1);
+                overVerificationDocumentLimit());
         request.setContextPath("/portal");
         MockHttpServletResponse response = new MockHttpServletResponse();
         TrackingFilterChain chain = new TrackingFilterChain();
@@ -80,17 +76,17 @@ class MultipartRequestSizeFilterTests {
 
     @Test
     void rejectedRequestIncludesBoundRequestIdInApiEnvelope() throws Exception {
-        RequestIdHolder.set("oversized-upload-request");
+        RequestIdHolder.set(OVERSIZED_UPLOAD_REQUEST_ID);
         try {
             MockHttpServletRequest request = multipartRequest(
                     "/api/v1/teachers/verification-documents",
-                    uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1);
+                    overVerificationDocumentLimit());
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             filter.doFilter(request, response, new TrackingFilterChain());
 
             JsonNode body = objectMapper.readTree(response.getContentAsString());
-            assertThat(body.path("requestId").asText()).isEqualTo("oversized-upload-request");
+            assertThat(body.path("requestId").asText()).isEqualTo(OVERSIZED_UPLOAD_REQUEST_ID);
         } finally {
             RequestIdHolder.clear();
         }
@@ -98,7 +94,7 @@ class MultipartRequestSizeFilterTests {
 
     @Test
     void ignoresNonMultipartRequests() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/ai/chat");
+        MockHttpServletRequest request = new MockHttpServletRequest(POST, "/api/v1/ai/chat");
         request.setContent(new byte[128]);
         TrackingFilterChain chain = new TrackingFilterChain();
 
@@ -117,12 +113,29 @@ class MultipartRequestSizeFilterTests {
         return properties;
     }
 
+    private RejectedRequest rejectMultipartRequest(String path, long contentLength) {
+        MockHttpServletRequest request = multipartRequest(path, contentLength);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        TrackingFilterChain chain = new TrackingFilterChain();
+
+        assertThatCode(() -> filter.doFilter(request, response, chain)).doesNotThrowAnyException();
+        assertThat(response.getStatus()).isEqualTo(413);
+        return new RejectedRequest(response, chain);
+    }
+
     private static MockHttpServletRequest multipartRequest(String path, long contentLength) {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
-        request.addHeader("Content-Type", "multipart/form-data; boundary=test");
-        request.addHeader("Content-Length", Long.toString(contentLength));
-        request.setContent(new byte[Math.toIntExact(contentLength)]);
+        MockHttpServletRequest request = new FixedContentLengthRequest(POST, path, contentLength);
+        request.addHeader(HttpHeaders.CONTENT_TYPE, MULTIPART_FORM_DATA);
+        request.addHeader(HttpHeaders.CONTENT_LENGTH, Long.toString(contentLength));
         return request;
+    }
+
+    private long overVerificationDocumentLimit() {
+        return uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1;
+    }
+
+    private long overAiAudioLimit() {
+        return uploadProperties.getAiAudioMaxFileSize().toBytes() + 1;
     }
 
     private void assertPayloadTooLargeEnvelope(MockHttpServletResponse response) throws Exception {
@@ -131,9 +144,29 @@ class MultipartRequestSizeFilterTests {
         assertThat(response.getHeader("Pragma")).isEqualTo("no-cache");
         JsonNode body = objectMapper.readTree(response.getContentAsString());
         assertThat(body.path("success").asBoolean()).isFalse();
-        assertThat(body.path("message").asText()).isEqualTo(
-                "The file is too large. Please choose a smaller file and try again.");
+        assertThat(body.path("message").asText()).isEqualTo(TOO_LARGE_MESSAGE);
         assertThat(body.path("errors").get(0).asText()).isEqualTo(body.path("message").asText());
+    }
+
+    private record RejectedRequest(MockHttpServletResponse response, TrackingFilterChain chain) {}
+
+    private static final class FixedContentLengthRequest extends MockHttpServletRequest {
+        private final long contentLength;
+
+        private FixedContentLengthRequest(String method, String requestUri, long contentLength) {
+            super(method, requestUri);
+            this.contentLength = contentLength;
+        }
+
+        @Override
+        public int getContentLength() {
+            return Math.toIntExact(contentLength);
+        }
+
+        @Override
+        public long getContentLengthLong() {
+            return contentLength;
+        }
     }
 
     private static final class TrackingFilterChain implements FilterChain {
