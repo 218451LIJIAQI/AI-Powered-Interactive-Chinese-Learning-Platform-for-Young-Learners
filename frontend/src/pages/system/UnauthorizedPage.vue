@@ -1,5 +1,5 @@
 <template>
-  <main class="system-page system-page--unauthorized" aria-label="Access denied">
+  <main class="system-page system-page--unauthorized" :aria-label="t('system.accessDeniedAria')">
     <span class="system-bg-orb system-bg-orb--one" />
     <span class="system-bg-orb system-bg-orb--two" />
     <div class="surface-card system-card">
@@ -8,25 +8,25 @@
 
         <div class="system-kicker">
           <IconGlyph name="safe" :size="18" />
-          <span>Protected workspace</span>
+          <span>{{ t('system.protectedWorkspace') }}</span>
         </div>
 
-        <h1>This space needs the right role.</h1>
-        <p>Sign in with the correct account or return to a learner-friendly area that matches your access.</p>
+        <h1>{{ t('system.unauthorizedTitle') }}</h1>
+        <p>{{ t('system.unauthorizedMessage') }}</p>
 
         <div class="system-action-row">
-          <RouterLink class="btn btn-primary" to="/auth">Go to sign in</RouterLink>
-          <RouterLink class="btn btn-ghost" to="/">Return home</RouterLink>
+          <RouterLink class="btn btn-primary" to="/auth">{{ t('system.goToSignIn') }}</RouterLink>
+          <RouterLink class="btn btn-ghost" to="/">{{ t('system.returnHome') }}</RouterLink>
         </div>
 
         <div class="system-link-grid">
           <RouterLink to="/student/home">
-            <strong>Student area</strong>
-            <span>Lessons, rewards, and AI helper.</span>
+            <strong>{{ t('system.studentArea') }}</strong>
+            <span>{{ t('system.studentAreaHint') }}</span>
           </RouterLink>
           <RouterLink to="/teacher/dashboard">
-            <strong>Teacher area</strong>
-            <span>Classes, content, and feedback.</span>
+            <strong>{{ t('system.teacherArea') }}</strong>
+            <span>{{ t('system.teacherAreaHint') }}</span>
           </RouterLink>
         </div>
       </div>
@@ -43,9 +43,19 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
+import { systemMessages } from '@/plugins/systemMessages'
+
+const { t } = useI18n({
+  messages: {
+    en: { system: systemMessages.en },
+    ms: { system: systemMessages.ms },
+    zh: { system: systemMessages.zh },
+  },
+})
 </script>

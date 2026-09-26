@@ -27,7 +27,7 @@
         <span class="topbar-stat-fire"><IconGlyph name="streak" :size="18" /></span>
         <div class="stack topbar-stat-copy">
           <strong>{{ streakCount }}</strong>
-          <span class="muted">day streak</span>
+          <span class="muted">{{ t('dashboard.dayStreak') }}</span>
         </div>
       </div>
 
@@ -69,6 +69,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { notificationsApi, studentApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -77,6 +78,7 @@ import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import { useResource } from '@/composables/useResource'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/api'
+import { dashboardMessages } from '@/plugins/dashboardMessages'
 
 interface RoleTopbarCopy {
   readonly tone: string
@@ -91,41 +93,41 @@ interface RoleTopbarCopy {
 const ROLE_TOPBAR_COPY: Record<UserRole, RoleTopbarCopy> = {
   ADMIN: {
     tone: 'admin',
-    label: 'Admin hub',
+    label: 'dashboard.adminHub',
     icon: 'verification',
-    profileLabel: 'Platform owner',
-    defaultDisplayName: 'Admin',
-    contextTitle: 'Keep operations clear and safe',
-    contextSubtitle: 'Queue health, moderation, finance, and audit context stay one glance away.',
+    profileLabel: 'dashboard.platformOwner',
+    defaultDisplayName: 'dashboard.adminName',
+    contextTitle: 'dashboard.adminContext',
+    contextSubtitle: 'dashboard.adminSubtitle',
   },
   TEACHER: {
     tone: 'teacher',
-    label: 'Teacher workspace',
+    label: 'dashboard.teacherWorkspace',
     icon: 'classes',
-    profileLabel: 'Teaching profile',
+    profileLabel: 'dashboard.teachingProfile',
     defaultDisplayName: 'Li Wei',
-    contextTitle: 'Guide each learner with clarity',
-    contextSubtitle: 'Lessons, classes, and feedback stay connected across your teaching flow.',
+    contextTitle: 'dashboard.teacherContext',
+    contextSubtitle: 'dashboard.teacherSubtitle',
   },
   STUDENT: {
     tone: 'student',
-    label: 'Student journey',
+    label: 'dashboard.studentJourney',
     icon: 'learn',
-    profileLabel: 'Learner profile',
-    defaultDisplayName: 'Learner',
-    contextTitle: 'Learning dashboard',
-    contextSubtitle: 'Lessons, rewards, classes, and AI help are tuned for young Mandarin learners.',
+    profileLabel: 'dashboard.learnerProfile',
+    defaultDisplayName: 'dashboard.learnerName',
+    contextTitle: 'dashboard.studentContext',
+    contextSubtitle: 'dashboard.studentSubtitle',
   },
 }
 
 const GUEST_TOPBAR_COPY = {
   tone: 'guest',
-  label: 'Guest preview',
+  label: 'dashboard.guestPreview',
   icon: 'courses',
-  profileLabel: 'Preview workspace',
-  displayName: 'Browse as guest',
-  contextTitle: 'Explore lessons before you commit',
-  contextSubtitle: 'Catalog, pricing, and support are visible without sign-in.',
+  profileLabel: 'dashboard.previewWorkspace',
+  displayName: 'dashboard.browseGuest',
+  contextTitle: 'dashboard.guestContext',
+  contextSubtitle: 'dashboard.guestSubtitle',
 } as const
 
 const EMPTY_STREAK = { currentStreak: 0, bestStreak: 0, lastLearningDate: null } as const
@@ -134,6 +136,13 @@ const NOTIFICATION_READ_EVENT = 'mandarin-spark:notification-read'
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
+const { t, locale } = useI18n({
+  messages: {
+    en: { dashboard: dashboardMessages.en },
+    ms: { dashboard: dashboardMessages.ms },
+    zh: { dashboard: dashboardMessages.zh },
+  },
+})
 
 const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
 const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
@@ -152,7 +161,7 @@ const streakResource = useResource(
 )
 const streakCount = computed(() => (role.value === 'STUDENT' ? (streakResource.data.value?.currentStreak ?? 0) : 0))
 const roleTone = computed(() => (isGuestCatalog.value ? GUEST_TOPBAR_COPY.tone : activeRoleCopy.value.tone))
-const roleLabel = computed(() => (isGuestCatalog.value ? GUEST_TOPBAR_COPY.label : activeRoleCopy.value.label))
+const roleLabel = computed(() => t(isGuestCatalog.value ? GUEST_TOPBAR_COPY.label : activeRoleCopy.value.label))
 const roleIcon = computed(() => (isGuestCatalog.value ? GUEST_TOPBAR_COPY.icon : activeRoleCopy.value.icon))
 
 function firstDisplayNamePart(name: string): string | null {
@@ -160,16 +169,16 @@ function firstDisplayNamePart(name: string): string | null {
 }
 
 const displayName = computed(() => {
-  if (isGuestCatalog.value) return GUEST_TOPBAR_COPY.displayName
+  if (isGuestCatalog.value) return t(GUEST_TOPBAR_COPY.displayName)
   if (role.value === 'STUDENT') {
     return (
       auth.currentUser?.studentProfile?.displayName ??
       firstDisplayNamePart(auth.displayName) ??
-      activeRoleCopy.value.defaultDisplayName
+      t(activeRoleCopy.value.defaultDisplayName)
     )
   }
 
-  return auth.displayName || activeRoleCopy.value.defaultDisplayName
+  return auth.displayName || t(activeRoleCopy.value.defaultDisplayName)
 })
 
 const userPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() =>
@@ -192,18 +201,20 @@ const notificationPath = computed(() =>
   role.value === 'ADMIN' ? '/admin/settings?section=support' : profilePath.value,
 )
 const profileLabel = computed(() =>
-  isGuestCatalog.value ? GUEST_TOPBAR_COPY.profileLabel : activeRoleCopy.value.profileLabel,
+  t(isGuestCatalog.value ? GUEST_TOPBAR_COPY.profileLabel : activeRoleCopy.value.profileLabel),
 )
 const contextTitle = computed(() => {
-  if (isGuestCatalog.value) return GUEST_TOPBAR_COPY.contextTitle
+  if (isGuestCatalog.value) return t(GUEST_TOPBAR_COPY.contextTitle)
   if (role.value === 'ADMIN')
-    return route.path.includes('/analytics') ? 'Monitor platform signals' : activeRoleCopy.value.contextTitle
+    return route.path.includes('/analytics')
+      ? t('dashboard.adminAnalyticsContext')
+      : t(activeRoleCopy.value.contextTitle)
   if (role.value === 'TEACHER')
-    return route.path.includes('/classes') ? 'Run live classes with confidence' : activeRoleCopy.value.contextTitle
-  return route.path.includes('/profile') ? 'Celebrate steady progress' : activeRoleCopy.value.contextTitle
+    return route.path.includes('/classes') ? t('dashboard.teacherClassesContext') : t(activeRoleCopy.value.contextTitle)
+  return route.path.includes('/profile') ? t('dashboard.studentProfileContext') : t(activeRoleCopy.value.contextTitle)
 })
 const contextSubtitle = computed(() =>
-  isGuestCatalog.value ? GUEST_TOPBAR_COPY.contextSubtitle : activeRoleCopy.value.contextSubtitle,
+  t(isGuestCatalog.value ? GUEST_TOPBAR_COPY.contextSubtitle : activeRoleCopy.value.contextSubtitle),
 )
 
 const isDashboardHome = computed(() => route.path.endsWith('/dashboard'))
@@ -218,23 +229,26 @@ const showNotifications = computed(() => {
 const showStreak = computed(() => role.value === 'STUDENT' && !isGuestCatalog.value && streakCount.value > 0)
 const showDateChip = computed<boolean>(() => role.value === 'TEACHER' && route.path.includes('/teacher/classes'))
 
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  weekday: 'short',
-})
-const dateLabel = computed<string>(() => dateFormatter.format(new Date()))
+const dateLabel = computed<string>(() =>
+  new Intl.DateTimeFormat({ en: 'en-US', ms: 'ms-MY', zh: 'zh-CN' }[locale.value] ?? 'en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    weekday: 'short',
+  }).format(new Date()),
+)
 
 const notificationCount = computed<number>(() =>
   showNotifications.value ? (unreadResource.data.value?.unreadCount ?? 0) : 0,
 )
 const notificationAriaLabel = computed<string>(() =>
-  notificationCount.value > 0 ? `Notifications - ${notificationCount.value} unread` : 'Notifications',
+  notificationCount.value > 0
+    ? t('dashboard.unreadNotifications', { count: notificationCount.value })
+    : t('dashboard.notifications'),
 )
 const showSessionAction = computed<boolean>(() => auth.isAuthenticated && !isGuestCatalog.value)
 const signingOut = ref<boolean>(false)
-const signOutLabel = computed<string>(() => (signingOut.value ? 'Signing out...' : 'Sign out'))
+const signOutLabel = computed<string>(() => (signingOut.value ? t('dashboard.signingOut') : t('dashboard.signOut')))
 
 function refreshUnreadCount(): void {
   if (!showNotifications.value) return

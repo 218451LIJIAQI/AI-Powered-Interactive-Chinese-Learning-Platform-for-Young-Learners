@@ -1,11 +1,26 @@
 import { createI18n } from 'vue-i18n'
 
+import { teacherAccessMessages } from '@/plugins/teacherAccessMessages'
 import { readPersistedLocale } from '@/utils/storage'
 
 const storedLocale = readPersistedLocale()
 
 const messages = {
   en: {
+    teacherAccess: teacherAccessMessages.en,
+    chrome: {
+      skipToMain: 'Skip to main content',
+      primaryNavigation: 'Primary',
+      safeAges: 'Safe for ages 7-12',
+      designedFor: 'Designed for families, learners, and teachers',
+      signIn: 'Sign In',
+      createAccount: 'Create Account',
+      tagline: 'Learn Mandarin. Spark Your Future.',
+      language: 'Language',
+      switchEnglish: 'Switch to English',
+      switchMalay: 'Switch to Bahasa Melayu',
+      switchChinese: 'Switch to Simplified Chinese',
+    },
     nav: {
       home: 'Home',
       courses: 'Courses',
@@ -34,6 +49,20 @@ const messages = {
     },
   },
   ms: {
+    teacherAccess: teacherAccessMessages.ms,
+    chrome: {
+      skipToMain: 'Langkau ke kandungan utama',
+      primaryNavigation: 'Navigasi utama',
+      safeAges: 'Selamat untuk umur 7-12',
+      designedFor: 'Direka untuk keluarga, pelajar dan guru',
+      signIn: 'Log Masuk',
+      createAccount: 'Cipta Akaun',
+      tagline: 'Belajar Mandarin. Ceriakan Masa Depan Anda.',
+      language: 'Bahasa',
+      switchEnglish: 'Tukar kepada bahasa Inggeris',
+      switchMalay: 'Tukar kepada Bahasa Melayu',
+      switchChinese: 'Tukar kepada bahasa Cina Ringkas',
+    },
     nav: {
       home: 'Laman Utama',
       courses: 'Kursus',
@@ -62,6 +91,20 @@ const messages = {
     },
   },
   zh: {
+    teacherAccess: teacherAccessMessages.zh,
+    chrome: {
+      skipToMain: '跳转到主要内容',
+      primaryNavigation: '主导航',
+      safeAges: '适合 7–12 岁儿童',
+      designedFor: '为家庭、学习者和教师设计',
+      signIn: '登录',
+      createAccount: '创建账号',
+      tagline: '学习中文，点亮未来。',
+      language: '语言',
+      switchEnglish: '切换到英语',
+      switchMalay: '切换到马来语',
+      switchChinese: '切换到简体中文',
+    },
     nav: {
       home: '首页',
       courses: '课程',

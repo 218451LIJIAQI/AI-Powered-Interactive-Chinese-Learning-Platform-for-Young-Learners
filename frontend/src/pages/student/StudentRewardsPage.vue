@@ -2,9 +2,9 @@
   <div class="page-stack student-rewards-page">
     <section class="student-simple-header">
       <h1>
-        Rewards <span><IconGlyph name="rewards" :size="28" /></span>
+        {{ t('studentRewards.title') }} <span><IconGlyph name="rewards" :size="28" /></span>
       </h1>
-      <p>Keep learning, earn points, and unlock milestones that make practice feel playful.</p>
+      <p>{{ t('studentRewards.intro') }}</p>
     </section>
 
     <DataNotice :using-fallback="usingFallback" :error="pageError" />
@@ -21,13 +21,13 @@
             <div class="student-rewards-level">
               <span class="student-rewards-level-badge"><IconGlyph name="trophy" :size="44" /></span>
               <div class="student-rewards-level-copy">
-                <small>Your Level</small>
-                <strong>Level {{ currentLevelNumber }}</strong>
+                <small>{{ t('studentRewards.yourLevel') }}</small>
+                <strong>{{ t('studentRewards.level', { level: currentLevelNumber }) }}</strong>
                 <span>{{ currentLevelTitle }}</span>
               </div>
               <div class="student-rewards-level-progress">
                 <ProgressBar :progress="levelProgressPercent" />
-                <strong>{{ levelProgressPercent }}% to next level</strong>
+                <strong>{{ t('studentRewards.nextLevelProgress', { progress: levelProgressPercent }) }}</strong>
               </div>
             </div>
 
@@ -45,11 +45,15 @@
               <div class="student-rewards-next-card">
                 <span class="student-rewards-next-icon"><IconGlyph name="rewards" :size="26" /></span>
                 <div class="student-rewards-next-copy">
-                  <strong>Next Milestone</strong>
-                  <p>Progress is {{ levelProgressPercent }}% toward Level {{ nextLevelNumber }}.</p>
+                  <strong>{{ t('studentRewards.nextMilestone') }}</strong>
+                  <p>
+                    {{
+                      t('studentRewards.milestoneProgress', { progress: levelProgressPercent, level: nextLevelNumber })
+                    }}
+                  </p>
                   <div class="student-rewards-next-progress">
                     <ProgressBar :progress="levelProgressPercent" />
-                    <span>Level {{ nextLevelNumber }} target</span>
+                    <span>{{ t('studentRewards.levelTarget', { level: nextLevelNumber }) }}</span>
                   </div>
                 </div>
               </div>
@@ -64,10 +68,10 @@
             <div class="row-between">
               <div class="student-section-heading">
                 <span><IconGlyph name="trophy" :size="20" /></span>
-                <strong>Earned Badges</strong>
+                <strong>{{ t('studentRewards.earnedBadges') }}</strong>
               </div>
               <button type="button" class="student-link-button" @click="openAchievements">
-                Open Achievements
+                {{ t('studentRewards.openAchievements') }}
               </button>
             </div>
 
@@ -93,18 +97,18 @@
               <div class="student-badges-empty-head">
                 <span><IconGlyph name="trophy" :size="22" /></span>
                 <div>
-                  <strong>No earned badges yet</strong>
-                  <small>Finish your first lesson, quiz, or streak to claim your first badge.</small>
+                  <strong>{{ t('studentRewards.noBadges') }}</strong>
+                  <small>{{ t('studentRewards.noBadgesHint') }}</small>
                 </div>
               </div>
               <ul class="student-badges-empty-list">
-                <li><IconGlyph name="learn" :size="14" /> Complete one lesson to unlock the Pinyin Explorer badge</li>
-                <li><IconGlyph name="quiz" :size="14" /> Score 80%+ in a quiz to unlock Quiz Starter</li>
-                <li><IconGlyph name="streak" :size="14" /> Learn 7 days in a row to unlock 7-Day Streak</li>
+                <li><IconGlyph name="learn" :size="14" /> {{ t('studentRewards.unlockPinyin') }}</li>
+                <li><IconGlyph name="quiz" :size="14" /> {{ t('studentRewards.unlockQuiz') }}</li>
+                <li><IconGlyph name="streak" :size="14" /> {{ t('studentRewards.unlockStreak') }}</li>
               </ul>
               <button type="button" class="student-badges-empty-cta" @click="openRewardPractice">
                 <IconGlyph name="practice" :size="16" />
-                Start practising
+                {{ t('studentRewards.startPractice') }}
                 <IconGlyph name="chevronRight" :size="14" />
               </button>
             </div>
@@ -114,9 +118,11 @@
             <div class="row-between">
               <div class="student-section-heading">
                 <span><IconGlyph name="safe" :size="20" /></span>
-                <strong>Locked Badges</strong>
+                <strong>{{ t('studentRewards.lockedBadges') }}</strong>
               </div>
-              <span class="student-badges-meta">{{ lockedBadgeCards.length }} to unlock</span>
+              <span class="student-badges-meta">{{
+                t('studentRewards.toUnlock', { count: lockedBadgeCards.length })
+              }}</span>
             </div>
 
             <div class="student-badge-grid student-badge-grid--locked">
@@ -134,7 +140,7 @@
             </div>
 
             <p class="student-badges-note">
-              Keep going! Reward progress stays aligned with your real learning activity and streak data.
+              {{ t('studentRewards.keepGoing') }}
             </p>
           </article>
 
@@ -142,8 +148,8 @@
             <div class="student-section-heading">
               <span><IconGlyph name="progress" :size="20" /></span>
               <div>
-                <strong>Your Learning Journey</strong>
-                <p>Milestones reached so far and what comes next.</p>
+                <strong>{{ t('studentRewards.journey') }}</strong>
+                <p>{{ t('studentRewards.journeyHint') }}</p>
               </div>
             </div>
 
@@ -160,7 +166,7 @@
                 }"
               >
                 <span class="student-journey-node"><IconGlyph :name="step.icon" :size="24" /></span>
-                <strong>Level {{ step.level }}</strong>
+                <strong>{{ t('studentRewards.level', { level: step.level }) }}</strong>
                 <span>{{ step.title }}</span>
                 <small>{{ step.caption }}</small>
               </article>
@@ -173,9 +179,9 @@
             <div class="row-between">
               <div class="student-section-heading">
                 <span><IconGlyph name="trophy" :size="20" /></span>
-                <strong>Reward Progress Goals</strong>
+                <strong>{{ t('studentRewards.progressGoals') }}</strong>
               </div>
-              <span class="student-weekly-reset">Live progress</span>
+              <span class="student-weekly-reset">{{ t('studentRewards.liveProgress') }}</span>
             </div>
 
             <div class="student-weekly-goal-list">
@@ -196,18 +202,17 @@
 
             <button type="button" class="student-weekly-bonus" @click="openRewardPractice">
               <span><IconGlyph name="rewards" :size="18" /></span>
-              Open practice to keep earning XP
+              {{ t('studentRewards.practiceXp') }}
             </button>
           </article>
 
           <article class="student-rewards-promo-card">
             <div class="student-rewards-promo-copy">
-              <strong>Keep Earning Points!</strong>
-              <p>
-                Reward tracking focuses on points, levels, streaks, and badges so every practice session shows visible
-                progress.
-              </p>
-              <button type="button" class="btn btn-primary" @click="openRewardPractice">Continue Practice</button>
+              <strong>{{ t('studentRewards.keepEarning') }}</strong>
+              <p>{{ t('studentRewards.earningHint') }}</p>
+              <button type="button" class="btn btn-primary" @click="openRewardPractice">
+                {{ t('studentRewards.continuePractice') }}
+              </button>
             </div>
             <div class="student-rewards-promo-chest"><IconGlyph name="rewards" :size="58" /></div>
           </article>
@@ -216,10 +221,10 @@
             <div class="row-between">
               <div class="student-section-heading">
                 <span><IconGlyph name="file" :size="20" /></span>
-                <strong>Reward History</strong>
+                <strong>{{ t('studentRewards.history') }}</strong>
               </div>
               <button type="button" class="student-link-button" @click="openProfile">
-                Points Activity
+                {{ t('studentRewards.pointsActivity') }}
               </button>
             </div>
 
@@ -236,8 +241,8 @@
             <div v-else class="student-reward-history-empty">
               <span><IconGlyph name="streak" :size="18" /></span>
               <div>
-                <strong>No reward history yet</strong>
-                <small>Complete a lesson, quiz, or daily streak to log your first XP entry.</small>
+                <strong>{{ t('studentRewards.noHistory') }}</strong>
+                <small>{{ t('studentRewards.noHistoryHint') }}</small>
               </div>
             </div>
           </article>
@@ -246,10 +251,10 @@
             <div class="row-between">
               <div class="student-section-heading">
                 <span><IconGlyph name="star" :size="20" /></span>
-                <strong>Recent Achievements</strong>
+                <strong>{{ t('studentRewards.achievements') }}</strong>
               </div>
               <button type="button" class="student-link-button" @click="openAchievements">
-                Open
+                {{ t('studentRewards.open') }}
               </button>
             </div>
 
@@ -275,6 +280,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { studentApi } from '@/api/services'
@@ -291,8 +297,24 @@ import {
   studentProgress as studentProgressDemo,
   studentRewards,
 } from '@/demo/data'
-import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent, toFiniteNumber } from '@/utils/format'
+import { studentRewardsMessages } from '@/plugins/studentRewardsMessages'
+import {
+  clampPercent,
+  formatDate,
+  formatNumber,
+  nonNegativeInteger,
+  ratioPercent,
+  toFiniteNumber,
+} from '@/utils/format'
 import { inferPracticeActivityFromText, normalizePracticeActivity, practiceRoute } from '@/utils/practiceRoute'
+
+const { t } = useI18n({
+  messages: {
+    en: { studentRewards: studentRewardsMessages.en },
+    ms: { studentRewards: studentRewardsMessages.ms },
+    zh: { studentRewards: studentRewardsMessages.zh },
+  },
+})
 
 type BadgeIcon = 'star' | 'learn' | 'live' | 'trophy'
 type JourneyStatus = 'complete' | 'current' | 'future'
@@ -394,16 +416,16 @@ const pageError = computed(
     activitiesResource.error.value,
 )
 
-const levelTitles: Record<number, string> = {
-  1: 'Little Starter',
-  2: 'Pinyin Explorer',
-  3: 'Little Learner',
-  4: 'Word Builder',
-  5: 'Sentence Maker',
-}
-
 function levelTitleFor(levelNumber: number): string {
-  return levelTitles[levelNumber] ?? `Level ${levelNumber}`
+  const keys: Record<number, string> = {
+    1: 'starter',
+    2: 'pinyinExplorer',
+    3: 'littleLearner',
+    4: 'wordBuilder',
+    5: 'sentenceMaker',
+  }
+  const key = keys[levelNumber]
+  return key ? t(`studentRewards.${key}`) : t('studentRewards.level', { level: levelNumber })
 }
 
 const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
@@ -421,9 +443,17 @@ const completedActivitiesForGoal = computed(() => Math.min(5, completedActivityC
 const quizGoalCount = computed(() => Math.min(3, quizzesAbove80.value))
 
 const heroStats = computed(() => [
-  { label: 'Total Points', value: formatNumber(rewards.value.totalPoints), icon: 'star' },
-  { label: 'Current Streak', value: `${currentStreakCount.value} days`, icon: 'streak' },
-  { label: 'Achievements', value: String(nonNegativeInteger(dashboard.value.badgeCount)), icon: 'rewards' },
+  { label: t('studentRewards.totalPoints'), value: formatNumber(rewards.value.totalPoints), icon: 'star' },
+  {
+    label: t('studentRewards.currentStreak'),
+    value: t('studentRewards.days', { count: currentStreakCount.value }),
+    icon: 'streak',
+  },
+  {
+    label: t('studentRewards.achievements'),
+    value: String(nonNegativeInteger(dashboard.value.badgeCount)),
+    icon: 'rewards',
+  },
 ])
 
 const earnedBadgeCards = computed(() => {
@@ -440,18 +470,18 @@ const earnedBadgeCards = computed(() => {
   const derived = [
     {
       id: 'earned-streak',
-      title: '7-Day Streak',
-      subtitle: 'Learnt for 7 days in a row',
-      statusLabel: 'Mastered',
+      title: t('studentRewards.sevenDayStreak'),
+      subtitle: t('studentRewards.streakHint'),
+      statusLabel: t('studentRewards.mastered'),
       icon: 'streak',
       tone: 'purple',
       locked: false,
     },
     {
       id: 'earned-quiz',
-      title: 'Quiz Starter',
-      subtitle: 'Scored above 80% in a quiz',
-      statusLabel: 'In progress',
+      title: t('studentRewards.quizStarter'),
+      subtitle: t('studentRewards.quizStarterHint'),
+      statusLabel: t('studentRewards.inProgress'),
       icon: 'quiz',
       tone: 'orange',
       locked: false,
@@ -467,69 +497,69 @@ const earnedBadgeCards = computed(() => {
   return [...base, ...filteredDerived].slice(0, 5)
 })
 
-const lockedBadgeCards = [
+const lockedBadgeCards = computed(() => [
   {
     id: 'lock-1',
-    title: 'Sentence Builder',
-    subtitle: 'Unlock with more rearrange practice',
-    statusLabel: 'Locked',
+    title: t('studentRewards.sentenceBuilder'),
+    subtitle: t('studentRewards.sentenceBuilderHint'),
+    statusLabel: t('studentRewards.locked'),
     icon: 'clip',
   },
   {
     id: 'lock-2',
-    title: 'Story Starter',
-    subtitle: 'Unlock after story activity streaks',
-    statusLabel: 'Locked',
+    title: t('studentRewards.storyStarter'),
+    subtitle: t('studentRewards.storyStarterHint'),
+    statusLabel: t('studentRewards.locked'),
     icon: 'learn',
   },
   {
     id: 'lock-3',
-    title: 'Character Master',
-    subtitle: 'Unlock after tracing drills',
-    statusLabel: 'Locked',
+    title: t('studentRewards.characterMaster'),
+    subtitle: t('studentRewards.characterMasterHint'),
+    statusLabel: t('studentRewards.locked'),
     icon: 'language',
   },
   {
     id: 'lock-4',
-    title: 'Quiz Whiz',
-    subtitle: 'Unlock with stronger quiz consistency',
-    statusLabel: 'Locked',
+    title: t('studentRewards.quizWhiz'),
+    subtitle: t('studentRewards.quizWhizHint'),
+    statusLabel: t('studentRewards.locked'),
     icon: 'quiz',
   },
   {
     id: 'lock-5',
-    title: 'Culture Explorer',
-    subtitle: 'Unlock from culture lesson progress',
-    statusLabel: 'Locked',
+    title: t('studentRewards.cultureExplorer'),
+    subtitle: t('studentRewards.cultureExplorerHint'),
+    statusLabel: t('studentRewards.locked'),
     icon: 'globe',
   },
-]
+])
 
 const achievementFeed = computed(() => [
   {
     id: 'a-1',
     icon: 'star',
-    title: '7-Day Streak!',
-    subtitle: `You have learned for ${currentStreakCount.value} days in a row.`,
-    reward: `${currentStreakCount.value} day streak`,
+    title: t('studentRewards.streakAchievement'),
+    subtitle: t('studentRewards.streakAchievementHint', { count: currentStreakCount.value }),
+    reward: t('studentRewards.dayStreak', { count: currentStreakCount.value }),
     date: formatDate(pointsHistory.value[0]?.createdAt ?? fallbackAchievementDateIso),
     tone: 'purple',
   },
   {
     id: 'a-2',
     icon: 'quiz',
-    title: 'Quiz Progress',
-    subtitle: `Average quiz score is now ${quizAveragePercent.value}%.`,
-    reward: `${quizAveragePercent.value}% average`,
+    title: t('studentRewards.quizProgress'),
+    subtitle: t('studentRewards.quizProgressHint', { score: quizAveragePercent.value }),
+    reward: t('studentRewards.average', { score: quizAveragePercent.value }),
     date: formatDate(dashboard.value.recentQuizResults[0]?.completedAt ?? fallbackAchievementDateIso),
     tone: 'green',
   },
   {
     id: 'a-3',
     icon: 'live',
-    title: 'Practice Explorer',
-    subtitle: `${activities.value.items.length} practice activities are available in your library.`,
-    reward: `${activities.value.items.length} activities`,
+    title: t('studentRewards.practiceExplorer'),
+    subtitle: t('studentRewards.practiceExplorerHint', { count: activities.value.items.length }),
+    reward: t('studentRewards.activities', { count: activities.value.items.length }),
     date: formatDate(pointsHistory.value[1]?.createdAt ?? fallbackAchievementDateIso),
     tone: 'orange',
   },
@@ -537,26 +567,26 @@ const achievementFeed = computed(() => [
 
 const weeklyGoals = computed(() => [
   {
-    title: 'Complete 8 lessons',
+    title: t('studentRewards.finishLessons'),
     count: `${completedLessonsForGoal.value} / 8`,
     progress: ratioPercent(completedLessonsForGoal.value, 8),
-    statusLabel: 'Tracking lessons',
+    statusLabel: t('studentRewards.trackingLessons'),
     icon: 'learn',
     tone: 'green',
   },
   {
-    title: 'Finish 5 practice activities',
+    title: t('studentRewards.finishActivities'),
     count: `${completedActivitiesForGoal.value} / 5`,
     progress: ratioPercent(completedActivitiesForGoal.value, 5),
-    statusLabel: 'Tracking practice',
+    statusLabel: t('studentRewards.trackingPractice'),
     icon: 'live',
     tone: 'purple',
   },
   {
-    title: 'Score 80%+ in 3 quizzes',
+    title: t('studentRewards.scoreQuizzes'),
     count: `${quizGoalCount.value} / 3`,
     progress: ratioPercent(quizGoalCount.value, 3),
-    statusLabel: 'Tracking quizzes',
+    statusLabel: t('studentRewards.trackingQuizzes'),
     icon: 'clip',
     tone: 'orange',
   },
@@ -594,7 +624,7 @@ function badgeIconFor(iconKey: string | null | undefined): BadgeIcon {
 }
 
 function earnedBadgeStatusLabel(index: number): string {
-  return index < 2 ? 'Mastered' : 'In progress'
+  return index < 2 ? t('studentRewards.mastered') : t('studentRewards.inProgress')
 }
 
 function earnedBadgeTone(index: number): string {
@@ -615,9 +645,9 @@ function journeyStatusFor(level: number): JourneyStatus {
 }
 
 function journeyCaptionFor(level: number, status: JourneyStatus): string {
-  if (status === 'complete') return 'Completed'
-  if (status === 'current') return `${levelProgressPercent.value}% to next level`
-  return level === nextLevelNumber.value ? 'Next up' : 'Locked until more progress'
+  if (status === 'complete') return t('studentRewards.completed')
+  if (status === 'current') return t('studentRewards.nextLevelProgress', { progress: levelProgressPercent.value })
+  return level === nextLevelNumber.value ? t('studentRewards.nextUp') : t('studentRewards.lockedProgress')
 }
 
 function journeyIconFor(status: JourneyStatus): string {

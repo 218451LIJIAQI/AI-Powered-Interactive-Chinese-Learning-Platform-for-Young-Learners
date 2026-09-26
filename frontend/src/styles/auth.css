@@ -1,0 +1,752 @@
+/* Auth page layout */
+.public-shell--auth {
+  width: min(calc(100% - 48px), 1500px);
+  margin: 24px auto;
+}
+
+.public-shell--auth .public-shell-content {
+  margin-top: 0;
+}
+
+.public-shell--auth .auth-showcase-page {
+  min-height: calc(100vh - 48px);
+  padding: 0;
+  align-items: center;
+}
+
+.public-shell--auth .auth-showcase-shell {
+  grid-template-columns: minmax(390px, 0.78fr) minmax(620px, 1.22fr);
+  min-height: 760px;
+  border-radius: 28px;
+  border-color: rgba(221, 227, 243, 0.96);
+  background: #fff;
+  box-shadow:
+    0 24px 70px rgba(92, 101, 154, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.92) inset;
+}
+
+.public-shell--auth .auth-showcase-art {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 30px 30px 24px;
+  background:
+    radial-gradient(circle at 24% 16%, rgba(255, 255, 255, 0.92), transparent 24%),
+    linear-gradient(180deg, #edf7ff 0%, #ffffff 48%, #fff3d7 100%);
+}
+
+.public-shell--auth .auth-showcase-art .brand-title,
+.public-shell--auth .auth-showcase-copy h1,
+.public-shell--auth .auth-form-title h2 {
+  letter-spacing: 0;
+}
+
+.public-shell--auth .auth-showcase-art .brand-title {
+  font-size: 1.92rem;
+}
+
+.public-shell--auth .auth-showcase-copy {
+  position: relative;
+  z-index: 2;
+  gap: 12px;
+  max-width: 520px;
+  margin-top: 42px;
+}
+
+.public-shell--auth .auth-showcase-eyebrow {
+  width: fit-content;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid rgba(111, 76, 255, 0.14);
+  border-radius: 999px;
+  color: #6146e8;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.public-shell--auth .auth-showcase-copy h1 {
+  color: #121b3d;
+  font-size: 3.65rem;
+  line-height: 1.03;
+}
+
+.public-shell--auth .auth-showcase-copy > p:not(.auth-showcase-eyebrow) {
+  max-width: 400px;
+  color: #5f6d88;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.public-shell--auth .auth-showcase-scene {
+  flex: 1 1 auto;
+  min-height: 250px;
+  margin-top: 10px;
+}
+
+.public-shell--auth .auth-showcase-panda {
+  left: 66px;
+  bottom: 26px;
+  transform: scale(0.84);
+  transform-origin: bottom left;
+}
+
+.public-shell--auth .auth-showcase-bamboo {
+  left: 18px;
+  bottom: 54px;
+}
+
+.public-shell--auth .auth-showcase-pagoda {
+  right: 34px;
+  bottom: 58px;
+  opacity: 0.34;
+  transform: scale(0.78);
+  transform-origin: bottom right;
+}
+
+.public-shell--auth .auth-showcase-river-fish {
+  right: 54px;
+  bottom: 12px;
+  color: #152042;
+  opacity: 0.9;
+}
+
+.public-shell--auth .auth-showcase-lower-pattern {
+  position: absolute;
+  z-index: 1;
+  left: 92px;
+  right: 74px;
+  top: 55%;
+  bottom: 126px;
+  min-height: 180px;
+  pointer-events: none;
+}
+
+.public-shell--auth .auth-pattern-line,
+.public-shell--auth .auth-pattern-dot,
+.public-shell--auth .auth-pattern-card,
+.public-shell--auth .auth-pattern-spark {
+  position: absolute;
+  display: block;
+}
+
+.public-shell--auth .auth-pattern-line {
+  left: 92px;
+  top: 6px;
+  bottom: 18px;
+  width: 10px;
+  border-radius: 999px;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(180deg, rgba(118, 204, 72, 0.72), rgba(255, 203, 64, 0.62), rgba(111, 76, 255, 0.5)) border-box;
+  border: 2px solid transparent;
+  opacity: 0.42;
+}
+
+.public-shell--auth .auth-pattern-dot {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(224, 229, 244, 0.9);
+  background:
+    radial-gradient(circle at 36% 32%, rgba(255, 255, 255, 0.96), transparent 34%),
+    linear-gradient(135deg, rgba(235, 249, 237, 0.94), rgba(255, 249, 229, 0.92));
+  box-shadow: 0 14px 28px rgba(112, 122, 180, 0.08);
+}
+
+.public-shell--auth .auth-pattern-dot::before {
+  content: '';
+  position: absolute;
+  inset: 13px;
+  border-radius: 50%;
+  background: #77c94b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.public-shell--auth .auth-pattern-dot--one {
+  left: 76px;
+  top: 0;
+}
+
+.public-shell--auth .auth-pattern-dot--two {
+  left: 124px;
+  top: 27%;
+  background:
+    radial-gradient(circle at 36% 32%, rgba(255, 255, 255, 0.96), transparent 34%),
+    linear-gradient(135deg, rgba(246, 243, 255, 0.96), rgba(255, 249, 229, 0.9));
+}
+
+.public-shell--auth .auth-pattern-dot--two::before {
+  background: #7b59ff;
+}
+
+.public-shell--auth .auth-pattern-dot--three {
+  left: 66px;
+  top: 55%;
+}
+
+.public-shell--auth .auth-pattern-dot--four {
+  left: 132px;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 36% 32%, rgba(255, 255, 255, 0.96), transparent 34%),
+    linear-gradient(135deg, rgba(255, 249, 229, 0.96), rgba(250, 244, 255, 0.94));
+}
+
+.public-shell--auth .auth-pattern-dot--four::before {
+  background: #f7b921;
+}
+
+.public-shell--auth .auth-pattern-card {
+  width: 86px;
+  height: 58px;
+  border-radius: 18px;
+  border: 1px solid rgba(224, 229, 244, 0.86);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 16px 34px rgba(112, 122, 180, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.public-shell--auth .auth-pattern-card::before,
+.public-shell--auth .auth-pattern-card::after {
+  content: '';
+  position: absolute;
+  left: 17px;
+  right: 17px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(111, 76, 255, 0.18);
+}
+
+.public-shell--auth .auth-pattern-card::before {
+  top: 17px;
+}
+
+.public-shell--auth .auth-pattern-card::after {
+  bottom: 17px;
+  background: rgba(255, 194, 50, 0.34);
+}
+
+.public-shell--auth .auth-pattern-card--one {
+  right: 26px;
+  top: 20%;
+  transform: rotate(4deg);
+}
+
+.public-shell--auth .auth-pattern-card--two {
+  right: 82px;
+  bottom: 18%;
+  transform: rotate(-5deg);
+  opacity: 0.86;
+}
+
+.public-shell--auth .auth-pattern-spark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #152042;
+  opacity: 0.8;
+}
+
+.public-shell--auth .auth-pattern-spark--one {
+  right: 0;
+  top: 3%;
+}
+
+.public-shell--auth .auth-pattern-spark--two {
+  left: 6px;
+  bottom: 12%;
+}
+
+.public-shell--auth .auth-showcase-safety {
+  position: relative;
+  z-index: 3;
+  left: auto;
+  bottom: auto;
+  align-items: center;
+  max-width: 430px;
+  margin-top: auto;
+  padding: 16px;
+  border: 1px solid rgba(226, 231, 245, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 34px rgba(109, 119, 174, 0.12);
+}
+
+.public-shell--auth .auth-showcase-safety > div:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.public-shell--auth .auth-showcase-safety span {
+  display: block;
+  color: #66728c;
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
+
+.public-shell--auth .auth-showcase-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 14px;
+  padding: 28px 28px 24px;
+}
+
+.public-shell--auth .auth-showcase-topbar {
+  align-items: center;
+  min-height: 40px;
+}
+
+.public-shell--auth .auth-showcase-topbar .language-switcher {
+  min-width: 0;
+}
+
+.public-shell--auth .auth-showcase-topbar .language-switcher-label {
+  color: #6d7891;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.public-shell--auth .auth-showcase-topbar .pill-switch {
+  min-width: 218px;
+  min-height: 36px;
+  border-color: rgba(221, 226, 242, 0.92);
+  box-shadow: 0 8px 22px rgba(116, 126, 185, 0.08);
+}
+
+.public-shell--auth .auth-showcase-topbar .pill-switch button {
+  min-height: 44px;
+  padding: 9px 16px;
+  font-size: 0.86rem;
+}
+
+.public-shell--auth .auth-showcase-headers {
+  gap: 4px;
+  padding: 4px;
+  border-radius: 16px;
+  border-color: rgba(223, 228, 244, 0.95);
+  background: #f6f8fd;
+}
+
+.public-shell--auth .auth-showcase-header {
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: #64708c;
+  font-size: 0.94rem;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.public-shell--auth .auth-showcase-header--active {
+  color: #6146e8;
+  background: #fff;
+  box-shadow:
+    0 8px 20px rgba(104, 113, 170, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.94);
+}
+
+.public-shell--auth .auth-entry-banner,
+.public-shell--auth .auth-bottom-illustration,
+.public-shell--auth .auth-footline {
+  display: none;
+}
+
+.public-shell--auth .auth-showcase-forms {
+  border-radius: 18px;
+  border-color: rgba(222, 227, 243, 0.96);
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(108, 118, 178, 0.08);
+}
+
+.public-shell--auth .auth-form-panel {
+  gap: 15px;
+  padding: 28px;
+}
+
+.public-shell--auth .auth-form-title {
+  gap: 6px;
+}
+
+.public-shell--auth .auth-form-kicker {
+  width: fit-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(111, 76, 255, 0.12);
+  border-radius: 999px;
+  color: #6146e8;
+  background: rgba(246, 243, 255, 0.88);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.public-shell--auth .auth-form-title h2 {
+  color: #152042;
+  font-size: 1.8rem;
+  line-height: 1.12;
+}
+
+.public-shell--auth .auth-form-title p {
+  max-width: 620px;
+  color: #65718c;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.public-shell--auth .field {
+  gap: 7px;
+}
+
+.public-shell--auth .field label {
+  color: #27324f;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.public-shell--auth .auth-input {
+  min-height: 50px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border-color: rgba(211, 218, 238, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.public-shell--auth .auth-textarea {
+  min-height: 96px;
+}
+
+.public-shell--auth .auth-field-hint {
+  margin: -2px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.public-shell--auth .auth-form-row {
+  margin-top: 2px;
+}
+
+.public-shell--auth .auth-session-note {
+  color: #69758f;
+  font-size: 0.9rem;
+}
+
+.public-shell--auth .auth-text-button {
+  min-height: 44px;
+  padding-block: 8px;
+  color: #7557ff;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.public-shell--auth .auth-text-button:hover {
+  color: #5435e8;
+  text-decoration: underline;
+}
+
+.public-shell--auth .auth-submit-button {
+  position: relative;
+  min-height: 54px;
+  justify-content: center;
+  padding: 0 58px 0 22px;
+  border-radius: 14px;
+  color: #2d2200;
+  background: linear-gradient(180deg, #ffe071, #ffc83a);
+  box-shadow: 0 14px 30px rgba(255, 199, 58, 0.28);
+}
+
+.public-shell--auth .auth-submit-arrow {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+}
+
+.public-shell--auth .auth-role-grid {
+  gap: 10px;
+}
+
+.public-shell--auth .auth-role-card {
+  grid-template-columns: 50px minmax(0, 1fr);
+  min-height: 76px;
+  padding: 11px;
+  border-radius: 14px;
+  border-color: rgba(217, 224, 242, 0.95);
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(112, 123, 184, 0.06);
+}
+
+.public-shell--auth .auth-role-card.is-active {
+  border-color: rgba(111, 76, 255, 0.44);
+  background: #f7f4ff;
+  box-shadow:
+    0 10px 22px rgba(111, 76, 255, 0.1),
+    inset 0 0 0 1px rgba(111, 76, 255, 0.08);
+}
+
+.public-shell--auth .auth-role-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  color: #6146e8;
+  background: linear-gradient(135deg, rgba(111, 76, 255, 0.1), rgba(255, 255, 255, 0.94));
+}
+
+.public-shell--auth .auth-role-card small,
+.public-shell--auth .auth-role-help,
+.public-shell--auth .auth-checkbox,
+.public-shell--auth .auth-register-note {
+  color: #69758f;
+}
+
+.public-shell--auth .auth-checkbox a {
+  color: #6146e8;
+  font-weight: 900;
+}
+
+.public-shell--auth .auth-alert {
+  border-radius: 14px;
+}
+
+.public-shell--auth .auth-bottom-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.public-shell--auth .auth-bottom-item {
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid rgba(222, 227, 243, 0.92);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(111, 121, 181, 0.06);
+}
+
+.public-shell--auth .auth-bottom-item strong {
+  color: #1d2846;
+  font-size: 0.96rem;
+  line-height: 1.22;
+}
+
+.public-shell--auth .auth-bottom-item p {
+  margin: 5px 0 0;
+  color: #65718c;
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
+
+.public-shell--auth .auth-showcase-safety-icon,
+.public-shell--auth .auth-bottom-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+}
+
+.public-shell--auth .auth-bottom-icon.is-purple {
+  background: rgba(111, 76, 255, 0.1);
+}
+
+@media (max-width: 1500px) and (min-width: 1181px) {
+  .public-shell--auth .auth-showcase-shell {
+    grid-template-columns: minmax(360px, 0.74fr) minmax(560px, 1.26fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .public-shell--auth {
+    width: min(calc(100% - 28px), 980px);
+    margin: 14px auto 20px;
+  }
+
+  .public-shell--auth .auth-showcase-page {
+    min-height: auto;
+  }
+
+  .public-shell--auth .auth-showcase-shell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .public-shell--auth .auth-showcase-art {
+    min-height: 390px;
+    padding: 28px;
+  }
+
+  .public-shell--auth .auth-showcase-copy {
+    max-width: 680px;
+    margin-top: 26px;
+  }
+
+  .public-shell--auth .auth-showcase-copy h1 {
+    font-size: 3.35rem;
+  }
+
+  .public-shell--auth .auth-showcase-scene {
+    min-height: 210px;
+    margin-top: 6px;
+  }
+
+  .public-shell--auth .auth-showcase-lower-pattern {
+    display: none;
+  }
+
+  .public-shell--auth .auth-showcase-panda {
+    left: 24px;
+    bottom: 2px;
+    transform: scale(0.72);
+    transform-origin: bottom left;
+  }
+
+  .public-shell--auth .auth-showcase-bamboo {
+    bottom: 38px;
+  }
+
+  .public-shell--auth .auth-showcase-pagoda {
+    right: 4%;
+    bottom: 48px;
+    transform: scale(0.72);
+  }
+
+  .public-shell--auth .auth-showcase-safety {
+    max-width: none;
+    margin-top: 12px;
+  }
+
+  .public-shell--auth .auth-bottom-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .public-shell--auth {
+    width: min(calc(100% - 16px), 720px);
+    margin: 8px auto 14px;
+  }
+
+  .public-shell--auth .auth-showcase-shell {
+    border-radius: 22px;
+  }
+
+  .public-shell--auth .auth-showcase-art {
+    min-height: 0;
+    padding: 18px;
+  }
+
+  .public-shell--auth .auth-showcase-art .brand-title {
+    font-size: 1.48rem;
+  }
+
+  .public-shell--auth .auth-showcase-copy {
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .public-shell--auth .auth-showcase-copy h1 {
+    font-size: 2.28rem;
+    line-height: 1.06;
+  }
+
+  .public-shell--auth .auth-showcase-copy > p:not(.auth-showcase-eyebrow) {
+    font-size: 0.92rem;
+  }
+
+  .public-shell--auth .auth-showcase-scene {
+    display: none;
+  }
+
+  .public-shell--auth .auth-showcase-safety {
+    grid-template-columns: 40px minmax(0, 1fr);
+    margin-top: 14px;
+    padding: 12px;
+  }
+
+  .public-shell--auth .auth-showcase-card {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .public-shell--auth .auth-showcase-topbar {
+    justify-content: stretch;
+  }
+
+  .public-shell--auth .auth-showcase-topbar .language-switcher {
+    display: grid;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .public-shell--auth .auth-showcase-topbar .pill-switch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+  }
+
+  .public-shell--auth .auth-showcase-topbar .pill-switch button {
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+
+  .public-shell--auth .auth-showcase-headers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .public-shell--auth .auth-showcase-header {
+    min-height: 44px;
+    gap: 6px;
+    padding: 8px 6px;
+    font-size: 0.86rem;
+  }
+
+  .public-shell--auth .auth-form-panel {
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .public-shell--auth .auth-form-title h2 {
+    font-size: 1.52rem;
+  }
+
+  .public-shell--auth .auth-input {
+    min-height: 48px;
+  }
+
+  .public-shell--auth .auth-form-row {
+    display: grid;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .public-shell--auth .auth-bottom-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .public-shell--auth .auth-bottom-item {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .public-shell--auth .auth-showcase-header .icon-glyph {
+    display: none;
+  }
+
+  .public-shell--auth .auth-form-panel {
+    padding: 16px;
+  }
+}

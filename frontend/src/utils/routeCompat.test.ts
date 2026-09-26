@@ -21,13 +21,12 @@ describe('normalizeAppRoute', () => {
     expect(normalizeAppRoute(input)).toBeNull()
   })
 
-  it.each([
-    '/courses/../../admin/settings',
-    '/courses/%2e%2e/%2e%2e/admin/settings',
-    '/courses\\..\\admin\\settings',
-  ])('rejects path traversal target %s', (input) => {
-    expect(normalizeAppRoute(input)).toBeNull()
-  })
+  it.each(['/courses/../../admin/settings', '/courses/%2e%2e/%2e%2e/admin/settings', '/courses\\..\\admin\\settings'])(
+    'rejects path traversal target %s',
+    (input) => {
+      expect(normalizeAppRoute(input)).toBeNull()
+    },
+  )
 
   it.each(['/courses/PACKAGE-42?tab=overview', '/student/quiz/123?lessonId=9'])(
     'keeps valid dynamic app route %s',

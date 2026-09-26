@@ -4,30 +4,39 @@
     <StatePanel
       v-else-if="loading"
       icon="progress"
-      title="Loading your content"
-      message="Just a moment while we get things ready for you!"
-      eyebrow="Loading"
+      :title="t('resourceSection.loadingTitle')"
+      :message="t('resourceSection.loadingMessage')"
+      :eyebrow="t('resourceSection.loadingEyebrow')"
       tone="loading"
     />
     <StatePanel
       v-else
       icon="alert"
-      title="Something went wrong"
-      :message="error || DEFAULT_ERROR_MESSAGE"
-      eyebrow="Needs attention"
+      :title="t('resourceSection.errorTitle')"
+      :message="error || t('resourceSection.defaultError')"
+      :eyebrow="t('resourceSection.errorEyebrow')"
       tone="error"
     >
       <template #actions>
-        <button class="btn btn-primary" type="button" @click="retry">Try again</button>
+        <button class="btn btn-primary" type="button" @click="retry">{{ t('resourceSection.retry') }}</button>
       </template>
     </StatePanel>
   </section>
 </template>
 
 <script setup lang="ts">
-import StatePanel from '@/components/common/StatePanel.vue'
+import { useI18n } from 'vue-i18n'
 
-const DEFAULT_ERROR_MESSAGE = 'We could not reach the learning service right now.'
+import StatePanel from '@/components/common/StatePanel.vue'
+import { resourceSectionMessages } from '@/plugins/resourceSectionMessages'
+
+const { t } = useI18n({
+  messages: {
+    en: { resourceSection: resourceSectionMessages.en },
+    ms: { resourceSection: resourceSectionMessages.ms },
+    zh: { resourceSection: resourceSectionMessages.zh },
+  },
+})
 
 interface Props {
   loading?: boolean

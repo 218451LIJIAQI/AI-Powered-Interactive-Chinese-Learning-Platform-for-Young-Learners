@@ -1,8 +1,8 @@
 <template>
   <div class="page-stack teacher-earnings-page">
     <PageHeaderBlock
-      title="Teacher Earnings"
-      description="Track teacher earnings, payouts, and platform commission settings that affect teacher revenue."
+      :title="t('teacherEarnings.title')"
+      :description="t('teacherEarnings.description')"
       icon="earnings"
     />
 
@@ -10,11 +10,15 @@
 
     <section class="teacher-earnings-hero">
       <div>
-        <span>Teacher revenue</span>
-        <h2>{{ formatCurrency(summary.availableBalance, summary.currencyCode) }} ready for payout</h2>
-        <p>
-          Review released earnings, pending balances, and payout requests with a parent-friendly platform finance flow.
-        </p>
+        <span>{{ t('teacherEarnings.revenue') }}</span>
+        <h2>
+          {{
+            t('teacherEarnings.readyAmount', {
+              amount: formatCurrency(summary.availableBalance, summary.currencyCode),
+            })
+          }}
+        </h2>
+        <p>{{ t('teacherEarnings.heroHint') }}</p>
       </div>
       <div class="teacher-earnings-hero-grid">
         <article v-for="item in earningHighlights" :key="item.label">
@@ -27,33 +31,37 @@
 
     <section class="stats-grid teacher-earnings-stats">
       <MetricCard
-        label="Gross"
+        :label="t('teacherEarnings.gross')"
         :value="formatCurrency(summary.grossAmount, summary.currencyCode)"
-        subtitle="Total teacher sales"
+        :subtitle="t('teacherEarnings.grossHint')"
         icon="money"
       />
       <MetricCard
-        label="Net"
+        :label="t('teacherEarnings.net')"
         :value="formatCurrency(summary.totalNetAmount, summary.currencyCode)"
-        subtitle="After commission"
+        :subtitle="t('teacherEarnings.netHint')"
         icon="earnings"
       />
       <MetricCard
-        label="Available"
+        :label="t('teacherEarnings.available')"
         :value="formatCurrency(summary.availableBalance, summary.currencyCode)"
-        subtitle="Ready for payout request"
+        :subtitle="t('teacherEarnings.availableHint')"
         icon="finance"
       />
       <MetricCard
-        label="Pending"
+        :label="t('teacherEarnings.pending')"
         :value="formatCurrency(summary.pendingBalance, summary.currencyCode)"
-        subtitle="Awaiting release"
+        :subtitle="t('teacherEarnings.pendingHint')"
         icon="chart"
       />
     </section>
 
     <section class="two-col teacher-earnings-layout">
-      <InfoCard title="Earning entries" subtitle="Revenue records tied to teacher order items." icon="earnings">
+      <InfoCard
+        :title="t('teacherEarnings.earningEntries')"
+        :subtitle="t('teacherEarnings.earningEntriesHint')"
+        icon="earnings"
+      >
         <div class="list">
           <ListInfoItem
             v-for="item in earnings"
@@ -68,7 +76,11 @@
             <template #aside>
               <div class="list-value-stack">
                 <strong>{{ formatCurrency(item.netAmount, item.currencyCode) }}</strong>
-                <span class="muted">Commission {{ formatCurrency(item.commissionAmount, item.currencyCode) }}</span>
+                <span class="muted">{{
+                  t('teacherEarnings.commission', {
+                    amount: formatCurrency(item.commissionAmount, item.currencyCode),
+                  })
+                }}</span>
               </div>
             </template>
           </ListInfoItem>
@@ -77,20 +89,20 @@
 
       <div class="stack">
         <ActionFormCard
-          title="Request payout"
-          subtitle="Uses the teacher payout request endpoint."
+          :title="t('teacherEarnings.requestPayout')"
+          :subtitle="t('teacherEarnings.requestPayoutHint')"
           icon="finance"
-          submit-label="Submit payout request"
-          submitting-label="Submitting..."
+          :submit-label="t('teacherEarnings.submit')"
+          :submitting-label="t('teacherEarnings.submitting')"
           :submitting="submittingPayout"
           :disabled="payoutFormDisabled"
           @submit="submitPayout"
         >
           <div v-if="payoutUsingFallback" class="soft-banner">
-            Preview data mode keeps payout requests read-only until a live teacher account is connected.
+            {{ t('teacherEarnings.previewReadOnly') }}
           </div>
           <div class="field">
-            <label for="teacher-payout-amount">Amount</label>
+            <label for="teacher-payout-amount">{{ t('teacherEarnings.amount') }}</label>
             <input
               id="teacher-payout-amount"
               v-model.number="payoutForm.amount"
@@ -103,7 +115,7 @@
             />
           </div>
           <div class="field">
-            <label for="teacher-payout-note">Note</label>
+            <label for="teacher-payout-note">{{ t('teacherEarnings.note') }}</label>
             <textarea
               id="teacher-payout-note"
               v-model="payoutForm.requestedNote"
@@ -114,7 +126,11 @@
           </div>
         </ActionFormCard>
 
-        <InfoCard title="Payout history" subtitle="Teacher payout requests and statuses." icon="finance">
+        <InfoCard
+          :title="t('teacherEarnings.payoutHistory')"
+          :subtitle="t('teacherEarnings.payoutHistoryHint')"
+          icon="finance"
+        >
           <div class="list">
             <ListInfoItem
               v-for="item in payouts"
@@ -124,7 +140,7 @@
               icon="finance"
             >
               <template #aside>
-                <StatusPill :label="item.payoutStatus" :tone="payoutTone(item.payoutStatus)" />
+                <StatusPill :label="payoutStatusLabel(item.payoutStatus)" :tone="payoutTone(item.payoutStatus)" />
               </template>
             </ListInfoItem>
           </div>
@@ -136,6 +152,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { teacherApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -148,11 +165,20 @@ import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { teacherEarnings, teacherEarningsSummary, teacherPayouts } from '@/demo/data'
+import { teacherEarningsMessages } from '@/plugins/teacherEarningsMessages'
 import type { TeacherPayoutRequestResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatCurrency, formatDateTime } from '@/utils/format'
 
 type PayoutTone = 'warning' | 'info' | 'success' | 'danger' | 'primary'
+
+const { t } = useI18n({
+  messages: {
+    en: { teacherEarnings: teacherEarningsMessages.en },
+    ms: { teacherEarnings: teacherEarningsMessages.ms },
+    zh: { teacherEarnings: teacherEarningsMessages.zh },
+  },
+})
 
 const earningsResource = useResource(() => teacherApi.earnings(), teacherEarnings)
 const summaryResource = useResource(() => teacherApi.earningsSummary(), teacherEarningsSummary)
@@ -177,15 +203,15 @@ const payouts = computed(
 const earningHighlights = computed(() => [
   {
     icon: 'money',
-    label: 'Net earned',
+    label: t('teacherEarnings.netEarned'),
     value: formatCurrency(summary.value.totalNetAmount, summary.value.currencyCode),
   },
   {
     icon: 'history',
-    label: 'Pending balance',
+    label: t('teacherEarnings.pendingBalance'),
     value: formatCurrency(summary.value.pendingBalance, summary.value.currencyCode),
   },
-  { icon: 'finance', label: 'Payout requests', value: String(payouts.value.length) },
+  { icon: 'finance', label: t('teacherEarnings.payoutRequests'), value: String(payouts.value.length) },
 ])
 const payoutUsingFallback = computed(() => summaryResource.usingFallback.value || payoutsResource.usingFallback.value)
 const payoutFormDisabled = computed(() => payoutUsingFallback.value || submittingPayout.value)
@@ -221,28 +247,39 @@ function payoutTone(status: string): PayoutTone {
   }
 }
 
+function payoutStatusLabel(status: string): string {
+  const keys: Record<string, string> = {
+    PENDING: 'statusPending',
+    APPROVED: 'statusApproved',
+    PAID: 'statusPaid',
+    REJECTED: 'statusRejected',
+  }
+  const key = keys[status]
+  return key ? t(`teacherEarnings.${key}`) : status
+}
+
 function payoutDescription(payout: TeacherPayoutRequestResponse): string {
-  const requestedNote = payout.requestedNote?.trim() || 'No note provided.'
+  const requestedNote = payout.requestedNote?.trim() || t('teacherEarnings.noNote')
   const decision = payout.decisionReason?.trim()
-  return decision ? `${requestedNote} • Decision: ${decision}` : requestedNote
+  return decision ? `${requestedNote} • ${t('teacherEarnings.decision', { reason: decision })}` : requestedNote
 }
 
 async function submitPayout(): Promise<void> {
   if (submittingPayout.value) return
   if (payoutUsingFallback.value) {
-    actionError.value = 'Payout requests are unavailable while using preview data.'
+    actionError.value = t('teacherEarnings.previewUnavailable')
     actionSuccess.value = null
     return
   }
 
   if (payoutForm.amount <= 0) {
-    actionError.value = 'Enter a payout amount greater than zero.'
+    actionError.value = t('teacherEarnings.invalidAmount')
     actionSuccess.value = null
     return
   }
 
   if (payoutForm.amount > summary.value.availableBalance) {
-    actionError.value = 'Requested payout exceeds the available balance shown above.'
+    actionError.value = t('teacherEarnings.exceedsBalance')
     actionSuccess.value = null
     return
   }
@@ -259,9 +296,9 @@ async function submitPayout(): Promise<void> {
     await summaryResource.reload()
     payoutForm.amount = 0
     payoutForm.requestedNote = ''
-    actionSuccess.value = 'Payout request submitted, balance refreshed, and history updated.'
+    actionSuccess.value = t('teacherEarnings.submitted')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to submit this payout request.')
+    actionError.value = resolveApiError(reason, t('teacherEarnings.submitError'))
   } finally {
     submittingPayout.value = false
   }

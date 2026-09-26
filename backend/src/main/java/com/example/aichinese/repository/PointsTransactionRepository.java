@@ -15,4 +15,7 @@ public interface PointsTransactionRepository extends JpaRepository<PointsTransac
     Page<PointsTransaction> findByStudentIdOrderByCreatedAtDesc(Long studentId, Pageable pageable);
 
     boolean existsByStudentIdAndSourceTypeAndSourceId(Long studentId, String sourceType, Long sourceId);
+
+    List<PointsTransaction> findByStudentIdAndSourceTypeInAndSourceIdIn(
+            Long studentId, List<String> sourceTypes, List<Long> sourceIds);
 }

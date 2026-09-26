@@ -41,7 +41,17 @@ public interface LearningModuleRepository extends JpaRepository<LearningModule, 
     @NonNull
     List<LearningModule> findAll(@Nullable Specification<LearningModule> specification);
 
+    @Override
+    @EntityGraph(value = LearningModule.GRAPH_DETAIL)
+    @NonNull
+    Page<LearningModule> findAll(@Nullable Specification<LearningModule> specification, @NonNull Pageable pageable);
+
     long countByContentStatus(ContentStatus contentStatus);
+
+    long countByTeacherId(Long teacherId);
+
+    @Query("select m.contentStatus as status, count(m) as count from LearningModule m where m.teacher.id = :teacherId group by m.contentStatus")
+    List<StatusCountProjection> groupByContentStatusForTeacher(Long teacherId);
 
     @Query("select m.contentStatus as status, count(m) as count from LearningModule m group by m.contentStatus")
     List<StatusCountProjection> groupByContentStatus();

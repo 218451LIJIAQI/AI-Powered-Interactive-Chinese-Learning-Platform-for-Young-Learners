@@ -8,10 +8,14 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +51,7 @@ public class AdminContentReviewService {
     private static final Logger log = LoggerFactory.getLogger(AdminContentReviewService.class);
 
     private static final int ADMIN_PACKAGE_ITEM_LIMIT = 100;
+    private static final int MERGE_BATCH_SIZE = 100;
     private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
 
     private final LearningModuleRepository learningModuleRepository;
@@ -93,44 +98,122 @@ public class AdminContentReviewService {
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .orElse(null);
 
-        List<ContentSubmissionResponse> submissions = new ArrayList<>();
+        int safePage = PaginationUtils.sanitizePage(page);
+        int safeSize = PaginationUtils.sanitizeSize(size);
+        Sort sort = Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"));
+        List<SubmissionCursor<?>> cursors = new ArrayList<>();
+        long totalItems = 0L;
 
         if (filterType == null || filterType == ManagedContentType.MODULE) {
-            submissions.addAll(learningModuleRepository
-                    .findAll(buildModuleSpecification(filterStatus, teacherId, normalizedKeyword))
-                    .stream()
-                    .map(contentManagementMapper::toSubmissionResponse)
-                    .toList());
+            Specification<LearningModule> specification = buildModuleSpecification(filterStatus, teacherId, normalizedKeyword);
+            SubmissionCursor<LearningModule> cursor = new SubmissionCursor<>(
+                    pageable -> learningModuleRepository.findAll(specification, pageable),
+                    contentManagementMapper::toSubmissionResponse,
+                    sort);
+            totalItems += cursor.totalItems();
+            cursors.add(cursor);
         }
 
         if (filterType == null || filterType == ManagedContentType.LESSON) {
-            submissions.addAll(lessonRepository
-                    .findAll(buildLessonSpecification(filterStatus, teacherId, normalizedKeyword))
-                    .stream()
-                    .map(contentManagementMapper::toSubmissionResponse)
-                    .toList());
+            Specification<Lesson> specification = buildLessonSpecification(filterStatus, teacherId, normalizedKeyword);
+            SubmissionCursor<Lesson> cursor = new SubmissionCursor<>(
+                    pageable -> lessonRepository.findAll(specification, pageable),
+                    contentManagementMapper::toSubmissionResponse,
+                    sort);
+            totalItems += cursor.totalItems();
+            cursors.add(cursor);
         }
 
         if (filterType == null || filterType == ManagedContentType.PACKAGE) {
-            submissions.addAll(coursePackageRepository
-                    .findAll(buildPackageSpecification(filterStatus, teacherId, normalizedKeyword))
-                    .stream()
-                    .map(contentManagementMapper::toSubmissionResponse)
-                    .toList());
+            Specification<CoursePackage> specification = buildPackageSpecification(filterStatus, teacherId, normalizedKeyword);
+            SubmissionCursor<CoursePackage> cursor = new SubmissionCursor<>(
+                    pageable -> coursePackageRepository.findAll(specification, pageable),
+                    contentManagementMapper::toSubmissionResponse,
+                    sort);
+            totalItems += cursor.totalItems();
+            cursors.add(cursor);
         }
 
-        List<ContentSubmissionResponse> sorted = submissions.stream()
-                .sorted(Comparator.comparing(ContentSubmissionResponse::updatedAt).reversed())
-                .toList();
+        List<ContentSubmissionResponse> items = new ArrayList<>(safeSize);
+        long firstIndex = (long) safePage * safeSize;
+        if (firstIndex < totalItems) {
+            Comparator<ContentSubmissionResponse> newestFirst = Comparator
+                    .comparing(ContentSubmissionResponse::updatedAt).reversed()
+                    .thenComparing(ContentSubmissionResponse::id, Comparator.reverseOrder());
+            long seen = 0;
+            while (seen < firstIndex + safeSize) {
+                SubmissionCursor<?> next = null;
+                ContentSubmissionResponse nextItem = null;
+                for (SubmissionCursor<?> cursor : cursors) {
+                    ContentSubmissionResponse candidate = cursor.peek();
+                    if (candidate != null && (nextItem == null || newestFirst.compare(candidate, nextItem) < 0)) {
+                        next = cursor;
+                        nextItem = candidate;
+                    }
+                }
+                if (next == null) {
+                    break;
+                }
+                next.advance();
+                if (seen++ >= firstIndex) {
+                    items.add(nextItem);
+                }
+            }
+        }
+        int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
 
-        int safePage = PaginationUtils.sanitizePage(page);
-        int safeSize = PaginationUtils.sanitizeSize(size);
-        int startIndex = PaginationUtils.startIndex(safePage, safeSize, sorted.size());
-        int endIndex = PaginationUtils.endIndex(startIndex, safeSize, sorted.size());
-        List<ContentSubmissionResponse> items = sorted.subList(startIndex, endIndex);
-        int totalPages = PaginationUtils.totalPages(sorted.size(), safeSize);
+        return new PageResponse<>(items, safePage, safeSize, totalItems, totalPages);
+    }
 
-        return new PageResponse<>(items, safePage, safeSize, sorted.size(), totalPages);
+    private static final class SubmissionCursor<T> {
+        private final Function<Pageable, Page<T>> fetch;
+        private final Function<T, ContentSubmissionResponse> map;
+        private final Sort sort;
+        private List<T> batch;
+        private int page;
+        private int index;
+        private long totalItems;
+        private ContentSubmissionResponse pending;
+
+        private SubmissionCursor(Function<Pageable, Page<T>> fetch, Function<T, ContentSubmissionResponse> map, Sort sort) {
+            this.fetch = fetch;
+            this.map = map;
+            this.sort = sort;
+            loadPage();
+        }
+
+        private long totalItems() {
+            return totalItems;
+        }
+
+        private ContentSubmissionResponse peek() {
+            if (index >= batch.size()) {
+                if ((long) page * MERGE_BATCH_SIZE >= totalItems) {
+                    return null;
+                }
+                loadPage();
+            }
+            if (index >= batch.size()) {
+                return null;
+            }
+            if (pending == null) {
+                pending = map.apply(batch.get(index));
+            }
+            return pending;
+        }
+
+        private void advance() {
+            index++;
+            pending = null;
+        }
+
+        private void loadPage() {
+            Page<T> result = fetch.apply(PageRequest.of(page++, MERGE_BATCH_SIZE, sort));
+            totalItems = result.getTotalElements();
+            batch = result.getContent();
+            index = 0;
+            pending = null;
+        }
     }
 
     private static Specification<LearningModule> buildModuleSpecification(

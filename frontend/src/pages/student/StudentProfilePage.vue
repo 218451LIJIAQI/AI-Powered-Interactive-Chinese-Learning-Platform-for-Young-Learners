@@ -1,18 +1,18 @@
 <template>
   <div class="page-stack student-profile-page">
     <section class="student-profile-header">
-      <span class="student-profile-kicker">My learning home</span>
-      <h1>Hello, {{ displayName }}!</h1>
-      <p>Review your learning progress, rewards, teacher feedback, and payment history in one place.</p>
+      <span class="student-profile-kicker">{{ t('studentProfile.kicker') }}</span>
+      <h1>{{ t('studentProfile.hello', { name: displayName }) }}</h1>
+      <p>{{ t('studentProfile.intro') }}</p>
     </section>
 
     <DataNotice
       :using-fallback="usingFallback"
       :error="noticeError"
       :success="actionSuccess"
-      fallback-title="Preview student profile"
-      fallback-message="Progress, rewards, feedback, activities, and payments are showing safe preview data for this preview session."
-      error-title="Profile details need attention"
+      :fallback-title="t('studentProfile.previewTitle')"
+      :fallback-message="t('studentProfile.previewMessage')"
+      :error-title="t('studentProfile.errorTitle')"
       :detail="profileNoticeDetail"
     />
 
@@ -23,7 +23,7 @@
             <div class="student-profile-identity">
               <PortraitAvatar :size="120" kind="student" accent="#ffb54a" />
               <div class="student-profile-identity-copy">
-                <span class="student-profile-identity-eyebrow">Student snapshot</span>
+                <span class="student-profile-identity-eyebrow">{{ t('studentProfile.snapshot') }}</span>
                 <h2>{{ displayName }}</h2>
                 <span class="student-profile-role">{{ currentLevelTitle }}</span>
                 <small>{{ profileEmailLabel }}</small>
@@ -33,22 +33,24 @@
 
             <div class="student-profile-hero-stats">
               <article class="student-profile-stat-card">
-                <small>Level</small>
+                <small>{{ t('studentProfile.level') }}</small>
                 <strong>{{ currentLevelNumber }}</strong>
-                <span>{{ formatPercent(rewards.progressToNextLevelPercent) }} to next level</span>
+                <span>{{
+                  t('studentProfile.nextLevel', { progress: formatPercent(rewards.progressToNextLevelPercent) })
+                }}</span>
               </article>
               <article class="student-profile-stat-card">
-                <small>Current Streak</small>
+                <small>{{ t('studentProfile.streak') }}</small>
                 <strong>{{ currentStreakCount }}</strong>
                 <span>{{ streakDateLabel }}</span>
               </article>
               <article class="student-profile-stat-card">
-                <small>Overall Progress</small>
+                <small>{{ t('studentProfile.overallProgress') }}</small>
                 <strong>{{ formatPercent(overallProgressPercent) }}</strong>
-                <span>{{ completedLessonCount }} completed lesson(s)</span>
+                <span>{{ t('studentProfile.completedLessons', { count: completedLessonCount }) }}</span>
               </article>
               <article class="student-profile-stat-card">
-                <small>Quiz Average</small>
+                <small>{{ t('studentProfile.quizAverage') }}</small>
                 <strong>{{ formatPercent(progress.quizAverage) }}</strong>
                 <span>{{ lastActivitySummaryLabel }}</span>
               </article>
@@ -59,10 +61,10 @@
             <article class="panel student-profile-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Recent Badges</strong>
+                  <strong>{{ t('studentProfile.recentBadges') }}</strong>
                 </div>
                 <button type="button" class="student-link-button" @click="openRewards">
-                  View Rewards
+                  {{ t('studentProfile.viewRewards') }}
                 </button>
               </div>
 
@@ -76,18 +78,18 @@
               <StatePanel
                 v-else
                 icon="rewards"
-                title="No badges yet"
-                message="Badges will appear here as you keep learning."
+                :title="t('studentProfile.noBadges')"
+                :message="t('studentProfile.noBadgesHint')"
               />
             </article>
 
             <article class="panel student-profile-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Recent Points Activity</strong>
+                  <strong>{{ t('studentProfile.recentPoints') }}</strong>
                 </div>
                 <button type="button" class="student-link-button" @click="openRewards">
-                  Open Rewards
+                  {{ t('studentProfile.openRewards') }}
                 </button>
               </div>
 
@@ -104,18 +106,18 @@
               <StatePanel
                 v-else
                 icon="rewards"
-                title="No points history"
-                message="Points history will appear here after you complete activities."
+                :title="t('studentProfile.noPoints')"
+                :message="t('studentProfile.noPointsHint')"
               />
             </article>
 
             <article class="panel student-profile-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Recent Lessons</strong>
+                  <strong>{{ t('studentProfile.recentLessons') }}</strong>
                 </div>
                 <button type="button" class="student-link-button" @click="openLearn">
-                  Open Learn
+                  {{ t('studentProfile.openLearn') }}
                 </button>
               </div>
 
@@ -132,18 +134,18 @@
               <StatePanel
                 v-else
                 icon="learn"
-                title="No recent lessons"
-                message="Your recent lesson activity will appear here after you start learning."
+                :title="t('studentProfile.noLessons')"
+                :message="t('studentProfile.noLessonsHint')"
               />
             </article>
 
             <article class="panel student-profile-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Teacher Feedback</strong>
+                  <strong>{{ t('studentProfile.feedback') }}</strong>
                 </div>
                 <button type="button" class="student-link-button" @click="openPractice">
-                  Open Practice
+                  {{ t('studentProfile.openPractice') }}
                 </button>
               </div>
 
@@ -160,8 +162,8 @@
               <StatePanel
                 v-else
                 icon="help"
-                title="No feedback yet"
-                message="Teacher feedback will appear here after your teacher sends it."
+                :title="t('studentProfile.noFeedback')"
+                :message="t('studentProfile.noFeedbackHint')"
               />
             </article>
           </div>
@@ -170,22 +172,26 @@
         <aside class="student-profile-side">
           <article class="panel student-profile-card">
             <div class="student-section-heading">
-              <strong>Learning Snapshot</strong>
+              <strong>{{ t('studentProfile.learningSnapshot') }}</strong>
             </div>
 
-            <ProgressRing :progress="overallProgressPercent" title="Keep going" subtitle="Your student progress" />
+            <ProgressRing
+              :progress="overallProgressPercent"
+              :title="t('studentProfile.keepGoing')"
+              :subtitle="t('studentProfile.studentProgress')"
+            />
 
             <div class="student-profile-side-stats">
               <div>
-                <small>Lessons Started</small>
+                <small>{{ t('studentProfile.lessonsStarted') }}</small>
                 <strong>{{ startedLessonCount }}</strong>
               </div>
               <div>
-                <small>Activities Loaded</small>
+                <small>{{ t('studentProfile.activitiesLoaded') }}</small>
                 <strong>{{ activities.items.length }}</strong>
               </div>
               <div>
-                <small>Weak Areas</small>
+                <small>{{ t('studentProfile.weakAreas') }}</small>
                 <strong>{{ progress.weakAreas.length }}</strong>
               </div>
             </div>
@@ -194,7 +200,7 @@
           <article class="panel student-profile-card">
             <div class="row-between">
               <div class="student-section-heading">
-                <strong>Recent Notifications</strong>
+                <strong>{{ t('studentProfile.notifications') }}</strong>
               </div>
               <button
                 type="button"
@@ -231,18 +237,18 @@
             <StatePanel
               v-else
               icon="bell"
-              title="No notifications"
-              message="Notifications from classes, payments, and learning reminders will appear here."
+              :title="t('studentProfile.noNotifications')"
+              :message="t('studentProfile.noNotificationsHint')"
             />
           </article>
 
           <article class="panel student-profile-card">
             <div class="row-between">
               <div class="student-section-heading">
-                <strong>Activity Library</strong>
+                <strong>{{ t('studentProfile.activityLibrary') }}</strong>
               </div>
               <button type="button" class="student-link-button" @click="openPractice">
-                Open Practice
+                {{ t('studentProfile.openPractice') }}
               </button>
             </div>
 
@@ -259,27 +265,27 @@
             <StatePanel
               v-else
               icon="practice"
-              title="No activities available"
-              message="The activity library is empty for this student right now."
+              :title="t('studentProfile.noActivities')"
+              :message="t('studentProfile.noActivitiesHint')"
             />
           </article>
 
           <article class="panel student-profile-card">
             <div class="student-section-heading">
-              <strong>Account Context</strong>
+              <strong>{{ t('studentProfile.accountContext') }}</strong>
             </div>
 
             <div class="student-profile-settings-list">
               <article class="student-profile-setting-row">
-                <span>Preferred Language</span>
+                <span>{{ t('studentProfile.preferredLanguage') }}</span>
                 <small>{{ preferredLanguageLabel }}</small>
               </article>
               <article class="student-profile-setting-row">
-                <span>AI Helper Route</span>
-                <small>Available from student navigation</small>
+                <span>{{ t('studentProfile.aiRoute') }}</span>
+                <small>{{ t('studentProfile.aiRouteHint') }}</small>
               </article>
               <article class="student-profile-setting-row">
-                <span>Email</span>
+                <span>{{ t('studentProfile.email') }}</span>
                 <small>{{ profileAccountEmailLabel }}</small>
               </article>
             </div>
@@ -288,7 +294,7 @@
           <article class="panel student-profile-card">
             <div class="row-between">
               <div class="student-section-heading">
-                <strong>Payments and Refunds</strong>
+                <strong>{{ t('studentProfile.paymentsRefunds') }}</strong>
               </div>
             </div>
 
@@ -300,7 +306,7 @@
               >
                 <div>
                   <strong>{{ payment.orderNumber }}</strong>
-                  <span>{{ payment.providerName }} - {{ payment.paymentStatus }}</span>
+                  <span>{{ payment.providerName }} - {{ financeStatusLabel(payment.paymentStatus) }}</span>
                 </div>
                 <strong>{{ formatCurrency(payment.amount, payment.currencyCode) }}</strong>
               </article>
@@ -308,8 +314,8 @@
             <StatePanel
               v-else
               icon="finance"
-              title="No payments"
-              message="Payment records will appear here once you purchase content."
+              :title="t('studentProfile.noPayments')"
+              :message="t('studentProfile.noPaymentsHint')"
             />
 
             <div v-if="refunds.length" class="student-profile-refund-list">
@@ -318,22 +324,22 @@
                   <strong>{{ refund.orderNumber }}</strong>
                   <span>{{ refund.reason }}</span>
                 </div>
-                <StatusPill :label="refund.refundStatus" tone="warning" />
+                <StatusPill :label="financeStatusLabel(refund.refundStatus)" tone="warning" />
               </article>
             </div>
 
             <ActionFormCard
-              title="Request refund"
-              subtitle="Submit a refund request for an existing order."
+              :title="t('studentProfile.requestRefund')"
+              :subtitle="t('studentProfile.requestRefundHint')"
               icon="finance"
-              submit-label="Submit refund request"
-              submitting-label="Submitting..."
+              :submit-label="t('studentProfile.submitRefund')"
+              :submitting-label="t('studentProfile.submitting')"
               :submitting="submittingRefund"
               :disabled="refundFormDisabled"
               @submit="submitRefund"
             >
               <div class="field">
-                <label for="student-refund-order">Order</label>
+                <label for="student-refund-order">{{ t('studentProfile.order') }}</label>
                 <select
                   id="student-refund-order"
                   v-model.number="refundForm.orderId"
@@ -350,13 +356,13 @@
                 </select>
               </div>
               <div class="field">
-                <label for="student-refund-reason">Reason</label>
+                <label for="student-refund-reason">{{ t('studentProfile.reason') }}</label>
                 <textarea
                   id="student-refund-reason"
                   v-model="refundForm.reason"
                   class="textarea"
                   maxlength="1000"
-                  placeholder="Explain why you need a refund."
+                  :placeholder="t('studentProfile.reasonPlaceholder')"
                   :disabled="refundFormDisabled"
                 />
               </div>
@@ -370,6 +376,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { authApi, notificationsApi, studentApi } from '@/api/services'
@@ -384,13 +391,14 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import {
   activityLibrary,
-  demoUsers,
   studentFeedbackList,
   studentPayments,
   studentProgress as studentProgressDemo,
   studentRefunds,
   studentRewards,
 } from '@/demo/data'
+import { demoUsers } from '@/demo/users'
+import { studentProfileMessages } from '@/plugins/studentProfileMessages'
 import { resolveApiError } from '@/utils/apiError'
 import {
   clampPercent,
@@ -402,6 +410,14 @@ import {
   toFiniteNumber,
 } from '@/utils/format'
 import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
+
+const { t } = useI18n({
+  messages: {
+    en: { studentProfile: studentProfileMessages.en },
+    ms: { studentProfile: studentProfileMessages.ms },
+    zh: { studentProfile: studentProfileMessages.zh },
+  },
+})
 
 type NotificationStatusTone = 'info' | 'warning'
 type FeedbackSummary = {
@@ -521,24 +537,25 @@ const pageError = computed(
 const noticeError = computed(() => actionError.value || pageError.value)
 const profileNoticeDetail = computed(() => {
   if (noticeError.value) {
-    return 'Your most recent profile snapshot remains visible so you can still review progress and account context.'
+    return t('studentProfile.errorSnapshot')
   }
 
   if (usingFallback.value) {
-    return 'Preview mode keeps profile, rewards, feedback, and payment sections testable even without the full backend.'
+    return t('studentProfile.previewDetail')
   }
 
   if (actionSuccess.value) {
-    return 'Your request completed and the profile snapshot has been refreshed.'
+    return t('studentProfile.successDetail')
   }
 
   return null
 })
 
 const displayName = computed(
-  () => profile.value.studentProfile?.displayName || profile.value.fullName.split(' ')[0] || 'Student',
+  () =>
+    profile.value.studentProfile?.displayName || profile.value.fullName.split(' ')[0] || t('studentProfile.student'),
 )
-const profileEmailLabel = computed(() => profile.value.email || 'No email available')
+const profileEmailLabel = computed(() => profile.value.email || t('studentProfile.noEmail'))
 const profileAccountEmailLabel = computed(() => profile.value.email || '--')
 const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
 const currentStreakCount = computed(() => nonNegativeInteger(rewards.value.streak.currentStreak))
@@ -546,23 +563,28 @@ const completedLessonCount = computed(() => nonNegativeInteger(progress.value.co
 const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
 const overallProgressPercent = computed(() => clampPercent(progress.value.overallCompletionPercent))
 const currentLevelTitle = computed(
-  () => profile.value.studentProfile?.currentLevel || `Level ${currentLevelNumber.value}`,
+  () =>
+    profile.value.studentProfile?.currentLevel || t('studentProfile.levelNumber', { level: currentLevelNumber.value }),
 )
-const accountModeLabel = computed(() => (usingFallback.value ? 'Preview profile data' : 'Live student account'))
-const lastActivitySummaryLabel = computed(() => progress.value.lastActivitySummary || 'No recent summary available')
+const accountModeLabel = computed(() =>
+  usingFallback.value ? t('studentProfile.previewData') : t('studentProfile.liveAccount'),
+)
+const lastActivitySummaryLabel = computed(() => progress.value.lastActivitySummary || t('studentProfile.noSummary'))
 const streakDateLabel = computed(() =>
   rewards.value.streak.lastLearningDate
-    ? `Last active ${formatDate(rewards.value.streak.lastLearningDate)}`
-    : 'No learning date yet',
+    ? t('studentProfile.lastActive', { date: formatDate(rewards.value.streak.lastLearningDate) })
+    : t('studentProfile.noLearningDate'),
 )
 const preferredLanguageLabel = computed(() => {
   const value = profile.value.preferredLanguage || 'en'
   if (value === 'ms') return 'Bahasa Melayu'
-  if (value === 'zh') return 'Chinese'
-  return 'English'
+  if (value === 'zh') return t('studentProfile.chinese')
+  return t('studentProfile.english')
 })
 const hasUnreadNotifications = computed(() => notifications.value.some((item) => item.status !== 'READ'))
-const markAllNotificationsLabel = computed(() => (markingNotificationsRead.value ? 'Marking...' : 'Mark all read'))
+const markAllNotificationsLabel = computed(() =>
+  markingNotificationsRead.value ? t('studentProfile.marking') : t('studentProfile.markAllRead'),
+)
 const activeRefundOrderIds = computed(
   () =>
     new Set(
@@ -575,7 +597,7 @@ const refundablePayments = computed(() =>
   payments.value.filter((item) => item.paymentStatus === 'PAID' && !activeRefundOrderIds.value.has(item.orderId)),
 )
 const refundOrderPlaceholder = computed(() =>
-  refundablePayments.value.length ? 'Select an order' : 'No refundable order available',
+  refundablePayments.value.length ? t('studentProfile.selectOrder') : t('studentProfile.noRefundableOrder'),
 )
 const refundReadOnly = computed(() => paymentsResource.usingFallback.value || refundsResource.usingFallback.value)
 const refundFormDisabled = computed(() => refundReadOnly.value || submittingRefund.value)
@@ -584,7 +606,7 @@ const badgeCards = computed(() =>
   rewards.value.badges.slice(0, 4).map((badge) => ({
     id: badge.badgeId,
     title: badge.name,
-    subtitle: badge.awardedAt ? `Awarded ${formatDate(badge.awardedAt)}` : badge.description,
+    subtitle: badge.awardedAt ? t('studentProfile.awarded', { date: formatDate(badge.awardedAt) }) : badge.description,
     initials:
       badge.name
         .split(' ')
@@ -615,11 +637,13 @@ const recentLessons = computed(() =>
       progressLabel: formatPercent(completionPercent),
       statusLabel:
         lesson.completed || completionPercent >= 100
-          ? 'Completed'
+          ? t('studentProfile.completed')
           : completionPercent > 0
-            ? 'In progress'
-            : 'Not started',
-      lastAccessedLabel: lesson.lastAccessedAt ? formatDateTime(lesson.lastAccessedAt) : 'No last access timestamp',
+            ? t('studentProfile.inProgress')
+            : t('studentProfile.notStarted'),
+      lastAccessedLabel: lesson.lastAccessedAt
+        ? formatDateTime(lesson.lastAccessedAt)
+        : t('studentProfile.noLastAccess'),
     }
   }),
 )
@@ -629,8 +653,8 @@ const activityRows = computed(() =>
     id: item.id,
     title: item.title,
     type: item.type.replaceAll('_', ' '),
-    tags: item.tags.length ? item.tags.join(', ') : 'No tags',
-    status: item.completed ? 'Done' : 'Open',
+    tags: item.tags.length ? item.tags.join(', ') : t('studentProfile.noTags'),
+    status: item.completed ? t('studentProfile.done') : t('studentProfile.open'),
   })),
 )
 
@@ -665,15 +689,39 @@ function openPractice(): void {
 }
 
 function feedbackTitle(item: FeedbackSummary): string {
-  return item.lessonTitle || item.quizTitle || 'Teacher feedback'
+  return item.lessonTitle || item.quizTitle || t('studentProfile.feedback')
 }
 
 function feedbackTypeLabel(item: FeedbackSummary): string {
-  return item.feedbackType || 'General'
+  if (!item.feedbackType) return t('studentProfile.feedbackGeneral')
+  const keys: Record<string, string> = {
+    GENERAL: 'feedbackGeneral',
+    QUIZ: 'feedbackQuiz',
+    LESSON: 'feedbackLesson',
+    ENCOURAGING: 'feedbackEncouraging',
+    CORRECTIVE: 'feedbackCorrective',
+    PROGRESS: 'feedbackProgress',
+    WEAK_AREA: 'feedbackWeakArea',
+  }
+  const key = keys[item.feedbackType.toUpperCase()]
+  return key ? t(`studentProfile.${key}`) : formatTeacherFeedbackType(item.feedbackType)
 }
 
 function notificationStatusLabel(status: string): string {
-  return status === 'READ' ? 'Read' : 'Unread'
+  return status === 'READ' ? t('studentProfile.read') : t('studentProfile.unread')
+}
+
+function financeStatusLabel(status: string): string {
+  const keys: Record<string, string> = {
+    PENDING: 'statusPending',
+    APPROVED: 'statusApproved',
+    REJECTED: 'statusRejected',
+    REFUNDED: 'statusRefunded',
+    PAID: 'statusPaid',
+    FAILED: 'statusFailed',
+  }
+  const key = keys[status]
+  return key ? t(`studentProfile.${key}`) : status
 }
 
 function notificationStatusTone(status: string): NotificationStatusTone {
@@ -689,7 +737,7 @@ function markStudentNotificationRead(notificationId: number): void {
 async function markAllNotificationsRead(): Promise<void> {
   if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
-    actionError.value = 'Notifications cannot be changed while using preview data.'
+    actionError.value = t('studentProfile.previewNotifications')
     actionSuccess.value = null
     return
   }
@@ -705,10 +753,10 @@ async function markAllNotificationsRead(): Promise<void> {
     window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
     actionSuccess.value =
       result.updatedCount > 0
-        ? `Marked ${result.updatedCount} notification(s) as read.`
-        : 'All notifications are already read.'
+        ? t('studentProfile.markedCount', { count: result.updatedCount })
+        : t('studentProfile.alreadyRead')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to mark notifications as read.')
+    actionError.value = resolveApiError(reason, t('studentProfile.markReadError'))
   } finally {
     markingNotificationsRead.value = false
   }
@@ -717,19 +765,19 @@ async function markAllNotificationsRead(): Promise<void> {
 async function submitRefund(): Promise<void> {
   if (submittingRefund.value) return
   if (refundReadOnly.value) {
-    actionError.value = 'Refund requests cannot be submitted while preview payment data is active.'
+    actionError.value = t('studentProfile.previewRefund')
     actionSuccess.value = null
     return
   }
 
   if (refundForm.orderId <= 0) {
-    actionError.value = 'No order is available for refund right now.'
+    actionError.value = t('studentProfile.noOrder')
     actionSuccess.value = null
     return
   }
 
   if (!refundForm.reason.trim()) {
-    actionError.value = 'Enter a refund reason before submitting this request.'
+    actionError.value = t('studentProfile.reasonRequired')
     actionSuccess.value = null
     return
   }
@@ -742,9 +790,9 @@ async function submitRefund(): Promise<void> {
     await refundsResource.reload()
     refundForm.reason = ''
     refundForm.orderId = refundablePayments.value.find((item) => item.orderId !== refundForm.orderId)?.orderId ?? 0
-    actionSuccess.value = 'Refund request submitted and refund history refreshed.'
+    actionSuccess.value = t('studentProfile.refundSubmitted')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to submit this refund request.')
+    actionError.value = resolveApiError(reason, t('studentProfile.refundError'))
   } finally {
     submittingRefund.value = false
   }

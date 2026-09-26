@@ -1286,10 +1286,7 @@ export const adminApi = {
   reviewAiReport(id: number, payload: ReviewAiReportPayload) {
     return unwrap<AdminAiResponseReportResponse>(http.post(`/admin/ai-response-reports/${id}/review`, payload))
   },
-  moderationAction(
-    action: ModerationAction,
-    payload: ModerationPayload,
-  ) {
+  moderationAction(action: ModerationAction, payload: ModerationPayload) {
     return unwrap<ModerationRecordResponse>(http.post(MODERATION_ACTION_ENDPOINTS[action], payload))
   },
   notifications(params: QueryParams = {}) {

@@ -1,24 +1,17 @@
 <template>
   <div class="page-stack teacher-profile-page">
-    <PageHeaderBlock
-      title="Teacher Profile"
-      description="Manage your public teaching profile and track verification status with real backend fields."
-      icon="profile"
-    />
+    <PageHeaderBlock :title="t('teacherProfile.title')" :description="t('teacherProfile.description')" icon="profile" />
 
     <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
 
     <section class="teacher-profile-hero">
       <div class="teacher-profile-hero-copy">
-        <span>Teacher identity</span>
+        <span>{{ t('teacherProfile.identity') }}</span>
         <h2>{{ profileNameLabel }}</h2>
         <p>{{ profileIntroLabel }}</p>
       </div>
       <div class="teacher-profile-hero-status">
-        <StatusPill
-          :label="verification.teacherStatus"
-          :tone="verificationStatusTone"
-        />
+        <StatusPill :label="verificationStatusLabel" :tone="verificationStatusTone" />
         <div class="teacher-profile-hero-stats">
           <article v-for="item in profileHighlights" :key="item.label">
             <strong>{{ item.value }}</strong>
@@ -31,17 +24,17 @@
     <section class="three-col teacher-profile-layout">
       <div class="stack teacher-profile-main">
         <ActionFormCard
-          title="Edit teacher profile"
-          subtitle="Public-facing teacher information"
+          :title="t('teacherProfile.edit')"
+          :subtitle="t('teacherProfile.editHint')"
           icon="profile"
-          submit-label="Save profile"
-          submitting-label="Saving..."
+          :submit-label="t('teacherProfile.save')"
+          :submitting-label="t('teacherProfile.saving')"
           :submitting="savingProfile"
           :disabled="profileFormDisabled"
           @submit="saveProfile"
         >
           <div class="field">
-            <label for="teacher-profile-full-name">Full name</label>
+            <label for="teacher-profile-full-name">{{ t('teacherProfile.fullName') }}</label>
             <input
               id="teacher-profile-full-name"
               v-model="profileForm.fullName"
@@ -52,7 +45,7 @@
             />
           </div>
           <div class="field">
-            <label for="teacher-profile-bio">Bio</label>
+            <label for="teacher-profile-bio">{{ t('teacherProfile.bio') }}</label>
             <textarea
               id="teacher-profile-bio"
               v-model="profileForm.bio"
@@ -62,7 +55,7 @@
             />
           </div>
           <div class="field">
-            <label for="teacher-profile-short-introduction">Short introduction</label>
+            <label for="teacher-profile-short-introduction">{{ t('teacherProfile.shortIntro') }}</label>
             <textarea
               id="teacher-profile-short-introduction"
               v-model="profileForm.shortIntroduction"
@@ -72,19 +65,23 @@
             />
           </div>
           <div class="field">
-            <label for="teacher-profile-categories">Teaching categories</label>
+            <label for="teacher-profile-categories">{{ t('teacherProfile.teachingCategories') }}</label>
             <input
               id="teacher-profile-categories"
               v-model="categoriesText"
               class="input"
               maxlength="255"
-              placeholder="Conversation, Pinyin, Listening"
+              :placeholder="t('teacherProfile.categoriesPlaceholder')"
               :disabled="profileFormDisabled"
             />
           </div>
         </ActionFormCard>
 
-        <InfoCard title="Verification documents" subtitle="Current uploaded verification files." icon="verification">
+        <InfoCard
+          :title="t('teacherProfile.verificationDocuments')"
+          :subtitle="t('teacherProfile.verificationDocumentsHint')"
+          icon="verification"
+        >
           <div class="list">
             <ListInfoItem
               v-for="document in profile.verificationDocuments"
@@ -112,13 +109,14 @@
       </div>
 
       <div class="stack">
-        <InfoCard title="Verification status" subtitle="Teacher identity protection." icon="verification">
-          <StatusPill
-            :label="verification.teacherStatus"
-            :tone="verificationStatusTone"
-          />
+        <InfoCard
+          :title="t('teacherProfile.verificationStatus')"
+          :subtitle="t('teacherProfile.verificationStatusHint')"
+          icon="verification"
+        >
+          <StatusPill :label="verificationStatusLabel" :tone="verificationStatusTone" />
           <p class="muted u-m-0">
-            {{ verification.latestReviewResult?.note || 'Your current verification state is shown here.' }}
+            {{ verification.latestReviewResult?.note || t('teacherProfile.currentStatus') }}
           </p>
           <button
             v-if="verification.resubmissionAllowed"
@@ -126,11 +124,15 @@
             type="button"
             @click="resubmitVerification"
           >
-            Resubmit verification
+            {{ t('teacherProfile.resubmit') }}
           </button>
         </InfoCard>
 
-        <InfoCard title="Recent notifications" subtitle="Open a notification to mark it as read." icon="bell">
+        <InfoCard
+          :title="t('teacherProfile.recentNotifications')"
+          :subtitle="t('teacherProfile.recentNotificationsHint')"
+          icon="bell"
+        >
           <template #header-end>
             <button
               class="teacher-outline-button"
@@ -165,21 +167,21 @@
             </NotificationLinkButton>
           </div>
 
-          <p v-else class="muted u-m-0">Recent teacher notifications will appear here.</p>
+          <p v-else class="muted u-m-0">{{ t('teacherProfile.noNotifications') }}</p>
         </InfoCard>
 
         <ActionFormCard
-          title="Upload verification document"
-          subtitle="Real backend multipart endpoint"
+          :title="t('teacherProfile.upload')"
+          :subtitle="t('teacherProfile.uploadHint')"
           icon="file"
-          submit-label="Upload document"
-          submitting-label="Uploading..."
+          :submit-label="t('teacherProfile.uploadDocument')"
+          :submitting-label="t('teacherProfile.uploading')"
           :submitting="uploading"
           :disabled="verificationUploadDisabled"
           @submit="uploadDocument"
         >
           <div class="field">
-            <label for="teacher-verification-document-type">Document type</label>
+            <label for="teacher-verification-document-type">{{ t('teacherProfile.documentType') }}</label>
             <select
               id="teacher-verification-document-type"
               v-model="uploadForm.documentType"
@@ -192,18 +194,18 @@
             </select>
           </div>
           <div class="field">
-            <label for="teacher-verification-description">Description</label>
+            <label for="teacher-verification-description">{{ t('teacherProfile.documentDescription') }}</label>
             <input
               id="teacher-verification-description"
               v-model="uploadForm.description"
               class="input"
               maxlength="500"
-              placeholder="Government ID, certificate, or qualification proof"
+              :placeholder="t('teacherProfile.documentPlaceholder')"
               :disabled="verificationUploadReadOnly"
             />
           </div>
           <div class="field">
-            <label for="teacher-verification-file">File</label>
+            <label for="teacher-verification-file">{{ t('teacherProfile.file') }}</label>
             <input
               id="teacher-verification-file"
               ref="fileInput"
@@ -213,7 +215,7 @@
               :disabled="verificationUploadReadOnly"
               @change="selectVerificationFile"
             />
-            <small class="helper-text">Upload a PDF, JPG, JPEG, or PNG file under 5 MB.</small>
+            <small class="helper-text">{{ t('teacherProfile.fileHint') }}</small>
           </div>
         </ActionFormCard>
       </div>
@@ -223,6 +225,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { notificationsApi, teacherApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -234,10 +237,19 @@ import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { teacherProfile, teacherVerification } from '@/demo/data'
+import { teacherProfileMessages } from '@/plugins/teacherProfileMessages'
 import type { TeacherVerificationDocumentType } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
 import { formatDateTime } from '@/utils/format'
+
+const { t } = useI18n({
+  messages: {
+    en: { teacherProfile: teacherProfileMessages.en },
+    ms: { teacherProfile: teacherProfileMessages.ms },
+    zh: { teacherProfile: teacherProfileMessages.zh },
+  },
+})
 
 type StatusTone = 'success' | 'warning' | 'info'
 
@@ -285,30 +297,39 @@ const usingFallback = computed(
     notificationsResource.usingFallback.value,
 )
 const pageError = computed(
-  () =>
-    profileResource.error.value ||
-    verificationResource.error.value ||
-    notificationsResource.error.value,
+  () => profileResource.error.value || verificationResource.error.value || notificationsResource.error.value,
 )
 const noticeError = computed(() => actionError.value || pageError.value)
-const profileNameLabel = computed(() => profile.value.fullName || 'Teacher profile')
+const profileNameLabel = computed(() => profile.value.fullName || t('teacherProfile.fallbackName'))
 const profileIntroLabel = computed(
-  () => profile.value.shortIntroduction || profile.value.bio || 'Build a trusted teacher profile for MandarinSpark families.',
+  () => profile.value.shortIntroduction || profile.value.bio || t('teacherProfile.fallbackIntro'),
 )
 const verificationStatusTone = computed(() => (verification.value.teacherStatus === 'APPROVED' ? 'success' : 'warning'))
+const verificationStatusLabel = computed(() => {
+  const keys: Record<string, string> = {
+    PENDING: 'statusPending',
+    APPROVED: 'statusApproved',
+    REJECTED: 'statusRejected',
+    SUSPENDED: 'statusSuspended',
+  }
+  const key = keys[verification.value.teacherStatus]
+  return key ? t(`teacherProfile.${key}`) : verification.value.teacherStatus
+})
 const profileHighlights = computed(() => [
-  { label: 'Categories', value: String(profile.value.teachingCategories.length) },
-  { label: 'Documents', value: String(profile.value.verificationDocuments.length) },
-  { label: 'Status', value: verification.value.teacherStatus },
+  { label: t('teacherProfile.categories'), value: String(profile.value.teachingCategories.length) },
+  { label: t('teacherProfile.documents'), value: String(profile.value.verificationDocuments.length) },
+  { label: t('teacherProfile.status'), value: verificationStatusLabel.value },
 ])
 const hasUnreadNotifications = computed(() => notifications.value.some((item) => item.status !== 'READ'))
-const markAllNotificationsLabel = computed(() => (markingNotificationsRead.value ? 'Marking...' : 'Mark all read'))
-const verificationDocumentTypes: Array<{ value: TeacherVerificationDocumentType; label: string }> = [
-  { value: 'IDENTITY', label: 'Identity document' },
-  { value: 'QUALIFICATION', label: 'Teaching qualification' },
-  { value: 'CERTIFICATE', label: 'Certificate' },
-  { value: 'OTHER', label: 'Other supporting document' },
-]
+const markAllNotificationsLabel = computed(() =>
+  markingNotificationsRead.value ? t('teacherProfile.marking') : t('teacherProfile.markAllRead'),
+)
+const verificationDocumentTypes = computed<Array<{ value: TeacherVerificationDocumentType; label: string }>>(() => [
+  { value: 'IDENTITY', label: t('teacherProfile.identityDocument') },
+  { value: 'QUALIFICATION', label: t('teacherProfile.qualification') },
+  { value: 'CERTIFICATE', label: t('teacherProfile.certificate') },
+  { value: 'OTHER', label: t('teacherProfile.otherDocument') },
+])
 
 const profileForm = reactive({
   fullName: '',
@@ -376,7 +397,7 @@ function selectVerificationFile(event: Event): void {
 
   if (!hasAllowedVerificationFileType(file) || file.size > maxVerificationFileSize) {
     resetVerificationFileInput()
-    actionError.value = 'Choose a PDF, JPG, JPEG, or PNG file under 5 MB.'
+    actionError.value = t('teacherProfile.invalidFile')
     return
   }
 
@@ -384,11 +405,11 @@ function selectVerificationFile(event: Event): void {
 }
 
 function documentDownloadLabel(documentId: number): string {
-  return downloadingDocumentId.value === documentId ? 'Downloading...' : 'Download'
+  return downloadingDocumentId.value === documentId ? t('teacherProfile.downloading') : t('teacherProfile.download')
 }
 
 function notificationStatusLabel(status: string): string {
-  return status === 'READ' ? 'Read' : 'Unread'
+  return status === 'READ' ? t('teacherProfile.read') : t('teacherProfile.unread')
 }
 
 function notificationStatusTone(status: string): StatusTone {
@@ -399,7 +420,7 @@ async function saveProfile(): Promise<void> {
   if (savingProfile.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Teacher profile cannot be changed while preview data is active.'
+    actionError.value = t('teacherProfile.previewProfile')
     return
   }
 
@@ -417,9 +438,9 @@ async function saveProfile(): Promise<void> {
         .filter(Boolean),
     })
     await profileResource.reload()
-    actionSuccess.value = 'Teacher profile saved and refreshed.'
+    actionSuccess.value = t('teacherProfile.profileSaved')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save your teacher profile.')
+    actionError.value = resolveApiError(reason, t('teacherProfile.profileSaveError'))
   } finally {
     savingProfile.value = false
   }
@@ -429,7 +450,7 @@ async function downloadVerificationDocument(documentId: number, originalFileName
   if (downloadingDocumentId.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Verification document downloads are unavailable while using preview data.'
+    actionError.value = t('teacherProfile.previewDownload')
     return
   }
 
@@ -440,9 +461,9 @@ async function downloadVerificationDocument(documentId: number, originalFileName
   try {
     const download = await teacherApi.downloadVerificationDocument(documentId)
     saveBlobDownload(download, originalFileName || `verification-document-${documentId}`)
-    actionSuccess.value = 'Verification document downloaded.'
+    actionSuccess.value = t('teacherProfile.downloaded')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to download this verification document.')
+    actionError.value = resolveApiError(reason, t('teacherProfile.downloadError'))
   } finally {
     downloadingDocumentId.value = null
   }
@@ -458,7 +479,7 @@ async function markAllNotificationsRead(): Promise<void> {
   if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Notifications cannot be changed while using preview data.'
+    actionError.value = t('teacherProfile.previewNotifications')
     return
   }
 
@@ -473,10 +494,10 @@ async function markAllNotificationsRead(): Promise<void> {
     window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
     actionSuccess.value =
       result.updatedCount > 0
-        ? `Marked ${result.updatedCount} notification(s) as read.`
-        : 'All notifications are already read.'
+        ? t('teacherProfile.markedCount', { count: result.updatedCount })
+        : t('teacherProfile.alreadyRead')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to mark notifications as read.')
+    actionError.value = resolveApiError(reason, t('teacherProfile.markReadError'))
   } finally {
     markingNotificationsRead.value = false
   }
@@ -485,7 +506,7 @@ async function markAllNotificationsRead(): Promise<void> {
 async function resubmitVerification(): Promise<void> {
   if (profileUsingFallback.value || verificationResource.usingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Verification status cannot be resubmitted while preview data is active.'
+    actionError.value = t('teacherProfile.previewResubmit')
     return
   }
 
@@ -494,9 +515,9 @@ async function resubmitVerification(): Promise<void> {
   try {
     await teacherApi.resubmitVerification()
     await verificationResource.reload()
-    actionSuccess.value = 'Verification resubmitted and status refreshed.'
+    actionSuccess.value = t('teacherProfile.resubmitted')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to resubmit verification.')
+    actionError.value = resolveApiError(reason, t('teacherProfile.resubmitError'))
   }
 }
 
@@ -504,14 +525,14 @@ async function uploadDocument(): Promise<void> {
   if (uploading.value) return
   if (profileUsingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Verification document upload is unavailable while using preview data.'
+    actionError.value = t('teacherProfile.previewUpload')
     return
   }
 
   const file = verificationFile.value
   if (!file) {
     actionSuccess.value = null
-    actionError.value = 'Choose a verification file before uploading.'
+    actionError.value = t('teacherProfile.chooseFile')
     return
   }
 
@@ -529,9 +550,9 @@ async function uploadDocument(): Promise<void> {
     resetVerificationFileInput()
     uploadForm.documentType = 'IDENTITY'
     uploadForm.description = ''
-    actionSuccess.value = 'Verification document uploaded and profile refreshed.'
+    actionSuccess.value = t('teacherProfile.uploaded')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to upload this verification document.')
+    actionError.value = resolveApiError(reason, t('teacherProfile.uploadError'))
   } finally {
     uploading.value = false
   }

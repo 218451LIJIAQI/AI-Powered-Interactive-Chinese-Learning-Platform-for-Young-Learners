@@ -1,10 +1,6 @@
 <template>
   <div class="page-stack admin-analytics-page">
-    <PageHeaderBlock
-      title="Analytics Overview"
-      description="Review the real analytics payload exposed by the admin backend without synthetic trend fabrication."
-      icon="analytics"
-    >
+    <PageHeaderBlock :title="t('adminAnalytics.title')" :description="t('adminAnalytics.description')" icon="analytics">
       <template #actions>
         <div class="admin-analytics-range">
           <IconGlyph name="calendar" :size="18" />
@@ -33,9 +29,11 @@
         <article class="panel admin-analytics-panel admin-analytics-panel--wide">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>User Registration Trend</strong>
+              <strong>{{ t('adminAnalytics.registrationTrend') }}</strong>
             </div>
-            <button class="student-link-button" type="button" @click="openUsers">Open Users</button>
+            <button class="student-link-button" type="button" @click="openUsers">
+              {{ t('adminAnalytics.openUsers') }}
+            </button>
           </div>
 
           <template v-if="analytics.userRegistrationTrend.length">
@@ -57,18 +55,18 @@
           <StatePanel
             v-else
             icon="analytics"
-            title="No registration trend data"
-            message="The analytics endpoint has not returned user registration trend points yet."
+            :title="t('adminAnalytics.noRegistration')"
+            :message="t('adminAnalytics.noRegistrationHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>Teacher Approval Breakdown</strong>
+              <strong>{{ t('adminAnalytics.teacherApproval') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openTeacherQueue">
-              Open Queue
+              {{ t('adminAnalytics.openQueue') }}
             </button>
           </div>
 
@@ -86,18 +84,18 @@
           <StatePanel
             v-else
             icon="verification"
-            title="No teacher approval data"
-            message="Teacher approval breakdown data will appear here once analytics provides it."
+            :title="t('adminAnalytics.noTeacherApproval')"
+            :message="t('adminAnalytics.noTeacherApprovalHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>Content Status Breakdown</strong>
+              <strong>{{ t('adminAnalytics.contentStatus') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openContent">
-              Open Content
+              {{ t('adminAnalytics.openContent') }}
             </button>
           </div>
 
@@ -115,18 +113,18 @@
           <StatePanel
             v-else
             icon="content"
-            title="No content status data"
-            message="Content status breakdown data will appear here once analytics provides it."
+            :title="t('adminAnalytics.noContentStatus')"
+            :message="t('adminAnalytics.noContentStatusHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>Payment Status Breakdown</strong>
+              <strong>{{ t('adminAnalytics.paymentStatus') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openFinance">
-              Open Finance
+              {{ t('adminAnalytics.openFinance') }}
             </button>
           </div>
 
@@ -144,18 +142,18 @@
           <StatePanel
             v-else
             icon="finance"
-            title="No payment status data"
-            message="Payment status breakdown data will appear here once analytics provides it."
+            :title="t('adminAnalytics.noPaymentStatus')"
+            :message="t('adminAnalytics.noPaymentStatusHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>AI Request Status Breakdown</strong>
+              <strong>{{ t('adminAnalytics.aiStatus') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openModeration">
-              Open Moderation
+              {{ t('adminAnalytics.openModeration') }}
             </button>
           </div>
 
@@ -173,18 +171,18 @@
           <StatePanel
             v-else
             icon="ai"
-            title="No AI breakdown data"
-            message="AI request breakdown data will appear here once analytics provides it."
+            :title="t('adminAnalytics.noAiBreakdown')"
+            :message="t('adminAnalytics.noAiBreakdownHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel admin-analytics-panel--wide">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>Recent AI Usage</strong>
+              <strong>{{ t('adminAnalytics.recentAiUsage') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openModeration">
-              Open Moderation
+              {{ t('adminAnalytics.openModeration') }}
             </button>
           </div>
 
@@ -204,15 +202,15 @@
           <StatePanel
             v-else
             icon="ai"
-            title="No AI usage logs"
-            message="The admin AI usage endpoint has not returned any student-facing usage records yet."
+            :title="t('adminAnalytics.noAiUsage')"
+            :message="t('adminAnalytics.noAiUsageHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>Live Class Snapshot</strong>
+              <strong>{{ t('adminAnalytics.liveClassSnapshot') }}</strong>
             </div>
             <span class="muted">{{ liveClassSummaryLabel }}</span>
           </div>
@@ -233,39 +231,39 @@
           <StatePanel
             v-else
             icon="classes"
-            title="No live classes"
-            message="No live class rows are currently returned by the admin live class endpoint."
+            :title="t('adminAnalytics.noLiveClasses')"
+            :message="t('adminAnalytics.noLiveClassesHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="student-section-heading">
-            <strong>System Health</strong>
+            <strong>{{ t('adminAnalytics.systemHealth') }}</strong>
           </div>
 
           <div class="admin-analytics-health-banner" :class="{ 'is-up': isHealthUp }">
             <IconGlyph name="status" :size="18" />
             <div class="stack u-gap-4">
               <strong>{{ healthStatusLabel }}</strong>
-              <span>Checked {{ healthCheckedLabel }}</span>
+              <span>{{ t('adminAnalytics.checked', { time: healthCheckedLabel }) }}</span>
             </div>
           </div>
 
           <div class="admin-analytics-health-grid">
             <article class="admin-analytics-mini-stat">
-              <small>Service</small>
+              <small>{{ t('adminAnalytics.service') }}</small>
               <strong>{{ health.service || 'backend' }}</strong>
-              <span>From live health endpoint</span>
+              <span>{{ t('adminAnalytics.liveHealth') }}</span>
             </article>
             <article class="admin-analytics-mini-stat">
-              <small>Audit Entries</small>
+              <small>{{ t('adminAnalytics.auditEntries') }}</small>
               <strong>{{ formatNumber(analytics.overview.auditLogEntries) }}</strong>
-              <span>Analytics overview count</span>
+              <span>{{ t('adminAnalytics.analyticsCount') }}</span>
             </article>
             <article class="admin-analytics-mini-stat">
-              <small>Unread Admin Notifications</small>
+              <small>{{ t('adminAnalytics.unreadAdminNotifications') }}</small>
               <strong>{{ formatNumber(analytics.overview.adminUnreadNotifications) }}</strong>
-              <span>Analytics overview count</span>
+              <span>{{ t('adminAnalytics.analyticsCount') }}</span>
             </article>
           </div>
         </article>
@@ -273,9 +271,11 @@
         <article class="panel admin-analytics-panel admin-analytics-panel--wide">
           <div class="row-between admin-analytics-panel-head">
             <div class="student-section-heading">
-              <strong>Recent Audit Log</strong>
+              <strong>{{ t('adminAnalytics.recentAudit') }}</strong>
             </div>
-            <button class="student-link-button" type="button" @click="openSettings">View All</button>
+            <button class="student-link-button" type="button" @click="openSettings">
+              {{ t('adminAnalytics.viewAll') }}
+            </button>
           </div>
 
           <div v-if="auditItems.length" class="admin-analytics-audit-list">
@@ -293,23 +293,22 @@
           <StatePanel
             v-else
             icon="history"
-            title="No audit data"
-            message="Recent audit entries will appear here once the backend records admin actions."
+            :title="t('adminAnalytics.noAudit')"
+            :message="t('adminAnalytics.noAuditHint')"
           />
         </article>
 
         <article class="panel admin-analytics-panel">
           <div class="student-section-heading">
-            <strong>Coverage Notes</strong>
+            <strong>{{ t('adminAnalytics.coverageNotes') }}</strong>
           </div>
 
           <div class="admin-analytics-notes">
             <p>
-              This page intentionally renders only fields that the current admin analytics and audit endpoints expose.
+              {{ t('adminAnalytics.coverageRealFields') }}
             </p>
             <p>
-              Unsupported metrics such as uptime percentages, fabricated approval trends, and language-share estimates
-              were removed during audit cleanup.
+              {{ t('adminAnalytics.coverageRemoved') }}
             </p>
           </div>
         </article>
@@ -321,6 +320,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { adminApi, systemApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -332,6 +332,7 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAnalytics, adminAuditLogs } from '@/demo/data'
+import { adminAnalyticsMessages } from '@/plugins/adminAnalyticsMessages'
 import type { AdminAiUsageLogResponse, AnalyticsBreakdownItem, LiveClassResponse } from '@/types/api'
 import { formatCurrency, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
@@ -342,6 +343,13 @@ const HEALTH_FALLBACK = {
 }
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { adminAnalytics: adminAnalyticsMessages.en },
+    ms: { adminAnalytics: adminAnalyticsMessages.ms },
+    zh: { adminAnalytics: adminAnalyticsMessages.zh },
+  },
+})
 
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
 const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
@@ -391,9 +399,7 @@ const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usin
 const aiUsageLogs = computed(() => aiUsageResource.data.value?.items ?? [])
 const liveClasses = computed(() => liveClassesResource.data.value ?? [])
 const health = computed(
-  () =>
-    healthResource.data.value ??
-    (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
+  () => healthResource.data.value ?? (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
 )
 
 const pageLoading = computed(
@@ -423,50 +429,54 @@ const usingFallback = computed(
 
 const rangeLabel = computed(() =>
   analytics.value.userRegistrationTrend.length
-    ? `${analytics.value.userRegistrationTrend.length} tracked registration point(s)`
-    : 'Current backend snapshot',
+    ? t('adminAnalytics.trackedPoints', { count: analytics.value.userRegistrationTrend.length })
+    : t('adminAnalytics.currentSnapshot'),
 )
 
 const kpiCards = computed(() => [
   {
-    label: 'Students',
+    label: t('adminAnalytics.students'),
     value: formatNumber(analytics.value.overview.totalStudents),
-    copy: 'Current analytics overview total',
+    copy: t('adminAnalytics.overviewTotal'),
     icon: 'students',
     tone: 'purple',
   },
   {
-    label: 'Teachers',
+    label: t('adminAnalytics.teachers'),
     value: formatNumber(analytics.value.overview.totalTeachers),
-    copy: `${formatNumber(analytics.value.overview.pendingTeacherApprovals)} pending approval(s)`,
+    copy: t('adminAnalytics.pendingApprovals', {
+      count: formatNumber(analytics.value.overview.pendingTeacherApprovals),
+    }),
     icon: 'users',
     tone: 'blue',
   },
   {
-    label: 'Published Content',
+    label: t('adminAnalytics.publishedContent'),
     value: formatNumber(analytics.value.overview.publishedContentItems),
-    copy: 'Visible items tracked by analytics',
+    copy: t('adminAnalytics.visibleItems'),
     icon: 'content',
     tone: 'green',
   },
   {
-    label: 'AI Requests',
+    label: t('adminAnalytics.aiRequests'),
     value: formatNumber(analytics.value.overview.aiRequests),
-    copy: 'Student-facing AI request volume',
+    copy: t('adminAnalytics.aiVolume'),
     icon: 'ai',
     tone: 'gold',
   },
   {
-    label: 'Revenue',
+    label: t('adminAnalytics.revenue'),
     value: formatCurrency(analytics.value.overview.totalRevenue, analytics.value.overview.currencyCode),
-    copy: `${formatNumber(analytics.value.overview.pendingRefunds)} refund(s) pending`,
+    copy: t('adminAnalytics.pendingRefunds', { count: formatNumber(analytics.value.overview.pendingRefunds) }),
     icon: 'finance',
     tone: 'sky',
   },
   {
-    label: 'Audit Entries',
+    label: t('adminAnalytics.auditEntries'),
     value: formatNumber(analytics.value.overview.auditLogEntries),
-    copy: `${formatNumber(analytics.value.overview.adminUnreadNotifications)} admin notification(s) unread`,
+    copy: t('adminAnalytics.unreadAdmin', {
+      count: formatNumber(analytics.value.overview.adminUnreadNotifications),
+    }),
     icon: 'history',
     tone: 'lavender',
   },
@@ -492,18 +502,21 @@ const aiUsageRows = computed(() =>
   aiUsageLogs.value.map((item) => ({
     id: item.id,
     title: `${formatFeatureKey(item.featureKey)} · ${formatStatus(item.status)}`,
-    meta: [item.userName || item.userEmail || 'Unknown user', item.userRole || 'Unknown role']
+    meta: [
+      item.userName || item.userEmail || t('adminAnalytics.unknownUser'),
+      item.userRole || t('adminAnalytics.unknownRole'),
+    ]
       .filter(Boolean)
       .join(' / '),
     detail:
       [
-        item.providerName || 'provider unavailable',
-        item.modelName || 'model unavailable',
-        item.tokenCount != null ? `${formatNumber(item.tokenCount)} tokens` : null,
+        item.providerName || t('adminAnalytics.providerUnavailable'),
+        item.modelName || t('adminAnalytics.modelUnavailable'),
+        item.tokenCount != null ? t('adminAnalytics.tokens', { count: formatNumber(item.tokenCount) }) : null,
         item.errorSummary || item.outputSummary || item.inputSummary || null,
       ]
         .filter(Boolean)
-        .join(' · ') || 'No request summary available.',
+        .join(' · ') || t('adminAnalytics.noRequestSummary'),
     time: formatDateTime(item.createdAt),
     tone: aiUsageTone(item),
   })),
@@ -513,9 +526,17 @@ const liveClassRows = computed(() =>
   liveClasses.value.slice(0, 5).map((item) => ({
     id: item.id,
     title: item.title,
-    teacherLabel: item.teacher?.displayName ? `Teacher: ${item.teacher.displayName}` : 'Teacher unavailable',
-    scheduleLabel: `${formatDateTime(item.startTime)} to ${formatDateTime(item.endTime)}`,
-    enrolmentLabel: `${formatNumber(item.enrolledCount)} enrolled / ${item.maxParticipants ?? 'Unlimited'} capacity`,
+    teacherLabel: item.teacher?.displayName
+      ? t('adminAnalytics.teacherNamed', { name: item.teacher.displayName })
+      : t('adminAnalytics.teacherUnavailable'),
+    scheduleLabel: t('adminAnalytics.schedule', {
+      start: formatDateTime(item.startTime),
+      end: formatDateTime(item.endTime),
+    }),
+    enrolmentLabel: t('adminAnalytics.enrolmentCapacity', {
+      enrolled: formatNumber(item.enrolledCount),
+      capacity: item.maxParticipants ?? t('adminAnalytics.unlimited'),
+    }),
     status: formatStatus(item.liveClassStatus),
     tone: liveClassTone(item),
   })),
@@ -523,8 +544,12 @@ const liveClassRows = computed(() =>
 
 const healthCheckedLabel = computed(() => (health.value.timestamp ? formatDateTime(health.value.timestamp) : '--'))
 const isHealthUp = computed(() => health.value.status === 'UP')
-const healthStatusLabel = computed(() => (isHealthUp.value ? 'All Systems Operational' : 'Status Unavailable'))
-const liveClassSummaryLabel = computed(() => `${formatNumber(liveClasses.value.length)} row(s) loaded`)
+const healthStatusLabel = computed(() =>
+  t(isHealthUp.value ? 'adminAnalytics.allOperational' : 'adminAnalytics.statusUnavailable'),
+)
+const liveClassSummaryLabel = computed(() =>
+  t('adminAnalytics.rowsLoaded', { count: formatNumber(liveClasses.value.length) }),
+)
 
 function normalizeBreakdown(items: AnalyticsBreakdownItem[]): Array<{
   label: string
@@ -539,7 +564,7 @@ function normalizeBreakdown(items: AnalyticsBreakdownItem[]): Array<{
     const value = Math.max(0, toFiniteNumber(item.value))
     const percentage = ratioPercent(value, total)
     return {
-      label: item.label,
+      label: formatStatus(item.label),
       displayValue: `${formatNumber(value)} (${percentage}%)`,
       toneClass: `is-${tones[index % tones.length]}`,
       barStyle: { width: `${percentage}%` },
@@ -548,6 +573,25 @@ function normalizeBreakdown(items: AnalyticsBreakdownItem[]): Array<{
 }
 
 function formatStatus(status: string): string {
+  const statusKeys: Record<string, string> = {
+    APPROVED: 'statusApproved',
+    PENDING: 'statusPending',
+    REJECTED: 'statusRejected',
+    PUBLISHED: 'statusPublished',
+    SUBMITTED: 'statusSubmitted',
+    DRAFT: 'statusDraft',
+    PAID: 'statusPaid',
+    FAILED: 'statusFailed',
+    COMPLETED: 'statusCompleted',
+    UNAVAILABLE: 'statusUnavailableValue',
+    SCHEDULED: 'statusScheduled',
+    ONGOING: 'statusOngoing',
+    RESCHEDULED: 'statusRescheduled',
+    CANCELLED: 'statusCancelled',
+  }
+  const normalized = status.trim().toUpperCase()
+  const translatedKey = statusKeys[normalized]
+  if (translatedKey) return t(`adminAnalytics.${translatedKey}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()

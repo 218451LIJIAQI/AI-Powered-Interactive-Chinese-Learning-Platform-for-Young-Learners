@@ -428,6 +428,17 @@ class ContentManagementIntegrationTests {
     }
 
     @Test
+    void adminContentListShouldReturnEmptyDeepPageWithoutRejectingIt() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/content/submissions")
+                .param("page", "1000")
+                .param("size", "20")
+                .header(HttpHeaders.AUTHORIZATION, bearer(adminToken())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.page").value(1000))
+                .andExpect(jsonPath("$.data.items").isEmpty());
+    }
+
+    @Test
     void adminContentSubmissionFiltersShouldNarrowResultsAtTheDatabase() throws Exception {
         String teacherEmail = uniqueEmail("admin-filter");
         approveTeacherProfile(teacherEmail);
@@ -948,4 +959,3 @@ class ContentManagementIntegrationTests {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
     }
 }
-

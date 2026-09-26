@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { storageKeys } from '@/utils/storage'
+import { i18n } from '@/plugins/i18n'
 
 const parentEmail = 'parent@example.com'
 const spacedParentEmail = ' Parent@Example.com '
@@ -38,10 +39,12 @@ import ForgotPasswordPage from './ForgotPasswordPage.vue'
 function mountForgotPasswordPage(): ReturnType<typeof mount> {
   return mount(ForgotPasswordPage, {
     global: {
+      plugins: [i18n],
       stubs: {
         AppBrand: true,
         IconGlyph: true,
         PandaIllustration: true,
+        LanguageSwitcher: true,
       },
     },
   })
@@ -49,6 +52,7 @@ function mountForgotPasswordPage(): ReturnType<typeof mount> {
 
 describe('ForgotPasswordPage recovery email hygiene', () => {
   beforeEach(() => {
+    i18n.global.locale.value = 'en'
     mocks.replace.mockReset()
     mocks.forgotPassword.mockReset()
     mocks.forgotPassword.mockResolvedValue(undefined)

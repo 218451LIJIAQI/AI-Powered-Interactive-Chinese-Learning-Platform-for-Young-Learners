@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.BiFunction;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -54,6 +56,7 @@ import com.example.aichinese.repository.FlashcardRepository;
 import com.example.aichinese.repository.ListeningExerciseRepository;
 import com.example.aichinese.repository.MatchingGameItemRepository;
 import com.example.aichinese.repository.MatchingGameRepository;
+import com.example.aichinese.repository.PointsTransactionRepository;
 import com.example.aichinese.repository.StoryActivityRepository;
 import com.example.aichinese.repository.StoryQuestionRepository;
 import com.example.aichinese.repository.TracingExerciseRepository;
@@ -103,6 +106,7 @@ public class StudentActivityLibraryService {
     private final StoryQuestionRepository storyQuestionRepository;
     private final StudentLearningAccessService studentLearningAccessService;
     private final StudentLearningProgressService studentLearningProgressService;
+    private final PointsTransactionRepository pointsTransactionRepository;
 
     public StudentActivityLibraryService(
             FlashcardRepository flashcardRepository,
@@ -115,7 +119,8 @@ public class StudentActivityLibraryService {
             StoryActivityRepository storyActivityRepository,
             StoryQuestionRepository storyQuestionRepository,
             StudentLearningAccessService studentLearningAccessService,
-            StudentLearningProgressService studentLearningProgressService) {
+            StudentLearningProgressService studentLearningProgressService,
+            PointsTransactionRepository pointsTransactionRepository) {
         this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
         this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
         this.matchingGameItemRepository = Objects.requireNonNull(matchingGameItemRepository, "matchingGameItemRepository");
@@ -127,6 +132,7 @@ public class StudentActivityLibraryService {
         this.storyQuestionRepository = Objects.requireNonNull(storyQuestionRepository, "storyQuestionRepository");
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.studentLearningProgressService = Objects.requireNonNull(studentLearningProgressService, "studentLearningProgressService");
+        this.pointsTransactionRepository = Objects.requireNonNull(pointsTransactionRepository, "pointsTransactionRepository");
     }
 
     @Transactional(readOnly = true)
@@ -145,17 +151,17 @@ public class StudentActivityLibraryService {
         long totalItems = 0;
         ActivityType requestedType = filter == null ? null : filter.type();
 
-        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+        totalItems += appendFeedItems(merged, filter, slice, requestedType,
                 ActivityType.FLASHCARD, flashcardRepository, this::toFlashcardFeedItem);
-        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+        totalItems += appendFeedItems(merged, filter, slice, requestedType,
                 ActivityType.MATCHING_GAME, matchingGameRepository, this::toMatchingGameFeedItem);
-        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+        totalItems += appendFeedItems(merged, filter, slice, requestedType,
                 ActivityType.LISTENING_EXERCISE, listeningExerciseRepository, this::toListeningExerciseFeedItem);
-        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+        totalItems += appendFeedItems(merged, filter, slice, requestedType,
                 ActivityType.TRACING_EXERCISE, tracingExerciseRepository, this::toTracingExerciseFeedItem);
-        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+        totalItems += appendFeedItems(merged, filter, slice, requestedType,
                 ActivityType.DRAG_DROP_ACTIVITY, dragDropActivityRepository, this::toDragDropActivityFeedItem);
-        totalItems += appendFeedItems(merged, student, filter, slice, requestedType,
+        totalItems += appendFeedItems(merged, filter, slice, requestedType,
                 ActivityType.STORY_ACTIVITY, storyActivityRepository, this::toStoryActivityFeedItem);
 
         List<StudentActivitySummaryResponse> sorted = merged.stream()
@@ -165,7 +171,7 @@ public class StudentActivityLibraryService {
         int fetchedTotal = sorted.size();
         int fromIndex = PaginationUtils.startIndex(safePage, safeSize, fetchedTotal);
         int toIndex = PaginationUtils.endIndex(fromIndex, safeSize, fetchedTotal);
-        List<StudentActivitySummaryResponse> windowed = sorted.subList(fromIndex, toIndex);
+        List<StudentActivitySummaryResponse> windowed = withCompletionStatus(student, sorted.subList(fromIndex, toIndex));
         int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
         return new PageResponse<>(windowed, safePage, safeSize, totalItems, totalPages);
     }
@@ -517,74 +523,105 @@ public class StudentActivityLibraryService {
 
     private <T> long appendFeedItems(
             List<ActivityFeedItem> target,
-            StudentProfile student,
             ActivityFilter filter,
             Pageable slice,
             ActivityType requestedType,
             ActivityType candidateType,
             JpaSpecificationExecutor<T> repository,
-            BiFunction<T, StudentProfile, ActivityFeedItem> mapper) {
+            Function<T, ActivityFeedItem> mapper) {
         if (requestedType != null && requestedType != candidateType) {
             return 0L;
         }
         var pageResult = repository.findAll(StudentActivityLibraryService.<T>filterSpec(filter), slice);
-        pageResult.getContent().forEach(entity -> target.add(mapper.apply(entity, student)));
+        pageResult.getContent().forEach(entity -> target.add(mapper.apply(entity)));
         return pageResult.getTotalElements();
     }
 
-    private ActivityFeedItem toFlashcardFeedItem(Flashcard entity, StudentProfile student) {
+    private List<StudentActivitySummaryResponse> withCompletionStatus(
+            StudentProfile student, List<StudentActivitySummaryResponse> pageItems) {
+        if (pageItems.isEmpty()) {
+            return pageItems;
+        }
+
+        List<String> sourceTypes = pageItems.stream()
+                .map(item -> "PLATFORM_" + item.type().name())
+                .distinct()
+                .toList();
+        List<Long> sourceIds = pageItems.stream()
+                .map(StudentActivitySummaryResponse::id)
+                .distinct()
+                .toList();
+        Set<CompletionKey> completed = pointsTransactionRepository
+                .findByStudentIdAndSourceTypeInAndSourceIdIn(student.getId(), sourceTypes, sourceIds)
+                .stream()
+                .map(transaction -> new CompletionKey(transaction.getSourceType(), transaction.getSourceId()))
+                .collect(Collectors.toSet());
+
+        return pageItems.stream()
+                .map(item -> new StudentActivitySummaryResponse(
+                        item.id(), item.type(), item.title(), item.hskLevel(), item.ageBand(),
+                        item.difficulty(), item.topic(), item.tags(), item.xpReward(),
+                        item.estimatedSeconds(), item.updatedAt(),
+                        completed.contains(new CompletionKey("PLATFORM_" + item.type().name(), item.id()))))
+                .toList();
+    }
+
+    private record CompletionKey(String sourceType, Long sourceId) {
+    }
+
+    private ActivityFeedItem toFlashcardFeedItem(Flashcard entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.FLASHCARD,
                 preferredTitle(entity.getTitle(), entity.getFrontText()),
                 entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                isCompleted(student, SOURCE_FLASHCARD, entity.getId()));
+                false);
     }
 
-    private ActivityFeedItem toMatchingGameFeedItem(MatchingGame entity, StudentProfile student) {
+    private ActivityFeedItem toMatchingGameFeedItem(MatchingGame entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.MATCHING_GAME, entity.getTitle(),
                 entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                isCompleted(student, SOURCE_MATCHING_GAME, entity.getId()));
+                false);
     }
 
-    private ActivityFeedItem toListeningExerciseFeedItem(ListeningExercise entity, StudentProfile student) {
+    private ActivityFeedItem toListeningExerciseFeedItem(ListeningExercise entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.LISTENING_EXERCISE, entity.getTitle(),
                 entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                isCompleted(student, SOURCE_LISTENING_EXERCISE, entity.getId()));
+                false);
     }
 
-    private ActivityFeedItem toTracingExerciseFeedItem(TracingExercise entity, StudentProfile student) {
+    private ActivityFeedItem toTracingExerciseFeedItem(TracingExercise entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.TRACING_EXERCISE, entity.getTitle(),
                 entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                isCompleted(student, SOURCE_TRACING_EXERCISE, entity.getId()));
+                false);
     }
 
-    private ActivityFeedItem toDragDropActivityFeedItem(DragDropActivity entity, StudentProfile student) {
+    private ActivityFeedItem toDragDropActivityFeedItem(DragDropActivity entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, entity.getTitle(),
                 entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                isCompleted(student, SOURCE_DRAG_DROP_ACTIVITY, entity.getId()));
+                false);
     }
 
-    private ActivityFeedItem toStoryActivityFeedItem(StoryActivity entity, StudentProfile student) {
+    private ActivityFeedItem toStoryActivityFeedItem(StoryActivity entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.STORY_ACTIVITY, entity.getTitle(),
                 entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                isCompleted(student, SOURCE_STORY_ACTIVITY, entity.getId()));
+                false);
     }
 
     private static ActivityFeedItem activityFeedItem(

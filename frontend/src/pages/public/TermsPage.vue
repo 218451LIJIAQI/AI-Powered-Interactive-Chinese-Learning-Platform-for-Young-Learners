@@ -1,18 +1,15 @@
 <template>
   <section class="public-page legal-page">
-    <button class="btn btn-ghost legal-back-button" type="button" @click="goBack">Back</button>
+    <button class="btn btn-ghost legal-back-button" type="button" @click="goBack">{{ t('legal.back') }}</button>
 
     <article class="hero-card light legal-hero">
       <span class="legal-eyebrow">MandarinSpark</span>
-      <h1>Terms of Service</h1>
-      <p>
-        These terms explain the rules for using MandarinSpark learning, teaching, AI assistance, payments, and account
-        tools.
-      </p>
+      <h1>{{ t('legal.terms.title') }}</h1>
+      <p>{{ t('legal.terms.intro') }}</p>
     </article>
 
     <section class="legal-grid">
-      <article v-for="section in sections" :key="section.title" class="panel legal-card">
+      <article v-for="section in sections" :key="section.key" class="panel legal-card">
         <h2>{{ section.title }}</h2>
         <p>{{ section.copy }}</p>
       </article>
@@ -21,9 +18,20 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+
+import { legalMessages } from '@/plugins/legalMessages'
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { legal: legalMessages.en },
+    ms: { legal: legalMessages.ms },
+    zh: { legal: legalMessages.zh },
+  },
+})
 
 function goBack(): void {
   if (window.history.length > 1) {
@@ -33,26 +41,11 @@ function goBack(): void {
   }
 }
 
-const sections = [
-  {
-    title: 'Accounts and roles',
-    copy: 'Students, teachers, and admins must use the platform only through their assigned role. Teacher publishing, verification, classroom, finance, and admin operations are protected by role-based access.',
-  },
-  {
-    title: 'Learning content and AI support',
-    copy: 'Lessons, activities, quizzes, live classes, recorded resources, teacher feedback, and AI helper responses are provided for learning support. AI responses should be reviewed by learners, guardians, or teachers when needed.',
-  },
-  {
-    title: 'Payments, refunds, and entitlements',
-    copy: 'Paid course access, checkout, refunds, payouts, and entitlements are handled through platform commerce records and payment-provider availability. Failed provider operations do not grant paid access.',
-  },
-  {
-    title: 'Safe use',
-    copy: 'Users must not upload harmful files, misuse classroom links, harass other users, attempt unauthorized access, or bypass moderation and safety controls.',
-  },
-  {
-    title: 'Support and changes',
-    copy: 'Support requests can be started from the public support section or from signed-in notification/profile areas. Platform rules may be updated as the product evolves.',
-  },
-] as const
+const sections = computed(() =>
+  (['accounts', 'learning', 'payments', 'safety', 'support'] as const).map((key) => ({
+    key,
+    title: t(`legal.terms.${key}Title`),
+    copy: t(`legal.terms.${key}Copy`),
+  })),
+)
 </script>

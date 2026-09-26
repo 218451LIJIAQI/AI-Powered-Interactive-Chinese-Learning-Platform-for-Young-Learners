@@ -55,7 +55,7 @@ vi.mock('@/config/env', () => ({
   appEnv: mocks.appEnv,
 }))
 
-vi.mock('@/demo/data', () => ({
+vi.mock('@/demo/users', () => ({
   demoUsers: {
     STUDENT: {
       id: 1,

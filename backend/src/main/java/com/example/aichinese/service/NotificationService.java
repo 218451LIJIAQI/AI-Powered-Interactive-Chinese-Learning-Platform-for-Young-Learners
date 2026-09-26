@@ -3,11 +3,13 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -48,6 +50,7 @@ public class NotificationService {
     private static final String TARGET_TEACHER_FEEDBACK = "TEACHER_FEEDBACK";
     private static final String TARGET_RECORDED_VIDEO = "RECORDED_VIDEO";
     private static final String TARGET_LIVE_CLASS = "LIVE_CLASS";
+    private static final int NOTIFICATION_BATCH_SIZE = 250;
 
     private final NotificationRepository notificationRepository;
     private final CommunicationMapper communicationMapper;
@@ -179,19 +182,30 @@ public class NotificationService {
     public PageResponse<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser, int page, int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        List<Notification> accessibleNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getUserId()).stream()
-                .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
-                .toList();
-        int startIndex = PaginationUtils.startIndex(safePage, safeSize, accessibleNotifications.size());
-        int endIndex = PaginationUtils.endIndex(startIndex, safeSize, accessibleNotifications.size());
-        return new PageResponse<>(
-                accessibleNotifications.subList(startIndex, endIndex).stream()
-                        .map(communicationMapper::toNotificationResponse)
-                        .toList(),
-                safePage,
-                safeSize,
-                accessibleNotifications.size(),
-                PaginationUtils.totalPages(accessibleNotifications.size(), safeSize));
+        long requestedStart = (long) safePage * safeSize;
+        long accessibleCount = 0;
+        List<NotificationResponse> items = new ArrayList<>(safeSize);
+        NotificationCursor cursor = NotificationCursor.initial();
+        while (true) {
+            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), null, cursor);
+            if (batch.isEmpty()) {
+                break;
+            }
+            for (Notification notification : batch) {
+                if (!isNotificationCurrentlyAccessible(currentUser, notification)) {
+                    continue;
+                }
+                if (accessibleCount >= requestedStart && items.size() < safeSize) {
+                    items.add(communicationMapper.toNotificationResponse(notification));
+                }
+                accessibleCount++;
+            }
+            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
+            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
+                break;
+            }
+        }
+        return PageResponse.of(items, safePage, safeSize, accessibleCount);
     }
 
     @Transactional(readOnly = true)
@@ -200,11 +214,51 @@ public class NotificationService {
     }
 
     public long countAccessibleUnreadNotifications(SecurityUserDetails currentUser) {
-        return notificationRepository
-                .findByUserIdAndNotificationStatusOrderByCreatedAtDesc(currentUser.getUserId(), NotificationStatus.UNREAD)
-                .stream()
-                .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
-                .count();
+        long count = 0;
+        NotificationCursor cursor = NotificationCursor.initial();
+        while (true) {
+            List<Notification> batch = loadNotificationBatch(
+                    currentUser.getUserId(), NotificationStatus.UNREAD, cursor);
+            if (batch.isEmpty()) {
+                break;
+            }
+            count += batch.stream()
+                    .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
+                    .count();
+            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
+            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
+                break;
+            }
+        }
+        return count;
+    }
+
+    public List<Notification> findRecentAccessibleNotifications(SecurityUserDetails currentUser, int limit) {
+        int safeLimit = Math.min(Math.max(limit, 0), PaginationUtils.DEFAULT_MAX_PAGE_SIZE);
+        if (safeLimit == 0) {
+            return List.of();
+        }
+        List<Notification> result = new ArrayList<>(safeLimit);
+        NotificationCursor cursor = NotificationCursor.initial();
+        while (result.size() < safeLimit) {
+            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), null, cursor);
+            if (batch.isEmpty()) {
+                break;
+            }
+            for (Notification notification : batch) {
+                if (isNotificationCurrentlyAccessible(currentUser, notification)) {
+                    result.add(notification);
+                    if (result.size() == safeLimit) {
+                        break;
+                    }
+                }
+            }
+            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
+            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
+                break;
+            }
+        }
+        return List.copyOf(result);
     }
 
     public boolean isNotificationCurrentlyAccessible(SecurityUserDetails currentUser, Notification notification) {
@@ -312,17 +366,50 @@ public class NotificationService {
     @Transactional
     public BulkOperationResponse markAllAsRead(SecurityUserDetails currentUser) {
         LocalDateTime readAt = LocalDateTime.now();
-        List<Notification> accessibleUnreadNotifications = notificationRepository
-                .findByUserIdAndNotificationStatusOrderByCreatedAtDesc(currentUser.getUserId(), NotificationStatus.UNREAD)
-                .stream()
-                .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
-                .toList();
-        accessibleUnreadNotifications.forEach(notification -> {
-            notification.setNotificationStatus(NotificationStatus.READ);
-            notification.setReadAt(readAt);
-        });
-        notificationRepository.saveAll(accessibleUnreadNotifications);
-        return new BulkOperationResponse(accessibleUnreadNotifications.size());
+        long updatedCount = 0;
+        NotificationCursor cursor = NotificationCursor.initial();
+        while (true) {
+            List<Notification> batch = loadNotificationBatch(
+                    currentUser.getUserId(), NotificationStatus.UNREAD, cursor);
+            if (batch.isEmpty()) {
+                break;
+            }
+            List<Notification> accessible = batch.stream()
+                    .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
+                    .toList();
+            accessible.forEach(notification -> {
+                notification.setNotificationStatus(NotificationStatus.READ);
+                notification.setReadAt(readAt);
+            });
+            notificationRepository.saveAll(accessible);
+            updatedCount += accessible.size();
+            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
+            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
+                break;
+            }
+        }
+        return new BulkOperationResponse(updatedCount);
+    }
+
+    private List<Notification> loadNotificationBatch(
+            Long userId, NotificationStatus status, NotificationCursor cursor) {
+        PageRequest page = PageRequest.of(0, NOTIFICATION_BATCH_SIZE);
+        if (status == null) {
+            return notificationRepository.findUserBatchBefore(
+                    userId, cursor.createdAt(), cursor.id(), page);
+        }
+        return notificationRepository.findUserStatusBatchBefore(
+                userId, status, cursor.createdAt(), cursor.id(), page);
+    }
+
+    private record NotificationCursor(LocalDateTime createdAt, Long id) {
+        static NotificationCursor initial() {
+            return new NotificationCursor(null, Long.MAX_VALUE);
+        }
+
+        static NotificationCursor before(Notification notification) {
+            return new NotificationCursor(notification.getCreatedAt(), notification.getId());
+        }
     }
 
     private static String requireText(String value, String fieldName) {

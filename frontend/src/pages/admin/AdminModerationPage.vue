@@ -1,22 +1,18 @@
 <template>
   <div class="page-stack admin-moderation-page">
     <PageHeaderBlock
-      title="Reports & Moderation"
-      description="Review moderation records and AI response reports using real admin moderation endpoints."
+      :title="t('adminModeration.title')"
+      :description="t('adminModeration.description')"
       icon="moderation"
     />
 
-    <DataNotice
-      :using-fallback="moderationResource.usingFallback.value"
-      :error="pageError"
-      :success="actionSuccess"
-    />
+    <DataNotice :using-fallback="moderationResource.usingFallback.value" :error="pageError" :success="actionSuccess" />
 
     <section class="admin-ops-hero admin-ops-hero--moderation">
       <div>
-        <span class="admin-ops-kicker">Safety Review</span>
-        <h2>Moderate reports with calm, clear, child-safe workflows.</h2>
-        <p>Track prior admin decisions, review flagged AI outputs, and keep the learner experience supportive.</p>
+        <span class="admin-ops-kicker">{{ t('adminModeration.safetyReview') }}</span>
+        <h2>{{ t('adminModeration.heroTitle') }}</h2>
+        <p>{{ t('adminModeration.heroHint') }}</p>
       </div>
       <div class="admin-ops-stat-grid">
         <article v-for="stat in moderationStats" :key="stat.label">
@@ -28,7 +24,7 @@
     </section>
 
     <section class="two-col admin-moderation-layout">
-      <InfoCard title="Moderation records" subtitle="Actions already taken by admins." icon="moderation">
+      <InfoCard :title="t('adminModeration.records')" :subtitle="t('adminModeration.recordsHint')" icon="moderation">
         <div class="list">
           <ListInfoItem
             v-for="item in moderationRecords"
@@ -49,11 +45,11 @@
       </InfoCard>
 
       <ActionFormCard
-        title="AI response reports"
-        subtitle="Review flagged student AI outputs with server-owned report evidence."
+        :title="t('adminModeration.reports')"
+        :subtitle="t('adminModeration.reportsHint')"
         icon="ai"
-        submit-label="Save review"
-        submitting-label="Saving..."
+        :submit-label="t('adminModeration.saveReview')"
+        :submitting-label="t('adminModeration.saving')"
         :submitting="submittingReview"
         :disabled="reviewDisabled"
         @submit="reviewAiReport"
@@ -67,7 +63,7 @@
         </template>
 
         <div class="field">
-          <label for="admin-moderation-report">Report</label>
+          <label for="admin-moderation-report">{{ t('adminModeration.report') }}</label>
           <select
             id="admin-moderation-report"
             v-model.number="selectedReportId"
@@ -83,40 +79,42 @@
         <div v-if="selectedReport" class="admin-report-detail">
           <div class="admin-report-summary-grid">
             <div>
-              <span>Student</span>
-              <strong>{{ selectedReport.studentName || 'Unknown learner' }}</strong>
-              <small>{{ selectedReport.studentEmail || 'No email available' }}</small>
+              <span>{{ t('adminModeration.student') }}</span>
+              <strong>{{ selectedReport.studentName || t('adminModeration.unknownLearner') }}</strong>
+              <small>{{ selectedReport.studentEmail || t('adminModeration.noEmail') }}</small>
             </div>
             <div>
-              <span>Feature</span>
+              <span>{{ t('adminModeration.feature') }}</span>
               <strong>{{ formatFeatureKey(selectedReport.featureKey) }}</strong>
-              <small v-if="selectedReport.aiUsageLogId">Usage log #{{ selectedReport.aiUsageLogId }}</small>
+              <small v-if="selectedReport.aiUsageLogId">{{
+                t('adminModeration.usageLog', { id: selectedReport.aiUsageLogId })
+              }}</small>
             </div>
             <div>
-              <span>Reason</span>
+              <span>{{ t('adminModeration.reason') }}</span>
               <strong>{{ formatReportReason(selectedReport.reasonCategory) }}</strong>
-              <small>Reported {{ formatDateTime(selectedReport.createdAt) }}</small>
+              <small>{{ t('adminModeration.reported', { date: formatDateTime(selectedReport.createdAt) }) }}</small>
             </div>
             <div>
-              <span>Chat evidence</span>
+              <span>{{ t('adminModeration.chatEvidence') }}</span>
               <strong>{{ chatEvidenceLabel(selectedReport) }}</strong>
               <small>{{ reviewerLabel(selectedReport) }}</small>
             </div>
           </div>
 
           <div v-if="selectedReport.description" class="admin-report-copy-card">
-            <span>Student note</span>
+            <span>{{ t('adminModeration.studentNote') }}</span>
             <p>{{ selectedReport.description }}</p>
           </div>
 
           <div class="admin-report-evidence-grid">
             <article class="admin-report-copy-card">
-              <span>Prompt evidence</span>
-              <p>{{ selectedReport.promptSnapshot || 'No server-side prompt snapshot was stored for this report.' }}</p>
+              <span>{{ t('adminModeration.promptEvidence') }}</span>
+              <p>{{ selectedReport.promptSnapshot || t('adminModeration.noPrompt') }}</p>
             </article>
             <article class="admin-report-copy-card">
-              <span>AI response evidence</span>
-              <p>{{ selectedReport.aiResponseSnapshot || 'No AI response snapshot is available for this report.' }}</p>
+              <span>{{ t('adminModeration.responseEvidence') }}</span>
+              <p>{{ selectedReport.aiResponseSnapshot || t('adminModeration.noResponse') }}</p>
             </article>
           </div>
         </div>
@@ -126,7 +124,7 @@
         </p>
 
         <div class="field">
-          <label for="admin-moderation-status">Review status</label>
+          <label for="admin-moderation-status">{{ t('adminModeration.reviewStatus') }}</label>
           <select id="admin-moderation-status" v-model="reviewForm.status" class="select" :disabled="reviewDisabled">
             <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
               {{ option.label }}
@@ -134,7 +132,7 @@
           </select>
         </div>
         <div class="field">
-          <label for="admin-moderation-reviewer-note">Reviewer note</label>
+          <label for="admin-moderation-reviewer-note">{{ t('adminModeration.reviewerNote') }}</label>
           <textarea
             id="admin-moderation-reviewer-note"
             v-model="reviewForm.reviewerNote"
@@ -153,13 +151,13 @@
           >
             <template #meta>
               <span class="tag">{{ formatFeatureKey(item.featureKey) }}</span>
-              <span class="tag">{{ item.studentName || 'Unknown learner' }}</span>
+              <span class="tag">{{ item.studentName || t('adminModeration.unknownLearner') }}</span>
             </template>
             <template #aside>
               <div class="admin-report-list-aside">
                 <StatusPill :label="formatStatus(item.status)" :tone="reportStatusTone(item.status)" />
                 <button class="student-link-button" type="button" @click="selectedReportId = item.id">
-                  {{ selectedReportId === item.id ? 'Selected' : 'Review' }}
+                  {{ selectedReportId === item.id ? t('adminModeration.selected') : t('adminModeration.review') }}
                 </button>
               </div>
             </template>
@@ -172,6 +170,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { adminApi } from '@/api/services'
 import type { AdminAiResponseReportResponse, AiResponseReportReviewStatus } from '@/types/api'
@@ -184,12 +183,21 @@ import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAiReports, adminModerationRecords } from '@/demo/data'
+import { adminModerationMessages } from '@/plugins/adminModerationMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 
+const { t } = useI18n({
+  messages: {
+    en: { adminModeration: adminModerationMessages.en },
+    ms: { adminModeration: adminModerationMessages.ms },
+    zh: { adminModeration: adminModerationMessages.zh },
+  },
+})
+
 type PillTone = 'info' | 'primary' | 'success' | 'warning'
 
-const DEFAULT_REVIEWER_NOTE = 'Checked the report evidence and documented the next moderation action.'
+const defaultReviewerNote = computed(() => t('adminModeration.defaultNote'))
 
 const moderationResource = useResource(() => adminApi.moderationRecords(), adminModerationRecords)
 const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
@@ -208,14 +216,14 @@ const reviewForm = reactive<{
   reviewerNote: string
 }>({
   status: 'IN_REVIEW',
-  reviewerNote: DEFAULT_REVIEWER_NOTE,
+  reviewerNote: defaultReviewerNote.value,
 })
 
-const reviewStatusOptions: Array<{ value: AiResponseReportReviewStatus; label: string }> = [
-  { value: 'IN_REVIEW', label: 'In Review' },
-  { value: 'RESOLVED', label: 'Resolved' },
-  { value: 'DISMISSED', label: 'Dismissed' },
-]
+const reviewStatusOptions = computed<Array<{ value: AiResponseReportReviewStatus; label: string }>>(() => [
+  { value: 'IN_REVIEW', label: t('adminModeration.inReview') },
+  { value: 'RESOLVED', label: t('adminModeration.resolved') },
+  { value: 'DISMISSED', label: t('adminModeration.dismissed') },
+])
 
 const submittingReview = ref(false)
 const actionError = ref<string | null>(null)
@@ -231,21 +239,21 @@ const reviewClosed = computed(() => isClosedStatus(selectedReport.value?.status)
 const reviewDisabled = computed(() => reviewReadOnly.value || !selectedReport.value || reviewClosed.value)
 const reviewDisabledReason = computed(() => {
   if (reviewReadOnly.value) {
-    return 'AI response reports cannot be reviewed while preview data is active.'
+    return t('adminModeration.previewDisabled')
   }
   if (!selectedReport.value) {
-    return 'No AI report is available to review right now.'
+    return t('adminModeration.noReport')
   }
   if (reviewClosed.value) {
-    return 'This report is already closed. Select an open report to continue moderation.'
+    return t('adminModeration.closedSelect')
   }
   return null
 })
 
 const moderationStats = computed(() => [
-  { icon: 'shield', label: 'Moderation records', value: String(moderationRecords.value.length) },
-  { icon: 'ai', label: 'Open AI reports', value: String(openReportCount.value) },
-  { icon: 'history', label: 'Pending review', value: String(pendingReviewCount.value) },
+  { icon: 'shield', label: t('adminModeration.records'), value: String(moderationRecords.value.length) },
+  { icon: 'ai', label: t('adminModeration.openReports'), value: String(openReportCount.value) },
+  { icon: 'history', label: t('adminModeration.pendingReview'), value: String(pendingReviewCount.value) },
 ])
 
 watch(
@@ -263,12 +271,12 @@ watch(
   (report) => {
     if (!report) {
       reviewForm.status = 'IN_REVIEW'
-      reviewForm.reviewerNote = DEFAULT_REVIEWER_NOTE
+      reviewForm.reviewerNote = defaultReviewerNote.value
       return
     }
 
     reviewForm.status = report.status === 'IN_REVIEW' ? 'RESOLVED' : 'IN_REVIEW'
-    reviewForm.reviewerNote = report.reviewerNote || DEFAULT_REVIEWER_NOTE
+    reviewForm.reviewerNote = report.reviewerNote || defaultReviewerNote.value
   },
   { immediate: true },
 )
@@ -276,25 +284,25 @@ watch(
 async function reviewAiReport(): Promise<void> {
   if (submittingReview.value) return
   if (reviewReadOnly.value) {
-    actionError.value = 'AI response reports cannot be reviewed while preview data is active.'
+    actionError.value = t('adminModeration.previewDisabled')
     actionSuccess.value = null
     return
   }
 
   if (!selectedReport.value) {
-    actionError.value = 'No AI report is available to review right now.'
+    actionError.value = t('adminModeration.noReport')
     actionSuccess.value = null
     return
   }
 
   if (reviewClosed.value) {
-    actionError.value = 'This report is already closed.'
+    actionError.value = t('adminModeration.closed')
     actionSuccess.value = null
     return
   }
 
   if (!reviewForm.reviewerNote.trim()) {
-    actionError.value = 'Reviewer note is required before saving this moderation action.'
+    actionError.value = t('adminModeration.noteRequired')
     actionSuccess.value = null
     return
   }
@@ -309,15 +317,32 @@ async function reviewAiReport(): Promise<void> {
       reviewerNote: reviewForm.reviewerNote.trim(),
     })
     await aiReportsResource.reload()
-    actionSuccess.value = `AI report updated to ${formatStatus(submittedStatus)} and queue refreshed.`
+    actionSuccess.value = t('adminModeration.updated', { status: formatStatus(submittedStatus) })
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to review this AI report.')
+    actionError.value = resolveApiError(reason, t('adminModeration.updateError'))
   } finally {
     submittingReview.value = false
   }
 }
 
 function formatStatus(status: string): string {
+  const keys: Record<string, string> = {
+    PENDING_REVIEW: 'pendingReview',
+    IN_REVIEW: 'inReview',
+    RESOLVED: 'resolved',
+    DISMISSED: 'dismissed',
+    HIDE: 'hidden',
+    HIDDEN: 'hidden',
+    UNPUBLISH: 'unpublished',
+    UNPUBLISHED: 'unpublished',
+    ARCHIVE: 'archived',
+    ARCHIVED: 'archived',
+    RESTORE: 'restored',
+    RESTORED: 'restored',
+    REQUEST_REVISION: 'revisionRequested',
+  }
+  const key = keys[status.toUpperCase()]
+  if (key) return t(`adminModeration.${key}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
@@ -325,10 +350,27 @@ function formatStatus(status: string): string {
 }
 
 function formatFeatureKey(featureKey: string): string {
+  const keys: Record<string, string> = {
+    AI_CHAT: 'aiChat',
+    CHAT_TUTOR: 'chatTutor',
+    WRITING_FEEDBACK: 'writingFeedback',
+    PRONUNCIATION: 'pronunciation',
+  }
+  const key = keys[featureKey.toUpperCase()]
+  if (key) return t(`adminModeration.${key}`)
   return formatStatus(featureKey)
 }
 
 function formatReportReason(reason: string): string {
+  const keys: Record<string, string> = {
+    INAPPROPRIATE_CONTENT: 'inappropriate',
+    UNSAFE_RESPONSE: 'unsafe',
+    INACCURATE_RESPONSE: 'inaccurate',
+    INCORRECT_CONTENT: 'incorrect',
+    OTHER: 'other',
+  }
+  const key = keys[reason.toUpperCase()]
+  if (key) return t(`adminModeration.${key}`)
   return formatStatus(reason)
 }
 
@@ -353,22 +395,22 @@ function isClosedStatus(status?: string | null): boolean {
 
 function chatEvidenceLabel(report: AdminAiResponseReportResponse): string {
   if (report.chatSessionId && report.chatMessageId) {
-    return `Chat #${report.chatSessionId} / message #${report.chatMessageId}`
+    return t('adminModeration.chatAndMessage', { chat: report.chatSessionId, message: report.chatMessageId })
   }
   if (report.chatSessionId) {
-    return `Chat #${report.chatSessionId}`
+    return t('adminModeration.chat', { chat: report.chatSessionId })
   }
-  return 'No chat message linked'
+  return t('adminModeration.noChat')
 }
 
 function reviewerLabel(report: AdminAiResponseReportResponse): string {
   if (report.reviewerName && report.reviewedAt) {
-    return `Reviewed by ${report.reviewerName} on ${formatDateTime(report.reviewedAt)}`
+    return t('adminModeration.reviewedOn', { name: report.reviewerName, date: formatDateTime(report.reviewedAt) })
   }
   if (report.reviewerName) {
-    return `Reviewed by ${report.reviewerName}`
+    return t('adminModeration.reviewedBy', { name: report.reviewerName })
   }
-  return 'Awaiting admin review'
+  return t('adminModeration.awaiting')
 }
 </script>
 

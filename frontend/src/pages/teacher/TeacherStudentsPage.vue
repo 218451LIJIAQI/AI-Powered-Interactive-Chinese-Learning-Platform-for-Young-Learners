@@ -1,8 +1,8 @@
 <template>
   <div class="page-stack teacher-students-page">
     <PageHeaderBlock
-      title="Students"
-      description="Monitor progress, review weak areas, and follow up with each learner."
+      :title="t('teacherStudents.title')"
+      :description="t('teacherStudents.description')"
       icon="students"
     />
 
@@ -30,7 +30,7 @@
         <article class="panel teacher-students-directory-card">
           <div class="teacher-students-directory-head">
             <div class="student-section-heading">
-              <strong>All Students ({{ filteredStudents.length }})</strong>
+              <strong>{{ t('teacherStudents.allStudents', { count: filteredStudents.length }) }}</strong>
             </div>
             <div class="teacher-students-directory-tools">
               <label class="teacher-students-search">
@@ -38,12 +38,12 @@
                 <input
                   v-model="searchTerm"
                   class="teacher-students-search-input"
-                  aria-label="Search students"
-                  placeholder="Search by learner, email, level, or weak area"
+                  :aria-label="t('teacherStudents.searchAria')"
+                  :placeholder="t('teacherStudents.searchPlaceholder')"
                 />
               </label>
               <button class="teacher-outline-button teacher-students-filter-button" type="button" @click="cycleSort">
-                Sort: {{ sortModeLabel }}
+                {{ t('teacherStudents.sort', { mode: sortModeLabel }) }}
               </button>
             </div>
           </div>
@@ -79,8 +79,8 @@
           <StatePanel
             v-else
             icon="students"
-            title="No students found"
-            message="No linked students match the current filter."
+            :title="t('teacherStudents.noStudents')"
+            :message="t('teacherStudents.noStudentsHint')"
           />
         </article>
 
@@ -102,25 +102,25 @@
 
                 <div class="teacher-students-profile-progress">
                   <strong>{{ selectedStudent.progressPercent }}%</strong>
-                  <span>Course Progress</span>
+                  <span>{{ t('teacherStudents.courseProgress') }}</span>
                 </div>
               </div>
 
               <div class="teacher-students-contact-grid">
                 <article>
-                  <small>Email</small>
+                  <small>{{ t('teacherStudents.email') }}</small>
                   <strong>{{ selectedStudentEmailLabel }}</strong>
                 </article>
                 <article>
-                  <small>Quiz Average</small>
+                  <small>{{ t('teacherStudents.quizAverage') }}</small>
                   <strong>{{ selectedStudent.quizAverageLabel }}</strong>
                 </article>
                 <article>
-                  <small>Latest Activity</small>
+                  <small>{{ t('teacherStudents.latestActivity') }}</small>
                   <strong>{{ selectedLatestActivityLabel }}</strong>
                 </article>
                 <article>
-                  <small>Latest Feedback</small>
+                  <small>{{ t('teacherStudents.latestFeedback') }}</small>
                   <strong>{{ selectedLatestFeedbackLabel }}</strong>
                 </article>
               </div>
@@ -129,30 +129,30 @@
             <StatePanel
               v-else
               icon="students"
-              title="No students available"
-              message="Students will appear here after they join your classes, lessons, or quiz attempts."
+              :title="t('teacherStudents.noStudentsAvailable')"
+              :message="t('teacherStudents.noStudentsAvailableHint')"
             />
           </article>
 
           <div v-if="selectedStudent" class="teacher-students-overview-grid">
             <article class="panel teacher-students-progress-card">
               <div class="teacher-students-card-head">
-                <strong>Learning Summary</strong>
+                <strong>{{ t('teacherStudents.learningSummary') }}</strong>
               </div>
 
               <div class="teacher-students-progress-summary">
                 <article class="teacher-students-mini-stat">
-                  <small>Progress</small>
+                  <small>{{ t('teacherStudents.progress') }}</small>
                   <strong>{{ selectedStudent.progressPercent }}%</strong>
-                  <span>Across linked lessons</span>
+                  <span>{{ t('teacherStudents.linkedLessons') }}</span>
                 </article>
                 <article class="teacher-students-mini-stat">
-                  <small>Quiz Average</small>
+                  <small>{{ t('teacherStudents.quizAverage') }}</small>
                   <strong>{{ selectedStudent.quizAverageLabel }}</strong>
-                  <span>Across submitted attempts</span>
+                  <span>{{ t('teacherStudents.submittedAttempts') }}</span>
                 </article>
                 <article class="teacher-students-mini-stat">
-                  <small>Risk Status</small>
+                  <small>{{ t('teacherStudents.riskStatus') }}</small>
                   <strong>{{ selectedRiskStatusLabel }}</strong>
                   <span>{{ selectedRiskSummary }}</span>
                 </article>
@@ -161,7 +161,7 @@
 
             <article class="panel teacher-students-weak-card">
               <div class="teacher-students-card-head">
-                <strong>Recorded Weak Areas</strong>
+                <strong>{{ t('teacherStudents.weakAreas') }}</strong>
               </div>
 
               <div v-if="selectedWeakAreaRows.length" class="teacher-students-weak-list">
@@ -172,17 +172,17 @@
                   </div>
                 </article>
               </div>
-              <p v-else class="teacher-students-empty-copy">No weak areas are recorded yet for this learner.</p>
+              <p v-else class="teacher-students-empty-copy">{{ t('teacherStudents.noWeakAreas') }}</p>
 
               <button class="teacher-footer-link" type="button" @click="openFeedback">
-                <span>Open feedback center</span>
+                <span>{{ t('teacherStudents.openFeedback') }}</span>
                 <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
               </button>
             </article>
 
             <article class="panel teacher-students-insights-card">
               <div class="teacher-students-card-head">
-                <strong>Learning Insights</strong>
+                <strong>{{ t('teacherStudents.insights') }}</strong>
               </div>
 
               <div class="teacher-students-insight-list">
@@ -200,9 +200,9 @@
         <div class="teacher-students-side-column">
           <article class="panel teacher-students-feedback-card">
             <div class="row-between teacher-students-card-head">
-              <strong>Recent Feedback</strong>
+              <strong>{{ t('teacherStudents.recentFeedback') }}</strong>
               <button class="student-link-button" type="button" @click="openFeedback">
-                View All
+                {{ t('teacherStudents.viewAll') }}
               </button>
             </div>
 
@@ -220,44 +220,46 @@
                 </div>
               </article>
             </div>
-            <p v-else class="teacher-students-empty-copy">No feedback has been recorded for this learner yet.</p>
+            <p v-else class="teacher-students-empty-copy">{{ t('teacherStudents.noFeedback') }}</p>
           </article>
 
           <article class="panel teacher-students-followup-card">
             <div class="teacher-students-card-head">
               <div class="row-between teacher-students-followup-headline">
-                <strong>Draft Guidance</strong>
+                <strong>{{ t('teacherStudents.draftGuidance') }}</strong>
                 <span class="teacher-students-followup-info"><IconGlyph name="help" :size="14" /></span>
               </div>
-              <p>Use this as a starting point, then review and send the final feedback yourself.</p>
+              <p>{{ t('teacherStudents.draftHint') }}</p>
             </div>
 
             <form class="teacher-students-followup-box" @submit.prevent="submitFollowUpFeedback">
-              <strong>Hi {{ selectedStudentFirstName }},</strong>
+              <strong>{{ t('teacherStudents.greeting', { name: selectedStudentFirstName }) }}</strong>
               <textarea
                 v-model="followUpMessage"
                 class="textarea teacher-students-followup-textarea"
-                aria-label="Follow-up feedback message"
+                :aria-label="t('teacherStudents.feedbackAria')"
                 :disabled="followUpDisabled"
               />
-              <span class="teacher-students-followup-sign">Ready to send as {{ followUpFeedbackType }}</span>
+              <span class="teacher-students-followup-sign">{{
+                t('teacherStudents.readyAs', { type: followUpFeedbackTypeLabel })
+              }}</span>
             </form>
 
             <div class="teacher-students-followup-fields">
               <div class="field">
-                <label for="teacher-followup-tone">Tone</label>
+                <label for="teacher-followup-tone">{{ t('teacherStudents.tone') }}</label>
                 <select id="teacher-followup-tone" v-model="followUpTone" class="select" :disabled="followUpDisabled">
-                  <option>Encouraging</option>
-                  <option>Specific</option>
-                  <option>Corrective</option>
+                  <option value="ENCOURAGING">{{ t('teacherStudents.encouraging') }}</option>
+                  <option value="SPECIFIC">{{ t('teacherStudents.specific') }}</option>
+                  <option value="CORRECTIVE">{{ t('teacherStudents.corrective') }}</option>
                 </select>
               </div>
               <div class="field">
-                <label for="teacher-followup-focus">Focus</label>
+                <label for="teacher-followup-focus">{{ t('teacherStudents.focus') }}</label>
                 <select id="teacher-followup-focus" v-model="followUpFocus" class="select" :disabled="followUpDisabled">
-                  <option>Weak Areas</option>
-                  <option>Quiz Accuracy</option>
-                  <option>Consistency</option>
+                  <option value="WEAK_AREAS">{{ t('teacherStudents.weakAreasOption') }}</option>
+                  <option value="QUIZ_ACCURACY">{{ t('teacherStudents.quizAccuracy') }}</option>
+                  <option value="CONSISTENCY">{{ t('teacherStudents.consistency') }}</option>
                 </select>
               </div>
             </div>
@@ -269,7 +271,7 @@
                 :disabled="followUpDisabled"
                 @click="resetFollowUpDraft"
               >
-                Reset Draft
+                {{ t('teacherStudents.resetDraft') }}
               </button>
               <button
                 class="btn btn-primary"
@@ -289,6 +291,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { teacherApi } from '@/api/services'
@@ -300,12 +303,20 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { teacherFeedback, teacherStudentSummaries } from '@/demo/data'
+import { teacherStudentsMessages } from '@/plugins/teacherStudentsMessages'
 import type { TeacherFeedbackResponse, TeacherStudentSummaryResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, formatDateTime, formatPercent } from '@/utils/format'
 import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { teacherStudents: teacherStudentsMessages.en },
+    ms: { teacherStudents: teacherStudentsMessages.ms },
+    zh: { teacherStudents: teacherStudentsMessages.zh },
+  },
+})
 
 type SortMode = 'progress' | 'name'
 type StudentAvatarKind = 'student' | 'male' | 'female' | 'hijab'
@@ -322,8 +333,8 @@ const feedbackResource = useResource(() => teacherApi.feedbackList(), teacherFee
 const searchTerm = ref('')
 const sortMode = ref<SortMode>('progress')
 const selectedStudentId = ref<number | null>(null)
-const followUpTone = ref('Encouraging')
-const followUpFocus = ref('Weak Areas')
+const followUpTone = ref('ENCOURAGING')
+const followUpFocus = ref('WEAK_AREAS')
 const followUpMessage = ref('')
 const submittingFollowUp = ref(false)
 const actionError = ref<string | null>(null)
@@ -334,10 +345,11 @@ const students = computed<StudentRecord[]>(() =>
     ...item,
     avatarKind: 'student',
     displayName: item.displayName?.trim() || item.fullName,
-    levelLabel: item.currentLevel?.trim() || 'Level not set',
+    levelLabel: item.currentLevel?.trim() || t('teacherStudents.levelNotSet'),
     progressPercent: clampPercent(item.progressPercent),
     quizAveragePercent: item.quizAveragePercent == null ? null : clampPercent(item.quizAveragePercent),
-    quizAverageLabel: item.quizAveragePercent == null ? 'No quiz data' : formatPercent(item.quizAveragePercent),
+    quizAverageLabel:
+      item.quizAveragePercent == null ? t('teacherStudents.noQuizData') : formatPercent(item.quizAveragePercent),
   })),
 )
 
@@ -351,7 +363,9 @@ const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(() => studentsResource.usingFallback.value || feedbackResource.usingFallback.value)
 const feedbackReadOnly = computed(() => usingFallback.value)
 const followUpDisabled = computed(() => feedbackReadOnly.value || submittingFollowUp.value || !selectedStudent.value)
-const sendFeedbackLabel = computed(() => (submittingFollowUp.value ? 'Sending...' : 'Send Feedback Now'))
+const sendFeedbackLabel = computed(() =>
+  submittingFollowUp.value ? t('teacherStudents.sending') : t('teacherStudents.sendNow'),
+)
 
 const filteredStudents = computed(() => {
   const keyword = searchTerm.value.trim().toLowerCase()
@@ -397,39 +411,39 @@ const summaryCards = computed(() => {
 
   return [
     {
-      label: 'Linked Students',
+      label: t('teacherStudents.linkedStudents'),
       value: String(students.value.length),
-      caption: 'Across lessons, live classes, quizzes, and feedback',
+      caption: t('teacherStudents.linkedStudentsHint'),
       icon: 'students',
       tone: 'purple',
-      actionLabel: 'View list',
+      actionLabel: t('teacherStudents.viewList'),
       action: selectFirstFilteredStudent,
     },
     {
-      label: 'Average Progress',
+      label: t('teacherStudents.averageProgress'),
       value: `${averageProgress}%`,
-      caption: 'Across linked lesson progress',
+      caption: t('teacherStudents.averageProgressHint'),
       icon: 'progress',
       tone: 'purple-soft',
-      actionLabel: 'Open student',
+      actionLabel: t('teacherStudents.openStudent'),
       action: selectFirstFilteredStudent,
     },
     {
-      label: 'At Risk',
+      label: t('teacherStudents.atRisk'),
       value: String(atRiskCount),
-      caption: 'Learners needing follow-up',
+      caption: t('teacherStudents.atRiskHint'),
       icon: 'alert',
       tone: 'orange',
-      actionLabel: 'Filter mentally',
+      actionLabel: t('teacherStudents.filterAtRisk'),
       action: selectFirstAtRiskStudent,
     },
     {
-      label: 'Quiz Average',
+      label: t('teacherStudents.quizAverage'),
       value: students.value.some((item) => item.quizAveragePercent != null) ? `${averageQuiz}%` : '--',
-      caption: 'Across submitted attempts',
+      caption: t('teacherStudents.submittedAttempts'),
       icon: 'quiz',
       tone: 'green',
-      actionLabel: 'Feedback center',
+      actionLabel: t('teacherStudents.feedbackCenter'),
       action: openFeedback,
     },
   ]
@@ -442,10 +456,10 @@ const selectedFeedbackCards = computed(() =>
     .map((item, index) => ({
       id: item.id,
       title: item.quizTitle
-        ? `Feedback on ${item.quizTitle}`
+        ? t('teacherStudents.feedbackOnQuiz', { quiz: item.quizTitle })
         : item.lessonTitle
-          ? `Lesson feedback: ${item.lessonTitle}`
-          : formatTeacherFeedbackType(item.feedbackType),
+          ? t('teacherStudents.lessonFeedback', { lesson: item.lessonTitle })
+          : feedbackTypeLabel(item.feedbackType),
       message: item.message,
       time: formatDateTime(item.createdAt),
       icon: ['file', 'status', 'help', 'history'][index % 4],
@@ -457,7 +471,7 @@ const selectedWeakAreaRows = computed(() => {
   const weakAreas = selectedStudent.value?.weakAreas ?? []
   return weakAreas.slice(0, 4).map((label, index) => ({
     label,
-    detail: index === 0 ? 'Primary focus' : 'Recorded focus',
+    detail: index === 0 ? t('teacherStudents.primaryFocus') : t('teacherStudents.recordedFocus'),
   }))
 })
 
@@ -470,23 +484,23 @@ const selectedInsights = computed(() => {
   const weakArea = selectedStudent.value.weakAreas[0]
   const quizAverage =
     selectedStudent.value.quizAveragePercent == null
-      ? 'No quiz average is available yet.'
-      : `Quiz average is ${formatPercent(selectedStudent.value.quizAveragePercent)}.`
+      ? t('teacherStudents.noQuizAverage')
+      : t('teacherStudents.quizAverageValue', { average: formatPercent(selectedStudent.value.quizAveragePercent) })
 
   return [
     {
       icon: selectedStudent.value.atRisk ? 'alert' : 'status',
       tone: selectedStudent.value.atRisk ? 'orange' : 'green',
       message: selectedStudent.value.atRisk
-        ? `${learner} is currently marked at risk based on progress, quiz results, or tracked weak areas.`
-        : `${learner} is currently staying on track across linked teacher activity.`,
+        ? t('teacherStudents.riskInsight', { name: learner })
+        : t('teacherStudents.onTrackInsight', { name: learner }),
     },
     {
       icon: weakArea ? 'help' : 'status',
       tone: weakArea ? 'blue' : 'green',
       message: weakArea
-        ? `The most visible weak area is ${weakArea.toLowerCase()}.`
-        : 'No weak areas have been recorded yet.',
+        ? t('teacherStudents.visibleWeakArea', { area: weakArea.toLowerCase() })
+        : t('teacherStudents.noWeakAreasInsight'),
     },
     {
       icon: 'progress',
@@ -497,65 +511,81 @@ const selectedInsights = computed(() => {
 })
 
 const selectedJoinedLabel = computed(() =>
-  selectedStudent.value?.joinedAt ? `Joined ${formatDate(selectedStudent.value.joinedAt)}` : 'Join date unavailable',
+  selectedStudent.value?.joinedAt
+    ? t('teacherStudents.joined', { date: formatDate(selectedStudent.value.joinedAt) })
+    : t('teacherStudents.joinUnavailable'),
 )
 const selectedLatestActivityLabel = computed(() =>
   selectedStudent.value?.latestActivityAt
     ? formatDateTime(selectedStudent.value.latestActivityAt)
-    : 'No activity recorded',
+    : t('teacherStudents.noActivity'),
 )
 const selectedLatestFeedbackLabel = computed(() => {
   if (!selectedStudent.value?.latestFeedbackType) {
-    return 'No feedback recorded'
+    return t('teacherStudents.noFeedbackRecorded')
   }
-  const normalized = formatTeacherFeedbackType(selectedStudent.value.latestFeedbackType)
+  const normalized = feedbackTypeLabel(selectedStudent.value.latestFeedbackType)
   return selectedStudent.value.latestFeedbackAt
-    ? `${normalized} on ${formatDateTime(selectedStudent.value.latestFeedbackAt)}`
+    ? t('teacherStudents.feedbackOnDate', {
+        type: normalized,
+        date: formatDateTime(selectedStudent.value.latestFeedbackAt),
+      })
     : normalized
 })
 const selectedRiskSummary = computed(() =>
-  selectedStudent.value?.atRisk ? 'Progress or accuracy needs closer follow-up' : 'No current risk signal',
+  selectedStudent.value?.atRisk ? t('teacherStudents.needsFollowup') : t('teacherStudents.noRisk'),
 )
-const selectedRiskStatusLabel = computed(() => (selectedStudent.value?.atRisk ? 'At Risk' : 'Stable'))
-const selectedStudentBadgeLabel = computed(() => (selectedStudent.value?.atRisk ? 'Alert' : 'Active'))
+const selectedRiskStatusLabel = computed(() =>
+  selectedStudent.value?.atRisk ? t('teacherStudents.atRisk') : t('teacherStudents.stable'),
+)
+const selectedStudentBadgeLabel = computed(() =>
+  selectedStudent.value?.atRisk ? t('teacherStudents.alert') : t('teacherStudents.active'),
+)
 const selectedStudentEmailLabel = computed(() => selectedStudent.value?.email || '--')
-const selectedStudentFirstName = computed(() => selectedStudent.value?.displayName.split(' ')[0] ?? 'student')
-const sortModeLabel = computed(() => (sortMode.value === 'progress' ? 'Progress' : 'Name'))
+const selectedStudentFirstName = computed(
+  () => selectedStudent.value?.displayName.split(' ')[0] ?? t('teacherStudents.student'),
+)
+const sortModeLabel = computed(() =>
+  sortMode.value === 'progress' ? t('teacherStudents.sortProgress') : t('teacherStudents.sortName'),
+)
 
 const manualFollowupDraft = computed(() => {
   if (!selectedStudent.value) {
-    return 'Open a learner to draft a follow-up note.'
+    return t('teacherStudents.openLearnerDraft')
   }
 
   const learner = selectedStudentFirstName.value
   const weakFocus = selectedStudent.value.weakAreas[0]
   const quizLabel =
     selectedStudent.value.quizAveragePercent == null
-      ? 'their recent activities'
-      : `their ${formatPercent(selectedStudent.value.quizAveragePercent)} quiz average`
+      ? t('teacherStudents.recentActivities')
+      : t('teacherStudents.quizAveragePossessive', {
+          average: formatPercent(selectedStudent.value.quizAveragePercent),
+        })
   const toneLead =
-    followUpTone.value === 'Corrective'
-      ? 'Please take another careful look at'
-      : followUpTone.value === 'Specific'
-        ? 'For the next step, focus on'
-        : 'You are making progress. Keep working on'
+    followUpTone.value === 'CORRECTIVE'
+      ? t('teacherStudents.toneCorrective')
+      : followUpTone.value === 'SPECIFIC'
+        ? t('teacherStudents.toneSpecific')
+        : t('teacherStudents.toneEncouraging')
   const focusText =
-    followUpFocus.value === 'Quiz Accuracy'
+    followUpFocus.value === 'QUIZ_ACCURACY'
       ? quizLabel
-      : followUpFocus.value === 'Consistency'
-        ? 'consistent short practice throughout the week'
+      : followUpFocus.value === 'CONSISTENCY'
+        ? t('teacherStudents.consistentPractice')
         : weakFocus
           ? weakFocus.toLowerCase()
-          : 'the next lesson target'
+          : t('teacherStudents.nextLessonTarget')
 
-  return `${toneLead} ${focusText}. ${learner} can improve with short, repeatable practice and one teacher check-in.`
+  return t('teacherStudents.draftMessage', { lead: toneLead, focus: focusText, name: learner })
 })
 const followUpFeedbackType = computed(() => {
-  if (followUpTone.value === 'Corrective') return 'CORRECTIVE'
-  if (followUpFocus.value === 'Quiz Accuracy') return 'QUIZ'
-  if (followUpFocus.value === 'Weak Areas') return 'WEAK_AREA'
+  if (followUpTone.value === 'CORRECTIVE') return 'CORRECTIVE'
+  if (followUpFocus.value === 'QUIZ_ACCURACY') return 'QUIZ'
+  if (followUpFocus.value === 'WEAK_AREAS') return 'WEAK_AREA'
   return 'GENERAL'
 })
+const followUpFeedbackTypeLabel = computed(() => feedbackTypeLabel(followUpFeedbackType.value))
 
 watch(
   filteredStudents,
@@ -597,7 +627,21 @@ function riskTone(atRisk: boolean): string {
 }
 
 function riskStatusLabel(atRisk: boolean): string {
-  return atRisk ? 'Needs attention' : 'On track'
+  return atRisk ? t('teacherStudents.needsAttention') : t('teacherStudents.onTrack')
+}
+
+function feedbackTypeLabel(type: string | null | undefined): string {
+  const keys: Record<string, string> = {
+    GENERAL: 'feedbackGeneral',
+    QUIZ: 'feedbackQuiz',
+    LESSON: 'feedbackLesson',
+    ENCOURAGING: 'feedbackEncouraging',
+    CORRECTIVE: 'feedbackCorrective',
+    PROGRESS: 'feedbackProgress',
+    WEAK_AREA: 'feedbackWeakArea',
+  }
+  const key = type ? keys[type.toUpperCase()] : 'feedbackGeneral'
+  return key ? t(`teacherStudents.${key}`) : formatTeacherFeedbackType(type)
 }
 
 function cycleSort(): void {
@@ -607,7 +651,7 @@ function cycleSort(): void {
 function resetFollowUpDraft(): void {
   followUpMessage.value = manualFollowupDraft.value
   actionError.value = null
-  actionSuccess.value = 'Draft reset from the selected learner context.'
+  actionSuccess.value = t('teacherStudents.draftReset')
 }
 
 async function submitFollowUpFeedback(): Promise<void> {
@@ -616,17 +660,17 @@ async function submitFollowUpFeedback(): Promise<void> {
   actionSuccess.value = null
 
   if (feedbackReadOnly.value) {
-    actionError.value = 'Student feedback cannot be sent while preview data is active.'
+    actionError.value = t('teacherStudents.previewFeedback')
     return
   }
 
   if (!selectedStudent.value) {
-    actionError.value = 'Select a linked student before sending feedback.'
+    actionError.value = t('teacherStudents.selectStudent')
     return
   }
 
   if (!followUpMessage.value.trim()) {
-    actionError.value = 'Feedback message is required.'
+    actionError.value = t('teacherStudents.messageRequired')
     return
   }
 
@@ -639,9 +683,9 @@ async function submitFollowUpFeedback(): Promise<void> {
     })
     await feedbackResource.reload()
     await studentsResource.reload()
-    actionSuccess.value = 'Feedback sent directly from the student page and records refreshed.'
+    actionSuccess.value = t('teacherStudents.feedbackSent')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to send feedback from this student page.')
+    actionError.value = resolveApiError(reason, t('teacherStudents.feedbackError'))
   } finally {
     submittingFollowUp.value = false
   }

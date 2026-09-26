@@ -8,7 +8,7 @@ The platform is designed around three main personas:
 - Teachers manage learning modules, lessons, course packages, quizzes, live classes, recorded videos, student progress, feedback, profile verification, and earnings.
 - Administrators manage users, teacher verification, published content, activity libraries, reports, moderation, payments, refunds, payouts, analytics, platform settings, notifications, and audit logs.
 
-The project can run as a normal full-stack application with MySQL, as a backend demo using an in-memory H2 database, or as a frontend-only preview for presentations without any backend service.
+The project can run as a normal full-stack application with MySQL, as a persistent desktop demo with file-backed H2, as an in-memory backend demo, or as a frontend-only preview for presentations without any backend service.
 
 ## Table of Contents
 
@@ -44,7 +44,8 @@ The project can run as a normal full-stack application with MySQL, as a backend 
 - Optional SMTP email support for password reset workflows.
 - Optional Sentry observability on both frontend and backend, with sensitive data scrubbing.
 - PWA support with auto-update service worker and static asset caching.
-- Internationalized navigation labels for English, Bahasa Melayu, and Chinese.
+- Complete interface localization for English, Bahasa Melayu, and Simplified Chinese across public, student,
+  teacher, admin, loading, error, and system pages.
 - Local demo paths that do not require real AI, Stripe, SMTP, or MySQL credentials.
 
 ## Feature Overview
@@ -127,10 +128,11 @@ flowchart LR
 - Pinia stores manage auth and UI state.
 - Axios wrapper centralizes API base URL handling, bearer-token attachment, refresh-token recovery, and auth invalidation.
 - `src/api/services.ts` is the typed frontend API layer for auth, public catalog, student, teacher, admin, AI, payments, notifications, and health checks.
-- `src/demo/data.ts` contains strictly typed preview fixtures used only when demo flags are enabled.
+- `src/demo/data.ts` contains strictly typed preview fixtures used only when demo flags are enabled; `src/demo/users.ts` holds the small preview account records separately.
 - `src/config/env.ts` validates and normalizes build-time environment variables.
 - `src/config/navigation.ts` is the single source of truth for sidebar and public navigation.
-- `src/plugins/i18n.ts` provides English, Bahasa Melayu, and Chinese navigation labels.
+- `src/plugins/i18n.ts` provides English, Bahasa Melayu, and Simplified Chinese shared labels; every public and
+  workspace page loads its route-local message bundle when visited.
 - `src/plugins/pwa.ts` registers the PWA service worker in production-like builds.
 - `src/plugins/observability.ts` initializes Sentry only when a DSN is configured and scrubs sensitive request data.
 
@@ -239,6 +241,14 @@ Recommended local tools:
 
 Choose the workflow that matches what you want to demonstrate or develop.
 
+### Option 0: One-Click Windows Desktop Demo
+
+On Windows with Java 21 and Node.js 22 installed, open `Start FYP.cmd` in the repository root. It builds the backend, installs frontend dependencies if needed, starts both services, waits for health checks, and opens `http://127.0.0.1:5174`. Use `Stop FYP.cmd` to stop only the processes started by this project.
+
+The desktop demo uses the `demo,desktop` profiles. Its H2 database is stored in `.local/data/`, so accounts and progress survive a restart. On the first start, the app creates one admin, one approved teacher, one student, three free published lessons, and one free published course package. Login emails are `admin@fyp.local`, `teacher@fyp.local`, and `student@fyp.local`; their generated passwords are in `.local/admin.env`. Keep that file private. Local logs and process IDs also live under `.local/`, which Git ignores.
+
+For a status check, run `powershell -File scripts/local.ps1 -Action Status`. The demo profile uses mock payments and has no real AI or SMTP service configured.
+
 ### Option 1: Frontend-Only Preview
 
 Use this when you want to present the UI without starting the backend or database.
@@ -291,6 +301,7 @@ The demo profile:
 - Uses mock payment behavior.
 - Disables real AI provider calls.
 - Disables SMTP email.
+- Seeds a small public course catalog and demo teacher/student accounts. Set `DEMO_TEACHER_PASSWORD` and `DEMO_STUDENT_PASSWORD` before first start if you need known credentials.
 
 Then start the frontend in a second terminal:
 
@@ -413,6 +424,7 @@ npm run lint
 npm run format:check
 npm run typecheck
 npm run test:unit
+npm run test:e2e
 npm run build
 npm run preview
 ```
@@ -556,6 +568,7 @@ For protected endpoints, sign in through `POST /api/v1/auth/login`, copy the ret
 | -------------------- | ------------------ | --------------------- | ------------------------------------------- |
 | Normal local/runtime | `local` or default | MySQL 8.4             | Flyway migrations with Hibernate validation |
 | Demo backend         | `demo`             | In-memory H2          | Hibernate create-drop, Flyway disabled      |
+| Windows desktop demo | `demo,desktop`     | File-backed H2        | Hibernate update, Flyway disabled           |
 | Automated tests      | `test`             | Isolated H2 databases | Hibernate create-drop, Flyway disabled      |
 
 ### Upload Storage
@@ -606,8 +619,11 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm run test:unit
+npm run test:e2e
 npm run build
 ```
+
+Run `npx playwright install chromium` once before the browser tests on a new machine. The end-to-end tests start an isolated preview server on port 5185.
 
 Frontend tests cover areas such as:
 
@@ -621,6 +637,15 @@ Frontend tests cover areas such as:
 - Sentry data sanitization.
 - URL, storage, download, formatting, role, route compatibility, and sensitive-data helpers.
 - Forgot-password and reset-password hygiene.
+- Playwright browser tests for course discovery and details, checkout result text, language persistence, translated
+  sign-in and recovery, narrow phone layouts, role-specific workspaces, and student, teacher, and admin preview
+  navigation.
+
+The language selector translates the complete application interface, including public, student, teacher, admin,
+loading, error, and system pages. Course titles, descriptions, notifications, and other user-authored or
+server-provided records remain in their source language.
+
+GitHub Actions runs the frontend checks, the backend test suite, and a MySQL 8.4 startup test that applies Flyway V1 and validates the schema with Hibernate. The MySQL test requires a real MySQL service and is skipped by local H2 test runs.
 
 ### Backend
 

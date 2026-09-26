@@ -1,18 +1,14 @@
 <template>
   <div class="page-stack student-classes-page">
-    <DataNotice
-      :using-fallback="liveResource.usingFallback.value"
-      :error="noticeError"
-      :success="actionSuccess"
-    />
+    <DataNotice :using-fallback="liveResource.usingFallback.value" :error="noticeError" :success="actionSuccess" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
       <section class="student-classes-layout">
         <div class="student-classes-main">
           <article class="panel student-live-hero">
             <div class="student-section-heading student-section-heading--live">
-              <span class="student-live-dot">LIVE</span>
-              <strong>Upcoming Live Class</strong>
+              <span class="student-live-dot">{{ t('studentClasses.liveNow') }}</span>
+              <strong>{{ t('studentClasses.upcoming') }}</strong>
             </div>
 
             <template v-if="upcomingClass">
@@ -40,7 +36,7 @@
 
                   <div class="student-live-actions">
                     <button class="btn btn-secondary" type="button" @click="openLinkedLesson">
-                      View Class Content
+                      {{ t('studentClasses.viewContent') }}
                     </button>
                   </div>
                 </div>
@@ -72,10 +68,10 @@
                   :disabled="liveReadOnly || classBusy"
                   @click="cancelEnrolment(upcomingClass.id)"
                 >
-                  Cancel Enrolment
+                  {{ t('studentClasses.cancelEnrolment') }}
                 </button>
                 <button class="student-live-setup" type="button" @click="openProfile">
-                  Open Profile
+                  {{ t('studentClasses.openProfile') }}
                 </button>
               </div>
             </template>
@@ -83,15 +79,15 @@
             <StatePanel
               v-else
               icon="classes"
-              title="No upcoming live class yet"
-              message="Live classes will appear here when a teacher schedules them for you."
+              :title="t('studentClasses.noUpcoming')"
+              :message="t('studentClasses.noUpcomingHint')"
             />
           </article>
 
           <div class="student-classes-bottom">
             <article class="panel student-teacher-card">
               <div class="student-section-heading">
-                <strong>Your Teacher</strong>
+                <strong>{{ t('studentClasses.yourTeacher') }}</strong>
               </div>
 
               <template v-if="upcomingClass?.teacher">
@@ -100,28 +96,32 @@
                   <div class="stack u-gap-6">
                     <div class="row">
                       <strong>{{ primaryTeacherName }}</strong>
-                      <span class="student-teacher-badge">Linked Teacher</span>
+                      <span class="student-teacher-badge">{{ t('studentClasses.linkedTeacher') }}</span>
                     </div>
-                    <p>This teacher is attached to your upcoming live class through the real live class API.</p>
+                    <p>{{ t('studentClasses.teacherHint') }}</p>
                   </div>
                 </div>
               </template>
               <StatePanel
                 v-else
                 icon="students"
-                title="No teacher assigned"
-                message="Teacher details will appear here when a live class includes teacher information."
+                :title="t('studentClasses.noTeacher')"
+                :message="t('studentClasses.noTeacherHint')"
               />
 
-              <button class="btn btn-secondary btn-block" type="button" @click="openProfile">View Feedback</button>
+              <button class="btn btn-secondary btn-block" type="button" @click="openProfile">
+                {{ t('studentClasses.viewFeedback') }}
+              </button>
             </article>
 
             <article class="panel student-library-card">
               <div class="row-between u-mb-14">
                 <div class="student-section-heading">
-                  <strong>Recorded Lessons Library</strong>
+                  <strong>{{ t('studentClasses.library') }}</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="openLinkedLesson">Open Learn</button>
+                <button class="student-link-button" type="button" @click="openLinkedLesson">
+                  {{ t('studentClasses.openLearn') }}
+                </button>
               </div>
 
               <div v-if="recordedLessonRows.length" class="student-library-list">
@@ -131,14 +131,16 @@
                     <span class="muted">{{ video.context }}</span>
                     <small>{{ video.meta }}</small>
                   </div>
-                  <button class="student-library-watch" type="button" @click="openRecordedLesson(video)">Watch</button>
+                  <button class="student-library-watch" type="button" @click="openRecordedLesson(video)">
+                    {{ t('studentClasses.watch') }}
+                  </button>
                 </article>
               </div>
               <StatePanel
                 v-else
                 icon="learn"
-                title="No recorded lessons"
-                message="Recorded lesson access will appear here once your lesson player includes videos."
+                :title="t('studentClasses.noRecordings')"
+                :message="t('studentClasses.noRecordingsHint')"
               />
             </article>
           </div>
@@ -148,9 +150,11 @@
           <article class="panel student-weekly-card">
             <div class="row-between u-mb-10">
               <div class="student-section-heading">
-                <strong>My Weekly Schedule</strong>
+                <strong>{{ t('studentClasses.weekly') }}</strong>
               </div>
-              <button class="student-link-button" type="button" @click="reloadAll">Refresh</button>
+              <button class="student-link-button" type="button" @click="reloadAll">
+                {{ t('studentClasses.refresh') }}
+              </button>
             </div>
 
             <div v-if="weeklySchedule.length" class="student-schedule-list">
@@ -172,7 +176,7 @@
                 </div>
 
                 <div class="student-schedule-state">
-                  <span v-if="item.canJoin" class="student-schedule-live">LIVE</span>
+                  <span v-if="item.canJoin" class="student-schedule-live">{{ t('studentClasses.liveNow') }}</span>
                   <span v-else>{{ item.statusLabel }}</span>
                 </div>
               </article>
@@ -180,17 +184,19 @@
             <StatePanel
               v-else
               icon="classes"
-              title="No classes scheduled"
-              message="Weekly live classes will appear here when the backend returns them."
+              :title="t('studentClasses.noClasses')"
+              :message="t('studentClasses.noClassesHint')"
             />
           </article>
 
           <article class="panel student-watch-again-card">
             <div class="row-between u-mb-12">
               <div class="student-section-heading">
-                <strong>Lesson Access Notes</strong>
+                <strong>{{ t('studentClasses.accessNotes') }}</strong>
               </div>
-              <button class="student-link-button" type="button" @click="openLinkedLesson">Open Learn</button>
+              <button class="student-link-button" type="button" @click="openLinkedLesson">
+                {{ t('studentClasses.openLearn') }}
+              </button>
             </div>
 
             <div class="student-watch-again-item">
@@ -205,7 +211,7 @@
           <article class="panel student-reminder-card">
             <div class="row-between u-mb-10">
               <div class="student-section-heading">
-                <strong>Class Reminders</strong>
+                <strong>{{ t('studentClasses.reminders') }}</strong>
               </div>
             </div>
 
@@ -221,8 +227,8 @@
             <StatePanel
               v-else
               icon="bell"
-              title="No reminders"
-              message="Reminders will appear here when you have upcoming live classes or enrolment actions."
+              :title="t('studentClasses.noReminders')"
+              :message="t('studentClasses.noRemindersHint')"
             />
           </article>
         </aside>
@@ -233,6 +239,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { publicApi, studentApi } from '@/api/services'
@@ -243,9 +250,20 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { publicCourseDetails, studentLiveClasses, teacherCoursePackages } from '@/demo/data'
+import { studentClassesMessages } from '@/plugins/studentClassesMessages'
 import type { CoursePackageResponse, LiveClassResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { openSafeHttpUrl } from '@/utils/url'
+
+const { locale, t } = useI18n({
+  messages: {
+    en: { studentClasses: studentClassesMessages.en },
+    ms: { studentClasses: studentClassesMessages.ms },
+    zh: { studentClasses: studentClassesMessages.zh },
+  },
+})
+
+const dateLocale = computed(() => ({ en: 'en-US', ms: 'ms-MY', zh: 'zh-CN' })[locale.value] ?? 'en-US')
 
 const router = useRouter()
 
@@ -272,23 +290,25 @@ const canCancelUpcomingEnrolment = computed(() => {
   return Boolean(liveClass.startTime) && new Date(liveClass.startTime).getTime() > Date.now()
 })
 const waitingForJoinWindow = computed(() => canCancelUpcomingEnrolment.value && !upcomingClass.value?.canJoin)
-const primaryTeacherName = computed(() => upcomingClass.value?.teacher?.displayName || 'Teacher unavailable')
-const upcomingClassDescription = computed(
-  () => upcomingClass.value?.description || 'No class description provided yet.',
+const primaryTeacherName = computed(
+  () => upcomingClass.value?.teacher?.displayName || t('studentClasses.teacherUnavailable'),
 )
-const upcomingClassDurationLabel = computed(() => `${upcomingClass.value?.durationMinutes ?? 45} min`)
+const upcomingClassDescription = computed(() => upcomingClass.value?.description || t('studentClasses.noDescription'))
+const upcomingClassDurationLabel = computed(() =>
+  t('studentClasses.minutes', { count: upcomingClass.value?.durationMinutes ?? 45 }),
+)
 const upcomingClassActionLabel = computed(() => {
-  if (classBusy.value) return 'Updating...'
-  if (upcomingClass.value?.canJoin) return 'Join Class'
-  if (upcomingClass.value?.canEnrol) return 'Enrol First'
-  if (waitingForJoinWindow.value) return 'Starts Later'
-  return 'Class Locked'
+  if (classBusy.value) return t('studentClasses.updating')
+  if (upcomingClass.value?.canJoin) return t('studentClasses.join')
+  if (upcomingClass.value?.canEnrol) return t('studentClasses.enrolFirst')
+  if (waitingForJoinWindow.value) return t('studentClasses.startsLater')
+  return t('studentClasses.locked')
 })
 const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() => {
   const name = primaryTeacherName.value.toLowerCase()
   if (name.includes('siti')) return 'hijab'
   if (name.includes('chen')) return 'male'
-  if (name.includes('unavailable')) return 'student'
+  if (!upcomingClass.value?.teacher?.displayName) return 'student'
   return 'female'
 })
 
@@ -305,20 +325,22 @@ const teacherInitials = computed(
 
 const classDate = computed(() => new Date(upcomingClass.value?.startTime ?? new Date().toISOString()))
 const upcomingMonth = computed(() =>
-  new Intl.DateTimeFormat('en-US', { month: 'short' }).format(classDate.value).toUpperCase(),
+  new Intl.DateTimeFormat(dateLocale.value, { month: 'short' }).format(classDate.value).toUpperCase(),
 )
-const upcomingDay = computed(() => new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(classDate.value))
+const upcomingDay = computed(() =>
+  new Intl.DateTimeFormat(dateLocale.value, { day: 'numeric' }).format(classDate.value),
+)
 const upcomingWeekday = computed(() =>
-  new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(classDate.value).toUpperCase(),
+  new Intl.DateTimeFormat(dateLocale.value, { weekday: 'short' }).format(classDate.value).toUpperCase(),
 )
 const classTimeRange = computed(() => {
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const formatter = new Intl.DateTimeFormat(dateLocale.value, {
     hour: 'numeric',
     minute: '2-digit',
   })
 
   if (!upcomingClass.value?.startTime || !upcomingClass.value?.endTime) {
-    return 'Schedule unavailable'
+    return t('studentClasses.scheduleUnavailable')
   }
 
   return `${formatter.format(new Date(upcomingClass.value.startTime))} - ${formatter.format(new Date(upcomingClass.value.endTime))}`
@@ -333,10 +355,10 @@ const weeklySchedule = computed(() =>
       return {
         id: item.id,
         title: item.title,
-        teacherName: item.teacher?.displayName || 'Teacher unavailable',
-        weekdayShort: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date).toUpperCase(),
-        day: new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(date),
-        timeLabel: new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date),
+        teacherName: item.teacher?.displayName || t('studentClasses.teacherUnavailable'),
+        weekdayShort: new Intl.DateTimeFormat(dateLocale.value, { weekday: 'short' }).format(date).toUpperCase(),
+        day: new Intl.DateTimeFormat(dateLocale.value, { day: 'numeric' }).format(date),
+        timeLabel: new Intl.DateTimeFormat(dateLocale.value, { hour: 'numeric', minute: '2-digit' }).format(date),
         canJoin: Boolean(item.canJoin),
         statusLabel: formatStatus(item.liveClassStatus),
       }
@@ -353,22 +375,22 @@ const watchAgainTitle = computed(() => {
   }
 
   if (upcomingClass.value) {
-    return `Live class access for ${upcomingClass.value.title}`
+    return t('studentClasses.accessFor', { title: upcomingClass.value.title })
   }
 
-  return 'No recorded lesson access yet'
+  return t('studentClasses.noRecordedAccess')
 })
 
 const watchAgainSubtitle = computed(() => {
   if (recordedLessonRows.value.length) {
-    return 'Recorded lessons are available through the linked lesson or package.'
+    return t('studentClasses.recordingsLinked')
   }
 
   if (upcomingClass.value?.canJoin) {
-    return 'You can join the upcoming live class directly from this page.'
+    return t('studentClasses.joinFromPage')
   }
 
-  return 'Recorded lesson and join details will appear here once a class is linked.'
+  return t('studentClasses.detailsLater')
 })
 
 const watchAgainMeta = computed(() => {
@@ -376,7 +398,7 @@ const watchAgainMeta = computed(() => {
     return `${formatStatus(upcomingClass.value.liveClassStatus)} - ${upcomingMeetingPlatformLabel.value}`
   }
 
-  return 'Waiting for class scheduling data'
+  return t('studentClasses.waitingSchedule')
 })
 
 const reminders = computed(() => {
@@ -384,13 +406,13 @@ const reminders = computed(() => {
 
   return [
     {
-      title: upcomingClass.value.canJoin ? 'Class is ready to join' : 'Upcoming class scheduled',
+      title: upcomingClass.value.canJoin ? t('studentClasses.ready') : t('studentClasses.scheduled'),
       copy: upcomingClass.value.title,
       time: classTimeRange.value,
     },
     {
-      title: upcomingClass.value.canEnrol ? 'Enrolment available' : 'Class access depends on enrolment',
-      copy: `Status: ${formatStatus(upcomingClass.value.liveClassStatus)}`,
+      title: upcomingClass.value.canEnrol ? t('studentClasses.enrolAvailable') : t('studentClasses.enrolRequired'),
+      copy: t('studentClasses.status', { status: formatStatus(upcomingClass.value.liveClassStatus) }),
       time: upcomingMeetingPlatformLabel.value,
     },
   ]
@@ -415,8 +437,8 @@ function recordedRowsFromClass(item: LiveClassResponse): RecordedLessonRow[] {
         lessonId: item.lesson.lessonId,
         packageId: null,
         title: item.lesson.lessonTitle,
-        context: 'Lesson linked to this live class',
-        meta: `${item.lesson.learningType} - ${item.lesson.accessType}`,
+        context: t('studentClasses.lessonLinked'),
+        meta: `${formatStatus(item.lesson.learningType)} - ${formatStatus(item.lesson.accessType)}`,
       },
     ]
   }
@@ -428,8 +450,8 @@ function recordedRowsFromClass(item: LiveClassResponse): RecordedLessonRow[] {
         lessonId: null,
         packageId: item.coursePackage.packageId,
         title: item.coursePackage.packageTitle,
-        context: 'Package linked to this live class',
-        meta: `${item.coursePackage.learningType} - ${item.coursePackage.accessType}`,
+        context: t('studentClasses.packageLinked'),
+        meta: `${formatStatus(item.coursePackage.learningType)} - ${formatStatus(item.coursePackage.accessType)}`,
       },
     ]
   }
@@ -476,7 +498,7 @@ async function openPackageLinkedContent(packageId: number): Promise<void> {
       }
     }
 
-    actionError.value = resolveApiError(reason, 'Unable to open the linked package content.')
+    actionError.value = resolveApiError(reason, t('studentClasses.packageOpenError'))
   }
 }
 
@@ -494,7 +516,7 @@ async function openRecordedLesson(video: RecordedLessonRow): Promise<void> {
     return
   }
 
-  actionError.value = 'No linked lesson or course is available for this recording yet.'
+  actionError.value = t('studentClasses.noRecordingLink')
 }
 
 async function openLinkedLesson(): Promise<void> {
@@ -518,7 +540,7 @@ async function openLinkedLesson(): Promise<void> {
     return
   }
 
-  actionError.value = 'No linked lesson or course is available for this class yet.'
+  actionError.value = t('studentClasses.noClassLink')
 }
 
 async function enrol(id: number): Promise<void> {
@@ -526,7 +548,7 @@ async function enrol(id: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   if (liveReadOnly.value) {
-    actionError.value = 'Preview live classes cannot be enrolled. Use live class data to change enrolment.'
+    actionError.value = t('studentClasses.previewEnrol')
     return
   }
 
@@ -534,9 +556,9 @@ async function enrol(id: number): Promise<void> {
   try {
     await studentApi.enrolLiveClass(id)
     await liveResource.reload()
-    actionSuccess.value = 'You are enrolled. The live class schedule has been refreshed.'
+    actionSuccess.value = t('studentClasses.enrolled')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to enrol in this class.')
+    actionError.value = resolveApiError(reason, t('studentClasses.enrolError'))
   } finally {
     classBusy.value = false
   }
@@ -547,7 +569,7 @@ async function cancelEnrolment(id: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   if (liveReadOnly.value) {
-    actionError.value = 'Preview live classes cannot change enrolment. Use live class data to cancel an enrolment.'
+    actionError.value = t('studentClasses.previewCancel')
     return
   }
 
@@ -555,9 +577,9 @@ async function cancelEnrolment(id: number): Promise<void> {
   try {
     await studentApi.cancelLiveClassEnrolment(id)
     await liveResource.reload()
-    actionSuccess.value = 'Your live class enrolment was cancelled and the schedule has been refreshed.'
+    actionSuccess.value = t('studentClasses.cancelled')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to cancel this enrolment.')
+    actionError.value = resolveApiError(reason, t('studentClasses.cancelError'))
   } finally {
     classBusy.value = false
   }
@@ -570,7 +592,7 @@ async function join(id: number): Promise<void> {
   actionSuccess.value = null
 
   if (liveReadOnly.value) {
-    actionError.value = 'Preview live classes cannot be joined. Use live class data to open a meeting link.'
+    actionError.value = t('studentClasses.previewJoin')
     return
   }
 
@@ -579,12 +601,12 @@ async function join(id: number): Promise<void> {
     try {
       const response = await studentApi.joinLiveClass(id)
       if (openSafeHttpUrl(response.meetingLink)) {
-        actionSuccess.value = 'Opening the live class in a new tab.'
+        actionSuccess.value = t('studentClasses.opening')
       } else {
-        actionError.value = 'The live class meeting link is not a safe web URL.'
+        actionError.value = t('studentClasses.unsafeLink')
       }
     } catch (reason) {
-      actionError.value = resolveApiError(reason, 'Unable to join this class right now.')
+      actionError.value = resolveApiError(reason, t('studentClasses.joinError'))
     }
     return
   }
@@ -594,10 +616,28 @@ async function join(id: number): Promise<void> {
     return
   }
 
-  actionError.value = 'This class is locked. Open Learn to continue with available lessons first.'
+  actionError.value = t('studentClasses.lockedHint')
 }
 
 function formatStatus(status: string): string {
+  const keys: Record<string, string> = {
+    SCHEDULED: 'statusScheduled',
+    ONGOING: 'statusOngoing',
+    COMPLETED: 'statusCompleted',
+    CANCELLED: 'statusCancelled',
+    RESCHEDULED: 'statusRescheduled',
+    LIVE: 'typeLive',
+    RECORDED: 'typeRecorded',
+    HYBRID: 'typeHybrid',
+    FREE: 'accessFree',
+    PAID: 'accessPaid',
+    ZOOM: 'platformZoom',
+    GOOGLE_MEET: 'platformMeet',
+    MICROSOFT_TEAMS: 'platformTeams',
+    OTHER: 'platformOther',
+  }
+  const key = keys[status.toUpperCase()]
+  if (key) return t(`studentClasses.${key}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()

@@ -1,18 +1,13 @@
 <template>
   <div class="page-stack teacher-classes-page">
     <PageHeaderBlock
-      title="My Classes"
-      description="Manage your synchronous and asynchronous classes, track progress, and support your students."
+      :title="t('teacherClasses.title')"
+      :description="t('teacherClasses.description')"
       icon="classes"
-      eyebrow="Teaching flow"
+      :eyebrow="t('teacherClasses.eyebrow')"
     >
       <template #actions>
-        <button
-          class="teacher-sample-link"
-          type="button"
-          :disabled="teacherApprovalLocked"
-          @click="toggleComposer"
-        >
+        <button class="teacher-sample-link" type="button" :disabled="teacherApprovalLocked" @click="toggleComposer">
           {{ composerToggleLabel }}
         </button>
       </template>
@@ -22,9 +17,9 @@
       :using-fallback="usingFallback"
       :error="noticeError"
       :success="actionSuccess"
-      fallback-title="Preview teaching workspace"
-      fallback-message="Live classes, enrolments, recordings, and attendance are showing safe preview data for this preview session."
-      error-title="Class workspace needs attention"
+      :fallback-title="t('teacherClasses.previewTitle')"
+      :fallback-message="t('teacherClasses.previewMessage')"
+      :error-title="t('teacherClasses.attentionTitle')"
       :detail="classesNoticeDetail"
     />
 
@@ -32,7 +27,7 @@
       <section class="teacher-classes-upcoming panel">
         <div class="row-between teacher-classes-section-head">
           <div class="student-section-heading">
-            <strong>Upcoming Live Classes</strong>
+            <strong>{{ t('teacherClasses.upcoming') }}</strong>
           </div>
           <div class="row teacher-classes-header-actions">
             <span class="teacher-classes-date-pill">{{ currentDateLabel }}</span>
@@ -42,15 +37,17 @@
               :disabled="teacherApprovalLocked"
               @click="openComposer"
             >
-              Open scheduler
+              {{ t('teacherClasses.openScheduler') }}
             </button>
           </div>
         </div>
 
         <div v-if="teacherApprovalLocked" class="teacher-classes-empty">
-          Complete teacher verification first to unlock class scheduling, rosters, and recording progress.
+          {{ t('teacherClasses.verificationRequired') }}
         </div>
-        <div v-else-if="!liveClassCards.length" class="teacher-classes-empty">No live classes are scheduled yet.</div>
+        <div v-else-if="!liveClassCards.length" class="teacher-classes-empty">
+          {{ t('teacherClasses.noLiveClasses') }}
+        </div>
         <div v-else class="teacher-classes-live-list">
           <article
             v-for="item in liveClassCards"
@@ -90,22 +87,22 @@
             <div class="teacher-classes-live-actions">
               <div class="teacher-classes-live-actions-main">
                 <button class="btn btn-primary" type="button" @click="openMeeting(item.meetingLink)">
-                  Open Meeting Link
+                  {{ t('teacherClasses.openMeeting') }}
                 </button>
                 <button class="teacher-outline-button" type="button" @click="selectClass(item.id)">
                   {{ item.editLabel }}
                 </button>
                 <button class="teacher-outline-button" type="button" @click="loadEnrolments(item.id)">
-                  View Roster
+                  {{ t('teacherClasses.viewRoster') }}
                 </button>
               </div>
               <button
                 class="teacher-classes-live-more"
                 type="button"
-                aria-label="Open class details"
+                :aria-label="t('teacherClasses.detailsAria')"
                 @click="selectClass(item.id)"
               >
-                Details
+                {{ t('teacherClasses.details') }}
               </button>
             </div>
           </article>
@@ -115,19 +112,13 @@
           <div class="row">
             <span class="teacher-classes-support-icon"><IconGlyph name="help" :size="14" /></span>
             <span>
-              Live support is provided through external tools such as Zoom or Google Meet. MandarinSpark does not
-              include built-in video conferencing.
+              {{ t('teacherClasses.externalSupport') }}
             </span>
           </div>
           <div class="row teacher-classes-support-actions">
-            <span>Need help with live classes?</span>
-            <button
-              class="teacher-guide-button"
-              type="button"
-              :disabled="teacherApprovalLocked"
-              @click="openComposer"
-            >
-              Open scheduler
+            <span>{{ t('teacherClasses.needHelp') }}</span>
+            <button class="teacher-guide-button" type="button" :disabled="teacherApprovalLocked" @click="openComposer">
+              {{ t('teacherClasses.openScheduler') }}
             </button>
           </div>
         </div>
@@ -140,14 +131,14 @@
               <strong>{{ composerTitle }}</strong>
             </div>
             <button v-if="selectedLiveClass" class="student-link-button" type="button" @click="resetComposer">
-              New class
+              {{ t('teacherClasses.newClass') }}
             </button>
           </div>
 
           <form class="teacher-classes-form" @submit.prevent="submitClass">
             <div class="form-grid two">
               <div class="field">
-                <label for="teacher-class-title">Class title</label>
+                <label for="teacher-class-title">{{ t('teacherClasses.classTitle') }}</label>
                 <input
                   id="teacher-class-title"
                   v-model="classForm.title"
@@ -158,7 +149,7 @@
                 />
               </div>
               <div class="field">
-                <label for="teacher-class-platform">Meeting platform</label>
+                <label for="teacher-class-platform">{{ t('teacherClasses.meetingPlatform') }}</label>
                 <select
                   id="teacher-class-platform"
                   v-model="classForm.meetingPlatform"
@@ -168,13 +159,13 @@
                   <option value="ZOOM">Zoom</option>
                   <option value="GOOGLE_MEET">Google Meet</option>
                   <option value="MICROSOFT_TEAMS">Microsoft Teams</option>
-                  <option value="OTHER">Other</option>
+                  <option value="OTHER">{{ t('teacherClasses.other') }}</option>
                 </select>
               </div>
             </div>
 
             <div class="field">
-              <label for="teacher-class-description">Topic / description</label>
+              <label for="teacher-class-description">{{ t('teacherClasses.topicDescription') }}</label>
               <textarea
                 id="teacher-class-description"
                 v-model="classForm.description"
@@ -186,28 +177,28 @@
 
             <div class="form-grid two">
               <div class="field">
-                <label for="teacher-class-lesson">Lesson</label>
+                <label for="teacher-class-lesson">{{ t('teacherClasses.lesson') }}</label>
                 <select
                   id="teacher-class-lesson"
                   v-model.number="classForm.lessonId"
                   class="select"
                   :disabled="classComposerDisabled"
                 >
-                  <option :value="0">No lesson context</option>
+                  <option :value="0">{{ t('teacherClasses.noLesson') }}</option>
                   <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">
                     {{ lesson.title }}
                   </option>
                 </select>
               </div>
               <div class="field">
-                <label for="teacher-class-package">Package</label>
+                <label for="teacher-class-package">{{ t('teacherClasses.package') }}</label>
                 <select
                   id="teacher-class-package"
                   v-model.number="classForm.packageId"
                   class="select"
                   :disabled="classComposerDisabled"
                 >
-                  <option :value="0">No package context</option>
+                  <option :value="0">{{ t('teacherClasses.noPackage') }}</option>
                   <option v-for="coursePackage in packageOptions" :key="coursePackage.id" :value="coursePackage.id">
                     {{ coursePackage.title }}
                   </option>
@@ -217,7 +208,7 @@
 
             <div class="form-grid two">
               <div class="field">
-                <label for="teacher-class-start-time">Start time</label>
+                <label for="teacher-class-start-time">{{ t('teacherClasses.startTime') }}</label>
                 <input
                   id="teacher-class-start-time"
                   v-model="classForm.startTime"
@@ -228,7 +219,7 @@
                 />
               </div>
               <div class="field">
-                <label for="teacher-class-end-time">End time</label>
+                <label for="teacher-class-end-time">{{ t('teacherClasses.endTime') }}</label>
                 <input
                   id="teacher-class-end-time"
                   v-model="classForm.endTime"
@@ -242,7 +233,7 @@
 
             <div class="form-grid two">
               <div class="field">
-                <label for="teacher-class-meeting-link">Meeting link</label>
+                <label for="teacher-class-meeting-link">{{ t('teacherClasses.meetingLink') }}</label>
                 <input
                   id="teacher-class-meeting-link"
                   v-model="classForm.meetingLink"
@@ -253,7 +244,7 @@
                 />
               </div>
               <div class="field">
-                <label for="teacher-class-max-participants">Max participants</label>
+                <label for="teacher-class-max-participants">{{ t('teacherClasses.maxParticipants') }}</label>
                 <input
                   id="teacher-class-max-participants"
                   v-model.number="classForm.maxParticipants"
@@ -267,8 +258,7 @@
 
             <div class="teacher-classes-form-footer">
               <div class="teacher-classes-form-note">
-                Select at least one lesson or package for every live class. Live classes remain teacher-managed and use
-                external meeting links only.
+                {{ t('teacherClasses.formNote') }}
               </div>
               <div class="row u-justify-end u-wrap">
                 <button
@@ -295,9 +285,11 @@
         <article class="panel teacher-classes-roster-card">
           <div class="row-between teacher-classes-section-head">
             <div class="student-section-heading">
-              <strong>Selected Class Roster</strong>
+              <strong>{{ t('teacherClasses.selectedRoster') }}</strong>
             </div>
-            <span class="teacher-classes-roster-count">{{ enrolments.length }} learners</span>
+            <span class="teacher-classes-roster-count">{{
+              t('teacherClasses.learners', { count: enrolments.length })
+            }}</span>
           </div>
 
           <div class="teacher-classes-roster-list">
@@ -308,11 +300,11 @@
                 <span>{{ student.studentEmail }}</span>
                 <small>{{ formatDate(student.enrolledAt) }}</small>
               </div>
-              <StatusPill :label="student.enrolmentStatus" tone="info" />
+              <StatusPill :label="formatStatus(student.enrolmentStatus)" tone="info" />
             </article>
 
             <div v-if="!enrolments.length" class="teacher-classes-empty">
-              Select a class to load enrolments from the live-class roster endpoint.
+              {{ t('teacherClasses.emptyRoster') }}
             </div>
           </div>
         </article>
@@ -322,9 +314,11 @@
         <article class="panel teacher-classes-library-card">
           <div class="row-between teacher-classes-section-head">
             <div class="student-section-heading">
-              <strong>Class Library &amp; Recordings</strong>
+              <strong>{{ t('teacherClasses.library') }}</strong>
             </div>
-            <button class="student-link-button" type="button" @click="openContent">View All</button>
+            <button class="student-link-button" type="button" @click="openContent">
+              {{ t('teacherClasses.viewAll') }}
+            </button>
           </div>
 
           <div class="teacher-classes-library-list">
@@ -338,13 +332,15 @@
               </div>
               <div class="teacher-classes-library-side">
                 <strong>{{ item.lengthLabel }}</strong>
-                <button class="teacher-play-button" type="button" @click="openContent">Open</button>
+                <button class="teacher-play-button" type="button" @click="openContent">
+                  {{ t('teacherClasses.open') }}
+                </button>
               </div>
             </article>
           </div>
 
           <button class="teacher-footer-cta" type="button" @click="openContent">
-            <span>Browse all recordings</span>
+            <span>{{ t('teacherClasses.browseRecordings') }}</span>
             <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
           </button>
         </article>
@@ -353,18 +349,18 @@
           <article class="panel teacher-classes-attendance-card">
             <div class="row-between teacher-classes-section-head">
               <div class="student-section-heading teacher-classes-title-with-note">
-                <strong>Attendance Check-ins</strong>
-                <small class="teacher-classes-head-note">(Selected Class)</small>
+                <strong>{{ t('teacherClasses.attendance') }}</strong>
+                <small class="teacher-classes-head-note">{{ t('teacherClasses.selectedClass') }}</small>
               </div>
               <button class="student-link-button" type="button" @click="loadEnrolments(primaryClass.id)">
-                View Details
+                {{ t('teacherClasses.viewDetails') }}
               </button>
             </div>
 
             <div class="teacher-classes-attendance-wrap">
               <div class="teacher-classes-attendance-ring">
                 <div class="teacher-classes-attendance-inner">
-                  <small>Checked In</small>
+                  <small>{{ t('teacherClasses.checkedIn') }}</small>
                   <strong>{{ attendanceRate }}%</strong>
                   <span>{{ presentCount }} / {{ totalRosterCount }}</span>
                 </div>
@@ -383,10 +379,10 @@
           <article class="panel teacher-classes-reminders-card">
             <div class="row-between teacher-classes-section-head">
               <div class="student-section-heading">
-                <strong>Class Follow-ups</strong>
+                <strong>{{ t('teacherClasses.followups') }}</strong>
               </div>
               <button class="student-link-button" type="button" @click="openStudents">
-                Open Students
+                {{ t('teacherClasses.openStudents') }}
               </button>
             </div>
 
@@ -409,10 +405,10 @@
           <article class="panel teacher-classes-homework-card">
             <div class="row-between teacher-classes-section-head">
               <div class="student-section-heading">
-                <strong>Learning Follow-ups</strong>
+                <strong>{{ t('teacherClasses.learningFollowups') }}</strong>
               </div>
               <button class="student-link-button" type="button" @click="openContent">
-                Open Content
+                {{ t('teacherClasses.openContent') }}
               </button>
             </div>
 
@@ -440,7 +436,7 @@
           <article class="panel teacher-classes-actions-card">
             <div class="teacher-classes-actions-head">
               <div class="student-section-heading">
-                <strong>Quick Class Actions</strong>
+                <strong>{{ t('teacherClasses.quickActions') }}</strong>
               </div>
             </div>
 
@@ -467,6 +463,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { teacherApi } from '@/api/services'
@@ -489,15 +486,23 @@ import {
   teacherRecordedVideos,
   teacherVideoProgress,
 } from '@/demo/data'
+import { teacherClassesMessages } from '@/plugins/teacherClassesMessages'
 import { useAuthStore } from '@/stores/auth'
 import type { CoursePackageResponse, LessonResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { clampPercent, formatDate, nonNegativeInteger, ratioPercent } from '@/utils/format'
+import { clampPercent, formatDate, getDisplayLocale, nonNegativeInteger, ratioPercent } from '@/utils/format'
 import { openSafeHttpUrl } from '@/utils/url'
 
 type MeetingPlatformValue = TeacherLiveClassPayload['meetingPlatform']
 
 const router = useRouter()
+const { t, locale } = useI18n({
+  messages: {
+    en: { teacherClasses: teacherClassesMessages.en },
+    ms: { teacherClasses: teacherClassesMessages.ms },
+    zh: { teacherClasses: teacherClassesMessages.zh },
+  },
+})
 const auth = useAuthStore()
 const { teacherApprovalLocked, teacherApprovalMessage } = useTeacherAccess()
 const previewFallbackEnabled = computed(() => appEnv.useDemoData && auth.isPreviewSession)
@@ -620,17 +625,21 @@ const classesReadOnly = computed(
 )
 const classComposerDisabled = computed(() => classesReadOnly.value || submittingCreate.value || submittingUpdate.value)
 const composerToggleLabel = computed(() => {
-  if (teacherApprovalLocked.value) return 'Verification pending'
-  return showComposer.value ? 'Close scheduler' : 'Schedule class'
+  if (teacherApprovalLocked.value) return t('teacherClasses.verificationPending')
+  return showComposer.value ? t('teacherClasses.closeScheduler') : t('teacherClasses.scheduleClass')
 })
-const composerTitle = computed(() => (selectedLiveClass.value ? 'Edit Live Class' : 'Schedule Live Class'))
-const cancelClassButtonLabel = computed(() => (submittingCancel.value ? 'Cancelling...' : 'Cancel class'))
+const composerTitle = computed(() =>
+  selectedLiveClass.value ? t('teacherClasses.editLiveClass') : t('teacherClasses.scheduleLiveClass'),
+)
+const cancelClassButtonLabel = computed(() =>
+  submittingCancel.value ? t('teacherClasses.cancelling') : t('teacherClasses.cancelClass'),
+)
 const submitClassButtonLabel = computed(() => {
   if (selectedLiveClass.value) {
-    return submittingUpdate.value ? 'Saving...' : 'Save changes'
+    return submittingUpdate.value ? t('teacherClasses.saving') : t('teacherClasses.saveChanges')
   }
 
-  return submittingCreate.value ? 'Creating...' : 'Create class'
+  return submittingCreate.value ? t('teacherClasses.creating') : t('teacherClasses.createClass')
 })
 const classesNoticeDetail = computed(() => {
   if (teacherApprovalLocked.value) {
@@ -638,19 +647,17 @@ const classesNoticeDetail = computed(() => {
   }
 
   if (noticeError.value) {
-    return selectedClassId.value
-      ? 'The selected class context stays visible so you can retry without losing your place.'
-      : 'Open a class again once the live endpoints respond.'
+    return selectedClassId.value ? t('teacherClasses.retryContext') : t('teacherClasses.reopenClass')
   }
 
   if (usingFallback.value) {
-    return 'Scheduler, roster, recording, and attendance flows remain reviewable in preview mode.'
+    return t('teacherClasses.previewFlows')
   }
 
   if (actionSuccess.value) {
     return selectedLiveClass.value
-      ? `Current focus: ${selectedLiveClass.value.title}`
-      : 'Your latest class action completed successfully.'
+      ? t('teacherClasses.currentFocus', { title: selectedLiveClass.value.title })
+      : t('teacherClasses.actionComplete')
   }
 
   return null
@@ -678,7 +685,7 @@ const classForm = reactive<TeacherLiveClassPayload>({
 })
 
 const currentDateLabel = computed(() =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(getDisplayLocale(locale.value), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -698,21 +705,25 @@ const liveClassCards = computed(() =>
     const platformLabel = formatMeetingPlatform(platform)
     const platformMeta =
       platform === 'GOOGLE_MEET'
-        ? `Meeting code: ${meetingCodeFromLink(item.meetingLink)}`
-        : `Meeting ID: ${meetingCodeFromLink(item.meetingLink)}`
+        ? t('teacherClasses.meetingCode', { code: meetingCodeFromLink(item.meetingLink) })
+        : t('teacherClasses.meetingId', { code: meetingCodeFromLink(item.meetingLink) })
 
     return {
       id: item.id,
       title: item.title,
-      topic: `Topic: ${item.lesson?.lessonTitle || item.description || 'Live class support session'}`,
-      studentLabel: `${item.enrolledCount} students`,
-      timeLabel: new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit' }).format(start),
+      topic: t('teacherClasses.topic', {
+        topic: item.lesson?.lessonTitle || item.description || t('teacherClasses.supportSession'),
+      }),
+      studentLabel: t('teacherClasses.students', { count: item.enrolledCount }),
+      timeLabel: new Intl.DateTimeFormat(getDisplayLocale(locale.value), { hour: '2-digit', minute: '2-digit' }).format(
+        start,
+      ),
       dayLabel: formatClassDate(start),
       classCode: formatStatus(item.liveClassStatus),
       platform: platformLabel,
       platformMeta,
       meetingLink: item.meetingLink,
-      editLabel: selectedClassId.value === item.id ? 'Editing' : 'Edit Class',
+      editLabel: selectedClassId.value === item.id ? t('teacherClasses.editing') : t('teacherClasses.editClass'),
       platformTone: platformToneFor(platform),
       art: rotatingClassArt(index),
       tone: liveClassTone(index),
@@ -727,9 +738,11 @@ const recordingCards = computed(() =>
     return {
       id: item.id,
       title: item.title,
-      meta: `Lesson ${item.lessonId} - ${formatDate(item.createdAt)}`,
+      meta: t('teacherClasses.lessonMeta', { id: item.lessonId, date: formatDate(item.createdAt) }),
       lengthLabel:
-        durationSeconds > 0 ? `${Math.max(1, nonNegativeInteger(durationSeconds / 60))}m` : 'Duration unavailable',
+        durationSeconds > 0
+          ? t('teacherClasses.minutesShort', { count: Math.max(1, nonNegativeInteger(durationSeconds / 60)) })
+          : t('teacherClasses.durationUnavailable'),
       art: rotatingClassArt(index),
     }
   }),
@@ -750,19 +763,19 @@ const attendanceLegend = computed(() => {
 
   return [
     {
-      label: 'Checked in',
+      label: t('teacherClasses.checkedIn'),
       count: presentCount.value,
       percent: ratioPercent(presentCount.value, total),
       tone: 'green',
     },
     {
-      label: 'Pending',
+      label: t('teacherClasses.pending'),
       count: pendingCheckInCount.value,
       percent: ratioPercent(pendingCheckInCount.value, total),
       tone: 'yellow',
     },
     {
-      label: 'Cancelled',
+      label: t('teacherClasses.cancelled'),
       count: cancelledCount.value,
       percent: ratioPercent(cancelledCount.value, total),
       tone: 'red',
@@ -776,19 +789,19 @@ const reminderCards = computed(() => {
   return [
     {
       title: activeClass?.lesson?.lessonTitle
-        ? `Review ${activeClass.lesson.lessonTitle}`
-        : 'Select a class to review linked lesson content',
+        ? t('teacherClasses.reviewLesson', { lesson: activeClass.lesson.lessonTitle })
+        : t('teacherClasses.selectClassReview'),
       copy: activeClass
         ? `${activeClass.title} - ${formatDate(activeClass.startTime)}`
-        : 'Class details will appear after the live class endpoint returns data.',
-      badge: activeClass?.liveClassStatus ? formatStatus(activeClass.liveClassStatus) : 'No class',
+        : t('teacherClasses.classDetailsPending'),
+      badge: activeClass?.liveClassStatus ? formatStatus(activeClass.liveClassStatus) : t('teacherClasses.noClass'),
       icon: 'status',
       tone: 'green',
     },
     {
-      title: pendingCheckInCount.value > 0 ? 'Follow up pending check-ins' : 'Roster check-ins are clear',
-      copy: `${pendingCheckInCount.value} learner(s) still have no attendance timestamp in the loaded roster.`,
-      badge: `${enrolments.value.length} roster`,
+      title: pendingCheckInCount.value > 0 ? t('teacherClasses.pendingFollowup') : t('teacherClasses.rosterClear'),
+      copy: t('teacherClasses.pendingAttendance', { count: pendingCheckInCount.value }),
+      badge: t('teacherClasses.rosterCount', { count: enrolments.value.length }),
       icon: 'alert',
       tone: pendingCheckInTone.value,
     },
@@ -805,30 +818,32 @@ const assignmentCards = computed(() => {
 
   return [
     {
-      title: selectedLiveClass.value?.lesson?.lessonTitle || 'Linked lesson recordings',
-      classCode: selectedLiveClass.value ? formatStatus(selectedLiveClass.value.liveClassStatus) : 'Recordings',
-      deadline: `${recordedVideos.value.length} recording(s)`,
-      progressLabel: `${completedVideoViews} completed video view(s) from loaded progress records`,
+      title: selectedLiveClass.value?.lesson?.lessonTitle || t('teacherClasses.linkedRecordings'),
+      classCode: selectedLiveClass.value
+        ? formatStatus(selectedLiveClass.value.liveClassStatus)
+        : t('teacherClasses.recordings'),
+      deadline: t('teacherClasses.recordingCount', { count: recordedVideos.value.length }),
+      progressLabel: t('teacherClasses.completedViews', { count: completedVideoViews }),
       progress: ratioPercent(completedVideoViews, videoProgress.value.length),
       icon: 'play',
       tone: 'green',
     },
     {
-      title: 'Average recording progress',
-      classCode: 'Recorded progress',
-      deadline: `${totalVideos} video(s)`,
+      title: t('teacherClasses.averageRecording'),
+      classCode: t('teacherClasses.recordedProgress'),
+      deadline: t('teacherClasses.videoCount', { count: totalVideos }),
       progressLabel: videoProgress.value.length
-        ? `${videoProgress.value.length} learner progress record(s)`
-        : 'No video progress records loaded yet',
+        ? t('teacherClasses.learnerProgressCount', { count: videoProgress.value.length })
+        : t('teacherClasses.noVideoProgress'),
       progress: progressAverage,
       icon: 'status',
       tone: 'orange',
     },
     {
-      title: 'Active linked learners',
-      classCode: 'Roster context',
-      deadline: `${analytics.value.overview.totalActiveStudents} total active`,
-      progressLabel: `${enrolments.value.length} learner(s) in the selected roster`,
+      title: t('teacherClasses.activeLearners'),
+      classCode: t('teacherClasses.rosterContext'),
+      deadline: t('teacherClasses.totalActive', { count: analytics.value.overview.totalActiveStudents }),
+      progressLabel: t('teacherClasses.selectedRosterCount', { count: enrolments.value.length }),
       progress: ratioPercent(enrolments.value.length, analytics.value.overview.totalActiveStudents),
       icon: 'students',
       tone: 'purple',
@@ -836,32 +851,32 @@ const assignmentCards = computed(() => {
   ]
 })
 
-const quickActions = [
+const quickActions = computed(() => [
   {
-    title: 'Create New Class',
+    title: t('teacherClasses.createNewClass'),
     icon: 'classes',
     tone: 'purple',
     action: createNewClass,
   },
   {
-    title: 'Schedule Class',
+    title: t('teacherClasses.scheduleClass'),
     icon: 'calendar',
     tone: 'orange',
     action: openComposer,
   },
   {
-    title: 'Create Content',
+    title: t('teacherClasses.createContent'),
     icon: 'content',
     tone: 'green',
     action: openContent,
   },
   {
-    title: 'Send Feedback',
+    title: t('teacherClasses.sendFeedback'),
     icon: 'help',
     tone: 'blue',
     action: openFeedback,
   },
-]
+])
 
 function platformToneFor(platform: MeetingPlatformValue): string {
   return platform === 'GOOGLE_MEET' ? 'green' : 'blue'
@@ -891,7 +906,7 @@ function toApiDateTime(value: string): string {
 }
 
 function meetingCodeFromLink(link?: string | null): string {
-  if (!link) return 'External link'
+  if (!link) return t('teacherClasses.externalLink')
 
   return (
     link
@@ -901,12 +916,12 @@ function meetingCodeFromLink(link?: string | null): string {
       .slice(-2)
       .join('-')
       .replace(/[^a-zA-Z0-9-]/g, '')
-      .slice(0, 18) || 'External link'
+      .slice(0, 18) || t('teacherClasses.externalLink')
   )
 }
 
 function formatClassDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(getDisplayLocale(locale.value), {
     month: 'short',
     day: 'numeric',
     weekday: 'short',
@@ -914,6 +929,16 @@ function formatClassDate(date: Date): string {
 }
 
 function formatStatus(status: string): string {
+  const keys: Record<string, string> = {
+    SCHEDULED: 'statusScheduled',
+    IN_PROGRESS: 'statusInProgress',
+    COMPLETED: 'statusCompleted',
+    CANCELLED: 'statusCancelled',
+    ENROLLED: 'statusEnrolled',
+    ATTENDED: 'statusAttended',
+  }
+  const key = keys[status.toUpperCase()]
+  if (key) return t(`teacherClasses.${key}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
@@ -1018,11 +1043,11 @@ async function submitClass(): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   if (classesReadOnly.value) {
-    actionError.value = 'Live classes cannot be created or updated while preview data is active.'
+    actionError.value = t('teacherClasses.previewMutation')
     return
   }
   if (!classForm.lessonId && !classForm.packageId) {
-    actionError.value = 'Select a lesson or package before creating a live class.'
+    actionError.value = t('teacherClasses.selectContext')
     return
   }
 
@@ -1045,9 +1070,9 @@ async function submitClass(): Promise<void> {
     try {
       await teacherApi.updateLiveClass(selectedLiveClass.value.id, payload)
       await liveClassesResource.reload()
-      actionSuccess.value = 'Live class updated and schedule refreshed.'
+      actionSuccess.value = t('teacherClasses.updated')
     } catch (reason) {
-      actionError.value = resolveApiError(reason, 'Unable to update this class.')
+      actionError.value = resolveApiError(reason, t('teacherClasses.updateError'))
     } finally {
       submittingUpdate.value = false
     }
@@ -1059,9 +1084,9 @@ async function submitClass(): Promise<void> {
     await teacherApi.createLiveClass(payload)
     await liveClassesResource.reload()
     showComposer.value = false
-    actionSuccess.value = 'Live class created and schedule refreshed.'
+    actionSuccess.value = t('teacherClasses.created')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to create this class.')
+    actionError.value = resolveApiError(reason, t('teacherClasses.createError'))
   } finally {
     submittingCreate.value = false
   }
@@ -1072,7 +1097,7 @@ async function cancelSelectedClass(): Promise<void> {
   if (!selectedLiveClass.value) return
   if (classesReadOnly.value) {
     actionSuccess.value = null
-    actionError.value = 'Live classes cannot be cancelled while preview data is active.'
+    actionError.value = t('teacherClasses.previewCancel')
     return
   }
 
@@ -1083,9 +1108,9 @@ async function cancelSelectedClass(): Promise<void> {
     await teacherApi.cancelLiveClass(selectedLiveClass.value.id)
     await liveClassesResource.reload()
     resetComposer()
-    actionSuccess.value = 'Live class cancelled and schedule refreshed.'
+    actionSuccess.value = t('teacherClasses.cancelledSuccess')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to cancel this class.')
+    actionError.value = resolveApiError(reason, t('teacherClasses.cancelError'))
   } finally {
     submittingCancel.value = false
   }
@@ -1099,16 +1124,16 @@ async function loadEnrolments(classId: number, announceSuccess = true): Promise<
   if (previewFallbackEnabled.value) {
     enrolmentsResource.data.value = teacherEnrolments
     enrolmentsResource.usingFallback.value = true
-    if (announceSuccess) actionSuccess.value = 'Class roster preview loaded.'
+    if (announceSuccess) actionSuccess.value = t('teacherClasses.rosterPreview')
     return
   }
 
   try {
     enrolmentsResource.data.value = await teacherApi.enrolments(classId)
-    if (announceSuccess) actionSuccess.value = 'Class roster loaded.'
+    if (announceSuccess) actionSuccess.value = t('teacherClasses.rosterLoaded')
   } catch (reason) {
     actionSuccess.value = null
-    actionError.value = resolveApiError(reason, 'Unable to load enrolments for this class.')
+    actionError.value = resolveApiError(reason, t('teacherClasses.rosterError'))
   }
 }
 
@@ -1132,13 +1157,13 @@ async function loadRecordedResources(lessonId: number | null): Promise<void> {
   try {
     recordedResource.data.value = await teacherApi.recordedVideos(lessonId)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load recorded lessons for this class.')
+    actionError.value = resolveApiError(reason, t('teacherClasses.recordingsError'))
   }
 
   try {
     progressResource.data.value = await teacherApi.lessonVideoProgress(lessonId)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load video progress for this class.')
+    actionError.value = resolveApiError(reason, t('teacherClasses.progressError'))
   }
 }
 
@@ -1151,15 +1176,15 @@ function openMeeting(link?: string | null): void {
   if (link) {
     if (openSafeHttpUrl(link)) {
       actionError.value = null
-      actionSuccess.value = 'Opening the external meeting link in a new tab.'
+      actionSuccess.value = t('teacherClasses.openingMeeting')
     } else {
       actionSuccess.value = null
-      actionError.value = 'The meeting link is not a safe web URL.'
+      actionError.value = t('teacherClasses.unsafeMeeting')
     }
     return
   }
   actionSuccess.value = null
-  actionError.value = 'No meeting link is available for this class.'
+  actionError.value = t('teacherClasses.noMeeting')
 }
 
 function reloadAll(): void {

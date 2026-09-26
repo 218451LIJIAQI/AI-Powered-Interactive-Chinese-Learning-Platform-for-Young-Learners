@@ -220,9 +220,7 @@ describe('aiApi.chatStream', () => {
       const headers = init?.headers as Headers
       authorizations.push(headers.get('Authorization'))
       return Promise.resolve(
-        authorizations.length === 1
-          ? new Response('', { status: 401 })
-          : sseResponse(completeEvent(payload)),
+        authorizations.length === 1 ? new Response('', { status: 401 }) : sseResponse(completeEvent(payload)),
       )
     })
     mockRefreshSuccess()

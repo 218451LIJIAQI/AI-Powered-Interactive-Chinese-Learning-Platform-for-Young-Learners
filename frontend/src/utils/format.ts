@@ -1,13 +1,11 @@
-const DISPLAY_LOCALE = 'en-US'
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
-const DEFAULT_DATE_FORMATTER = new Intl.DateTimeFormat(DISPLAY_LOCALE, DEFAULT_DATE_OPTIONS)
-const DEFAULT_DATE_TIME_FORMATTER = new Intl.DateTimeFormat(DISPLAY_LOCALE, {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-})
-const DEFAULT_NUMBER_FORMATTER = new Intl.NumberFormat(DISPLAY_LOCALE)
+const DISPLAY_LOCALES = { en: 'en-US', ms: 'ms-MY', zh: 'zh-CN' } as const
+
+export function getDisplayLocale(locale?: string): string {
+  if (!locale && typeof document === 'undefined') return DISPLAY_LOCALES.en
+  const language = (locale ?? document.documentElement.lang).trim().toLowerCase().split('-')[0]
+  return DISPLAY_LOCALES[language as keyof typeof DISPLAY_LOCALES] ?? DISPLAY_LOCALES.en
+}
 
 export function toFiniteNumber(value: number | null | undefined, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -35,7 +33,7 @@ export function ratioPercent(numerator: number | null | undefined, denominator: 
 }
 
 export function formatNumber(value: number | null | undefined): string {
-  return DEFAULT_NUMBER_FORMATTER.format(toFiniteNumber(value))
+  return new Intl.NumberFormat(getDisplayLocale()).format(toFiniteNumber(value))
 }
 
 const DEFAULT_CURRENCY_CODE = 'USD'
@@ -78,7 +76,7 @@ function normalizeCurrencyCode(currency: string | null | undefined): string {
 }
 
 export function formatCurrency(value: number | null | undefined, currency = DEFAULT_CURRENCY_CODE): string {
-  return new Intl.NumberFormat(DISPLAY_LOCALE, {
+  return new Intl.NumberFormat(getDisplayLocale(), {
     style: 'currency',
     currency: normalizeCurrencyCode(currency),
     maximumFractionDigits: 2,
@@ -96,14 +94,19 @@ export function formatDate(value: string | null | undefined, options?: Intl.Date
   const date = parseDate(value)
   if (!date) return '--'
 
-  return options ? new Intl.DateTimeFormat(DISPLAY_LOCALE, options).format(date) : DEFAULT_DATE_FORMATTER.format(date)
+  return new Intl.DateTimeFormat(getDisplayLocale(), options ?? DEFAULT_DATE_OPTIONS).format(date)
 }
 
 export function formatDateTime(value: string | null | undefined): string {
   const date = parseDate(value)
   if (!date) return '--'
 
-  return DEFAULT_DATE_TIME_FORMATTER.format(date)
+  return new Intl.DateTimeFormat(getDisplayLocale(), {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
 }
 
 export function formatPercent(value: number | null | undefined): string {

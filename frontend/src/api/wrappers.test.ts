@@ -302,8 +302,7 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'auth register student',
-        run: () =>
-          authApi.registerStudent(registrationPayload(STUDENT_EMAIL)),
+        run: () => authApi.registerStudent(registrationPayload(STUDENT_EMAIL)),
         method: 'POST',
         url: '/auth/register/student',
       },

@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.TeacherEarning;
 import com.example.aichinese.entity.enums.TeacherEarningStatus;
+import com.example.aichinese.repository.projection.MonthlyEarningProjection;
 
 public interface TeacherEarningRepository extends JpaRepository<TeacherEarning, Long> {
 
@@ -23,6 +24,17 @@ public interface TeacherEarningRepository extends JpaRepository<TeacherEarning, 
     Page<TeacherEarning> findByTeacherUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     Optional<TeacherEarning> findByOrderItemId(Long orderItemId);
+
+    @Query("""
+            select year(te.createdAt) as year, month(te.createdAt) as month, sum(te.netAmount) as amount
+            from TeacherEarning te
+            where te.teacher.id = :teacherId
+            group by year(te.createdAt), month(te.createdAt)
+            order by year(te.createdAt) desc, month(te.createdAt) desc
+            """)
+    List<MonthlyEarningProjection> findMonthlyNetAmountByTeacherId(
+            @Param("teacherId") Long teacherId,
+            Pageable pageable);
 
     @Query("select coalesce(sum(te.grossAmount), 0) from TeacherEarning te where te.teacher.id = :teacherId")
     BigDecimal sumGrossAmountByTeacherId(@Param("teacherId") Long teacherId);

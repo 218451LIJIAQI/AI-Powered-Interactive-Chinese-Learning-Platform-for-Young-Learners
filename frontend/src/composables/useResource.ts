@@ -3,7 +3,7 @@ import type { ComputedRef, Ref } from 'vue'
 
 import { appEnv } from '@/config/env'
 import { useAuthStore } from '@/stores/auth'
-import { resolveApiError } from '@/utils/apiError'
+import { defaultRequestError, resolveApiError } from '@/utils/apiError'
 
 type FallbackFactory<T> = (() => T) | T
 type ApiFailure = {
@@ -88,7 +88,7 @@ export function useResource<T>(
         usingFallback.value = true
         error.value = null
       } else {
-        error.value = resolveApiError(reason, 'Request failed')
+        error.value = resolveApiError(reason, defaultRequestError())
       }
     } finally {
       if (sequence === executionSequence) {

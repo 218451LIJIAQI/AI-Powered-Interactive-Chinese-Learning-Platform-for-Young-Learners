@@ -88,9 +88,7 @@ function scrubQueryParams(query: SentryQueryParams | undefined): SentryQueryPara
   }
 
   if (query) {
-    return Object.fromEntries(
-      Object.entries(query).map(([key, value]) => [key, scrubQueryValue(key, value)]),
-    )
+    return Object.fromEntries(Object.entries(query).map(([key, value]) => [key, scrubQueryValue(key, value)]))
   }
 
   return query

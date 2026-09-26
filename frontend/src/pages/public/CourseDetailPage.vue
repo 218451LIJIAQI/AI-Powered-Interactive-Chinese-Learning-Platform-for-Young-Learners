@@ -1,13 +1,17 @@
 ﻿<template>
   <div class="page-stack public-course-detail-page">
     <button class="btn btn-ghost public-course-detail-back" type="button" @click="goBackToCatalog">
-      Back to catalog
+      {{ t('courseDetail.back') }}
     </button>
 
     <DataNotice
       :using-fallback="resource.usingFallback.value"
       :error="noticeError"
       :success="actionSuccess"
+      :fallback-title="t('courseDetail.fallbackTitle')"
+      :fallback-message="t('courseDetail.fallbackMessage')"
+      :error-title="t('courseDetail.errorTitle')"
+      :success-title="t('courseDetail.successTitle')"
     />
 
     <section class="hero-card light public-course-detail-hero">
@@ -16,13 +20,13 @@
       <div class="public-course-detail-hero-grid">
         <div class="hero-copy light public-course-detail-copy">
           <div class="public-course-detail-kicker">
-            <span>MandarinSpark Course</span>
+            <span>{{ t('courseDetail.courseEyebrow') }}</span>
             <span>{{ course.category.name }}</span>
           </div>
           <div class="row public-course-detail-tags">
             <StatusPill :label="course.level.name" tone="primary" />
-            <StatusPill :label="course.learningType" tone="info" />
-            <StatusPill :label="course.accessType" tone="warning" />
+            <StatusPill :label="learningTypeLabel" tone="info" />
+            <StatusPill :label="accessTypeLabel" tone="warning" />
           </div>
           <h2>{{ course.title }}</h2>
           <p>{{ course.description }}</p>
@@ -44,7 +48,7 @@
           <CourseSceneThumb :size="240" :variant="courseSceneVariant" />
           <div class="public-course-detail-price-card">
             <div class="row-between">
-              <strong>Teacher</strong>
+              <strong>{{ t('courseDetail.teacher') }}</strong>
               <StatusPill :label="teacherVerificationLabel" tone="success" />
             </div>
             <p>{{ course.teacher.displayName }}</p>
@@ -69,9 +73,9 @@
       <div class="panel stack public-course-detail-inside-card">
         <div class="student-section-heading">
           <span><IconGlyph name="learn" :size="20" /></span>
-          <strong>What's inside</strong>
+          <strong>{{ t('courseDetail.inside') }}</strong>
         </div>
-        <p class="muted">{{ course.basicContent || 'Structured beginner material plus interactive practice.' }}</p>
+        <p class="muted">{{ course.basicContent || t('courseDetail.basicFallback') }}</p>
         <div class="list public-course-detail-item-list">
           <div
             v-for="item in course.packageItems"
@@ -82,31 +86,31 @@
               <IconGlyph :name="packageItemIcon(item.type)" :size="18" />
               <div class="stack">
                 <strong>{{ item.title }}</strong>
-                <span class="muted">Included item {{ item.displayOrder }}</span>
+                <span class="muted">{{ t('courseDetail.includedItem', { order: item.displayOrder }) }}</span>
               </div>
             </div>
-            <span class="tag">{{ item.type }}</span>
+            <span class="tag">{{ packageItemTypeLabel(item.type) }}</span>
           </div>
         </div>
       </div>
 
       <aside class="stack public-course-detail-side">
         <div class="panel stack public-course-detail-cta-card">
-          <strong>Course call to action</strong>
+          <strong>{{ t('courseDetail.ctaTitle') }}</strong>
           <p>{{ displayedCallToAction }}</p>
         </div>
         <div class="panel stack public-course-detail-alignment-card">
-          <strong>Proposal alignment</strong>
+          <strong>{{ t('courseDetail.expectTitle') }}</strong>
           <ul>
-            <li>Structured beginner Mandarin materials</li>
-            <li>Teacher-guided content and feedback</li>
-            <li>Purchases continue through the authenticated student checkout flow</li>
-            <li>No built-in video conferencing; live support uses external meeting links</li>
+            <li>{{ t('courseDetail.expectMaterials') }}</li>
+            <li>{{ t('courseDetail.expectFeedback') }}</li>
+            <li>{{ t('courseDetail.expectCheckout') }}</li>
+            <li>{{ t('courseDetail.expectMeeting') }}</li>
           </ul>
         </div>
         <div class="panel stack public-course-detail-support-card">
-          <strong>Need more support?</strong>
-          <p>AI helper suggestions are optional and student-facing only.</p>
+          <strong>{{ t('courseDetail.supportTitle') }}</strong>
+          <p>{{ t('courseDetail.supportCopy') }}</p>
           <button class="btn btn-primary" type="button" :disabled="studentOnlyViewer" @click="goToAiHelperSignIn">
             {{ aiHelperButtonLabel }}
           </button>
@@ -119,6 +123,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { publicApi, studentApi } from '@/api/services'
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
@@ -126,6 +131,7 @@ import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { publicCourseDetails } from '@/demo/data'
+import { courseDetailMessages } from '@/plugins/courseDetailMessages'
 import { useResource } from '@/composables/useResource'
 import { useAuthStore } from '@/stores/auth'
 import type { CheckoutResponse, PublicCourseDetail } from '@/types/api'
@@ -136,6 +142,13 @@ import { safeHttpUrl } from '@/utils/url'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n({
+  messages: {
+    en: { courseDetail: courseDetailMessages.en },
+    ms: { courseDetail: courseDetailMessages.ms },
+    zh: { courseDetail: courseDetailMessages.zh },
+  },
+})
 const courseId = computed(() => String(route.params.courseId))
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
@@ -154,21 +167,21 @@ const emptyCourse = computed<PublicCourseDetail>(() => ({
   id: courseId.value,
   contentId: 0,
   type: 'LESSON' as const,
-  title: 'Course unavailable',
-  description: 'The requested course could not be loaded from the current API route.',
+  title: t('courseDetail.unavailableTitle'),
+  description: t('courseDetail.unavailableCopy'),
   teacher: {
     teacherId: 0,
-    displayName: 'Unavailable',
+    displayName: t('courseDetail.unavailableName'),
     verified: false,
   },
   level: {
     id: 0,
-    name: 'Unavailable',
+    name: t('courseDetail.unavailableName'),
     description: '',
   },
   category: {
     id: 0,
-    name: 'Unavailable',
+    name: t('courseDetail.unavailableName'),
     description: '',
   },
   learningType: 'RECORDED' as const,
@@ -177,9 +190,9 @@ const emptyCourse = computed<PublicCourseDetail>(() => ({
   currencyCode: 'MYR',
   locked: true,
   status: 'DRAFT' as const,
-  basicContent: 'Course content is unavailable right now.',
+  basicContent: t('courseDetail.unavailableContent'),
   packageItems: [],
-  callToAction: 'Try again after the API route becomes available.',
+  callToAction: t('courseDetail.unavailableAction'),
 }))
 
 const resource = useResource(
@@ -199,11 +212,11 @@ const noticeError = computed(() => actionError.value || resource.error.value)
 const displayedCallToAction = computed(() => {
   if (canUseStudentActions.value) {
     return course.value.accessType === 'FREE'
-      ? 'Start this lesson from your student learning dashboard.'
-      : 'Complete secure checkout to unlock this course in your student account.'
+      ? t('courseDetail.startFromDashboard')
+      : t('courseDetail.unlockWithCheckout')
   }
-  if (studentOnlyViewer.value) return 'Students can enrol and purchase through a student account.'
-  return course.value.callToAction || 'Begin with one lesson, one activity, and one confident step at a time.'
+  if (studentOnlyViewer.value) return t('courseDetail.studentAccountRequired')
+  return course.value.callToAction || t('courseDetail.defaultAction')
 })
 const courseSceneVariant = computed<'family' | 'general' | 'pagoda' | 'panda' | 'travel'>(() => {
   const title = course.value.title.toLowerCase()
@@ -213,34 +226,49 @@ const courseSceneVariant = computed<'family' | 'general' | 'pagoda' | 'panda' | 
   if (title.includes('panda')) return 'panda'
   return 'general'
 })
-const teacherVerificationLabel = computed(() => (course.value.teacher.verified ? 'Verified' : 'Public'))
+const teacherVerificationLabel = computed(() =>
+  course.value.teacher.verified ? t('courseDetail.verified') : t('courseDetail.public'),
+)
 const priceLabel = computed(() =>
-  course.value.accessType === 'FREE' ? 'Free' : formatCurrency(course.value.price, course.value.currencyCode),
+  course.value.accessType === 'FREE'
+    ? t('courseDetail.free')
+    : formatCurrency(course.value.price, course.value.currencyCode),
 )
 const priceHelp = computed(() =>
-  course.value.accessType === 'FREE'
-    ? 'Start learning after signing in.'
-    : 'Secure checkout unlocks student access.',
+  course.value.accessType === 'FREE' ? t('courseDetail.freeHelp') : t('courseDetail.paidHelp'),
 )
-const aiHelperButtonLabel = computed(() => (studentOnlyViewer.value ? 'Student AI only' : 'Open AI Helper'))
+const learningTypeLabel = computed(() => {
+  const key = { RECORDED: 'recorded', LIVE: 'live', HYBRID: 'hybrid' }[course.value.learningType]
+  return t(`courseDetail.${key}`)
+})
+const accessTypeLabel = computed(() =>
+  t(course.value.accessType === 'FREE' ? 'courseDetail.free' : 'courseDetail.paid'),
+)
+const aiHelperButtonLabel = computed(() =>
+  studentOnlyViewer.value ? t('courseDetail.studentAiOnly') : t('courseDetail.openAi'),
+)
 const summaryCards = computed(() => [
-  { icon: 'trophy', label: 'Level', value: course.value.level.name },
-  { icon: 'globe', label: 'Category', value: course.value.category.name },
-  { icon: 'content', label: 'Included items', value: String(course.value.packageItems.length) },
-  { icon: 'teacher', label: 'Teacher', value: teacherVerificationLabel.value },
+  { icon: 'trophy', label: t('courseDetail.level'), value: course.value.level.name },
+  { icon: 'globe', label: t('courseDetail.category'), value: course.value.category.name },
+  { icon: 'content', label: t('courseDetail.includedItems'), value: String(course.value.packageItems.length) },
+  { icon: 'teacher', label: t('courseDetail.teacher'), value: teacherVerificationLabel.value },
 ])
 const primaryActionLabel = computed(() => {
   if (studentOnlyViewer.value)
-    return course.value.accessType === 'FREE' ? 'Student access only' : 'Student checkout only'
-  if (!auth.isAuthenticated) return course.value.accessType === 'FREE' ? 'Sign in to start' : 'Sign in to purchase'
-  if (course.value.accessType === 'FREE') return 'Start learning'
-  return submittingBuyNow.value ? 'Starting checkout...' : 'Buy now'
+    return course.value.accessType === 'FREE'
+      ? t('courseDetail.studentAccessOnly')
+      : t('courseDetail.studentCheckoutOnly')
+  if (!auth.isAuthenticated)
+    return course.value.accessType === 'FREE' ? t('courseDetail.signInStart') : t('courseDetail.signInPurchase')
+  if (course.value.accessType === 'FREE') return t('courseDetail.startLearning')
+  return submittingBuyNow.value ? t('courseDetail.startingCheckout') : t('courseDetail.buyNow')
 })
 const secondaryActionLabel = computed(() => {
-  if (studentOnlyViewer.value) return course.value.accessType === 'FREE' ? 'Student AI only' : 'Student checkout only'
-  if (!auth.isAuthenticated) return 'Sign in and return'
-  if (course.value.accessType === 'FREE') return 'Ask AI Helper'
-  return submittingCart.value ? 'Adding...' : 'Add to cart'
+  if (studentOnlyViewer.value)
+    return course.value.accessType === 'FREE' ? t('courseDetail.studentAiOnly') : t('courseDetail.studentCheckoutOnly')
+  if (!auth.isAuthenticated) return t('courseDetail.signInReturn')
+  if (course.value.accessType === 'FREE') return t('courseDetail.askAi')
+  return submittingCart.value ? t('courseDetail.adding') : t('courseDetail.addToCart')
 })
 const primaryActionDisabled = computed(
   () => studentOnlyViewer.value || submittingBuyNow.value || submittingCart.value || course.value.contentId <= 0,
@@ -268,7 +296,7 @@ function goBackToCatalog(): void {
 
 function handleCheckoutResponse(response: CheckoutResponse): void {
   if (!response.paymentAvailable) {
-    actionError.value = response.message || 'Payment provider is unavailable. Please try again later.'
+    actionError.value = response.message || t('courseDetail.paymentUnavailable')
     return
   }
 
@@ -283,7 +311,7 @@ function handleCheckoutResponse(response: CheckoutResponse): void {
     return
   }
 
-  actionError.value = 'Checkout completed but no redirect or payment reference was returned. Please contact support.'
+  actionError.value = t('courseDetail.missingCheckoutReference')
 }
 
 async function handlePrimaryAction(): Promise<void> {
@@ -304,7 +332,7 @@ async function handlePrimaryAction(): Promise<void> {
   }
 
   if (courseReadOnly.value) {
-    actionError.value = 'Preview course data cannot start checkout. Refresh live course data before purchasing.'
+    actionError.value = t('courseDetail.previewCheckoutBlocked')
     return
   }
 
@@ -313,7 +341,7 @@ async function handlePrimaryAction(): Promise<void> {
     const response = await studentApi.buyNow({ itemType: course.value.type, itemId: course.value.contentId })
     handleCheckoutResponse(response)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to start checkout for this course.')
+    actionError.value = resolveApiError(reason, t('courseDetail.checkoutFailed'))
   } finally {
     submittingBuyNow.value = false
   }
@@ -337,16 +365,16 @@ async function handleSecondaryAction(): Promise<void> {
   }
 
   if (courseReadOnly.value) {
-    actionError.value = 'Preview course data cannot be added to the cart. Refresh live course data first.'
+    actionError.value = t('courseDetail.previewCartBlocked')
     return
   }
 
   submittingCart.value = true
   try {
     await studentApi.addCartItem({ itemType: course.value.type, itemId: course.value.contentId })
-    actionSuccess.value = `${course.value.title} was added to your cart.`
+    actionSuccess.value = t('courseDetail.addedToCart', { title: course.value.title })
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to add this course to your cart.')
+    actionError.value = resolveApiError(reason, t('courseDetail.addFailed'))
   } finally {
     submittingCart.value = false
   }
@@ -373,5 +401,10 @@ function openPaymentSuccess(paymentId: number): void {
 
 function packageItemIcon(type: string): PackageItemIcon {
   return type === 'MODULE' ? 'content' : 'learn'
+}
+
+function packageItemTypeLabel(type: string): string {
+  const key = { LESSON: 'lesson', MODULE: 'module', PACKAGE: 'package' }[type]
+  return key ? t(`courseDetail.${key}`) : type
 }
 </script>

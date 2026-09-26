@@ -1,8 +1,8 @@
 <template>
   <div class="page-stack admin-activity-page">
     <PageHeaderBlock
-      title="Activity Library"
-      description="Create, publish, archive, and curate the platform-owned activity library across all six supported learning activity types."
+      :title="t('adminActivityLibrary.title')"
+      :description="t('adminActivityLibrary.description')"
       icon="practice"
     >
       <template #actions>
@@ -23,54 +23,56 @@
     <section class="panel admin-activity-toolbar">
       <div class="admin-activity-filter-grid">
         <label class="field">
-          <span>Activity type</span>
+          <span>{{ t('adminActivityLibrary.activityType') }}</span>
           <select v-model="filters.type" class="select">
-            <option value="">All types</option>
+            <option value="">{{ t('adminActivityLibrary.allTypes') }}</option>
             <option v-for="item in activityTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
           </select>
         </label>
 
         <label class="field">
-          <span>Status</span>
+          <span>{{ t('adminActivityLibrary.status') }}</span>
           <select v-model="filters.status" class="select">
-            <option value="">All statuses</option>
-            <option value="DRAFT">Draft</option>
-            <option value="PUBLISHED">Published</option>
-            <option value="ARCHIVED">Archived</option>
+            <option value="">{{ t('adminActivityLibrary.allStatuses') }}</option>
+            <option value="DRAFT">{{ t('adminActivityLibrary.draft') }}</option>
+            <option value="PUBLISHED">{{ t('adminActivityLibrary.published') }}</option>
+            <option value="ARCHIVED">{{ t('adminActivityLibrary.archived') }}</option>
           </select>
         </label>
 
         <label class="field">
-          <span>Age band</span>
+          <span>{{ t('adminActivityLibrary.ageBand') }}</span>
           <select v-model="filters.ageBand" class="select">
-            <option value="">All ages</option>
+            <option value="">{{ t('adminActivityLibrary.allAges') }}</option>
             <option v-for="item in ageBandOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
           </select>
         </label>
 
         <label class="field">
-          <span>Difficulty</span>
+          <span>{{ t('adminActivityLibrary.difficulty') }}</span>
           <select v-model="filters.difficulty" class="select">
-            <option value="">All levels</option>
+            <option value="">{{ t('adminActivityLibrary.allLevels') }}</option>
             <option v-for="item in difficultyOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
           </select>
         </label>
 
         <label class="field admin-activity-filter-wide">
-          <span>Keyword</span>
-          <input v-model="filters.keyword" class="input" placeholder="Search titles, topics, or content" />
+          <span>{{ t('adminActivityLibrary.keyword') }}</span>
+          <input v-model="filters.keyword" class="input" :placeholder="t('adminActivityLibrary.keywordPlaceholder')" />
         </label>
 
         <label class="field">
-          <span>Topic</span>
-          <input v-model="filters.topic" class="input" placeholder="greetings" />
+          <span>{{ t('adminActivityLibrary.topic') }}</span>
+          <input v-model="filters.topic" class="input" :placeholder="t('adminActivityLibrary.topicPlaceholder')" />
         </label>
       </div>
 
       <div class="admin-activity-toolbar-actions">
-        <button class="btn btn-secondary" type="button" @click="resetFilters" :disabled="pageBusy">Reset</button>
+        <button class="btn btn-secondary" type="button" @click="resetFilters" :disabled="pageBusy">
+          {{ t('adminActivityLibrary.reset') }}
+        </button>
         <button class="btn btn-primary" type="button" @click="applyFilters" :disabled="pageBusy">
-          {{ pageBusy ? 'Loading...' : 'Apply filters' }}
+          {{ pageBusy ? t('adminActivityLibrary.loading') : t('adminActivityLibrary.applyFilters') }}
         </button>
       </div>
     </section>
@@ -92,19 +94,19 @@
       <article class="panel admin-activity-list-panel">
         <div class="row-between admin-activity-panel-head">
           <div class="student-section-heading">
-            <strong>Unified Activity Feed</strong>
-            <span>{{ feed.totalItems }} total item(s)</span>
+            <strong>{{ t('adminActivityLibrary.unifiedFeed') }}</strong>
+            <span>{{ t('adminActivityLibrary.totalItems', { count: formatNumber(feed.totalItems) }) }}</span>
           </div>
           <button class="btn btn-secondary" type="button" @click="startNewDraft()" :disabled="previewReadOnly">
-            New Draft
+            {{ t('adminActivityLibrary.newDraft') }}
           </button>
         </div>
 
         <StatePanel
           v-if="previewReadOnly"
           icon="practice"
-          title="Live admin account required"
-          message="Preview mode keeps the admin shell visible, but the activity library only edits real backend records after you sign in as an admin."
+          :title="t('adminActivityLibrary.liveAdminRequired')"
+          :message="t('adminActivityLibrary.liveAdminMessage')"
         />
 
         <template v-else>
@@ -120,7 +122,7 @@
               <div class="admin-activity-row-copy">
                 <div class="row admin-activity-row-top">
                   <strong>{{ item.title || fallbackActivityTitle(item.type) }}</strong>
-                  <StatusPill :label="humanizeEnum(item.status)" :tone="statusTone(item.status)" />
+                  <StatusPill :label="activityStatusLabel(item.status)" :tone="statusTone(item.status)" />
                 </div>
                 <span>{{ activityTypeLabel(item.type) }}</span>
                 <small>{{ activitySummaryMeta(item) }}</small>
@@ -131,8 +133,8 @@
           <StatePanel
             v-else-if="!feedResource.loading.value"
             icon="practice"
-            title="No activities match these filters"
-            message="Adjust the filters or create a new draft to start building an activity."
+            :title="t('adminActivityLibrary.noMatches')"
+            :message="t('adminActivityLibrary.noMatchesMessage')"
           />
 
           <div v-if="feed.totalPages > 1" class="admin-activity-pagination">
@@ -142,16 +144,16 @@
               :disabled="currentPage <= 1 || pageBusy"
               @click="goToPage(currentPage - 1)"
             >
-              Previous
+              {{ t('adminActivityLibrary.previous') }}
             </button>
-            <span>Page {{ currentPage }} of {{ feed.totalPages }}</span>
+            <span>{{ t('adminActivityLibrary.pageOf', { page: currentPage, total: feed.totalPages }) }}</span>
             <button
               class="admin-activity-page-button"
               type="button"
               :disabled="currentPage >= feed.totalPages || pageBusy"
               @click="goToPage(currentPage + 1)"
             >
-              Next
+              {{ t('adminActivityLibrary.next') }}
             </button>
           </div>
         </template>
@@ -166,7 +168,7 @@
           <div class="admin-activity-panel-actions">
             <StatusPill
               v-if="hasSelectedRecord && selectedSummary"
-              :label="humanizeEnum(selectedSummary.status)"
+              :label="activityStatusLabel(selectedSummary.status)"
               :tone="statusTone(selectedSummary.status)"
             />
             <button
@@ -175,7 +177,7 @@
               @click="startNewDraft(form.type)"
               :disabled="previewReadOnly"
             >
-              New {{ activityTypeLabel(form.type) }}
+              {{ t('adminActivityLibrary.newType', { type: activityTypeLabel(form.type) }) }}
             </button>
           </div>
         </div>
@@ -183,14 +185,14 @@
         <StatePanel
           v-if="previewReadOnly"
           icon="verification"
-          title="Read-only preview"
-          message="Sign in with a live admin account to create, edit, publish, archive, and delete platform activities."
+          :title="t('adminActivityLibrary.readOnlyPreview')"
+          :message="t('adminActivityLibrary.readOnlyPreviewMessage')"
         />
 
         <template v-else>
           <div class="admin-activity-editor-grid">
             <label class="field">
-              <span>Activity type</span>
+              <span>{{ t('adminActivityLibrary.activityType') }}</span>
               <select
                 v-model="form.type"
                 class="select"
@@ -209,25 +211,25 @@
             </label>
 
             <label class="field">
-              <span>HSK level</span>
+              <span>{{ t('adminActivityLibrary.hskLevel') }}</span>
               <select v-model="form.hskLevel" class="select">
-                <option :value="null">Not set</option>
+                <option :value="null">{{ t('adminActivityLibrary.notSet') }}</option>
                 <option v-for="level in hskLevels" :key="level" :value="level">HSK {{ level }}</option>
               </select>
             </label>
 
             <label class="field">
-              <span>Age band</span>
+              <span>{{ t('adminActivityLibrary.ageBand') }}</span>
               <select v-model="form.ageBand" class="select">
-                <option value="">Not set</option>
+                <option value="">{{ t('adminActivityLibrary.notSet') }}</option>
                 <option v-for="item in ageBandOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
               </select>
             </label>
 
             <label class="field">
-              <span>Difficulty</span>
+              <span>{{ t('adminActivityLibrary.difficulty') }}</span>
               <select v-model="form.difficulty" class="select">
-                <option value="">Not set</option>
+                <option value="">{{ t('adminActivityLibrary.notSet') }}</option>
                 <option v-for="item in difficultyOptions" :key="item.value" :value="item.value">
                   {{ item.label }}
                 </option>
@@ -235,67 +237,67 @@
             </label>
 
             <label class="field">
-              <span>Topic</span>
-              <input v-model="form.topic" class="input" placeholder="animals, tones, greetings" />
+              <span>{{ t('adminActivityLibrary.topic') }}</span>
+              <input v-model="form.topic" class="input" :placeholder="t('adminActivityLibrary.topicPlaceholder')" />
             </label>
 
             <label class="field admin-activity-editor-grid-wide">
-              <span>Tags</span>
-              <input v-model="form.tagsText" class="input" placeholder="comma-separated tags" />
+              <span>{{ t('adminActivityLibrary.tags') }}</span>
+              <input v-model="form.tagsText" class="input" :placeholder="t('adminActivityLibrary.tagsPlaceholder')" />
             </label>
 
             <label class="field">
-              <span>XP reward</span>
+              <span>{{ t('adminActivityLibrary.xpReward') }}</span>
               <input v-model.number="form.xpReward" class="input" type="number" min="0" />
             </label>
 
             <label class="field">
-              <span>Estimated seconds</span>
+              <span>{{ t('adminActivityLibrary.estimatedSeconds') }}</span>
               <input v-model.number="form.estimatedSeconds" class="input" type="number" min="0" />
             </label>
           </div>
 
           <section v-if="form.type === 'FLASHCARD'" class="admin-activity-section">
             <div class="admin-activity-section-head">
-              <strong>Flashcard content</strong>
-              <span>Curate language cards with multilingual support and optional media.</span>
+              <strong>{{ t('adminActivityLibrary.flashcardContent') }}</strong>
+              <span>{{ t('adminActivityLibrary.flashcardContentHint') }}</span>
             </div>
 
             <div class="admin-activity-editor-grid">
               <label class="field">
-                <span>Front text</span>
+                <span>{{ t('adminActivityLibrary.frontText') }}</span>
                 <textarea v-model="form.frontText" class="textarea" rows="3" />
               </label>
               <label class="field">
-                <span>Back text</span>
+                <span>{{ t('adminActivityLibrary.backText') }}</span>
                 <textarea v-model="form.backText" class="textarea" rows="3" />
               </label>
               <label class="field">
-                <span>Pinyin</span>
+                <span>{{ t('adminActivityLibrary.pinyin') }}</span>
                 <input v-model="form.pinyin" class="input" />
               </label>
               <label class="field">
-                <span>English meaning</span>
+                <span>{{ t('adminActivityLibrary.englishMeaning') }}</span>
                 <input v-model="form.englishMeaning" class="input" />
               </label>
               <label class="field">
-                <span>Malay meaning</span>
+                <span>{{ t('adminActivityLibrary.malayMeaning') }}</span>
                 <input v-model="form.malayMeaning" class="input" />
               </label>
               <label class="field">
-                <span>Sort order</span>
+                <span>{{ t('adminActivityLibrary.sortOrder') }}</span>
                 <input v-model.number="form.sortOrder" class="input" type="number" min="0" />
               </label>
               <label class="field">
-                <span>Image URL</span>
+                <span>{{ t('adminActivityLibrary.imageUrl') }}</span>
                 <input v-model="form.imageUrl" class="input" type="url" />
               </label>
               <label class="field">
-                <span>Audio URL</span>
+                <span>{{ t('adminActivityLibrary.audioUrl') }}</span>
                 <input v-model="form.audioUrl" class="input" type="url" />
               </label>
               <label class="field admin-activity-editor-grid-wide">
-                <span>Extra payload</span>
+                <span>{{ t('adminActivityLibrary.extraPayload') }}</span>
                 <textarea v-model="form.extraPayload" class="textarea" rows="3" />
               </label>
             </div>
@@ -303,8 +305,10 @@
 
           <section v-else-if="form.type === 'MATCHING_GAME'" class="admin-activity-section">
             <div class="admin-activity-section-head">
-              <strong>Matching pairs</strong>
-              <button class="btn btn-secondary" type="button" @click="addMatchingItem">Add pair</button>
+              <strong>{{ t('adminActivityLibrary.matchingPairs') }}</strong>
+              <button class="btn btn-secondary" type="button" @click="addMatchingItem">
+                {{ t('adminActivityLibrary.addPair') }}
+              </button>
             </div>
 
             <div class="admin-activity-repeat-list">
@@ -314,39 +318,39 @@
                 class="admin-activity-repeat-card"
               >
                 <div class="row-between">
-                  <strong>Pair {{ index + 1 }}</strong>
+                  <strong>{{ t('adminActivityLibrary.pairNumber', { number: index + 1 }) }}</strong>
                   <button
                     class="teacher-outline-button"
                     type="button"
                     @click="removeMatchingItem(index)"
                     :disabled="form.matchingItems.length <= 1"
                   >
-                    Remove
+                    {{ t('adminActivityLibrary.remove') }}
                   </button>
                 </div>
                 <div class="admin-activity-editor-grid">
                   <label class="field">
-                    <span>Left text</span>
+                    <span>{{ t('adminActivityLibrary.leftText') }}</span>
                     <input v-model="item.leftText" class="input" />
                   </label>
                   <label class="field">
-                    <span>Right text</span>
+                    <span>{{ t('adminActivityLibrary.rightText') }}</span>
                     <input v-model="item.rightText" class="input" />
                   </label>
                   <label class="field">
-                    <span>Left image URL</span>
+                    <span>{{ t('adminActivityLibrary.leftImageUrl') }}</span>
                     <input v-model="item.leftImageUrl" class="input" type="url" />
                   </label>
                   <label class="field">
-                    <span>Right image URL</span>
+                    <span>{{ t('adminActivityLibrary.rightImageUrl') }}</span>
                     <input v-model="item.rightImageUrl" class="input" type="url" />
                   </label>
                   <label class="field">
-                    <span>Pinyin</span>
+                    <span>{{ t('adminActivityLibrary.pinyin') }}</span>
                     <input v-model="item.pinyin" class="input" />
                   </label>
                   <label class="field">
-                    <span>Sort order</span>
+                    <span>{{ t('adminActivityLibrary.sortOrder') }}</span>
                     <input v-model.number="item.sortOrder" class="input" type="number" min="0" />
                   </label>
                 </div>
@@ -356,22 +360,22 @@
 
           <section v-else-if="form.type === 'LISTENING_EXERCISE'" class="admin-activity-section">
             <div class="admin-activity-section-head">
-              <strong>Listening exercise content</strong>
-              <span>Save the audio source plus the question payload your student view will consume.</span>
+              <strong>{{ t('adminActivityLibrary.listeningContent') }}</strong>
+              <span>{{ t('adminActivityLibrary.listeningContentHint') }}</span>
             </div>
 
             <div class="admin-activity-editor-grid">
               <label class="field">
-                <span>Audio URL</span>
+                <span>{{ t('adminActivityLibrary.audioUrl') }}</span>
                 <input v-model="form.audioUrl" class="input" type="url" />
               </label>
               <label class="field admin-activity-editor-grid-wide">
-                <span>Question payload</span>
+                <span>{{ t('adminActivityLibrary.questionPayload') }}</span>
                 <textarea
                   v-model="form.questionPayload"
                   class="textarea"
                   rows="5"
-                  placeholder='{"prompt":"Listen and identify the word"}'
+                  :placeholder="t('adminActivityLibrary.listeningPayloadPlaceholder')"
                 />
               </label>
             </div>
@@ -379,31 +383,29 @@
 
           <section v-else-if="form.type === 'TRACING_EXERCISE'" class="admin-activity-section">
             <div class="admin-activity-section-head">
-              <strong>Tracing exercise content</strong>
-              <span
-                >Capture the worksheet, character, pronunciation, meaning, and teacher guidance for the activity.</span
-              >
+              <strong>{{ t('adminActivityLibrary.tracingContent') }}</strong>
+              <span>{{ t('adminActivityLibrary.tracingContentHint') }}</span>
             </div>
 
             <div class="admin-activity-editor-grid">
               <label class="field">
-                <span>Worksheet URL</span>
+                <span>{{ t('adminActivityLibrary.worksheetUrl') }}</span>
                 <input v-model="form.worksheetUrl" class="input" type="url" />
               </label>
               <label class="field">
-                <span>Target character</span>
+                <span>{{ t('adminActivityLibrary.targetCharacter') }}</span>
                 <input v-model="form.targetCharacter" class="input" />
               </label>
               <label class="field">
-                <span>Pinyin</span>
+                <span>{{ t('adminActivityLibrary.pinyin') }}</span>
                 <input v-model="form.pinyin" class="input" />
               </label>
               <label class="field">
-                <span>Meaning</span>
+                <span>{{ t('adminActivityLibrary.meaning') }}</span>
                 <input v-model="form.meaning" class="input" />
               </label>
               <label class="field admin-activity-editor-grid-wide">
-                <span>Instructions</span>
+                <span>{{ t('adminActivityLibrary.instructions') }}</span>
                 <textarea v-model="form.instructions" class="textarea" rows="4" />
               </label>
             </div>
@@ -411,12 +413,14 @@
 
           <section v-else-if="form.type === 'DRAG_DROP_ACTIVITY'" class="admin-activity-section">
             <div class="admin-activity-section-head">
-              <strong>Drag and drop activity</strong>
-              <button class="btn btn-secondary" type="button" @click="addDragItem">Add draggable item</button>
+              <strong>{{ t('adminActivityLibrary.dragDropActivity') }}</strong>
+              <button class="btn btn-secondary" type="button" @click="addDragItem">
+                {{ t('adminActivityLibrary.addDraggableItem') }}
+              </button>
             </div>
 
             <label class="field">
-              <span>Instructions</span>
+              <span>{{ t('adminActivityLibrary.instructions') }}</span>
               <textarea v-model="form.instructions" class="textarea" rows="4" />
             </label>
 
@@ -427,35 +431,35 @@
                 class="admin-activity-repeat-card"
               >
                 <div class="row-between">
-                  <strong>Draggable item {{ index + 1 }}</strong>
+                  <strong>{{ t('adminActivityLibrary.draggableItemNumber', { number: index + 1 }) }}</strong>
                   <button
                     class="teacher-outline-button"
                     type="button"
                     @click="removeDragItem(index)"
                     :disabled="form.dragItems.length <= 1"
                   >
-                    Remove
+                    {{ t('adminActivityLibrary.remove') }}
                   </button>
                 </div>
                 <div class="admin-activity-editor-grid">
                   <label class="field">
-                    <span>Drag text</span>
+                    <span>{{ t('adminActivityLibrary.dragText') }}</span>
                     <input v-model="item.dragText" class="input" />
                   </label>
                   <label class="field">
-                    <span>Target zone</span>
+                    <span>{{ t('adminActivityLibrary.targetZone') }}</span>
                     <input v-model="item.targetZone" class="input" />
                   </label>
                   <label class="field">
-                    <span>Pinyin</span>
+                    <span>{{ t('adminActivityLibrary.pinyin') }}</span>
                     <input v-model="item.pinyin" class="input" />
                   </label>
                   <label class="field">
-                    <span>Image URL</span>
+                    <span>{{ t('adminActivityLibrary.imageUrl') }}</span>
                     <input v-model="item.imageUrl" class="input" type="url" />
                   </label>
                   <label class="field">
-                    <span>Sort order</span>
+                    <span>{{ t('adminActivityLibrary.sortOrder') }}</span>
                     <input v-model.number="item.sortOrder" class="input" type="number" min="0" />
                   </label>
                 </div>
@@ -465,29 +469,31 @@
 
           <section v-else class="admin-activity-section">
             <div class="admin-activity-section-head">
-              <strong>Story activity</strong>
-              <button class="btn btn-secondary" type="button" @click="addStoryQuestion">Add question</button>
+              <strong>{{ t('adminActivityLibrary.storyActivity') }}</strong>
+              <button class="btn btn-secondary" type="button" @click="addStoryQuestion">
+                {{ t('adminActivityLibrary.addQuestion') }}
+              </button>
             </div>
 
             <div class="admin-activity-editor-grid">
               <label class="field admin-activity-editor-grid-wide">
-                <span>Instructions</span>
+                <span>{{ t('adminActivityLibrary.instructions') }}</span>
                 <textarea v-model="form.instructions" class="textarea" rows="3" />
               </label>
               <label class="field admin-activity-editor-grid-wide">
-                <span>Story text</span>
+                <span>{{ t('adminActivityLibrary.storyText') }}</span>
                 <textarea v-model="form.storyText" class="textarea" rows="8" />
               </label>
               <label class="field">
-                <span>Pinyin</span>
+                <span>{{ t('adminActivityLibrary.pinyin') }}</span>
                 <textarea v-model="form.storyPinyin" class="textarea" rows="4" />
               </label>
               <label class="field">
-                <span>Translation</span>
+                <span>{{ t('adminActivityLibrary.translation') }}</span>
                 <textarea v-model="form.storyTranslation" class="textarea" rows="4" />
               </label>
               <label class="field admin-activity-editor-grid-wide">
-                <span>Image URL</span>
+                <span>{{ t('adminActivityLibrary.imageUrl') }}</span>
                 <input v-model="form.imageUrl" class="input" type="url" />
               </label>
             </div>
@@ -499,31 +505,31 @@
                 class="admin-activity-repeat-card"
               >
                 <div class="row-between">
-                  <strong>Question {{ index + 1 }}</strong>
+                  <strong>{{ t('adminActivityLibrary.questionNumber', { number: index + 1 }) }}</strong>
                   <button
                     class="teacher-outline-button"
                     type="button"
                     @click="removeStoryQuestion(index)"
                     :disabled="form.storyQuestions.length <= 1"
                   >
-                    Remove
+                    {{ t('adminActivityLibrary.remove') }}
                   </button>
                 </div>
                 <div class="admin-activity-editor-grid">
                   <label class="field admin-activity-editor-grid-wide">
-                    <span>Question text</span>
+                    <span>{{ t('adminActivityLibrary.questionText') }}</span>
                     <input v-model="item.questionText" class="input" />
                   </label>
                   <label class="field">
-                    <span>Options (one per line)</span>
+                    <span>{{ t('adminActivityLibrary.optionsPerLine') }}</span>
                     <textarea v-model="item.optionsText" class="textarea" rows="5" />
                   </label>
                   <label class="field">
-                    <span>Explanation</span>
+                    <span>{{ t('adminActivityLibrary.explanation') }}</span>
                     <textarea v-model="item.explanation" class="textarea" rows="5" />
                   </label>
                   <label class="field">
-                    <span>Sort order</span>
+                    <span>{{ t('adminActivityLibrary.sortOrder') }}</span>
                     <input v-model.number="item.sortOrder" class="input" type="number" min="0" />
                   </label>
                 </div>
@@ -533,18 +539,20 @@
 
           <div class="admin-activity-editor-footer">
             <div class="admin-activity-editor-meta">
-              <span v-if="hasSelectedRecord && selectedSummary"
-                >Created {{ formatDateTime(selectedSummary.createdAt) }}</span
-              >
-              <span v-if="hasSelectedRecord && selectedSummary"
-                >Updated {{ formatDateTime(selectedSummary.updatedAt) }}</span
-              >
-              <span v-if="selectedSummary?.createdByDisplayName">By {{ selectedSummary.createdByDisplayName }}</span>
+              <span v-if="hasSelectedRecord && selectedSummary">
+                {{ t('adminActivityLibrary.createdAt', { date: formatDateTime(selectedSummary.createdAt) }) }}
+              </span>
+              <span v-if="hasSelectedRecord && selectedSummary">
+                {{ t('adminActivityLibrary.updatedAt', { date: formatDateTime(selectedSummary.updatedAt) }) }}
+              </span>
+              <span v-if="selectedSummary?.createdByDisplayName">
+                {{ t('adminActivityLibrary.createdBy', { name: selectedSummary.createdByDisplayName }) }}
+              </span>
             </div>
 
             <div class="admin-activity-editor-actions">
               <button class="btn btn-secondary" type="button" @click="startNewDraft(form.type)" :disabled="formBusy">
-                Clear draft
+                {{ t('adminActivityLibrary.clearDraft') }}
               </button>
               <button class="btn btn-primary" type="button" @click="saveActivity" :disabled="formBusy">
                 {{ saveButtonLabel }}
@@ -555,7 +563,7 @@
                 @click="updateStatus('DRAFT')"
                 :disabled="!hasSelectedRecord || formBusy"
               >
-                Save as Draft
+                {{ t('adminActivityLibrary.saveAsDraft') }}
               </button>
               <button
                 class="btn btn-secondary"
@@ -563,7 +571,7 @@
                 @click="updateStatus('PUBLISHED')"
                 :disabled="!hasSelectedRecord || formBusy"
               >
-                Publish
+                {{ t('adminActivityLibrary.publish') }}
               </button>
               <button
                 class="btn btn-secondary"
@@ -571,7 +579,7 @@
                 @click="updateStatus('ARCHIVED')"
                 :disabled="!hasSelectedRecord || formBusy"
               >
-                Archive
+                {{ t('adminActivityLibrary.archive') }}
               </button>
               <button
                 class="btn btn-danger"
@@ -591,6 +599,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import {
   adminApi,
@@ -610,6 +619,7 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
+import { adminActivityLibraryMessages } from '@/plugins/adminActivityLibraryMessages'
 import { useAuthStore } from '@/stores/auth'
 import type {
   ActivityDifficulty,
@@ -681,6 +691,13 @@ interface ActivityEditorForm {
 }
 
 const auth = useAuthStore()
+const { t } = useI18n({
+  messages: {
+    en: { adminActivityLibrary: adminActivityLibraryMessages.en },
+    ms: { adminActivityLibrary: adminActivityLibraryMessages.ms },
+    zh: { adminActivityLibrary: adminActivityLibraryMessages.zh },
+  },
+})
 
 const emptyFeed: PageResponse<AdminActivitySummaryResponse> = {
   items: [],
@@ -690,27 +707,27 @@ const emptyFeed: PageResponse<AdminActivitySummaryResponse> = {
   totalPages: 0,
 }
 
-const activityTypeOptions: Array<{ value: AdminActivityType; label: string }> = [
-  { value: 'FLASHCARD', label: 'Flashcard' },
-  { value: 'MATCHING_GAME', label: 'Matching Game' },
-  { value: 'LISTENING_EXERCISE', label: 'Listening Exercise' },
-  { value: 'TRACING_EXERCISE', label: 'Tracing Exercise' },
-  { value: 'DRAG_DROP_ACTIVITY', label: 'Drag & Drop Activity' },
-  { value: 'STORY_ACTIVITY', label: 'Story Activity' },
-]
+const activityTypeOptions = computed<Array<{ value: AdminActivityType; label: string }>>(() => [
+  { value: 'FLASHCARD', label: t('adminActivityLibrary.flashcard') },
+  { value: 'MATCHING_GAME', label: t('adminActivityLibrary.matchingGame') },
+  { value: 'LISTENING_EXERCISE', label: t('adminActivityLibrary.listeningExercise') },
+  { value: 'TRACING_EXERCISE', label: t('adminActivityLibrary.tracingExercise') },
+  { value: 'DRAG_DROP_ACTIVITY', label: t('adminActivityLibrary.dragDropType') },
+  { value: 'STORY_ACTIVITY', label: t('adminActivityLibrary.storyType') },
+])
 
-const ageBandOptions: Array<{ value: AgeBand; label: string }> = [
-  { value: 'KINDERGARTEN', label: 'Kindergarten' },
-  { value: 'LOWER_PRIMARY', label: 'Lower Primary' },
-  { value: 'UPPER_PRIMARY', label: 'Upper Primary' },
-  { value: 'ALL_AGES', label: 'All Ages' },
-]
+const ageBandOptions = computed<Array<{ value: AgeBand; label: string }>>(() => [
+  { value: 'KINDERGARTEN', label: t('adminActivityLibrary.kindergarten') },
+  { value: 'LOWER_PRIMARY', label: t('adminActivityLibrary.lowerPrimary') },
+  { value: 'UPPER_PRIMARY', label: t('adminActivityLibrary.upperPrimary') },
+  { value: 'ALL_AGES', label: t('adminActivityLibrary.allAgesValue') },
+])
 
-const difficultyOptions: Array<{ value: ActivityDifficulty; label: string }> = [
-  { value: 'EASY', label: 'Easy' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HARD', label: 'Hard' },
-]
+const difficultyOptions = computed<Array<{ value: ActivityDifficulty; label: string }>>(() => [
+  { value: 'EASY', label: t('adminActivityLibrary.easy') },
+  { value: 'MEDIUM', label: t('adminActivityLibrary.medium') },
+  { value: 'HARD', label: t('adminActivityLibrary.hard') },
+])
 
 const hskLevels = [1, 2, 3, 4, 5, 6] as const
 
@@ -775,37 +792,37 @@ const statCards = computed(() => {
 
   return [
     {
-      label: 'Filtered Total',
+      label: t('adminActivityLibrary.filteredTotal'),
       value: formatNumber(feed.value.totalItems),
-      copy: 'Records matched by the current filters.',
+      copy: t('adminActivityLibrary.filteredTotalCopy'),
       icon: 'practice',
       tone: 'purple',
     },
     {
-      label: 'Published',
+      label: t('adminActivityLibrary.published'),
       value: formatNumber(statusCounts.published),
-      copy: 'Published items on the current page.',
+      copy: t('adminActivityLibrary.publishedCopy'),
       icon: 'status',
       tone: 'green',
     },
     {
-      label: 'Drafts',
+      label: t('adminActivityLibrary.drafts'),
       value: formatNumber(statusCounts.drafts),
-      copy: 'Draft items ready for curation.',
+      copy: t('adminActivityLibrary.draftsCopy'),
       icon: 'content',
       tone: 'blue',
     },
     {
-      label: 'Archived',
+      label: t('adminActivityLibrary.archived'),
       value: formatNumber(statusCounts.archived),
-      copy: 'Archived items still tracked for audit.',
+      copy: t('adminActivityLibrary.archivedCopy'),
       icon: 'history',
       tone: 'orange',
     },
     {
-      label: 'Visible Types',
+      label: t('adminActivityLibrary.visibleTypes'),
       value: formatNumber(typeCount),
-      copy: 'Distinct activity types on this page.',
+      copy: t('adminActivityLibrary.visibleTypesCopy'),
       icon: 'analytics',
       tone: 'gold',
     },
@@ -813,25 +830,37 @@ const statCards = computed(() => {
 })
 
 const editorTitle = computed(() =>
-  hasSelectedRecord.value ? `${activityTypeLabel(selectedType.value)} details` : 'New activity draft',
+  hasSelectedRecord.value
+    ? t('adminActivityLibrary.details', { type: activityTypeLabel(selectedType.value) })
+    : t('adminActivityLibrary.newActivityDraft'),
 )
 const editorSubtitle = computed(() => {
   if (hasSelectedRecord.value && selectedSummary.value) {
-    return `${humanizeEnum(selectedSummary.value.status)} · ${activitySummaryMeta(selectedSummary.value)}`
+    return `${activityStatusLabel(selectedSummary.value.status)} · ${activitySummaryMeta(selectedSummary.value)}`
   }
-  return `Create a new ${activityTypeLabel(form.type).toLowerCase()} and save it directly to the admin activity library.`
+  return t('adminActivityLibrary.editorNewHint', { type: activityTypeLabel(form.type) })
 })
 const saveButtonLabel = computed(() =>
-  saving.value ? 'Saving...' : hasSelectedRecord.value ? 'Save changes' : 'Create activity',
+  saving.value
+    ? t('adminActivityLibrary.saving')
+    : hasSelectedRecord.value
+      ? t('adminActivityLibrary.saveChanges')
+      : t('adminActivityLibrary.createActivity'),
 )
-const deleteButtonLabel = computed(() => (deleting.value ? 'Deleting...' : 'Delete'))
+const deleteButtonLabel = computed(() =>
+  deleting.value ? t('adminActivityLibrary.deleting') : t('adminActivityLibrary.delete'),
+)
 const refreshFeedLabel = computed(() => {
-  if (previewReadOnly.value) return 'Preview feed'
-  return pageBusy.value ? 'Refreshing...' : 'Refresh feed'
+  if (previewReadOnly.value) return t('adminActivityLibrary.previewFeed')
+  return pageBusy.value ? t('adminActivityLibrary.refreshing') : t('adminActivityLibrary.refreshFeed')
 })
-const titleFieldLabel = computed(() => (form.type === 'FLASHCARD' ? 'Title (optional)' : 'Title'))
+const titleFieldLabel = computed(() =>
+  form.type === 'FLASHCARD' ? t('adminActivityLibrary.optionalTitle') : t('adminActivityLibrary.titleLabel'),
+)
 const titleFieldPlaceholder = computed(() =>
-  form.type === 'FLASHCARD' ? 'Optional flashcard title' : 'Activity title',
+  form.type === 'FLASHCARD'
+    ? t('adminActivityLibrary.optionalFlashcardTitle')
+    : t('adminActivityLibrary.activityTitle'),
 )
 
 onMounted(() => {
@@ -927,11 +956,11 @@ function parseTags(): string[] {
 }
 
 function activityTypeLabel(type: AdminActivityType): string {
-  return activityTypeOptions.find((item) => item.value === type)?.label ?? humanizeEnum(type)
+  return activityTypeOptions.value.find((item) => item.value === type)?.label ?? humanizeEnum(type)
 }
 
 function fallbackActivityTitle(type: AdminActivityType): string {
-  return `${activityTypeLabel(type)} draft`
+  return t('adminActivityLibrary.draftFallback', { type: activityTypeLabel(type) })
 }
 
 function humanizeEnum(value: string): string {
@@ -949,11 +978,30 @@ function statusTone(status: ContentStatus): 'danger' | 'info' | 'primary' | 'suc
   return 'info'
 }
 
+function activityStatusLabel(status: ContentStatus | StatusMutation): string {
+  const labels: Partial<Record<ContentStatus | StatusMutation, string>> = {
+    DRAFT: t('adminActivityLibrary.draft'),
+    PUBLISHED: t('adminActivityLibrary.published'),
+    ARCHIVED: t('adminActivityLibrary.archived'),
+    REJECTED: t('adminActivityLibrary.rejected'),
+    SUBMITTED: t('adminActivityLibrary.submitted'),
+  }
+  return labels[status] ?? humanizeEnum(status)
+}
+
+function ageBandLabel(ageBand: AgeBand): string {
+  return ageBandOptions.value.find((item) => item.value === ageBand)?.label ?? humanizeEnum(ageBand)
+}
+
+function difficultyLabel(difficulty: ActivityDifficulty): string {
+  return difficultyOptions.value.find((item) => item.value === difficulty)?.label ?? humanizeEnum(difficulty)
+}
+
 function activitySummaryMeta(item: AdminActivitySummaryResponse): string {
-  const parts = [item.topic?.trim() || 'No topic']
+  const parts = [item.topic?.trim() || t('adminActivityLibrary.noTopic')]
   if (item.hskLevel) parts.push(`HSK ${item.hskLevel}`)
-  if (item.ageBand) parts.push(humanizeEnum(item.ageBand))
-  if (item.difficulty) parts.push(humanizeEnum(item.difficulty))
+  if (item.ageBand) parts.push(ageBandLabel(item.ageBand))
+  if (item.difficulty) parts.push(difficultyLabel(item.difficulty))
   if (item.tags.length) parts.push(item.tags.slice(0, 2).join(', '))
   return parts.join(' · ')
 }
@@ -1034,7 +1082,7 @@ async function reloadFeed(
 ): Promise<void> {
   if (previewReadOnly.value) {
     actionError.value = null
-    actionSuccess.value = 'Preview mode is read-only. Sign in as an admin to refresh the live activity feed.'
+    actionSuccess.value = t('adminActivityLibrary.previewRefresh')
     return
   }
 
@@ -1232,7 +1280,7 @@ async function selectActivity(type: AdminActivityType, id: number): Promise<void
       }
     }
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load this activity detail.')
+    actionError.value = resolveApiError(reason, t('adminActivityLibrary.loadDetailError'))
   } finally {
     detailLoading.value = false
   }
@@ -1258,34 +1306,34 @@ function optionsTextToPayload(text: string): string {
 
 function validateForm(): string | null {
   if (form.type !== 'FLASHCARD' && !form.title.trim()) {
-    return 'Activity title is required.'
+    return t('adminActivityLibrary.titleRequired')
   }
 
   if (form.type === 'FLASHCARD') {
-    if (!form.frontText.trim()) return 'Front text is required for flashcards.'
-    if (!form.backText.trim()) return 'Back text is required for flashcards.'
+    if (!form.frontText.trim()) return t('adminActivityLibrary.flashcardFrontRequired')
+    if (!form.backText.trim()) return t('adminActivityLibrary.flashcardBackRequired')
   }
 
   if (form.type === 'MATCHING_GAME') {
     if (!form.matchingItems.some((item) => item.leftText.trim() && item.rightText.trim())) {
-      return 'Add at least one complete matching pair.'
+      return t('adminActivityLibrary.matchingPairRequired')
     }
   }
 
   if (form.type === 'LISTENING_EXERCISE' && !form.title.trim()) {
-    return 'Listening exercise title is required.'
+    return t('adminActivityLibrary.listeningTitleRequired')
   }
 
   if (form.type === 'DRAG_DROP_ACTIVITY') {
     if (!form.dragItems.some((item) => item.dragText.trim() && item.targetZone.trim())) {
-      return 'Add at least one drag and drop item.'
+      return t('adminActivityLibrary.dragItemRequired')
     }
   }
 
   if (form.type === 'STORY_ACTIVITY') {
-    if (!form.storyText.trim()) return 'Story text is required.'
+    if (!form.storyText.trim()) return t('adminActivityLibrary.storyTextRequired')
     if (!form.storyQuestions.some((item) => item.questionText.trim() && item.optionsText.trim())) {
-      return 'Add at least one story comprehension question with answer options.'
+      return t('adminActivityLibrary.storyQuestionRequired')
     }
   }
 
@@ -1428,7 +1476,7 @@ function buildStoryPayload(): AdminStoryActivityPayload {
 async function saveActivity(): Promise<void> {
   if (saving.value || deleting.value) return
   if (previewReadOnly.value) {
-    actionError.value = 'Activity library changes are read-only while preview data is active.'
+    actionError.value = t('adminActivityLibrary.previewChanges')
     actionSuccess.value = null
     return
   }
@@ -1506,16 +1554,16 @@ async function saveActivity(): Promise<void> {
     }
 
     if (recordId == null) {
-      throw new Error('Unable to determine the saved activity record ID.')
+      throw new Error(t('adminActivityLibrary.recordIdError'))
     }
 
     actionSuccess.value = hasSelectedRecord.value
-      ? `${activityTypeLabel(type)} updated successfully.`
-      : `${activityTypeLabel(type)} created successfully.`
+      ? t('adminActivityLibrary.updatedSuccess', { type: activityTypeLabel(type) })
+      : t('adminActivityLibrary.createdSuccess', { type: activityTypeLabel(type) })
 
     await reloadFeed({ id: recordId, type })
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this activity.')
+    actionError.value = resolveApiError(reason, t('adminActivityLibrary.saveError'))
   } finally {
     saving.value = false
   }
@@ -1528,7 +1576,7 @@ async function updateStatus(status: StatusMutation): Promise<void> {
   }
 
   if (previewReadOnly.value) {
-    actionError.value = 'Activity status changes are read-only while preview data is active.'
+    actionError.value = t('adminActivityLibrary.previewStatus')
     actionSuccess.value = null
     return
   }
@@ -1536,7 +1584,10 @@ async function updateStatus(status: StatusMutation): Promise<void> {
   if (
     status !== 'DRAFT' &&
     !confirmActivityMutation(
-      `Move this ${activityTypeLabel(selectedType.value).toLowerCase()} to ${humanizeEnum(status)}?`,
+      t('adminActivityLibrary.confirmStatus', {
+        type: activityTypeLabel(selectedType.value),
+        status: activityStatusLabel(status),
+      }),
     )
   ) {
     return
@@ -1568,10 +1619,13 @@ async function updateStatus(status: StatusMutation): Promise<void> {
         break
     }
 
-    actionSuccess.value = `${activityTypeLabel(selectedType.value)} moved to ${humanizeEnum(status)}.`
+    actionSuccess.value = t('adminActivityLibrary.statusUpdated', {
+      type: activityTypeLabel(selectedType.value),
+      status: activityStatusLabel(status),
+    })
     await reloadFeed({ id: selectedId.value, type: selectedType.value })
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to update activity status.')
+    actionError.value = resolveApiError(reason, t('adminActivityLibrary.statusError'))
   } finally {
     saving.value = false
   }
@@ -1584,15 +1638,13 @@ async function deleteActivity(): Promise<void> {
   }
 
   if (previewReadOnly.value) {
-    actionError.value = 'Activity deletion is read-only while preview data is active.'
+    actionError.value = t('adminActivityLibrary.previewDelete')
     actionSuccess.value = null
     return
   }
 
   if (
-    !confirmActivityMutation(
-      `Delete this ${activityTypeLabel(selectedType.value).toLowerCase()}? This action cannot be undone.`,
-    )
+    !confirmActivityMutation(t('adminActivityLibrary.confirmDelete', { type: activityTypeLabel(selectedType.value) }))
   ) {
     return
   }
@@ -1623,18 +1675,20 @@ async function deleteActivity(): Promise<void> {
         break
     }
 
-    actionSuccess.value = `${activityTypeLabel(selectedType.value)} deleted successfully.`
+    actionSuccess.value = t('adminActivityLibrary.deletedSuccess', {
+      type: activityTypeLabel(selectedType.value),
+    })
     startNewDraft(selectedType.value)
     await reloadFeed('first')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to delete this activity.')
+    actionError.value = resolveApiError(reason, t('adminActivityLibrary.deleteError'))
   } finally {
     deleting.value = false
   }
 }
 
 function confirmActivityMutation(message: string): boolean {
-  const confirmed = window.confirm(`${message}\n\nThis changes the live activity library for students.`)
+  const confirmed = window.confirm(`${message}\n\n${t('adminActivityLibrary.liveChangeWarning')}`)
   if (!confirmed) {
     actionSuccess.value = null
     actionError.value = null

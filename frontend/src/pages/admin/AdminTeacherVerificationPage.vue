@@ -2,8 +2,8 @@
   <div class="page-stack admin-verification-page">
     <section class="admin-verification-header">
       <PageHeaderBlock
-        title="Teacher Verification"
-        description="Review real teacher applications, inspect uploaded documents, and complete approval or rejection actions."
+        :title="t('adminTeacherVerification.title')"
+        :description="t('adminTeacherVerification.description')"
         icon="verification"
       />
 
@@ -13,12 +13,12 @@
           <input
             v-model="searchTerm"
             class="admin-verification-search-input"
-            placeholder="Search applicants by name or email"
+            :placeholder="t('adminTeacherVerification.search')"
           />
         </label>
 
         <button class="teacher-outline-button admin-verification-tool-button" type="button" @click="cycleSortMode">
-          Sort: <strong>{{ sortModeLabel }}</strong>
+          {{ t('adminTeacherVerification.sort', { mode: sortModeLabel }) }}
         </button>
 
         <div class="teacher-outline-button admin-verification-tool-button is-date" role="status" aria-live="polite">
@@ -28,11 +28,7 @@
       </div>
     </section>
 
-    <DataNotice
-      :using-fallback="pendingResource.usingFallback.value"
-      :error="noticeError"
-      :success="actionSuccess"
-    />
+    <DataNotice :using-fallback="pendingResource.usingFallback.value" :error="noticeError" :success="actionSuccess" />
 
     <section class="admin-verification-stats">
       <article v-for="card in statCards" :key="card.label" class="admin-verification-stat">
@@ -51,7 +47,9 @@
       <article class="panel admin-verification-list-panel">
         <div class="admin-verification-list-head">
           <div class="student-section-heading">
-            <strong>Pending Applications ({{ filteredApplicants.length }})</strong>
+            <strong>{{
+              t('adminTeacherVerification.pendingApplications', { count: filteredApplicants.length })
+            }}</strong>
           </div>
         </div>
 
@@ -79,8 +77,8 @@
         <StatePanel
           v-else
           icon="verification"
-          title="No pending applications"
-          message="Teachers waiting for review will appear here."
+          :title="t('adminTeacherVerification.noPending')"
+          :message="t('adminTeacherVerification.noPendingHint')"
         />
 
         <div v-if="totalPages > 1" class="admin-verification-pagination">
@@ -96,7 +94,9 @@
               {{ page }}
             </button>
           </div>
-          <span>Showing {{ paginationCountLabel }} of {{ filteredApplicants.length }}</span>
+          <span>{{
+            t('adminTeacherVerification.showing', { shown: paginationCountLabel, total: filteredApplicants.length })
+          }}</span>
         </div>
       </article>
 
@@ -108,12 +108,12 @@
               <div class="stack u-gap-6">
                 <h2>{{ selectedApplicant.fullName }}</h2>
                 <span>{{ selectedApplicant.email }}</span>
-                <small>Submitted {{ selectedApplicant.appliedLabel }}</small>
+                <small>{{ t('adminTeacherVerification.submittedAt', { date: selectedApplicant.appliedLabel }) }}</small>
               </div>
             </div>
 
             <div class="admin-verification-detail-top-side">
-              <StatusPill label="Pending" tone="warning" />
+              <StatusPill :label="t('adminTeacherVerification.pending')" tone="warning" />
               <small>{{ selectedApplicant.documentCountLabel }}</small>
             </div>
           </div>
@@ -125,7 +125,7 @@
               :class="{ 'is-active': activeDetailTab === 'overview' }"
               @click="showDetailTab('overview')"
             >
-              Overview
+              {{ t('adminTeacherVerification.overview') }}
             </button>
             <button
               class="tab-button"
@@ -133,7 +133,7 @@
               :class="{ 'is-active': activeDetailTab === 'documents' }"
               @click="showDetailTab('documents')"
             >
-              Documents
+              {{ t('adminTeacherVerification.documents') }}
             </button>
             <button
               class="tab-button"
@@ -141,7 +141,7 @@
               :class="{ 'is-active': activeDetailTab === 'notes' }"
               @click="showDetailTab('notes')"
             >
-              Decision
+              {{ t('adminTeacherVerification.decision') }}
             </button>
           </div>
 
@@ -149,27 +149,32 @@
             <div class="admin-verification-detail-grid">
               <section class="panel admin-verification-info-card">
                 <div class="admin-verification-section-head">
-                  <strong>Application Summary</strong>
+                  <strong>{{ t('adminTeacherVerification.applicationSummary') }}</strong>
                 </div>
 
                 <div class="admin-verification-basic-info">
                   <div>
-                    <span>Teacher ID</span><strong>#{{ selectedApplicant.teacherId }}</strong>
+                    <span>{{ t('adminTeacherVerification.teacherId') }}</span
+                    ><strong>#{{ selectedApplicant.teacherId }}</strong>
                   </div>
                   <div>
-                    <span>User ID</span><strong>#{{ selectedApplicant.userId }}</strong>
+                    <span>{{ t('adminTeacherVerification.userId') }}</span
+                    ><strong>#{{ selectedApplicant.userId }}</strong>
                   </div>
                   <div>
-                    <span>Status</span><strong>{{ formatStatus(selectedApplicant.teacherStatus) }}</strong>
+                    <span>{{ t('adminTeacherVerification.status') }}</span
+                    ><strong>{{ formatStatus(selectedApplicant.teacherStatus) }}</strong>
                   </div>
                   <div>
-                    <span>Submitted</span><strong>{{ selectedApplicant.appliedLabel }}</strong>
+                    <span>{{ t('adminTeacherVerification.submitted') }}</span
+                    ><strong>{{ selectedApplicant.appliedLabel }}</strong>
                   </div>
                   <div>
-                    <span>Teaching Categories</span><strong>{{ selectedApplicant.categoriesLabel }}</strong>
+                    <span>{{ t('adminTeacherVerification.teachingCategories') }}</span
+                    ><strong>{{ selectedApplicant.categoriesLabel }}</strong>
                   </div>
                   <div class="admin-verification-block-row">
-                    <span>Short Introduction</span>
+                    <span>{{ t('adminTeacherVerification.shortIntroduction') }}</span>
                     <div class="stack u-gap-4">
                       <strong>{{ selectedApplicant.shortIntroductionLabel }}</strong>
                       <small>{{ selectedApplicant.bioLabel }}</small>
@@ -180,7 +185,7 @@
 
               <section class="panel admin-verification-doc-card">
                 <div class="admin-verification-section-head">
-                  <strong>Review History</strong>
+                  <strong>{{ t('adminTeacherVerification.reviewHistory') }}</strong>
                 </div>
 
                 <div v-if="reviewHistory.length" class="admin-verification-audit-list">
@@ -193,10 +198,10 @@
                     </div>
                   </article>
                 </div>
-                <p v-else class="admin-verification-empty-copy">No review history has been recorded yet.</p>
+                <p v-else class="admin-verification-empty-copy">{{ t('adminTeacherVerification.noHistory') }}</p>
 
                 <div class="admin-verification-section-head admin-verification-audit-head">
-                  <strong>Recent Audit Logs</strong>
+                  <strong>{{ t('adminTeacherVerification.recentAudit') }}</strong>
                 </div>
 
                 <div v-if="auditTrail.length" class="admin-verification-audit-list">
@@ -213,7 +218,7 @@
                     </div>
                   </article>
                 </div>
-                <p v-else class="admin-verification-empty-copy">No audit trail is available for this teacher yet.</p>
+                <p v-else class="admin-verification-empty-copy">{{ t('adminTeacherVerification.noAudit') }}</p>
               </section>
             </div>
           </template>
@@ -223,7 +228,7 @@
             class="panel admin-verification-doc-card admin-verification-doc-card--solo"
           >
             <div class="admin-verification-section-head">
-              <strong>Verification Documents</strong>
+              <strong>{{ t('adminTeacherVerification.verificationDocuments') }}</strong>
             </div>
 
             <div v-if="reviewDocuments.length" class="admin-verification-document-list">
@@ -254,42 +259,44 @@
             <StatePanel
               v-else
               icon="file"
-              title="No uploaded documents"
-              message="This teacher has not uploaded verification documents yet."
+              :title="t('adminTeacherVerification.noDocuments')"
+              :message="t('adminTeacherVerification.noDocumentsHint')"
             />
           </section>
 
           <section v-else class="panel admin-verification-notes-card">
             <div class="admin-verification-section-head">
-              <strong>Decision Notes</strong>
+              <strong>{{ t('adminTeacherVerification.decisionNotes') }}</strong>
             </div>
 
             <div class="stack u-gap-14">
               <article class="admin-verification-note-preview">
-                <strong>Current rejection reason</strong>
+                <strong>{{ t('adminTeacherVerification.currentRejection') }}</strong>
                 <p>{{ selectedApplicant.rejectionReasonLabel }}</p>
               </article>
 
               <div class="field">
-                <label for="admin-verification-approval-note">Approval note</label>
+                <label for="admin-verification-approval-note">{{ t('adminTeacherVerification.approvalNote') }}</label>
                 <textarea
                   id="admin-verification-approval-note"
                   v-model="approvalNote"
                   class="textarea"
                   maxlength="1000"
-                  placeholder="Add a concise approval note."
+                  :placeholder="t('adminTeacherVerification.approvalPlaceholder')"
                   :disabled="verificationDecisionReadOnly"
                 />
               </div>
 
               <div class="field">
-                <label for="admin-verification-rejection-reason">Rejection reason</label>
+                <label for="admin-verification-rejection-reason">{{
+                  t('adminTeacherVerification.rejectionReason')
+                }}</label>
                 <textarea
                   id="admin-verification-rejection-reason"
                   v-model="rejectionReason"
                   class="textarea"
                   maxlength="1000"
-                  placeholder="Explain what needs correction before resubmission."
+                  :placeholder="t('adminTeacherVerification.rejectionPlaceholder')"
                   :disabled="verificationDecisionReadOnly"
                 />
               </div>
@@ -298,7 +305,7 @@
 
           <div class="admin-verification-footer-actions">
             <button class="btn btn-secondary" type="button" @click="showDetailTab('notes')">
-              Open Decision Tab
+              {{ t('adminTeacherVerification.openDecision') }}
             </button>
             <button
               class="btn btn-danger"
@@ -322,8 +329,8 @@
         <StatePanel
           v-else
           icon="verification"
-          title="Choose a teacher"
-          message="Select a pending application to inspect documents and complete the review."
+          :title="t('adminTeacherVerification.chooseTeacher')"
+          :message="t('adminTeacherVerification.chooseTeacherHint')"
         />
       </article>
     </section>
@@ -332,6 +339,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { adminApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -342,10 +350,19 @@ import StatusPill from '@/components/common/StatusPill.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminTeacherDetail, adminTeachers, teacherApplicationsPending } from '@/demo/data'
+import { adminTeacherVerificationMessages } from '@/plugins/adminTeacherVerificationMessages'
 import type { AdminTeacherDetailResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
-import { formatDate, formatDateTime, formatNumber } from '@/utils/format'
+import { formatDate, formatDateTime, formatNumber, getDisplayLocale } from '@/utils/format'
+
+const { t, locale } = useI18n({
+  messages: {
+    en: { adminTeacherVerification: adminTeacherVerificationMessages.en },
+    ms: { adminTeacherVerification: adminTeacherVerificationMessages.ms },
+    zh: { adminTeacherVerification: adminTeacherVerificationMessages.zh },
+  },
+})
 
 const pendingResource = useResource(() => adminApi.pendingTeachers(), teacherApplicationsPending)
 const teachersResource = useResource(() => adminApi.teachers(), adminTeachers)
@@ -430,13 +447,15 @@ const pendingApplicants = computed<ApplicantSummary[]>(() =>
     teacherStatus: item.teacherStatus,
     appliedAt: item.latestSubmissionTime || item.createdAt,
     appliedLabel: formatDate(item.latestSubmissionTime || item.createdAt),
-    summary: item.bioSummary?.trim() || 'No teacher summary provided yet.',
+    summary: item.bioSummary?.trim() || t('adminTeacherVerification.noSummary'),
     documentCount: item.verificationDocumentCount,
-    documentCountLabel: `${formatNumber(item.verificationDocumentCount)} document(s) submitted`,
-    categoriesLabel: 'Available in teacher detail',
-    shortIntroductionLabel: item.bioSummary?.trim() || 'No short introduction provided.',
-    bioLabel: 'Open the teacher detail to review the full profile.',
-    rejectionReasonLabel: 'No rejection reason recorded.',
+    documentCountLabel: t('adminTeacherVerification.documentCount', {
+      count: formatNumber(item.verificationDocumentCount),
+    }),
+    categoriesLabel: t('adminTeacherVerification.detailCategories'),
+    shortIntroductionLabel: item.bioSummary?.trim() || t('adminTeacherVerification.noIntroduction'),
+    bioLabel: t('adminTeacherVerification.openFullProfile'),
+    rejectionReasonLabel: t('adminTeacherVerification.noRejection'),
     avatarKind: avatarKinds[index % avatarKinds.length],
   })),
 )
@@ -501,12 +520,15 @@ const selectedApplicant = computed(() => {
     teacherStatus: selectedDetail.value.teacherStatus,
     categoriesLabel: selectedDetail.value.teachingCategories.length
       ? selectedDetail.value.teachingCategories.join(', ')
-      : 'No categories configured',
-    shortIntroductionLabel: selectedDetail.value.shortIntroduction?.trim() || 'No short introduction provided.',
-    bioLabel: selectedDetail.value.bio?.trim() || 'No detailed bio provided.',
+      : t('adminTeacherVerification.noCategories'),
+    shortIntroductionLabel:
+      selectedDetail.value.shortIntroduction?.trim() || t('adminTeacherVerification.noIntroduction'),
+    bioLabel: selectedDetail.value.bio?.trim() || t('adminTeacherVerification.noBio'),
     documentCount: selectedDetail.value.verificationDocuments.length,
-    documentCountLabel: `${formatNumber(selectedDetail.value.verificationDocuments.length)} document(s) available`,
-    rejectionReasonLabel: selectedDetail.value.rejectionReason?.trim() || 'No rejection reason recorded.',
+    documentCountLabel: t('adminTeacherVerification.documentCount', {
+      count: formatNumber(selectedDetail.value.verificationDocuments.length),
+    }),
+    rejectionReasonLabel: selectedDetail.value.rejectionReason?.trim() || t('adminTeacherVerification.noRejection'),
   }
 })
 
@@ -515,7 +537,9 @@ const reviewDocuments = computed<ApplicantDocument[]>(() =>
     id: document.id,
     title: document.description || document.documentType,
     fileName: document.originalFileName,
-    status: document.currentVersion ? 'Current Version' : 'Older Version',
+    status: document.currentVersion
+      ? t('adminTeacherVerification.currentVersion')
+      : t('adminTeacherVerification.olderVersion'),
     tone: document.currentVersion ? 'success' : 'warning',
     meta: `${document.contentType} • ${formatNumber(document.fileSize)} bytes • ${formatDateTime(document.submittedAt)}`,
   })),
@@ -525,7 +549,7 @@ const reviewHistory = computed<ApplicantAudit[]>(() =>
   (selectedDetail.value?.verificationReviewHistory ?? []).map((entry) => ({
     id: `review-${entry.id}`,
     title: formatStatus(entry.decisionStatus),
-    copy: entry.note?.trim() || 'No reviewer note recorded.',
+    copy: entry.note?.trim() || t('adminTeacherVerification.noReviewerNote'),
     time: formatDateTime(entry.reviewedAt),
   })),
 )
@@ -541,51 +565,57 @@ const auditTrail = computed<ApplicantAudit[]>(() =>
 
 const statCards = computed(() => [
   {
-    label: 'Pending Review',
+    label: t('adminTeacherVerification.pendingReview'),
     value: formatNumber(filteredApplicants.value.length),
-    copy: 'Current pending teacher queue',
+    copy: t('adminTeacherVerification.pendingQueue'),
     icon: 'verification',
     tone: 'gold',
   },
   {
-    label: 'Approved Teachers',
+    label: t('adminTeacherVerification.approvedTeachers'),
     value: formatNumber(
       (teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'APPROVED').length,
     ),
-    copy: 'Teacher directory count',
+    copy: t('adminTeacherVerification.teacherCount'),
     icon: 'status',
     tone: 'green',
   },
   {
-    label: 'Rejected Teachers',
+    label: t('adminTeacherVerification.rejectedTeachers'),
     value: formatNumber(
       (teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'REJECTED').length,
     ),
-    copy: 'Teacher directory count',
+    copy: t('adminTeacherVerification.teacherCount'),
     icon: 'close',
     tone: 'red',
   },
   {
-    label: 'Documents In Queue',
+    label: t('adminTeacherVerification.documentsQueue'),
     value: formatNumber(filteredApplicants.value.reduce((sum, item) => sum + item.documentCount, 0)),
-    copy: 'Pending application document total',
+    copy: t('adminTeacherVerification.pendingDocumentCount'),
     icon: 'file',
     tone: 'purple',
   },
 ])
 
 const todayLabel = computed(() =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(getDisplayLocale(locale.value), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
     weekday: 'short',
   }).format(new Date()),
 )
-const sortModeLabel = computed(() => (sortMode.value === 'newest' ? 'Newest First' : 'A-Z'))
+const sortModeLabel = computed(() =>
+  sortMode.value === 'newest' ? t('adminTeacherVerification.newestFirst') : t('adminTeacherVerification.alphabetical'),
+)
 const noticeError = computed(() => actionError.value || pageError.value)
-const approveButtonLabel = computed(() => (submittingApprove.value ? 'Approving...' : 'Approve'))
-const rejectButtonLabel = computed(() => (submittingReject.value ? 'Rejecting...' : 'Reject'))
+const approveButtonLabel = computed(() =>
+  submittingApprove.value ? t('adminTeacherVerification.approving') : t('adminTeacherVerification.approve'),
+)
+const rejectButtonLabel = computed(() =>
+  submittingReject.value ? t('adminTeacherVerification.rejecting') : t('adminTeacherVerification.reject'),
+)
 const paginationCountLabel = computed(() => {
   if (!filteredApplicants.value.length) {
     return '0-0'
@@ -610,7 +640,9 @@ function showDetailTab(tab: DetailTab): void {
 }
 
 function getDocumentDownloadLabel(documentId: number): string {
-  return downloadingDocumentId.value === documentId ? 'Downloading...' : 'Download'
+  return downloadingDocumentId.value === documentId
+    ? t('adminTeacherVerification.downloading')
+    : t('adminTeacherVerification.download')
 }
 
 function previewTeacherDetail(id: number): AdminTeacherDetailResponse | null {
@@ -646,7 +678,7 @@ async function selectTeacher(id: number): Promise<void> {
   try {
     detailResource.data.value = await adminApi.teacherDetail(id)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load this teacher detail.')
+    actionError.value = resolveApiError(reason, t('adminTeacherVerification.loadDetailError'))
     detailResource.data.value = null
   }
 }
@@ -655,7 +687,7 @@ async function downloadTeacherDocument(documentId: number, fileName: string): Pr
   if (downloadingDocumentId.value) return
   if (detailUsingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Teacher document downloads are unavailable while using preview data.'
+    actionError.value = t('adminTeacherVerification.previewDownload')
     return
   }
 
@@ -666,9 +698,9 @@ async function downloadTeacherDocument(documentId: number, fileName: string): Pr
   try {
     const download = await adminApi.downloadTeacherDocument(documentId)
     saveBlobDownload(download, fileName || `teacher-document-${documentId}`)
-    actionSuccess.value = 'Teacher verification document downloaded.'
+    actionSuccess.value = t('adminTeacherVerification.downloaded')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to download this teacher document.')
+    actionError.value = resolveApiError(reason, t('adminTeacherVerification.downloadError'))
   } finally {
     downloadingDocumentId.value = null
   }
@@ -679,7 +711,7 @@ async function approveTeacher(): Promise<void> {
   if (!selectedApplicant.value) return
   if (verificationReadOnly.value) {
     actionSuccess.value = null
-    actionError.value = 'Teacher applications cannot be approved while preview data is active.'
+    actionError.value = t('adminTeacherVerification.previewApprove')
     return
   }
 
@@ -694,9 +726,9 @@ async function approveTeacher(): Promise<void> {
     detailResource.data.value = null
     approvalNote.value = ''
     rejectionReason.value = ''
-    actionSuccess.value = 'Teacher application approved and queue refreshed.'
+    actionSuccess.value = t('adminTeacherVerification.approved')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to approve this teacher.')
+    actionError.value = resolveApiError(reason, t('adminTeacherVerification.approveError'))
   } finally {
     submittingApprove.value = false
   }
@@ -707,14 +739,14 @@ async function rejectTeacher(): Promise<void> {
   if (!selectedApplicant.value) return
   if (verificationReadOnly.value) {
     actionSuccess.value = null
-    actionError.value = 'Teacher applications cannot be rejected while preview data is active.'
+    actionError.value = t('adminTeacherVerification.previewReject')
     return
   }
 
   const normalizedReason = rejectionReason.value.trim()
   if (!normalizedReason) {
     actionSuccess.value = null
-    actionError.value = 'Enter a rejection reason before rejecting this teacher application.'
+    actionError.value = t('adminTeacherVerification.rejectionRequired')
     return
   }
 
@@ -729,15 +761,23 @@ async function rejectTeacher(): Promise<void> {
     detailResource.data.value = null
     approvalNote.value = ''
     rejectionReason.value = ''
-    actionSuccess.value = 'Teacher application rejected and queue refreshed.'
+    actionSuccess.value = t('adminTeacherVerification.rejected')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to reject this teacher.')
+    actionError.value = resolveApiError(reason, t('adminTeacherVerification.rejectError'))
   } finally {
     submittingReject.value = false
   }
 }
 
 function formatStatus(status: string): string {
+  const keys: Record<string, string> = {
+    PENDING: 'statusPending',
+    APPROVED: 'statusApproved',
+    REJECTED: 'statusRejected',
+    UNDER_REVIEW: 'statusUnderReview',
+  }
+  const key = keys[status.toUpperCase()]
+  if (key) return t(`adminTeacherVerification.${key}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()

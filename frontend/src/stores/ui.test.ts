@@ -20,6 +20,7 @@ describe('ui store', () => {
 
     expect(ui.locale).toBe('zh')
     expect(i18n.global.locale.value).toBe('zh')
+    expect(document.documentElement.lang).toBe('zh')
     expect(window.localStorage.getItem(storageKeys.language)).toBe('zh')
   })
 })

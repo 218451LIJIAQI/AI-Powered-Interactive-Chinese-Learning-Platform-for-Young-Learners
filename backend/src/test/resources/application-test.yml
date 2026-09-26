@@ -26,6 +26,10 @@ logging:
 
 app:
   security:
+    public-auth-rate-limit:
+      # Integration tests create many accounts from MockMvc's shared IP in one JVM.
+      # The limiter's production threshold is covered by dedicated unit tests.
+      register-requests: 10000
     jwt:
       secret: RuntimeStyleJwtSecretForTests1234567890AB
       # Keep test tokens long-lived so slow local verification or a paused

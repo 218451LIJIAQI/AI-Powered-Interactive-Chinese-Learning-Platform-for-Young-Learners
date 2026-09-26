@@ -8,7 +8,10 @@ import { initObservability } from './plugins/observability'
 import { clearOfflineCaches } from './plugins/pwa'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'
+import { readPersistedLocale } from './utils/storage'
 import './styles/main.css'
+
+document.documentElement.lang = readPersistedLocale()
 
 const app = createApp(App)
 const pinia = createPinia()

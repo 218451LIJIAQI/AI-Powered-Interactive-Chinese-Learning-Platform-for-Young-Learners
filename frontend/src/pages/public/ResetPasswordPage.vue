@@ -5,12 +5,12 @@
         <AppBrand />
 
         <div class="auth-reset-art-copy">
-          <span class="auth-reset-kicker">Password Help</span>
+          <span class="auth-reset-kicker">{{ t('recovery.reset.eyebrow') }}</span>
           <h1>
-            Back to your Mandarin adventure,
-            <span>safely.</span>
+            {{ t('recovery.reset.heroStart') }}
+            <span>{{ t('recovery.reset.heroHighlight') }}</span>
           </h1>
-          <p>Choose a fresh password and keep your lessons, rewards, and progress protected.</p>
+          <p>{{ t('recovery.reset.heroCopy') }}</p>
         </div>
 
         <div class="auth-reset-scene">
@@ -22,17 +22,18 @@
         </div>
 
         <div class="auth-reset-safety-card">
-          <strong><IconGlyph name="shield" :size="18" /> Safe account recovery</strong>
-          <span>Use the reset token from your email and never share it with anyone.</span>
+          <strong><IconGlyph name="shield" :size="18" /> {{ t('recovery.reset.safetyTitle') }}</strong>
+          <span>{{ t('recovery.reset.safetyCopy') }}</span>
         </div>
       </aside>
 
       <div class="surface-card auth-reset-card">
+        <div class="auth-reset-language"><LanguageSwitcher size="compact" /></div>
         <div class="auth-reset-card-head">
           <span class="auth-reset-card-icon"><IconGlyph name="safe" :size="24" /></span>
           <div class="auth-form-title">
-            <h2>Reset your password</h2>
-            <p>Enter the reset token from your email and choose a new password.</p>
+            <h2>{{ t('recovery.reset.title') }}</h2>
+            <p>{{ t('recovery.reset.cardCopy') }}</p>
           </div>
         </div>
 
@@ -46,31 +47,31 @@
 
         <form class="auth-reset-form" @submit.prevent="submitReset">
           <div class="field">
-            <label for="reset-token">Reset token</label>
+            <label for="reset-token">{{ t('recovery.reset.token') }}</label>
             <input
               id="reset-token"
               v-model="token"
               class="input auth-input"
               autocomplete="one-time-code"
-              placeholder="Paste your reset token"
+              :placeholder="t('recovery.reset.tokenPlaceholder')"
             />
           </div>
 
           <div class="field">
-            <label for="reset-password">New password</label>
+            <label for="reset-password">{{ t('recovery.reset.newPassword') }}</label>
             <input
               id="reset-password"
               v-model="password"
               class="input auth-input"
               autocomplete="new-password"
               type="password"
-              placeholder="Enter a new password"
+              :placeholder="t('recovery.reset.newPasswordPlaceholder')"
             />
           </div>
 
           <div class="auth-reset-strength">
             <div class="row-between">
-              <span>Password readiness</span>
+              <span>{{ t('recovery.reset.readiness') }}</span>
               <strong>{{ passwordStrengthLabel }}</strong>
             </div>
             <div class="auth-reset-strength-track">
@@ -84,14 +85,14 @@
           </div>
 
           <div class="field">
-            <label for="reset-confirm-password">Confirm new password</label>
+            <label for="reset-confirm-password">{{ t('recovery.reset.confirmPassword') }}</label>
             <input
               id="reset-confirm-password"
               v-model="confirmPassword"
               class="input auth-input"
               autocomplete="new-password"
               type="password"
-              placeholder="Confirm your new password"
+              :placeholder="t('recovery.reset.confirmPlaceholder')"
             />
           </div>
 
@@ -102,13 +103,17 @@
         </form>
 
         <div class="auth-reset-help-row">
-          <span>Remember your password?</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/auth">Back to sign in</RouterLink>
+          <span>{{ t('recovery.reset.rememberPassword') }}</span>
+          <RouterLink class="auth-text-button auth-reset-link" to="/auth">{{
+            t('recovery.reset.backSignIn')
+          }}</RouterLink>
         </div>
 
         <div class="auth-reset-help-row">
-          <span>Need a new reset link?</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/forgot-password">Request one</RouterLink>
+          <span>{{ t('recovery.reset.needLink') }}</span>
+          <RouterLink class="auth-text-button auth-reset-link" to="/forgot-password">{{
+            t('recovery.reset.requestOne')
+          }}</RouterLink>
         </div>
       </div>
     </div>
@@ -118,17 +123,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
+import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { isPasswordLengthValid } from '@/utils/password'
 import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { recovery: recoveryMessages.en },
+    ms: { recovery: recoveryMessages.ms },
+    zh: { recovery: recoveryMessages.zh },
+  },
+})
 
 const token = ref(firstQueryText(route.query.token))
 const password = ref('')
@@ -138,7 +153,7 @@ const success = ref<string | null>(null)
 const submitting = ref(false)
 
 type PasswordCheckIcon = 'close' | 'status'
-const passwordStrengthLabels = ['Start typing', 'Getting close', 'Almost ready', 'Ready'] as const
+const passwordStrengthKeys = ['strengthStart', 'strengthClose', 'strengthAlmost', 'strengthReady'] as const
 
 removeSensitiveQueryFromAddressBar()
 
@@ -150,16 +165,23 @@ const canSubmit = computed(
     password.value === confirmPassword.value,
 )
 const passwordChecks = computed(() => [
-  { label: 'At least 8 characters', met: password.value.length >= 8 },
-  { label: 'Within the secure 72-byte limit', met: isPasswordLengthValid(password.value) },
-  { label: 'Includes a number', met: /\d/.test(password.value) },
-  { label: 'Passwords match', met: Boolean(confirmPassword.value && password.value === confirmPassword.value) },
+  { label: t('recovery.reset.atLeastEight'), met: password.value.length >= 8 },
+  { label: t('recovery.reset.withinLimit'), met: isPasswordLengthValid(password.value) },
+  { label: t('recovery.reset.includesNumber'), met: /\d/.test(password.value) },
+  {
+    label: t('recovery.reset.passwordsMatch'),
+    met: Boolean(confirmPassword.value && password.value === confirmPassword.value),
+  },
 ])
 const passwordStrengthScore = computed(() => passwordChecks.value.filter((check) => check.met).length)
-const passwordStrengthLabel = computed(() => passwordStrengthLabels[Math.min(passwordStrengthScore.value, 3)])
+const passwordStrengthLabel = computed(() =>
+  t(`recovery.reset.${passwordStrengthKeys[Math.min(passwordStrengthScore.value, 3)]}`),
+)
 const passwordStrengthClass = computed(() => `is-${Math.min(passwordStrengthScore.value, 3)}`)
 const passwordStrengthWidth = computed(() => `${(passwordStrengthScore.value / passwordChecks.value.length) * 100}%`)
-const submitLabel = computed(() => (submitting.value ? 'Resetting...' : 'Reset password'))
+const submitLabel = computed(() =>
+  submitting.value ? t('recovery.reset.resetting') : t('recovery.reset.resetPassword'),
+)
 
 async function submitReset(): Promise<void> {
   if (submitting.value) return
@@ -168,12 +190,12 @@ async function submitReset(): Promise<void> {
   success.value = null
 
   if (!isPasswordLengthValid(password.value)) {
-    error.value = 'Password must be 8 to 72 characters and no more than 72 bytes.'
+    error.value = t('recovery.reset.invalidPassword')
     return
   }
 
   if (password.value !== confirmPassword.value) {
-    error.value = 'Confirm password does not match.'
+    error.value = t('recovery.reset.mismatch')
     return
   }
 
@@ -187,12 +209,9 @@ async function submitReset(): Promise<void> {
     token.value = ''
     password.value = ''
     confirmPassword.value = ''
-    success.value = 'Password reset successfully. You can sign in with your new password now.'
+    success.value = t('recovery.reset.success')
   } catch (reason) {
-    error.value = resolveApiError(
-      reason,
-      'Unable to reset the password. Please request a new reset link and try again.',
-    )
+    error.value = resolveApiError(reason, t('recovery.reset.error'))
   } finally {
     submitting.value = false
   }
@@ -210,3 +229,10 @@ function passwordCheckIcon(met: boolean): PasswordCheckIcon {
   return met ? 'status' : 'close'
 }
 </script>
+
+<style scoped>
+.auth-reset-language {
+  display: flex;
+  justify-content: flex-end;
+}
+</style>

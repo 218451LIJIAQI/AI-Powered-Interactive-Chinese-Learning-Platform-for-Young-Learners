@@ -4,12 +4,14 @@
       <h2 class="brand-title">
         Mandarin<span class="accent">Spark</span><IconGlyph name="star" :size="15" class="brand-star" />
       </h2>
-      <p v-if="!compact" class="brand-subtitle">Learn Mandarin. Spark Your Future.</p>
+      <p v-if="!compact" class="brand-subtitle">{{ t('chrome.tagline') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 interface Props {
@@ -19,4 +21,6 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   compact: false,
 })
+
+const { t } = useI18n()
 </script>

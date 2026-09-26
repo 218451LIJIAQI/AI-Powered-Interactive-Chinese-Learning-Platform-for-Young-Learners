@@ -2,3 +2,5 @@ node_modules
 dist
 dist-ssr
 coverage
+playwright-report
+test-results

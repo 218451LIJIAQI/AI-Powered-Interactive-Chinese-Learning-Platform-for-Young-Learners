@@ -4,10 +4,10 @@
       :using-fallback="catalogUsingFallback"
       :error="catalogNoticeError"
       :success="cartSuccess"
-      fallback-title="Preview catalog mode"
-      fallback-message="You are browsing safe preview data for courses, filters, and cart flow. Sign in to use live student checkout."
-      error-title="Catalog needs attention"
-      success-title="Cart updated"
+      :fallback-title="t('catalog.fallbackTitle')"
+      :fallback-message="t('catalog.fallbackMessage')"
+      :error-title="t('catalog.errorTitle')"
+      :success-title="t('catalog.successTitle')"
       :detail="catalogNoticeDetail"
     />
 
@@ -15,26 +15,23 @@
       <div class="public-catalog-main">
         <div class="public-catalog-header">
           <div class="public-catalog-header-copy">
-            <span class="public-catalog-kicker">Find the right Mandarin path</span>
-            <h1>Explore Courses</h1>
-            <p>
-              Compare beginner-friendly lessons, teacher-led support, and kid-safe formats designed for real family
-              decision-making.
-            </p>
+            <span class="public-catalog-kicker">{{ t('catalog.kicker') }}</span>
+            <h1>{{ t('catalog.title') }}</h1>
+            <p>{{ t('catalog.intro') }}</p>
           </div>
 
           <div class="public-catalog-header-meta">
             <article>
               <strong>{{ matchedCourseCount }}</strong>
-              <span>courses matched</span>
+              <span>{{ t('catalog.coursesMatched') }}</span>
             </article>
             <article>
               <strong>{{ categories.length }}</strong>
-              <span>learning themes</span>
+              <span>{{ t('catalog.learningThemes') }}</span>
             </article>
             <article>
               <strong>{{ cart?.items.length ?? 0 }}</strong>
-              <span>in your cart</span>
+              <span>{{ t('catalog.inCart') }}</span>
             </article>
           </div>
         </div>
@@ -43,7 +40,7 @@
           <div class="public-search-row">
             <label class="public-search-input">
               <IconGlyph name="search" :size="18" />
-              <input v-model="filters.keyword" type="text" placeholder="Search courses" />
+              <input v-model="filters.keyword" type="text" :placeholder="t('catalog.searchPlaceholder')" />
             </label>
             <button
               class="btn btn-primary public-filter-button"
@@ -53,14 +50,14 @@
             >
               {{ filterToggleLabel }}
             </button>
-            <button class="public-clear-button" type="button" @click="clearFilters">Clear All</button>
+            <button class="public-clear-button" type="button" @click="clearFilters">{{ t('catalog.clearAll') }}</button>
           </div>
 
           <div v-show="filtersOpen" class="public-filter-grid">
             <label class="public-filter-field">
-              <span>Category</span>
+              <span>{{ t('catalog.category') }}</span>
               <select v-model="filters.categoryId">
-                <option value="">All Categories</option>
+                <option value="">{{ t('catalog.allCategories') }}</option>
                 <option v-for="category in categories" :key="category.id" :value="String(category.id)">
                   {{ category.name }}
                 </option>
@@ -68,37 +65,37 @@
             </label>
 
             <label class="public-filter-field">
-              <span>Level</span>
+              <span>{{ t('catalog.level') }}</span>
               <select v-model="filters.levelId">
-                <option value="">All Levels</option>
+                <option value="">{{ t('catalog.allLevels') }}</option>
                 <option v-for="level in levels" :key="level.id" :value="String(level.id)">{{ level.name }}</option>
               </select>
             </label>
 
             <label class="public-filter-field">
-              <span>Activity Type</span>
+              <span>{{ t('catalog.activityType') }}</span>
               <select v-model="filters.learningType">
-                <option value="">All Activities</option>
-                <option value="RECORDED">Recorded</option>
-                <option value="LIVE">Live Support</option>
-                <option value="HYBRID">Hybrid</option>
+                <option value="">{{ t('catalog.allActivities') }}</option>
+                <option value="RECORDED">{{ t('catalog.recorded') }}</option>
+                <option value="LIVE">{{ t('catalog.liveSupport') }}</option>
+                <option value="HYBRID">{{ t('catalog.hybrid') }}</option>
               </select>
             </label>
 
             <label class="public-filter-field">
-              <span>Format</span>
+              <span>{{ t('catalog.format') }}</span>
               <select v-model="filters.accessType">
-                <option value="">All Formats</option>
-                <option value="FREE">Free</option>
-                <option value="PAID">Paid</option>
+                <option value="">{{ t('catalog.allFormats') }}</option>
+                <option value="FREE">{{ t('catalog.free') }}</option>
+                <option value="PAID">{{ t('catalog.paid') }}</option>
               </select>
             </label>
 
             <label class="public-filter-field">
-              <span>Sort by</span>
+              <span>{{ t('catalog.sortBy') }}</span>
               <select v-model="filters.sort">
-                <option value="newest">Recently added</option>
-                <option value="title">Title</option>
+                <option value="newest">{{ t('catalog.recentlyAdded') }}</option>
+                <option value="title">{{ t('catalog.sortTitle') }}</option>
               </select>
             </label>
           </div>
@@ -107,21 +104,26 @@
         <section class="public-catalog-feature-strip">
           <PublicFeatureCard
             icon="safe"
-            title="Kid-Safe & Ad-Free"
-            description="Safe learning environment"
+            :title="t('catalog.safeFeatureTitle')"
+            :description="t('catalog.safeFeatureCopy')"
             tone="purple"
           />
           <PublicFeatureCard
             icon="teacher"
-            title="Expert Teachers"
-            description="Certified and experienced"
+            :title="t('catalog.teachersFeatureTitle')"
+            :description="t('catalog.teachersFeatureCopy')"
             tone="blue"
           />
-          <PublicFeatureCard icon="fun" title="Fun & Engaging" description="Games, stories, and practice" tone="gold" />
+          <PublicFeatureCard
+            icon="fun"
+            :title="t('catalog.funFeatureTitle')"
+            :description="t('catalog.funFeatureCopy')"
+            tone="gold"
+          />
           <PublicFeatureCard
             icon="progress"
-            title="Progress You Can See"
-            description="Track growth step by step"
+            :title="t('catalog.progressFeatureTitle')"
+            :description="t('catalog.progressFeatureCopy')"
             tone="purple"
           />
         </section>
@@ -130,12 +132,14 @@
           <StatePanel
             v-if="!filteredCourses.length"
             icon="courses"
-            title="No courses matched your filters"
-            message="Try clearing one filter or searching for beginner Mandarin, pinyin, culture, or live support."
-            eyebrow="No matches"
+            :title="t('catalog.noMatchesTitle')"
+            :message="t('catalog.noMatchesCopy')"
+            :eyebrow="t('catalog.noMatchesEyebrow')"
           >
             <template #actions>
-              <button class="btn btn-primary" type="button" @click="clearFilters">Clear filters</button>
+              <button class="btn btn-primary" type="button" @click="clearFilters">
+                {{ t('catalog.clearFilters') }}
+              </button>
             </template>
           </StatePanel>
 
@@ -148,23 +152,23 @@
             @action="handleCourseAction(course)"
           />
 
-          <nav v-if="courseTotalPages > 1" class="public-catalog-pagination" aria-label="Course result pages">
+          <nav v-if="courseTotalPages > 1" class="public-catalog-pagination" :aria-label="t('catalog.resultPages')">
             <button
               class="btn btn-secondary"
               type="button"
               :disabled="currentPage <= 0 || coursesResource.loading.value"
               @click="goToCoursePage(currentPage - 1)"
             >
-              Previous
+              {{ t('catalog.previous') }}
             </button>
-            <span>Page {{ currentPage + 1 }} of {{ courseTotalPages }}</span>
+            <span>{{ t('catalog.pageOf', { page: currentPage + 1, total: courseTotalPages }) }}</span>
             <button
               class="btn btn-secondary"
               type="button"
               :disabled="currentPage >= courseTotalPages - 1 || coursesResource.loading.value"
               @click="goToCoursePage(currentPage + 1)"
             >
-              Next
+              {{ t('catalog.next') }}
             </button>
           </nav>
         </section>
@@ -173,16 +177,16 @@
       <aside class="public-catalog-side">
         <div v-if="canUseCart" class="public-cart-card">
           <div class="public-cart-header">
-            <strong>My Course Cart ({{ cart?.items.length ?? 0 }})</strong>
+            <strong>{{ t('catalog.myCart', { count: cart?.items.length ?? 0 }) }}</strong>
             <button v-if="cart?.items.length" class="public-clear-button" type="button" @click="clearCart">
-              Clear
+              {{ t('catalog.clear') }}
             </button>
           </div>
 
           <p class="public-cart-note">{{ cartNote }}</p>
 
           <div class="public-cart-items">
-            <p v-if="!cart?.items.length" class="muted public-cart-empty">Your cart is empty.</p>
+            <p v-if="!cart?.items.length" class="muted public-cart-empty">{{ t('catalog.cartEmptyText') }}</p>
             <div v-for="item in cart?.items ?? []" :key="item.cartItemId" class="public-cart-item">
               <CourseSceneThumb :size="80" :variant="cartThumb(item.title)" />
               <div class="public-cart-item-copy">
@@ -194,7 +198,7 @@
               <div class="public-cart-item-actions">
                 <strong>{{ formatCurrency(item.subtotal, item.currencyCode) }}</strong>
                 <button class="public-clear-button" type="button" @click="removeCartItem(item.cartItemId)">
-                  Remove
+                  {{ t('catalog.remove') }}
                 </button>
               </div>
             </div>
@@ -202,12 +206,12 @@
 
           <div class="public-cart-summary">
             <div class="row-between">
-              <span>Subtotal</span>
+              <span>{{ t('catalog.subtotal') }}</span>
               <strong v-if="cart">{{ formatCurrency(cart.totalAmount, cart.currencyCode) }}</strong>
               <span v-else class="muted">--</span>
             </div>
             <div class="row-between public-cart-total">
-              <span>Total</span>
+              <span>{{ t('catalog.total') }}</span>
               <strong v-if="cart">{{ formatCurrency(cart.totalAmount, cart.currencyCode) }}</strong>
               <span v-else class="muted">--</span>
             </div>
@@ -223,7 +227,7 @@
           </button>
 
           <div class="public-cart-disclaimer">
-            <span>Info</span>
+            <span>{{ t('catalog.info') }}</span>
             <span>{{ cartActionHint }}</span>
           </div>
         </div>
@@ -233,22 +237,24 @@
           <p class="muted public-cart-empty">
             {{ cartAccessDescription }}
           </p>
-          <button v-if="!auth.isAuthenticated" class="btn btn-primary" type="button" @click="goToAuth">Sign in</button>
+          <button v-if="!auth.isAuthenticated" class="btn btn-primary" type="button" @click="goToAuth">
+            {{ t('catalog.signIn') }}
+          </button>
         </div>
 
         <PublicInfoBanner
           icon="safe"
-          title="Safe. Positive. Effective."
-          description="Designed for young learners and trusted by parents."
+          :title="t('catalog.safeBannerTitle')"
+          :description="t('catalog.safeBannerCopy')"
           tone="green"
         />
 
         <div class="public-help-card">
           <div>
-            <strong>Need help choosing?</strong>
-            <p>Try our AI Helper for personalized recommendations.</p>
+            <strong>{{ t('catalog.helpTitle') }}</strong>
+            <p>{{ t('catalog.helpCopy') }}</p>
           </div>
-          <button class="btn btn-secondary" type="button" @click="goToAiHelperSignIn">Ask AI Helper</button>
+          <button class="btn btn-secondary" type="button" @click="goToAiHelperSignIn">{{ t('catalog.askAi') }}</button>
         </div>
       </aside>
     </section>
@@ -258,6 +264,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { publicApi, studentApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -269,6 +276,7 @@ import PublicFeatureCard from '@/components/public/PublicFeatureCard.vue'
 import PublicInfoBanner from '@/components/public/PublicInfoBanner.vue'
 import { useResource } from '@/composables/useResource'
 import { cartDemo, categories as demoCategories, levels as demoLevels, publicCourses } from '@/demo/data'
+import { catalogMessages } from '@/plugins/catalogMessages'
 import { useAuthStore } from '@/stores/auth'
 import type { CartItemResponse, CartResponse, LearningCategory, LearningLevel, PublicCourseSummary } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
@@ -278,6 +286,13 @@ import { safeHttpUrl } from '@/utils/url'
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const { t } = useI18n({
+  messages: {
+    en: { catalog: catalogMessages.en },
+    ms: { catalog: catalogMessages.ms },
+    zh: { catalog: catalogMessages.zh },
+  },
+})
 
 type CatalogSort = 'newest' | 'title'
 type LearningTypeFilter = '' | 'RECORDED' | 'LIVE' | 'HYBRID'
@@ -370,15 +385,11 @@ const catalogNoticeError = computed(
 )
 const catalogNoticeDetail = computed(() => {
   if (catalogNoticeError.value) {
-    return canUseCart.value
-      ? 'Course browsing still works while cart or catalog requests recover.'
-      : 'Public visitors can still review course information and sign-in options.'
+    return canUseCart.value ? t('catalog.browsingRecoveryCart') : t('catalog.browsingRecoveryPublic')
   }
 
   if (catalogUsingFallback.value) {
-    return canUseCart.value
-      ? 'Cart actions are limited while preview data is active.'
-      : 'Live cart and enrolment open after student sign-in.'
+    return canUseCart.value ? t('catalog.previewCartLimited') : t('catalog.liveAfterSignIn')
   }
 
   if (cartSuccess.value) {
@@ -427,13 +438,13 @@ onBeforeUnmount(() => {
 })
 
 const cartCheckoutLabel = computed(() => {
-  if (!canUseCart.value) return 'Sign in to checkout'
-  if (cartResource.loading.value) return 'Loading cart...'
-  if (cartResource.usingFallback.value) return 'Preview cart only'
-  if (!cart.value?.items.length) return 'Cart empty'
-  return 'Checkout'
+  if (!canUseCart.value) return t('catalog.signInCheckout')
+  if (cartResource.loading.value) return t('catalog.loadingCart')
+  if (cartResource.usingFallback.value) return t('catalog.previewCartOnly')
+  if (!cart.value?.items.length) return t('catalog.cartEmpty')
+  return t('catalog.checkout')
 })
-const filterToggleLabel = computed(() => (filtersOpen.value ? 'Hide filters' : 'Show filters'))
+const filterToggleLabel = computed(() => (filtersOpen.value ? t('catalog.hideFilters') : t('catalog.showFilters')))
 
 const cartActionDisabled = computed(
   () =>
@@ -445,33 +456,31 @@ const cartActionDisabled = computed(
 )
 
 const cartNote = computed(() => {
-  if (!canUseCart.value) return 'Sign in as a student to use the live cart.'
-  if (cartResource.usingFallback.value) return 'Preview mode is showing demo cart data.'
-  if (cartResource.error.value) return `Cart unavailable: ${cartResource.error.value}`
-  return 'Your cart is synced with the live backend.'
+  if (!canUseCart.value) return t('catalog.signInStudentCart')
+  if (cartResource.usingFallback.value) return t('catalog.previewCartNote')
+  if (cartResource.error.value) return t('catalog.cartUnavailable', { error: cartResource.error.value })
+  return t('catalog.syncedCart')
 })
 
 const cartActionHint = computed(() => {
-  if (!canUseCart.value) return 'Live cart and checkout are available after sign-in.'
-  if (cartResource.usingFallback.value) return 'Preview data is read-only.'
-  return 'Checkout redirects to the payment page and returns here on success.'
+  if (!canUseCart.value) return t('catalog.checkoutAfterSignIn')
+  if (cartResource.usingFallback.value) return t('catalog.previewReadOnly')
+  return t('catalog.checkoutHint')
 })
 
 const cartAccessTitle = computed(() =>
-  signedInWithoutStudentRole.value ? 'Student checkout only' : 'Use the live cart',
+  signedInWithoutStudentRole.value ? t('catalog.studentCheckoutOnly') : t('catalog.useLiveCart'),
 )
 const cartAccessDescription = computed(() =>
-  signedInWithoutStudentRole.value
-    ? 'You can browse public course information, but purchases and the live cart are available only to student accounts.'
-    : 'Sign in as a student to save courses, manage checkout, and return to lessons after payment.',
+  signedInWithoutStudentRole.value ? t('catalog.nonStudentCartCopy') : t('catalog.studentCartCopy'),
 )
 
 function courseActionLabel(course: PublicCourseSummary): string {
-  if (signedInWithoutStudentRole.value) return 'View course'
-  if (!canUseCart.value) return 'Sign in'
-  if (auth.isPreviewSession && !auth.isAuthenticated) return 'Preview'
-  if (course.accessType === 'FREE') return 'View course'
-  return 'Add to cart'
+  if (signedInWithoutStudentRole.value) return t('catalog.viewCourse')
+  if (!canUseCart.value) return t('catalog.signIn')
+  if (auth.isPreviewSession && !auth.isAuthenticated) return t('catalog.preview')
+  if (course.accessType === 'FREE') return t('catalog.viewCourse')
+  return t('catalog.addToCart')
 }
 
 function handleCourseAction(course: PublicCourseSummary): void {
@@ -501,21 +510,17 @@ function handleCourseAction(course: PublicCourseSummary): void {
 async function addCourseToCart(course: PublicCourseSummary): Promise<void> {
   await mutateCart(
     () => studentApi.addCartItem({ itemType: course.type, itemId: course.contentId }),
-    `${course.title} was added to your cart.`,
-    'Unable to add this course to the cart.',
+    t('catalog.addedToCart', { title: course.title }),
+    t('catalog.addFailed'),
   )
 }
 
 async function removeCartItem(cartItemId: number): Promise<void> {
-  await mutateCart(
-    () => studentApi.removeCartItem(cartItemId),
-    'The course was removed from your cart.',
-    'Unable to remove this item right now.',
-  )
+  await mutateCart(() => studentApi.removeCartItem(cartItemId), t('catalog.removedFromCart'), t('catalog.removeFailed'))
 }
 
 async function clearCart(): Promise<void> {
-  await mutateCart(() => studentApi.clearCart(), 'Your cart is now empty.', 'Unable to clear your cart right now.')
+  await mutateCart(() => studentApi.clearCart(), t('catalog.cartCleared'), t('catalog.clearFailed'))
 }
 
 function canStartCartAction(fallbackMessage: string): boolean {
@@ -536,7 +541,7 @@ function canStartCartAction(fallbackMessage: string): boolean {
 }
 
 async function mutateCart(action: () => Promise<unknown>, successMessage: string, errorMessage: string): Promise<void> {
-  if (!canStartCartAction('Cart preview data is read-only. Refresh live cart data before changing it.')) return
+  if (!canStartCartAction(t('catalog.previewEditBlocked'))) return
 
   cartBusy.value = true
   try {
@@ -554,7 +559,7 @@ async function mutateCart(action: () => Promise<unknown>, successMessage: string
 }
 
 async function checkoutCart(): Promise<void> {
-  if (!canStartCartAction('Cart preview data cannot be checked out. Refresh live cart data first.')) return
+  if (!canStartCartAction(t('catalog.previewCheckoutBlocked'))) return
 
   if (!cart.value?.items.length) {
     return
@@ -566,7 +571,7 @@ async function checkoutCart(): Promise<void> {
     cartResource.error.value = null
     const response = await studentApi.checkoutCart()
     if (!response.paymentAvailable) {
-      cartResource.error.value = response.message || 'Payment provider is unavailable. Please try again later.'
+      cartResource.error.value = response.message || t('catalog.paymentUnavailable')
       return
     }
 
@@ -581,10 +586,9 @@ async function checkoutCart(): Promise<void> {
       return
     }
 
-    cartResource.error.value =
-      'Checkout completed but no redirect or payment reference was returned. Please contact support.'
+    cartResource.error.value = t('catalog.missingCheckoutReference')
   } catch (reason) {
-    cartResource.error.value = resolveApiError(reason, 'Unable to start checkout.')
+    cartResource.error.value = resolveApiError(reason, t('catalog.checkoutFailed'))
   } finally {
     cartBusy.value = false
   }
@@ -679,7 +683,10 @@ function cartThumb(title: string): CartThumbVariant {
 }
 
 function cartMetaTags(item: CartItemResponse): string[] {
-  return [formatCartItemType(item.itemType), item.teacherOwned ? 'Teacher content' : 'Platform content']
+  return [
+    formatCartItemType(item.itemType),
+    item.teacherOwned ? t('catalog.teacherContent') : t('catalog.platformContent'),
+  ]
 }
 
 function courseMatchesFallbackFilters(course: PublicCourseSummary, keyword: string): boolean {
@@ -692,6 +699,13 @@ function courseMatchesFallbackFilters(course: PublicCourseSummary, keyword: stri
 }
 
 function formatCartItemType(itemType: string): string {
+  const keyByType: Record<string, string> = {
+    LESSON: 'lessonType',
+    MODULE: 'moduleType',
+    PACKAGE: 'packageType',
+  }
+  const key = keyByType[itemType]
+  if (key) return t(`catalog.${key}`)
   return itemType
     .toLowerCase()
     .split('_')

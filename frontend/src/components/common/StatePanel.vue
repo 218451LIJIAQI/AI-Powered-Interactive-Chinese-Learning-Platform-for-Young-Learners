@@ -1,11 +1,5 @@
 <template>
-  <div
-    class="panel state-panel"
-    :class="toneClass"
-    :role="panelRole"
-    :aria-live="panelLive"
-    aria-atomic="true"
-  >
+  <div class="panel state-panel" :class="toneClass" :role="panelRole" :aria-live="panelLive" aria-atomic="true">
     <span class="state-panel-orb" />
     <div class="state-icon">
       <IconGlyph :name="icon" :size="24" />

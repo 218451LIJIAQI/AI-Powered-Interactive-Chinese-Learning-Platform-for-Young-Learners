@@ -1,6 +1,6 @@
 <template>
   <div class="language-switcher" :class="[`is-${size}`]">
-    <span v-if="showLabel" class="language-switcher-label">{{ label }}</span>
+    <span v-if="showLabel" class="language-switcher-label">{{ label || t('chrome.language') }}</span>
     <div class="pill-switch" :class="{ 'pill-switch--compact': size === 'compact' }">
       <button
         v-for="option in options"
@@ -18,6 +18,9 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
 import { useUiStore } from '@/stores/ui'
 
 type SupportedLocale = 'en' | 'ms' | 'zh'
@@ -36,17 +39,18 @@ interface Props {
 
 withDefaults(defineProps<Props>(), {
   showLabel: false,
-  label: 'Language / 语言',
+  label: '',
   size: 'default',
 })
 
 const ui = useUiStore()
+const { t } = useI18n()
 
-const options: readonly LocaleOption[] = [
-  { label: 'EN', value: 'en', ariaLabel: 'Switch to English' },
-  { label: 'BM', value: 'ms', ariaLabel: 'Switch to Bahasa Melayu' },
-  { label: '简体中文', value: 'zh', ariaLabel: 'Switch to Simplified Chinese' },
-]
+const options = computed<readonly LocaleOption[]>(() => [
+  { label: 'EN', value: 'en', ariaLabel: t('chrome.switchEnglish') },
+  { label: 'BM', value: 'ms', ariaLabel: t('chrome.switchMalay') },
+  { label: '简体中文', value: 'zh', ariaLabel: t('chrome.switchChinese') },
+])
 
 function isActiveLocale(locale: SupportedLocale): boolean {
   return ui.locale === locale

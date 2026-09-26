@@ -6,12 +6,7 @@
         <span class="payment-result-cloud payment-result-cloud--two" />
         <span class="payment-result-bamboo" />
         <span class="payment-result-pagoda" />
-        <PandaIllustration
-          class="payment-result-panda"
-          :size="210"
-          :outfit="pandaOutfit"
-          accent="#ffcc2f"
-        />
+        <PandaIllustration class="payment-result-panda" :size="210" :outfit="pandaOutfit" accent="#ffcc2f" />
         <div class="payment-result-speech">
           <strong>{{ speechTitle }}</strong>
           <span>{{ speechCopy }}</span>
@@ -33,7 +28,7 @@
 
         <div v-if="loading" class="payment-result-loading">
           <span />
-          <strong>Verifying checkout status...</strong>
+          <strong>{{ t('payment.verifyingCheckout') }}</strong>
         </div>
 
         <div v-if="error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
@@ -42,15 +37,15 @@
 
         <div v-if="payment" class="payment-result-summary">
           <div>
-            <span>Order</span>
+            <span>{{ t('payment.order') }}</span>
             <strong>{{ payment.orderNumber }}</strong>
           </div>
           <div>
-            <span>Status</span>
-            <strong>{{ payment.paymentStatus }}</strong>
+            <span>{{ t('payment.status') }}</span>
+            <strong>{{ paymentStatusLabel }}</strong>
           </div>
           <div>
-            <span>Amount</span>
+            <span>{{ t('payment.amount') }}</span>
             <strong>{{ formatCurrency(payment.amount, payment.currencyCode) }}</strong>
           </div>
         </div>
@@ -66,8 +61,8 @@
         </div>
 
         <div class="payment-result-actions">
-          <RouterLink class="btn btn-primary" to="/student/profile">View payments</RouterLink>
-          <RouterLink class="btn btn-ghost" to="/courses">Continue learning</RouterLink>
+          <RouterLink class="btn btn-primary" to="/student/profile">{{ t('payment.viewPayments') }}</RouterLink>
+          <RouterLink class="btn btn-ghost" to="/courses">{{ t('payment.continueLearning') }}</RouterLink>
         </div>
 
         <p class="payment-result-footnote">{{ footnote }}</p>
@@ -79,16 +74,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { paymentApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
+import { paymentMessages } from '@/plugins/paymentMessages'
 import type { StudentPaymentRecordResponse } from '@/types/api'
 import { isUnauthorizedApiError, resolveApiError } from '@/utils/apiError'
 import { formatCurrency } from '@/utils/format'
 
 const route = useRoute()
+const { t } = useI18n({
+  messages: {
+    en: { payment: paymentMessages.en },
+    ms: { payment: paymentMessages.ms },
+    zh: { payment: paymentMessages.zh },
+  },
+})
 
 const payment = ref<StudentPaymentRecordResponse | null>(null)
 const error = ref<string | null>(null)
@@ -113,54 +117,64 @@ const resultKind = computed<ResultKind>(() => {
 })
 const resultStateClass = computed(() => (resultKind.value === 'cancelled' ? 'is-cancelled' : 'is-success'))
 const pandaOutfit = computed(() => (resultKind.value === 'cancelled' ? '#ff9f2f' : '#46b851'))
-const speechTitle = computed(() => (resultKind.value === 'cancelled' ? 'No worries!' : 'Great job!'))
+const speechTitle = computed(() => (resultKind.value === 'cancelled' ? t('payment.noWorries') : t('payment.greatJob')))
 const speechCopy = computed(() =>
-  resultKind.value === 'cancelled' ? 'You can return to courses anytime.' : 'Your learning journey continues.',
+  resultKind.value === 'cancelled' ? t('payment.returnAnytime') : t('payment.journeyContinues'),
 )
 const resultIcon = computed<ResultIcon>(() => (resultKind.value === 'cancelled' ? 'chevronLeft' : 'status'))
-const kicker = computed(() => (resultKind.value === 'cancelled' ? 'Checkout paused' : 'Checkout complete'))
+const kicker = computed(() =>
+  resultKind.value === 'cancelled' ? t('payment.checkoutPaused') : t('payment.checkoutComplete'),
+)
 const title = computed(() => {
-  if (resultKind.value === 'paid') return 'Payment successful'
-  return resultKind.value === 'cancelled' ? 'Payment cancelled' : 'Payment status'
+  if (resultKind.value === 'paid') return t('payment.successful')
+  return resultKind.value === 'cancelled' ? t('payment.cancelled') : t('payment.statusTitle')
 })
 const description = computed(() => {
-  if (loading.value) return 'Verifying your payment status...'
-  if (resultKind.value === 'paid') return 'Your payment has been verified and your learning access is unlocked.'
-  if (resultKind.value === 'cancelled') return 'Your checkout was cancelled. No new access was unlocked.'
-  return 'We could not automatically verify this payment. You can check your payments page or sign in again.'
+  if (loading.value) return t('payment.verifyingPayment')
+  if (resultKind.value === 'paid') return t('payment.paidCopy')
+  if (resultKind.value === 'cancelled') return t('payment.cancelledCopy')
+  return t('payment.pendingCopy')
 })
 const footnote = computed(() =>
-  resultKind.value === 'cancelled'
-    ? 'Your course access was not changed by this cancelled checkout.'
-    : 'If access does not appear immediately, refresh your student profile payments area.',
+  resultKind.value === 'cancelled' ? t('payment.cancelledFootnote') : t('payment.pendingFootnote'),
 )
+const paymentStatusLabel = computed(() => {
+  const keys: Record<string, string> = {
+    PAID: 'paidStatus',
+    PENDING: 'pendingStatus',
+    FAILED: 'failedStatus',
+    REFUNDED: 'refundedStatus',
+    CANCELLED: 'cancelledStatus',
+  }
+  const key = payment.value?.paymentStatus ? keys[payment.value.paymentStatus] : null
+  return key ? t(`payment.${key}`) : (payment.value?.paymentStatus ?? '')
+})
 const resultSteps = computed<Array<{ icon: ResultIcon; label: string; copy: string; state: ResultStepState }>>(() => [
   {
     icon: 'finance',
-    label: 'Checkout',
-    copy:
-      resultKind.value === 'cancelled' ? 'Checkout was safely cancelled.' : 'Checkout returned to MandarinSpark.',
+    label: t('payment.checkout'),
+    copy: resultKind.value === 'cancelled' ? t('payment.checkoutCancelled') : t('payment.checkoutReturned'),
     state: 'done',
   },
   {
     icon: verificationStepIcon(resultKind.value),
-    label: 'Verification',
+    label: t('payment.verification'),
     copy: verificationStepCopy(resultKind.value),
     state: verificationStepState(resultKind.value),
   },
   {
     icon: resultKind.value === 'paid' ? 'learn' : 'fun',
-    label: 'Learning access',
-    copy: resultKind.value === 'paid' ? 'Unlocked for your student account.' : 'Browse courses when you are ready.',
+    label: t('payment.learningAccess'),
+    copy: resultKind.value === 'paid' ? t('payment.unlocked') : t('payment.browseWhenReady'),
     state: resultKind.value === 'paid' ? 'done' : 'muted',
   },
 ])
 
 function resolvePaymentError(reason: unknown): string {
   if (isUnauthorizedApiError(reason)) {
-    return 'Please sign in again to verify this payment.'
+    return t('payment.signInAgain')
   }
-  return resolveApiError(reason, 'Unable to verify this payment right now.')
+  return resolveApiError(reason, t('payment.verificationFailed'))
 }
 
 function verificationStepIcon(kind: ResultKind): ResultIcon {
@@ -169,8 +183,8 @@ function verificationStepIcon(kind: ResultKind): ResultIcon {
 }
 
 function verificationStepCopy(kind: ResultKind): string {
-  if (kind === 'paid') return 'Payment is confirmed.'
-  return kind === 'cancelled' ? 'No payment confirmation needed.' : 'Status may need another check.'
+  if (kind === 'paid') return t('payment.paymentConfirmed')
+  return kind === 'cancelled' ? t('payment.noConfirmationNeeded') : t('payment.checkAgain')
 }
 
 function verificationStepState(kind: ResultKind): ResultStepState {

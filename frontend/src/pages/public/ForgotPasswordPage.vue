@@ -5,12 +5,12 @@
         <AppBrand />
 
         <div class="auth-reset-art-copy">
-          <span class="auth-reset-kicker">Account Recovery</span>
+          <span class="auth-reset-kicker">{{ t('recovery.forgot.eyebrow') }}</span>
           <h1>
-            Find your way back,
-            <span>safely.</span>
+            {{ t('recovery.forgot.heroStart') }}
+            <span>{{ t('recovery.forgot.heroHighlight') }}</span>
           </h1>
-          <p>Enter your account email and we will send a secure password reset link if the account exists.</p>
+          <p>{{ t('recovery.forgot.heroCopy') }}</p>
         </div>
 
         <div class="auth-reset-scene">
@@ -22,17 +22,18 @@
         </div>
 
         <div class="auth-reset-safety-card">
-          <strong><IconGlyph name="shield" :size="18" /> Secure reset flow</strong>
-          <span>Only use reset links from your own inbox and never share your reset token with anyone.</span>
+          <strong><IconGlyph name="shield" :size="18" /> {{ t('recovery.forgot.safetyTitle') }}</strong>
+          <span>{{ t('recovery.forgot.safetyCopy') }}</span>
         </div>
       </aside>
 
       <div class="surface-card auth-reset-card">
+        <div class="auth-reset-language"><LanguageSwitcher size="compact" /></div>
         <div class="auth-reset-card-head">
           <span class="auth-reset-card-icon"><IconGlyph name="bell" :size="24" /></span>
           <div class="auth-form-title">
-            <h2>Forgot password?</h2>
-            <p>We will email you the next step for resetting your MandarinSpark password.</p>
+            <h2>{{ t('recovery.forgot.title') }}</h2>
+            <p>{{ t('recovery.forgot.cardCopy') }}</p>
           </div>
         </div>
 
@@ -46,27 +47,29 @@
 
         <form v-if="!success" class="auth-reset-form" @submit.prevent="submitForgotPassword">
           <div class="field">
-            <label for="forgot-email">Account email</label>
+            <label for="forgot-email">{{ t('recovery.forgot.accountEmail') }}</label>
             <input
               id="forgot-email"
               v-model="email"
               class="input auth-input"
               type="email"
               autocomplete="email"
-              placeholder="Enter your email address"
+              :placeholder="t('recovery.forgot.emailPlaceholder')"
               :aria-invalid="Boolean(error)"
             />
           </div>
 
           <div class="auth-reset-strength">
             <div class="row-between">
-              <span>Recovery steps</span>
-              <strong>Email link</strong>
+              <span>{{ t('recovery.forgot.recoverySteps') }}</span>
+              <strong>{{ t('recovery.forgot.emailLink') }}</strong>
             </div>
             <div class="auth-reset-check-grid">
-              <span class="is-met"><IconGlyph name="status" :size="14" /> Enter your registered email</span>
-              <span class="is-met"><IconGlyph name="status" :size="14" /> Open the reset link in your inbox</span>
-              <span class="is-met"><IconGlyph name="status" :size="14" /> Choose a new password</span>
+              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.enterEmail') }}</span>
+              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.openLink') }}</span>
+              <span class="is-met"
+                ><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.choosePassword') }}</span
+              >
             </div>
           </div>
 
@@ -79,34 +82,40 @@
         <div v-else class="auth-reset-form">
           <div class="auth-reset-strength">
             <div class="row-between">
-              <span>Next step</span>
-              <strong>Check your inbox</strong>
+              <span>{{ t('recovery.forgot.nextStep') }}</span>
+              <strong>{{ t('recovery.forgot.checkInbox') }}</strong>
             </div>
             <div class="auth-reset-check-grid">
-              <span class="is-met"><IconGlyph name="status" :size="14" /> Check inbox, spam, and all mail</span>
-              <span class="is-met"><IconGlyph name="status" :size="14" /> Open the link from MandarinSpark</span>
-              <span class="is-met"><IconGlyph name="status" :size="14" /> Reset your password on the secure page</span>
+              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.checkAllMail') }}</span>
+              <span class="is-met"
+                ><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.openBrandLink') }}</span
+              >
+              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.secureReset') }}</span>
             </div>
           </div>
 
           <RouterLink class="btn btn-accent btn-block auth-submit-button" to="/auth">
-            <span>Back to sign in</span>
+            <span>{{ t('recovery.forgot.backSignIn') }}</span>
             <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
           </RouterLink>
 
           <button class="auth-text-button auth-reset-link" type="button" @click="requestAnotherEmail">
-            Use another email
+            {{ t('recovery.forgot.anotherEmail') }}
           </button>
         </div>
 
         <div class="auth-reset-help-row">
-          <span>Remember your password?</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/auth">Back to sign in</RouterLink>
+          <span>{{ t('recovery.forgot.rememberPassword') }}</span>
+          <RouterLink class="auth-text-button auth-reset-link" to="/auth">{{
+            t('recovery.forgot.backSignIn')
+          }}</RouterLink>
         </div>
 
         <div class="auth-reset-help-row">
-          <span>Already have a reset token?</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/reset-password">Reset password</RouterLink>
+          <span>{{ t('recovery.forgot.haveToken') }}</span>
+          <RouterLink class="auth-text-button auth-reset-link" to="/reset-password">{{
+            t('recovery.forgot.resetPassword')
+          }}</RouterLink>
         </div>
       </div>
     </div>
@@ -116,17 +125,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
+import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
 import { getSessionStorage, safeGetItem, safeRemoveItem, storageKeys } from '@/utils/storage'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { recovery: recoveryMessages.en },
+    ms: { recovery: recoveryMessages.ms },
+    zh: { recovery: recoveryMessages.zh },
+  },
+})
 
 const email = ref(readInitialRecoveryEmail())
 const error = ref<string | null>(null)
@@ -139,7 +158,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizedEmail = computed(() => email.value.trim().toLowerCase())
 const emailValid = computed(() => emailPattern.test(normalizedEmail.value))
 const canSubmit = computed(() => emailValid.value && !submitting.value)
-const submitLabel = computed(() => (submitting.value ? 'Sending reset link...' : 'Send reset link'))
+const submitLabel = computed(() => (submitting.value ? t('recovery.forgot.sending') : t('recovery.forgot.send')))
 
 async function submitForgotPassword(): Promise<void> {
   if (submitting.value) return
@@ -148,16 +167,16 @@ async function submitForgotPassword(): Promise<void> {
   success.value = null
 
   if (!emailValid.value) {
-    error.value = 'Enter a valid email address before requesting a reset link.'
+    error.value = t('recovery.forgot.invalidEmail')
     return
   }
 
   submitting.value = true
   try {
     await authApi.forgotPassword(normalizedEmail.value)
-    success.value = `If ${normalizedEmail.value} is registered, reset instructions will be sent shortly.`
+    success.value = t('recovery.forgot.sent', { email: normalizedEmail.value })
   } catch (reason) {
-    error.value = resolveApiError(reason, 'Unable to request a password reset right now. Please try again later.')
+    error.value = resolveApiError(reason, t('recovery.forgot.error'))
   } finally {
     submitting.value = false
   }
@@ -185,3 +204,10 @@ function removeSensitiveQueryFromAddressBar(): void {
   }
 }
 </script>
+
+<style scoped>
+.auth-reset-language {
+  display: flex;
+  justify-content: flex-end;
+}
+</style>

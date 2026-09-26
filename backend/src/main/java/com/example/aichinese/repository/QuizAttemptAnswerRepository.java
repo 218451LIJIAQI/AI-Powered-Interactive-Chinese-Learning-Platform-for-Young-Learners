@@ -12,8 +12,42 @@ import org.springframework.data.repository.query.Param;
 import com.example.aichinese.entity.QuizAttemptAnswer;
 import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.repository.projection.WrongAnswerCountProjection;
 
 public interface QuizAttemptAnswerRepository extends JpaRepository<QuizAttemptAnswer, Long> {
+
+    @Query("""
+            select question.questionType as questionType, count(answer) as answerCount
+            from QuizAttemptAnswer answer
+            join answer.quizAttempt attempt
+            join answer.question question
+            join question.quiz quiz
+            join quiz.lesson lesson
+            where attempt.student.id = :studentId
+              and answer.correct = false
+              and (
+                  lesson.accessType <> :paidAccessType
+                  or exists (
+                      select entitlement.id from PaymentEntitlement entitlement
+                      where entitlement.student.id = :studentId
+                        and entitlement.active = true
+                        and entitlement.itemType = 'LESSON'
+                        and entitlement.itemId = lesson.id
+                  )
+                  or exists (
+                      select moduleEntitlement.id from PaymentEntitlement moduleEntitlement
+                      where moduleEntitlement.student.id = :studentId
+                        and moduleEntitlement.active = true
+                        and moduleEntitlement.itemType = 'MODULE'
+                        and moduleEntitlement.itemId = lesson.module.id
+                  )
+              )
+            group by question.questionType
+            order by max(answer.createdAt) desc
+            """)
+    List<WrongAnswerCountProjection> countAccessibleWrongAnswersByQuestionType(
+            @Param("studentId") Long studentId,
+            @Param("paidAccessType") AccessType paidAccessType);
 
     @EntityGraph(attributePaths = { "question", "question.quiz", "quizAttempt" })
     List<QuizAttemptAnswer> findByQuizAttemptIdOrderByCreatedAtAsc(Long quizAttemptId);

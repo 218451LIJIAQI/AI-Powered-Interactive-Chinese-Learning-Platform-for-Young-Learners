@@ -55,7 +55,7 @@
         <span class="muted">{{ progressCaption }}</span>
       </div>
       <span v-else-if="showSignInHint" class="muted sidebar-footer-subtitle">
-        Sign in to open lessons, practice, classes, rewards, and AI tools.
+        {{ t('dashboard.signInHint') }}
       </span>
       <div class="sidebar-footer-ornament"><IconGlyph :name="footerDecorationIcon" :size="26" /></div>
     </div>
@@ -77,6 +77,7 @@ import { useI18n } from 'vue-i18n'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import { publicNav, roleNavigation } from '@/config/navigation'
+import { dashboardMessages } from '@/plugins/dashboardMessages'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/api'
 import type { NavItem } from '@/config/navigation'
@@ -109,23 +110,23 @@ interface RoleSidebarCopy {
 
 const ROLE_SIDEBAR_COPY: Record<UserRole, RoleSidebarCopy> = {
   ADMIN: {
-    badge: 'Admin',
-    heading: 'Operational control without visual overload',
-    summary: 'Review users, moderation, finance, and settings from a steadier shell.',
+    badge: 'dashboard.adminBadge',
+    heading: 'dashboard.adminHeading',
+    summary: 'dashboard.adminSummary',
     footerIcon: 'shield',
     footerDecorationIcon: 'dashboard',
   },
   TEACHER: {
-    badge: 'Teacher',
-    heading: 'A calm teaching cockpit for classes and content',
-    summary: 'Move between learners, live sessions, and content without losing context.',
+    badge: 'dashboard.teacherBadge',
+    heading: 'dashboard.teacherHeading',
+    summary: 'dashboard.teacherSummary',
     footerIcon: 'teacher',
     footerDecorationIcon: 'fun',
   },
   STUDENT: {
-    badge: 'Student',
-    heading: 'A cheerful learning path with rewards and next steps',
-    summary: 'Keep lessons, practice, classes, achievements, and AI help within easy reach.',
+    badge: 'dashboard.studentBadge',
+    heading: 'dashboard.studentHeading',
+    summary: 'dashboard.studentSummary',
     footerIcon: 'trophy',
     footerDecorationIcon: 'fun',
   },
@@ -133,28 +134,38 @@ const ROLE_SIDEBAR_COPY: Record<UserRole, RoleSidebarCopy> = {
 
 const ROLE_NAVIGATION_GROUPS: Record<UserRole, readonly NavigationGroupConfig[]> = {
   ADMIN: [
-    { key: 'overview', title: 'OVERVIEW', ariaLabel: 'Admin overview', itemIndices: [0, 7, 6] },
-    { key: 'operations', title: 'OPERATIONS', ariaLabel: 'Admin operations', itemIndices: [1, 2, 5] },
-    { key: 'trust', title: 'TRUST & CONTENT', ariaLabel: 'Admin trust and content', itemIndices: [3, 4] },
-    { key: 'platform', title: 'PLATFORM', ariaLabel: 'Admin platform settings', itemIndices: [8] },
+    { key: 'overview', title: 'dashboard.overview', ariaLabel: 'dashboard.adminOverview', itemIndices: [0, 7, 6] },
+    {
+      key: 'operations',
+      title: 'dashboard.operations',
+      ariaLabel: 'dashboard.adminOperations',
+      itemIndices: [1, 2, 5],
+    },
+    { key: 'trust', title: 'dashboard.trustContent', ariaLabel: 'dashboard.adminTrust', itemIndices: [3, 4] },
+    { key: 'platform', title: 'dashboard.platform', ariaLabel: 'dashboard.adminPlatform', itemIndices: [8] },
   ],
   TEACHER: [
-    { key: 'overview', title: 'OVERVIEW', ariaLabel: 'Teacher overview', itemIndices: [0, 5] },
-    { key: 'teaching', title: 'TEACHING', ariaLabel: 'Teacher teaching tools', itemIndices: [2, 1] },
-    { key: 'learners', title: 'LEARNERS', ariaLabel: 'Teacher learner management', itemIndices: [3, 4] },
-    { key: 'profile', title: 'PROFILE', ariaLabel: 'Teacher profile settings', itemIndices: [6] },
+    { key: 'overview', title: 'dashboard.overview', ariaLabel: 'dashboard.teacherOverview', itemIndices: [0, 5] },
+    { key: 'teaching', title: 'dashboard.teaching', ariaLabel: 'dashboard.teacherTools', itemIndices: [2, 1] },
+    { key: 'learners', title: 'dashboard.learners', ariaLabel: 'dashboard.teacherLearners', itemIndices: [3, 4] },
+    { key: 'profile', title: 'dashboard.profile', ariaLabel: 'dashboard.teacherProfileSettings', itemIndices: [6] },
   ],
   STUDENT: [
-    { key: 'journey', title: 'JOURNEY', ariaLabel: 'Student learning navigation', itemIndices: [0, 1, 2, 3] },
-    { key: 'motivation', title: 'MOTIVATION', ariaLabel: 'Student progress and rewards navigation', itemIndices: [4, 5] },
-    { key: 'support', title: 'SUPPORT', ariaLabel: 'Student support navigation', itemIndices: [6, 7] },
+    { key: 'journey', title: 'dashboard.journey', ariaLabel: 'dashboard.studentNavigation', itemIndices: [0, 1, 2, 3] },
+    {
+      key: 'motivation',
+      title: 'dashboard.motivation',
+      ariaLabel: 'dashboard.studentMotivation',
+      itemIndices: [4, 5],
+    },
+    { key: 'support', title: 'dashboard.support', ariaLabel: 'dashboard.studentSupport', itemIndices: [6, 7] },
   ],
 }
 
 const PUBLIC_NAVIGATION_GROUP = {
   key: 'explore',
-  title: 'EXPLORE',
-  ariaLabel: 'Public preview navigation',
+  title: 'dashboard.explore',
+  ariaLabel: 'dashboard.publicNavigation',
 } as const
 
 const PREVIEW_PROGRESS_PERCENT = 55
@@ -163,7 +174,14 @@ const showcaseAccent = '#f6d056'
 
 const auth = useAuthStore()
 const route = useRoute()
-const { t } = useI18n()
+const { t: globalT } = useI18n({ useScope: 'global' })
+const { t } = useI18n({
+  messages: {
+    en: { dashboard: dashboardMessages.en },
+    ms: { dashboard: dashboardMessages.ms },
+    zh: { dashboard: dashboardMessages.zh },
+  },
+})
 
 const isPreview = computed(() => auth.isPreviewSession)
 const studentProfile = computed(() => auth.currentUser?.studentProfile ?? null)
@@ -175,7 +193,7 @@ const items = computed(() => (isGuestCatalog.value ? publicNav : roleNavigation[
 const localizedItems = computed<LocalizedNavItem[]>(() =>
   items.value.map((item) => ({
     icon: item.icon,
-    label: t(item.labelKey),
+    label: globalT(item.labelKey),
     labelKey: item.labelKey,
     to: item.to,
   })),
@@ -183,13 +201,9 @@ const localizedItems = computed<LocalizedNavItem[]>(() =>
 const activeRoleCopy = computed(() => ROLE_SIDEBAR_COPY[role.value])
 
 const sidebarClass = computed(() => `sidebar--${sceneRole.value}`)
-const roleBadge = computed(() => (isGuestCatalog.value ? 'Public preview' : activeRoleCopy.value.badge))
-const roleHeading = computed(() =>
-  isGuestCatalog.value ? 'Course discovery that feels trustworthy' : activeRoleCopy.value.heading,
-)
-const roleSummary = computed(() =>
-  isGuestCatalog.value ? 'Compare courses, learning modes, and value before signing in.' : activeRoleCopy.value.summary,
-)
+const roleBadge = computed(() => t(isGuestCatalog.value ? 'dashboard.publicPreview' : activeRoleCopy.value.badge))
+const roleHeading = computed(() => t(isGuestCatalog.value ? 'dashboard.guestHeading' : activeRoleCopy.value.heading))
+const roleSummary = computed(() => t(isGuestCatalog.value ? 'dashboard.guestSummary' : activeRoleCopy.value.summary))
 
 function pickItems(indices: readonly number[]): LocalizedNavItem[] {
   return indices.reduce<LocalizedNavItem[]>((pickedItems, index) => {
@@ -204,8 +218,8 @@ function pickItems(indices: readonly number[]): LocalizedNavItem[] {
 function buildNavigationGroup(config: NavigationGroupConfig): NavigationGroup {
   return {
     key: config.key,
-    title: config.title,
-    ariaLabel: config.ariaLabel,
+    title: t(config.title),
+    ariaLabel: t(config.ariaLabel),
     items: pickItems(config.itemIndices),
   }
 }
@@ -214,7 +228,9 @@ const navigationGroups = computed<NavigationGroup[]>(() => {
   if (isGuestCatalog.value) {
     return [
       {
-        ...PUBLIC_NAVIGATION_GROUP,
+        key: PUBLIC_NAVIGATION_GROUP.key,
+        title: t(PUBLIC_NAVIGATION_GROUP.title),
+        ariaLabel: t(PUBLIC_NAVIGATION_GROUP.ariaLabel),
         items: localizedItems.value,
       },
     ]
@@ -224,31 +240,33 @@ const navigationGroups = computed<NavigationGroup[]>(() => {
 })
 
 const footerTitle = computed(() => {
-  if (isGuestCatalog.value) return 'Public course catalog'
+  if (isGuestCatalog.value) return t('dashboard.publicCatalog')
 
   switch (role.value) {
     case 'TEACHER':
-      return auth.displayName || 'Teacher'
+      return auth.displayName || t('dashboard.teacherName')
     case 'ADMIN':
-      return 'Admin workspace'
+      return t('dashboard.adminWorkspace')
     default:
       if (!isPreview.value && studentProfile.value?.currentLevel) {
         return studentProfile.value.currentLevel
       }
-      return isPreview.value ? 'Preview learner' : 'Student'
+      return isPreview.value ? t('dashboard.previewLearner') : t('dashboard.studentBadge')
   }
 })
 
 const footerSubtitle = computed(() => {
-  if (isGuestCatalog.value) return 'Browse before you sign in'
+  if (isGuestCatalog.value) return t('dashboard.browseBeforeSignIn')
 
   switch (role.value) {
     case 'TEACHER':
-      return auth.currentUser?.teacherProfile?.teacherStatus === 'APPROVED' ? 'Verified educator' : 'Educator workspace'
+      return auth.currentUser?.teacherProfile?.teacherStatus === 'APPROVED'
+        ? t('dashboard.verifiedEducator')
+        : t('dashboard.educatorWorkspace')
     case 'ADMIN':
-      return 'Administrator'
+      return t('dashboard.administrator')
     default:
-      return 'Keep learning and growing'
+      return t('dashboard.keepLearning')
   }
 })
 
@@ -268,15 +286,15 @@ const progressLabel = computed(() => {
   if (!showFooterProgress.value) return ''
 
   if (!isPreview.value && studentProfile.value) {
-    return `${studentProfile.value.totalPoints} pts`
+    return t('dashboard.points', { count: studentProfile.value.totalPoints })
   }
 
-  return isPreview.value ? 'Preview XP' : ''
+  return isPreview.value ? t('dashboard.previewXp') : ''
 })
 
 const progressCaption = computed(() => {
   if (!showFooterProgress.value) return ''
-  return isPreview.value ? 'preview session' : 'earned so far'
+  return isPreview.value ? t('dashboard.previewSession') : t('dashboard.earnedSoFar')
 })
 
 const footerIcon = computed(() => (isGuestCatalog.value ? 'search' : activeRoleCopy.value.footerIcon))

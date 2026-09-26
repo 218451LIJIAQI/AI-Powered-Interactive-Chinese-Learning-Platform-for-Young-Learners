@@ -9,18 +9,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.Map;
 import java.util.UUID;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.aichinese.entity.Quiz;
+import com.example.aichinese.repository.QuizRepository;
+import com.example.aichinese.repository.StudentProfileRepository;
+import com.example.aichinese.repository.TeacherProfileRepository;
+import com.example.aichinese.repository.UserRepository;
 
 /**
  * End-to-end MockMvc coverage of the three persona analytics
@@ -54,6 +64,21 @@ class AnalyticsIntegrationTests {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private StudentProfileRepository studentProfileRepository;
+
+    @Autowired
+    private TeacherProfileRepository teacherProfileRepository;
+
+    @Autowired
+    private QuizRepository quizRepository;
+
     @Test
     void studentAnalyticsShouldReturnOwnedSummary() throws Exception {
         String studentToken = registerAndLoginStudent(uniqueEmail("student-analytics"));
@@ -80,6 +105,61 @@ class AnalyticsIntegrationTests {
                 .andExpect(jsonPath("$.data.overview.netEarnings").exists())
                 .andExpect(jsonPath("$.data.overview.currencyCode").value(CURRENCY_CODE))
                 .andExpect(jsonPath("$.data.contentStatusBreakdown").isArray());
+    }
+
+    @Test
+    void quizAnalyticsShouldAggregateAcrossBatchesWithoutCountingDraftScores() throws Exception {
+        String studentEmail = uniqueEmail("student-batched-analytics");
+        String teacherEmail = uniqueEmail("teacher-batched-analytics");
+        String studentToken = registerAndLoginStudent(studentEmail);
+        String teacherToken = registerAndLoginTeacher(teacherEmail);
+        Long studentId = studentProfileRepository.findByUserId(
+                userRepository.findByEmailWithRoles(studentEmail).orElseThrow().getId()).orElseThrow().getId();
+        Quiz quiz = new Quiz();
+        quiz.setTitle("Analytics batch boundary");
+        quiz.setTeacher(teacherProfileRepository.findByUserId(
+                userRepository.findByEmailWithRoles(teacherEmail).orElseThrow().getId()).orElseThrow());
+        Long quizId = quizRepository.save(quiz).getId();
+        LocalDateTime completedBase = LocalDate.now().atTime(12, 0);
+        LocalDateTime createdAt = LocalDateTime.now();
+
+        jdbcTemplate.batchUpdate("""
+                insert into quiz_attempts
+                    (quiz_id, student_id, score, max_score, submitted, started_at,
+                     completed_at, created_at, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, new BatchPreparedStatementSetter() {
+            @Override
+            public void setValues(java.sql.PreparedStatement statement, int index) throws java.sql.SQLException {
+                statement.setLong(1, quizId);
+                statement.setLong(2, studentId);
+                statement.setInt(3, index < 500 ? 50 : 100);
+                statement.setInt(4, 100);
+                statement.setBoolean(5, index < 505);
+                statement.setTimestamp(6, Timestamp.valueOf(completedBase.plusSeconds(index)));
+                statement.setTimestamp(7, Timestamp.valueOf(completedBase.plusSeconds(index)));
+                statement.setTimestamp(8, Timestamp.valueOf(createdAt));
+                statement.setTimestamp(9, Timestamp.valueOf(createdAt));
+            }
+
+            @Override
+            public int getBatchSize() {
+                return 506;
+            }
+        });
+
+        mockMvc.perform(get(STUDENT_ANALYTICS_PATH).header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.overview.averageQuizScore").value(50.50))
+                .andExpect(jsonPath("$.data.quizScoreTrend.length()").value(6))
+                .andExpect(jsonPath("$.data.quizScoreTrend[0].value").value(50.0))
+                .andExpect(jsonPath("$.data.quizScoreTrend[5].value").value(100.0))
+                .andExpect(jsonPath("$.data.activityTrend[0].value").value(506));
+        mockMvc.perform(get(TEACHER_ANALYTICS_PATH).header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.overview.averageQuizScore").value(50.50))
+                .andExpect(jsonPath("$.data.quizScoreTrend.length()").value(1))
+                .andExpect(jsonPath("$.data.quizScoreTrend[0].value").value(50.50));
     }
 
     @Test

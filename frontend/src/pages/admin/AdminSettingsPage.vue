@@ -1,10 +1,6 @@
 <template>
   <div class="page-stack admin-settings-page">
-    <PageHeaderBlock
-      title="Settings & Audit Logs"
-      description="Configure platform settings and review system audit logs."
-      icon="settings"
-    />
+    <PageHeaderBlock :title="t('adminSettings.title')" :description="t('adminSettings.description')" icon="settings" />
 
     <DataNotice :using-fallback="usingFallback" :error="actionError || pageError" :success="actionSuccess" />
 
@@ -17,8 +13,8 @@
                 <IconGlyph name="language" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>Interface Language</strong>
-                <span>Select the default language for the admin interface.</span>
+                <strong>{{ t('adminSettings.interfaceLanguage') }}</strong>
+                <span>{{ t('adminSettings.interfaceLanguageHint') }}</span>
               </div>
             </div>
 
@@ -26,7 +22,7 @@
               <select
                 v-model="ui.locale"
                 class="admin-settings-select"
-                aria-label="Admin interface language"
+                :aria-label="t('adminSettings.languageAria')"
                 :disabled="platformSettingsReadOnly"
                 @change="ui.setLocale(ui.locale)"
               >
@@ -41,7 +37,7 @@
                 :disabled="platformSettingsReadOnly"
                 @click="saveLocale"
               >
-                Save
+                {{ t('adminSettings.save') }}
               </button>
             </div>
           </article>
@@ -52,8 +48,8 @@
                 <IconGlyph name="safe" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>AI Disclaimer Text</strong>
-                <span>This disclaimer is shown on AI-generated content and features.</span>
+                <strong>{{ t('adminSettings.disclaimer') }}</strong>
+                <span>{{ t('adminSettings.disclaimerHint') }}</span>
               </div>
             </div>
 
@@ -62,7 +58,7 @@
                 <textarea
                   v-model="disclaimerText"
                   class="admin-settings-textarea"
-                  aria-label="AI disclaimer text"
+                  :aria-label="t('adminSettings.disclaimerAria')"
                   maxlength="200"
                   :disabled="platformSettingsFormDisabled"
                 />
@@ -79,7 +75,7 @@
             </div>
 
             <small class="admin-settings-note-inline">
-              This disclaimer is stored in platform settings and shown on AI-powered learning experiences.
+              {{ t('adminSettings.disclaimerStored') }}
             </small>
           </article>
 
@@ -89,8 +85,8 @@
                 <IconGlyph name="bell" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>Notification Preferences</strong>
-                <span>Manage admin workflow notification settings for the platform.</span>
+                <strong>{{ t('adminSettings.notifications') }}</strong>
+                <span>{{ t('adminSettings.notificationsHint') }}</span>
               </div>
             </div>
 
@@ -105,7 +101,7 @@
                   :class="{ 'is-on': localSettings[item.key] }"
                   type="button"
                   :disabled="platformSettingsFormDisabled"
-                  :aria-label="`${item.title}: ${localSettings[item.key] ? 'On' : 'Off'}`"
+                  :aria-label="`${item.title}: ${localSettings[item.key] ? t('adminSettings.on') : t('adminSettings.off')}`"
                   :aria-pressed="localSettings[item.key]"
                   @click="toggleSetting(item.key)"
                 >
@@ -132,8 +128,8 @@
                 <IconGlyph name="shield" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>Child-Safety Preferences</strong>
-                <span>Manage platform safety controls for AI and content workflows.</span>
+                <strong>{{ t('adminSettings.safety') }}</strong>
+                <span>{{ t('adminSettings.safetyHint') }}</span>
               </div>
             </div>
 
@@ -148,7 +144,7 @@
                   :class="{ 'is-on': localSettings[item.key] }"
                   type="button"
                   :disabled="platformSettingsFormDisabled"
-                  :aria-label="`${item.title}: ${localSettings[item.key] ? 'On' : 'Off'}`"
+                  :aria-label="`${item.title}: ${localSettings[item.key] ? t('adminSettings.on') : t('adminSettings.off')}`"
                   :aria-pressed="localSettings[item.key]"
                   @click="toggleSetting(item.key)"
                 >
@@ -175,27 +171,32 @@
                 <IconGlyph name="settings" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>Basic System Settings</strong>
-                <span>General platform configuration.</span>
+                <strong>{{ t('adminSettings.basic') }}</strong>
+                <span>{{ t('adminSettings.basicHint') }}</span>
               </div>
             </div>
 
             <div class="admin-settings-basic-list">
               <article class="admin-settings-basic-row">
-                <span>Platform Name</span>
-                <input class="admin-settings-input" :value="appName" aria-label="Platform name" readonly />
-              </article>
-              <article class="admin-settings-basic-row">
-                <span>Support Email</span>
+                <span>{{ t('adminSettings.platformName') }}</span>
                 <input
                   class="admin-settings-input"
-                  value="Configured in backend environment"
-                  aria-label="Support email"
+                  :value="appName"
+                  :aria-label="t('adminSettings.platformName')"
                   readonly
                 />
               </article>
               <article class="admin-settings-basic-row">
-                <span>Commission Rate</span>
+                <span>{{ t('adminSettings.supportEmail') }}</span>
+                <input
+                  class="admin-settings-input"
+                  :value="t('adminSettings.backendConfigured')"
+                  :aria-label="t('adminSettings.supportEmail')"
+                  readonly
+                />
+              </article>
+              <article class="admin-settings-basic-row">
+                <span>{{ t('adminSettings.commissionRate') }}</span>
                 <div class="admin-settings-commission">
                   <input
                     v-model.number="commissionRate"
@@ -204,7 +205,7 @@
                     min="0"
                     max="1"
                     step="0.01"
-                    aria-label="Commission rate"
+                    :aria-label="t('adminSettings.commissionRate')"
                     :disabled="commissionFormDisabled"
                   />
                   <button
@@ -220,7 +221,7 @@
             </div>
 
             <small class="admin-settings-note-inline">
-              Platform name is read from system settings. Support email remains read-only in this release.
+              {{ t('adminSettings.basicNote') }}
             </small>
           </article>
         </div>
@@ -228,9 +229,9 @@
         <article class="panel admin-settings-center">
           <div class="admin-settings-center-head">
             <div class="student-section-heading">
-              <strong>Audit Logs</strong>
+              <strong>{{ t('adminSettings.auditLogs') }}</strong>
             </div>
-            <span>Review important system activities and changes.</span>
+            <span>{{ t('adminSettings.auditHint') }}</span>
           </div>
 
           <div class="admin-settings-filters">
@@ -275,8 +276,10 @@
 
           <div class="admin-settings-pagination">
             <div class="row admin-settings-pagination-left">
-              <span>Rows per page:</span>
-              <span class="teacher-outline-button admin-settings-page-size" aria-label="Rows per page is fixed at 10"
+              <span>{{ t('adminSettings.rowsPerPage') }}</span>
+              <span
+                class="teacher-outline-button admin-settings-page-size"
+                :aria-label="t('adminSettings.fixedRowsAria')"
                 >10</span
               >
             </div>
@@ -287,7 +290,7 @@
               <button
                 class="admin-settings-page-button"
                 type="button"
-                aria-label="Previous audit log page"
+                :aria-label="t('adminSettings.previousPage')"
                 :disabled="currentPage === 1"
                 @click="goToPreviousPage"
               >
@@ -308,7 +311,7 @@
               <button
                 class="admin-settings-page-button"
                 type="button"
-                aria-label="Next audit log page"
+                :aria-label="t('adminSettings.nextPage')"
                 :disabled="currentPage === totalPages"
                 @click="goToNextPage"
               >
@@ -325,36 +328,39 @@
                 <IconGlyph name="monitor" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>System Information</strong>
+                <strong>{{ t('adminSettings.systemInfo') }}</strong>
               </div>
             </div>
 
             <div class="admin-settings-info-list">
-              <div><span>Platform Version</span><strong>Repository build</strong></div>
               <div>
-                <span>Environment</span><strong>{{ environmentLabel }}</strong>
+                <span>{{ t('adminSettings.platformVersion') }}</span
+                ><strong>{{ t('adminSettings.repositoryBuild') }}</strong>
               </div>
               <div>
-                <span>Last Health Check</span><strong>{{ lastHealthCheckLabel }}</strong>
+                <span>{{ t('adminSettings.environment') }}</span
+                ><strong>{{ environmentLabel }}</strong>
               </div>
               <div>
-                <span>Uptime</span><strong>{{ uptimeLabel }}</strong>
+                <span>{{ t('adminSettings.lastHealth') }}</span
+                ><strong>{{ lastHealthCheckLabel }}</strong>
               </div>
               <div>
-                <span>Registered Students</span><strong>{{ formatNumber(registeredStudents) }}</strong>
+                <span>{{ t('adminSettings.service') }}</span
+                ><strong>{{ serviceLabel }}</strong>
               </div>
               <div>
-                <span>Database Status</span>
+                <span>{{ t('adminSettings.registeredStudents') }}</span
+                ><strong>{{ formatNumber(registeredStudents) }}</strong>
+              </div>
+              <div>
+                <span>{{ t('adminSettings.databaseStatus') }}</span>
                 <strong class="admin-settings-healthy"><i /> {{ databaseStatusLabel }}</strong>
               </div>
             </div>
 
-            <button
-              class="teacher-outline-button admin-settings-health-button"
-              type="button"
-              @click="openAnalytics"
-            >
-              View Analytics
+            <button class="teacher-outline-button admin-settings-health-button" type="button" @click="openAnalytics">
+              {{ t('adminSettings.viewAnalytics') }}
             </button>
           </article>
 
@@ -364,7 +370,7 @@
                 <IconGlyph name="flash" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>Quick Actions</strong>
+                <strong>{{ t('adminSettings.quickActions') }}</strong>
               </div>
             </div>
 
@@ -388,8 +394,8 @@
           <article class="panel admin-settings-side-card">
             <div class="row-between admin-settings-card-head">
               <div class="stack u-gap-4">
-                <strong>Recent Notifications</strong>
-                <span>Open a notification to mark it as read.</span>
+                <strong>{{ t('adminSettings.recentNotifications') }}</strong>
+                <span>{{ t('adminSettings.notificationsOpenHint') }}</span>
               </div>
               <button
                 class="teacher-outline-button admin-settings-health-button"
@@ -422,8 +428,8 @@
             </div>
 
             <div v-else class="stack u-gap-6">
-              <strong>No admin notifications</strong>
-              <span class="muted">Unread and recent admin notifications will appear here.</span>
+              <strong>{{ t('adminSettings.noNotifications') }}</strong>
+              <span class="muted">{{ t('adminSettings.noNotificationsHint') }}</span>
             </div>
           </article>
 
@@ -433,14 +439,14 @@
                 <IconGlyph name="help" :size="22" />
               </div>
               <div class="stack u-gap-4">
-                <strong>Note</strong>
+                <strong>{{ t('adminSettings.note') }}</strong>
               </div>
             </div>
 
             <div class="stack u-gap-10">
-              <span>Audit log retention depends on the deployed database and backup policy.</span>
-              <span>Times are rendered in your browser's local timezone.</span>
-              <span>AI, notification, safety, and commission settings now save through real backend endpoints.</span>
+              <span>{{ t('adminSettings.retentionNote') }}</span>
+              <span>{{ t('adminSettings.timezoneNote') }}</span>
+              <span>{{ t('adminSettings.endpointNote') }}</span>
             </div>
           </article>
         </div>
@@ -451,6 +457,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { adminApi, notificationsApi, systemApi } from '@/api/services'
@@ -462,11 +469,19 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAnalytics, adminAuditLogs, commissionSetting } from '@/demo/data'
+import { adminSettingsMessages } from '@/plugins/adminSettingsMessages'
 import { useUiStore } from '@/stores/ui'
 import { resolveApiError } from '@/utils/apiError'
 import { clampNumber, formatDate, formatDateTime, formatNumber } from '@/utils/format'
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { adminSettings: adminSettingsMessages.en },
+    ms: { adminSettings: adminSettingsMessages.ms },
+    zh: { adminSettings: adminSettingsMessages.zh },
+  },
+})
 const ui = useUiStore()
 
 type AuditTypeFilter = 'ALL' | 'SECURITY' | 'ADMIN_ACTION' | 'CONTENT_CHANGE' | 'MODERATION'
@@ -482,7 +497,7 @@ type LocalSettingKey =
 
 const platformSettingsFallback = {
   platformName: appEnv.appName,
-  aiDisclaimerText: 'AI-generated content may not always be accurate. Please review before use.',
+  aiDisclaimerText: t('adminSettings.defaultDisclaimer'),
   emailNotifications: true,
   inAppNotifications: true,
   dailySummary: false,
@@ -538,9 +553,7 @@ const analytics = computed(
 const adminNotifications = computed(() => notificationsResource.data.value ?? [])
 const platformSettings = computed(() => platformSettingsResource.data.value ?? platformSettingsFallback)
 const health = computed(
-  () =>
-    healthResource.data.value ??
-    (healthResource.usingFallback.value ? healthFallback : emptyHealth),
+  () => healthResource.data.value ?? (healthResource.usingFallback.value ? healthFallback : emptyHealth),
 )
 
 const pageLoading = computed(
@@ -618,37 +631,37 @@ watch(
   { immediate: true },
 )
 
-const notificationOptions: Array<{ key: LocalSettingKey; title: string; description: string }> = [
+const notificationOptions = computed<Array<{ key: LocalSettingKey; title: string; description: string }>>(() => [
   {
     key: 'emailNotifications',
-    title: 'Email Notifications',
-    description: 'Control email notifications for admin workflows.',
+    title: t('adminSettings.emailNotifications'),
+    description: t('adminSettings.emailNotificationsHint'),
   },
   {
     key: 'inAppNotifications',
-    title: 'In-App Notifications',
-    description: 'Control in-app notifications for admin workflows.',
+    title: t('adminSettings.inAppNotifications'),
+    description: t('adminSettings.inAppNotificationsHint'),
   },
-  { key: 'dailySummary', title: 'Daily Summary Email', description: 'Control daily summary delivery for admins.' },
-]
+  { key: 'dailySummary', title: t('adminSettings.dailySummary'), description: t('adminSettings.dailySummaryHint') },
+])
 
-const safetyOptions: Array<{ key: LocalSettingKey; title: string; description: string }> = [
+const safetyOptions = computed<Array<{ key: LocalSettingKey; title: string; description: string }>>(() => [
   {
     key: 'strictContentFiltering',
-    title: 'Strict Content Filtering',
-    description: 'Control strict filtering for safety-sensitive flows.',
+    title: t('adminSettings.strictFiltering'),
+    description: t('adminSettings.strictFilteringHint'),
   },
   {
     key: 'sensitiveWordFilter',
-    title: 'Profanity & Sensitive Words Filter',
-    description: 'Control the sensitive word filter used by the platform.',
+    title: t('adminSettings.profanityFilter'),
+    description: t('adminSettings.profanityFilterHint'),
   },
   {
     key: 'aiSafetyCheck',
-    title: 'AI Content Safety Check',
-    description: 'Control AI safety checks before AI guidance is shown.',
+    title: t('adminSettings.aiSafety'),
+    description: t('adminSettings.aiSafetyHint'),
   },
-]
+])
 
 const typeFilter = ref<AuditTypeFilter>('ALL')
 const actorFilter = ref<AuditActorFilter>('ALL')
@@ -659,7 +672,7 @@ const selectedDateLabel = computed(() => {
   const timestamps = auditLogs.value
     .map((item) => new Date(item.createdAt).getTime())
     .filter((value) => !Number.isNaN(value))
-  if (!timestamps.length) return 'All dates'
+  if (!timestamps.length) return t('adminSettings.allDates')
   const latest = new Date(Math.max(...timestamps))
   return formatDate(latest.toISOString())
 })
@@ -690,24 +703,27 @@ const normalizedAuditLogs = computed(() =>
 
     const tag =
       type === 'SECURITY'
-        ? 'Security'
+        ? t('adminSettings.security')
         : type === 'ADMIN_ACTION'
-          ? 'Admin Action'
+          ? t('adminSettings.adminAction')
           : type === 'CONTENT_CHANGE'
-            ? 'Content Change'
-            : 'Moderation'
+            ? t('adminSettings.contentChange')
+            : t('adminSettings.moderation')
+
+    const actorKind: 'SYSTEM' | 'ADMIN' = item.actorEmail ? 'ADMIN' : 'SYSTEM'
 
     return {
       id: item.id,
-      title: action.replaceAll('_', ' '),
+      title: auditActionLabel(action),
       description: item.description,
-      actor: item.actorEmail || 'System',
+      actor: item.actorEmail || t('adminSettings.system'),
+      actorKind,
       time: formatDateTime(item.createdAt),
       trace: item.requestId
-        ? `Request ${item.requestId}`
+        ? t('adminSettings.requestTrace', { id: item.requestId })
         : item.ipAddress
-          ? `IP ${item.ipAddress}`
-          : 'No trace captured',
+          ? t('adminSettings.ipTrace', { address: item.ipAddress })
+          : t('adminSettings.noTrace'),
       type,
       tone,
       icon,
@@ -737,7 +753,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalAuditCount.value / 
 const paginationLabel = computed(() => {
   const start = totalAuditCount.value ? (currentPage.value - 1) * pageSize + 1 : 0
   const end = Math.min(totalAuditCount.value, currentPage.value * pageSize)
-  return `${start}-${end} of ${totalAuditCount.value}`
+  return t('adminSettings.pagination', { start, end, total: totalAuditCount.value })
 })
 
 watch([typeFilter, actorFilter], () => {
@@ -745,43 +761,51 @@ watch([typeFilter, actorFilter], () => {
 })
 
 const typeFilterLabel = computed(() => {
-  if (typeFilter.value === 'ALL') return 'All Types'
-  if (typeFilter.value === 'ADMIN_ACTION') return 'Admin Action'
-  if (typeFilter.value === 'CONTENT_CHANGE') return 'Content Change'
-  return typeFilter.value.charAt(0) + typeFilter.value.slice(1).toLowerCase()
+  if (typeFilter.value === 'ALL') return t('adminSettings.allTypes')
+  if (typeFilter.value === 'ADMIN_ACTION') return t('adminSettings.adminAction')
+  if (typeFilter.value === 'CONTENT_CHANGE') return t('adminSettings.contentChange')
+  if (typeFilter.value === 'SECURITY') return t('adminSettings.security')
+  return t('adminSettings.moderation')
 })
 
 const actorFilterLabel = computed(() => {
-  if (actorFilter.value === 'ALL') return 'All Users'
-  return actorFilter.value === 'ADMINS' ? 'Admins' : 'System'
+  if (actorFilter.value === 'ALL') return t('adminSettings.allUsers')
+  return actorFilter.value === 'ADMINS' ? t('adminSettings.admins') : t('adminSettings.system')
 })
 
-const sortLabel = computed(() => (sortOrder.value === 'NEWEST' ? 'Newest First' : 'Oldest First'))
-const environmentLabel = computed(() => (usingFallback.value ? 'Preview / Demo' : 'Live API'))
-const databaseStatusLabel = computed(() => (health.value.status === 'UP' ? 'Healthy' : 'Unavailable'))
-const uptimeLabel = computed(() => {
-  if (health.value.status !== 'UP' || !health.value.timestamp) return '--'
-  return `Heartbeat at ${formatDateTime(health.value.timestamp)}`
-})
+const sortLabel = computed(() =>
+  sortOrder.value === 'NEWEST' ? t('adminSettings.newestFirst') : t('adminSettings.oldestFirst'),
+)
+const environmentLabel = computed(() =>
+  usingFallback.value ? t('adminSettings.previewEnvironment') : t('adminSettings.liveEnvironment'),
+)
+const databaseStatusLabel = computed(() =>
+  health.value.status === 'UP' ? t('adminSettings.healthy') : t('adminSettings.unavailable'),
+)
+const serviceLabel = computed(() => health.value.service || '--')
 const lastHealthCheckLabel = computed(() => (health.value.timestamp ? formatDateTime(health.value.timestamp) : '--'))
 const registeredStudents = computed(() => analytics.value.overview.totalStudents)
 const appName = computed(() => platformSettings.value.platformName || appEnv.appName)
 const hasUnreadNotifications = computed(() => adminNotifications.value.some((item) => item.status !== 'READ'))
-const platformSettingsSaveLabel = computed(() => (savingPlatformSettings.value ? 'Saving...' : 'Save'))
-const platformSettingsSaveSettingsLabel = computed(() =>
-  savingPlatformSettings.value ? 'Saving...' : 'Save Settings',
+const platformSettingsSaveLabel = computed(() =>
+  savingPlatformSettings.value ? t('adminSettings.saving') : t('adminSettings.save'),
 )
-const commissionSaveLabel = computed(() => (savingCommission.value ? 'Saving...' : 'Save'))
+const platformSettingsSaveSettingsLabel = computed(() =>
+  savingPlatformSettings.value ? t('adminSettings.saving') : t('adminSettings.saveSettings'),
+)
+const commissionSaveLabel = computed(() =>
+  savingCommission.value ? t('adminSettings.saving') : t('adminSettings.save'),
+)
 const markAllNotificationsLabel = computed(() =>
-  markingNotificationsRead.value ? 'Marking...' : 'Mark all read',
+  markingNotificationsRead.value ? t('adminSettings.marking') : t('adminSettings.markAllRead'),
 )
 
-const quickActions = [
-  { label: 'Save Platform Settings', icon: 'refresh', action: () => saveLocalPreferences() },
-  { label: 'View Analytics', icon: 'download', action: () => openAnalytics() },
-  { label: 'Review Audit Logs', icon: 'history', action: () => reviewAuditLogs() },
-  { label: 'Open Finance Queue', icon: 'database', action: () => openFinance() },
-]
+const quickActions = computed(() => [
+  { label: t('adminSettings.savePlatformSettings'), icon: 'refresh', action: () => saveLocalPreferences() },
+  { label: t('adminSettings.viewAnalytics'), icon: 'download', action: () => openAnalytics() },
+  { label: t('adminSettings.reviewAuditLogs'), icon: 'history', action: () => reviewAuditLogs() },
+  { label: t('adminSettings.openFinance'), icon: 'database', action: () => openFinance() },
+])
 
 function markAdminNotificationRead(notificationId: number): void {
   notificationsResource.data.value = adminNotifications.value.map((item) =>
@@ -796,13 +820,13 @@ function toggleSetting(key: LocalSettingKey): void {
 
 function saveLocale(): void {
   if (platformSettingsReadOnly.value) {
-    actionError.value = 'Platform settings cannot be changed while using preview data.'
+    actionError.value = t('adminSettings.previewSettings')
     actionSuccess.value = null
     return
   }
   ui.setLocale(ui.locale)
   actionError.value = null
-  actionSuccess.value = 'Interface language preference saved.'
+  actionSuccess.value = t('adminSettings.localeSaved')
 }
 
 async function saveDisclaimer(): Promise<void> {
@@ -816,7 +840,7 @@ async function saveLocalPreferences(): Promise<void> {
 async function markAllAdminNotificationsRead(): Promise<void> {
   if (markingNotificationsRead.value) return
   if (notificationsResource.usingFallback.value) {
-    actionError.value = 'Notifications cannot be changed while using preview data.'
+    actionError.value = t('adminSettings.previewNotifications')
     actionSuccess.value = null
     return
   }
@@ -832,10 +856,10 @@ async function markAllAdminNotificationsRead(): Promise<void> {
     window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
     actionSuccess.value =
       result.updatedCount > 0
-        ? `Marked ${result.updatedCount} notification(s) as read.`
-        : 'All notifications are already read.'
+        ? t('adminSettings.notificationsMarked', { count: result.updatedCount })
+        : t('adminSettings.allRead')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to mark admin notifications as read.')
+    actionError.value = resolveApiError(reason, t('adminSettings.markReadError'))
   } finally {
     markingNotificationsRead.value = false
   }
@@ -844,14 +868,14 @@ async function markAllAdminNotificationsRead(): Promise<void> {
 async function savePlatformSettings(): Promise<void> {
   if (savingPlatformSettings.value) return
   if (platformSettingsResource.usingFallback.value) {
-    actionError.value = 'Platform settings cannot be changed while using preview data.'
+    actionError.value = t('adminSettings.previewSettings')
     actionSuccess.value = null
     return
   }
 
   const normalizedDisclaimerText = disclaimerText.value.trim()
   if (!normalizedDisclaimerText) {
-    actionError.value = 'Enter an AI disclaimer before saving platform settings.'
+    actionError.value = t('adminSettings.disclaimerRequired')
     actionSuccess.value = null
     return
   }
@@ -870,9 +894,9 @@ async function savePlatformSettings(): Promise<void> {
       aiSafetyCheck: localSettings.value.aiSafetyCheck,
     })
     await platformSettingsResource.reload()
-    actionSuccess.value = 'Platform settings saved and refreshed.'
+    actionSuccess.value = t('adminSettings.settingsSaved')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save platform settings.')
+    actionError.value = resolveApiError(reason, t('adminSettings.settingsSaveError'))
   } finally {
     savingPlatformSettings.value = false
   }
@@ -884,13 +908,13 @@ function reviewAuditLogs(): void {
   sortOrder.value = 'NEWEST'
   currentPage.value = 1
   actionError.value = null
-  actionSuccess.value = 'Audit log filters reset to the latest records.'
+  actionSuccess.value = t('adminSettings.filtersReset')
 }
 
 async function saveCommission(): Promise<void> {
   if (savingCommission.value) return
   if (commissionReadOnly.value) {
-    actionError.value = 'Commission settings cannot be changed while preview data is active.'
+    actionError.value = t('adminSettings.previewCommission')
     actionSuccess.value = null
     return
   }
@@ -903,9 +927,9 @@ async function saveCommission(): Promise<void> {
     commissionRate.value = normalizedRate
     await adminApi.updateCommissionSetting({ commissionRate: normalizedRate })
     await commissionResource.reload()
-    actionSuccess.value = 'Commission setting saved and refreshed.'
+    actionSuccess.value = t('adminSettings.commissionSaved')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save the commission setting.')
+    actionError.value = resolveApiError(reason, t('adminSettings.commissionError'))
   } finally {
     savingCommission.value = false
   }
@@ -925,11 +949,22 @@ function cycleSort(): void {
   sortOrder.value = sortOrder.value === 'NEWEST' ? 'OLDEST' : 'NEWEST'
 }
 
-function auditMatchesActiveFilters(item: { type: string; actor: string }): boolean {
+function auditMatchesActiveFilters(item: { type: string; actorKind: 'SYSTEM' | 'ADMIN' }): boolean {
   if (typeFilter.value !== 'ALL' && item.type !== typeFilter.value) return false
-  if (actorFilter.value === 'ADMINS' && item.actor === 'System') return false
-  if (actorFilter.value === 'SYSTEM' && item.actor !== 'System') return false
+  if (actorFilter.value === 'ADMINS' && item.actorKind !== 'ADMIN') return false
+  if (actorFilter.value === 'SYSTEM' && item.actorKind !== 'SYSTEM') return false
   return true
+}
+
+function auditActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    ADMIN_LOGIN: t('adminSettings.actionAdminLogin'),
+    TEACHER_APPROVED: t('adminSettings.actionTeacherApproved'),
+    TEACHER_REJECTED: t('adminSettings.actionTeacherRejected'),
+    CONTENT_ARCHIVED: t('adminSettings.actionContentArchived'),
+    CONTENT_UPDATED: t('adminSettings.actionContentUpdated'),
+  }
+  return labels[action] ?? action.replaceAll('_', ' ')
 }
 
 function clampCommissionRate(value: number): number {

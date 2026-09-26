@@ -60,13 +60,13 @@ export default defineConfig({
         url: 'http://localhost:3000/',
       },
     },
-    exclude: ['node_modules/**', 'dist/**'],
+    exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
     globals: true,
     setupFiles: './src/test/setup.ts',
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   server: {

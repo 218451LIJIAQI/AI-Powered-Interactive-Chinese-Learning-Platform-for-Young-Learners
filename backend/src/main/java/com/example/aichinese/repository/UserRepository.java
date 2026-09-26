@@ -94,5 +94,5 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("select distinct u from User u join u.roles r where r.name = :roleName")
     List<User> findAllByRoleName(@Param("roleName") RoleName roleName);
 
-    List<User> findByCreatedAtGreaterThanEqualOrderByCreatedAtAsc(LocalDateTime threshold);
+    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime start, LocalDateTime end);
 }

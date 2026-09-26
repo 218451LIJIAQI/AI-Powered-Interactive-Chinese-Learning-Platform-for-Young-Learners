@@ -7,7 +7,7 @@
         <div class="student-learn-main">
           <article class="panel student-course-levels">
             <div class="student-section-heading">
-              <strong>Learning Overview</strong>
+              <strong>{{ t('studentLearn.overview') }}</strong>
             </div>
 
             <div class="student-level-strip">
@@ -40,13 +40,13 @@
             <span class="student-learn-hill student-learn-hill--front" />
 
             <div class="student-learn-hero-copy">
-              <div class="chip student-hero-chip">Lesson {{ lesson.lessonId }}</div>
+              <div class="chip student-hero-chip">{{ t('studentLearn.lesson', { id: lesson.lessonId }) }}</div>
               <h2>{{ lesson.title }}</h2>
               <p>{{ lessonDescription }}</p>
 
               <div class="student-learn-progress-block">
                 <div class="row-between">
-                  <strong>Progress</strong>
+                  <strong>{{ t('studentLearn.progress') }}</strong>
                   <strong>{{ formatPercent(currentLessonPercent) }} - {{ currentLessonProgressLabel }}</strong>
                 </div>
                 <ProgressBar :progress="currentLessonPercent" />
@@ -58,7 +58,7 @@
                 :disabled="!hasActiveLesson"
                 @click="openLessonQuiz"
               >
-                Continue Unit
+                {{ t('studentLearn.continueUnit') }}
                 <span><IconGlyph name="chevronRight" :size="18" /></span>
               </button>
             </div>
@@ -70,7 +70,7 @@
 
           <section class="student-learn-modules">
             <div class="student-section-heading">
-              <strong>Recent Lesson Progress</strong>
+              <strong>{{ t('studentLearn.recentProgress') }}</strong>
             </div>
 
             <div v-if="learningModules.length" class="student-module-grid">
@@ -109,10 +109,10 @@
                 <div class="student-module-count">{{ module.count }}</div>
               </article>
             </div>
-            <p v-else class="muted u-m-0">No recent lesson progress yet.</p>
+            <p v-else class="muted u-m-0">{{ t('studentLearn.noProgress') }}</p>
 
             <button class="student-view-units" type="button" @click="openPractice">
-              Practice More Lessons
+              {{ t('studentLearn.practiceMore') }}
               <span><IconGlyph name="chevronRight" :size="16" /></span>
             </button>
           </section>
@@ -122,7 +122,7 @@
           <article class="panel student-recorded-lesson-card">
             <div class="row u-mb-12">
               <div class="media-badge small"><IconGlyph name="play" :size="18" /></div>
-              <strong>Recorded Lesson</strong>
+              <strong>{{ t('studentLearn.recordedLesson') }}</strong>
             </div>
 
             <div class="student-recorded-lesson-scene">
@@ -132,12 +132,12 @@
               <PandaIllustration class="student-recorded-panda" :size="128" outfit="#7d56ff" accent="#f6d056" compact />
               <div class="student-recorded-bubble">
                 <strong>Ni hao!</strong>
-                <span>Hello!</span>
+                <span>{{ t('studentLearn.hello') }}</span>
               </div>
               <button
                 class="student-recorded-play"
                 type="button"
-                aria-label="Open recorded lesson"
+                :aria-label="t('studentLearn.openRecorded')"
                 @click="openRecordedLesson"
               >
                 <IconGlyph name="play" :size="20" />
@@ -178,14 +178,14 @@
           <article class="panel student-progress-side-card">
             <div class="row u-mb-12">
               <div class="media-badge small"><IconGlyph name="progress" :size="18" /></div>
-              <strong>My Progress</strong>
+              <strong>{{ t('studentLearn.myProgress') }}</strong>
             </div>
 
             <div class="student-progress-row">
               <div class="row-between">
                 <div class="row">
                   <span class="student-progress-icon"><IconGlyph name="learn" :size="18" /></span>
-                  <strong>Current Lesson Progress</strong>
+                  <strong>{{ t('studentLearn.currentProgress') }}</strong>
                 </div>
                 <strong>{{ formatPercent(currentLessonPercent) }}</strong>
               </div>
@@ -199,7 +199,7 @@
               <div class="row-between">
                 <div class="row">
                   <span class="student-progress-icon"><IconGlyph name="progress" :size="18" /></span>
-                  <strong>Overall Course Progress</strong>
+                  <strong>{{ t('studentLearn.overallProgress') }}</strong>
                 </div>
                 <strong>{{ formatPercent(progress.overallCompletionPercent) }}</strong>
               </div>
@@ -210,8 +210,8 @@
 
           <article class="student-side-encourage">
             <div>
-              <strong>Keep going, {{ studentName }}!</strong>
-              <p>Every lesson brings you closer to fluency.</p>
+              <strong>{{ t('studentLearn.keepGoing', { name: studentName }) }}</strong>
+              <p>{{ t('studentLearn.encouragement') }}</p>
             </div>
             <div class="student-side-encourage-fish"><IconGlyph name="fun" :size="24" /></div>
           </article>
@@ -223,6 +223,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { studentApi } from '@/api/services'
@@ -233,11 +234,20 @@ import ProgressBar from '@/components/common/ProgressBar.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { studentLessonPlayer, studentProgress as studentProgressDemo } from '@/demo/data'
+import { studentLearnMessages } from '@/plugins/studentLearnMessages'
 import { useAuthStore } from '@/stores/auth'
 import type { RecordedLessonVideoResponse, StudentLessonPlayerResponse, VideoProgressResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatPercent, nonNegativeInteger, toFiniteNumber } from '@/utils/format'
 import { openSafeHttpUrl, safeHttpUrl } from '@/utils/url'
+
+const { t } = useI18n({
+  messages: {
+    en: { studentLearn: studentLearnMessages.en },
+    ms: { studentLearn: studentLearnMessages.ms },
+    zh: { studentLearn: studentLearnMessages.zh },
+  },
+})
 
 const router = useRouter()
 const route = useRoute()
@@ -275,14 +285,14 @@ const resource = useResource(loadLessonPlayer, fallbackLesson)
 const emptyLesson = {
   ...studentLessonPlayer,
   lessonId: 0,
-  title: 'Lesson unavailable',
-  description: 'A published lesson has not been assigned to this learner yet.',
+  title: t('studentLearn.lessonUnavailable'),
+  description: t('studentLearn.unassigned'),
   completionPercent: 0,
   liveClasses: [],
   recordedVideos: [],
 }
 const lesson = computed(() => resource.data.value ?? (resource.usingFallback.value ? studentLessonPlayer : emptyLesson))
-const lessonDescription = computed(() => lesson.value.description || 'Lesson details are not available yet.')
+const lessonDescription = computed(() => lesson.value.description || t('studentLearn.noLessonDetails'))
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const videoProgress = ref<VideoProgressResponse | null>(null)
@@ -294,14 +304,14 @@ const pageError = computed(() => resource.error.value || progressResource.error.
 const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(() => resource.usingFallback.value || progressResource.usingFallback.value)
 const studentName = computed(
-  () => auth.currentUser?.studentProfile?.displayName || auth.displayName.split(' ')[0] || 'Learner',
+  () => auth.currentUser?.studentProfile?.displayName || auth.displayName.split(' ')[0] || t('studentLearn.learner'),
 )
 function emptyVideo(lessonId: number): RecordedLessonVideoResponse {
   return {
     id: 0,
     lessonId,
-    title: 'Video unavailable',
-    description: 'Recorded video is unavailable right now.',
+    title: t('studentLearn.videoUnavailable'),
+    description: t('studentLearn.videoUnavailableHint'),
     sourceType: 'UPLOAD',
     externalVideoUrl: null,
     streamUrl: null,
@@ -319,14 +329,12 @@ const primaryVideo = computed(
     (resource.usingFallback.value ? studentLessonPlayer.recordedVideos[0] : undefined) ??
     emptyVideo(lesson.value.lessonId),
 )
-const primaryVideoDescription = computed(
-  () => primaryVideo.value.description || 'Recorded lesson details are not available yet.',
-)
+const primaryVideoDescription = computed(() => primaryVideo.value.description || t('studentLearn.noVideoDetails'))
 
 const videoDurationLabel = computed(() => {
   const durationSeconds = nonNegativeInteger(primaryVideo.value?.durationSeconds)
   if (durationSeconds > 0) return formatDuration(durationSeconds)
-  return 'Duration unavailable'
+  return t('studentLearn.durationUnavailable')
 })
 const playableVideoUrl = computed(() => {
   const streamUrl = safeHttpUrl(primaryVideo.value.streamUrl, { allowRelative: true, sameOriginOnly: true })
@@ -337,26 +345,30 @@ const playableVideoUrl = computed(() => {
 const hasPlayableVideo = computed(() => Boolean(primaryVideo.value.id && playableVideoUrl.value))
 const currentLessonPercent = computed(() => clampPercent(lesson.value.completionPercent))
 const videoProgressLabel = computed(() => {
-  if (videoProgressLoading.value) return 'Loading progress'
-  if (!primaryVideo.value.id) return 'No video'
-  if (!videoProgress.value) return 'Not started'
+  if (videoProgressLoading.value) return t('studentLearn.loadingProgress')
+  if (!primaryVideo.value.id) return t('studentLearn.noVideo')
+  if (!videoProgress.value) return t('studentLearn.notStarted')
   return videoProgress.value.completed
-    ? '100% complete'
-    : `${clampPercent(videoProgress.value.progressPercentage)}% watched`
+    ? t('studentLearn.completePercent')
+    : t('studentLearn.watchedPercent', { progress: clampPercent(videoProgress.value.progressPercentage) })
 })
-const videoWatchActionLabel = computed(() => (videoActionLoading.value ? 'Saving progress...' : 'Start Watching'))
-const videoCompleteActionLabel = computed(() => (videoProgress.value?.completed ? 'Completed' : 'Mark Complete'))
+const videoWatchActionLabel = computed(() =>
+  videoActionLoading.value ? t('studentLearn.savingProgress') : t('studentLearn.startWatching'),
+)
+const videoCompleteActionLabel = computed(() =>
+  videoProgress.value?.completed ? t('studentLearn.completed') : t('studentLearn.markComplete'),
+)
 const currentLessonProgressLabel = computed(() => {
-  if (currentLessonPercent.value >= 100) return 'Completed'
-  if (currentLessonPercent.value > 0) return 'In progress'
-  return 'Not started'
+  if (currentLessonPercent.value >= 100) return t('studentLearn.completed')
+  if (currentLessonPercent.value > 0) return t('studentLearn.inProgress')
+  return t('studentLearn.notStarted')
 })
 const hasActiveLesson = computed(() => lesson.value.lessonId > 0)
 const overallLessonCountLabel = computed(() => {
   const completed = progress.value.completedLessons
   const started = progress.value.totalLessonsStarted
-  if (!completed && !started) return 'No lessons started yet'
-  return `${completed} completed - ${started} started`
+  if (!completed && !started) return t('studentLearn.noLessons')
+  return t('studentLearn.lessonCounts', { completed, started })
 })
 
 type LevelStatusIcon = 'history' | 'safe' | 'star'
@@ -392,8 +404,8 @@ interface LearningModule {
 const courseLevels = computed<CourseLevel[]>(() => [
   {
     id: 1,
-    title: 'Started',
-    subtitle: 'Lessons opened',
+    title: t('studentLearn.started'),
+    subtitle: t('studentLearn.lessonsOpened'),
     progress: String(nonNegativeInteger(progress.value.totalLessonsStarted)),
     icon: 'learn',
     active: nonNegativeInteger(progress.value.totalLessonsStarted) > 0,
@@ -401,8 +413,8 @@ const courseLevels = computed<CourseLevel[]>(() => [
   },
   {
     id: 2,
-    title: 'Completed',
-    subtitle: 'Lessons finished',
+    title: t('studentLearn.completed'),
+    subtitle: t('studentLearn.lessonsFinished'),
     progress: String(nonNegativeInteger(progress.value.completedLessons)),
     icon: 'status',
     active: nonNegativeInteger(progress.value.completedLessons) > 0,
@@ -410,8 +422,8 @@ const courseLevels = computed<CourseLevel[]>(() => [
   },
   {
     id: 3,
-    title: 'Quiz Average',
-    subtitle: 'Assessment score',
+    title: t('studentLearn.quizAverage'),
+    subtitle: t('studentLearn.assessmentScore'),
     progress: formatPercent(progress.value.quizAverage),
     icon: 'star',
     active: clampPercent(progress.value.quizAverage) > 0,
@@ -419,8 +431,8 @@ const courseLevels = computed<CourseLevel[]>(() => [
   },
   {
     id: 4,
-    title: 'Overall Progress',
-    subtitle: progress.value.lastActivitySummary || 'Course completion',
+    title: t('studentLearn.overallProgress'),
+    subtitle: progress.value.lastActivitySummary || t('studentLearn.courseCompletion'),
     progress: formatPercent(progress.value.overallCompletionPercent),
     icon: 'progress',
     active: clampPercent(progress.value.overallCompletionPercent) > 0,
@@ -485,9 +497,9 @@ function iconForProgress(completionPercent: number, completed: boolean): ModuleI
 }
 
 function progressLabel(completionPercent: number, completed: boolean): string {
-  if (completed || completionPercent >= 100) return 'Completed'
-  if (completionPercent > 0) return 'In progress'
-  return 'Not started'
+  if (completed || completionPercent >= 100) return t('studentLearn.completed')
+  if (completionPercent > 0) return t('studentLearn.inProgress')
+  return t('studentLearn.notStarted')
 }
 
 function variantForProgress(completionPercent: number, completed: boolean): ModuleVariant {
@@ -546,7 +558,7 @@ async function loadVideoProgress(): Promise<void> {
   try {
     videoProgress.value = await studentApi.videoProgress(primaryVideo.value.id)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load recorded lesson progress.')
+    actionError.value = resolveApiError(reason, t('studentLearn.loadVideoError'))
   } finally {
     videoProgressLoading.value = false
   }
@@ -559,7 +571,7 @@ async function openRecordedLesson(): Promise<void> {
   const url = playableVideoUrl.value
   if (openSafeHttpUrl(url, { allowRelative: true, sameOriginOnly: primaryVideo.value.sourceType === 'UPLOAD' })) {
     if (resource.usingFallback.value || !primaryVideo.value.id) {
-      actionSuccess.value = 'Opening the recorded lesson in a new tab.'
+      actionSuccess.value = t('studentLearn.openingVideo')
       return
     }
 
@@ -569,16 +581,16 @@ async function openRecordedLesson(): Promise<void> {
         primaryVideo.value.id,
         startProgressPayload(primaryVideo.value),
       )
-      actionSuccess.value = 'Opening the recorded lesson and saving your watch progress.'
+      actionSuccess.value = t('studentLearn.openingAndSaving')
     } catch (reason) {
-      actionError.value = resolveApiError(reason, 'Recorded lesson opened, but progress could not be saved.')
+      actionError.value = resolveApiError(reason, t('studentLearn.openedSaveError'))
     } finally {
       videoActionLoading.value = false
     }
     return
   }
 
-  actionError.value = 'This recorded lesson does not have a playable video link yet.'
+  actionError.value = t('studentLearn.noPlayableLink')
 }
 
 async function markRecordedLessonComplete(): Promise<void> {
@@ -586,13 +598,12 @@ async function markRecordedLessonComplete(): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   if (!hasPlayableVideo.value) {
-    actionError.value = 'This recorded lesson does not have a playable video link yet.'
+    actionError.value = t('studentLearn.noPlayableLink')
     return
   }
 
   if (resource.usingFallback.value) {
-    actionError.value =
-      'Preview recorded lessons cannot save completion progress. Use a live student account to update progress.'
+    actionError.value = t('studentLearn.previewComplete')
     return
   }
 
@@ -600,9 +611,9 @@ async function markRecordedLessonComplete(): Promise<void> {
   try {
     videoProgress.value = await studentApi.completeVideo(primaryVideo.value.id)
     await Promise.all([resource.reload(), progressResource.reload()])
-    actionSuccess.value = 'Recorded lesson marked complete. Your progress has been refreshed.'
+    actionSuccess.value = t('studentLearn.markedComplete')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to mark this recorded lesson complete.')
+    actionError.value = resolveApiError(reason, t('studentLearn.completeError'))
   } finally {
     videoActionLoading.value = false
   }

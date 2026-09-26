@@ -1,8 +1,8 @@
 <template>
   <div class="page-stack admin-dashboard-page">
     <PageHeaderBlock
-      title="Admin Control Center"
-      description="Review platform state, teacher approvals, moderation queues, finance signals, and system health."
+      :title="t('adminDashboard.title')"
+      :description="t('adminDashboard.description')"
       icon="verification"
     >
       <template #actions>
@@ -33,10 +33,10 @@
         <article class="panel admin-dashboard-panel">
           <div class="row-between admin-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Teacher Verification Queue</strong>
+              <strong>{{ t('adminDashboard.teacherQueue') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openTeacherVerification">
-              View All
+              {{ t('adminDashboard.viewAll') }}
             </button>
           </div>
 
@@ -48,24 +48,24 @@
                 <span>{{ item.email }}</span>
                 <small>{{ item.appliedLabel }}</small>
               </div>
-              <StatusPill label="Pending" tone="warning" />
+              <StatusPill :label="t('adminDashboard.pending')" tone="warning" />
             </article>
           </div>
           <StatePanel
             v-else
             icon="verification"
-            title="No pending teachers"
-            message="Teacher applications waiting for review will appear here."
+            :title="t('adminDashboard.noPendingTeachers')"
+            :message="t('adminDashboard.noPendingTeachersHint')"
           />
         </article>
 
         <article class="panel admin-dashboard-panel">
           <div class="row-between admin-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Moderation and AI Reports</strong>
+              <strong>{{ t('adminDashboard.moderationReports') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openModeration">
-              Open Queue
+              {{ t('adminDashboard.openQueue') }}
             </button>
           </div>
 
@@ -85,17 +85,19 @@
           <StatePanel
             v-else
             icon="moderation"
-            title="No open moderation items"
-            message="Moderation records and AI response reports will show here when they exist."
+            :title="t('adminDashboard.noModeration')"
+            :message="t('adminDashboard.noModerationHint')"
           />
         </article>
 
         <article class="panel admin-dashboard-panel">
           <div class="row-between admin-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Admin Notifications</strong>
+              <strong>{{ t('adminDashboard.adminNotifications') }}</strong>
             </div>
-            <button class="student-link-button" type="button" @click="openSettings">View All</button>
+            <button class="student-link-button" type="button" @click="openSettings">
+              {{ t('adminDashboard.viewAll') }}
+            </button>
           </div>
 
           <div v-if="notifications.length" class="admin-dashboard-list">
@@ -120,41 +122,41 @@
           <StatePanel
             v-else
             icon="bell"
-            title="No admin notifications"
-            message="Unread and recent admin notifications will appear here."
+            :title="t('adminDashboard.noNotifications')"
+            :message="t('adminDashboard.noNotificationsHint')"
           />
         </article>
 
         <article class="panel admin-dashboard-panel admin-dashboard-panel--wide">
           <div class="row-between admin-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Platform Analytics Snapshot</strong>
+              <strong>{{ t('adminDashboard.analyticsSnapshot') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openAnalytics">
-              Open Analytics
+              {{ t('adminDashboard.openAnalytics') }}
             </button>
           </div>
 
           <div class="admin-dashboard-analytics-grid">
             <article class="admin-dashboard-mini-stat">
-              <small>Total Students</small>
+              <small>{{ t('adminDashboard.totalStudents') }}</small>
               <strong>{{ formatNumber(analytics.overview.totalStudents) }}</strong>
-              <span>From admin analytics overview</span>
+              <span>{{ t('adminDashboard.totalStudentsHint') }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>Total Teachers</small>
+              <small>{{ t('adminDashboard.totalTeachers') }}</small>
               <strong>{{ formatNumber(analytics.overview.totalTeachers) }}</strong>
-              <span>Approved and pending combined</span>
+              <span>{{ t('adminDashboard.totalTeachersHint') }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>Published Content</small>
+              <small>{{ t('adminDashboard.publishedContent') }}</small>
               <strong>{{ formatNumber(analytics.overview.publishedContentItems) }}</strong>
-              <span>Visible content items tracked by analytics</span>
+              <span>{{ t('adminDashboard.publishedContentHint') }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>AI Requests</small>
+              <small>{{ t('adminDashboard.aiRequests') }}</small>
               <strong>{{ formatNumber(analytics.overview.aiRequests) }}</strong>
-              <span>Student-facing AI usage only</span>
+              <span>{{ t('adminDashboard.aiRequestsHint') }}</span>
             </article>
           </div>
 
@@ -170,40 +172,44 @@
             </article>
           </div>
           <p v-else class="admin-dashboard-empty-copy">
-            Registration trend data will appear here once the analytics endpoint returns trend points.
+            {{ t('adminDashboard.noRegistrationTrend') }}
           </p>
         </article>
 
         <article class="panel admin-dashboard-panel">
           <div class="row-between admin-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Finance Overview</strong>
+              <strong>{{ t('adminDashboard.financeOverview') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openFinance">
-              Open Finance
+              {{ t('adminDashboard.openFinance') }}
             </button>
           </div>
 
           <div class="admin-dashboard-finance-grid">
             <article class="admin-dashboard-mini-stat">
-              <small>Total Revenue</small>
+              <small>{{ t('adminDashboard.totalRevenue') }}</small>
               <strong>{{
                 formatCurrency(
                   dashboard.paymentRevenueSummary.totalRevenue,
                   dashboard.paymentRevenueSummary.currencyCode,
                 )
               }}</strong>
-              <span>{{ formatNumber(dashboard.paymentRevenueSummary.paidTransactions) }} paid transaction(s)</span>
+              <span>{{
+                t('adminDashboard.paidTransactions', {
+                  count: formatNumber(dashboard.paymentRevenueSummary.paidTransactions),
+                })
+              }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>Pending Refunds</small>
+              <small>{{ t('adminDashboard.pendingRefunds') }}</small>
               <strong>{{ formatNumber(dashboard.pendingRefunds) }}</strong>
-              <span>Requires admin decision or status update</span>
+              <span>{{ t('adminDashboard.pendingRefundsHint') }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>Pending Payouts</small>
+              <small>{{ t('adminDashboard.pendingPayouts') }}</small>
               <strong>{{ formatNumber(dashboard.pendingPayouts) }}</strong>
-              <span>Teacher payout requests still open</span>
+              <span>{{ t('adminDashboard.pendingPayoutsHint') }}</span>
             </article>
           </div>
         </article>
@@ -211,9 +217,11 @@
         <article class="panel admin-dashboard-panel">
           <div class="row-between admin-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Recent Audit Logs</strong>
+              <strong>{{ t('adminDashboard.auditLogs') }}</strong>
             </div>
-            <button class="student-link-button" type="button" @click="openSettings">View All</button>
+            <button class="student-link-button" type="button" @click="openSettings">
+              {{ t('adminDashboard.viewAll') }}
+            </button>
           </div>
 
           <div v-if="auditItems.length" class="admin-dashboard-list">
@@ -231,46 +239,46 @@
           <StatePanel
             v-else
             icon="history"
-            title="No audit logs"
-            message="Recent admin actions will appear here once they are recorded."
+            :title="t('adminDashboard.noAuditLogs')"
+            :message="t('adminDashboard.noAuditLogsHint')"
           />
         </article>
 
         <article class="panel admin-dashboard-panel">
           <div class="student-section-heading">
-            <strong>Platform Health</strong>
+            <strong>{{ t('adminDashboard.platformHealth') }}</strong>
           </div>
 
           <div class="admin-dashboard-health-banner" :class="{ 'is-up': isHealthUp }">
             <IconGlyph name="status" :size="18" />
             <div class="stack u-gap-4">
               <strong>{{ healthStatusLabel }}</strong>
-              <span>Checked {{ healthTimestampLabel }}</span>
+              <span>{{ t('adminDashboard.checked', { time: healthTimestampLabel }) }}</span>
             </div>
           </div>
 
           <div class="admin-dashboard-health-grid">
             <article class="admin-dashboard-mini-stat">
-              <small>Backend Service</small>
+              <small>{{ t('adminDashboard.backendService') }}</small>
               <strong>{{ health.service || 'backend' }}</strong>
-              <span>Live health endpoint</span>
+              <span>{{ t('adminDashboard.backendServiceHint') }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>Audit Entries</small>
+              <small>{{ t('adminDashboard.auditEntries') }}</small>
               <strong>{{ formatNumber(analytics.overview.auditLogEntries) }}</strong>
-              <span>Tracked in analytics overview</span>
+              <span>{{ t('adminDashboard.auditEntriesHint') }}</span>
             </article>
             <article class="admin-dashboard-mini-stat">
-              <small>Unread Notifications</small>
+              <small>{{ t('adminDashboard.unreadNotifications') }}</small>
               <strong>{{ formatNumber(analytics.overview.adminUnreadNotifications) }}</strong>
-              <span>Admin analytics unread count</span>
+              <span>{{ t('adminDashboard.unreadNotificationsHint') }}</span>
             </article>
           </div>
         </article>
 
         <article class="panel admin-dashboard-panel">
           <div class="student-section-heading">
-            <strong>Quick Actions</strong>
+            <strong>{{ t('adminDashboard.quickActions') }}</strong>
           </div>
 
           <div class="admin-dashboard-actions">
@@ -294,6 +302,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { adminApi, systemApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -314,6 +323,7 @@ import {
   adminNotifications,
   teacherApplicationsPending,
 } from '@/demo/data'
+import { adminDashboardMessages } from '@/plugins/adminDashboardMessages'
 import { formatCurrency, formatDate, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
 const HEALTH_FALLBACK = {
@@ -323,6 +333,13 @@ const HEALTH_FALLBACK = {
 }
 
 const router = useRouter()
+const { t, locale } = useI18n({
+  messages: {
+    en: { adminDashboard: adminDashboardMessages.en },
+    ms: { adminDashboard: adminDashboardMessages.ms },
+    zh: { adminDashboard: adminDashboardMessages.zh },
+  },
+})
 
 const dashboardResource = useResource(() => adminApi.dashboard(), adminDashboard)
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
@@ -406,9 +423,7 @@ const aiReports = computed(
   () => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []),
 )
 const health = computed(
-  () =>
-    healthResource.data.value ??
-    (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
+  () => healthResource.data.value ?? (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
 )
 
 const pageLoading = computed(
@@ -452,7 +467,7 @@ function markAdminNotificationRead(notificationId: number): void {
 }
 
 const todayLabel = computed(() =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(locale.value === 'zh' ? 'zh-CN' : locale.value === 'ms' ? 'ms-MY' : 'en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -462,40 +477,47 @@ const todayLabel = computed(() =>
 
 const statCards = computed(() => [
   {
-    label: 'Total Users',
+    label: t('adminDashboard.totalUsers'),
     value: formatNumber(dashboard.value.totalStudents + dashboard.value.totalTeachers),
-    copy: `${formatNumber(dashboard.value.totalStudents)} students and ${formatNumber(dashboard.value.totalTeachers)} teachers`,
+    copy: t('adminDashboard.userCount', {
+      students: formatNumber(dashboard.value.totalStudents),
+      teachers: formatNumber(dashboard.value.totalTeachers),
+    }),
     icon: 'users',
     tone: 'purple',
   },
   {
-    label: 'Pending Teacher Reviews',
+    label: t('adminDashboard.pendingTeacherReviews'),
     value: formatNumber(dashboard.value.pendingTeacherApprovals),
-    copy: 'Matches the current dashboard aggregate',
+    copy: t('adminDashboard.pendingTeacherReviewsHint'),
     icon: 'verification',
     tone: 'gold',
   },
   {
-    label: 'Moderation Actions',
+    label: t('adminDashboard.moderationActions'),
     value: formatNumber(analytics.value.overview.moderationActions),
-    copy: 'Tracked moderation activity from analytics',
+    copy: t('adminDashboard.moderationActionsHint'),
     icon: 'moderation',
     tone: 'red',
   },
   {
-    label: 'AI Requests',
+    label: t('adminDashboard.aiRequests'),
     value: formatNumber(dashboard.value.aiUsageSummary.totalRequests),
-    copy: `${formatNumber(dashboard.value.aiUsageSummary.successfulRequests)} successful request(s)`,
+    copy: t('adminDashboard.successfulRequests', {
+      count: formatNumber(dashboard.value.aiUsageSummary.successfulRequests),
+    }),
     icon: 'ai',
     tone: 'blue',
   },
   {
-    label: 'Platform Revenue',
+    label: t('adminDashboard.platformRevenue'),
     value: formatCurrency(
       dashboard.value.paymentRevenueSummary.totalRevenue,
       dashboard.value.paymentRevenueSummary.currencyCode,
     ),
-    copy: `${formatNumber(dashboard.value.paymentRevenueSummary.totalTransactions)} recorded transaction(s)`,
+    copy: t('adminDashboard.recordedTransactions', {
+      count: formatNumber(dashboard.value.paymentRevenueSummary.totalTransactions),
+    }),
     icon: 'money',
     tone: 'mint',
   },
@@ -517,7 +539,7 @@ const moderationItems = computed(() => {
     title: item.actionTaken,
     copy: `${item.targetType}: ${item.targetTitle}`,
     meta: formatDateTime(item.createdAt),
-    label: 'Moderation',
+    label: t('adminDashboard.moderation'),
     tone: 'orange',
     icon: 'moderation',
     statusTone: 'warning' as const,
@@ -563,15 +585,17 @@ const auditItems = computed(() =>
 
 const healthStatus = computed(() => health.value.status || 'UNKNOWN')
 const isHealthUp = computed(() => healthStatus.value === 'UP')
-const healthStatusLabel = computed(() => (isHealthUp.value ? 'All Systems Operational' : 'Status Unavailable'))
+const healthStatusLabel = computed(() =>
+  t(isHealthUp.value ? 'adminDashboard.allOperational' : 'adminDashboard.statusUnavailable'),
+)
 const healthTimestampLabel = computed(() => (health.value.timestamp ? formatDateTime(health.value.timestamp) : '--'))
 
-const quickActions = [
-  { label: 'Teacher Verification', icon: 'verification', to: '/admin/teacher-verification' },
-  { label: 'Moderation Queue', icon: 'moderation', to: '/admin/moderation' },
-  { label: 'Analytics', icon: 'analytics', to: '/admin/analytics' },
-  { label: 'Finance', icon: 'finance', to: '/admin/finance' },
-]
+const quickActions = computed(() => [
+  { label: t('adminDashboard.teacherVerification'), icon: 'verification', to: '/admin/teacher-verification' },
+  { label: t('adminDashboard.moderationQueue'), icon: 'moderation', to: '/admin/moderation' },
+  { label: t('adminDashboard.analytics'), icon: 'analytics', to: '/admin/analytics' },
+  { label: t('adminDashboard.finance'), icon: 'finance', to: '/admin/finance' },
+])
 
 function auditIcon(actionType: string): string {
   if (actionType.includes('APPROVE')) return 'status'
@@ -588,6 +612,15 @@ function auditTone(actionType: string): string {
 }
 
 function formatStatus(status: string): string {
+  const statusKeys: Record<string, string> = {
+    PENDING_REVIEW: 'statusPendingReview',
+    IN_REVIEW: 'statusInReview',
+    DISMISSED: 'statusDismissed',
+    RESOLVED: 'statusResolved',
+  }
+  const normalized = status.trim().toUpperCase()
+  const translatedKey = statusKeys[normalized]
+  if (translatedKey) return t(`adminDashboard.${translatedKey}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()

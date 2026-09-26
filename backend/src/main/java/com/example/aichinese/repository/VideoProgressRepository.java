@@ -8,8 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
 import com.example.aichinese.entity.VideoProgress;
+import com.example.aichinese.repository.projection.VideoProgressAnalyticsRow;
 
 import jakarta.persistence.LockModeType;
 
@@ -27,6 +29,23 @@ public interface VideoProgressRepository extends JpaRepository<VideoProgress, Lo
 
     @EntityGraph(attributePaths = { "student", "student.user", "lesson", "recordedVideo" })
     List<VideoProgress> findByStudentIdOrderByLastWatchedAtDesc(Long studentId);
+
+    @Query("""
+            select progress.id as id, lesson.id as lessonId,
+                   lesson.accessType as lessonAccessType, module.id as moduleId,
+                   coursePackage.id as packageId, coursePackage.accessType as packageAccessType,
+                   progress.completed as completed, progress.lastWatchedAt as lastWatchedAt,
+                   progress.updatedAt as updatedAt
+            from VideoProgress progress
+            join progress.lesson lesson
+            left join lesson.module module
+            join progress.recordedVideo video
+            left join video.coursePackage coursePackage
+            where progress.student.id = :studentId and progress.id > :afterId
+            order by progress.id asc
+            """)
+    List<VideoProgressAnalyticsRow> findAnalyticsBatch(
+            @Param("studentId") Long studentId, @Param("afterId") Long afterId, Pageable pageable);
 
     @EntityGraph(attributePaths = { "student", "student.user", "lesson", "recordedVideo" })
     List<VideoProgress> findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(Long teacherUserId, Long lessonId);

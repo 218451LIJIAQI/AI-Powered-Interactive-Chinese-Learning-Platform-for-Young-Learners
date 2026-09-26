@@ -72,9 +72,7 @@ public class AdminActivityService {
             ContentStatus.DRAFT,
             ContentStatus.PUBLISHED,
             ContentStatus.ARCHIVED);
-    private static final int MAX_MERGED_FEED_WINDOW = 1_000;
-    private static final String ACTIVITY_PAGE_TOO_DEEP_MESSAGE =
-            "Requested activity page is too deep. Please use filters or a smaller page.";
+    private static final int MERGED_FEED_BATCH_SIZE = 100;
 
     private final FlashcardRepository flashcardRepository;
     private final MatchingGameRepository matchingGameRepository;
@@ -558,63 +556,126 @@ public class AdminActivityService {
             int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        int perTypeLimit = mergedPageFetchLimit(safePage, safeSize);
-        Pageable slice = PageRequest.of(0, perTypeLimit, Sort.by(Sort.Order.desc("updatedAt")));
-
-        List<AdminActivitySummaryResponse> merged = new ArrayList<>();
+        Sort sort = Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.desc("id"));
+        List<ActivityCursor<?>> cursors = new ArrayList<>();
         long totalItems = 0L;
         if (includesActivityType(filter, ActivityType.FLASHCARD)) {
-            totalItems += appendSummaries(merged, flashcardRepository.findAll(filterSpec(filter), slice),
-                    mapper::toSummary);
+            ActivityCursor<Flashcard> cursor = new ActivityCursor<>(
+                    pageable -> flashcardRepository.findAll(filterSpec(filter), pageable), mapper::toSummary, sort);
+            cursors.add(cursor);
+            totalItems += cursor.totalItems();
         }
         if (includesActivityType(filter, ActivityType.MATCHING_GAME)) {
-            totalItems += appendSummaries(merged, matchingGameRepository.findAll(filterSpec(filter), slice),
-                    mapper::toSummary);
+            ActivityCursor<MatchingGame> cursor = new ActivityCursor<>(
+                    pageable -> matchingGameRepository.findAll(filterSpec(filter), pageable), mapper::toSummary, sort);
+            cursors.add(cursor);
+            totalItems += cursor.totalItems();
         }
         if (includesActivityType(filter, ActivityType.LISTENING_EXERCISE)) {
-            totalItems += appendSummaries(merged, listeningExerciseRepository.findAll(filterSpec(filter), slice),
-                    mapper::toSummary);
+            ActivityCursor<ListeningExercise> cursor = new ActivityCursor<>(
+                    pageable -> listeningExerciseRepository.findAll(filterSpec(filter), pageable), mapper::toSummary, sort);
+            cursors.add(cursor);
+            totalItems += cursor.totalItems();
         }
         if (includesActivityType(filter, ActivityType.TRACING_EXERCISE)) {
-            totalItems += appendSummaries(merged, tracingExerciseRepository.findAll(filterSpec(filter), slice),
-                    mapper::toSummary);
+            ActivityCursor<TracingExercise> cursor = new ActivityCursor<>(
+                    pageable -> tracingExerciseRepository.findAll(filterSpec(filter), pageable), mapper::toSummary, sort);
+            cursors.add(cursor);
+            totalItems += cursor.totalItems();
         }
         if (includesActivityType(filter, ActivityType.DRAG_DROP_ACTIVITY)) {
-            totalItems += appendSummaries(merged, dragDropActivityRepository.findAll(filterSpec(filter), slice),
-                    mapper::toSummary);
+            ActivityCursor<DragDropActivity> cursor = new ActivityCursor<>(
+                    pageable -> dragDropActivityRepository.findAll(filterSpec(filter), pageable), mapper::toSummary, sort);
+            cursors.add(cursor);
+            totalItems += cursor.totalItems();
         }
         if (includesActivityType(filter, ActivityType.STORY_ACTIVITY)) {
-            totalItems += appendSummaries(merged, storyActivityRepository.findAll(filterSpec(filter), slice),
-                    mapper::toSummary);
+            ActivityCursor<StoryActivity> cursor = new ActivityCursor<>(
+                    pageable -> storyActivityRepository.findAll(filterSpec(filter), pageable), mapper::toSummary, sort);
+            cursors.add(cursor);
+            totalItems += cursor.totalItems();
         }
 
-        merged.sort(Comparator
-                .comparing(AdminActivitySummaryResponse::updatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
-
-        int loadedTotal = merged.size();
-        int fromIndex = PaginationUtils.startIndex(safePage, safeSize, loadedTotal);
-        int toIndex = PaginationUtils.endIndex(fromIndex, safeSize, loadedTotal);
-        List<AdminActivitySummaryResponse> windowed = merged.subList(fromIndex, toIndex);
+        List<AdminActivitySummaryResponse> items = new ArrayList<>(safeSize);
+        long firstIndex = (long) safePage * safeSize;
+        if (firstIndex < totalItems) {
+            Comparator<AdminActivitySummaryResponse> newestFirst = Comparator
+                    .comparing(AdminActivitySummaryResponse::updatedAt,
+                            Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(AdminActivitySummaryResponse::id, Comparator.reverseOrder());
+            long seen = 0L;
+            while (seen < firstIndex + safeSize) {
+                ActivityCursor<?> next = null;
+                AdminActivitySummaryResponse nextItem = null;
+                for (ActivityCursor<?> cursor : cursors) {
+                    AdminActivitySummaryResponse candidate = cursor.peek();
+                    if (candidate != null && (nextItem == null || newestFirst.compare(candidate, nextItem) < 0)) {
+                        next = cursor;
+                        nextItem = candidate;
+                    }
+                }
+                if (next == null) {
+                    break;
+                }
+                next.advance();
+                if (seen++ >= firstIndex) {
+                    items.add(nextItem);
+                }
+            }
+        }
         int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
-        return new PageResponse<>(windowed, safePage, safeSize, totalItems, totalPages);
+        return new PageResponse<>(items, safePage, safeSize, totalItems, totalPages);
     }
 
-    private static int mergedPageFetchLimit(int safePage, int safeSize) {
-        long requestedWindow = ((long) safePage + 1L) * safeSize;
-        if (requestedWindow > MAX_MERGED_FEED_WINDOW) {
-            throw new ResponseStatusException(BAD_REQUEST, ACTIVITY_PAGE_TOO_DEEP_MESSAGE);
+    private static final class ActivityCursor<T> {
+        private final Function<Pageable, Page<T>> fetch;
+        private final Function<T, AdminActivitySummaryResponse> map;
+        private final Sort sort;
+        private List<T> batch;
+        private int page;
+        private int index;
+        private long totalItems;
+        private AdminActivitySummaryResponse pending;
+
+        private ActivityCursor(Function<Pageable, Page<T>> fetch, Function<T, AdminActivitySummaryResponse> map, Sort sort) {
+            this.fetch = fetch;
+            this.map = map;
+            this.sort = sort;
+            loadPage();
         }
-        return (int) requestedWindow;
-    }
 
-    private static <T> long appendSummaries(
-            List<AdminActivitySummaryResponse> target,
-            Page<T> page,
-            Function<? super T, AdminActivitySummaryResponse> mapper) {
-        page.getContent().stream()
-                .map(mapper)
-                .forEach(target::add);
-        return page.getTotalElements();
+        private long totalItems() {
+            return totalItems;
+        }
+
+        private AdminActivitySummaryResponse peek() {
+            if (index >= batch.size()) {
+                if ((long) page * MERGED_FEED_BATCH_SIZE >= totalItems) {
+                    return null;
+                }
+                loadPage();
+            }
+            if (index >= batch.size()) {
+                return null;
+            }
+            if (pending == null) {
+                pending = map.apply(batch.get(index));
+            }
+            return pending;
+        }
+
+        private void advance() {
+            index++;
+            pending = null;
+        }
+
+        private void loadPage() {
+            Page<T> result = fetch.apply(PageRequest.of(page++, MERGED_FEED_BATCH_SIZE, sort));
+            totalItems = result.getTotalElements();
+            batch = result.getContent();
+            index = 0;
+            pending = null;
+        }
     }
 
     private User findActor(SecurityUserDetails currentUser) {

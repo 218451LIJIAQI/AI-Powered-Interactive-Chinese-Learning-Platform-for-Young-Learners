@@ -1,0 +1,79 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-fund
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm run format:check
+        working-directory: frontend
+      - run: npm run test:unit
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: chmod +x mvnw && ./mvnw -B test
+        working-directory: backend
+
+  mysql-migration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: ai_chinese_learning
+          MYSQL_USER: aichinese_app
+          MYSQL_PASSWORD: ci-migration-password
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u aichinese_app -pci-migration-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      RUN_MYSQL_MIGRATION_TEST: 'true'
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3307'
+      DB_NAME: ai_chinese_learning
+      DB_USERNAME: aichinese_app
+      DB_PASSWORD: ci-migration-password
+      JWT_SECRET: CiMigrationSmokeJwtSecret1234567890ABCDE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: chmod +x mvnw && ./mvnw -B -Dtest=MySqlMigrationSmokeTests test
+        working-directory: backend

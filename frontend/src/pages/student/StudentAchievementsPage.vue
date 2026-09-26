@@ -8,11 +8,16 @@
           <article class="student-achievements-hero">
             <PandaIllustration :size="138" outfit="#7d56ff" accent="#f6d056" pose="wave" />
             <div class="student-achievements-level">
-              <span>Your Level</span>
-              <strong>Level {{ currentLevelNumber }}</strong>
+              <span>{{ t('studentAchievements.yourLevel') }}</span>
+              <strong>{{ t('studentAchievements.level', { level: currentLevelNumber }) }}</strong>
               <small>{{ levelTitle }}</small>
               <ProgressBar :progress="levelProgressPercent" />
-              <em>{{ formatNumber(rewards.totalPoints) }} XP - {{ levelProgressPercent }}% to next level</em>
+              <em>{{
+                t('studentAchievements.nextLevel', {
+                  points: formatNumber(rewards.totalPoints),
+                  progress: levelProgressPercent,
+                })
+              }}</em>
             </div>
             <div class="student-achievements-stats">
               <div v-for="stat in achievementStats" :key="stat.label" class="student-achievements-stat">
@@ -28,9 +33,9 @@
               <div class="row-between">
                 <div class="student-section-heading">
                   <span><IconGlyph name="progress" :size="20" /></span>
-                  <strong>Learning Progress</strong>
+                  <strong>{{ t('studentAchievements.learningProgress') }}</strong>
                 </div>
-                <span class="student-achievements-range">Recent lessons</span>
+                <span class="student-achievements-range">{{ t('studentAchievements.recentLessons') }}</span>
               </div>
               <div class="student-achievements-chart">
                 <span
@@ -49,9 +54,11 @@
               <div class="row-between">
                 <div class="student-section-heading">
                   <span><IconGlyph name="trophy" :size="20" /></span>
-                  <strong>Your Achievements</strong>
+                  <strong>{{ t('studentAchievements.achievements') }}</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="openRewards">Open Rewards</button>
+                <button class="student-link-button" type="button" @click="openRewards">
+                  {{ t('studentAchievements.openRewards') }}
+                </button>
               </div>
               <div v-if="badgeCards.length" class="student-achievements-badge-grid">
                 <article v-for="badge in badgeCards" :key="badge.id" class="student-achievements-badge">
@@ -65,8 +72,8 @@
               <StatePanel
                 v-else
                 icon="rewards"
-                title="No badges yet"
-                message="Badges will appear here after you complete lessons, quizzes, and streak goals."
+                :title="t('studentAchievements.noBadges')"
+                :message="t('studentAchievements.noBadgesHint')"
               />
             </article>
           </div>
@@ -75,7 +82,7 @@
             <article class="panel student-achievements-milestones-card">
               <div class="student-section-heading">
                 <span><IconGlyph name="rewards" :size="20" /></span>
-                <strong>Recent Milestones</strong>
+                <strong>{{ t('studentAchievements.milestones') }}</strong>
               </div>
               <div v-if="milestoneCards.length" class="student-achievements-milestone-list">
                 <article v-for="item in milestoneCards" :key="item.title" class="student-achievements-milestone">
@@ -90,8 +97,8 @@
               <StatePanel
                 v-else
                 icon="rewards"
-                title="No milestones yet"
-                message="Recent point milestones will appear here after you complete learning activities."
+                :title="t('studentAchievements.noMilestones')"
+                :message="t('studentAchievements.noMilestonesHint')"
               />
             </article>
 
@@ -99,9 +106,11 @@
               <div class="row-between">
                 <div class="student-section-heading">
                   <span><IconGlyph name="learn" :size="20" /></span>
-                  <strong>Recent Lesson Progress</strong>
+                  <strong>{{ t('studentAchievements.lessonProgress') }}</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="openLearn">Open Learn</button>
+                <button class="student-link-button" type="button" @click="openLearn">
+                  {{ t('studentAchievements.openLearn') }}
+                </button>
               </div>
               <div v-if="moduleProgress.length" class="student-achievements-module-list">
                 <article v-for="module in moduleProgress" :key="module.title" class="student-achievements-module-row">
@@ -116,8 +125,8 @@
               <StatePanel
                 v-else
                 icon="learn"
-                title="No lesson progress yet"
-                message="Recent lesson progress will appear here after you start learning."
+                :title="t('studentAchievements.noLessonProgress')"
+                :message="t('studentAchievements.noLessonProgressHint')"
               />
             </article>
           </div>
@@ -126,19 +135,23 @@
         <aside class="student-achievements-side">
           <article class="panel student-achievements-progress-card">
             <div class="student-section-heading">
-              <strong>Overall Progress</strong>
+              <strong>{{ t('studentAchievements.overallProgress') }}</strong>
             </div>
-            <ProgressRing :progress="overallProgressPercent" title="Course Progress" subtitle="You're doing great!" />
+            <ProgressRing
+              :progress="overallProgressPercent"
+              :title="t('studentAchievements.courseProgress')"
+              :subtitle="t('studentAchievements.doingGreat')"
+            />
             <div class="student-achievements-progress-mini">
               <strong>{{ completedLessonCount }} / {{ startedLessonCount }}</strong>
-              <span>Units Completed</span>
+              <span>{{ t('studentAchievements.unitsCompleted') }}</span>
               <ProgressBar :progress="overallProgressPercent" />
             </div>
           </article>
 
           <article class="student-achievements-encourage-card">
-            <strong>Keep learning, keep growing!</strong>
-            <p>You're doing amazing!</p>
+            <strong>{{ t('studentAchievements.keepLearning') }}</strong>
+            <p>{{ t('studentAchievements.amazing') }}</p>
             <span><IconGlyph name="fun" :size="28" /></span>
           </article>
         </aside>
@@ -149,6 +162,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { studentApi } from '@/api/services'
@@ -167,7 +181,16 @@ import {
   studentRewards,
   studentStreak,
 } from '@/demo/data'
+import { studentAchievementsMessages } from '@/plugins/studentAchievementsMessages'
 import { clampNumber, clampPercent, formatDate, formatNumber, nonNegativeInteger } from '@/utils/format'
+
+const { t } = useI18n({
+  messages: {
+    en: { studentAchievements: studentAchievementsMessages.en },
+    ms: { studentAchievements: studentAchievementsMessages.ms },
+    zh: { studentAchievements: studentAchievementsMessages.zh },
+  },
+})
 
 const router = useRouter()
 const badgesResource = useResource(() => studentApi.badges(), studentBadges)
@@ -240,10 +263,10 @@ const usingFallback = computed(
 )
 const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
 const levelTitle = computed(() => {
-  if (currentLevelNumber.value >= 10) return 'Mandarin Champion'
-  if (currentLevelNumber.value >= 5) return 'Confident Speaker'
-  if (currentLevelNumber.value >= 3) return 'Little Learner'
-  return 'New Explorer'
+  if (currentLevelNumber.value >= 10) return t('studentAchievements.champion')
+  if (currentLevelNumber.value >= 5) return t('studentAchievements.confident')
+  if (currentLevelNumber.value >= 3) return t('studentAchievements.littleLearner')
+  return t('studentAchievements.explorer')
 })
 const levelProgressPercent = computed(() => clampPercent(rewards.value.progressToNextLevelPercent))
 const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
@@ -251,17 +274,21 @@ const overallProgressPercent = computed(() => clampPercent(progress.value.overal
 const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
 const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
 const progressTrendSummary = computed(
-  () => progress.value.lastActivitySummary || 'Your progress trend updates as you complete lessons and quizzes.',
+  () => progress.value.lastActivitySummary || t('studentAchievements.progressFallback'),
 )
 
 const achievementStats = computed(() => [
-  { icon: 'streak', value: String(nonNegativeInteger(streak.value.currentStreak)), label: 'Day Streak' },
+  {
+    icon: 'streak',
+    value: String(nonNegativeInteger(streak.value.currentStreak)),
+    label: t('studentAchievements.dayStreak'),
+  },
   { icon: 'star', value: formatNumber(rewards.value.totalPoints), label: 'XP' },
-  { icon: 'rewards', value: `${quizAveragePercent.value}%`, label: 'Quiz Avg' },
+  { icon: 'rewards', value: `${quizAveragePercent.value}%`, label: t('studentAchievements.quizAverage') },
   {
     icon: 'shield',
     value: String(badgeCount.value),
-    label: 'Badges',
+    label: t('studentAchievements.badges'),
   },
 ])
 const badgeCount = computed(() => (badges.value.length > 0 ? badges.value.length : rewards.value.badges.length))
@@ -384,7 +411,7 @@ function lessonIdLabel(lessonId: number | null | undefined, index: number): stri
 }
 
 function lessonTitleFallback(index: number): string {
-  return `Lesson ${index + 1}`
+  return t('studentAchievements.lesson', { number: index + 1 })
 }
 
 function reloadAll(): void {

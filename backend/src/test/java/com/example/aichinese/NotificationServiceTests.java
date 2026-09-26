@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -187,9 +191,8 @@ class NotificationServiceTests {
         Notification hidden = unreadTeacherFeedbackNotification(studentUser);
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
-        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(
-                STUDENT_USER_ID,
-                NotificationStatus.UNREAD))
+        when(notificationRepository.findUserStatusBatchBefore(
+                any(), any(), nullable(java.time.LocalDateTime.class), any(), any()))
                 .thenReturn(List.of(hidden, visible));
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.empty());
@@ -204,9 +207,8 @@ class NotificationServiceTests {
         Notification hidden = unreadTeacherFeedbackNotification(studentUser);
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
-        when(notificationRepository.findByUserIdAndNotificationStatusOrderByCreatedAtDesc(
-                STUDENT_USER_ID,
-                NotificationStatus.UNREAD))
+        when(notificationRepository.findUserStatusBatchBefore(
+                any(), any(), nullable(java.time.LocalDateTime.class), any(), any()))
                 .thenReturn(List.of(hidden, visible));
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.empty());
@@ -217,6 +219,31 @@ class NotificationServiceTests {
         assertThat(hidden.getNotificationStatus()).isEqualTo(NotificationStatus.UNREAD);
         assertThat(visible.getNotificationStatus()).isEqualTo(NotificationStatus.READ);
         verify(notificationRepository).saveAll(List.of(visible));
+    }
+
+    @Test
+    void unreadCountProcessesMoreThanOneRepositoryBatch() {
+        NotificationService service = service();
+        User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
+        List<Notification> firstBatch = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (long id = 300; id > 50; id--) {
+            Notification notification = notification(studentUser, null, null, NotificationStatus.UNREAD);
+            notification.setId(id);
+            notification.setCreatedAt(now.minusSeconds(300 - id));
+            firstBatch.add(notification);
+        }
+        Notification finalNotification = notification(studentUser, null, null, NotificationStatus.UNREAD);
+        finalNotification.setId(50L);
+        finalNotification.setCreatedAt(now.minusSeconds(250));
+
+        when(notificationRepository.findUserStatusBatchBefore(
+                any(), any(), nullable(LocalDateTime.class), any(), any()))
+                .thenReturn(firstBatch, List.of(finalNotification));
+
+        assertThat(service.countAccessibleUnreadNotifications(securityUser(studentUser))).isEqualTo(251);
+        verify(notificationRepository, times(2))
+                .findUserStatusBatchBefore(any(), any(), nullable(LocalDateTime.class), any(), any());
     }
 
     private NotificationService service() {

@@ -30,11 +30,7 @@ function apiResponse<T>(config: InternalAxiosRequestConfig, status: number, data
   }
 }
 
-function adapterResponse<T>(
-  config: InternalAxiosRequestConfig,
-  status: number,
-  data: T,
-): AxiosResponse<T> {
+function adapterResponse<T>(config: InternalAxiosRequestConfig, status: number, data: T): AxiosResponse<T> {
   const response = apiResponse(config, status, data)
   if (status >= 400) {
     throw new AxiosError(
@@ -137,9 +133,7 @@ describe('http auth refresh interceptor', () => {
 
       if (config.url === BUSINESS_LOGIN_HISTORY_URL) {
         businessCalls += 1
-        return businessCalls === 1
-          ? authExpired(config)
-          : ok(config, { success: true, data: { ok: true } })
+        return businessCalls === 1 ? authExpired(config) : ok(config, { success: true, data: { ok: true } })
       }
 
       throw new Error(`Unexpected request ${config.url}`)

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   clampNumber,
@@ -10,6 +10,10 @@ import {
   formatPercent,
   ratioPercent,
 } from './format'
+
+afterEach(() => {
+  document.documentElement.lang = 'en'
+})
 
 describe('format numeric helpers', () => {
   it('formats non-finite numbers with stable fallbacks', () => {
@@ -60,5 +64,14 @@ describe('format date helpers', () => {
     expect(formatDate('2026-05-20T12:00:00.000Z')).toBe('May 20, 2026')
     expect(formatDate('2026-05-20T12:00:00.000Z', { month: 'short', day: 'numeric' })).toBe('May 20')
     expect(formatDateTime('2026-05-20T12:00:00.000Z')).toMatch(/^May 20, \d{1,2}:00 (AM|PM)$/)
+  })
+
+  it('uses the active interface locale for dates and numbers', () => {
+    document.documentElement.lang = 'zh'
+    expect(formatNumber(1234)).toBe('1,234')
+    expect(formatDate('2026-05-20T12:00:00.000Z')).toBe('2026年5月20日')
+
+    document.documentElement.lang = 'ms'
+    expect(formatDate('2026-05-20T12:00:00.000Z')).toBe('20 Mei 2026')
   })
 })

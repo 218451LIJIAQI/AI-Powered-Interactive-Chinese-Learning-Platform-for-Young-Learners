@@ -15,9 +15,7 @@ export async function clearOfflineCaches(): Promise<void> {
   }
 
   const cacheNames = await window.caches.keys()
-  await Promise.all(
-    cacheNames.filter(isManagedOfflineCache).map((cacheName) => window.caches.delete(cacheName)),
-  )
+  await Promise.all(cacheNames.filter(isManagedOfflineCache).map((cacheName) => window.caches.delete(cacheName)))
 }
 
 function isManagedOfflineCache(cacheName: string): boolean {

@@ -1,20 +1,14 @@
 ﻿<template>
   <div class="page-stack admin-finance-page">
-    <PageHeaderBlock
-      title="Finance"
-      description="Manage payments, refunds, payouts, and the platform commission setting."
-      icon="finance"
-    />
+    <PageHeaderBlock :title="t('adminFinance.title')" :description="t('adminFinance.description')" icon="finance" />
 
     <DataNotice :using-fallback="usingFallback" :error="pageError" :success="actionSuccess" />
 
     <section class="admin-ops-hero admin-ops-hero--finance">
       <div>
-        <span class="admin-ops-kicker">Finance Operations</span>
-        <h2>Monitor payments, refunds, payouts, and commission signals in one trusted view.</h2>
-        <p>
-          Every action here stays connected to real backend finance endpoints while preserving a calm admin workflow.
-        </p>
+        <span class="admin-ops-kicker">{{ t('adminFinance.operations') }}</span>
+        <h2>{{ t('adminFinance.heroTitle') }}</h2>
+        <p>{{ t('adminFinance.heroHint') }}</p>
       </div>
       <div class="admin-ops-stat-grid">
         <article v-for="stat in financeHighlights" :key="stat.label">
@@ -27,23 +21,33 @@
 
     <section class="stats-grid admin-finance-stats">
       <MetricCard
-        label="Payments"
+        :label="t('adminFinance.payments')"
         :value="String(payments.length)"
-        subtitle="Recorded payment transactions"
+        :subtitle="t('adminFinance.paymentsHint')"
         icon="finance"
       />
-      <MetricCard label="Refunds" :value="String(refunds.length)" subtitle="Current refund records" icon="help" />
-      <MetricCard label="Payouts" :value="String(payouts.length)" subtitle="Teacher payout requests" icon="earnings" />
       <MetricCard
-        label="Commission"
+        :label="t('adminFinance.refunds')"
+        :value="String(refunds.length)"
+        :subtitle="t('adminFinance.refundsHint')"
+        icon="help"
+      />
+      <MetricCard
+        :label="t('adminFinance.payouts')"
+        :value="String(payouts.length)"
+        :subtitle="t('adminFinance.payoutsHint')"
+        icon="earnings"
+      />
+      <MetricCard
+        :label="t('adminFinance.commission')"
         :value="`${commissionRatePercent}%`"
-        subtitle="Platform commission rate"
+        :subtitle="t('adminFinance.commissionHint')"
         icon="chart"
       />
     </section>
 
     <section class="two-col admin-finance-grid">
-      <InfoCard title="Payments" subtitle="Recorded payment history." icon="finance">
+      <InfoCard :title="t('adminFinance.payments')" :subtitle="t('adminFinance.paymentHistory')" icon="finance">
         <div class="list">
           <ListInfoItem
             v-for="payment in payments"
@@ -55,14 +59,17 @@
             <template #aside>
               <div class="list-value-stack">
                 <strong>{{ formatCurrency(payment.amount, payment.currencyCode) }}</strong>
-                <StatusPill :label="payment.paymentStatus" :tone="paymentTone(payment.paymentStatus)" />
+                <StatusPill
+                  :label="financeStatusLabel(payment.paymentStatus)"
+                  :tone="paymentTone(payment.paymentStatus)"
+                />
               </div>
             </template>
           </ListInfoItem>
         </div>
       </InfoCard>
 
-      <InfoCard title="Refund requests" subtitle="Approve, reject, or mark refunded." icon="help">
+      <InfoCard :title="t('adminFinance.refundRequests')" :subtitle="t('adminFinance.refundActions')" icon="help">
         <div class="list">
           <ListInfoItem
             v-for="refund in refunds"
@@ -73,14 +80,14 @@
           >
             <template #aside>
               <div class="list-action-row">
-                <StatusPill :label="refund.refundStatus" :tone="refundTone(refund.refundStatus)" />
+                <StatusPill :label="financeStatusLabel(refund.refundStatus)" :tone="refundTone(refund.refundStatus)" />
                 <button
                   class="btn btn-secondary"
                   type="button"
                   :disabled="refundReadOnly || financeActionBusy || !canApproveRefund(refund.refundStatus)"
                   @click="approveRefund(refund.id)"
                 >
-                  Approve
+                  {{ t('adminFinance.approve') }}
                 </button>
                 <button
                   class="btn btn-secondary"
@@ -88,7 +95,7 @@
                   :disabled="refundReadOnly || financeActionBusy || !canRejectRefund(refund.refundStatus)"
                   @click="openRefundReject(refund.id)"
                 >
-                  Reject
+                  {{ t('adminFinance.reject') }}
                 </button>
                 <button
                   class="btn btn-ghost"
@@ -96,7 +103,7 @@
                   :disabled="refundReadOnly || financeActionBusy || !canMarkRefunded(refund.refundStatus)"
                   @click="markRefunded(refund.id)"
                 >
-                  Mark refunded
+                  {{ t('adminFinance.markRefunded') }}
                 </button>
               </div>
             </template>
@@ -106,7 +113,7 @@
     </section>
 
     <section class="two-col admin-finance-grid">
-      <InfoCard title="Payout requests" subtitle="Approve, reject, or mark paid." icon="earnings">
+      <InfoCard :title="t('adminFinance.payoutRequests')" :subtitle="t('adminFinance.payoutActions')" icon="earnings">
         <div class="list">
           <ListInfoItem
             v-for="payout in payouts"
@@ -119,14 +126,17 @@
               <div class="list-value-stack">
                 <strong>{{ formatCurrency(payout.amount, payout.currencyCode) }}</strong>
                 <div class="list-action-row">
-                  <StatusPill :label="payout.payoutStatus" :tone="payoutTone(payout.payoutStatus)" />
+                  <StatusPill
+                    :label="financeStatusLabel(payout.payoutStatus)"
+                    :tone="payoutTone(payout.payoutStatus)"
+                  />
                   <button
                     class="btn btn-secondary"
                     type="button"
                     :disabled="payoutReadOnly || financeActionBusy || !canApprovePayout(payout.payoutStatus)"
                     @click="approvePayout(payout.id)"
                   >
-                    Approve
+                    {{ t('adminFinance.approve') }}
                   </button>
                   <button
                     class="btn btn-secondary"
@@ -134,7 +144,7 @@
                     :disabled="payoutReadOnly || financeActionBusy || !canRejectPayout(payout.payoutStatus)"
                     @click="openPayoutReject(payout.id)"
                   >
-                    Reject
+                    {{ t('adminFinance.reject') }}
                   </button>
                   <button
                     class="btn btn-ghost"
@@ -142,7 +152,7 @@
                     :disabled="payoutReadOnly || financeActionBusy || !canMarkPaid(payout.payoutStatus)"
                     @click="markPaid(payout.id)"
                   >
-                    Mark paid
+                    {{ t('adminFinance.markPaid') }}
                   </button>
                 </div>
               </div>
@@ -152,17 +162,17 @@
       </InfoCard>
 
       <ActionFormCard
-        title="Commission setting"
-        subtitle="Real backend system setting"
+        :title="t('adminFinance.commissionSetting')"
+        :subtitle="t('adminFinance.settingHint')"
         icon="chart"
-        submit-label="Save commission"
-        submitting-label="Saving..."
+        :submit-label="t('adminFinance.saveCommission')"
+        :submitting-label="t('adminFinance.saving')"
         :submitting="submittingCommission"
         :disabled="commissionReadOnly"
         @submit="saveCommission"
       >
         <div class="field">
-          <label for="admin-commission-rate">Commission rate (0.0 to 1.0)</label>
+          <label for="admin-commission-rate">{{ t('adminFinance.commissionRate') }}</label>
           <input
             id="admin-commission-rate"
             v-model.number="commissionRate"
@@ -183,20 +193,20 @@
         :title="financeRejectionTitle"
         :subtitle="financeRejectionSubtitle"
         icon="help"
-        submit-label="Submit rejection"
-        submitting-label="Submitting..."
+        :submit-label="t('adminFinance.submitRejection')"
+        :submitting-label="t('adminFinance.submitting')"
         :submitting="financeActionBusy"
         :disabled="financeRejectionReadOnly"
         @submit="submitFinanceRejection"
       >
         <div class="field">
-          <label for="admin-finance-rejection-reason">Rejection reason</label>
+          <label for="admin-finance-rejection-reason">{{ t('adminFinance.rejectionReason') }}</label>
           <textarea
             id="admin-finance-rejection-reason"
             v-model="financeDecisionReason"
             class="textarea"
             maxlength="1000"
-            placeholder="Explain why this request is being rejected."
+            :placeholder="t('adminFinance.rejectionPlaceholder')"
             :disabled="financeActionBusy || financeRejectionReadOnly"
           />
         </div>
@@ -207,7 +217,7 @@
             :disabled="financeActionBusy"
             @click="cancelFinanceDecision"
           >
-            Cancel
+            {{ t('adminFinance.cancel') }}
           </button>
         </div>
       </ActionFormCard>
@@ -217,6 +227,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { adminApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -229,9 +240,18 @@ import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminPayments, adminPayouts, adminRefunds, commissionSetting } from '@/demo/data'
+import { adminFinanceMessages } from '@/plugins/adminFinanceMessages'
 import type { AdminPayoutRequestResponse, AdminRefundRequestResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampNumber, clampPercent, formatCurrency, toFiniteNumber } from '@/utils/format'
+
+const { t } = useI18n({
+  messages: {
+    en: { adminFinance: adminFinanceMessages.en },
+    ms: { adminFinance: adminFinanceMessages.ms },
+    zh: { adminFinance: adminFinanceMessages.zh },
+  },
+})
 
 type PillTone = 'danger' | 'info' | 'primary' | 'success' | 'warning'
 
@@ -243,7 +263,7 @@ const commissionResource = useResource(() => adminApi.commissionSetting(), commi
 const emptyCommission = {
   commissionRate: 0,
   settingKey: 'platform.commission-rate',
-  description: 'Platform commission rate is unavailable right now.',
+  description: t('adminFinance.unavailable'),
 }
 
 const payments = computed(
@@ -264,7 +284,7 @@ const pendingPayoutCount = computed(() => payouts.value.filter((payout) => payou
 const financeHighlights = computed(() => [
   {
     icon: 'finance',
-    label: 'Visible paid amount',
+    label: t('adminFinance.visiblePaid'),
     value: formatCurrency(
       totalRevenue.value,
       settledPayments.value[0]?.currencyCode ??
@@ -273,8 +293,8 @@ const financeHighlights = computed(() => [
         'MYR',
     ),
   },
-  { icon: 'chevronLeft', label: 'Refund queue', value: String(pendingRefundCount.value) },
-  { icon: 'earnings', label: 'Payout queue', value: String(pendingPayoutCount.value) },
+  { icon: 'chevronLeft', label: t('adminFinance.refundQueue'), value: String(pendingRefundCount.value) },
+  { icon: 'earnings', label: t('adminFinance.payoutQueue'), value: String(pendingPayoutCount.value) },
 ])
 const usingFallback = computed(
   () =>
@@ -304,12 +324,10 @@ const pendingFinanceDecision = ref<{ kind: 'refund' | 'payout'; id: number } | n
 const financeDecisionReason = ref('')
 const financeRejectionIsRefund = computed(() => pendingFinanceDecision.value?.kind === 'refund')
 const financeRejectionTitle = computed(() =>
-  financeRejectionIsRefund.value ? 'Reject refund request' : 'Reject payout request',
+  financeRejectionIsRefund.value ? t('adminFinance.rejectRefund') : t('adminFinance.rejectPayout'),
 )
 const financeRejectionSubtitle = computed(() =>
-  financeRejectionIsRefund.value
-    ? 'A real decision reason is required before rejecting the refund.'
-    : 'A real decision reason is required before rejecting the payout.',
+  financeRejectionIsRefund.value ? t('adminFinance.rejectRefundHint') : t('adminFinance.rejectPayoutHint'),
 )
 const financeRejectionReadOnly = computed(() =>
   financeRejectionIsRefund.value ? refundReadOnly.value : payoutReadOnly.value,
@@ -366,19 +384,34 @@ function payoutTone(status: string): PillTone {
   }
 }
 
+function financeStatusLabel(status: string): string {
+  const keys: Record<string, string> = {
+    PENDING: 'statusPending',
+    APPROVED: 'statusApproved',
+    REJECTED: 'statusRejected',
+    REFUNDED: 'statusRefunded',
+    PAID: 'statusPaid',
+    FAILED: 'statusFailed',
+    CANCELLED: 'statusCancelled',
+    PROCESSING: 'statusProcessing',
+  }
+  const key = keys[status]
+  return key ? t(`adminFinance.${key}`) : status
+}
+
 function refundDescription(refund: AdminRefundRequestResponse): string {
   const decision = refund.decisionReason?.trim()
   const owner = `${refund.studentName} • ${refund.studentEmail}`
   const base = `${owner} • ${refund.reason}`
-  return decision ? `${base} • Decision: ${decision}` : base
+  return decision ? `${base} • ${t('adminFinance.decision', { reason: decision })}` : base
 }
 
 function payoutDescription(payout: AdminPayoutRequestResponse): string {
-  const requestedNote = payout.requestedNote?.trim() || 'No note provided.'
+  const requestedNote = payout.requestedNote?.trim() || t('adminFinance.noNote')
   const decision = payout.decisionReason?.trim()
   const owner = `${payout.teacherName} • ${payout.teacherEmail}`
   const base = `${owner} • ${requestedNote}`
-  return decision ? `${base} • Decision: ${decision}` : base
+  return decision ? `${base} • ${t('adminFinance.decision', { reason: decision })}` : base
 }
 
 function canApproveRefund(status: string): boolean {
@@ -406,7 +439,7 @@ function canMarkPaid(status: string): boolean {
 }
 
 function openRefundReject(id: number): void {
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(refundReadOnly.value, t('adminFinance.refundPreview'))) return
   pendingFinanceDecision.value = { kind: 'refund', id }
   financeDecisionReason.value = ''
   actionError.value = null
@@ -414,7 +447,7 @@ function openRefundReject(id: number): void {
 }
 
 function openPayoutReject(id: number): void {
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(payoutReadOnly.value, t('adminFinance.payoutPreview'))) return
   pendingFinanceDecision.value = { kind: 'payout', id }
   financeDecisionReason.value = ''
   actionError.value = null
@@ -429,39 +462,30 @@ function cancelFinanceDecision(): void {
 
 async function approveRefund(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
-  if (!confirmFinanceAction('Approve this refund request?')) return
-  await runFinanceAction(() => adminApi.approveRefund(id), refundsResource.reload, 'Unable to approve this refund.')
+  if (!ensureFinanceLive(refundReadOnly.value, t('adminFinance.refundPreview'))) return
+  if (!confirmFinanceAction(t('adminFinance.confirmRefundApprove'))) return
+  await runFinanceAction(() => adminApi.approveRefund(id), refundsResource.reload, t('adminFinance.approveRefundError'))
 }
 
 async function markRefunded(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(refundReadOnly.value, 'Refund requests cannot be changed while preview data is active.')) return
-  if (!confirmFinanceAction('Mark this refund as refunded? Confirm only after the provider refund has been completed.'))
-    return
-  await runFinanceAction(
-    () => adminApi.markRefunded(id),
-    refundsResource.reload,
-    'Unable to mark this refund as refunded.',
-  )
+  if (!ensureFinanceLive(refundReadOnly.value, t('adminFinance.refundPreview'))) return
+  if (!confirmFinanceAction(t('adminFinance.confirmRefunded'))) return
+  await runFinanceAction(() => adminApi.markRefunded(id), refundsResource.reload, t('adminFinance.markRefundedError'))
 }
 
 async function approvePayout(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
-  if (!confirmFinanceAction('Approve this teacher payout request?')) return
-  await runFinanceAction(() => adminApi.approvePayout(id), payoutsResource.reload, 'Unable to approve this payout.')
+  if (!ensureFinanceLive(payoutReadOnly.value, t('adminFinance.payoutPreview'))) return
+  if (!confirmFinanceAction(t('adminFinance.confirmPayoutApprove'))) return
+  await runFinanceAction(() => adminApi.approvePayout(id), payoutsResource.reload, t('adminFinance.approvePayoutError'))
 }
 
 async function markPaid(id: number): Promise<void> {
   if (financeActionBusy.value) return
-  if (!ensureFinanceLive(payoutReadOnly.value, 'Payout requests cannot be changed while preview data is active.')) return
-  if (!confirmFinanceAction('Mark this payout as paid? Confirm only after funds have been sent.')) return
-  await runFinanceAction(
-    () => adminApi.markPayoutPaid(id),
-    payoutsResource.reload,
-    'Unable to mark this payout as paid.',
-  )
+  if (!ensureFinanceLive(payoutReadOnly.value, t('adminFinance.payoutPreview'))) return
+  if (!confirmFinanceAction(t('adminFinance.confirmPaid'))) return
+  await runFinanceAction(() => adminApi.markPayoutPaid(id), payoutsResource.reload, t('adminFinance.markPaidError'))
 }
 
 async function submitFinanceRejection(): Promise<void> {
@@ -471,12 +495,12 @@ async function submitFinanceRejection(): Promise<void> {
     return
   }
   const readOnly = pendingDecision.kind === 'refund' ? refundReadOnly.value : payoutReadOnly.value
-  if (!ensureFinanceLive(readOnly, 'Finance decisions cannot be changed while preview data is active.')) return
+  if (!ensureFinanceLive(readOnly, t('adminFinance.financePreview'))) return
 
   const reason = financeDecisionReason.value.trim()
   if (!reason) {
     actionSuccess.value = null
-    actionError.value = 'Enter a rejection reason before submitting the finance decision.'
+    actionError.value = t('adminFinance.reasonRequired')
     return
   }
 
@@ -484,7 +508,7 @@ async function submitFinanceRejection(): Promise<void> {
     await runFinanceAction(
       () => adminApi.rejectRefund(pendingDecision.id, { reason }),
       refundsResource.reload,
-      'Unable to reject this refund.',
+      t('adminFinance.rejectRefundError'),
     )
     return
   }
@@ -492,16 +516,13 @@ async function submitFinanceRejection(): Promise<void> {
   await runFinanceAction(
     () => adminApi.rejectPayout(pendingDecision.id, { reason }),
     payoutsResource.reload,
-    'Unable to reject this payout.',
+    t('adminFinance.rejectPayoutError'),
   )
 }
 
 async function saveCommission(): Promise<void> {
   if (submittingCommission.value) return
-  if (
-    !ensureFinanceLive(commissionReadOnly.value, 'Commission settings cannot be changed while preview data is active.')
-  )
-    return
+  if (!ensureFinanceLive(commissionReadOnly.value, t('adminFinance.commissionPreview'))) return
   actionError.value = null
   actionSuccess.value = null
   submittingCommission.value = true
@@ -510,9 +531,9 @@ async function saveCommission(): Promise<void> {
     commissionRate.value = normalizedRate
     await adminApi.updateCommissionSetting({ commissionRate: normalizedRate })
     await commissionResource.reload()
-    actionSuccess.value = 'Commission setting saved and refreshed.'
+    actionSuccess.value = t('adminFinance.commissionSaved')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save the commission setting.')
+    actionError.value = resolveApiError(reason, t('adminFinance.commissionSaveError'))
   } finally {
     submittingCommission.value = false
   }
@@ -531,7 +552,7 @@ async function runFinanceAction(
     await reload()
     pendingFinanceDecision.value = null
     financeDecisionReason.value = ''
-    actionSuccess.value = 'Finance action completed and data refreshed.'
+    actionSuccess.value = t('adminFinance.actionComplete')
   } catch (reason) {
     actionError.value = resolveApiError(reason, fallback)
   } finally {
@@ -551,7 +572,7 @@ function clampCommissionRate(value: number): number {
 }
 
 function confirmFinanceAction(message: string): boolean {
-  const confirmed = window.confirm(`${message}\n\nThis updates live finance records.`)
+  const confirmed = window.confirm(`${message}\n\n${t('adminFinance.liveWarning')}`)
   if (!confirmed) {
     actionSuccess.value = null
     actionError.value = null

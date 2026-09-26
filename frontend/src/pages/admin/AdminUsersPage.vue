@@ -1,19 +1,19 @@
 <template>
   <div class="page-stack admin-users-page">
     <PageHeaderBlock
-      title="Users"
-      description="Review the user directory, role context, and manage live account access."
+      :title="t('adminUsers.title')"
+      :description="t('adminUsers.description')"
       icon="users"
-      eyebrow="Operations"
+      :eyebrow="t('adminUsers.eyebrow')"
     />
 
     <DataNotice
       :using-fallback="usingFallback"
       :error="noticeError"
       :success="actionSuccess"
-      fallback-title="Preview operations mode"
-      fallback-message="User records, role context, and audit shortcuts are showing safe preview data for this preview session."
-      error-title="User directory unavailable"
+      :fallback-title="t('adminUsers.previewTitle')"
+      :fallback-message="t('adminUsers.previewMessage')"
+      :error-title="t('adminUsers.unavailableTitle')"
       :detail="directoryNoticeDetail"
     />
 
@@ -37,11 +37,7 @@
             <div class="admin-users-toolbar-top">
               <label class="admin-users-search">
                 <IconGlyph name="search" :size="18" />
-                <input
-                  v-model="searchTerm"
-                  class="admin-users-search-input"
-                  placeholder="Search users by name, email, or ID..."
-                />
+                <input v-model="searchTerm" class="admin-users-search-input" :placeholder="t('adminUsers.search')" />
               </label>
 
               <button
@@ -59,7 +55,7 @@
                 @click="openAnalytics"
               >
                 <IconGlyph name="chart" :size="16" />
-                <span>Analytics</span>
+                <span>{{ t('adminUsers.analytics') }}</span>
               </button>
             </div>
 
@@ -103,12 +99,14 @@
                 </button>
               </div>
 
-              <button class="student-link-button admin-users-clear" type="button" @click="clearFilters">Clear</button>
+              <button class="student-link-button admin-users-clear" type="button" @click="clearFilters">
+                {{ t('adminUsers.clear') }}
+              </button>
             </div>
           </div>
 
           <div class="admin-users-table-meta">
-            <span>Total {{ filteredUsers.length }} users</span>
+            <span>{{ t('adminUsers.totalUsers', { count: filteredUsers.length }) }}</span>
             <span>{{ selectedUserMetaLabel }}</span>
           </div>
 
@@ -116,13 +114,13 @@
             <template v-if="pagedUsers.length">
               <div class="admin-users-table-header">
                 <span />
-                <span>User</span>
-                <span>Role</span>
-                <span>Status</span>
-                <span>Account State</span>
-                <span>Last Active</span>
-                <span>Joined Date</span>
-                <span>Actions</span>
+                <span>{{ t('adminUsers.user') }}</span>
+                <span>{{ t('adminUsers.role') }}</span>
+                <span>{{ t('adminUsers.status') }}</span>
+                <span>{{ t('adminUsers.accountState') }}</span>
+                <span>{{ t('adminUsers.lastActive') }}</span>
+                <span>{{ t('adminUsers.joinedDate') }}</span>
+                <span>{{ t('adminUsers.actions') }}</span>
               </div>
 
               <article
@@ -132,7 +130,7 @@
                 :class="{ 'is-active': selectedUser?.userId === user.userId }"
                 tabindex="0"
                 role="button"
-                :aria-label="`Open account details for ${user.fullName}`"
+                :aria-label="t('adminUsers.openDetailsAria', { name: user.fullName })"
                 @click="selectUser(user.userId)"
                 @keydown.enter.prevent="selectUser(user.userId)"
                 @keydown.space.prevent="selectUser(user.userId)"
@@ -169,7 +167,7 @@
                 <button
                   class="admin-users-more"
                   type="button"
-                  aria-label="Open user details"
+                  :aria-label="t('adminUsers.openDetailsAria', { name: user.fullName })"
                   @click.stop="selectUser(user.userId)"
                 >
                   <IconGlyph name="more" :size="18" />
@@ -180,23 +178,21 @@
               v-else
               class="admin-users-empty-state"
               icon="search"
-              eyebrow="No matches"
-              title="No users match this view"
-              :message="
-                hasActiveFilters
-                  ? 'Clear or adjust the current filters to bring more users back into view.'
-                  : 'User records will appear here once the directory returns data.'
-              "
+              :eyebrow="t('adminUsers.noMatches')"
+              :title="t('adminUsers.noUsers')"
+              :message="hasActiveFilters ? t('adminUsers.adjustFilters') : t('adminUsers.recordsPending')"
             >
               <template v-if="hasActiveFilters" #actions>
-                <button class="btn btn-secondary" type="button" @click="clearFilters">Clear filters</button>
+                <button class="btn btn-secondary" type="button" @click="clearFilters">
+                  {{ t('adminUsers.clearFilters') }}
+                </button>
               </template>
             </StatePanel>
           </div>
 
           <div class="admin-users-pagination">
             <div class="row admin-users-pagination-left">
-              <span>Rows per page:</span>
+              <span>{{ t('adminUsers.rowsPerPage') }}</span>
               <span class="teacher-outline-button admin-users-page-size" aria-hidden="true">10</span>
             </div>
 
@@ -206,7 +202,7 @@
               <button
                 class="admin-users-page-button"
                 type="button"
-                aria-label="Previous users page"
+                :aria-label="t('adminUsers.previousPage')"
                 :disabled="currentPage === 1"
                 @click="goToPreviousPage"
               >
@@ -227,7 +223,7 @@
               <button
                 class="admin-users-page-button"
                 type="button"
-                aria-label="Next users page"
+                :aria-label="t('adminUsers.nextPage')"
                 :disabled="currentPage === totalPages"
                 @click="goToNextPage"
               >
@@ -264,7 +260,12 @@
                   </div>
                 </div>
 
-                <button class="admin-users-close" type="button" aria-label="Close user panel" @click="clearSelection">
+                <button
+                  class="admin-users-close"
+                  type="button"
+                  :aria-label="t('adminUsers.closePanel')"
+                  @click="clearSelection"
+                >
                   <IconGlyph name="close" :size="20" />
                 </button>
               </div>
@@ -272,21 +273,25 @@
 
             <article class="panel admin-users-info-card">
               <div class="student-section-heading">
-                <strong>Account Info</strong>
+                <strong>{{ t('adminUsers.accountInfo') }}</strong>
               </div>
 
               <div class="admin-users-info-grid">
                 <div>
-                  <span>Joined Date</span><strong>{{ selectedUser.joinedLabel }}</strong>
+                  <span>{{ t('adminUsers.joinedDate') }}</span
+                  ><strong>{{ selectedUser.joinedLabel }}</strong>
                 </div>
                 <div>
-                  <span>Last Active</span><strong>{{ selectedUser.lastActiveLabel }}</strong>
+                  <span>{{ t('adminUsers.lastActive') }}</span
+                  ><strong>{{ selectedUser.lastActiveLabel }}</strong>
                 </div>
                 <div>
-                  <span>Account State</span><strong>{{ selectedUser.accountLabel }}</strong>
+                  <span>{{ t('adminUsers.accountState') }}</span
+                  ><strong>{{ selectedUser.accountLabel }}</strong>
                 </div>
                 <div>
-                  <span>Profile Status</span><strong>{{ selectedUser.statusLabel }}</strong>
+                  <span>{{ t('adminUsers.profileStatus') }}</span
+                  ><strong>{{ selectedUser.statusLabel }}</strong>
                 </div>
               </div>
             </article>
@@ -294,23 +299,26 @@
             <article class="panel admin-users-progress-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Directory Context</strong>
+                  <strong>{{ t('adminUsers.directoryContext') }}</strong>
                 </div>
                 <button class="student-link-button" type="button" @click="openProgressTarget">
-                  Open Relevant Page
+                  {{ t('adminUsers.openRelevant') }}
                 </button>
               </div>
 
               <div class="admin-users-progress-wrap admin-users-progress-wrap--context">
                 <div class="admin-users-progress-copy">
                   <div>
-                    <span>Role</span><strong>{{ selectedUser.roleLabel }}</strong>
+                    <span>{{ t('adminUsers.role') }}</span
+                    ><strong>{{ selectedUser.roleLabel }}</strong>
                   </div>
                   <div>
-                    <span>Account State</span><strong>{{ selectedUser.accountLabel }}</strong>
+                    <span>{{ t('adminUsers.accountState') }}</span
+                    ><strong>{{ selectedUser.accountLabel }}</strong>
                   </div>
                   <div>
-                    <span>Profile Status</span><strong>{{ selectedUser.statusLabel }}</strong>
+                    <span>{{ t('adminUsers.profileStatus') }}</span
+                    ><strong>{{ selectedUser.statusLabel }}</strong>
                   </div>
                 </div>
               </div>
@@ -319,9 +327,11 @@
             <article class="panel admin-users-activity-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Follow-up Routes</strong>
+                  <strong>{{ t('adminUsers.followupRoutes') }}</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="openActivityTarget">Open Route</button>
+                <button class="student-link-button" type="button" @click="openActivityTarget">
+                  {{ t('adminUsers.openRoute') }}
+                </button>
               </div>
 
               <div class="admin-users-activity-list">
@@ -333,7 +343,9 @@
                     <strong>{{ item.title }}</strong>
                     <span>{{ item.copy }}</span>
                   </div>
-                  <button class="student-link-button" type="button" @click="openAdminRoute(item.path)">Open</button>
+                  <button class="student-link-button" type="button" @click="openAdminRoute(item.path)">
+                    {{ t('adminUsers.open') }}
+                  </button>
                 </article>
               </div>
             </article>
@@ -341,9 +353,11 @@
             <article class="panel admin-users-audit-card">
               <div class="row-between">
                 <div class="student-section-heading">
-                  <strong>Audit Log (Latest 5)</strong>
+                  <strong>{{ t('adminUsers.auditLatest') }}</strong>
                 </div>
-                <button class="student-link-button" type="button" @click="openSettings">View All</button>
+                <button class="student-link-button" type="button" @click="openSettings">
+                  {{ t('adminUsers.viewAll') }}
+                </button>
               </div>
 
               <div class="admin-users-audit-list">
@@ -359,7 +373,7 @@
 
             <article class="panel admin-users-actions-card">
               <div class="student-section-heading">
-                <strong>Account Actions</strong>
+                <strong>{{ t('adminUsers.accountActions') }}</strong>
               </div>
 
               <div class="admin-users-actions-grid">
@@ -383,16 +397,15 @@
                   type="button"
                   @click="openTeacherVerification"
                 >
-                  Review Teacher Verification
+                  {{ t('adminUsers.reviewTeacher') }}
                 </button>
                 <button class="admin-users-action-safe" type="button" @click="openRecoveryAction">
-                  Open Settings & Audit
+                  {{ t('adminUsers.openSettingsAudit') }}
                 </button>
               </div>
 
               <small class="admin-users-actions-note">
-                Suspend or restore live access here, then use verification, content, analytics, and audit routes for
-                deeper follow-up.
+                {{ t('adminUsers.actionsHint') }}
               </small>
             </article>
           </template>
@@ -400,13 +413,9 @@
             v-else
             class="admin-users-empty-sidebar"
             icon="users"
-            eyebrow="Selection"
-            title="Pick a user to inspect details"
-            :message="
-              filteredUsers.length
-                ? 'Choose a user from the directory to review account context, progress, and audit history.'
-                : 'Broaden the current filters or refresh the directory to restore the user list.'
-            "
+            :eyebrow="t('adminUsers.selection')"
+            :title="t('adminUsers.pickUser')"
+            :message="filteredUsers.length ? t('adminUsers.chooseUserHint') : t('adminUsers.broadenFilters')"
           />
         </aside>
       </section>
@@ -416,6 +425,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { adminApi } from '@/api/services'
@@ -427,15 +437,23 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAuditLogs, adminStudents, adminTeachers, adminUsers } from '@/demo/data'
+import { adminUsersMessages } from '@/plugins/adminUsersMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDate, formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { adminUsers: adminUsersMessages.en },
+    ms: { adminUsers: adminUsersMessages.ms },
+    zh: { adminUsers: adminUsersMessages.zh },
+  },
+})
 
 type TabKey = 'ALL' | 'STUDENTS' | 'TEACHERS' | 'ADMINS'
 type RoleFilter = 'ALL' | 'STUDENT' | 'TEACHER' | 'ADMIN'
 type StatusFilter = 'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'
-type AccountFilter = 'ALL' | 'VERIFIED' | 'VERIFICATION'
+type AccountFilter = 'ALL' | 'VERIFIED' | 'VERIFICATION' | 'SUSPENDED'
 type ClassFilter = 'ALL' | 'ENROLLED' | 'PUBLISHED' | 'ADMIN'
 type SortMode = 'joined' | 'name'
 type ExtraFilter = 'filters' | 'recent' | 'verified'
@@ -445,18 +463,18 @@ type StatusTone = 'active' | 'pending' | 'inactive'
 type AccountTone = 'verified' | 'warning'
 type AvatarKind = 'student' | 'female' | 'male' | 'hijab'
 type FollowUpTone = 'green' | 'blue' | 'purple'
-type AdminUserRoute = '/admin/analytics' | '/admin/content' | '/admin/moderation' | '/admin/settings' | '/admin/teacher-verification'
+type AdminUserRoute =
+  | '/admin/analytics'
+  | '/admin/content'
+  | '/admin/moderation'
+  | '/admin/settings'
+  | '/admin/teacher-verification'
 
 const roleFilterOrder: readonly RoleFilter[] = ['ALL', 'STUDENT', 'TEACHER', 'ADMIN']
 const statusFilterOrder: readonly StatusFilter[] = ['ALL', 'ACTIVE', 'PENDING', 'INACTIVE']
-const accountFilterOrder: readonly AccountFilter[] = ['ALL', 'VERIFIED', 'VERIFICATION']
+const accountFilterOrder: readonly AccountFilter[] = ['ALL', 'VERIFIED', 'VERIFICATION', 'SUSPENDED']
 const classFilterOrder: readonly ClassFilter[] = ['ALL', 'ENROLLED', 'PUBLISHED', 'ADMIN']
 const extraFilterOrder: readonly ExtraFilter[] = ['filters', 'recent', 'verified']
-const roleLabels: Record<PrimaryRole, string> = {
-  ADMIN: 'Admin',
-  TEACHER: 'Teacher',
-  STUDENT: 'Student',
-}
 const roleTones: Record<PrimaryRole, RoleTone> = {
   ADMIN: 'purple',
   TEACHER: 'blue',
@@ -519,19 +537,15 @@ const submittingUserStatus = ref(false)
 const userStatusActionDisabled = computed(() => usingFallback.value || submittingUserStatus.value)
 const noticeError = computed(() => actionError.value || pageError.value)
 const directoryNoticeDetail = computed(() =>
-  pageError.value
-    ? 'Filters and selected-user context remain visible so you can still review the current data snapshot.'
-    : usingFallback.value
-      ? 'Preview data keeps the user directory, role breakdown, and recent activity flows testable.'
-      : null,
+  pageError.value ? t('adminUsers.errorContext') : usingFallback.value ? t('adminUsers.previewContext') : null,
 )
 
-const tabs: Array<{ label: string; value: TabKey }> = [
-  { label: 'All Users', value: 'ALL' },
-  { label: 'Students', value: 'STUDENTS' },
-  { label: 'Teachers', value: 'TEACHERS' },
-  { label: 'Admins', value: 'ADMINS' },
-]
+const tabs = computed<Array<{ label: string; value: TabKey }>>(() => [
+  { label: t('adminUsers.allUsers'), value: 'ALL' },
+  { label: t('adminUsers.students'), value: 'STUDENTS' },
+  { label: t('adminUsers.teachers'), value: 'TEACHERS' },
+  { label: t('adminUsers.admins'), value: 'ADMINS' },
+])
 
 const searchTerm = ref('')
 const activeTab = ref<TabKey>('ALL')
@@ -553,10 +567,13 @@ type CombinedUser = {
   roleKey: PrimaryRole
   roleTone: RoleTone
   statusLabel: string
+  statusKey: Exclude<StatusFilter, 'ALL'>
   statusTone: StatusTone
   accountLabel: string
+  accountKey: Exclude<AccountFilter, 'ALL'>
   accountTone: AccountTone
   lastActiveLabel: string
+  lastActiveAt: string
   joinedLabel: string
   internalId: string
   avatarKind: AvatarKind
@@ -581,22 +598,25 @@ const combinedUsers = computed<CombinedUser[]>(() => {
     const teacher = teacherByUserId.get(item.userId)
     const teacherStatus = teacher?.teacherStatus ?? item.teacherStatus ?? null
     const isStudent = studentUserIds.has(item.userId)
-    const statusLabel = getStatusLabel(item.active, primaryRole, teacherStatus)
-    const accountLabel = getAccountLabel(item.active, primaryRole, teacherStatus)
+    const statusKey = getStatusKey(item.active, primaryRole, teacherStatus)
+    const accountKey = getAccountKey(item.active, primaryRole, teacherStatus)
 
     return {
       userId: item.userId,
       fullName: item.fullName,
       email: item.email,
       active: item.active,
-      roleLabel: roleLabels[primaryRole],
+      roleLabel: roleLabel(primaryRole),
       roleKey: primaryRole,
       roleTone: roleTones[primaryRole],
-      statusLabel,
-      statusTone: getStatusTone(statusLabel),
-      accountLabel,
-      accountTone: getAccountTone(accountLabel),
+      statusLabel: statusLabel(statusKey),
+      statusKey,
+      statusTone: getStatusTone(statusKey),
+      accountLabel: accountLabel(accountKey),
+      accountKey,
+      accountTone: getAccountTone(accountKey),
       lastActiveLabel: formatDate(item.updatedAt),
+      lastActiveAt: item.updatedAt,
       joinedLabel: formatDate(item.createdAt),
       internalId: `${roleIdPrefixes[primaryRole]}-${String(item.userId).padStart(6, '0')}`,
       avatarKind: getAvatarKind(primaryRole, item.fullName),
@@ -615,12 +635,12 @@ const filteredUsers = computed(() => {
     if (activeTab.value === 'ADMINS' && item.roleKey !== 'ADMIN') return false
 
     if (roleFilter.value !== 'ALL' && item.roleKey !== roleFilter.value) return false
-    if (statusFilter.value !== 'ALL' && item.statusLabel.toUpperCase() !== statusFilter.value) return false
-    if (accountFilter.value !== 'ALL' && item.accountLabel.toUpperCase() !== accountFilter.value) return false
+    if (statusFilter.value !== 'ALL' && item.statusKey !== statusFilter.value) return false
+    if (accountFilter.value !== 'ALL' && item.accountKey !== accountFilter.value) return false
     if (classFilter.value !== 'ALL' && item.classKey !== classFilter.value) return false
 
-    if (extraFilter.value === 'recent' && !item.lastActiveLabel.startsWith('Today')) return false
-    if (extraFilter.value === 'verified' && item.accountLabel !== 'Verified') return false
+    if (extraFilter.value === 'recent' && !isToday(item.lastActiveAt)) return false
+    if (extraFilter.value === 'verified' && item.accountKey !== 'VERIFIED') return false
 
     if (!keyword) return true
     return (
@@ -685,60 +705,66 @@ watch(
   { immediate: true, deep: true },
 )
 
-const roleFilterLabel = computed(() => (roleFilter.value === 'ALL' ? 'All Roles' : roleFilter.value))
-const statusFilterLabel = computed(() => (statusFilter.value === 'ALL' ? 'All Status' : statusFilter.value))
-const accountFilterLabel = computed(() => (accountFilter.value === 'ALL' ? 'All Account States' : accountFilter.value))
+const roleFilterLabel = computed(() =>
+  roleFilter.value === 'ALL' ? t('adminUsers.allRoles') : roleLabel(roleFilter.value),
+)
+const statusFilterLabel = computed(() =>
+  statusFilter.value === 'ALL' ? t('adminUsers.allStatus') : statusLabel(statusFilter.value),
+)
+const accountFilterLabel = computed(() =>
+  accountFilter.value === 'ALL' ? t('adminUsers.allAccounts') : accountLabel(accountFilter.value),
+)
 const classFilterLabel = computed(() => {
-  if (classFilter.value === 'ALL') return 'All Classes / Courses'
-  if (classFilter.value === 'ENROLLED') return 'Enrolled'
-  if (classFilter.value === 'PUBLISHED') return 'Published'
-  return 'Admin Access'
+  if (classFilter.value === 'ALL') return t('adminUsers.allClasses')
+  if (classFilter.value === 'ENROLLED') return t('adminUsers.enrolled')
+  if (classFilter.value === 'PUBLISHED') return t('adminUsers.published')
+  return t('adminUsers.adminAccess')
 })
-const sortModeLabel = computed(() => (sortMode.value === 'joined' ? 'Filters' : 'A-Z'))
+const sortModeLabel = computed(() => (sortMode.value === 'joined' ? t('adminUsers.filters') : 'A-Z'))
 const selectedUserStatusActionLabel = computed(() => {
-  if (!selectedUser.value) return 'Update account'
-  if (submittingUserStatus.value) return selectedUser.value.active ? 'Suspending...' : 'Reactivating...'
-  return selectedUser.value.active ? 'Suspend account' : 'Reactivate account'
+  if (!selectedUser.value) return t('adminUsers.updateAccount')
+  if (submittingUserStatus.value) {
+    return selectedUser.value.active ? t('adminUsers.suspending') : t('adminUsers.reactivating')
+  }
+  return selectedUser.value.active ? t('adminUsers.suspend') : t('adminUsers.reactivate')
 })
 const extraFilterLabel = computed(() => {
-  if (extraFilter.value === 'recent') return 'Recent'
-  if (extraFilter.value === 'verified') return 'Verified'
-  return 'More Filters'
+  if (extraFilter.value === 'recent') return t('adminUsers.recent')
+  if (extraFilter.value === 'verified') return t('adminUsers.verified')
+  return t('adminUsers.moreFilters')
 })
 const selectedUserMetaLabel = computed(() => {
-  if (selectedUser.value) return `Focused on ${selectedUser.value.fullName}`
+  if (selectedUser.value) return t('adminUsers.focusedOn', { name: selectedUser.value.fullName })
   if (!filteredUsers.value.length) {
-    return hasActiveFilters.value
-      ? 'No users match the current filters.'
-      : 'User records will appear here once the directory loads.'
+    return hasActiveFilters.value ? t('adminUsers.noFilterMatch') : t('adminUsers.recordsPending')
   }
-  return 'Choose a user to inspect account context.'
+  return t('adminUsers.chooseContext')
 })
 const paginationLabel = computed(() => {
   const start = filteredUsers.value.length ? (currentPage.value - 1) * pageSize + 1 : 0
   const end = Math.min(filteredUsers.value.length, currentPage.value * pageSize)
-  return `${start}-${end} of ${filteredUsers.value.length}`
+  return t('adminUsers.pagination', { start, end, total: filteredUsers.value.length })
 })
 const selectedFollowUpRoutes = computed<FollowUpRoute[]>(() => {
   if (selectedUser.value?.roleKey === 'TEACHER') {
     return [
       {
-        title: 'Teacher Verification',
-        copy: 'Review status, documents, and approval notes.',
+        title: t('adminUsers.teacherVerification'),
+        copy: t('adminUsers.teacherVerificationHint'),
         icon: 'status',
         tone: 'green',
         path: '/admin/teacher-verification',
       },
       {
-        title: 'Content Review',
-        copy: 'Open submitted teacher content and moderation flow.',
+        title: t('adminUsers.contentReview'),
+        copy: t('adminUsers.contentReviewHint'),
         icon: 'content',
         tone: 'blue',
         path: '/admin/content',
       },
       {
-        title: 'Audit Trail',
-        copy: 'Review latest admin activity records.',
+        title: t('adminUsers.auditTrail'),
+        copy: t('adminUsers.auditTrailHint'),
         icon: 'history',
         tone: 'purple',
         path: '/admin/settings',
@@ -749,22 +775,22 @@ const selectedFollowUpRoutes = computed<FollowUpRoute[]>(() => {
   if (selectedUser.value?.roleKey === 'ADMIN') {
     return [
       {
-        title: 'Audit Logs',
-        copy: 'Inspect latest platform audit events.',
+        title: t('adminUsers.auditLogs'),
+        copy: t('adminUsers.auditLogsHint'),
         icon: 'status',
         tone: 'green',
         path: '/admin/settings',
       },
       {
-        title: 'Analytics',
-        copy: 'Review platform performance and usage trends.',
+        title: t('adminUsers.platformAnalytics'),
+        copy: t('adminUsers.platformAnalyticsHint'),
         icon: 'analytics',
         tone: 'blue',
         path: '/admin/analytics',
       },
       {
-        title: 'Moderation',
-        copy: 'Open content and AI safety review queues.',
+        title: t('adminUsers.moderation'),
+        copy: t('adminUsers.moderationHint'),
         icon: 'moderation',
         tone: 'purple',
         path: '/admin/moderation',
@@ -774,22 +800,22 @@ const selectedFollowUpRoutes = computed<FollowUpRoute[]>(() => {
 
   return [
     {
-      title: 'Analytics',
-      copy: 'Review learner progress from aggregate analytics.',
+      title: t('adminUsers.learnerAnalytics'),
+      copy: t('adminUsers.learnerAnalyticsHint'),
       icon: 'analytics',
       tone: 'green',
       path: '/admin/analytics',
     },
     {
-      title: 'Audit Logs',
-      copy: 'Inspect account-related audit events.',
+      title: t('adminUsers.auditLogs'),
+      copy: t('adminUsers.accountAuditHint'),
       icon: 'history',
       tone: 'blue',
       path: '/admin/settings',
     },
     {
-      title: 'Support Settings',
-      copy: 'Open support and operational settings.',
+      title: t('adminUsers.supportSettings'),
+      copy: t('adminUsers.supportSettingsHint'),
       icon: 'settings',
       tone: 'purple',
       path: '/admin/settings',
@@ -798,23 +824,23 @@ const selectedFollowUpRoutes = computed<FollowUpRoute[]>(() => {
 })
 
 const primaryActionLabel = computed(() => {
-  if (selectedUser.value?.roleKey === 'TEACHER') return 'Open teacher review'
-  if (selectedUser.value?.roleKey === 'STUDENT') return 'Open analytics'
-  return 'Open audit logs'
+  if (selectedUser.value?.roleKey === 'TEACHER') return t('adminUsers.openTeacherReview')
+  if (selectedUser.value?.roleKey === 'STUDENT') return t('adminUsers.openAnalytics')
+  return t('adminUsers.openAuditLogs')
 })
 
 const secondaryActionLabel = computed(() => {
-  if (selectedUser.value?.roleKey === 'TEACHER') return 'Open content review'
-  if (selectedUser.value?.roleKey === 'STUDENT') return 'Open support settings'
-  return 'Open platform analytics'
+  if (selectedUser.value?.roleKey === 'TEACHER') return t('adminUsers.openContentReview')
+  if (selectedUser.value?.roleKey === 'STUDENT') return t('adminUsers.openSupport')
+  return t('adminUsers.openPlatformAnalytics')
 })
 
 const selectedAudit = computed(() =>
   auditLogs.value.slice(0, 5).map((item) => ({
     id: item.id,
-    title: item.actionType.replaceAll('_', ' '),
+    title: auditActionLabel(item.actionType),
     time: formatDateTime(item.createdAt),
-    meta: item.actorEmail || 'System',
+    meta: item.actorEmail || t('adminUsers.system'),
   })),
 )
 
@@ -940,7 +966,7 @@ async function toggleSelectedUserStatus(): Promise<void> {
 
   if (usingFallback.value) {
     actionSuccess.value = null
-    actionError.value = 'Account access cannot be changed while preview data is active.'
+    actionError.value = t('adminUsers.previewMutation')
     return
   }
 
@@ -954,9 +980,9 @@ async function toggleSelectedUserStatus(): Promise<void> {
     await usersResource.reload()
     await teachersResource.reload()
     await studentsResource.reload()
-    actionSuccess.value = nextActive ? 'Account reactivated successfully.' : 'Account suspended successfully.'
+    actionSuccess.value = nextActive ? t('adminUsers.reactivated') : t('adminUsers.suspended')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to update account access right now.')
+    actionError.value = resolveApiError(reason, t('adminUsers.updateError'))
   } finally {
     submittingUserStatus.value = false
   }
@@ -979,25 +1005,76 @@ function getPrimaryRole(roles: readonly string[]): PrimaryRole {
   return 'STUDENT'
 }
 
-function getStatusLabel(active: boolean, role: PrimaryRole, teacherStatus: string | null): string {
-  if (!active) return 'Inactive'
-  if (role !== 'TEACHER') return 'Active'
-  if (teacherStatus === 'PENDING') return 'Pending'
-  return teacherStatus === 'REJECTED' ? 'Inactive' : 'Active'
+function roleLabel(role: PrimaryRole): string {
+  const keys: Record<PrimaryRole, string> = {
+    ADMIN: 'admin',
+    TEACHER: 'teacher',
+    STUDENT: 'student',
+  }
+  return t(`adminUsers.${keys[role]}`)
 }
 
-function getStatusTone(statusLabel: string): StatusTone {
-  if (statusLabel === 'Active') return 'active'
-  return statusLabel === 'Pending' ? 'pending' : 'inactive'
+function getStatusKey(active: boolean, role: PrimaryRole, teacherStatus: string | null): Exclude<StatusFilter, 'ALL'> {
+  if (!active) return 'INACTIVE'
+  if (role !== 'TEACHER') return 'ACTIVE'
+  if (teacherStatus === 'PENDING') return 'PENDING'
+  return teacherStatus === 'REJECTED' ? 'INACTIVE' : 'ACTIVE'
 }
 
-function getAccountLabel(active: boolean, role: PrimaryRole, teacherStatus: string | null): string {
-  if (!active) return 'Suspended'
-  return role === 'TEACHER' && teacherStatus !== 'APPROVED' ? 'Verification' : 'Verified'
+function statusLabel(status: Exclude<StatusFilter, 'ALL'>): string {
+  const keys: Record<Exclude<StatusFilter, 'ALL'>, string> = {
+    ACTIVE: 'statusActive',
+    PENDING: 'statusPending',
+    INACTIVE: 'statusInactive',
+  }
+  return t(`adminUsers.${keys[status]}`)
 }
 
-function getAccountTone(accountLabel: string): AccountTone {
-  return accountLabel === 'Verified' ? 'verified' : 'warning'
+function getStatusTone(status: Exclude<StatusFilter, 'ALL'>): StatusTone {
+  if (status === 'ACTIVE') return 'active'
+  return status === 'PENDING' ? 'pending' : 'inactive'
+}
+
+function getAccountKey(
+  active: boolean,
+  role: PrimaryRole,
+  teacherStatus: string | null,
+): Exclude<AccountFilter, 'ALL'> {
+  if (!active) return 'SUSPENDED'
+  return role === 'TEACHER' && teacherStatus !== 'APPROVED' ? 'VERIFICATION' : 'VERIFIED'
+}
+
+function accountLabel(account: Exclude<AccountFilter, 'ALL'>): string {
+  const keys: Record<Exclude<AccountFilter, 'ALL'>, string> = {
+    VERIFIED: 'accountVerified',
+    VERIFICATION: 'accountVerification',
+    SUSPENDED: 'accountSuspended',
+  }
+  return t(`adminUsers.${keys[account]}`)
+}
+
+function getAccountTone(account: Exclude<AccountFilter, 'ALL'>): AccountTone {
+  return account === 'VERIFIED' ? 'verified' : 'warning'
+}
+
+function isToday(value: string): boolean {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return false
+  const now = new Date()
+  return (
+    date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
+  )
+}
+
+function auditActionLabel(action: string): string {
+  const keys: Record<string, string> = {
+    TEACHER_APPROVED: 'auditTeacherApproved',
+    CONTENT_ARCHIVED: 'auditContentArchived',
+    APPLICATION_SUBMITTED: 'auditApplicationSubmitted',
+    ADMIN_LOGIN: 'auditAdminLogin',
+  }
+  const key = keys[action]
+  return key ? t(`adminUsers.${key}`) : action.replaceAll('_', ' ')
 }
 
 function getClassKey(role: PrimaryRole, isStudent: boolean): ClassFilter {

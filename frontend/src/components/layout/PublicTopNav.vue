@@ -1,9 +1,9 @@
 <template>
   <header class="public-nav">
-    <a href="#main-content" class="skip-to-main">Skip to main content</a>
+    <a href="#main-content" class="skip-to-main">{{ t('chrome.skipToMain') }}</a>
     <AppBrand compact />
 
-    <nav class="nav-links public-nav-links" aria-label="Primary">
+    <nav class="nav-links public-nav-links" :aria-label="t('chrome.primaryNavigation')">
       <RouterLink v-for="item in items" :key="item.to" :to="item.to" custom v-slot="{ href, navigate }">
         <a
           :href="href"
@@ -18,13 +18,15 @@
 
     <div class="public-nav-actions">
       <div class="public-nav-trust hidden-mobile">
-        <span>Safe for ages 7-12</span>
-        <span>Designed for families, learners, and teachers</span>
+        <span>{{ t('chrome.safeAges') }}</span>
+        <span>{{ t('chrome.designedFor') }}</span>
       </div>
       <LanguageSwitcher size="compact" />
-      <button class="btn btn-secondary public-nav-button" type="button" @click="openSignIn">Sign In</button>
+      <button class="btn btn-secondary public-nav-button" type="button" @click="openSignIn">
+        {{ t('chrome.signIn') }}
+      </button>
       <button class="btn btn-accent public-nav-button public-nav-button--primary" type="button" @click="openSignUp">
-        Create Account
+        {{ t('chrome.createAccount') }}
       </button>
     </div>
   </header>

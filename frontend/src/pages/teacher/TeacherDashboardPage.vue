@@ -1,15 +1,12 @@
 <template>
   <div class="page-stack teacher-dashboard-page">
     <PageHeaderBlock
-      title="Teaching Dashboard"
-      description="Track your learners, live classes, content pipeline, and teacher activity from one place."
+      :title="t('teacherDashboard.title')"
+      :description="t('teacherDashboard.description')"
       icon="dashboard"
     >
       <template #actions>
-        <StatusPill
-          :label="teacherStatusLabel"
-          :tone="teacherStatusTone"
-        />
+        <StatusPill :label="teacherStatusLabel" :tone="teacherStatusTone" />
       </template>
     </PageHeaderBlock>
 
@@ -33,33 +30,33 @@
         <article class="panel teacher-dashboard-panel teacher-dashboard-panel--wide">
           <div class="row-between teacher-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Content Snapshot</strong>
+              <strong>{{ t('teacherDashboard.contentSnapshot') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openContent">
-              Manage Content
+              {{ t('teacherDashboard.manageContent') }}
             </button>
           </div>
 
           <div class="teacher-dashboard-content-top">
             <article class="teacher-dashboard-mini-stat">
-              <small>Modules</small>
+              <small>{{ t('teacherDashboard.modules') }}</small>
               <strong>{{ analytics.overview.totalModules }}</strong>
-              <span>Created under your account</span>
+              <span>{{ t('teacherDashboard.modulesHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Lessons</small>
+              <small>{{ t('teacherDashboard.lessons') }}</small>
               <strong>{{ analytics.overview.totalLessons }}</strong>
-              <span>Across all teaching flows</span>
+              <span>{{ t('teacherDashboard.lessonsHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Packages</small>
+              <small>{{ t('teacherDashboard.packages') }}</small>
               <strong>{{ analytics.overview.totalPackages }}</strong>
-              <span>Published and draft bundles</span>
+              <span>{{ t('teacherDashboard.packagesHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Submitted Items</small>
+              <small>{{ t('teacherDashboard.submittedItems') }}</small>
               <strong>{{ analytics.overview.submittedContentItems }}</strong>
-              <span>Waiting for review or publish steps</span>
+              <span>{{ t('teacherDashboard.submittedHint') }}</span>
             </article>
           </div>
 
@@ -75,22 +72,17 @@
             </article>
           </div>
           <p v-else class="teacher-dashboard-empty-copy">
-            Content status breakdown will appear here once your teacher analytics endpoint returns tracked items.
+            {{ t('teacherDashboard.noContentBreakdown') }}
           </p>
         </article>
 
         <article class="panel teacher-dashboard-panel">
           <div class="row-between teacher-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Upcoming Live Classes</strong>
+              <strong>{{ t('teacherDashboard.upcomingClasses') }}</strong>
             </div>
-            <button
-              class="student-link-button"
-              type="button"
-              :disabled="teacherApprovalLocked"
-              @click="openClasses"
-            >
-              Open Calendar
+            <button class="student-link-button" type="button" :disabled="teacherApprovalLocked" @click="openClasses">
+              {{ t('teacherDashboard.openCalendar') }}
             </button>
           </div>
 
@@ -116,18 +108,18 @@
           <StatePanel
             v-else
             icon="classes"
-            title="No upcoming classes"
-            message="Create or reschedule a live class to see your next session here."
+            :title="t('teacherDashboard.noUpcomingClasses')"
+            :message="t('teacherDashboard.noUpcomingClassesHint')"
           />
         </article>
 
         <article class="panel teacher-dashboard-panel">
           <div class="row-between teacher-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Recent Quiz Results</strong>
+              <strong>{{ t('teacherDashboard.recentQuizResults') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openStudents">
-              Open Students
+              {{ t('teacherDashboard.openStudents') }}
             </button>
           </div>
 
@@ -148,18 +140,18 @@
           <StatePanel
             v-else
             icon="quiz"
-            title="No quiz attempts yet"
-            message="Student quiz submissions will appear here after linked learners complete teacher quizzes."
+            :title="t('teacherDashboard.noQuizAttempts')"
+            :message="t('teacherDashboard.noQuizAttemptsHint')"
           />
         </article>
 
         <article class="panel teacher-dashboard-panel">
           <div class="row-between teacher-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Recent Notifications</strong>
+              <strong>{{ t('teacherDashboard.recentNotifications') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openProfile">
-              Open Profile
+              {{ t('teacherDashboard.openProfile') }}
             </button>
           </div>
 
@@ -185,53 +177,53 @@
           <StatePanel
             v-else
             icon="bell"
-            title="No notifications"
-            message="Teacher notifications will appear here when the backend sends them."
+            :title="t('teacherDashboard.noNotifications')"
+            :message="t('teacherDashboard.noNotificationsHint')"
           />
         </article>
 
         <article class="panel teacher-dashboard-panel teacher-dashboard-panel--wide">
           <div class="row-between teacher-dashboard-panel-head">
             <div class="student-section-heading">
-              <strong>Teaching Operations</strong>
+              <strong>{{ t('teacherDashboard.teachingOperations') }}</strong>
             </div>
             <button class="student-link-button" type="button" @click="openStudents">
-              Open Learners
+              {{ t('teacherDashboard.openLearners') }}
             </button>
           </div>
 
           <div class="teacher-dashboard-operations-grid">
             <article class="teacher-dashboard-mini-stat">
-              <small>Teacher</small>
+              <small>{{ t('teacherDashboard.teacher') }}</small>
               <strong>{{ teacherName }}</strong>
               <span>{{ teacherStatusLabel }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Active Students</small>
+              <small>{{ t('teacherDashboard.activeStudents') }}</small>
               <strong>{{ analytics.overview.totalActiveStudents }}</strong>
-              <span>Linked through classes, lessons, or attempts</span>
+              <span>{{ t('teacherDashboard.activeStudentsHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Live Enrolments</small>
+              <small>{{ t('teacherDashboard.liveEnrolments') }}</small>
               <strong>{{ analytics.overview.totalLiveEnrolments }}</strong>
-              <span>Across upcoming and past classes</span>
+              <span>{{ t('teacherDashboard.liveEnrolmentsHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Average Quiz Score</small>
+              <small>{{ t('teacherDashboard.averageQuizScore') }}</small>
               <strong>{{ formatPercent(analytics.overview.averageQuizScore) }}</strong>
-              <span>Latest teacher analytics snapshot</span>
+              <span>{{ t('teacherDashboard.averageQuizHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Available Balance</small>
+              <small>{{ t('teacherDashboard.availableBalance') }}</small>
               <strong>{{
                 formatCurrency(analytics.overview.availableBalance, analytics.overview.currencyCode)
               }}</strong>
-              <span>Ready for payout request</span>
+              <span>{{ t('teacherDashboard.availableBalanceHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>Net Earnings</small>
+              <small>{{ t('teacherDashboard.netEarnings') }}</small>
               <strong>{{ formatCurrency(analytics.overview.netEarnings, analytics.overview.currencyCode) }}</strong>
-              <span>Across paid teacher content</span>
+              <span>{{ t('teacherDashboard.netEarningsHint') }}</span>
             </article>
           </div>
 
@@ -256,6 +248,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { teacherApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -268,6 +261,7 @@ import { useTeacherAccess } from '@/composables/useTeacherAccess'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { teacherAnalytics, teacherDashboard, teacherLiveClasses } from '@/demo/data'
+import { teacherDashboardMessages } from '@/plugins/teacherDashboardMessages'
 import type { AnalyticsBreakdownItem, LiveClassResponse, TeacherDashboardResponse } from '@/types/api'
 import {
   formatCurrency,
@@ -280,6 +274,13 @@ import {
 } from '@/utils/format'
 
 const router = useRouter()
+const { t, locale } = useI18n({
+  messages: {
+    en: { teacherDashboard: teacherDashboardMessages.en },
+    ms: { teacherDashboard: teacherDashboardMessages.ms },
+    zh: { teacherDashboard: teacherDashboardMessages.zh },
+  },
+})
 const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage } = useTeacherAccess()
 
 const dashboardResource = useResource(() => teacherApi.dashboard(), teacherDashboard)
@@ -358,46 +359,55 @@ function markTeacherNotificationRead(notificationId: number) {
   }
 }
 
-const teacherName = computed(() => dashboard.value.fullName || 'Teacher')
+const teacherName = computed(() => dashboard.value.fullName || t('teacherDashboard.teacher'))
 const teacherStatusLabel = computed(() => formatStatus(dashboard.value.teacherStatus))
 const teacherStatusTone = computed(() => (dashboard.value.teacherStatus === 'APPROVED' ? 'success' : 'warning'))
 
 const statCards = computed(() => [
   {
-    label: 'Linked Students',
+    label: t('teacherDashboard.linkedStudents'),
     value: formatNumber(dashboard.value.totalStudents),
-    copy: 'Students connected through classes, lessons, or quizzes',
+    copy: t('teacherDashboard.linkedStudentsHint'),
     icon: 'students',
     tone: 'purple',
   },
   {
-    label: 'Published Content',
+    label: t('teacherDashboard.publishedContent'),
     value: formatNumber(analytics.value.overview.publishedContentItems),
-    copy: `${formatNumber(analytics.value.overview.submittedContentItems)} item(s) still in submission flow`,
+    copy: t('teacherDashboard.submittedCount', {
+      count: formatNumber(analytics.value.overview.submittedContentItems),
+    }),
     icon: 'content',
     tone: 'blue',
   },
   {
-    label: 'Upcoming Classes',
+    label: t('teacherDashboard.upcomingClasses'),
     value: formatNumber(analytics.value.overview.upcomingLiveClasses),
-    copy: `${formatNumber(analytics.value.overview.totalLiveEnrolments)} total live enrolments tracked`,
+    copy: t('teacherDashboard.upcomingCount', {
+      count: formatNumber(analytics.value.overview.totalLiveEnrolments),
+    }),
     icon: 'classes',
     tone: 'orange',
   },
   {
-    label: 'Average Quiz Score',
+    label: t('teacherDashboard.averageQuizScore'),
     value: formatPercent(dashboard.value.averageQuizScore),
-    copy: 'Teacher dashboard aggregate from submitted quiz attempts',
+    copy: t('teacherDashboard.dashboardQuizHint'),
     icon: 'quiz',
     tone: 'green',
   },
   {
-    label: 'Available Balance',
+    label: t('teacherDashboard.availableBalance'),
     value: formatCurrency(
       dashboard.value.earningsSummary.availableBalance,
       dashboard.value.earningsSummary.currencyCode,
     ),
-    copy: `${formatCurrency(dashboard.value.earningsSummary.pendingBalance, dashboard.value.earningsSummary.currencyCode)} still pending`,
+    copy: t('teacherDashboard.pendingBalance', {
+      amount: formatCurrency(
+        dashboard.value.earningsSummary.pendingBalance,
+        dashboard.value.earningsSummary.currencyCode,
+      ),
+    }),
     icon: 'earnings',
     tone: 'mint',
   },
@@ -412,12 +422,12 @@ const upcomingClasses = computed(() =>
 
 const contentBreakdownRows = computed(() => withPercentages(analytics.value.contentStatusBreakdown))
 
-const quickActions = [
-  { label: 'Create Content', icon: 'content', action: openContent },
-  { label: 'Manage Classes', icon: 'classes', action: openClasses },
-  { label: 'Review Students', icon: 'students', action: openStudents },
-  { label: 'Open Feedback', icon: 'help', action: openFeedback },
-]
+const quickActions = computed(() => [
+  { label: t('teacherDashboard.createContent'), icon: 'content', action: openContent },
+  { label: t('teacherDashboard.manageClasses'), icon: 'classes', action: openClasses },
+  { label: t('teacherDashboard.reviewStudents'), icon: 'students', action: openStudents },
+  { label: t('teacherDashboard.openFeedback'), icon: 'help', action: openFeedback },
+])
 
 function withPercentages(items: AnalyticsBreakdownItem[]) {
   const total = items.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item.value)), 0)
@@ -427,7 +437,7 @@ function withPercentages(items: AnalyticsBreakdownItem[]) {
     const value = Math.max(0, toFiniteNumber(item.value))
     const percentage = ratioPercent(value, total)
     return {
-      label: item.label,
+      label: formatStatus(item.label),
       displayValue: `${formatNumber(value)} (${percentage}%)`,
       percentage,
       tone: tones[index % tones.length],
@@ -436,7 +446,23 @@ function withPercentages(items: AnalyticsBreakdownItem[]) {
 }
 
 function formatStatus(status: string | null | undefined): string {
-  if (!status) return 'Unknown'
+  if (!status) return t('teacherDashboard.unknown')
+  const statusKeys: Record<string, string> = {
+    APPROVED: 'statusApproved',
+    PENDING: 'statusPending',
+    REJECTED: 'statusRejected',
+    PUBLISHED: 'statusPublished',
+    SUBMITTED: 'statusSubmitted',
+    DRAFT: 'statusDraft',
+    ARCHIVED: 'statusArchived',
+    SCHEDULED: 'statusScheduled',
+    LIVE: 'statusLive',
+    COMPLETED: 'statusCompleted',
+    CANCELLED: 'statusCancelled',
+  }
+  const normalized = status.trim().toUpperCase()
+  const translatedKey = statusKeys[normalized]
+  if (translatedKey) return t(`teacherDashboard.${translatedKey}`)
   return status
     .replaceAll('_', ' ')
     .toLowerCase()
@@ -449,14 +475,14 @@ function scoreLabel(score: number, maxScore: number): string {
 
 function classContextLabel(item: LiveClassResponse): string {
   if (item.lesson?.lessonTitle) {
-    return `${item.lesson.lessonTitle} • ${item.enrolledCount} enrolment(s)`
+    return `${item.lesson.lessonTitle} • ${t('teacherDashboard.enrolments', { count: item.enrolledCount })}`
   }
 
   if (item.coursePackage?.packageTitle) {
-    return `${item.coursePackage.packageTitle} • ${item.enrolledCount} enrolment(s)`
+    return `${item.coursePackage.packageTitle} • ${t('teacherDashboard.enrolments', { count: item.enrolledCount })}`
   }
 
-  return `${item.enrolledCount} enrolment(s)`
+  return t('teacherDashboard.enrolments', { count: item.enrolledCount })
 }
 
 function classJoinTone(canJoin: boolean): 'success' | 'warning' {
@@ -464,7 +490,8 @@ function classJoinTone(canJoin: boolean): 'success' | 'warning' {
 }
 
 function timeRange(startTime: string, endTime: string): string {
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const localeCode = locale.value === 'zh' ? 'zh-CN' : locale.value === 'ms' ? 'ms-MY' : 'en-US'
+  const formatter = new Intl.DateTimeFormat(localeCode, {
     hour: 'numeric',
     minute: '2-digit',
   })

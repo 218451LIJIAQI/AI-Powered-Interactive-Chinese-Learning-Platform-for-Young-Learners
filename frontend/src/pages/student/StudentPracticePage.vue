@@ -42,7 +42,7 @@
                 <div class="student-practice-pill">
                   <span class="student-practice-pill-icon is-gold"><IconGlyph name="star" :size="20" /></span>
                   <div>
-                    <small>Points Earned</small>
+                    <small>{{ t('studentPractice.pointsEarned') }}</small>
                     <strong>{{ formatNumber(dashboard.points) }} XP</strong>
                   </div>
                 </div>
@@ -50,7 +50,7 @@
                 <div class="student-practice-pill">
                   <span class="student-practice-pill-icon is-green"><IconGlyph name="status" :size="20" /></span>
                   <div>
-                    <small>Library Complete</small>
+                    <small>{{ t('studentPractice.libraryComplete') }}</small>
                     <strong>{{ activityCompletionLabel }}</strong>
                   </div>
                 </div>
@@ -77,48 +77,47 @@
                 <span>{{ selectedActivityInstructions }}</span>
 
                 <div v-if="loadingActivity" class="student-practice-activity-list">
-                  <small>Loading activity details...</small>
+                  <small>{{ t('studentPractice.loading') }}</small>
                 </div>
 
                 <div v-else-if="matchingDetail" class="student-practice-activity-list">
-                  <small v-for="item in matchingDetail.items" :key="item.id"
-                    >{{ item.leftText }} to {{ item.rightText }}</small
-                  >
+                  <small v-for="item in matchingDetail.items" :key="item.id">{{
+                    t('studentPractice.matchTo', { left: item.leftText, right: item.rightText })
+                  }}</small>
                 </div>
 
                 <div v-else-if="listeningDetail" class="student-practice-activity-list">
-                  <small>{{
-                    listeningDetail.questionPayload || 'Listen to the audio prompt, then complete the exercise.'
-                  }}</small>
+                  <small>{{ listeningDetail.questionPayload || t('studentPractice.listenDefault') }}</small>
                   <a
                     v-if="safeListeningAudioUrl"
                     :href="safeListeningAudioUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Open audio</a
+                    >{{ t('studentPractice.openAudio') }}</a
                   >
                 </div>
 
                 <div v-else-if="tracingDetail" class="student-practice-activity-list">
                   <small
-                    >{{ tracingDetail.targetCharacter }} - {{ tracingDetail.pinyin || 'Pinyin unavailable' }}</small
+                    >{{ tracingDetail.targetCharacter }} -
+                    {{ tracingDetail.pinyin || t('studentPractice.pinyinUnavailable') }}</small
                   >
                   <small>{{
-                    tracingDetail.meaning || tracingDetail.instructions || 'Trace the character carefully.'
+                    tracingDetail.meaning || tracingDetail.instructions || t('studentPractice.traceDefault')
                   }}</small>
                   <a
                     v-if="safeTracingWorksheetUrl"
                     :href="safeTracingWorksheetUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    >Open worksheet</a
+                    >{{ t('studentPractice.openWorksheet') }}</a
                   >
                 </div>
 
                 <div v-else-if="dragDropDetail" class="student-practice-activity-list">
-                  <small v-for="item in dragDropDetail.items" :key="item.id"
-                    >{{ item.dragText }} to {{ item.targetZone }}</small
-                  >
+                  <small v-for="item in dragDropDetail.items" :key="item.id">{{
+                    t('studentPractice.dragTo', { drag: item.dragText, target: item.targetZone })
+                  }}</small>
                 </div>
 
                 <div v-else-if="storyDetail" class="student-practice-activity-list">
@@ -134,7 +133,7 @@
                   type="button"
                   class="student-practice-circle"
                   :disabled="!flashcardAvailable"
-                  aria-label="Play flashcard pronunciation"
+                  :aria-label="t('studentPractice.pronunciationAria')"
                   @click="playCardPronunciation"
                 >
                   <IconGlyph name="live" :size="20" />
@@ -159,7 +158,7 @@
                   :disabled="!flashcardAvailable"
                   @click="goToPreviousActivityLevel()"
                 >
-                  Previous Level
+                  {{ t('studentPractice.previousLevel') }}
                 </button>
 
                 <div class="student-practice-footer-status">
@@ -184,7 +183,7 @@
                   :disabled="!selectedActivity"
                   @click="goToPreviousActivityLevel()"
                 >
-                  Previous Level
+                  {{ t('studentPractice.previousLevel') }}
                 </button>
 
                 <div class="student-practice-footer-status">
@@ -209,11 +208,13 @@
               <div class="student-section-heading">
                 <span class="student-review-alert"><IconGlyph name="alert" :size="14" /></span>
                 <div>
-                  <strong>Review Wrong Answers</strong>
-                  <p>We highlight real mistakes first, then fill the strip with weak-area review when needed.</p>
+                  <strong>{{ t('studentPractice.reviewWrong') }}</strong>
+                  <p>{{ t('studentPractice.reviewHint') }}</p>
                 </div>
               </div>
-              <span class="student-review-count">{{ reviewCards.length }} items to review</span>
+              <span class="student-review-count">{{
+                t('studentPractice.itemsToReview', { count: reviewCards.length })
+              }}</span>
             </div>
 
             <div class="student-review-grid">
@@ -246,35 +247,35 @@
           <article class="panel student-practice-progress-card">
             <div class="student-section-heading">
               <span class="student-practice-progress-icon"><IconGlyph name="progress" :size="18" /></span>
-              <strong>Your Practice Progress</strong>
+              <strong>{{ t('studentPractice.practiceProgress') }}</strong>
             </div>
 
             <div class="student-practice-progress-top">
               <ProgressRing
                 :progress="practiceProgress"
-                title="Overall progress"
-                subtitle="Keep building confidence!"
+                :title="t('studentPractice.overallProgress')"
+                :subtitle="t('studentPractice.confidence')"
               />
             </div>
 
             <div class="student-practice-stat-row">
               <div>
-                <small>Activities Completed</small>
+                <small>{{ t('studentPractice.completedActivities') }}</small>
                 <strong>{{ completedActivities }}</strong>
               </div>
               <div>
-                <small>Available Practice Time</small>
+                <small>{{ t('studentPractice.practiceTime') }}</small>
                 <strong>{{ totalPracticeTime }}</strong>
               </div>
               <div>
-                <small>Accuracy</small>
+                <small>{{ t('studentPractice.accuracy') }}</small>
                 <strong>{{ accuracyLabel }}</strong>
               </div>
             </div>
 
             <div class="student-practice-weekly">
               <div class="row-between">
-                <strong>Activity Library</strong>
+                <strong>{{ t('studentPractice.activityLibrary') }}</strong>
                 <span>{{ activityCompletionLabel }}</span>
               </div>
               <ProgressBar :progress="activityCompletionProgress" />
@@ -285,9 +286,11 @@
             <div class="row-between">
               <div class="student-section-heading">
                 <span class="student-practice-progress-icon"><IconGlyph name="quiz" :size="18" /></span>
-                <strong>Recent Quiz Attempts</strong>
+                <strong>{{ t('studentPractice.recentAttempts') }}</strong>
               </div>
-              <button type="button" class="student-link-button" @click="openQuiz">View All</button>
+              <button type="button" class="student-link-button" @click="openQuiz">
+                {{ t('studentPractice.viewAll') }}
+              </button>
             </div>
 
             <div class="student-practice-attempts">
@@ -304,7 +307,7 @@
                 }}</strong>
 
                 <button type="button" class="student-practice-attempt-button" @click="openQuizAttempt(attempt.quizId)">
-                  Review
+                  {{ t('studentPractice.review') }}
                 </button>
               </article>
             </div>
@@ -316,6 +319,7 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { studentApi } from '@/api/services'
@@ -343,6 +347,7 @@ import {
   tracingActivities,
   tracingActivity,
 } from '@/demo/data'
+import { studentPracticeMessages } from '@/plugins/studentPracticeMessages'
 import type {
   StudentActivityCompletionResponse,
   StudentActivitySummaryResponse,
@@ -368,6 +373,14 @@ import {
   type StudentPracticeActivityType,
 } from '@/utils/practiceRoute'
 import { safeHttpUrl } from '@/utils/url'
+
+const { t } = useI18n({
+  messages: {
+    en: { studentPractice: studentPracticeMessages.en },
+    ms: { studentPractice: studentPracticeMessages.ms },
+    zh: { studentPractice: studentPracticeMessages.zh },
+  },
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -487,10 +500,10 @@ const totalPracticeTime = computed(() => {
   const minutes = totalPracticeMinutes.value % 60
 
   if (hours > 0) {
-    return `${hours}h ${minutes}m`
+    return t('studentPractice.hoursMinutes', { hours, minutes })
   }
 
-  return `${totalPracticeMinutes.value}m`
+  return t('studentPractice.minutes', { minutes: totalPracticeMinutes.value })
 })
 
 const accuracy = computed(() => clampPercent(progress.value.quizAverage))
@@ -505,20 +518,22 @@ const currentActivitySet = computed(() => activitiesByType(selectedActivityType.
 const currentActivityLevelNumber = computed(() => selectedActivityIndexByType.value[selectedActivityType.value] + 1)
 const selectedActivitySetLabel = computed(() => {
   const total = currentActivitySet.value.length
-  if (total <= 0) return 'No levels available yet'
+  if (total <= 0) return t('studentPractice.noLevels')
 
-  return `Level ${Math.min(currentActivityLevelNumber.value, total)} of ${total}`
+  return t('studentPractice.levelOf', { current: Math.min(currentActivityLevelNumber.value, total), total })
 })
 const hasMultipleLevels = computed(() => currentActivitySet.value.length > 1)
 const flashcardProgressLabel = computed(() => {
-  if (!flashcardAvailable.value) return 'No flashcard available'
-  return flashcard.value.completed ? 'Flashcard completed' : 'Flashcard review'
+  if (!flashcardAvailable.value) return t('studentPractice.noFlashcard')
+  return flashcard.value.completed ? t('studentPractice.flashcardCompleted') : t('studentPractice.flashcardReview')
 })
-const flashcardPrimaryButtonLabel = computed(() => (hasMultipleLevels.value ? 'Next Level' : 'I know this'))
-const flashcardTopic = computed(() => flashcard.value.topic || 'Vocabulary')
-const flashcardPinyin = computed(() => flashcard.value.pinyin || 'Pinyin unavailable')
+const flashcardPrimaryButtonLabel = computed(() =>
+  hasMultipleLevels.value ? t('studentPractice.nextLevel') : t('studentPractice.knowThis'),
+)
+const flashcardTopic = computed(() => flashcard.value.topic || t('studentPractice.vocabulary'))
+const flashcardPinyin = computed(() => flashcard.value.pinyin || t('studentPractice.pinyinUnavailable'))
 const translationToggleAriaLabel = computed(() =>
-  showMalayMeaning.value ? 'Show English meaning' : 'Show Malay meaning',
+  showMalayMeaning.value ? t('studentPractice.showEnglish') : t('studentPractice.showMalay'),
 )
 const translationToggleLabel = computed(() => (showMalayMeaning.value ? 'EN' : 'BM'))
 
@@ -526,20 +541,22 @@ const selectedActivityHskLevel = computed(() =>
   selectedActivityType.value === 'FLASHCARD' ? flashcard.value.hskLevel : selectedActivity.value?.hskLevel,
 )
 const selectedActivityPrimaryButtonLabel = computed(() => {
-  if (submittingActivity.value) return 'Saving...'
-  return hasMultipleLevels.value ? 'Complete & Next' : 'Complete Activity'
+  if (submittingActivity.value) return t('studentPractice.saving')
+  return hasMultipleLevels.value ? t('studentPractice.completeNext') : t('studentPractice.completeActivity')
 })
 const selectedActivity = computed(() =>
   selectedActivityType.value === 'FLASHCARD' ? null : selectedActivityForType(selectedActivityType.value),
 )
 const selectedStageTitle = computed(() => {
-  if (selectedActivityType.value === 'FLASHCARD') return 'Flashcards'
+  if (selectedActivityType.value === 'FLASHCARD') return t('studentPractice.flashcards')
   return selectedActivity.value?.title ?? activityLabel(selectedActivityType.value)
 })
 const selectedStageLevelLabel = computed(() => {
   const total = currentActivitySet.value.length
   const levelText =
-    total > 1 ? `Level ${currentActivityLevelNumber.value} of ${total}` : `Level ${selectedActivityHskLevel.value ?? 1}`
+    total > 1
+      ? t('studentPractice.levelOf', { current: currentActivityLevelNumber.value, total })
+      : t('studentPractice.level', { level: selectedActivityHskLevel.value ?? 1 })
   if (selectedActivityType.value === 'FLASHCARD') return levelText
   return selectedActivity.value?.hskLevel ? levelText : activityLabel(selectedActivityType.value)
 })
@@ -553,19 +570,18 @@ const selectedActivityTitle = computed(() => {
   return selectedActivity.value?.title ?? activityLabel(selectedActivityType.value)
 })
 const selectedActivityInstructions = computed(() => {
-  if (tracingDetail.value)
-    return tracingDetail.value.instructions || 'Trace the target character and compare your shape.'
-  if (dragDropDetail.value) return dragDropDetail.value.instructions || 'Arrange the items in the correct order.'
-  if (storyDetail.value) return storyDetail.value.instructions || 'Read the story and answer the questions.'
-  if (listeningDetail.value) return 'Listen to the prompt and choose the matching answer.'
-  if (matchingDetail.value) return 'Review the matching pairs, then complete the activity.'
-  return selectedActivity.value
-    ? 'Load and complete this backend activity from the practice library.'
-    : 'No activity is available for this type yet.'
+  if (tracingDetail.value) return tracingDetail.value.instructions || t('studentPractice.traceInstruction')
+  if (dragDropDetail.value) return dragDropDetail.value.instructions || t('studentPractice.arrangeInstruction')
+  if (storyDetail.value) return storyDetail.value.instructions || t('studentPractice.storyInstruction')
+  if (listeningDetail.value) return t('studentPractice.listeningInstruction')
+  if (matchingDetail.value) return t('studentPractice.matchingInstruction')
+  return selectedActivity.value ? t('studentPractice.loadInstruction') : t('studentPractice.noActivityType')
 })
 const selectedActivityProgressLabel = computed(() => {
-  if (!selectedActivity.value) return 'Unavailable'
-  return selectedActivity.value.completed ? 'Completed' : `${selectedActivity.value.xpReward ?? 0} XP`
+  if (!selectedActivity.value) return t('studentPractice.unavailable')
+  return selectedActivity.value.completed
+    ? t('studentPractice.completed')
+    : `${selectedActivity.value.xpReward ?? 0} XP`
 })
 const translationLine = computed(() => {
   if (showMalayMeaning.value) {
@@ -577,56 +593,56 @@ const translationLine = computed(() => {
 
 const activityOptions = computed(() => [
   {
-    title: 'Flashcards',
+    title: t('studentPractice.flashcards'),
     icon: 'file',
     tint: '#7c5bff',
     active: selectedActivityType.value === 'FLASHCARD',
     action: () => openActivityType('FLASHCARD'),
   },
   {
-    title: 'Multiple-Choice Quiz',
+    title: t('studentPractice.multipleChoice'),
     icon: 'quiz',
     tint: '#ffad50',
     active: false,
     action: openQuiz,
   },
   {
-    title: 'Matching',
+    title: t('studentPractice.matching'),
     icon: 'fun',
     tint: '#6e67ff',
     active: selectedActivityType.value === 'MATCHING_GAME',
     action: () => openActivityType('MATCHING_GAME'),
   },
   {
-    title: 'Listening',
+    title: t('studentPractice.listening'),
     icon: 'live',
     tint: '#23b8a7',
     active: selectedActivityType.value === 'LISTENING_EXERCISE',
     action: () => openActivityType('LISTENING_EXERCISE'),
   },
   {
-    title: 'Speaking',
+    title: t('studentPractice.speaking'),
     icon: 'moderation',
     tint: '#6573a7',
     active: false,
     action: openAiHelper,
   },
   {
-    title: 'Character Writing',
+    title: t('studentPractice.characterWriting'),
     icon: 'clip',
     tint: '#f4a03c',
     active: selectedActivityType.value === 'TRACING_EXERCISE',
     action: () => openActivityType('TRACING_EXERCISE'),
   },
   {
-    title: 'Drag-and-Drop',
+    title: t('studentPractice.dragDrop'),
     icon: 'practice',
     tint: '#7bc99b',
     active: selectedActivityType.value === 'DRAG_DROP_ACTIVITY',
     action: () => openActivityType('DRAG_DROP_ACTIVITY'),
   },
   {
-    title: 'Story Activity',
+    title: t('studentPractice.storyActivity'),
     icon: 'learn',
     tint: '#ffcb65',
     active: selectedActivityType.value === 'STORY_ACTIVITY',
@@ -655,13 +671,13 @@ const reviewCards = computed(() => {
   const directCards = wrongAnswers.value.slice(0, 3).map((item) => ({
     id: `wrong-${item.attemptId}-${item.questionId}`,
     kind: 'wrong-answer',
-    label: 'Question',
+    label: t('studentPractice.question'),
     title: item.questionText,
-    primary: `Your answer: ${item.studentAnswer}`,
-    secondary: `Correct answer: ${item.correctAnswer}`,
+    primary: t('studentPractice.yourAnswer', { answer: item.studentAnswer }),
+    secondary: t('studentPractice.correctAnswer', { answer: item.correctAnswer }),
     visualIcon: 'quiz',
     visualTone: 'purple',
-    cta: 'Practice Again',
+    cta: t('studentPractice.practiceAgain'),
     action: openQuiz,
   }))
 
@@ -670,13 +686,13 @@ const reviewCards = computed(() => {
     return {
       id: `focus-${index}-${area}`,
       kind: 'focus',
-      label: 'Focus Area',
+      label: t('studentPractice.focusArea'),
       title: area,
-      primary: 'Targeted practice is suggested because your recent progress shows this area needs extra review.',
-      secondary: 'Open practice mode to reinforce vocabulary, listening, or character recall.',
+      primary: t('studentPractice.targetedHint'),
+      secondary: t('studentPractice.reinforceHint'),
       visualIcon: activityIcon(activityType),
       visualTone: focusVisualTone(index),
-      cta: `Open ${activityLabel(activityType)}`,
+      cta: t('studentPractice.openActivity', { activity: activityLabel(activityType) }),
       action: () => openPracticeRoute(activityType),
     }
   })
@@ -684,6 +700,16 @@ const reviewCards = computed(() => {
   return [...directCards, ...fillerCards]
 })
 function activityLabel(type: PracticeActivityType): string {
+  const keys: Record<PracticeActivityType, string> = {
+    FLASHCARD: 'flashcards',
+    MATCHING_GAME: 'matching',
+    LISTENING_EXERCISE: 'listening',
+    TRACING_EXERCISE: 'characterWriting',
+    DRAG_DROP_ACTIVITY: 'dragDrop',
+    STORY_ACTIVITY: 'storyActivity',
+  }
+  const key = keys[type]
+  if (key) return t(`studentPractice.${key}`)
   return type
     .replaceAll('_', ' ')
     .toLowerCase()
@@ -812,7 +838,10 @@ function openActivityType(type: PracticeActivityType): void {
   void router.push(target)
 }
 
-async function selectActivityType(type: PracticeActivityType, options: { preserveNotice?: boolean } = {}): Promise<void> {
+async function selectActivityType(
+  type: PracticeActivityType,
+  options: { preserveNotice?: boolean } = {},
+): Promise<void> {
   selectedActivityType.value = type
   if (!options.preserveNotice) {
     actionError.value = null
@@ -826,7 +855,7 @@ async function selectActivityType(type: PracticeActivityType, options: { preserv
   if (!activity) {
     if (activitiesResource.loading.value || !activitiesResource.hasData.value) return
 
-    actionError.value = `${activityLabel(type)} is not available in your activity library yet.`
+    actionError.value = t('studentPractice.unavailableInLibrary', { activity: activityLabel(type) })
     return
   }
 
@@ -835,7 +864,7 @@ async function selectActivityType(type: PracticeActivityType, options: { preserv
     if (activitiesResource.usingFallback.value) {
       applyPreviewActivityDetail(type, activity.id)
       if (!options.preserveNotice) {
-        actionSuccess.value = 'Preview activity loaded. Sign in with live backend data to save completion progress.'
+        actionSuccess.value = t('studentPractice.previewLoaded')
       }
       return
     }
@@ -846,7 +875,7 @@ async function selectActivityType(type: PracticeActivityType, options: { preserv
     if (type === 'DRAG_DROP_ACTIVITY') dragDropDetail.value = await studentApi.dragDropActivity(activity.id)
     if (type === 'STORY_ACTIVITY') storyDetail.value = await studentApi.storyActivity(activity.id)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, `Unable to load ${activityLabel(type).toLowerCase()}.`)
+    actionError.value = resolveApiError(reason, t('studentPractice.loadError', { activity: activityLabel(type) }))
   } finally {
     loadingActivity.value = false
   }
@@ -898,7 +927,7 @@ async function handleFlashcardPrimaryAction(): Promise<void> {
   if (hasMultipleLevels.value) {
     if (flashcardResource.usingFallback.value) {
       actionError.value = null
-      actionSuccess.value = `Preview completed: ${flashcard.value.title}. Next level loaded.`
+      actionSuccess.value = t('studentPractice.previewCompletedNext', { title: flashcard.value.title })
       goToNextActivityLevel({ preserveNotice: true })
       return
     }
@@ -930,7 +959,9 @@ async function completeSelectedActivity(): Promise<void> {
   if (submittingActivity.value) return
   const activity = selectedActivity.value
   if (!activity) {
-    actionError.value = `${activityLabel(selectedActivityType.value)} is not available to complete.`
+    actionError.value = t('studentPractice.unavailableInLibrary', {
+      activity: activityLabel(selectedActivityType.value),
+    })
     actionSuccess.value = null
     return
   }
@@ -939,8 +970,8 @@ async function completeSelectedActivity(): Promise<void> {
     const completedTitle = activity.title
     actionError.value = null
     actionSuccess.value = hasMultipleLevels.value
-      ? `Preview completed: ${completedTitle}. Next level loaded.`
-      : `Preview completed: ${completedTitle}. Sign in with live backend data to save progress.`
+      ? t('studentPractice.previewCompletedNext', { title: completedTitle })
+      : t('studentPractice.previewCompletedSignIn', { title: completedTitle })
     if (hasMultipleLevels.value) {
       goToNextActivityLevel({ preserveNotice: true })
     }
@@ -953,14 +984,27 @@ async function completeSelectedActivity(): Promise<void> {
   try {
     const result = await completeActivity(selectedActivityType.value, activity.id)
     await refreshPracticeProgress()
-    actionSuccess.value = `Activity completed. ${result.earnedPoints > 0 ? `+${result.earnedPoints} XP. ` : ''}${result.firstCompletion ? `Total XP: ${formatNumber(result.totalPoints)}.` : 'Progress refreshed.'}`
+    if (result.firstCompletion) {
+      actionSuccess.value =
+        result.earnedPoints > 0
+          ? t('studentPractice.activityCompletePoints', {
+              points: result.earnedPoints,
+              total: formatNumber(result.totalPoints),
+            })
+          : t('studentPractice.activityCompleteTotal', { total: formatNumber(result.totalPoints) })
+    } else {
+      actionSuccess.value =
+        result.earnedPoints > 0
+          ? t('studentPractice.activityCompleteEarned', { points: result.earnedPoints })
+          : t('studentPractice.activityCompleteRefresh')
+    }
     if (hasMultipleLevels.value) {
       goToNextActivityLevel({ preserveNotice: true })
     }
   } catch (reason) {
     actionError.value = resolveApiError(
       reason,
-      `Unable to complete ${activityLabel(selectedActivityType.value).toLowerCase()}.`,
+      t('studentPractice.completeError', { activity: activityLabel(selectedActivityType.value) }),
     )
   } finally {
     submittingActivity.value = false
@@ -972,13 +1016,12 @@ async function markFlashcardDone(): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
   if (!flashcardAvailable.value) {
-    actionError.value = 'No flashcard is available in your current practice library yet.'
+    actionError.value = t('studentPractice.noFlashcardLibrary')
     return
   }
 
   if (flashcardResource.usingFallback.value) {
-    actionError.value =
-      'Preview flashcards cannot be submitted to the backend. Use a live student account to save progress.'
+    actionError.value = t('studentPractice.previewFlashcard')
     return
   }
 
@@ -986,11 +1029,11 @@ async function markFlashcardDone(): Promise<void> {
     await studentApi.completeFlashcard(flashcard.value.id)
     await refreshPracticeProgress()
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this flashcard progress.')
+    actionError.value = resolveApiError(reason, t('studentPractice.flashcardSaveError'))
     return
   }
 
-  actionSuccess.value = 'Flashcard progress saved. Keep going!'
+  actionSuccess.value = t('studentPractice.flashcardSaved')
 }
 
 function openQuizAttempt(quizId: number | null): void {
@@ -1008,14 +1051,14 @@ function openQuizAttempt(quizId: number | null): void {
 function toggleTranslation(): void {
   showMalayMeaning.value = !showMalayMeaning.value
   actionError.value = null
-  actionSuccess.value = showMalayMeaning.value ? 'Bahasa Melayu meaning shown.' : 'English meaning shown.'
+  actionSuccess.value = showMalayMeaning.value ? t('studentPractice.malayShown') : t('studentPractice.englishShown')
 }
 
 function playCardPronunciation(): void {
   actionError.value = null
   actionSuccess.value = null
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    actionError.value = 'Pronunciation playback is not available in this browser.'
+    actionError.value = t('studentPractice.playbackUnavailable')
     return
   }
 
@@ -1023,7 +1066,7 @@ function playCardPronunciation(): void {
   utterance.lang = 'zh-CN'
   window.speechSynthesis.cancel()
   window.speechSynthesis.speak(utterance)
-  actionSuccess.value = 'Playing Mandarin pronunciation.'
+  actionSuccess.value = t('studentPractice.playing')
 }
 
 function reloadAll(): void {

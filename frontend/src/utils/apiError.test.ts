@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { isUnauthorizedApiError, resolveApiError } from './apiError'
 
 describe('resolveApiError', () => {
+  afterEach(() => {
+    document.documentElement.lang = 'en'
+  })
+
   it('uses sanitized backend messages before generic fallbacks', () => {
     expect(
       resolveApiError({
@@ -63,6 +67,16 @@ describe('resolveApiError', () => {
     expect(resolveApiError({ response: { status: 403, data: {} } })).toBe('You do not have permission to do that.')
     expect(resolveApiError({ response: { status: 404, data: {} } }, 'Missing course.')).toBe('Missing course.')
     expect(resolveApiError({ response: { status: 503, data: {} } })).toContain('having trouble')
+  })
+
+  it('localizes generic transport and authorization errors from the active document language', () => {
+    document.documentElement.lang = 'zh-CN'
+    expect(resolveApiError({ response: { status: 401, data: {} } })).toBe('请重新登录后继续。')
+    expect(resolveApiError({ request: {} })).toContain('无法连接学习服务')
+
+    document.documentElement.lang = 'ms-MY'
+    expect(resolveApiError({ response: { status: 403, data: {} } })).toContain('tiada kebenaran')
+    expect(resolveApiError({ code: 'ECONNABORTED' })).toContain('terlalu lama')
   })
 
   it('detects unauthorized responses', () => {

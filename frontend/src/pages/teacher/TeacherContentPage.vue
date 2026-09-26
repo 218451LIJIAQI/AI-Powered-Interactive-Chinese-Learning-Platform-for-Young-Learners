@@ -1,10 +1,6 @@
 <template>
   <div class="page-stack teacher-content-page">
-    <PageHeaderBlock
-      title="Content Management"
-      description="Create, edit, archive, package, and assess your teaching content from one workspace."
-      icon="content"
-    />
+    <PageHeaderBlock :title="t('teacherContent.title')" :description="t('teacherContent.description')" icon="content" />
 
     <DataNotice
       :using-fallback="usingFallback"
@@ -30,8 +26,10 @@
     <section class="teacher-content-layout">
       <aside class="panel teacher-course-sidebar">
         <div class="row-between teacher-sidebar-header">
-          <strong>My Courses</strong>
-          <button class="student-link-button" type="button" @click="reloadAll">Refresh</button>
+          <strong>{{ t('teacherContent.myCourses') }}</strong>
+          <button class="student-link-button" type="button" @click="reloadAll">
+            {{ t('teacherContent.refresh') }}
+          </button>
         </div>
 
         <button
@@ -41,7 +39,7 @@
           @click="openPackageBuilder()"
         >
           <span class="teacher-inline-plus">+</span>
-          <span>Create New Course</span>
+          <span>{{ t('teacherContent.createCourse') }}</span>
         </button>
 
         <div class="teacher-course-list">
@@ -58,14 +56,14 @@
               <span class="muted">{{ item.subtitle }}</span>
               <div class="row teacher-course-meta">
                 <StatusPill :label="item.statusLabel" :tone="contentStatusTone(item.statusLabel)" />
-                <span class="muted">{{ item.lessonCount }} Items</span>
+                <span class="muted">{{ t('teacherContent.items', { count: item.lessonCount }) }}</span>
               </div>
             </div>
           </article>
         </div>
 
         <button class="teacher-view-all" type="button" @click="showAllCourses">
-          <span>View All Courses</span>
+          <span>{{ t('teacherContent.viewAllCourses') }}</span>
           <span class="teacher-view-all-arrow">></span>
         </button>
       </aside>
@@ -93,14 +91,14 @@
             </div>
 
             <div class="row teacher-content-summary-right">
-              <span class="muted">{{ selectedCourse.lessonCount }} Items</span>
+              <span class="muted">{{ t('teacherContent.items', { count: selectedCourse.lessonCount }) }}</span>
               <button
                 class="student-link-button"
                 type="button"
                 :disabled="!selectedCourse.source || previewReadOnly"
                 @click="openPackageBuilder(selectedCourse.source ?? undefined)"
               >
-                Edit Course
+                {{ t('teacherContent.editCourse') }}
               </button>
               <button
                 class="btn btn-secondary"
@@ -115,28 +113,28 @@
 
           <div class="teacher-overview-grid">
             <div>
-              <strong>Course Overview</strong>
+              <strong>{{ t('teacherContent.courseOverview') }}</strong>
               <p class="muted">{{ selectedCourse.description }}</p>
             </div>
 
             <div class="teacher-overview-meta">
               <div>
-                <span class="muted">Level</span>
+                <span class="muted">{{ t('teacherContent.level') }}</span>
                 <strong>{{ selectedCourse.levelLabel }}</strong>
               </div>
               <div>
-                <span class="muted">Access</span>
+                <span class="muted">{{ t('teacherContent.access') }}</span>
                 <strong>{{ selectedCourse.accessLabel }}</strong>
               </div>
               <div>
-                <span class="muted">Last Updated</span>
+                <span class="muted">{{ t('teacherContent.lastUpdated') }}</span>
                 <strong>{{ selectedCourse.updatedLabel }}</strong>
               </div>
             </div>
           </div>
 
           <div class="row-between teacher-content-section-head">
-            <strong>Course Package Items</strong>
+            <strong>{{ t('teacherContent.packageItems') }}</strong>
             <button
               class="btn btn-secondary teacher-add-module"
               type="button"
@@ -144,7 +142,7 @@
               @click="openPackageBuilder(selectedCourse.source ?? undefined)"
             >
               <span class="teacher-inline-plus">+</span>
-              <span>Edit Course</span>
+              <span>{{ t('teacherContent.editCourse') }}</span>
             </button>
           </div>
 
@@ -172,10 +170,8 @@
           </div>
 
           <div v-else class="teacher-builder-helper">
-            <strong>No modules or lessons are attached to this course yet.</strong>
-            <span class="muted"
-              >Use the package item form in the builder to add modules or lessons to the selected course.</span
-            >
+            <strong>{{ t('teacherContent.noPackageItems') }}</strong>
+            <span class="muted">{{ t('teacherContent.noPackageItemsHint') }}</span>
           </div>
 
           <form class="panel form-grid" @submit.prevent="submitPackageItem">
@@ -185,42 +181,42 @@
                   <IconGlyph name="courses" />
                 </div>
                 <div class="card-section-copy">
-                  <strong>Add Course Item</strong>
-                  <span class="muted">Attach modules or lessons to the selected course package.</span>
+                  <strong>{{ t('teacherContent.addCourseItem') }}</strong>
+                  <span class="muted">{{ t('teacherContent.addCourseItemHint') }}</span>
                 </div>
               </div>
             </div>
 
             <div class="form-grid two">
               <div class="field">
-                <label>Item type</label>
-                <select v-model="packageItemForm.itemType" class="select" aria-label="Course item type">
-                  <option value="LESSON">LESSON</option>
-                  <option value="MODULE">MODULE</option>
+                <label>{{ t('teacherContent.itemType') }}</label>
+                <select v-model="packageItemForm.itemType" class="select" :aria-label="t('teacherContent.itemType')">
+                  <option value="LESSON">{{ t('teacherContent.lesson') }}</option>
+                  <option value="MODULE">{{ t('teacherContent.module') }}</option>
                 </select>
               </div>
 
               <div class="field">
-                <label>Display order</label>
+                <label>{{ t('teacherContent.displayOrder') }}</label>
                 <input
                   v-model.number="packageItemForm.displayOrder"
                   class="input"
                   type="number"
                   min="0"
-                  aria-label="Course item display order"
+                  :aria-label="t('teacherContent.displayOrder')"
                 />
               </div>
             </div>
 
             <div class="field">
-              <label>Available item</label>
+              <label>{{ t('teacherContent.availableItem') }}</label>
               <select
                 v-model.number="packageItemForm.itemId"
                 class="select"
-                aria-label="Available course item"
+                :aria-label="t('teacherContent.availableItem')"
                 :disabled="!selectedCourse.source || previewReadOnly"
               >
-                <option :value="0">Select an item</option>
+                <option :value="0">{{ t('teacherContent.selectItem') }}</option>
                 <option v-for="item in packageItemOptions" :key="item.id" :value="item.id">{{ item.title }}</option>
               </select>
             </div>
@@ -235,7 +231,7 @@
           </form>
 
           <div class="row-between teacher-content-section-head">
-            <strong>Modules and Lessons</strong>
+            <strong>{{ t('teacherContent.modulesLessons') }}</strong>
             <button
               class="btn btn-secondary teacher-add-module"
               type="button"
@@ -243,7 +239,7 @@
               @click="openModuleBuilder()"
             >
               <span class="teacher-inline-plus">+</span>
-              <span>Add Module</span>
+              <span>{{ t('teacherContent.addModule') }}</span>
             </button>
           </div>
 
@@ -261,14 +257,14 @@
                 </div>
 
                 <div class="row teacher-module-right">
-                  <span class="muted">{{ module.lessonCount }} Lessons</span>
+                  <span class="muted">{{ t('teacherContent.lessonCount', { count: module.lessonCount }) }}</span>
                   <button
                     class="student-link-button"
                     type="button"
                     :disabled="!module.source || previewReadOnly"
                     @click="openModuleBuilder(module.source ?? undefined)"
                   >
-                    Edit
+                    {{ t('teacherContent.edit') }}
                   </button>
                   <button
                     class="btn btn-secondary"
@@ -299,7 +295,7 @@
                       :disabled="!lesson.source || previewReadOnly"
                       @click="openLessonBuilder(lesson.source ?? undefined, lesson.moduleId)"
                     >
-                      Edit
+                      {{ t('teacherContent.edit') }}
                     </button>
                     <button
                       class="btn btn-secondary"
@@ -318,7 +314,7 @@
 
         <section v-else-if="activeSurfaceTab === 'resources'" class="panel teacher-content-card">
           <div class="row-between teacher-content-section-head">
-            <strong>Recorded Lesson Resources</strong>
+            <strong>{{ t('teacherContent.recordedResources') }}</strong>
             <button
               class="btn btn-secondary teacher-resource-upload"
               type="button"
@@ -326,28 +322,28 @@
               @click="openResourceBuilder()"
             >
               <span class="teacher-inline-plus">+</span>
-              <span>Upload New Resource</span>
+              <span>{{ t('teacherContent.uploadResource') }}</span>
             </button>
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Lesson</label>
-              <select v-model.number="resourceLessonId" class="select" aria-label="Recorded resource lesson">
-                <option :value="0">Select a lesson</option>
+              <label>{{ t('teacherContent.lesson') }}</label>
+              <select v-model.number="resourceLessonId" class="select" :aria-label="t('teacherContent.lesson')">
+                <option :value="0">{{ t('teacherContent.selectLesson') }}</option>
                 <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">{{ lesson.title }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Summary</label>
-              <input :value="resourceSummaryLabel" class="input" aria-label="Recorded resource summary" readonly />
+              <label>{{ t('teacherContent.summary') }}</label>
+              <input :value="resourceSummaryLabel" class="input" :aria-label="t('teacherContent.summary')" readonly />
             </div>
           </div>
 
           <div v-if="loadingResourceInsights" class="teacher-builder-helper">
-            <strong>Loading lesson resources...</strong>
-            <span class="muted">Fetching recordings and learner progress for the selected lesson.</span>
+            <strong>{{ t('teacherContent.loadingResources') }}</strong>
+            <span class="muted">{{ t('teacherContent.loadingResourcesHint') }}</span>
           </div>
 
           <div v-else-if="uploadedResourceVideos.length" class="teacher-module-list">
@@ -366,7 +362,7 @@
                     :disabled="previewReadOnly"
                     @click="openResourceBuilder(video)"
                   >
-                    Edit
+                    {{ t('teacherContent.edit') }}
                   </button>
                   <button
                     class="btn btn-secondary"
@@ -381,22 +377,22 @@
 
               <div class="teacher-overview-grid">
                 <div>
-                  <strong>Resource Details</strong>
+                  <strong>{{ t('teacherContent.resourceDetails') }}</strong>
                   <p class="muted">{{ descriptionLabel(video.description) }}</p>
                 </div>
 
                 <div class="teacher-overview-meta">
                   <div>
-                    <span class="muted">Active</span>
+                    <span class="muted">{{ t('teacherContent.active') }}</span>
                     <strong>{{ yesNoLabel(video.active) }}</strong>
                   </div>
                   <div>
-                    <span class="muted">Updated</span>
+                    <span class="muted">{{ t('teacherContent.updatedLabel') }}</span>
                     <strong>{{ formatDate(video.updatedAt, shortDateOptions) }}</strong>
                   </div>
                   <div>
-                    <span class="muted">Open</span>
-                    <strong>{{ video.externalVideoUrl || video.streamUrl || 'Stored file' }}</strong>
+                    <span class="muted">{{ t('teacherContent.open') }}</span>
+                    <strong>{{ video.externalVideoUrl || video.streamUrl || t('teacherContent.storedFile') }}</strong>
                   </div>
                 </div>
               </div>
@@ -404,16 +400,13 @@
           </div>
 
           <div v-else class="teacher-builder-helper">
-            <strong>No recorded lessons for this selection yet.</strong>
-            <span class="muted"
-              >Attach an external URL or uploaded video file from the builder to open this lesson for self-paced
-              learning.</span
-            >
+            <strong>{{ t('teacherContent.noRecordings') }}</strong>
+            <span class="muted">{{ t('teacherContent.noRecordingsHint') }}</span>
           </div>
 
           <div class="row-between teacher-content-section-head">
-            <strong>Learner Watch Progress</strong>
-            <span class="muted">{{ lessonVideoProgress.length }} tracked views</span>
+            <strong>{{ t('teacherContent.watchProgress') }}</strong>
+            <span class="muted">{{ t('teacherContent.trackedViews', { count: lessonVideoProgress.length }) }}</span>
           </div>
 
           <div v-if="lessonVideoProgress.length" class="teacher-module-list">
@@ -441,14 +434,18 @@
                 <div>
                   <strong>{{ progressRow.studentEmail }}</strong>
                   <p class="muted">
-                    Watched {{ formatDuration(progressRow.watchedSeconds) }} of
-                    {{ formatDuration(progressRow.totalSeconds) }}.
+                    {{
+                      t('teacherContent.watched', {
+                        watched: formatDuration(progressRow.watchedSeconds),
+                        total: formatDuration(progressRow.totalSeconds),
+                      })
+                    }}
                   </p>
                 </div>
 
                 <div class="teacher-overview-meta">
                   <div>
-                    <span class="muted">Last Watched</span>
+                    <span class="muted">{{ t('teacherContent.lastWatched') }}</span>
                     <strong>{{ lastWatchedLabel(progressRow.lastWatchedAt) }}</strong>
                   </div>
                 </div>
@@ -457,14 +454,14 @@
           </div>
 
           <div v-else class="teacher-builder-helper">
-            <strong>No learner watch history yet.</strong>
-            <span class="muted">Progress will appear here as soon as students start the recorded videos.</span>
+            <strong>{{ t('teacherContent.noWatchHistory') }}</strong>
+            <span class="muted">{{ t('teacherContent.noWatchHistoryHint') }}</span>
           </div>
         </section>
 
         <section v-else-if="activeSurfaceTab === 'activity-types'" class="panel teacher-content-card">
           <div class="row-between teacher-content-section-head">
-            <strong>Quiz Builder</strong>
+            <strong>{{ t('teacherContent.quizBuilder') }}</strong>
             <button
               class="btn btn-secondary teacher-builder-launch"
               type="button"
@@ -472,28 +469,28 @@
               @click="openQuizBuilder()"
             >
               <span class="teacher-inline-plus">+</span>
-              <span>Create Quiz</span>
+              <span>{{ t('teacherContent.createQuiz') }}</span>
             </button>
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Lesson</label>
-              <select v-model.number="quizLessonId" class="select" aria-label="Quiz lesson">
-                <option :value="0">Select a lesson</option>
+              <label>{{ t('teacherContent.lesson') }}</label>
+              <select v-model.number="quizLessonId" class="select" :aria-label="t('teacherContent.lesson')">
+                <option :value="0">{{ t('teacherContent.selectLesson') }}</option>
                 <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">{{ lesson.title }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Summary</label>
-              <input :value="quizSummaryLabel" class="input" aria-label="Quiz summary" readonly />
+              <label>{{ t('teacherContent.summary') }}</label>
+              <input :value="quizSummaryLabel" class="input" :aria-label="t('teacherContent.summary')" readonly />
             </div>
           </div>
 
           <div v-if="loadingQuizzes" class="teacher-builder-helper">
-            <strong>Loading quizzes...</strong>
-            <span class="muted">Reading live quiz drafts, questions, and attempt history for the selected lesson.</span>
+            <strong>{{ t('teacherContent.loadingQuizzes') }}</strong>
+            <span class="muted">{{ t('teacherContent.loadingQuizzesHint') }}</span>
           </div>
 
           <div v-else-if="quizList.length" class="teacher-module-list">
@@ -509,14 +506,16 @@
                     :label="normalizeStatus(quiz.contentStatus)"
                     :tone="contentStatusTone(normalizeStatus(quiz.contentStatus))"
                   />
-                  <button class="student-link-button" type="button" @click="selectQuiz(quiz.id)">Open</button>
+                  <button class="student-link-button" type="button" @click="selectQuiz(quiz.id)">
+                    {{ t('teacherContent.open') }}
+                  </button>
                   <button
                     class="student-link-button"
                     type="button"
                     :disabled="previewReadOnly"
                     @click="openQuizBuilder(quiz)"
                   >
-                    Edit
+                    {{ t('teacherContent.edit') }}
                   </button>
                   <button
                     class="btn btn-secondary"
@@ -537,15 +536,15 @@
 
                 <div class="teacher-overview-meta">
                   <div>
-                    <span class="muted">Questions</span>
+                    <span class="muted">{{ t('teacherContent.questions') }}</span>
                     <strong>{{ quiz.questions.length }}</strong>
                   </div>
                   <div>
-                    <span class="muted">Points</span>
+                    <span class="muted">{{ t('teacherContent.points') }}</span>
                     <strong>{{ formatNumber(quiz.totalPoints) }}</strong>
                   </div>
                   <div>
-                    <span class="muted">Time Limit</span>
+                    <span class="muted">{{ t('teacherContent.timeLimit') }}</span>
                     <strong>{{ quizTimeLimitLabel(quiz.timeLimitMinutes) }}</strong>
                   </div>
                 </div>
@@ -554,13 +553,13 @@
           </div>
 
           <div v-else class="teacher-builder-helper">
-            <strong>No quizzes for this lesson yet.</strong>
-            <span class="muted">Create a quiz, then add question items and monitor attempts from this surface.</span>
+            <strong>{{ t('teacherContent.noQuizzes') }}</strong>
+            <span class="muted">{{ t('teacherContent.noQuizzesHint') }}</span>
           </div>
 
           <template v-if="selectedQuiz">
             <div class="row-between teacher-content-section-head">
-              <strong>Selected Quiz Questions</strong>
+              <strong>{{ t('teacherContent.selectedQuestions') }}</strong>
               <button
                 class="btn btn-secondary teacher-add-module"
                 type="button"
@@ -568,7 +567,7 @@
                 @click="openQuestionBuilder()"
               >
                 <span class="teacher-inline-plus">+</span>
-                <span>Add Question</span>
+                <span>{{ t('teacherContent.addQuestion') }}</span>
               </button>
             </div>
 
@@ -588,7 +587,7 @@
                       :disabled="previewReadOnly"
                       @click="openQuestionBuilder(question)"
                     >
-                      Edit
+                      {{ t('teacherContent.edit') }}
                     </button>
                     <button
                       class="btn btn-secondary"
@@ -603,7 +602,7 @@
 
                 <div class="teacher-overview-grid">
                   <div>
-                    <strong>Answer</strong>
+                    <strong>{{ t('teacherContent.answer') }}</strong>
                     <p class="muted">
                       {{ questionAnswerLabel(question) }}
                     </p>
@@ -612,11 +611,11 @@
 
                   <div class="teacher-overview-meta">
                     <div>
-                      <span class="muted">Points</span>
+                      <span class="muted">{{ t('teacherContent.points') }}</span>
                       <strong>{{ question.points }}</strong>
                     </div>
                     <div>
-                      <span class="muted">Options</span>
+                      <span class="muted">{{ t('teacherContent.options') }}</span>
                       <strong>{{ question.options.length }}</strong>
                     </div>
                   </div>
@@ -641,23 +640,20 @@
             </div>
 
             <div v-else class="teacher-builder-helper">
-              <strong>No question items yet.</strong>
-              <span class="muted"
-                >Create the quiz first, then add question text, options, points, and explanations from the
-                builder.</span
-              >
+              <strong>{{ t('teacherContent.noQuestions') }}</strong>
+              <span class="muted">{{ t('teacherContent.noQuestionsHint') }}</span>
             </div>
 
             <div class="row-between teacher-content-section-head">
-              <strong>Recent Attempts</strong>
+              <strong>{{ t('teacherContent.recentAttempts') }}</strong>
               <button class="student-link-button" type="button" @click="loadQuizAttempts(selectedQuiz.id)">
-                Refresh Attempts
+                {{ t('teacherContent.refreshAttempts') }}
               </button>
             </div>
 
             <div v-if="loadingQuizAttempts" class="teacher-builder-helper">
-              <strong>Loading attempts...</strong>
-              <span class="muted">Checking recent submissions and scores for this quiz.</span>
+              <strong>{{ t('teacherContent.loadingAttempts') }}</strong>
+              <span class="muted">{{ t('teacherContent.loadingAttemptsHint') }}</span>
             </div>
 
             <div v-else-if="quizAttempts.length" class="teacher-module-list">
@@ -677,15 +673,15 @@
             </div>
 
             <div v-else class="teacher-builder-helper">
-              <strong>No student attempts yet.</strong>
-              <span class="muted">Attempt history will appear here after learners complete the selected quiz.</span>
+              <strong>{{ t('teacherContent.noAttempts') }}</strong>
+              <span class="muted">{{ t('teacherContent.noAttemptsHint') }}</span>
             </div>
           </template>
 
           <div class="muted-divider" />
 
           <div class="stack">
-            <strong>Supported Activity Types</strong>
+            <strong>{{ t('teacherContent.supportedTypes') }}</strong>
             <div class="teacher-activity-grid">
               <div v-for="tool in activityTypes" :key="tool.title" class="teacher-activity-card">
                 <span class="teacher-activity-icon"><IconGlyph :name="tool.icon" :size="22" /></span>
@@ -700,8 +696,8 @@
 
         <section v-else-if="activeSurfaceTab === 'categories'" class="panel teacher-content-card">
           <div class="row-between teacher-content-section-head">
-            <strong>Learning Categories</strong>
-            <span class="muted">{{ categories.length }} available</span>
+            <strong>{{ t('teacherContent.learningCategories') }}</strong>
+            <span class="muted">{{ t('teacherContent.available', { count: categories.length }) }}</span>
           </div>
 
           <div v-if="categories.length" class="teacher-module-list">
@@ -712,20 +708,20 @@
                   <strong>{{ category.name }}</strong>
                 </div>
               </div>
-              <p class="muted">{{ descriptionLabel(category.description, 'No description available.') }}</p>
+              <p class="muted">{{ descriptionLabel(category.description, t('teacherContent.noDescription')) }}</p>
             </article>
           </div>
 
           <div v-else class="teacher-builder-helper">
-            <strong>No categories available.</strong>
-            <span class="muted">The platform categories endpoint did not return any live records.</span>
+            <strong>{{ t('teacherContent.noCategories') }}</strong>
+            <span class="muted">{{ t('teacherContent.noCategoriesHint') }}</span>
           </div>
         </section>
 
         <section v-else class="panel teacher-content-card">
           <div class="row-between teacher-content-section-head">
-            <strong>Learning Levels</strong>
-            <span class="muted">{{ levels.length }} available</span>
+            <strong>{{ t('teacherContent.learningLevels') }}</strong>
+            <span class="muted">{{ t('teacherContent.available', { count: levels.length }) }}</span>
           </div>
 
           <div v-if="levels.length" class="teacher-module-list">
@@ -736,13 +732,13 @@
                   <strong>{{ level.name }}</strong>
                 </div>
               </div>
-              <p class="muted">{{ descriptionLabel(level.description, 'No description available.') }}</p>
+              <p class="muted">{{ descriptionLabel(level.description, t('teacherContent.noDescription')) }}</p>
             </article>
           </div>
 
           <div v-else class="teacher-builder-helper">
-            <strong>No levels available.</strong>
-            <span class="muted">The platform levels endpoint did not return any live records.</span>
+            <strong>{{ t('teacherContent.noLevels') }}</strong>
+            <span class="muted">{{ t('teacherContent.noLevelsHint') }}</span>
           </div>
         </section>
       </div>
@@ -780,7 +776,7 @@
             type="button"
             @click="openPackageBuilder(editingPackageSource ?? selectedCourse.source ?? undefined)"
           >
-            Course
+            {{ t('teacherContent.course') }}
           </button>
           <button
             class="tab-button"
@@ -788,7 +784,7 @@
             type="button"
             @click="openModuleBuilder(editingModuleSource)"
           >
-            Module
+            {{ t('teacherContent.module') }}
           </button>
           <button
             class="tab-button"
@@ -796,7 +792,7 @@
             type="button"
             @click="openLessonBuilder(editingLessonSource)"
           >
-            Lesson
+            {{ t('teacherContent.lesson') }}
           </button>
           <button
             class="tab-button"
@@ -804,7 +800,7 @@
             type="button"
             @click="openResourceBuilder(editingResourceSource)"
           >
-            Resource
+            {{ t('teacherContent.resource') }}
           </button>
           <button
             class="tab-button"
@@ -812,52 +808,61 @@
             type="button"
             @click="openQuizBuilder(editingQuizSource)"
           >
-            Quiz
+            {{ t('teacherContent.quiz') }}
           </button>
         </div>
 
         <ActionFormCard
           v-if="activeBuilder === 'package'"
-          :title="editingPackageId ? 'Edit Course' : 'Create New Course'"
-          subtitle="Packages publish directly and can be updated until you archive them."
+          :title="editingPackageId ? t('teacherContent.editCourseTitle') : t('teacherContent.createCourseTitle')"
+          :subtitle="t('teacherContent.courseFormHint')"
           icon="courses"
-          :submit-label="editingPackageId ? 'Save course changes' : 'Create course'"
-          submitting-label="Saving..."
+          :submit-label="
+            editingPackageId ? t('teacherContent.saveCourseChanges') : t('teacherContent.createCourseAction')
+          "
+          :submitting-label="t('teacherContent.saving')"
           :submitting="submitting.package"
           @submit="submitPackage"
         >
           <template #header-end>
-            <button class="teacher-outline-button" type="button" @click="resetPackageForm">Clear</button>
+            <button class="teacher-outline-button" type="button" @click="resetPackageForm">
+              {{ t('teacherContent.clear') }}
+            </button>
           </template>
 
           <div class="field">
-            <label>Course title</label>
-            <input v-model="packageForm.title" class="input" maxlength="200" aria-label="Course title" />
+            <label>{{ t('teacherContent.courseTitle') }}</label>
+            <input
+              v-model="packageForm.title"
+              class="input"
+              maxlength="200"
+              :aria-label="t('teacherContent.courseTitle')"
+            />
           </div>
 
           <div class="field">
-            <label>Description</label>
+            <label>{{ t('teacherContent.descriptionLabel') }}</label>
             <textarea
               v-model="packageForm.description"
               class="textarea"
               maxlength="2000"
-              aria-label="Course description"
+              :aria-label="t('teacherContent.descriptionLabel')"
             />
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Level</label>
-              <select v-model.number="packageForm.levelId" class="select" aria-label="Course level">
-                <option :value="0">Select a level</option>
+              <label>{{ t('teacherContent.level') }}</label>
+              <select v-model.number="packageForm.levelId" class="select" :aria-label="t('teacherContent.level')">
+                <option :value="0">{{ t('teacherContent.selectLevel') }}</option>
                 <option v-for="level in levels" :key="level.id" :value="level.id">{{ level.name }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Category</label>
-              <select v-model.number="packageForm.categoryId" class="select" aria-label="Course category">
-                <option :value="0">Select a category</option>
+              <label>{{ t('teacherContent.category') }}</label>
+              <select v-model.number="packageForm.categoryId" class="select" :aria-label="t('teacherContent.category')">
+                <option :value="0">{{ t('teacherContent.selectCategory') }}</option>
                 <option v-for="category in categories" :key="category.id" :value="category.id">
                   {{ category.name }}
                 </option>
@@ -867,44 +872,44 @@
 
           <div class="form-grid two">
             <div class="field">
-              <label>Learning type</label>
-              <select v-model="packageForm.learningType" class="select" aria-label="Course learning type">
-                <option value="LIVE">LIVE</option>
-                <option value="RECORDED">RECORDED</option>
-                <option value="HYBRID">HYBRID</option>
+              <label>{{ t('teacherContent.learningType') }}</label>
+              <select v-model="packageForm.learningType" class="select" :aria-label="t('teacherContent.learningType')">
+                <option value="LIVE">{{ t('teacherContent.live') }}</option>
+                <option value="RECORDED">{{ t('teacherContent.recorded') }}</option>
+                <option value="HYBRID">{{ t('teacherContent.hybrid') }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Access</label>
-              <select v-model="packageForm.accessType" class="select" aria-label="Course access type">
-                <option value="FREE">FREE</option>
-                <option value="PAID">PAID</option>
+              <label>{{ t('teacherContent.access') }}</label>
+              <select v-model="packageForm.accessType" class="select" :aria-label="t('teacherContent.access')">
+                <option value="FREE">{{ t('teacherContent.free') }}</option>
+                <option value="PAID">{{ t('teacherContent.paid') }}</option>
               </select>
             </div>
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Price</label>
+              <label>{{ t('teacherContent.price') }}</label>
               <input
                 v-model.number="packageForm.price"
                 class="input"
                 type="number"
                 min="0"
                 step="0.01"
-                aria-label="Course price"
+                :aria-label="t('teacherContent.price')"
               />
             </div>
 
             <div class="field">
-              <label>Cover image URL</label>
+              <label>{{ t('teacherContent.coverUrl') }}</label>
               <input
                 v-model="packageForm.coverImageUrl"
                 class="input"
                 type="url"
                 maxlength="255"
-                aria-label="Course cover image URL"
+                :aria-label="t('teacherContent.coverUrl')"
               />
             </div>
           </div>
@@ -912,46 +917,53 @@
 
         <ActionFormCard
           v-else-if="activeBuilder === 'module'"
-          :title="editingModuleId ? 'Edit Module' : 'Add Module'"
-          subtitle="Modules remain teacher-owned and editable until archived."
+          :title="editingModuleId ? t('teacherContent.editModuleTitle') : t('teacherContent.addModule')"
+          :subtitle="t('teacherContent.moduleFormHint')"
           icon="content"
-          :submit-label="editingModuleId ? 'Save module changes' : 'Create module'"
-          submitting-label="Saving..."
+          :submit-label="editingModuleId ? t('teacherContent.saveModuleChanges') : t('teacherContent.createModule')"
+          :submitting-label="t('teacherContent.saving')"
           :submitting="submitting.module"
           @submit="submitModule"
         >
           <template #header-end>
-            <button class="teacher-outline-button" type="button" @click="resetModuleForm">Clear</button>
+            <button class="teacher-outline-button" type="button" @click="resetModuleForm">
+              {{ t('teacherContent.clear') }}
+            </button>
           </template>
 
           <div class="field">
-            <label>Module title</label>
-            <input v-model="moduleForm.title" class="input" maxlength="200" aria-label="Module title" />
+            <label>{{ t('teacherContent.moduleTitle') }}</label>
+            <input
+              v-model="moduleForm.title"
+              class="input"
+              maxlength="200"
+              :aria-label="t('teacherContent.moduleTitle')"
+            />
           </div>
 
           <div class="field">
-            <label>Description</label>
+            <label>{{ t('teacherContent.descriptionLabel') }}</label>
             <textarea
               v-model="moduleForm.description"
               class="textarea"
               maxlength="2000"
-              aria-label="Module description"
+              :aria-label="t('teacherContent.descriptionLabel')"
             />
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Level</label>
-              <select v-model.number="moduleForm.levelId" class="select" aria-label="Module level">
-                <option :value="0">Select a level</option>
+              <label>{{ t('teacherContent.level') }}</label>
+              <select v-model.number="moduleForm.levelId" class="select" :aria-label="t('teacherContent.level')">
+                <option :value="0">{{ t('teacherContent.selectLevel') }}</option>
                 <option v-for="level in levels" :key="level.id" :value="level.id">{{ level.name }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Category</label>
-              <select v-model.number="moduleForm.categoryId" class="select" aria-label="Module category">
-                <option :value="0">Select a category</option>
+              <label>{{ t('teacherContent.category') }}</label>
+              <select v-model.number="moduleForm.categoryId" class="select" :aria-label="t('teacherContent.category')">
+                <option :value="0">{{ t('teacherContent.selectCategory') }}</option>
                 <option v-for="category in categories" :key="category.id" :value="category.id">
                   {{ category.name }}
                 </option>
@@ -961,72 +973,79 @@
 
           <div class="form-grid two">
             <div class="field">
-              <label>Access</label>
-              <select v-model="moduleForm.accessType" class="select" aria-label="Module access type">
-                <option value="FREE">FREE</option>
-                <option value="PAID">PAID</option>
+              <label>{{ t('teacherContent.access') }}</label>
+              <select v-model="moduleForm.accessType" class="select" :aria-label="t('teacherContent.access')">
+                <option value="FREE">{{ t('teacherContent.free') }}</option>
+                <option value="PAID">{{ t('teacherContent.paid') }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Price</label>
+              <label>{{ t('teacherContent.price') }}</label>
               <input
                 v-model.number="moduleForm.price"
                 class="input"
                 type="number"
                 min="0"
                 step="0.01"
-                aria-label="Module price"
+                :aria-label="t('teacherContent.price')"
               />
             </div>
           </div>
 
           <div class="field">
-            <label>Cover image URL</label>
+            <label>{{ t('teacherContent.coverUrl') }}</label>
             <input
               v-model="moduleForm.coverImageUrl"
               class="input"
               type="url"
               maxlength="255"
-              aria-label="Module cover image URL"
+              :aria-label="t('teacherContent.coverUrl')"
             />
           </div>
         </ActionFormCard>
 
         <ActionFormCard
           v-else-if="activeBuilder === 'lesson'"
-          :title="editingLessonId ? 'Edit Lesson' : 'Create New Lesson'"
-          subtitle="Lessons now support the full backend payload, including access, price, and cover metadata."
+          :title="editingLessonId ? t('teacherContent.editLessonTitle') : t('teacherContent.createLessonTitle')"
+          :subtitle="t('teacherContent.lessonFormHint')"
           icon="learn"
-          :submit-label="editingLessonId ? 'Save lesson changes' : 'Create lesson'"
-          submitting-label="Saving..."
+          :submit-label="editingLessonId ? t('teacherContent.saveLessonChanges') : t('teacherContent.createLesson')"
+          :submitting-label="t('teacherContent.saving')"
           :submitting="submitting.lesson"
           @submit="submitLesson"
         >
           <template #header-end>
-            <button class="teacher-outline-button" type="button" @click="resetLessonForm()">Clear</button>
+            <button class="teacher-outline-button" type="button" @click="resetLessonForm()">
+              {{ t('teacherContent.clear') }}
+            </button>
           </template>
 
           <div class="field">
-            <label>Lesson title</label>
-            <input v-model="lessonForm.title" class="input" maxlength="200" aria-label="Lesson title" />
+            <label>{{ t('teacherContent.lessonTitle') }}</label>
+            <input
+              v-model="lessonForm.title"
+              class="input"
+              maxlength="200"
+              :aria-label="t('teacherContent.lessonTitle')"
+            />
           </div>
 
           <div class="field">
-            <label>Description</label>
+            <label>{{ t('teacherContent.descriptionLabel') }}</label>
             <textarea
               v-model="lessonForm.description"
               class="textarea"
               maxlength="1000"
-              aria-label="Lesson description"
+              :aria-label="t('teacherContent.descriptionLabel')"
             />
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Module</label>
-              <select v-model.number="lessonForm.moduleId" class="select" aria-label="Lesson module">
-                <option :value="0">Select a module</option>
+              <label>{{ t('teacherContent.module') }}</label>
+              <select v-model.number="lessonForm.moduleId" class="select" :aria-label="t('teacherContent.module')">
+                <option :value="0">{{ t('teacherContent.selectModule') }}</option>
                 <option v-for="module in liveModuleOptions" :key="module.id" :value="module.id">
                   {{ module.title }}
                 </option>
@@ -1034,28 +1053,28 @@
             </div>
 
             <div class="field">
-              <label>Learning type</label>
-              <select v-model="lessonForm.learningType" class="select" aria-label="Lesson learning type">
-                <option value="LIVE">LIVE</option>
-                <option value="RECORDED">RECORDED</option>
-                <option value="HYBRID">HYBRID</option>
+              <label>{{ t('teacherContent.learningType') }}</label>
+              <select v-model="lessonForm.learningType" class="select" :aria-label="t('teacherContent.learningType')">
+                <option value="LIVE">{{ t('teacherContent.live') }}</option>
+                <option value="RECORDED">{{ t('teacherContent.recorded') }}</option>
+                <option value="HYBRID">{{ t('teacherContent.hybrid') }}</option>
               </select>
             </div>
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Level</label>
-              <select v-model.number="lessonForm.levelId" class="select" aria-label="Lesson level">
-                <option :value="0">Select a level</option>
+              <label>{{ t('teacherContent.level') }}</label>
+              <select v-model.number="lessonForm.levelId" class="select" :aria-label="t('teacherContent.level')">
+                <option :value="0">{{ t('teacherContent.selectLevel') }}</option>
                 <option v-for="level in levels" :key="level.id" :value="level.id">{{ level.name }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Category</label>
-              <select v-model.number="lessonForm.categoryId" class="select" aria-label="Lesson category">
-                <option :value="0">Select a category</option>
+              <label>{{ t('teacherContent.category') }}</label>
+              <select v-model.number="lessonForm.categoryId" class="select" :aria-label="t('teacherContent.category')">
+                <option :value="0">{{ t('teacherContent.selectCategory') }}</option>
                 <option v-for="category in categories" :key="category.id" :value="category.id">
                   {{ category.name }}
                 </option>
@@ -1065,282 +1084,308 @@
 
           <div class="form-grid two">
             <div class="field">
-              <label>Access</label>
-              <select v-model="lessonForm.accessType" class="select" aria-label="Lesson access type">
-                <option value="FREE">FREE</option>
-                <option value="PAID">PAID</option>
+              <label>{{ t('teacherContent.access') }}</label>
+              <select v-model="lessonForm.accessType" class="select" :aria-label="t('teacherContent.access')">
+                <option value="FREE">{{ t('teacherContent.free') }}</option>
+                <option value="PAID">{{ t('teacherContent.paid') }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Price</label>
+              <label>{{ t('teacherContent.price') }}</label>
               <input
                 v-model.number="lessonForm.price"
                 class="input"
                 type="number"
                 min="0"
                 step="0.01"
-                aria-label="Lesson price"
+                :aria-label="t('teacherContent.price')"
               />
             </div>
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Estimated duration (minutes)</label>
+              <label>{{ t('teacherContent.estimatedMinutes') }}</label>
               <input
                 v-model.number="lessonForm.estimatedDurationMinutes"
                 class="input"
                 type="number"
                 min="0"
-                aria-label="Lesson estimated duration in minutes"
+                :aria-label="t('teacherContent.estimatedMinutes')"
               />
             </div>
 
             <div class="field">
-              <label>Cover image URL</label>
+              <label>{{ t('teacherContent.coverUrl') }}</label>
               <input
                 v-model="lessonForm.coverImageUrl"
                 class="input"
                 type="url"
                 maxlength="255"
-                aria-label="Lesson cover image URL"
+                :aria-label="t('teacherContent.coverUrl')"
               />
             </div>
           </div>
 
           <div class="field">
-            <label>Basic content</label>
-            <textarea v-model="lessonForm.basicContent" class="textarea" aria-label="Lesson basic content" />
+            <label>{{ t('teacherContent.basicContent') }}</label>
+            <textarea
+              v-model="lessonForm.basicContent"
+              class="textarea"
+              :aria-label="t('teacherContent.basicContent')"
+            />
           </div>
         </ActionFormCard>
 
         <ActionFormCard
           v-else-if="activeBuilder === 'resource'"
-          :title="editingResourceId ? 'Edit Recorded Lesson' : 'Upload Recorded Lesson'"
-          subtitle="Attach either an external stream URL or an uploaded file, and optionally link it to a course package."
+          :title="editingResourceId ? t('teacherContent.editRecordingTitle') : t('teacherContent.uploadRecordingTitle')"
+          :subtitle="t('teacherContent.recordingFormHint')"
           icon="file"
-          :submit-label="editingResourceId ? 'Save recording changes' : 'Save recording'"
-          submitting-label="Saving..."
+          :submit-label="
+            editingResourceId ? t('teacherContent.saveRecordingChanges') : t('teacherContent.saveRecording')
+          "
+          :submitting-label="t('teacherContent.saving')"
           :submitting="submitting.resource"
           @submit="submitRecordedResource"
         >
           <template #header-end>
             <button class="teacher-outline-button" type="button" @click="resetResourceForm(resourceLessonId)">
-              Clear
+              {{ t('teacherContent.clear') }}
             </button>
           </template>
 
           <div class="field">
-            <label>Lesson</label>
-            <select v-model.number="resourceForm.lessonId" class="select" aria-label="Recorded lesson linked lesson">
-              <option :value="0">Select a lesson</option>
+            <label>{{ t('teacherContent.lesson') }}</label>
+            <select v-model.number="resourceForm.lessonId" class="select" :aria-label="t('teacherContent.lesson')">
+              <option :value="0">{{ t('teacherContent.selectLesson') }}</option>
               <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">{{ lesson.title }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label>Course package (optional)</label>
+            <label>{{ t('teacherContent.packageOptional') }}</label>
             <select
               v-model.number="resourceForm.packageId"
               class="select"
-              aria-label="Recorded lesson linked course package"
+              :aria-label="t('teacherContent.packageOptional')"
             >
-              <option :value="0">No package link</option>
+              <option :value="0">{{ t('teacherContent.noPackageLink') }}</option>
               <option v-for="item in livePackageOptions" :key="item.id" :value="item.id">{{ item.title }}</option>
             </select>
           </div>
 
           <div class="field">
-            <label>Title</label>
-            <input v-model="resourceForm.title" class="input" maxlength="200" aria-label="Recorded lesson title" />
+            <label>{{ t('teacherContent.titleLabel') }}</label>
+            <input
+              v-model="resourceForm.title"
+              class="input"
+              maxlength="200"
+              :aria-label="t('teacherContent.titleLabel')"
+            />
           </div>
 
           <div class="field">
-            <label>Description</label>
+            <label>{{ t('teacherContent.descriptionLabel') }}</label>
             <textarea
               v-model="resourceForm.description"
               class="textarea"
               maxlength="1000"
-              aria-label="Recorded lesson description"
+              :aria-label="t('teacherContent.descriptionLabel')"
             />
           </div>
 
           <div class="form-grid two">
             <div class="field">
-              <label>Source type</label>
-              <select v-model="resourceForm.sourceType" class="select" aria-label="Recorded lesson source type">
-                <option value="EXTERNAL_URL">EXTERNAL_URL</option>
-                <option value="UPLOADED_FILE">UPLOADED_FILE</option>
+              <label>{{ t('teacherContent.sourceType') }}</label>
+              <select v-model="resourceForm.sourceType" class="select" :aria-label="t('teacherContent.sourceType')">
+                <option value="EXTERNAL_URL">{{ t('teacherContent.externalSource') }}</option>
+                <option value="UPLOADED_FILE">{{ t('teacherContent.uploadSource') }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Duration seconds</label>
+              <label>{{ t('teacherContent.durationSeconds') }}</label>
               <input
                 v-model.number="resourceForm.durationSeconds"
                 class="input"
                 type="number"
                 min="0"
-                aria-label="Recorded lesson duration in seconds"
+                :aria-label="t('teacherContent.durationSeconds')"
               />
             </div>
           </div>
 
           <div v-if="resourceForm.sourceType === 'EXTERNAL_URL'" class="field">
-            <label>External video URL</label>
+            <label>{{ t('teacherContent.externalVideoUrl') }}</label>
             <input
               v-model="resourceForm.externalVideoUrl"
               class="input"
               type="url"
               maxlength="2048"
-              aria-label="External video URL"
+              :aria-label="t('teacherContent.externalVideoUrl')"
             />
           </div>
 
           <div v-else class="field">
-            <label>Video file</label>
+            <label>{{ t('teacherContent.videoFile') }}</label>
             <input
               ref="resourceFileInput"
               class="input"
               type="file"
               accept="video/*"
-              aria-label="Recorded lesson video file"
+              :aria-label="t('teacherContent.videoFile')"
             />
           </div>
         </ActionFormCard>
 
         <template v-else-if="activeBuilder === 'quiz'">
           <ActionFormCard
-            :title="editingQuizId ? 'Edit Quiz' : 'Create Quiz'"
-            subtitle="Each quiz stays linked to a lesson and can be updated or removed from this workspace."
+            :title="editingQuizId ? t('teacherContent.editQuizTitle') : t('teacherContent.createQuiz')"
+            :subtitle="t('teacherContent.quizFormHint')"
             icon="practice"
-            :submit-label="editingQuizId ? 'Save quiz changes' : 'Create quiz'"
-            submitting-label="Saving..."
+            :submit-label="editingQuizId ? t('teacherContent.saveQuizChanges') : t('teacherContent.createQuizAction')"
+            :submitting-label="t('teacherContent.saving')"
             :submitting="submitting.quiz"
             @submit="submitQuiz"
           >
             <template #header-end>
-              <button class="teacher-outline-button" type="button" @click="resetQuizForm(quizLessonId)">Clear</button>
+              <button class="teacher-outline-button" type="button" @click="resetQuizForm(quizLessonId)">
+                {{ t('teacherContent.clear') }}
+              </button>
             </template>
 
             <div class="field">
-              <label>Lesson</label>
-              <select v-model.number="quizForm.lessonId" class="select" aria-label="Quiz linked lesson">
-                <option :value="0">Select a lesson</option>
+              <label>{{ t('teacherContent.lesson') }}</label>
+              <select v-model.number="quizForm.lessonId" class="select" :aria-label="t('teacherContent.lesson')">
+                <option :value="0">{{ t('teacherContent.selectLesson') }}</option>
                 <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">{{ lesson.title }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Quiz title</label>
-              <input v-model="quizForm.title" class="input" maxlength="200" aria-label="Quiz title" />
-            </div>
-
-            <div class="field">
-              <label>Description</label>
-              <textarea
-                v-model="quizForm.description"
-                class="textarea"
-                maxlength="1000"
-                aria-label="Quiz description"
+              <label>{{ t('teacherContent.quizTitle') }}</label>
+              <input
+                v-model="quizForm.title"
+                class="input"
+                maxlength="200"
+                :aria-label="t('teacherContent.quizTitle')"
               />
             </div>
 
             <div class="field">
-              <label>Time limit (minutes)</label>
+              <label>{{ t('teacherContent.descriptionLabel') }}</label>
+              <textarea
+                v-model="quizForm.description"
+                class="textarea"
+                maxlength="1000"
+                :aria-label="t('teacherContent.descriptionLabel')"
+              />
+            </div>
+
+            <div class="field">
+              <label>{{ t('teacherContent.timeLimitMinutes') }}</label>
               <input
                 v-model.number="quizForm.timeLimitMinutes"
                 class="input"
                 type="number"
                 min="0"
-                aria-label="Quiz time limit in minutes"
+                :aria-label="t('teacherContent.timeLimitMinutes')"
               />
             </div>
           </ActionFormCard>
 
           <ActionFormCard
-            :title="editingQuestionId ? 'Edit Question' : 'Add Question'"
+            :title="editingQuestionId ? t('teacherContent.editQuestionTitle') : t('teacherContent.addQuestion')"
             :subtitle="
-              selectedQuiz ? `Active quiz: ${selectedQuiz.title}` : 'Create or open a quiz before adding questions.'
+              selectedQuiz
+                ? t('teacherContent.activeQuiz', { title: selectedQuiz.title })
+                : t('teacherContent.questionPrerequisite')
             "
             icon="practice"
-            :submit-label="editingQuestionId ? 'Save question changes' : 'Add question'"
-            submitting-label="Saving..."
+            :submit-label="
+              editingQuestionId ? t('teacherContent.saveQuestionChanges') : t('teacherContent.addQuestionAction')
+            "
+            :submitting-label="t('teacherContent.saving')"
             :submitting="submitting.question"
             @submit="submitQuestion"
           >
             <template #header-end>
-              <button class="teacher-outline-button" type="button" @click="resetQuestionForm">Clear</button>
+              <button class="teacher-outline-button" type="button" @click="resetQuestionForm">
+                {{ t('teacherContent.clear') }}
+              </button>
             </template>
 
             <div class="field">
-              <label>Question type</label>
-              <select v-model="questionForm.questionType" class="select" aria-label="Question type">
+              <label>{{ t('teacherContent.questionType') }}</label>
+              <select v-model="questionForm.questionType" class="select" :aria-label="t('teacherContent.questionType')">
                 <option v-for="type in questionTypeOptions" :key="type" :value="type">{{ type }}</option>
               </select>
             </div>
 
             <div class="field">
-              <label>Question text</label>
+              <label>{{ t('teacherContent.questionText') }}</label>
               <textarea
                 v-model="questionForm.questionText"
                 class="textarea"
                 maxlength="1000"
-                aria-label="Question text"
+                :aria-label="t('teacherContent.questionText')"
               />
             </div>
 
             <div class="form-grid two">
               <div class="field">
-                <label>Correct answer</label>
+                <label>{{ t('teacherContent.correctAnswer') }}</label>
                 <input
                   v-model="questionForm.correctAnswerText"
                   class="input"
                   maxlength="500"
-                  aria-label="Correct answer"
+                  :aria-label="t('teacherContent.correctAnswer')"
                 />
               </div>
 
               <div class="field">
-                <label>Points</label>
+                <label>{{ t('teacherContent.points') }}</label>
                 <input
                   v-model.number="questionForm.points"
                   class="input"
                   type="number"
                   min="1"
-                  aria-label="Question points"
+                  :aria-label="t('teacherContent.points')"
                 />
               </div>
             </div>
 
             <div class="form-grid two">
               <div class="field">
-                <label>Display order</label>
+                <label>{{ t('teacherContent.displayOrder') }}</label>
                 <input
                   v-model.number="questionForm.displayOrder"
                   class="input"
                   type="number"
                   min="0"
-                  aria-label="Question display order"
+                  :aria-label="t('teacherContent.displayOrder')"
                 />
               </div>
 
               <div class="field">
-                <label>Explanation</label>
+                <label>{{ t('teacherContent.explanation') }}</label>
                 <input
                   v-model="questionForm.explanation"
                   class="input"
                   maxlength="1000"
-                  aria-label="Question explanation"
+                  :aria-label="t('teacherContent.explanation')"
                 />
               </div>
             </div>
 
             <div class="stack">
               <div class="row-between teacher-content-section-head">
-                <strong>Answer Options</strong>
-                <button class="student-link-button" type="button" @click="addQuestionOption">Add Option</button>
+                <strong>{{ t('teacherContent.answerOptions') }}</strong>
+                <button class="student-link-button" type="button" @click="addQuestionOption">
+                  {{ t('teacherContent.addOption') }}
+                </button>
               </div>
 
               <div v-for="(option, index) in questionForm.options" :key="`option-${index}`" class="teacher-lesson-row">
@@ -1349,23 +1394,23 @@
                   <input
                     v-model="option.optionText"
                     class="input"
-                    placeholder="Option text"
+                    :placeholder="t('teacherContent.optionText')"
                     maxlength="255"
-                    :aria-label="`Answer option ${index + 1} text`"
+                    :aria-label="t('teacherContent.optionTextAria', { number: index + 1 })"
                   />
                 </div>
 
                 <div class="row teacher-lesson-actions">
                   <label class="muted">
                     <input v-model="option.correctOption" type="checkbox" />
-                    Correct
+                    {{ t('teacherContent.correct') }}
                   </label>
                   <input
                     v-model.number="option.displayOrder"
                     class="input"
                     type="number"
                     min="0"
-                    :aria-label="`Answer option ${index + 1} display order`"
+                    :aria-label="t('teacherContent.optionOrderAria', { number: index + 1 })"
                   />
                   <button
                     class="btn btn-secondary"
@@ -1373,7 +1418,7 @@
                     :disabled="questionForm.options.length <= 1"
                     @click="removeQuestionOption(index)"
                   >
-                    Remove
+                    {{ t('teacherContent.remove') }}
                   </button>
                 </div>
               </div>
@@ -1384,7 +1429,7 @@
         <div class="muted-divider" />
 
         <div class="stack">
-          <strong>Quick Reference</strong>
+          <strong>{{ t('teacherContent.quickReference') }}</strong>
           <div class="teacher-resource-grid">
             <div v-for="item in resourceTypes" :key="item.label" class="teacher-resource-chip">
               <span><IconGlyph :name="item.icon" :size="18" /></span>
@@ -1399,6 +1444,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { publicApi, teacherApi } from '@/api/services'
 import type {
@@ -1418,6 +1464,7 @@ import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { useTeacherAccess } from '@/composables/useTeacherAccess'
 import { categories as demoCategories, levels as demoLevels, teacherCoursePackages, teacherLessons } from '@/demo/data'
+import { teacherContentMessages } from '@/plugins/teacherContentMessages'
 import { useAuthStore } from '@/stores/auth'
 import type {
   ContentStatus,
@@ -1434,7 +1481,14 @@ import type {
   TeacherQuizResponse,
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { clampPercent, formatDate, formatNumber, nonNegativeInteger, ratioPercent } from '@/utils/format'
+import {
+  clampPercent,
+  formatCurrency,
+  formatDate,
+  formatNumber,
+  nonNegativeInteger,
+  ratioPercent,
+} from '@/utils/format'
 
 type SurfaceTab = 'courses' | 'modules' | 'lessons' | 'categories' | 'levels' | 'resources' | 'activity-types'
 type BuilderTab = 'package' | 'module' | 'lesson' | 'resource' | 'quiz'
@@ -1479,6 +1533,13 @@ type QuestionOptionDraft = {
 }
 
 const auth = useAuthStore()
+const { t } = useI18n({
+  messages: {
+    en: { teacherContent: teacherContentMessages.en },
+    ms: { teacherContent: teacherContentMessages.ms },
+    zh: { teacherContent: teacherContentMessages.zh },
+  },
+})
 const { teacherApprovalLocked, teacherApprovalMessage } = useTeacherAccess()
 
 const packagesResource = useResource(
@@ -1514,15 +1575,15 @@ const livePackages = computed(() => (packagesResource.usingFallback.value ? [] :
 const liveLessons = computed(() => (lessonsResource.usingFallback.value ? [] : (lessonsResource.data.value ?? [])))
 const liveModules = computed(() => (modulesResource.usingFallback.value ? [] : (modulesResource.data.value ?? [])))
 
-const contentTabs: Array<{ key: SurfaceTab; label: string; icon: string }> = [
-  { key: 'courses', label: 'Courses', icon: 'courses' },
-  { key: 'modules', label: 'Modules', icon: 'content' },
-  { key: 'lessons', label: 'Lessons', icon: 'learn' },
-  { key: 'categories', label: 'Categories', icon: 'rewards' },
-  { key: 'levels', label: 'Levels', icon: 'star' },
-  { key: 'resources', label: 'Resources', icon: 'file' },
-  { key: 'activity-types', label: 'Assessments', icon: 'practice' },
-]
+const contentTabs = computed<Array<{ key: SurfaceTab; label: string; icon: string }>>(() => [
+  { key: 'courses', label: t('teacherContent.courses'), icon: 'courses' },
+  { key: 'modules', label: t('teacherContent.modules'), icon: 'content' },
+  { key: 'lessons', label: t('teacherContent.lessons'), icon: 'learn' },
+  { key: 'categories', label: t('teacherContent.categories'), icon: 'rewards' },
+  { key: 'levels', label: t('teacherContent.levels'), icon: 'star' },
+  { key: 'resources', label: t('teacherContent.resources'), icon: 'file' },
+  { key: 'activity-types', label: t('teacherContent.assessments'), icon: 'practice' },
+])
 
 const questionTypeOptions: QuizQuestionType[] = [
   'MULTIPLE_CHOICE',
@@ -1537,39 +1598,39 @@ const questionTypeOptions: QuizQuestionType[] = [
   'CHARACTER_MEANING',
 ]
 
-const activityTypes = [
+const activityTypes = computed(() => [
   {
-    title: 'Flashcards',
-    copy: 'Vocabulary and recognition practice are powered from the shared activity library.',
+    title: t('teacherContent.activityFlashcards'),
+    copy: t('teacherContent.activityFlashcardsHint'),
     icon: 'clip',
   },
-  { title: 'Quizzes', copy: 'Teacher-owned quizzes are now fully editable from this page.', icon: 'quiz' },
-  { title: 'Matching', copy: 'Matching games can be curated centrally in the admin activity library.', icon: 'fun' },
-  { title: 'Listening', copy: 'Listening exercises connect with recorded media and AI support.', icon: 'live' },
+  { title: t('teacherContent.activityQuizzes'), copy: t('teacherContent.activityQuizzesHint'), icon: 'quiz' },
+  { title: t('teacherContent.activityMatching'), copy: t('teacherContent.activityMatchingHint'), icon: 'fun' },
+  { title: t('teacherContent.activityListening'), copy: t('teacherContent.activityListeningHint'), icon: 'live' },
   {
-    title: 'Tracing',
-    copy: 'Character tracing ties into practice progress and worksheet resources.',
+    title: t('teacherContent.activityTracing'),
+    copy: t('teacherContent.activityTracingHint'),
     icon: 'practice',
   },
   {
-    title: 'Drag and Drop',
-    copy: 'Interactive sequence activities are available in the student activity library.',
+    title: t('teacherContent.activityDrag'),
+    copy: t('teacherContent.activityDragHint'),
     icon: 'practice',
   },
-]
+])
 
-const resourceTypes = [
-  { label: 'Images', icon: 'content' },
-  { label: 'Audio', icon: 'live' },
-  { label: 'Videos', icon: 'play' },
-  { label: 'Documents', icon: 'file' },
-]
+const resourceTypes = computed(() => [
+  { label: t('teacherContent.images'), icon: 'content' },
+  { label: t('teacherContent.audio'), icon: 'live' },
+  { label: t('teacherContent.videos'), icon: 'play' },
+  { label: t('teacherContent.documents'), icon: 'file' },
+])
 
-const previewModuleRows: DisplayModuleRow[] = [
-  { id: 1, title: 'Module 1 - Greetings and Introductions', lessonCount: 0, lessons: [], source: null },
-  { id: 2, title: 'Module 2 - Numbers and Counting', lessonCount: 0, lessons: [], source: null },
-  { id: 3, title: 'Module 3 - Family and Friends', lessonCount: 0, lessons: [], source: null },
-]
+const previewModuleRows = computed<DisplayModuleRow[]>(() => [
+  { id: 1, title: t('teacherContent.demoModuleOne'), lessonCount: 0, lessons: [], source: null },
+  { id: 2, title: t('teacherContent.demoModuleTwo'), lessonCount: 0, lessons: [], source: null },
+  { id: 3, title: t('teacherContent.demoModuleThree'), lessonCount: 0, lessons: [], source: null },
+])
 
 const shortDateOptions = { month: 'short', day: 'numeric', year: 'numeric' } as const
 
@@ -1700,13 +1761,17 @@ const usingFallback = computed(
     categoriesResource.usingFallback.value,
 )
 const teacherContentDetail = computed(() => (teacherApprovalLocked.value ? teacherApprovalMessage.value : null))
-const packageArchiveLabel = computed(() => (packageBusy.value ? 'Working...' : 'Archive'))
-const packageItemSubmitLabel = computed(() => (submitting.packageItem ? 'Saving...' : 'Add to Course'))
-const readOnlyTitle = computed(() => (teacherApprovalLocked.value ? 'Verification pending.' : 'Preview mode is read-only.'))
+const packageArchiveLabel = computed(() =>
+  packageBusy.value ? t('teacherContent.working') : t('teacherContent.archive'),
+)
+const packageItemSubmitLabel = computed(() =>
+  submitting.packageItem ? t('teacherContent.saving') : t('teacherContent.addToCourse'),
+)
+const readOnlyTitle = computed(() =>
+  teacherApprovalLocked.value ? t('teacherContent.verificationPending') : t('teacherContent.previewReadOnly'),
+)
 const readOnlyMessage = computed(() =>
-  teacherApprovalLocked.value
-    ? teacherApprovalMessage.value
-    : 'Sign in as an approved teacher to save content, upload files, package lessons, and manage quizzes.',
+  teacherApprovalLocked.value ? teacherApprovalMessage.value : t('teacherContent.readOnlyHint'),
 )
 
 const pageError = computed(
@@ -1732,11 +1797,11 @@ const displayCourses = computed<DisplayCourse[]>(() => {
     id: item.id,
     title: item.title,
     subtitle: item.category.name,
-    description: item.description || 'No description available yet.',
+    description: item.description || t('teacherContent.noDescriptionYet'),
     statusLabel: normalizeStatus(item.contentStatus),
     lessonCount: item.packageItems.length,
     levelLabel: item.level.name,
-    accessLabel: item.accessType === 'PAID' ? formatPrice(item.price) : 'Free',
+    accessLabel: item.accessType === 'PAID' ? formatPrice(item.price) : t('teacherContent.free'),
     updatedLabel: formatDate(item.updatedAt, shortDateOptions),
     packageItems: item.packageItems,
     source: packagesResource.usingFallback.value ? null : item,
@@ -1748,10 +1813,10 @@ const selectedCourse = computed<DisplayCourse>(() => {
     displayCourses.value.find((item) => item.id === selectedPackageId.value) ??
     displayCourses.value[0] ?? {
       id: 0,
-      title: 'No course available',
-      subtitle: 'Create or select a course',
-      description: 'No course data is available right now.',
-      statusLabel: 'Draft',
+      title: t('teacherContent.noCourse'),
+      subtitle: t('teacherContent.selectOrCreateCourse'),
+      description: t('teacherContent.noCourseData'),
+      statusLabel: t('teacherContent.statusDraft'),
       lessonCount: 0,
       levelLabel: '--',
       accessLabel: '--',
@@ -1771,7 +1836,9 @@ const lessonRows = computed<DisplayLessonRow[]>(() => {
     order: index + 1,
     categoryLabel: lesson.category.name,
     statusLabel: normalizeStatus(lesson.contentStatus),
-    metaLabel: lesson.estimatedDurationMinutes ? `${lesson.estimatedDurationMinutes} min` : lesson.learningType,
+    metaLabel: lesson.estimatedDurationMinutes
+      ? t('teacherContent.minutes', { count: lesson.estimatedDurationMinutes })
+      : learningTypeLabel(lesson.learningType),
     moduleId: lesson.moduleId ?? 0,
     source: lessonsResource.usingFallback.value ? null : lesson,
   }))
@@ -1794,7 +1861,7 @@ const moduleRows = computed<DisplayModuleRow[]>(() => {
   }
 
   if (modulesResource.usingFallback.value || lessonsResource.usingFallback.value) {
-    return previewModuleRows.map((module, index) => ({
+    return previewModuleRows.value.map((module, index) => ({
       ...module,
       lessonCount: index === 0 ? lessonRows.value.length : 0,
       lessons: index === 0 ? lessonRows.value : [],
@@ -1840,57 +1907,63 @@ const packageItemOptions = computed(() => {
 const selectedQuiz = computed(() => quizList.value.find((item) => item.id === selectedQuizId.value) ?? null)
 
 const resourceSummaryLabel = computed(() => {
-  if (!resourceLessonId.value) return 'Choose a lesson to manage recordings'
-  return `${uploadedResourceVideos.value.length} recording(s), ${lessonVideoProgress.value.length} learner progress row(s)`
+  if (!resourceLessonId.value) return t('teacherContent.chooseLessonRecordings')
+  return t('teacherContent.resourceSummary', {
+    videos: uploadedResourceVideos.value.length,
+    progress: lessonVideoProgress.value.length,
+  })
 })
 
 const quizSummaryLabel = computed(() => {
-  if (!quizLessonId.value) return 'Choose a lesson to manage quizzes'
-  return `${quizList.value.length} quiz(zes), ${quizAttempts.value.length} recent attempt(s)`
+  if (!quizLessonId.value) return t('teacherContent.chooseLessonQuizzes')
+  return t('teacherContent.quizSummary', {
+    quizzes: quizList.value.length,
+    questions: quizAttempts.value.length,
+  })
 })
 
 const builderHeading = computed(() => {
   switch (activeBuilder.value) {
     case 'module':
-      return 'Module Builder'
+      return t('teacherContent.moduleBuilder')
     case 'lesson':
-      return 'Lesson Builder'
+      return t('teacherContent.lessonBuilder')
     case 'resource':
-      return 'Resource Builder'
+      return t('teacherContent.resourceBuilder')
     case 'quiz':
-      return 'Assessment Builder'
+      return t('teacherContent.assessmentBuilder')
     default:
-      return 'Course Builder'
+      return t('teacherContent.courseBuilder')
   }
 })
 
 const builderDescription = computed(() => {
   switch (activeBuilder.value) {
     case 'module':
-      return 'Edit module metadata, pricing, and placement with live backend validation.'
+      return t('teacherContent.moduleBuilderHint')
     case 'lesson':
-      return 'Use the full lesson payload, including learning type, access, duration, and cover metadata.'
+      return t('teacherContent.lessonBuilderHint')
     case 'resource':
-      return 'Manage recorded lessons with real uploads, external links, and learner watch insights.'
+      return t('teacherContent.resourceBuilderHint')
     case 'quiz':
-      return 'Create quizzes, add question items, and review attempt activity without leaving this page.'
+      return t('teacherContent.assessmentBuilderHint')
     default:
-      return 'Create or revise course packages, then attach lessons and modules into sellable pathways.'
+      return t('teacherContent.courseBuilderHint')
   }
 })
 
 const builderLaunchLabel = computed(() => {
   switch (activeSurfaceTab.value) {
     case 'modules':
-      return 'Add Module'
+      return t('teacherContent.addModule')
     case 'lessons':
-      return 'Create Lesson'
+      return t('teacherContent.createLesson')
     case 'resources':
-      return 'Upload Resource'
+      return t('teacherContent.uploadResourceAction')
     case 'activity-types':
-      return 'Create Quiz'
+      return t('teacherContent.createQuiz')
     default:
-      return 'Create Course'
+      return t('teacherContent.createCourseAction')
   }
 })
 
@@ -1970,8 +2043,8 @@ watch(
   (type) => {
     if (type === 'TRUE_FALSE' && questionForm.options.every((option) => !option.optionText.trim())) {
       questionForm.options = [
-        { optionText: 'True', correctOption: true, displayOrder: 0 },
-        { optionText: 'False', correctOption: false, displayOrder: 1 },
+        { optionText: t('teacherContent.trueLabel'), correctOption: true, displayOrder: 0 },
+        { optionText: t('teacherContent.falseLabel'), correctOption: false, displayOrder: 1 },
       ]
     }
   },
@@ -1985,7 +2058,7 @@ function defaultQuestionOptions(): QuestionOptionDraft[] {
 }
 
 function formatPrice(value: number): string {
-  return `RM ${Number(value || 0).toFixed(2)}`
+  return formatCurrency(value, 'MYR')
 }
 
 function formatDuration(value: number | null | undefined): string {
@@ -1999,40 +2072,53 @@ function formatDuration(value: number | null | undefined): string {
   return `${seconds}s`
 }
 
-function descriptionLabel(value: string | null | undefined, fallback = 'No description provided.'): string {
+function descriptionLabel(
+  value: string | null | undefined,
+  fallback = t('teacherContent.noDescriptionProvided'),
+): string {
   return value || fallback
 }
 
 function yesNoLabel(value: boolean): string {
-  return value ? 'Yes' : 'No'
+  return value ? t('teacherContent.yes') : t('teacherContent.no')
+}
+
+function learningTypeLabel(value: string): string {
+  const keys: Record<string, string> = {
+    LIVE: 'live',
+    RECORDED: 'recorded',
+    HYBRID: 'hybrid',
+  }
+  const key = keys[value]
+  return key ? t(`teacherContent.${key}`) : value
 }
 
 function packageItemRemoveLabel(packageItemId: number): string {
-  return packageItemRemovingId.value === packageItemId ? 'Removing...' : 'Remove'
+  return packageItemRemovingId.value === packageItemId ? t('teacherContent.removing') : t('teacherContent.remove')
 }
 
 function moduleArchiveLabel(moduleId: number): string {
-  return moduleBusyId.value === moduleId ? 'Working...' : 'Archive'
+  return moduleBusyId.value === moduleId ? t('teacherContent.working') : t('teacherContent.archive')
 }
 
 function lessonArchiveLabel(lessonId: number): string {
-  return lessonBusyId.value === lessonId ? 'Working...' : 'Archive'
+  return lessonBusyId.value === lessonId ? t('teacherContent.working') : t('teacherContent.archive')
 }
 
 function resourceArchiveLabel(videoId: number): string {
-  return archivingResourceId.value === videoId ? 'Working...' : 'Archive'
+  return archivingResourceId.value === videoId ? t('teacherContent.working') : t('teacherContent.archive')
 }
 
 function quizDeleteLabel(quizId: number): string {
-  return quizDeleteId.value === quizId ? 'Working...' : 'Delete'
+  return quizDeleteId.value === quizId ? t('teacherContent.working') : t('teacherContent.deleteAction')
 }
 
 function questionDeleteLabel(questionId: number): string {
-  return questionDeleteId.value === questionId ? 'Working...' : 'Delete'
+  return questionDeleteId.value === questionId ? t('teacherContent.working') : t('teacherContent.deleteAction')
 }
 
 function videoProgressStatusLabel(completed: boolean): string {
-  return completed ? 'Completed' : 'Watching'
+  return completed ? t('teacherContent.completed') : t('teacherContent.watching')
 }
 
 function videoProgressStatusTone(completed: boolean): 'success' | 'warning' {
@@ -2044,15 +2130,15 @@ function lastWatchedLabel(value: string | null | undefined): string {
 }
 
 function quizTimeLimitLabel(value: number | null | undefined): string {
-  return value ? `${value} min` : 'None'
+  return value ? t('teacherContent.minutes', { count: value }) : t('teacherContent.none')
 }
 
 function questionAnswerLabel(question: TeacherQuizQuestionResponse): string {
-  return question.correctAnswerText || 'Use the options below to mark a correct answer.'
+  return question.correctAnswerText || t('teacherContent.answerFallback')
 }
 
 function questionOptionStatusLabel(correct: boolean | null | undefined): string {
-  return correct ? 'Correct' : 'Distractor'
+  return correct ? t('teacherContent.correct') : t('teacherContent.distractor')
 }
 
 function questionOptionStatusTone(correct: boolean | null | undefined): 'success' | 'info' {
@@ -2062,31 +2148,31 @@ function questionOptionStatusTone(correct: boolean | null | undefined): 'success
 function normalizeStatus(status: ContentStatus | string): string {
   switch (status) {
     case 'PUBLISHED':
-      return 'Published'
+      return t('teacherContent.statusPublished')
     case 'APPROVED':
-      return 'Approved'
+      return t('teacherContent.statusApproved')
     case 'ARCHIVED':
-      return 'Archived'
+      return t('teacherContent.statusArchived')
     case 'SUBMITTED':
-      return 'Submitted'
+      return t('teacherContent.statusSubmitted')
     case 'REJECTED':
-      return 'Rejected'
+      return t('teacherContent.statusRejected')
     default:
-      return 'Draft'
+      return t('teacherContent.statusDraft')
   }
 }
 
 function contentStatusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
   switch (status) {
-    case 'Published':
+    case t('teacherContent.statusPublished'):
       return 'success'
-    case 'Approved':
+    case t('teacherContent.statusApproved'):
       return 'info'
-    case 'Submitted':
+    case t('teacherContent.statusSubmitted'):
       return 'warning'
-    case 'Rejected':
+    case t('teacherContent.statusRejected'):
       return 'danger'
-    case 'Archived':
+    case t('teacherContent.statusArchived'):
       return 'primary'
     default:
       return 'info'
@@ -2099,8 +2185,9 @@ function courseThumbVariant(id: number): 'panda' | 'family' | 'pagoda' | 'travel
 }
 
 function ensureLiveWrite(feature: string): boolean {
+  void feature
   if (!previewReadOnly.value) return true
-  actionError.value = `${feature} is read-only while preview data is active.`
+  actionError.value = t('teacherContent.readOnlyFeature')
   actionSuccess.value = null
   return false
 }
@@ -2360,7 +2447,7 @@ function showAllCourses(): void {
   clearActionFeedback()
   selectedPackageId.value = displayCourses.value[0]?.id ?? 0
   activeSurfaceTab.value = 'courses'
-  actionSuccess.value = 'Showing all available courses from the current teacher content list.'
+  actionSuccess.value = t('teacherContent.showingAll')
 }
 
 async function loadResourceInsights(lessonId: number): Promise<void> {
@@ -2373,7 +2460,7 @@ async function loadResourceInsights(lessonId: number): Promise<void> {
     uploadedResourceVideos.value = videos
     lessonVideoProgress.value = progressRows
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load recorded lesson resources.')
+    actionError.value = resolveApiError(reason, t('teacherContent.loadResourcesError'))
   } finally {
     loadingResourceInsights.value = false
   }
@@ -2397,7 +2484,7 @@ async function loadQuizzesForLesson(lessonId: number, preferredQuizId?: number |
       quizAttempts.value = []
     }
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load lesson quizzes.')
+    actionError.value = resolveApiError(reason, t('teacherContent.loadQuizzesError'))
   } finally {
     loadingQuizzes.value = false
   }
@@ -2409,7 +2496,7 @@ async function loadQuizAttempts(quizId: number): Promise<void> {
     quizAttempts.value = await teacherApi.quizAttempts(quizId)
     selectedQuizId.value = quizId
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to load quiz attempts.')
+    actionError.value = resolveApiError(reason, t('teacherContent.loadAttemptsError'))
   } finally {
     loadingQuizAttempts.value = false
   }
@@ -2452,9 +2539,9 @@ async function archiveSelectedPackage(): Promise<void> {
   try {
     await teacherApi.archivePackage(selectedCourse.value.source.id)
     await packagesResource.reload()
-    actionSuccess.value = 'Course archived successfully.'
+    actionSuccess.value = t('teacherContent.archivedCourse')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to archive this course.')
+    actionError.value = resolveApiError(reason, t('teacherContent.archiveCourseError'))
   } finally {
     packageBusy.value = false
   }
@@ -2475,9 +2562,9 @@ async function archiveModule(item?: LearningModuleResponse | null): Promise<void
   try {
     await teacherApi.archiveModule(item.id)
     await Promise.all([modulesResource.reload(), packagesResource.reload()])
-    actionSuccess.value = 'Module archived successfully.'
+    actionSuccess.value = t('teacherContent.archivedModule')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to archive this module.')
+    actionError.value = resolveApiError(reason, t('teacherContent.archiveModuleError'))
   } finally {
     moduleBusyId.value = null
   }
@@ -2494,9 +2581,9 @@ async function archiveLesson(item?: LessonResponse | null): Promise<void> {
   try {
     await teacherApi.archiveLesson(item.id)
     await Promise.all([lessonsResource.reload(), packagesResource.reload()])
-    actionSuccess.value = 'Lesson archived successfully.'
+    actionSuccess.value = t('teacherContent.archivedLesson')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to archive this lesson.')
+    actionError.value = resolveApiError(reason, t('teacherContent.archiveLessonError'))
   } finally {
     lessonBusyId.value = null
   }
@@ -2505,13 +2592,13 @@ async function archiveLesson(item?: LessonResponse | null): Promise<void> {
 async function submitPackageItem(): Promise<void> {
   if (submitting.packageItem) return
   if (!selectedCourse.value.source) {
-    actionError.value = 'Select a live course package before attaching items.'
+    actionError.value = t('teacherContent.selectLiveCourse')
     actionSuccess.value = null
     return
   }
   if (!ensureLiveWrite('Course packaging')) return
   if (packageItemForm.itemId <= 0) {
-    actionError.value = 'Choose a module or lesson to attach to this course.'
+    actionError.value = t('teacherContent.choosePackageItem')
     actionSuccess.value = null
     return
   }
@@ -2527,9 +2614,9 @@ async function submitPackageItem(): Promise<void> {
     await packagesResource.reload()
     packageItemForm.itemId = 0
     packageItemForm.displayOrder = selectedCourse.value.packageItems.length + 1
-    actionSuccess.value = 'Course package updated successfully.'
+    actionSuccess.value = t('teacherContent.packageUpdated')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to add this item to the course package.')
+    actionError.value = resolveApiError(reason, t('teacherContent.addPackageItemError'))
   } finally {
     submitting.packageItem = false
   }
@@ -2538,16 +2625,16 @@ async function submitPackageItem(): Promise<void> {
 async function removePackageItem(packageItemId: number): Promise<void> {
   if (packageItemRemovingId.value) return
   if (!selectedCourse.value.source || !ensureLiveWrite('Course packaging')) return
-  if (!confirmTeacherContentMutation('Remove this item from the course package?')) return
+  if (!confirmTeacherContentMutation(t('teacherContent.confirmRemoveItem'))) return
 
   clearActionFeedback()
   packageItemRemovingId.value = packageItemId
   try {
     await teacherApi.removePackageItem(selectedCourse.value.source.id, packageItemId)
     await packagesResource.reload()
-    actionSuccess.value = 'Course package item removed successfully.'
+    actionSuccess.value = t('teacherContent.packageItemRemoved')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to remove this course package item.')
+    actionError.value = resolveApiError(reason, t('teacherContent.removePackageItemError'))
   } finally {
     packageItemRemovingId.value = null
   }
@@ -2557,12 +2644,12 @@ async function submitPackage(): Promise<void> {
   if (submitting.package) return
   if (!ensureLiveWrite('Course management')) return
   if (!packageForm.title.trim()) {
-    actionError.value = 'Course title is required.'
+    actionError.value = t('teacherContent.courseTitleRequired')
     actionSuccess.value = null
     return
   }
   if (packageForm.levelId <= 0 || packageForm.categoryId <= 0) {
-    actionError.value = 'Select a level and category before saving this course.'
+    actionError.value = t('teacherContent.selectCourseTaxonomy')
     actionSuccess.value = null
     return
   }
@@ -2587,13 +2674,13 @@ async function submitPackage(): Promise<void> {
     selectedPackageId.value = response.id
     if (isEditing) {
       editingPackageId.value = response.id
-      actionSuccess.value = 'Course updated successfully.'
+      actionSuccess.value = t('teacherContent.courseUpdated')
     } else {
-      actionSuccess.value = 'Course created successfully.'
+      actionSuccess.value = t('teacherContent.courseCreated')
       openPackageBuilder(response, true)
     }
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this course.')
+    actionError.value = resolveApiError(reason, t('teacherContent.saveCourseError'))
   } finally {
     submitting.package = false
   }
@@ -2603,12 +2690,12 @@ async function submitModule(): Promise<void> {
   if (submitting.module) return
   if (!ensureLiveWrite('Module management')) return
   if (!moduleForm.title.trim()) {
-    actionError.value = 'Module title is required.'
+    actionError.value = t('teacherContent.moduleTitleRequired')
     actionSuccess.value = null
     return
   }
   if (moduleForm.levelId <= 0 || moduleForm.categoryId <= 0) {
-    actionError.value = 'Select a level and category before saving this module.'
+    actionError.value = t('teacherContent.selectModuleTaxonomy')
     actionSuccess.value = null
     return
   }
@@ -2631,10 +2718,10 @@ async function submitModule(): Promise<void> {
 
     await modulesResource.reload()
     editingModuleId.value = response.id
-    actionSuccess.value = isEditing ? 'Module saved successfully.' : 'Module created successfully.'
+    actionSuccess.value = isEditing ? t('teacherContent.moduleSaved') : t('teacherContent.moduleCreated')
     openModuleBuilder(response, true)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this module.')
+    actionError.value = resolveApiError(reason, t('teacherContent.saveModuleError'))
   } finally {
     submitting.module = false
   }
@@ -2644,17 +2731,17 @@ async function submitLesson(): Promise<void> {
   if (submitting.lesson) return
   if (!ensureLiveWrite('Lesson management')) return
   if (!lessonForm.title.trim()) {
-    actionError.value = 'Lesson title is required.'
+    actionError.value = t('teacherContent.lessonTitleRequired')
     actionSuccess.value = null
     return
   }
   if (!lessonForm.moduleId || lessonForm.moduleId <= 0) {
-    actionError.value = 'Select a module before saving this lesson.'
+    actionError.value = t('teacherContent.selectModuleError')
     actionSuccess.value = null
     return
   }
   if (lessonForm.levelId <= 0 || lessonForm.categoryId <= 0) {
-    actionError.value = 'Select a level and category before saving this lesson.'
+    actionError.value = t('teacherContent.selectLessonTaxonomy')
     actionSuccess.value = null
     return
   }
@@ -2683,10 +2770,10 @@ async function submitLesson(): Promise<void> {
 
     await Promise.all([lessonsResource.reload(), modulesResource.reload()])
     editingLessonId.value = response.id
-    actionSuccess.value = isEditing ? 'Lesson saved successfully.' : 'Lesson created successfully.'
+    actionSuccess.value = isEditing ? t('teacherContent.lessonSaved') : t('teacherContent.lessonCreated')
     openLessonBuilder(response, response.moduleId ?? 0, true)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this lesson.')
+    actionError.value = resolveApiError(reason, t('teacherContent.saveLessonError'))
   } finally {
     submitting.lesson = false
   }
@@ -2696,24 +2783,24 @@ async function submitRecordedResource(): Promise<void> {
   if (submitting.resource) return
   if (!ensureLiveWrite('Recorded lesson management')) return
   if (!resourceForm.lessonId || resourceForm.lessonId <= 0) {
-    actionError.value = 'Select a lesson before saving a recorded lesson resource.'
+    actionError.value = t('teacherContent.selectLessonRecording')
     actionSuccess.value = null
     return
   }
   if (!resourceForm.title.trim()) {
-    actionError.value = 'Recording title is required.'
+    actionError.value = t('teacherContent.recordingTitleRequired')
     actionSuccess.value = null
     return
   }
   if (resourceForm.sourceType === 'EXTERNAL_URL' && !resourceForm.externalVideoUrl.trim()) {
-    actionError.value = 'External video URL is required for EXTERNAL_URL sources.'
+    actionError.value = t('teacherContent.externalUrlRequired')
     actionSuccess.value = null
     return
   }
 
   const selectedFile = resourceFileInput.value?.files?.[0]
   if (resourceForm.sourceType === 'UPLOADED_FILE' && !selectedFile && !editingResourceId.value) {
-    actionError.value = 'Choose a file before saving an uploaded recording.'
+    actionError.value = t('teacherContent.fileRequired')
     actionSuccess.value = null
     return
   }
@@ -2747,11 +2834,11 @@ async function submitRecordedResource(): Promise<void> {
     resourceLessonId.value = response.lessonId
     await loadResourceInsights(response.lessonId)
     actionSuccess.value = editingResourceId.value
-      ? 'Recorded lesson updated successfully.'
-      : 'Recorded lesson created successfully.'
+      ? t('teacherContent.recordingUpdated')
+      : t('teacherContent.recordingCreated')
     openResourceBuilder(response)
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this recorded lesson.')
+    actionError.value = resolveApiError(reason, t('teacherContent.saveRecordingError'))
   } finally {
     submitting.resource = false
   }
@@ -2760,8 +2847,7 @@ async function submitRecordedResource(): Promise<void> {
 async function archiveRecordedResource(videoId: number): Promise<void> {
   if (archivingResourceId.value) return
   if (!ensureLiveWrite('Recorded lesson management') || resourceLessonId.value <= 0) return
-  if (!confirmTeacherContentMutation('Archive this recorded lesson resource? Learners may lose access to the video.'))
-    return
+  if (!confirmTeacherContentMutation(t('teacherContent.confirmArchiveRecording'))) return
 
   clearActionFeedback()
   archivingResourceId.value = videoId
@@ -2771,9 +2857,9 @@ async function archiveRecordedResource(videoId: number): Promise<void> {
     if (editingResourceId.value === videoId) {
       resetResourceForm(resourceLessonId.value)
     }
-    actionSuccess.value = 'Recorded lesson archived successfully.'
+    actionSuccess.value = t('teacherContent.recordingArchived')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to archive this recorded lesson.')
+    actionError.value = resolveApiError(reason, t('teacherContent.archiveRecordingError'))
   } finally {
     archivingResourceId.value = null
   }
@@ -2783,12 +2869,12 @@ async function submitQuiz(): Promise<void> {
   if (submitting.quiz) return
   if (!ensureLiveWrite('Quiz management')) return
   if (!quizForm.lessonId || quizForm.lessonId <= 0) {
-    actionError.value = 'Select a lesson before saving this quiz.'
+    actionError.value = t('teacherContent.selectLessonQuiz')
     actionSuccess.value = null
     return
   }
   if (!quizForm.title.trim()) {
-    actionError.value = 'Quiz title is required.'
+    actionError.value = t('teacherContent.quizTitleRequired')
     actionSuccess.value = null
     return
   }
@@ -2810,9 +2896,9 @@ async function submitQuiz(): Promise<void> {
     quizLessonId.value = response.lessonId
     await loadQuizzesForLesson(response.lessonId, response.id)
     openQuizBuilder(response)
-    actionSuccess.value = isEditing ? 'Quiz updated successfully.' : 'Quiz created successfully.'
+    actionSuccess.value = isEditing ? t('teacherContent.quizUpdated') : t('teacherContent.quizCreated')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this quiz.')
+    actionError.value = resolveApiError(reason, t('teacherContent.saveQuizError'))
   } finally {
     submitting.quiz = false
   }
@@ -2834,24 +2920,24 @@ async function submitQuestion(): Promise<void> {
   if (submitting.question) return
   if (!ensureLiveWrite('Quiz question management')) return
   if (!selectedQuiz.value) {
-    actionError.value = 'Open or create a quiz before adding questions.'
+    actionError.value = t('teacherContent.openQuizFirst')
     actionSuccess.value = null
     return
   }
   if (!questionForm.questionText.trim()) {
-    actionError.value = 'Question text is required.'
+    actionError.value = t('teacherContent.questionRequired')
     actionSuccess.value = null
     return
   }
   if (!questionForm.points || questionForm.points <= 0) {
-    actionError.value = 'Question points must be greater than 0.'
+    actionError.value = t('teacherContent.pointsRequired')
     actionSuccess.value = null
     return
   }
 
   const options = buildQuestionOptions()
   if (!(questionForm.correctAnswerText ?? '').trim() && !options?.some((option) => option.correctOption)) {
-    actionError.value = 'Provide either a correct answer text or mark one option as correct.'
+    actionError.value = t('teacherContent.correctAnswerRequired')
     actionSuccess.value = null
     return
   }
@@ -2877,9 +2963,9 @@ async function submitQuestion(): Promise<void> {
     quizLessonId.value = response.lessonId
     await loadQuizzesForLesson(response.lessonId, response.id)
     resetQuestionForm()
-    actionSuccess.value = isEditing ? 'Quiz question updated successfully.' : 'Quiz question created successfully.'
+    actionSuccess.value = isEditing ? t('teacherContent.questionUpdated') : t('teacherContent.questionCreated')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to save this quiz question.')
+    actionError.value = resolveApiError(reason, t('teacherContent.saveQuestionError'))
   } finally {
     submitting.question = false
   }
@@ -2888,12 +2974,7 @@ async function submitQuestion(): Promise<void> {
 async function deleteQuiz(quizId: number): Promise<void> {
   if (quizDeleteId.value) return
   if (!ensureLiveWrite('Quiz management')) return
-  if (
-    !confirmTeacherContentMutation(
-      'Delete this quiz? Existing learner attempts may no longer have a visible quiz source.',
-    )
-  )
-    return
+  if (!confirmTeacherContentMutation(t('teacherContent.confirmDeleteQuiz'))) return
 
   clearActionFeedback()
   quizDeleteId.value = quizId
@@ -2904,9 +2985,9 @@ async function deleteQuiz(quizId: number): Promise<void> {
       selectedQuizId.value = null
     }
     await loadQuizzesForLesson(quizLessonId.value)
-    actionSuccess.value = 'Quiz deleted successfully.'
+    actionSuccess.value = t('teacherContent.quizDeleted')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to delete this quiz.')
+    actionError.value = resolveApiError(reason, t('teacherContent.deleteQuizError'))
   } finally {
     quizDeleteId.value = null
   }
@@ -2915,7 +2996,7 @@ async function deleteQuiz(quizId: number): Promise<void> {
 async function deleteQuestion(questionId: number): Promise<void> {
   if (questionDeleteId.value) return
   if (!ensureLiveWrite('Quiz question management')) return
-  if (!confirmTeacherContentMutation('Delete this quiz question? This cannot be undone.')) return
+  if (!confirmTeacherContentMutation(t('teacherContent.confirmDeleteQuestion'))) return
 
   clearActionFeedback()
   questionDeleteId.value = questionId
@@ -2926,9 +3007,9 @@ async function deleteQuestion(questionId: number): Promise<void> {
     if (editingQuestionId.value === questionId) {
       resetQuestionForm()
     }
-    actionSuccess.value = 'Quiz question deleted successfully.'
+    actionSuccess.value = t('teacherContent.questionDeleted')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to delete this quiz question.')
+    actionError.value = resolveApiError(reason, t('teacherContent.deleteQuestionError'))
   } finally {
     questionDeleteId.value = null
   }
@@ -2951,7 +3032,7 @@ function removeQuestionOption(index: number): void {
 }
 
 function confirmTeacherContentMutation(message: string): boolean {
-  const confirmed = window.confirm(`${message}\n\nThis updates live teaching content.`)
+  const confirmed = window.confirm(`${message}\n\n${t('teacherContent.liveChangeWarning')}`)
   if (!confirmed) {
     actionSuccess.value = null
     actionError.value = null

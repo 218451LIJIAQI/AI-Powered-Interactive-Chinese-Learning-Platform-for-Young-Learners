@@ -5,12 +5,12 @@
         <AppBrand />
 
         <div class="auth-showcase-copy">
-          <p class="auth-showcase-eyebrow">Mandarin for young learners</p>
+          <p class="auth-showcase-eyebrow">{{ t('auth.eyebrow') }}</p>
           <h1>
-            Speak Mandarin,<br />
-            <span>spark confidence.</span>
+            {{ t('auth.heroLineOne') }}<br />
+            <span>{{ t('auth.heroLineTwo') }}</span>
           </h1>
-          <p>Playful lessons, safe practice, and guided progress for students, families, and teachers.</p>
+          <p>{{ t('auth.heroCopy') }}</p>
         </div>
 
         <div class="auth-showcase-scene">
@@ -35,18 +35,18 @@
         <div class="auth-showcase-safety">
           <div class="auth-showcase-safety-icon"><IconGlyph name="shield" :size="22" /></div>
           <div>
-            <strong>Child-safe learning by design</strong>
-            <span>Structured access, verified teachers, and age-aware practice tools.</span>
+            <strong>{{ t('auth.safetyTitle') }}</strong>
+            <span>{{ t('auth.safetyCopy') }}</span>
           </div>
         </div>
       </aside>
 
       <section class="auth-showcase-card">
         <div class="auth-showcase-topbar">
-          <LanguageSwitcher show-label label="Language" size="compact" />
+          <LanguageSwitcher show-label :label="t('auth.language')" size="compact" />
         </div>
 
-        <div class="auth-showcase-headers" role="tablist" aria-label="Authentication views">
+        <div class="auth-showcase-headers" role="tablist" :aria-label="t('auth.views')">
           <button
             class="auth-showcase-header"
             :class="{ 'auth-showcase-header--active': activeTab === 'signin' }"
@@ -56,27 +56,27 @@
             @click="activateSignIn"
           >
             <IconGlyph name="profile" :size="20" />
-            <strong>Sign In</strong>
+            <strong>{{ t('auth.signIn') }}</strong>
           </button>
-            <button
-              class="auth-showcase-header"
-              :class="{ 'auth-showcase-header--active': activeTab === 'register' }"
+          <button
+            class="auth-showcase-header"
+            :class="{ 'auth-showcase-header--active': activeTab === 'register' }"
             type="button"
             role="tab"
             :aria-selected="activeTab === 'register'"
             @click="activateRegister()"
           >
             <IconGlyph name="status" :size="20" />
-            <strong>Create Account</strong>
+            <strong>{{ t('auth.createAccount') }}</strong>
           </button>
         </div>
 
         <div class="auth-showcase-forms" :class="`is-${activeTab}`">
           <form v-show="activeTab === 'signin'" class="auth-form-panel" @submit.prevent="submitLogin">
             <div class="auth-form-title">
-              <span class="auth-form-kicker">Secure workspace access</span>
-              <h2>Welcome back</h2>
-              <p>Use one sign-in for student lessons, teacher tools, and admin operations.</p>
+              <span class="auth-form-kicker">{{ t('auth.signInKicker') }}</span>
+              <h2>{{ t('auth.welcome') }}</h2>
+              <p>{{ t('auth.signInCopy') }}</p>
             </div>
 
             <div
@@ -100,7 +100,7 @@
             </div>
 
             <div class="field">
-              <label for="login-email">Email Address</label>
+              <label for="login-email">{{ t('auth.email') }}</label>
               <input
                 id="login-email"
                 v-model="login.email"
@@ -108,14 +108,14 @@
                 type="email"
                 autocomplete="email"
                 required
-                placeholder="Enter your email"
+                :placeholder="t('auth.emailPlaceholder')"
                 :aria-invalid="Boolean(loginError)"
                 :aria-describedby="loginDescriptionId"
               />
             </div>
 
             <div class="field">
-              <label for="login-password">Password</label>
+              <label for="login-password">{{ t('auth.password') }}</label>
               <input
                 id="login-password"
                 v-model="login.password"
@@ -123,16 +123,16 @@
                 type="password"
                 autocomplete="current-password"
                 required
-                placeholder="Enter your password"
+                :placeholder="t('auth.passwordPlaceholder')"
                 :aria-invalid="Boolean(loginError)"
                 :aria-describedby="loginDescriptionId"
               />
             </div>
 
             <div class="auth-form-row">
-              <p class="auth-session-note">Sign-in stays active for this browser session only.</p>
+              <p class="auth-session-note">{{ t('auth.sessionNote') }}</p>
               <button class="auth-text-button" :disabled="!loginEmailValid" type="button" @click="openForgotPassword">
-                Forgot password?
+                {{ t('auth.forgotPassword') }}
               </button>
             </div>
 
@@ -148,9 +148,9 @@
             @submit.prevent="submitRegister"
           >
             <div class="auth-form-title">
-              <span class="auth-form-kicker">New account setup</span>
-              <h2>Create account</h2>
-              <p>Select the role first so the form only asks for what is needed.</p>
+              <span class="auth-form-kicker">{{ t('auth.registerKicker') }}</span>
+              <h2>{{ t('auth.registerTitle') }}</h2>
+              <p>{{ t('auth.registerCopy') }}</p>
             </div>
 
             <div
@@ -174,7 +174,7 @@
             </div>
 
             <div class="field">
-              <label>Account Type</label>
+              <label>{{ t('auth.accountType') }}</label>
               <div class="auth-role-grid">
                 <button
                   class="auth-role-card"
@@ -185,8 +185,8 @@
                 >
                   <span class="auth-role-avatar"><IconGlyph name="students" :size="24" /></span>
                   <span>
-                    <strong>Student</strong>
-                    <small>Young learner</small>
+                    <strong>{{ t('auth.student') }}</strong>
+                    <small>{{ t('auth.youngLearner') }}</small>
                   </span>
                 </button>
                 <button
@@ -198,8 +198,8 @@
                 >
                   <span class="auth-role-avatar"><IconGlyph name="teacher" :size="24" /></span>
                   <span>
-                    <strong>Teacher</strong>
-                    <small>Educator</small>
+                    <strong>{{ t('auth.teacher') }}</strong>
+                    <small>{{ t('auth.educator') }}</small>
                   </span>
                 </button>
               </div>
@@ -209,7 +209,7 @@
             </div>
 
             <div class="field">
-              <label for="register-full-name">Full Name</label>
+              <label for="register-full-name">{{ t('auth.fullName') }}</label>
               <input
                 id="register-full-name"
                 v-model="register.fullName"
@@ -217,14 +217,14 @@
                 autocomplete="name"
                 required
                 maxlength="120"
-                placeholder="Enter your full name"
+                :placeholder="t('auth.fullNamePlaceholder')"
                 :aria-invalid="Boolean(registerError && !normalizedRegisterFullName)"
                 :aria-describedby="registerDescriptionId"
               />
             </div>
 
             <div class="field">
-              <label for="register-email">Email Address</label>
+              <label for="register-email">{{ t('auth.email') }}</label>
               <input
                 id="register-email"
                 v-model="register.email"
@@ -232,14 +232,14 @@
                 type="email"
                 autocomplete="email"
                 required
-                placeholder="Enter your email"
+                :placeholder="t('auth.emailPlaceholder')"
                 :aria-invalid="Boolean(registerError && !registerEmailValid)"
                 :aria-describedby="registerDescriptionId"
               />
             </div>
 
             <div class="field">
-              <label for="register-password">Password</label>
+              <label for="register-password">{{ t('auth.password') }}</label>
               <input
                 id="register-password"
                 v-model="register.password"
@@ -248,15 +248,15 @@
                 autocomplete="new-password"
                 required
                 minlength="8"
-                placeholder="Create a password"
+                :placeholder="t('auth.createPassword')"
                 :aria-invalid="Boolean(register.password && !registerPasswordReady)"
                 :aria-describedby="registerDescriptionId"
               />
-              <p class="helper-text auth-field-hint">Use at least 8 characters.</p>
+              <p class="helper-text auth-field-hint">{{ t('auth.passwordHint') }}</p>
             </div>
 
             <div class="field">
-              <label for="register-confirm-password">Confirm Password</label>
+              <label for="register-confirm-password">{{ t('auth.confirmPassword') }}</label>
               <input
                 id="register-confirm-password"
                 v-model="register.confirmPassword"
@@ -265,32 +265,32 @@
                 autocomplete="new-password"
                 required
                 minlength="8"
-                placeholder="Confirm your password"
+                :placeholder="t('auth.confirmPasswordPlaceholder')"
                 :aria-invalid="Boolean(register.confirmPassword && !registerPasswordsMatch)"
                 :aria-describedby="registerDescriptionId"
               />
               <p v-if="register.confirmPassword && !registerPasswordsMatch" class="error-text auth-field-hint">
-                Passwords do not match yet.
+                {{ t('auth.passwordMismatch') }}
               </p>
             </div>
 
             <div v-if="register.role === 'STUDENT'" class="field">
-              <label for="register-preferred-language">Preferred Language</label>
+              <label for="register-preferred-language">{{ t('auth.preferredLanguage') }}</label>
               <select id="register-preferred-language" v-model="register.preferredLanguage" class="select auth-input">
-                <option value="en">English</option>
-                <option value="ms">Bahasa Melayu</option>
-                <option value="zh">Simplified Chinese</option>
+                <option value="en">{{ t('auth.english') }}</option>
+                <option value="ms">{{ t('auth.malay') }}</option>
+                <option value="zh">{{ t('auth.chinese') }}</option>
               </select>
             </div>
 
             <div v-else class="field">
-              <label for="register-teacher-bio">Teacher Bio</label>
+              <label for="register-teacher-bio">{{ t('auth.teacherBio') }}</label>
               <textarea
                 id="register-teacher-bio"
                 v-model="register.bio"
                 class="textarea auth-input auth-textarea"
                 maxlength="1000"
-                placeholder="Share your teaching background."
+                :placeholder="t('auth.teacherBioPlaceholder')"
               />
             </div>
 
@@ -298,15 +298,16 @@
               <label class="auth-checkbox">
                 <input v-model="register.agreedToTerms" type="checkbox" required />
                 <span>
-                  I agree to the
-                  <a href="/terms" @click.prevent="openTerms">Terms of Service</a>
-                  and
-                  <a href="/privacy" @click.prevent="openPrivacy">Privacy Policy</a>.
+                  {{ t('auth.agreePrefix') }}
+                  <a href="/terms" @click.prevent="openTerms">{{ t('auth.terms') }}</a>
+                  {{ t('auth.and') }}
+                  <a href="/privacy" @click.prevent="openPrivacy">{{ t('auth.privacy') }}</a
+                  >{{ t('auth.agreementEnd') }}
                 </span>
               </label>
               <label class="auth-checkbox">
                 <input v-model="register.guardianConfirmed" type="checkbox" required />
-                <span>I confirm parent/guardian permission where required for child learners.</span>
+                <span>{{ t('auth.guardian') }}</span>
               </label>
             </div>
 
@@ -316,7 +317,7 @@
             </button>
 
             <div class="soft-banner auth-register-note">
-              <span>Teacher accounts are verified before publishing courses.</span>
+              <span>{{ t('auth.teacherNote') }}</span>
             </div>
           </form>
         </div>
@@ -325,30 +326,30 @@
           <div class="auth-bottom-item">
             <span class="auth-bottom-icon is-green"><IconGlyph name="shield" :size="20" /></span>
             <div>
-              <strong>Safe for Young Learners</strong>
-              <p>Age-aware access and guided practice keep the learning space focused.</p>
+              <strong>{{ t('auth.safetyFeatureTitle') }}</strong>
+              <p>{{ t('auth.safetyFeatureCopy') }}</p>
             </div>
           </div>
           <div class="auth-bottom-item">
             <span class="auth-bottom-icon is-blue"><IconGlyph name="verified" :size="20" /></span>
             <div>
-              <strong>Teacher Verification</strong>
-              <p>Educator accounts are reviewed before teaching and publishing access expands.</p>
+              <strong>{{ t('auth.teacherFeatureTitle') }}</strong>
+              <p>{{ t('auth.teacherFeatureCopy') }}</p>
             </div>
           </div>
           <div class="auth-bottom-item">
             <span class="auth-bottom-icon is-purple"><IconGlyph name="safe" :size="20" /></span>
             <div>
-              <strong>One Secure Sign-In</strong>
-              <p>Students, teachers, and admins return through a single clean entry point.</p>
+              <strong>{{ t('auth.signInFeatureTitle') }}</strong>
+              <p>{{ t('auth.signInFeatureCopy') }}</p>
             </div>
           </div>
         </div>
 
         <div v-if="previewEnabled" class="auth-preview-actions">
-          <button class="btn btn-ghost" type="button" @click="previewStudent">Preview Student</button>
-          <button class="btn btn-ghost" type="button" @click="previewTeacher">Preview Teacher</button>
-          <button class="btn btn-ghost" type="button" @click="previewAdmin">Preview Admin</button>
+          <button class="btn btn-ghost" type="button" @click="previewStudent">{{ t('auth.previewStudent') }}</button>
+          <button class="btn btn-ghost" type="button" @click="previewTeacher">{{ t('auth.previewTeacher') }}</button>
+          <button class="btn btn-ghost" type="button" @click="previewAdmin">{{ t('auth.previewAdmin') }}</button>
         </div>
       </section>
     </div>
@@ -358,6 +359,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -365,6 +367,7 @@ import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import { appEnv } from '@/config/env'
+import { authMessages } from '@/plugins/authMessages'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
@@ -372,10 +375,18 @@ import { isPasswordLengthValid } from '@/utils/password'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 import { defaultRouteForRole } from '@/utils/role'
 import { getSessionStorage, safeSetItem, storageKeys } from '@/utils/storage'
+import '@/styles/auth.css'
 
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n({
+  messages: {
+    en: { auth: authMessages.en },
+    ms: { auth: authMessages.ms },
+    zh: { auth: authMessages.zh },
+  },
+})
 
 type AuthTab = 'signin' | 'register'
 type RegisterRole = 'STUDENT' | 'TEACHER'
@@ -419,13 +430,9 @@ const registerPasswordsMatch = computed(
   () => register.password === register.confirmPassword && register.confirmPassword.length > 0,
 )
 const teacherBioReady = computed(() => register.role !== 'TEACHER' || register.bio.trim().length >= 20)
-const loginSubmitLabel = computed(() => (auth.loading ? 'Signing In...' : 'Sign In'))
-const registerSubmitLabel = computed(() => (registerSubmitting.value ? 'Creating...' : 'Create Account'))
-const registerRoleHelp = computed(() =>
-  register.role === 'STUDENT'
-    ? 'Student accounts open lessons, rewards, and AI practice for young learners.'
-    : 'Teacher accounts unlock classes and content after verification is reviewed.',
-)
+const loginSubmitLabel = computed(() => (auth.loading ? t('auth.signingIn') : t('auth.signIn')))
+const registerSubmitLabel = computed(() => (registerSubmitting.value ? t('auth.creating') : t('auth.createAccount')))
+const registerRoleHelp = computed(() => (register.role === 'STUDENT' ? t('auth.studentHelp') : t('auth.teacherHelp')))
 const canSubmitRegister = computed(
   () =>
     !registerSubmitting.value &&
@@ -473,12 +480,12 @@ async function submitLogin(): Promise<void> {
   loginInfo.value = null
 
   if (!loginEmailValid.value) {
-    loginError.value = 'Enter a valid email address before signing in.'
+    loginError.value = t('auth.invalidLoginEmail')
     return
   }
 
   if (!login.password.trim()) {
-    loginError.value = 'Enter your password before signing in.'
+    loginError.value = t('auth.missingLoginPassword')
     return
   }
 
@@ -486,10 +493,7 @@ async function submitLogin(): Promise<void> {
     await auth.login(normalizedLoginEmail.value, login.password)
     await router.push(resolveRedirect())
   } catch (reason) {
-    loginError.value = resolveApiError(
-      reason,
-      'Unable to sign in. Please check your email and password, then try again.',
-    )
+    loginError.value = resolveApiError(reason, t('auth.loginFailed'))
   }
 }
 
@@ -501,32 +505,32 @@ async function submitRegister(): Promise<void> {
   loginInfo.value = null
 
   if (!normalizedRegisterFullName.value) {
-    registerError.value = 'Enter the account holder name before creating an account.'
+    registerError.value = t('auth.missingName')
     return
   }
 
   if (!registerEmailValid.value) {
-    registerError.value = 'Enter a valid email address before creating an account.'
+    registerError.value = t('auth.invalidRegisterEmail')
     return
   }
 
   if (!registerPasswordReady.value) {
-    registerError.value = 'Use 8 to 72 characters and keep the password within the 72-byte security limit.'
+    registerError.value = t('auth.invalidRegisterPassword')
     return
   }
 
   if (!registerPasswordsMatch.value) {
-    registerError.value = 'Make sure both password fields match.'
+    registerError.value = t('auth.registerPasswordMismatch')
     return
   }
 
   if (!teacherBioReady.value) {
-    registerError.value = 'Teacher bio must be at least 20 characters so families and admins have useful context.'
+    registerError.value = t('auth.shortTeacherBio')
     return
   }
 
   if (!register.agreedToTerms || !register.guardianConfirmed) {
-    registerError.value = 'Please accept the required confirmations before creating an account.'
+    registerError.value = t('auth.missingConfirmations')
     return
   }
 
@@ -554,13 +558,10 @@ async function submitRegister(): Promise<void> {
     login.password = ''
     register.password = ''
     register.confirmPassword = ''
-    loginInfo.value =
-      register.role === 'TEACHER'
-        ? 'Teacher account created. Please sign in and complete verification if required.'
-        : 'Student account created. You can sign in now.'
+    loginInfo.value = register.role === 'TEACHER' ? t('auth.teacherCreated') : t('auth.studentCreated')
     activateSignIn()
   } catch (reason) {
-    registerError.value = resolveApiError(reason, 'Unable to create the account. Please check the form and try again.')
+    registerError.value = resolveApiError(reason, t('auth.registerFailed'))
   } finally {
     registerSubmitting.value = false
   }

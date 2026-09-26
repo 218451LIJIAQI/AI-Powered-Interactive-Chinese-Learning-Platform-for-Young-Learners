@@ -12,34 +12,32 @@
       <div class="public-hero-grid">
         <div class="public-hero-copy">
           <div class="public-hero-chip">
-            <span>Young Learners</span>
-            <span>For Young Learners Ages 7-12</span>
+            <span>{{ t('landing.youngLearners') }}</span>
+            <span>{{ t('landing.ageLine') }}</span>
           </div>
 
           <h1>
-            Spark a love for <span class="accent-purple">Mandarin</span>.<br />
-            Open a world of <span class="accent-orange">possibilities</span>.
+            {{ t('landing.heroPrefixOne') }} <span class="accent-purple">{{ t('landing.heroEmphasisOne') }}</span
+            >{{ t('landing.heroSuffixOne') }}<br />
+            {{ t('landing.heroPrefixTwo') }} <span class="accent-orange">{{ t('landing.heroEmphasisTwo') }}</span
+            >{{ t('landing.heroSuffixTwo') }}
           </h1>
 
-          <p>MandarinSpark makes learning Mandarin fun, effective, and safe for young learners anywhere, anytime.</p>
+          <p>{{ t('landing.heroDescription') }}</p>
 
           <div class="public-hero-actions">
             <button class="btn btn-primary public-hero-button" type="button" @click="openCatalog">
-              <span>Explore Courses</span>
+              <span>{{ t('landing.exploreCourses') }}</span>
             </button>
-            <button
-              class="btn btn-accent public-hero-button public-hero-button--gold"
-              type="button"
-              @click="openAuth"
-            >
-              <span>Start Learning</span>
+            <button class="btn btn-accent public-hero-button public-hero-button--gold" type="button" @click="openAuth">
+              <span>{{ t('landing.startLearning') }}</span>
             </button>
           </div>
 
           <div class="public-hero-checks">
-            <span>Ages 7-12</span>
-            <span>Beginner Friendly</span>
-            <span>Learn with Confidence</span>
+            <span>{{ t('landing.ages') }}</span>
+            <span>{{ t('landing.beginnerFriendly') }}</span>
+            <span>{{ t('landing.confidence') }}</span>
           </div>
 
           <div class="public-hero-proof">
@@ -53,7 +51,7 @@
         <div class="public-hero-visual">
           <div class="public-hero-speech">
             <span>Ni hao!</span>
-            <small>Hello!</small>
+            <small>{{ t('landing.hello') }}</small>
           </div>
           <PandaIllustration class="public-hero-panda" :size="228" outfit="#6d47ff" accent="#f6c44f" />
         </div>
@@ -71,7 +69,7 @@
       />
     </section>
 
-    <section id="how-it-works" class="public-journey-strip" aria-label="How MandarinSpark works">
+    <section id="how-it-works" class="public-journey-strip" :aria-label="t('landing.howItWorks')">
       <article v-for="step in familyJourney" :key="step.title" class="public-journey-card">
         <span class="public-journey-step">{{ step.step }}</span>
         <strong>{{ step.title }}</strong>
@@ -84,15 +82,15 @@
         <DataNotice
           :using-fallback="featuredCoursesResource.usingFallback.value"
           :error="featuredCoursesResource.error.value"
-          fallback-title="Preview featured courses"
-          fallback-message="These featured courses are sample catalog records for the current preview session."
-          error-title="Featured courses unavailable"
+          :fallback-title="t('landing.previewTitle')"
+          :fallback-message="t('landing.previewMessage')"
+          :error-title="t('landing.unavailableTitle')"
         />
 
         <section class="panel public-home-panel">
           <div class="public-section-head">
-            <h2>Featured Courses</h2>
-            <button class="public-link-button" type="button" @click="openCatalog">View All Courses</button>
+            <h2>{{ t('landing.featuredCourses') }}</h2>
+            <button class="public-link-button" type="button" @click="openCatalog">{{ t('landing.viewAll') }}</button>
           </div>
 
           <div v-if="featuredCourses.length" class="public-featured-grid">
@@ -100,7 +98,7 @@
               <button
                 class="public-featured-card-button"
                 type="button"
-                :aria-label="`Open featured course: ${course.title}`"
+                :aria-label="t('landing.openCourse', { title: course.title })"
                 @click="viewCourse(course.id)"
               >
                 <div class="public-featured-thumb">
@@ -120,9 +118,7 @@
               </button>
             </article>
           </div>
-          <div v-else class="public-featured-empty">
-            Featured courses will appear here after teachers publish public content.
-          </div>
+          <div v-else class="public-featured-empty">{{ t('landing.noCourses') }}</div>
 
           <div class="public-carousel-dots">
             <span class="is-active" />
@@ -135,23 +131,23 @@
       <aside class="public-home-side">
         <PublicInfoBanner
           icon="shield"
-          title="Safe & Secure for Kids"
-          description="We follow child-safe design standards to protect every learner's experience."
-          badge="Safe"
+          :title="t('landing.safetyCardTitle')"
+          :description="t('landing.safetyCardCopy')"
+          :badge="t('landing.safetyCardBadge')"
           tone="green"
         />
         <PublicInfoBanner
           icon="verified"
-          title="Verified Teachers You Can Trust"
-          description="All teachers go through a strict verification process before publishing public content."
-          badge="Verified"
+          :title="t('landing.teacherCardTitle')"
+          :description="t('landing.teacherCardCopy')"
+          :badge="t('landing.teacherCardBadge')"
           tone="purple"
         />
         <PublicInfoBanner
           icon="globe"
-          title="Web-Based Learning"
-          description="MandarinSpark works in the browser so families, learners, teachers, and admins can stay connected from one place."
-          badge="Web"
+          :title="t('landing.webCardTitle')"
+          :description="t('landing.webCardCopy')"
+          :badge="t('landing.webCardBadge')"
           tone="blue"
         />
       </aside>
@@ -162,8 +158,8 @@
         <IconGlyph name="shield" :size="32" />
       </div>
       <div class="public-safety-copy">
-        <strong>A safe, supportive learning environment</strong>
-        <p>We follow strict child-safety standards to ensure every learner can grow with confidence.</p>
+        <strong>{{ t('landing.safetyBannerTitle') }}</strong>
+        <p>{{ t('landing.safetyBannerCopy') }}</p>
       </div>
       <div class="public-safety-scene">
         <div class="public-safety-hill" />
@@ -174,10 +170,12 @@
     <section id="support" class="panel public-support-panel">
       <div class="public-section-head">
         <div>
-          <span class="legal-eyebrow">Support</span>
-          <h2>Need help using MandarinSpark?</h2>
+          <span class="legal-eyebrow">{{ t('landing.support') }}</span>
+          <h2>{{ t('landing.supportTitle') }}</h2>
         </div>
-        <button class="btn btn-primary" type="button" @click="openSupportSignIn">Sign in for support</button>
+        <button class="btn btn-primary" type="button" @click="openSupportSignIn">
+          {{ t('landing.signInSupport') }}
+        </button>
       </div>
       <div class="public-support-grid">
         <article v-for="item in supportOptions" :key="item.title" class="public-support-card">
@@ -195,32 +193,32 @@
 
       <div class="public-footer-links">
         <div class="public-footer-column">
-          <strong>Explore</strong>
-          <a href="/courses" @click.prevent="openCatalog">Courses</a>
-          <a href="#how-it-works">How It Works</a>
+          <strong>{{ t('landing.explore') }}</strong>
+          <a href="/courses" @click.prevent="openCatalog">{{ t('landing.courses') }}</a>
+          <a href="#how-it-works">{{ t('landing.howItWorksLink') }}</a>
         </div>
         <div class="public-footer-column">
-          <strong>Company</strong>
-          <a href="#about">About Us</a>
-          <a href="#support">Contact Us</a>
+          <strong>{{ t('landing.company') }}</strong>
+          <a href="#about">{{ t('landing.aboutUs') }}</a>
+          <a href="#support">{{ t('landing.contactUs') }}</a>
         </div>
         <div class="public-footer-column">
-          <strong>Safety</strong>
-          <a href="#safety">Child Safety</a>
-          <a href="/privacy" @click.prevent="openPrivacy">Privacy Policy</a>
-          <a href="/terms" @click.prevent="openTerms">Terms</a>
+          <strong>{{ t('landing.safety') }}</strong>
+          <a href="#safety">{{ t('landing.childSafety') }}</a>
+          <a href="/privacy" @click.prevent="openPrivacy">{{ t('landing.privacy') }}</a>
+          <a href="/terms" @click.prevent="openTerms">{{ t('landing.terms') }}</a>
         </div>
         <div class="public-footer-column">
-          <strong>Support</strong>
-          <a href="#support">Help Center</a>
-          <a href="#support">Contact Support</a>
+          <strong>{{ t('landing.support') }}</strong>
+          <a href="#support">{{ t('landing.helpCenter') }}</a>
+          <a href="#support">{{ t('landing.contactSupport') }}</a>
         </div>
       </div>
 
       <div class="public-footer-meta">
         <div class="public-footer-copy">
-          <span>&copy; {{ copyrightYear }} MandarinSpark. All rights reserved.</span>
-          <span>Made for young learners.</span>
+          <span>&copy; {{ copyrightYear }} MandarinSpark. {{ t('landing.rights') }}</span>
+          <span>{{ t('landing.madeForLearners') }}</span>
         </div>
       </div>
     </footer>
@@ -230,6 +228,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { publicApi } from '@/api/services'
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
@@ -241,12 +240,21 @@ import PublicFeatureCard from '@/components/public/PublicFeatureCard.vue'
 import PublicInfoBanner from '@/components/public/PublicInfoBanner.vue'
 import { useResource } from '@/composables/useResource'
 import { publicCourses } from '@/demo/data'
+import { landingMessages } from '@/plugins/landingMessages'
+import '@/styles/landing.css'
 import type { PublicCourseSummary } from '@/types/api'
 
 type CourseSceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
 type FeatureTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink' | 'purple'
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { landing: landingMessages.en },
+    ms: { landing: landingMessages.ms },
+    zh: { landing: landingMessages.zh },
+  },
+})
 const copyrightYear = new Date().getFullYear()
 
 const previewFeaturedCourses = publicCourses.slice(0, 3)
@@ -266,83 +274,86 @@ const featuredCourses = computed<PublicCourseSummary[]>(() =>
       : [],
 )
 
-const featureStrip = [
-  {
-    icon: 'status',
-    title: 'Beginner Mandarin Made Easy',
-    description: 'Start from the basics with step-by-step lessons.',
-    tone: 'purple',
-  },
-  {
-    icon: 'play',
-    title: 'Interactive Activities',
-    description: 'Fun games and quizzes that build real skills.',
-    tone: 'green',
-  },
-  {
-    icon: 'ai',
-    title: 'AI-Assisted Support',
-    description: 'Get help anytime with SparkBot AI Helper.',
-    tone: 'blue',
-  },
-  {
-    icon: 'live',
-    title: 'Live & Recorded Learning',
-    description: 'Join live classes or learn at your own pace.',
-    tone: 'orange',
-  },
-  {
-    icon: 'trophy',
-    title: 'Progress Tracking & Rewards',
-    description: 'Earn stars, badges, and celebrate your growth.',
-    tone: 'gold',
-  },
-  {
-    icon: 'teacher',
-    title: 'Teacher-Guided Learning',
-    description: 'Learn with verified teachers who care about you.',
-    tone: 'pink',
-  },
-] satisfies Array<{ icon: string; title: string; description: string; tone: FeatureTone }>
+const featureStrip = computed(
+  () =>
+    [
+      {
+        icon: 'status',
+        title: t('landing.featureBasicsTitle'),
+        description: t('landing.featureBasicsCopy'),
+        tone: 'purple',
+      },
+      {
+        icon: 'play',
+        title: t('landing.featureActivitiesTitle'),
+        description: t('landing.featureActivitiesCopy'),
+        tone: 'green',
+      },
+      {
+        icon: 'ai',
+        title: t('landing.featureAiTitle'),
+        description: t('landing.featureAiCopy'),
+        tone: 'blue',
+      },
+      {
+        icon: 'live',
+        title: t('landing.featureLiveTitle'),
+        description: t('landing.featureLiveCopy'),
+        tone: 'orange',
+      },
+      {
+        icon: 'trophy',
+        title: t('landing.featureRewardsTitle'),
+        description: t('landing.featureRewardsCopy'),
+        tone: 'gold',
+      },
+      {
+        icon: 'teacher',
+        title: t('landing.featureTeacherTitle'),
+        description: t('landing.featureTeacherCopy'),
+        tone: 'pink',
+      },
+    ] satisfies Array<{ icon: string; title: string; description: string; tone: FeatureTone }>,
+)
 
-const heroProof = [
-  { value: 'Live + recorded', label: 'Flexible learning paths for families' },
-  { value: 'AI support', label: 'On-demand practice help between lessons' },
-  { value: 'Rewards', label: 'Visible growth with stars, badges, and streaks' },
-]
+const heroProof = computed(() => [
+  { value: t('landing.proofPathValue'), label: t('landing.proofPathLabel') },
+  { value: t('landing.proofAiValue'), label: t('landing.proofAiLabel') },
+  { value: t('landing.proofRewardsValue'), label: t('landing.proofRewardsLabel') },
+])
 
-const familyJourney = [
+const familyJourney = computed(() => [
   {
     step: '1',
-    title: 'Explore with confidence',
-    copy: 'Families can compare course styles, age fit, and teacher guidance before signing in.',
+    title: t('landing.journeyExploreTitle'),
+    copy: t('landing.journeyExploreCopy'),
   },
   {
     step: '2',
-    title: 'Learn in small wins',
-    copy: 'Students move from lessons to practice, class support, and rewards without losing momentum.',
+    title: t('landing.journeyLearnTitle'),
+    copy: t('landing.journeyLearnCopy'),
   },
   {
     step: '3',
-    title: 'Stay supported',
-    copy: 'Teachers, parents, and admins all see the progress signals they need to keep learners growing.',
+    title: t('landing.journeySupportTitle'),
+    copy: t('landing.journeySupportCopy'),
   },
-]
+])
 
-const supportOptions = [
+const supportOptions = computed(() => [
   {
-    title: 'Families and students',
-    copy: 'Sign in to review learning progress, feedback, payments, refunds, rewards, and notifications from the student profile area.',
+    title: t('landing.supportFamiliesTitle'),
+    copy: t('landing.supportFamiliesCopy'),
   },
   {
-    title: 'Teachers',
-    copy: 'Use the teacher profile, verification, class, content, feedback, and earnings pages to resolve account and teaching workflow questions.',
+    title: t('landing.supportTeachersTitle'),
+    copy: t('landing.supportTeachersCopy'),
   },
   {
-    title: 'Platform operations',
-    copy: 'Admins can review users, teacher verification, moderation, audit logs, finance, notifications, and safety settings from the admin workspace.',
+    title: t('landing.supportAdminsTitle'),
+    copy: t('landing.supportAdminsCopy'),
   },
-]
+])
 
 function viewCourse(id: string): void {
   void router.push(`/courses/${id}`)
@@ -357,7 +368,10 @@ function featuredThumb(index: number): CourseSceneVariant {
 function featuredCopy(course: PublicCourseSummary): string {
   return (
     course.shortDescription?.trim() ||
-    `${course.teacher.displayName} teaches this ${course.category.name.toLowerCase()} course.`
+    t('landing.courseFallback', {
+      teacher: course.teacher.displayName,
+      category: course.category.name.toLowerCase(),
+    })
   )
 }
 

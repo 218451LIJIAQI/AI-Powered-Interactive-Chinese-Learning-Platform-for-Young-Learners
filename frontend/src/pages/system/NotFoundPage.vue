@@ -1,5 +1,5 @@
 <template>
-  <main class="system-page system-page--not-found" aria-label="Page not found">
+  <main class="system-page system-page--not-found" :aria-label="t('system.notFoundAria')">
     <span class="system-bg-orb system-bg-orb--one" />
     <span class="system-bg-orb system-bg-orb--two" />
     <div class="surface-card system-card">
@@ -8,25 +8,25 @@
 
         <div class="system-kicker">
           <IconGlyph name="search" :size="18" />
-          <span>Route not found</span>
+          <span>{{ t('system.routeNotFound') }}</span>
         </div>
 
-        <h1>Oops, this lesson path is missing.</h1>
-        <p>The page you opened does not exist in the current MandarinSpark frontend map.</p>
+        <h1>{{ t('system.notFoundTitle') }}</h1>
+        <p>{{ t('system.notFoundMessage') }}</p>
 
         <div class="system-action-row">
-          <RouterLink class="btn btn-primary" to="/">Return home</RouterLink>
-          <RouterLink class="btn btn-ghost" to="/courses">Explore courses</RouterLink>
+          <RouterLink class="btn btn-primary" to="/">{{ t('system.returnHome') }}</RouterLink>
+          <RouterLink class="btn btn-ghost" to="/courses">{{ t('system.exploreCourses') }}</RouterLink>
         </div>
 
         <div class="system-link-grid">
           <RouterLink to="/auth">
-            <strong>Sign in</strong>
-            <span>Return to your learning workspace.</span>
+            <strong>{{ t('system.signIn') }}</strong>
+            <span>{{ t('system.signInHint') }}</span>
           </RouterLink>
           <RouterLink to="/courses">
-            <strong>Course catalog</strong>
-            <span>Browse Mandarin lessons and packages.</span>
+            <strong>{{ t('system.courseCatalog') }}</strong>
+            <span>{{ t('system.courseCatalogHint') }}</span>
           </RouterLink>
         </div>
       </div>
@@ -43,9 +43,19 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
+import { systemMessages } from '@/plugins/systemMessages'
+
+const { t } = useI18n({
+  messages: {
+    en: { system: systemMessages.en },
+    ms: { system: systemMessages.ms },
+    zh: { system: systemMessages.zh },
+  },
+})
 </script>

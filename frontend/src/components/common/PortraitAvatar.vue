@@ -1,11 +1,5 @@
 <template>
-  <div
-    class="portrait-avatar"
-    :class="avatarClass"
-    :style="avatarStyle"
-    role="img"
-    :aria-label="ariaLabel"
-  >
+  <div class="portrait-avatar" :class="avatarClass" :style="avatarStyle" role="img" :aria-label="ariaLabel">
     <span class="portrait-backdrop" />
     <span class="portrait-shoulders" />
     <span class="portrait-neck" />

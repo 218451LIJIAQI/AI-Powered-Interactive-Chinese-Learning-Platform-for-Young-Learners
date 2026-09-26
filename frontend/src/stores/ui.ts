@@ -12,6 +12,7 @@ export const useUiStore = defineStore('ui', {
     setLocale(locale: AppLanguage): void {
       this.locale = locale
       i18n.global.locale.value = locale
+      document.documentElement.lang = locale
       safeSetItem(storageKeys.language, locale)
     },
   },

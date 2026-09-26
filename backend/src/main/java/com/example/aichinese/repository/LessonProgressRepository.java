@@ -8,8 +8,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
 import com.example.aichinese.entity.LessonProgress;
+import com.example.aichinese.repository.projection.LessonProgressAnalyticsRow;
 
 import jakarta.persistence.LockModeType;
 
@@ -25,6 +27,20 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
             @Param("lessonId") Long lessonId);
 
     List<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId);
+
+    @Query("""
+            select progress.id as id, lesson.id as lessonId,
+                   lesson.accessType as lessonAccessType, module.id as moduleId,
+                   lesson.learningType as learningType, progress.completed as completed,
+                   progress.lastAccessedAt as lastAccessedAt, progress.updatedAt as updatedAt
+            from LessonProgress progress
+            join progress.lesson lesson
+            left join lesson.module module
+            where progress.student.id = :studentId and progress.id > :afterId
+            order by progress.id asc
+            """)
+    List<LessonProgressAnalyticsRow> findAnalyticsBatch(
+            @Param("studentId") Long studentId, @Param("afterId") Long afterId, Pageable pageable);
 
     @EntityGraph(attributePaths = { "student", "student.user", "student.currentLevel", "lesson", "lesson.teacher" })
     List<LessonProgress> findByLessonTeacherIdAndStudentIdIn(Long teacherId, List<Long> studentIds);

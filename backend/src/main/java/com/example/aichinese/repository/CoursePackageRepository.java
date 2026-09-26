@@ -53,7 +53,17 @@ public interface CoursePackageRepository extends JpaRepository<CoursePackage, Lo
     @NonNull
     List<CoursePackage> findAll(@Nullable Specification<CoursePackage> specification);
 
+    @Override
+    @EntityGraph(value = CoursePackage.GRAPH_DETAIL)
+    @NonNull
+    Page<CoursePackage> findAll(@Nullable Specification<CoursePackage> specification, @NonNull Pageable pageable);
+
     long countByContentStatus(ContentStatus contentStatus);
+
+    long countByTeacherId(Long teacherId);
+
+    @Query("select p.contentStatus as status, count(p) as count from CoursePackage p where p.teacher.id = :teacherId group by p.contentStatus")
+    List<StatusCountProjection> groupByContentStatusForTeacher(Long teacherId);
 
     @Query("select p.contentStatus as status, count(p) as count from CoursePackage p group by p.contentStatus")
     List<StatusCountProjection> groupByContentStatus();

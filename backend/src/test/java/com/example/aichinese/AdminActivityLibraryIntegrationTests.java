@@ -283,34 +283,33 @@ class AdminActivityLibraryIntegrationTests {
     }
 
     @Test
-    void unifiedFeedCanReturnPagesBeyondFirstFiveHundredItems() throws Exception {
+    void unifiedFeedCanReturnPagesBeyondFirstThousandItems() throws Exception {
         String token = adminToken();
         String topic = "large-feed-" + UUID.randomUUID();
-        flashcardRepository.saveAll(flashcardsForLargeFeed(topic, 501));
+        flashcardRepository.saveAll(flashcardsForLargeFeed(topic, 1001));
 
         mockMvc.perform(get("/api/v1/admin/activities")
                 .param("topic", topic)
                 .param("type", "FLASHCARD")
-                .param("page", "50")
+                .param("page", "100")
                 .param("size", "10")
                 .header(AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalItems").value(501))
-                .andExpect(jsonPath("$.data.totalPages").value(51))
+                .andExpect(jsonPath("$.data.totalItems").value(1001))
+                .andExpect(jsonPath("$.data.totalPages").value(101))
                 .andExpect(jsonPath("$.data.items.length()").value(1));
     }
 
     @Test
-    void unifiedFeedShouldRejectTooDeepPages() throws Exception {
+    void unifiedFeedReturnsEmptyPageBeyondTheEnd() throws Exception {
         String token = adminToken();
 
         mockMvc.perform(get("/api/v1/admin/activities")
                 .param(PAGE_PARAM, DEEP_PAGE)
                 .param(SIZE_PARAM, PAGE_SIZE_ONE_HUNDRED)
                 .header(AUTHORIZATION, bearer(token)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Requested activity page is too deep. Please use filters or a smaller page."));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0));
     }
 
     @Test

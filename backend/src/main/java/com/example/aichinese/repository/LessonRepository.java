@@ -56,7 +56,15 @@ public interface LessonRepository extends JpaRepository<Lesson, Long>, JpaSpecif
     @NonNull
     List<Lesson> findAll(@Nullable Specification<Lesson> specification);
 
+    @Override
+    @EntityGraph(value = Lesson.GRAPH_DETAIL)
+    @NonNull
+    Page<Lesson> findAll(@Nullable Specification<Lesson> specification, @NonNull Pageable pageable);
+
     long countByTeacherId(Long teacherId);
+
+    @Query("select l.contentStatus as status, count(l) as count from Lesson l where l.teacher.id = :teacherId group by l.contentStatus")
+    List<StatusCountProjection> groupByContentStatusForTeacher(Long teacherId);
 
     long countByContentStatus(ContentStatus contentStatus);
 

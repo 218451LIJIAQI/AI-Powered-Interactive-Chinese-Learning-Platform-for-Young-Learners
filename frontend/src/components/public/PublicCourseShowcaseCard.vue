@@ -31,13 +31,15 @@
     </div>
 
     <div class="public-course-card-actions">
-      <button class="btn btn-secondary public-course-card-button" type="button" @click="viewCourse">View Details</button>
+      <button class="btn btn-secondary public-course-card-button" type="button" @click="viewCourse">
+        {{ t('catalog.viewDetails') }}
+      </button>
       <button
         class="btn btn-accent public-course-card-button public-course-card-button--accent"
         type="button"
         @click="runAction"
       >
-        {{ actionLabel }}
+        {{ actionLabel || t('catalog.addToCart') }}
       </button>
     </div>
   </article>
@@ -45,9 +47,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import { catalogMessages } from '@/plugins/catalogMessages'
 import type { LearningType, ManagedContentType, PublicCourseSummary } from '@/types/api'
 import { formatCurrency } from '@/utils/format'
 
@@ -56,8 +60,13 @@ interface Props {
   actionLabel?: string
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  actionLabel: 'Add to Cart',
+const props = defineProps<Props>()
+const { t } = useI18n({
+  messages: {
+    en: { catalog: catalogMessages.en },
+    ms: { catalog: catalogMessages.ms },
+    zh: { catalog: catalogMessages.zh },
+  },
 })
 
 const emit = defineEmits<{
@@ -65,16 +74,16 @@ const emit = defineEmits<{
   action: []
 }>()
 
-const COURSE_TYPE_LABELS: Record<ManagedContentType, string> = {
-  LESSON: 'Single lesson',
-  MODULE: 'Learning module',
-  PACKAGE: 'Course package',
+const COURSE_TYPE_KEYS: Record<ManagedContentType, string> = {
+  LESSON: 'lessonType',
+  MODULE: 'moduleType',
+  PACKAGE: 'packageType',
 }
 
-const LEARNING_TYPE_META: Record<LearningType, { readonly label: string; readonly pillClass: string }> = {
-  LIVE: { label: 'Live Support', pillClass: 'public-mini-pill--violet' },
-  RECORDED: { label: 'Recorded', pillClass: 'public-mini-pill--purple' },
-  HYBRID: { label: 'Hybrid', pillClass: 'public-mini-pill--gold' },
+const LEARNING_TYPE_META: Record<LearningType, { readonly labelKey: string; readonly pillClass: string }> = {
+  LIVE: { labelKey: 'liveSupport', pillClass: 'public-mini-pill--violet' },
+  RECORDED: { labelKey: 'recorded', pillClass: 'public-mini-pill--purple' },
+  HYBRID: { labelKey: 'hybrid', pillClass: 'public-mini-pill--gold' },
 }
 
 const THUMB_VARIANTS: Record<string, 'family' | 'pagoda' | 'panda' | 'travel'> = {
@@ -83,24 +92,22 @@ const THUMB_VARIANTS: Record<string, 'family' | 'pagoda' | 'panda' | 'travel'> =
   'LESSON-3': 'pagoda',
 }
 
-const descriptionText = computed<string>(
-  () => props.course.shortDescription || 'Beginner-friendly Mandarin learning content.',
-)
+const descriptionText = computed<string>(() => props.course.shortDescription || t('catalog.defaultDescription'))
 const teacherName = computed<string>(() => props.course.teacher.displayName)
 const priceValue = computed<string>(() =>
   formatCurrency(props.course.price, props.course.currencyCode).replace(/\.00$/, ''),
 )
-const contentTypeLabel = computed(() => COURSE_TYPE_LABELS[props.course.type])
+const contentTypeLabel = computed(() => t(`catalog.${COURSE_TYPE_KEYS[props.course.type]}`))
 const categoryLabel = computed(() => props.course.category.name)
 
 const levelLabel = computed(() => {
-  if (props.course.level.id <= 2) return 'Beginner'
-  if (props.course.level.id === 3) return 'Intermediate'
+  if (props.course.level.id <= 2) return t('catalog.beginner')
+  if (props.course.level.id === 3) return t('catalog.intermediate')
   return props.course.level.name
 })
 
 const learningTypeMeta = computed(() => LEARNING_TYPE_META[props.course.learningType])
-const modeLabel = computed(() => learningTypeMeta.value.label)
+const modeLabel = computed(() => t(`catalog.${learningTypeMeta.value.labelKey}`))
 const modePillClass = computed(() => learningTypeMeta.value.pillClass)
 
 const thumbVariant = computed(() => THUMB_VARIANTS[props.course.id] ?? 'travel')

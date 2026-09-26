@@ -9,15 +9,15 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins the migration contract: runtime profiles use Flyway-managed schema with
- * Hibernate set to {@code validate} (never {@code update} / {@code create-drop}),
- * preventing accidental schema drift between FYP demo, local development, and tests.
+ * Pins the MySQL migration contract and explicitly documents the separate H2
+ * schema strategies used by the demo, desktop, and test profiles.
  */
 class DatabaseMigrationConfigurationTests {
 
     private static final Path APPLICATION_YML = Path.of("src/main/resources/application.yml");
     private static final Path APPLICATION_LOCAL_YML = Path.of("src/main/resources/application-local.yml");
     private static final Path APPLICATION_DEMO_YML = Path.of("src/main/resources/application-demo.yml");
+    private static final Path APPLICATION_DESKTOP_YML = Path.of("src/main/resources/application-desktop.yml");
     private static final Path APPLICATION_TEST_YML = Path.of("src/test/resources/application-test.yml");
     private static final Path BASELINE_MIGRATION = Path.of("src/main/resources/db/migration/V1__consolidated_schema.sql");
     private static final Path ENV_EXAMPLE = Path.of(".env.example");
@@ -119,6 +119,17 @@ class DatabaseMigrationConfigurationTests {
                         "ddl-auto: create-drop",
                         "enabled: false",
                         "Test profile intentionally uses Hibernate create-drop");
+    }
+
+    @Test
+    void desktopProfileKeepsDemoDataInAFile() throws IOException {
+        String desktop = readResource(APPLICATION_DESKTOP_YML);
+
+        assertThat(desktop).contains(
+                "on-profile: desktop",
+                "jdbc:h2:file:${FYP_DATA_DIR:./.local/data}/aichinese",
+                "ddl-auto: update",
+                "enabled: false");
     }
 
     @Test

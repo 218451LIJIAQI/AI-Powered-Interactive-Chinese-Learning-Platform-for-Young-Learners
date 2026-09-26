@@ -3,6 +3,7 @@ package com.example.aichinese.repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,11 @@ import com.example.aichinese.entity.enums.LiveClassStatus;
 import jakarta.persistence.LockModeType;
 
 public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
+
+    long countByTeacherIdAndScheduledStartAtAfterAndLiveClassStatusNotIn(
+            Long teacherId,
+            LocalDateTime now,
+            Collection<LiveClassStatus> excludedStatuses);
 
     @Override
     @EntityGraph(value = LiveClass.GRAPH_DETAIL)

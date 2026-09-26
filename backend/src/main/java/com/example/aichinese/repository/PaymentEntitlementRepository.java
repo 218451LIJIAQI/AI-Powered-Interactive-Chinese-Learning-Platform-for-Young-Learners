@@ -1,6 +1,7 @@
 package com.example.aichinese.repository;
 
 import java.util.List;
+import java.util.Collection;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,8 @@ public interface PaymentEntitlementRepository extends JpaRepository<PaymentEntit
     boolean existsByStudentIdAndItemTypeAndItemIdAndActiveTrue(Long studentId, String itemType, Long itemId);
 
     List<PaymentEntitlement> findByOrderId(Long orderId);
+
+    List<PaymentEntitlement> findByStudentIdInAndActiveTrue(Collection<Long> studentIds);
 
     @Query("select case when count(pe) > 0 then true else false end "
             + "from PaymentEntitlement pe "

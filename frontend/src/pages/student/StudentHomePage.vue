@@ -3,8 +3,8 @@
     <DataNotice
       :using-fallback="usingFallback"
       :error="pageError"
-      fallback-title="Preview learning dashboard"
-      fallback-message="Showing safe sample lesson, progress, and reward data for this preview session."
+      :fallback-title="t('studentHome.previewTitle')"
+      :fallback-message="t('studentHome.previewMessage')"
     />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
@@ -14,7 +14,7 @@
             <div class="student-hero-copy">
               <div class="chip student-hero-chip">
                 <IconGlyph name="learn" :size="16" />
-                Current Lesson
+                {{ t('studentHome.currentLesson') }}
               </div>
 
               <div class="student-hero-progress-strip">
@@ -28,7 +28,7 @@
               <p>{{ displayNextStep }}</p>
 
               <button class="btn btn-accent student-hero-cta" type="button" @click="continueLearning">
-                Continue Learning
+                {{ t('studentHome.continueLearning') }}
                 <span class="student-hero-cta-arrow"><IconGlyph name="chevronRight" :size="18" /></span>
               </button>
             </div>
@@ -37,7 +37,7 @@
               <article class="student-hero-focus-card">
                 <div class="student-hero-focus-head">
                   <IconGlyph name="language" :size="16" />
-                  <span>Warm-up words</span>
+                  <span>{{ t('studentHome.warmUpWords') }}</span>
                 </div>
                 <div class="student-hero-word-grid">
                   <span v-for="word in heroWords" :key="word.hanzi" class="student-hero-word-chip">
@@ -50,7 +50,7 @@
               <article class="student-hero-mini-goal">
                 <span class="student-hero-mini-icon"><IconGlyph name="trophy" :size="16" /></span>
                 <div>
-                  <strong>Today’s focus</strong>
+                  <strong>{{ t('studentHome.todayFocus') }}</strong>
                   <small>{{ heroFocusText }}</small>
                 </div>
               </article>
@@ -68,7 +68,7 @@
             </div>
 
             <div class="student-hero-checklist">
-              <strong>Lesson checklist:</strong>
+              <strong>{{ t('studentHome.lessonChecklist') }}</strong>
               <div
                 v-for="item in checklist"
                 :key="item.title"
@@ -86,7 +86,7 @@
               <div class="row student-home-section-head">
                 <div class="media-badge small"><IconGlyph name="progress" :size="18" /></div>
                 <div class="stack student-home-title-stack">
-                  <strong>My Learning Path</strong>
+                  <strong>{{ t('studentHome.learningPath') }}</strong>
                 </div>
               </div>
 
@@ -126,7 +126,7 @@
               <div class="row student-home-section-head">
                 <div class="media-badge small"><IconGlyph name="practice" :size="18" /></div>
                 <div class="stack student-home-title-stack">
-                  <strong>Practice Tools</strong>
+                  <strong>{{ t('studentHome.practiceTools') }}</strong>
                 </div>
               </div>
 
@@ -153,21 +153,17 @@
               <div class="row-between student-home-section-head student-home-section-head--compact">
                 <div class="row">
                   <div class="media-badge small"><IconGlyph name="calendar" :size="18" /></div>
-                  <strong>Live Practice</strong>
+                  <strong>{{ t('studentHome.livePractice') }}</strong>
                 </div>
               </div>
               <div class="student-class-body">
                 <div class="student-class-copy">
                   <div class="stack student-home-copy-stack student-home-copy-stack--wide">
-                    <strong>Live speaking practice</strong>
-                    <span class="muted">Join the next teacher-guided session.</span>
+                    <strong>{{ t('studentHome.liveSpeaking') }}</strong>
+                    <span class="muted">{{ t('studentHome.liveSpeakingHint') }}</span>
                   </div>
-                  <button
-                    class="btn btn-primary student-class-button"
-                    type="button"
-                    @click="openClasses"
-                  >
-                    View Classes
+                  <button class="btn btn-primary student-class-button" type="button" @click="openClasses">
+                    {{ t('studentHome.viewClasses') }}
                   </button>
                 </div>
                 <div class="student-class-scene">
@@ -188,17 +184,17 @@
               <div class="row-between student-home-section-head student-home-section-head--compact">
                 <div class="row">
                   <div class="media-badge small"><IconGlyph name="play" :size="18" /></div>
-                  <strong>Recorded Lesson</strong>
+                  <strong>{{ t('studentHome.recordedLesson') }}</strong>
                 </div>
               </div>
               <div class="student-recorded-body">
                 <div class="student-recorded-copy">
                   <div class="stack student-home-copy-stack">
                     <strong>{{ displayLessonTitle }}</strong>
-                    <span class="muted">Review this unit and reinforce recent words.</span>
+                    <span class="muted">{{ t('studentHome.recordedHint') }}</span>
                   </div>
                   <button class="btn btn-secondary student-watch-button" type="button" @click="continueLearning">
-                    Watch Now
+                    {{ t('studentHome.watchNow') }}
                   </button>
                 </div>
                 <div class="student-recorded-preview">
@@ -220,18 +216,22 @@
           <article class="panel student-side-card">
             <div class="row student-home-section-head">
               <div class="media-badge small"><IconGlyph name="progress" :size="18" /></div>
-              <strong>My Progress</strong>
+              <strong>{{ t('studentHome.myProgress') }}</strong>
             </div>
-            <ProgressRing :progress="overallProgress" title="Course Progress" subtitle="Keep the steady rhythm." />
+            <ProgressRing
+              :progress="overallProgress"
+              :title="t('studentHome.courseProgress')"
+              :subtitle="t('studentHome.progressHint')"
+            />
           </article>
 
           <article class="panel student-side-card">
             <div class="row-between student-home-section-head">
               <div class="row">
                 <div class="media-badge small"><IconGlyph name="trophy" :size="18" /></div>
-                <strong>Learning Goals</strong>
+                <strong>{{ t('studentHome.learningGoals') }}</strong>
               </div>
-              <span class="muted student-goal-reset">Live progress</span>
+              <span class="muted student-goal-reset">{{ t('studentHome.liveProgress') }}</span>
             </div>
             <div class="student-goal-list">
               <div v-for="goal in goals" :key="goal.title" class="student-goal-item">
@@ -261,14 +261,14 @@
           <article class="student-ai-card">
             <div class="row student-home-section-head student-home-section-head--compact">
               <div class="media-badge small student-ai-badge"><IconGlyph name="ai" :size="18" /></div>
-              <strong>SparkBot AI Helper</strong>
+              <strong>{{ t('studentHome.aiHelper') }}</strong>
             </div>
             <div class="student-ai-bubble">
-              Hi {{ firstName }}! I can help with tones, words, sentences, and quiz review.
+              {{ t('studentHome.aiGreeting', { name: firstName }) }}
             </div>
             <button class="btn student-ai-button" type="button" @click="openAiHelper">
               <IconGlyph name="ai" :size="16" />
-              Chat with SparkBot
+              {{ t('studentHome.chatWithAi') }}
             </button>
             <div class="student-ai-fish"><IconGlyph name="fun" :size="28" /></div>
           </article>
@@ -281,6 +281,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, type RouteLocationRaw } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
 import { studentApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -291,11 +292,19 @@ import ProgressRing from '@/components/common/ProgressRing.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { studentDashboard, studentProgress } from '@/demo/data'
+import { studentHomeMessages } from '@/plugins/studentHomeMessages'
 import type { StudentDashboardResponse, StudentProgressSummaryResponse } from '@/types/api'
 import { clampPercent, nonNegativeInteger, ratioPercent } from '@/utils/format'
 import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
 
 const router = useRouter()
+const { t } = useI18n({
+  messages: {
+    en: { studentHome: studentHomeMessages.en },
+    ms: { studentHome: studentHomeMessages.ms },
+    zh: { studentHome: studentHomeMessages.zh },
+  },
+})
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboard)
 const progressResource = useResource(() => studentApi.progress(), studentProgress)
 
@@ -359,7 +368,7 @@ interface LearningGoal {
   done: boolean
 }
 
-const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || 'Learner').trim())
+const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || t('studentHome.learner')).trim())
 const overallProgress = computed(() =>
   safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
 )
@@ -370,21 +379,19 @@ const nextLesson = computed(() => {
 
   return {
     id: unfinished?.lessonId ?? recent?.lessonId ?? null,
-    title: unfinished?.lessonTitle ?? recent?.lessonTitle ?? 'Continue Learning',
+    title: unfinished?.lessonTitle ?? recent?.lessonTitle ?? t('studentHome.fallbackLesson'),
     completionPercent: safePercent(unfinished?.completionPercent ?? recent?.completionPercent ?? 0),
   }
 })
-const nextStep = computed(
-  () => dashboard.value.recommendedNextStep || 'Continue your current lesson, then review one short practice activity.',
-)
+const nextStep = computed(() => dashboard.value.recommendedNextStep || t('studentHome.fallbackNextStep'))
 const displayLessonTitle = computed(() => normalizeLessonTitle(nextLesson.value.title))
 const displayNextStep = computed(() => shortenSentence(nextStep.value, 118))
 const nextLessonDuration = computed(() => (nextLesson.value.id ? '18 min' : '--'))
 
 const heroMetrics = computed(() => [
-  { label: 'Level', value: dashboard.value.currentLevel || 'Not set' },
-  { label: 'Progress', value: `${overallProgress.value}%` },
-  { label: 'Streak', value: formatDayCount(dashboard.value.dailyStreak) },
+  { label: t('studentHome.level'), value: dashboard.value.currentLevel || t('studentHome.notSet') },
+  { label: t('studentHome.progress'), value: `${overallProgress.value}%` },
+  { label: t('studentHome.streak'), value: formatDayCount(dashboard.value.dailyStreak) },
 ])
 const heroWords = [
   { hanzi: '你好', pinyin: 'ni hao' },
@@ -393,17 +400,17 @@ const heroWords = [
 ]
 const heroToneMarks = [1, 2, 3, 4]
 const heroFocusText = computed(() =>
-  quizAveragePercent.value >= 80 ? 'Keep the rhythm with one quick review.' : 'Review tones, then retry the quiz.',
+  quizAveragePercent.value >= 80 ? t('studentHome.keepRhythm') : t('studentHome.retryQuiz'),
 )
 
 const checklist = computed(() => [
-  { title: 'Open the next lesson', done: nextLesson.value.completionPercent > 0 },
+  { title: t('studentHome.openNextLesson'), done: nextLesson.value.completionPercent > 0 },
   {
-    title: 'Review a practice set',
+    title: t('studentHome.reviewPractice'),
     done: progress.value.recentLessons.some((lesson) => lesson.completionPercent >= 50),
   },
-  { title: 'Build quiz accuracy', done: quizAveragePercent.value >= 80 },
-  { title: 'Keep your streak alive', done: nonNegativeInteger(dashboard.value.dailyStreak) > 0 },
+  { title: t('studentHome.buildAccuracy'), done: quizAveragePercent.value >= 80 },
+  { title: t('studentHome.keepStreak'), done: nonNegativeInteger(dashboard.value.dailyStreak) > 0 },
 ])
 
 const pathNodes = computed<PathNode[]>(() => {
@@ -419,24 +426,24 @@ const pathNodes = computed<PathNode[]>(() => {
   const uniqueLessons = Array.from(new Map(lessons.map((lesson) => [lesson.lessonId, lesson])).values()).slice(0, 4)
   const source = uniqueLessons.length
     ? [...uniqueLessons]
-    : [{ lessonId: 0, lessonTitle: 'Start your first lesson', completionPercent: 0, completed: false }]
+    : [{ lessonId: 0, lessonTitle: t('studentHome.firstLesson'), completionPercent: 0, completed: false }]
 
   const plannedSteps = [
     {
       lessonId: -1,
-      lessonTitle: 'Review checkpoint',
+      lessonTitle: t('studentHome.reviewCheckpoint'),
       completionPercent: quizAveragePercent.value,
       completed: quizAveragePercent.value >= 80,
     },
     {
       lessonId: -2,
-      lessonTitle: 'Listening practice',
+      lessonTitle: t('studentHome.listeningPractice'),
       completionPercent: nextLesson.value.completionPercent > 0 ? 50 : 0,
       completed: false,
     },
     {
       lessonId: -3,
-      lessonTitle: 'Next quiz goal',
+      lessonTitle: t('studentHome.nextQuizGoal'),
       completionPercent: 0,
       completed: false,
     },
@@ -453,7 +460,7 @@ const pathNodes = computed<PathNode[]>(() => {
     const current = lesson.lessonId === nextLesson.value.id && completionPercent < 100
     return {
       id: index + 1,
-      title: normalizeLessonTitle(lesson.lessonTitle) || 'Learning step',
+      title: normalizeLessonTitle(lesson.lessonTitle) || t('studentHome.learningStep'),
       icon: iconForLesson(lesson.lessonTitle),
       progressPercent: completionPercent,
       statusLabel: lessonStatusLabel(completed, current, completionPercent),
@@ -465,15 +472,21 @@ const pathNodes = computed<PathNode[]>(() => {
   })
 })
 
-const practiceTools = [
-  { title: 'Flashcards', icon: 'file', color: '#6bc45c', to: practiceRoute('FLASHCARD') },
-  { title: 'Quiz', icon: 'quiz', color: '#9b6aff', to: '/student/quiz' },
-  { title: 'Listening', icon: 'live', color: '#2d8cff', to: practiceRoute('LISTENING_EXERCISE') },
-  { title: 'Speaking', icon: 'moderation', color: '#ff9c21', to: '/student/ai-helper' },
-  { title: 'Writing', icon: 'clip', color: '#8d59ff', to: practiceRoute('TRACING_EXERCISE') },
-  { title: 'Matching', icon: 'fun', color: '#ffc530', to: practiceRoute('MATCHING_GAME') },
-  { title: 'Drag & Drop', icon: 'practice', color: '#00b8d9', to: practiceRoute('DRAG_DROP_ACTIVITY'), wide: true },
-]
+const practiceTools = computed(() => [
+  { title: t('studentHome.flashcards'), icon: 'file', color: '#6bc45c', to: practiceRoute('FLASHCARD') },
+  { title: t('studentHome.quiz'), icon: 'quiz', color: '#9b6aff', to: '/student/quiz' },
+  { title: t('studentHome.listening'), icon: 'live', color: '#2d8cff', to: practiceRoute('LISTENING_EXERCISE') },
+  { title: t('studentHome.speaking'), icon: 'moderation', color: '#ff9c21', to: '/student/ai-helper' },
+  { title: t('studentHome.writing'), icon: 'clip', color: '#8d59ff', to: practiceRoute('TRACING_EXERCISE') },
+  { title: t('studentHome.matching'), icon: 'fun', color: '#ffc530', to: practiceRoute('MATCHING_GAME') },
+  {
+    title: t('studentHome.dragDrop'),
+    icon: 'practice',
+    color: '#00b8d9',
+    to: practiceRoute('DRAG_DROP_ACTIVITY'),
+    wide: true,
+  },
+])
 
 const goals = computed<LearningGoal[]>(() => {
   const completedLessons = nonNegativeInteger(progress.value.completedLessons)
@@ -482,15 +495,15 @@ const goals = computed<LearningGoal[]>(() => {
 
   return [
     {
-      title: 'Complete started lessons',
-      count: started ? `${completedLessons} / ${started}` : 'No lessons started',
+      title: t('studentHome.completeStarted'),
+      count: started ? `${completedLessons} / ${started}` : t('studentHome.noLessonsStarted'),
       progress: completedPercent,
       tone: 'success',
       icon: 'learn',
       done: started > 0 && completedLessons >= started,
     },
     {
-      title: 'Continue next lesson',
+      title: t('studentHome.continueNext'),
       count: `${nextLesson.value.completionPercent}%`,
       progress: nextLesson.value.completionPercent,
       tone: 'info',
@@ -498,7 +511,7 @@ const goals = computed<LearningGoal[]>(() => {
       done: nextLesson.value.completionPercent >= 100,
     },
     {
-      title: 'Build quiz accuracy',
+      title: t('studentHome.buildAccuracy'),
       count: `${quizAveragePercent.value}%`,
       progress: quizAveragePercent.value,
       tone: 'warning',
@@ -510,9 +523,9 @@ const goals = computed<LearningGoal[]>(() => {
 
 const POINTS_PER_GEM = 6.8
 const rewards = computed(() => [
-  { label: 'Stars', value: nonNegativeInteger(dashboard.value.points), icon: 'star' },
-  { label: 'Gems', value: nonNegativeInteger(dashboard.value.points / POINTS_PER_GEM), icon: 'rewards' },
-  { label: 'Badges', value: nonNegativeInteger(dashboard.value.badgeCount), icon: 'shield' },
+  { label: t('studentHome.stars'), value: nonNegativeInteger(dashboard.value.points), icon: 'star' },
+  { label: t('studentHome.gems'), value: nonNegativeInteger(dashboard.value.points / POINTS_PER_GEM), icon: 'rewards' },
+  { label: t('studentHome.badges'), value: nonNegativeInteger(dashboard.value.badgeCount), icon: 'shield' },
 ])
 
 function safePercent(value: number): number {
@@ -521,7 +534,7 @@ function safePercent(value: number): number {
 
 function formatDayCount(value: number): string {
   const days = nonNegativeInteger(value)
-  return `${days} ${days === 1 ? 'day' : 'days'}`
+  return `${days} ${t(days === 1 ? 'studentHome.day' : 'studentHome.days')}`
 }
 
 function variantForLesson(title: string): LessonVariant {
@@ -567,13 +580,13 @@ function continueLearning(): void {
   openStudentLearn(nextLesson.value.id)
 }
 
-function clickNode(node: Pick<PathNode, 'lessonId' | 'title'>): void {
+function clickNode(node: Pick<PathNode, 'lessonId'>): void {
   if (node.lessonId !== null && node.lessonId > 0) {
     openStudentLearn(node.lessonId)
     return
   }
 
-  openFallbackNodeRoute(node.title)
+  openFallbackNodeRoute(node.lessonId)
 }
 
 function reloadAll(): void {
@@ -586,14 +599,18 @@ function completionIcon(done: boolean): CompletionIcon {
 }
 
 function lessonStatusLabel(completed: boolean, current: boolean, completionPercent: number): string {
-  if (completed) return 'Complete'
-  if (current) return `${completionPercent}% in progress`
-  return completionPercent > 0 ? `${completionPercent}% started` : 'Up next'
+  if (completed) return t('studentHome.complete')
+  if (current) return t('studentHome.inProgress', { percent: completionPercent })
+  return completionPercent > 0 ? t('studentHome.started', { percent: completionPercent }) : t('studentHome.upNext')
 }
 
 function pathNodeAriaLabel(node: PathNode): string {
-  const state = node.complete ? 'Complete' : node.current ? 'Current' : 'Locked'
-  return `Learning step ${node.id}: ${node.title}. Status: ${state}.`
+  const state = node.complete
+    ? t('studentHome.complete')
+    : node.current
+      ? t('studentHome.current')
+      : t('studentHome.locked')
+  return t('studentHome.pathAria', { id: node.id, title: node.title, state })
 }
 
 function pathNodeBadgeClass(node: PathNode): PathNodeBadgeClass {
@@ -631,15 +648,14 @@ function openStudentLearn(lessonId: number): void {
   })
 }
 
-function openFallbackNodeRoute(title: string): void {
-  const normalizedTitle = title.toLowerCase()
-  if (normalizedTitle.includes('quiz')) {
+function openFallbackNodeRoute(lessonId: number | null): void {
+  if (lessonId === -3) {
     openQuiz()
     return
   }
 
-  if (normalizedTitle.includes('listening') || normalizedTitle.includes('practice')) {
-    openPracticeTool(practiceRoute(inferPracticeActivityFromText(title)))
+  if (lessonId === -2) {
+    openPracticeTool(practiceRoute(inferPracticeActivityFromText('listening')))
     return
   }
 

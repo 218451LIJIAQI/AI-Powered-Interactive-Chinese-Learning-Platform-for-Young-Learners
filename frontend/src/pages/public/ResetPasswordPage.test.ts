@@ -1,6 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { i18n } from '@/plugins/i18n'
+
 const rawResetToken = 'raw-reset-token'
 const accountTab = 'account'
 const newPassword = 'Password123'
@@ -37,10 +39,12 @@ import ResetPasswordPage from './ResetPasswordPage.vue'
 function mountResetPasswordPage(): ReturnType<typeof mount> {
   return mount(ResetPasswordPage, {
     global: {
+      plugins: [i18n],
       stubs: {
         AppBrand: true,
         IconGlyph: true,
         PandaIllustration: true,
+        LanguageSwitcher: true,
       },
     },
   })
@@ -48,6 +52,7 @@ function mountResetPasswordPage(): ReturnType<typeof mount> {
 
 describe('ResetPasswordPage token hygiene', () => {
   beforeEach(() => {
+    i18n.global.locale.value = 'en'
     mocks.replace.mockReset()
     mocks.resetPassword.mockReset()
     mocks.resetPassword.mockResolvedValue(undefined)

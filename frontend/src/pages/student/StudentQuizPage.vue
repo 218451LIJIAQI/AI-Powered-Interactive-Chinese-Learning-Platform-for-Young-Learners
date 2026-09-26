@@ -3,7 +3,7 @@
     <section class="student-quiz-header">
       <button class="student-link-button" type="button" @click="openRecommendedPractice">
         <IconGlyph name="chevronLeft" :size="16" />
-        Back to Practice
+        {{ t('studentQuiz.back') }}
       </button>
       <div class="student-quiz-title-row">
         <div class="student-quiz-title-badge">你好</div>
@@ -21,7 +21,9 @@
         <div class="student-quiz-main">
           <form v-if="activeQuestion" class="student-quiz-card" @submit.prevent="submitQuiz">
             <div class="student-quiz-progress-row">
-              <strong>Question {{ currentQuestionNumber }} of {{ totalQuestionCount }}</strong>
+              <strong>{{
+                t('studentQuiz.questionOf', { current: currentQuestionNumber, total: totalQuestionCount })
+              }}</strong>
               <div class="student-quiz-progress-track"><span :style="{ width: quizProgressWidth }" /></div>
               <span><IconGlyph name="history" :size="15" /> {{ quizTimeLabel }}</span>
             </div>
@@ -50,7 +52,9 @@
 
             <div class="student-quiz-tip">
               <span><IconGlyph name="fun" :size="20" /></span>
-              <p><strong>Tip:</strong> Use the lesson context and pronunciation clues before submitting.</p>
+              <p>
+                <strong>{{ t('studentQuiz.tip') }}</strong> {{ t('studentQuiz.tipHint') }}
+              </p>
             </div>
 
             <div class="row-between u-wrap u-gap-12">
@@ -60,16 +64,18 @@
                 :disabled="activeQuestionIndex === 0"
                 @click="goToPreviousQuestion"
               >
-                Previous
+                {{ t('studentQuiz.previous') }}
               </button>
-              <span class="muted">{{ answeredCount }} / {{ totalQuestionCount }} answered</span>
+              <span class="muted">{{
+                t('studentQuiz.answered', { answered: answeredCount, total: totalQuestionCount })
+              }}</span>
               <button
                 class="student-quiz-nav-button"
                 type="button"
                 :disabled="isLastQuestion"
                 @click="goToNextQuestion"
               >
-                Next
+                {{ t('studentQuiz.next') }}
               </button>
             </div>
 
@@ -82,26 +88,30 @@
             </button>
           </form>
 
-          <StatePanel v-else icon="quiz" title="No quiz ready" :message="quizEmptyMessage" tone="empty">
+          <StatePanel v-else icon="quiz" :title="t('studentQuiz.noQuiz')" :message="quizEmptyMessage" tone="empty">
             <template #actions>
-              <button class="btn btn-primary" type="button" @click="openLessons">Open Lessons</button>
-              <button class="btn btn-secondary" type="button" @click="openRecommendedPractice">Practice Instead</button>
+              <button class="btn btn-primary" type="button" @click="openLessons">
+                {{ t('studentQuiz.openLessons') }}
+              </button>
+              <button class="btn btn-secondary" type="button" @click="openRecommendedPractice">
+                {{ t('studentQuiz.practiceInstead') }}
+              </button>
             </template>
           </StatePanel>
 
           <article v-if="hasSubmitted" class="student-quiz-review">
             <div class="row u-mb-12">
               <span class="student-review-alert"><IconGlyph name="alert" :size="14" /></span>
-              <strong>Review · Let's learn from mistakes!</strong>
+              <strong>{{ t('studentQuiz.reviewTitle') }}</strong>
             </div>
             <div class="student-quiz-review-grid">
               <article v-for="answer in result.answers" :key="answer.questionId" class="student-quiz-review-card">
-                <small>{{ answer.correct ? 'Correct answer' : 'Your answer' }}</small>
+                <small>{{ answer.correct ? t('studentQuiz.correctAnswer') : t('studentQuiz.yourAnswer') }}</small>
                 <strong>{{ answer.questionText }}</strong>
-                <p>{{ answer.studentAnswer || 'No answer submitted' }}</p>
+                <p>{{ answer.studentAnswer || t('studentQuiz.noAnswer') }}</p>
                 <span :class="answer.correct ? 'is-correct' : 'is-wrong'">
                   <IconGlyph :name="answer.correct ? 'status' : 'alert'" :size="14" />
-                  {{ answer.correct ? 'Correct' : 'Review' }}
+                  {{ answer.correct ? t('studentQuiz.correct') : t('studentQuiz.review') }}
                 </span>
               </article>
             </div>
@@ -110,11 +120,10 @@
           <article v-else-if="activeQuestion" class="student-quiz-review student-quiz-review--pending">
             <div class="row u-mb-12">
               <span class="student-review-alert"><IconGlyph name="help" :size="14" /></span>
-              <strong>Feedback unlocks after you submit</strong>
+              <strong>{{ t('studentQuiz.feedbackLocked') }}</strong>
             </div>
             <p>
-              Choose an answer first. SparkBot will show review notes after your attempt so the quiz stays fair and
-              encouraging.
+              {{ t('studentQuiz.feedbackHint') }}
             </p>
           </article>
         </div>
@@ -122,19 +131,21 @@
         <aside class="student-quiz-side">
           <article class="panel student-quiz-side-card">
             <div class="row-between">
-              <strong>Quiz Progress</strong>
-              <button class="student-link-button" type="button" @click="openRecommendedPractice">View All</button>
+              <strong>{{ t('studentQuiz.quizProgress') }}</strong>
+              <button class="student-link-button" type="button" @click="openRecommendedPractice">
+                {{ t('studentQuiz.viewAll') }}
+              </button>
             </div>
             <div class="student-quiz-ring">
               <span>{{ quizAveragePercent }}%</span>
             </div>
             <div class="student-quiz-side-stats">
               <div>
-                <small>Lessons Started</small>
+                <small>{{ t('studentQuiz.lessonsStarted') }}</small>
                 <strong>{{ startedLessonCount }}</strong>
               </div>
               <div>
-                <small>Completed</small>
+                <small>{{ t('studentQuiz.completed') }}</small>
                 <strong>{{ completedLessonCount }}</strong>
               </div>
             </div>
@@ -143,8 +154,10 @@
 
           <article class="panel student-quiz-side-card">
             <div class="row-between">
-              <strong>Recent Lesson Progress</strong>
-              <button class="student-link-button" type="button" @click="openRecommendedPractice">Open Practice</button>
+              <strong>{{ t('studentQuiz.recentProgress') }}</strong>
+              <button class="student-link-button" type="button" @click="openRecommendedPractice">
+                {{ t('studentQuiz.openPractice') }}
+              </button>
             </div>
             <div v-if="performanceItems.length" class="student-quiz-performance-list">
               <div v-for="item in performanceItems" :key="item.title" class="student-quiz-performance-item">
@@ -156,14 +169,14 @@
                 <b>{{ item.score }}</b>
               </div>
             </div>
-            <p v-else class="muted u-m-0">Recent lesson progress will appear after you start learning.</p>
+            <p v-else class="muted u-m-0">{{ t('studentQuiz.noProgress') }}</p>
           </article>
 
           <article class="student-quiz-help-card">
-            <strong>Need a hint?</strong>
-            <p>SparkBot can explain the answer and help you try again.</p>
+            <strong>{{ t('studentQuiz.needHint') }}</strong>
+            <p>{{ t('studentQuiz.hintHelp') }}</p>
             <button class="btn btn-primary" type="button" @click="openAiHelper">
-              Ask SparkBot
+              {{ t('studentQuiz.askSparkBot') }}
             </button>
             <span><IconGlyph name="ai" :size="28" /></span>
           </article>
@@ -175,6 +188,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { studentApi } from '@/api/services'
@@ -185,10 +199,19 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useResource } from '@/composables/useResource'
 import { studentProgress as studentProgressDemo, studentQuiz } from '@/demo/data'
+import { studentQuizMessages } from '@/plugins/studentQuizMessages'
 import type { QuizAttemptResultResponse, StudentQuizResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, nonNegativeInteger } from '@/utils/format'
 import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
+
+const { t } = useI18n({
+  messages: {
+    en: { studentQuiz: studentQuizMessages.en },
+    ms: { studentQuiz: studentQuizMessages.ms },
+    zh: { studentQuiz: studentQuizMessages.zh },
+  },
+})
 
 type AnswerTone = '' | 'correct' | 'wrong'
 
@@ -209,8 +232,8 @@ const emptyQuiz = {
   id: 0,
   lessonId: 0,
   lessonTitle: '',
-  title: 'Choose a quiz',
-  description: 'Pick a published quiz from your available lessons to start.',
+  title: t('studentQuiz.chooseQuiz'),
+  description: t('studentQuiz.chooseQuizHint'),
   timeLimitMinutes: null,
   totalPoints: 0,
   questions: [],
@@ -264,15 +287,15 @@ const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F']
 const totalQuestionCount = computed(() => orderedQuestions.value.length)
 const quizMetaLabel = computed(() => {
   const parts = [
-    quiz.value.lessonTitle || `Lesson ${quiz.value.lessonId}`,
-    `${totalQuestionCount.value} question${totalQuestionCount.value === 1 ? '' : 's'}`,
-    `${quiz.value.totalPoints} point${quiz.value.totalPoints === 1 ? '' : 's'}`,
+    quiz.value.lessonTitle || t('studentQuiz.lesson', { id: quiz.value.lessonId }),
+    t('studentQuiz.questions', { count: totalQuestionCount.value }),
+    t('studentQuiz.points', { count: quiz.value.totalPoints }),
   ]
   return parts.filter(Boolean).join(' - ')
 })
-const quizDescriptionLabel = computed(() => quiz.value.description || 'Choose the best answer.')
+const quizDescriptionLabel = computed(() => quiz.value.description || t('studentQuiz.chooseBest'))
 const quizTimeLabel = computed(() =>
-  quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : 'No time limit',
+  quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : t('studentQuiz.noTimeLimit'),
 )
 const currentQuestionNumber = computed(() =>
   Math.min(activeQuestionIndex.value + 1, Math.max(totalQuestionCount.value, 1)),
@@ -287,21 +310,21 @@ const quizProgressWidth = computed(
   () => `${Math.min(100, Math.max(8, (currentQuestionNumber.value / Math.max(totalQuestionCount.value, 1)) * 100))}%`,
 )
 const submitButtonLabel = computed(() => {
-  if (submitting.value) return 'Submitting...'
-  if (hasSubmitted.value) return 'Submitted'
-  if (!allQuestionsAnswered.value) return `Answer ${unansweredQuestionCount.value} more`
-  return 'Submit quiz'
+  if (submitting.value) return t('studentQuiz.submitting')
+  if (hasSubmitted.value) return t('studentQuiz.submitted')
+  if (!allQuestionsAnswered.value) return t('studentQuiz.answerMore', { count: unansweredQuestionCount.value })
+  return t('studentQuiz.submit')
 })
 const quizEmptyMessage = computed(() => {
   if (hasQuizSelection.value) {
-    return 'This published quiz does not have questions yet. Try another lesson or practice activity.'
+    return t('studentQuiz.emptyQuestions')
   }
 
   if (requestedLessonId.value) {
-    return 'No published quiz is available for this lesson yet. Continue the lesson or pick another practice activity.'
+    return t('studentQuiz.emptyLesson')
   }
 
-  return 'No published quiz is available to this student account yet. Continue lessons first, then return when a teacher has published a quiz.'
+  return t('studentQuiz.emptyAccount')
 })
 const performanceItems = computed(() =>
   progress.value.recentLessons.slice(0, 3).map((lesson) => {
@@ -335,9 +358,9 @@ function iconForLessonProgress(completionPercent: number, completed: boolean): s
 }
 
 function progressStatusLabel(completionPercent: number, completed: boolean): string {
-  if (completed || completionPercent >= 100) return 'Completed'
-  if (completionPercent > 0) return 'In progress'
-  return 'Not started'
+  if (completed || completionPercent >= 100) return t('studentQuiz.completed')
+  if (completionPercent > 0) return t('studentQuiz.inProgress')
+  return t('studentQuiz.notStarted')
 }
 
 function chooseAnswer(questionId: number, optionText: string): void {
@@ -431,12 +454,12 @@ async function submitQuiz(): Promise<void> {
   if (submitting.value || hasSubmitted.value) return
   actionError.value = null
   if (!hasQuizSelection.value) {
-    actionError.value = 'Choose an available quiz before submitting an attempt.'
+    actionError.value = t('studentQuiz.chooseBeforeSubmit')
     return
   }
 
   if (quizReadOnly.value) {
-    actionError.value = 'Preview quizzes cannot be submitted to the backend. Use a live quiz to save an attempt.'
+    actionError.value = t('studentQuiz.previewSubmit')
     return
   }
 
@@ -445,7 +468,7 @@ async function submitQuiz(): Promise<void> {
     if (firstMissingIndex >= 0) {
       goToQuestion(firstMissingIndex)
     }
-    actionError.value = 'Answer every question before submitting this quiz.'
+    actionError.value = t('studentQuiz.answerAll')
     return
   }
 
@@ -460,7 +483,7 @@ async function submitQuiz(): Promise<void> {
     )
     hasSubmitted.value = true
   } catch (reason) {
-    actionError.value = resolveApiError(reason, 'Unable to submit this quiz attempt.')
+    actionError.value = resolveApiError(reason, t('studentQuiz.submitError'))
   } finally {
     submitting.value = false
   }
