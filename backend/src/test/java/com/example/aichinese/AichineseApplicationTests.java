@@ -7,8 +7,9 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * Smoke test that boots the full Spring application context with the
  * {@code test} profile. A regression here usually means a misconfigured
- * bean wiring, a missing migration, or a broken production guard —
- * caught before any feature-level test runs.
+ * bean wiring or an invalid test-profile property — caught before any
+ * feature-level test runs. (Migrations are covered by
+ * DatabaseMigrationConfigurationTests and MySqlMigrationSmokeTests.)
  */
 @SpringBootTest
 @ActiveProfiles("test")

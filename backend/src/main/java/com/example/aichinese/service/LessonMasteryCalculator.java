@@ -2,9 +2,7 @@ package com.example.aichinese.service;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.example.aichinese.entity.LessonProgress;
@@ -53,7 +51,7 @@ public final class LessonMasteryCalculator {
                 || attempt.getMaxScore() == null || attempt.getMaxScore() <= 0) {
             return null;
         }
-        return (int) Math.round(attempt.getScore() * 100.0 / attempt.getMaxScore());
+        return QuizScoring.percentage(attempt.getScore(), attempt.getMaxScore());
     }
 
     /**
@@ -79,11 +77,8 @@ public final class LessonMasteryCalculator {
                 .collect(Collectors.toMap(Map.Entry::getKey, entry -> average(entry.getValue().values())));
     }
 
+    /** Rounded down for the same reason as {@link QuizScoring#percentage}; every lesson entry has at least one quiz. */
     private static int average(Collection<Integer> values) {
-        List<Integer> present = values.stream().filter(Objects::nonNull).toList();
-        if (present.isEmpty()) {
-            return 0;
-        }
-        return (int) Math.round(present.stream().mapToInt(Integer::intValue).average().orElse(0));
+        return (int) Math.floor(values.stream().mapToInt(Integer::intValue).average().orElse(0));
     }
 }

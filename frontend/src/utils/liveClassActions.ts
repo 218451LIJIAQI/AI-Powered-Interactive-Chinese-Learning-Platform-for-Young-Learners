@@ -58,17 +58,15 @@ export function liveClassActionState(item: ActionFields, nowMs: number = Date.no
   return { primary, canCancel }
 }
 
-const IN_PROGRESS_STATUSES = new Set(['ONGOING', 'IN_PROGRESS', 'LIVE'])
-
 /**
- * D21: an in-progress (ongoing / live) status is only shown while `nowMs` is inside the class window. Before the start
+ * D21: an ONGOING status is only shown while `nowMs` is inside the class window. Before the start
  * (or with an unreadable time) the class shows as SCHEDULED, after the end as COMPLETED; other statuses are unchanged.
  */
 export function effectiveLiveClassStatus(
   item: Pick<LiveClassResponse, 'startTime' | 'endTime'> & { liveClassStatus: string },
   nowMs: number = Date.now(),
 ): string {
-  if (!IN_PROGRESS_STATUSES.has((item.liveClassStatus ?? '').toUpperCase())) return item.liveClassStatus
+  if ((item.liveClassStatus ?? '').toUpperCase() !== 'ONGOING') return item.liveClassStatus
   const start = new Date(item.startTime).getTime()
   const end = new Date(item.endTime).getTime()
   if (Number.isNaN(start) || Number.isNaN(end) || nowMs < start) return 'SCHEDULED'

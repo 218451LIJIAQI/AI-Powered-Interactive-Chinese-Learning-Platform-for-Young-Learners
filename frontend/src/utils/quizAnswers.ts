@@ -13,6 +13,7 @@ import type {
   QuizQuestionType,
   StudentQuizQuestionResponse,
 } from '@/types/api'
+import { normalizeLearningStage } from '@/utils/learningStage'
 
 /** A draft answer: an option id for option-based questions, typed text for text questions. */
 export type QuizAnswerValue = number | string
@@ -74,7 +75,7 @@ export function canRequestHint(
   question: Pick<StudentQuizQuestionResponse, 'hintAvailable'>,
   learningStage: LearningStage | string | null | undefined,
 ): boolean {
-  return question.hintAvailable === true && (learningStage ?? '').toString().toUpperCase() !== 'INDEPENDENT'
+  return question.hintAvailable === true && normalizeLearningStage(learningStage) !== 'INDEPENDENT'
 }
 
 function optionText(question: QuizAttemptResultQuestionResponse, optionId: number | null | undefined): string | null {

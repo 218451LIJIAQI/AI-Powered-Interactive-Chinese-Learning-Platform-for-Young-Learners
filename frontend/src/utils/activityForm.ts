@@ -36,10 +36,6 @@ export function activityTypeLabelKey(type: AdminActivityType): (typeof ACTIVITY_
   return ACTIVITY_TYPE_LABEL_KEYS[type]
 }
 
-export function isActivityType(value: unknown): value is AdminActivityType {
-  return typeof value === 'string' && (ACTIVITY_TYPES as readonly string[]).includes(value)
-}
-
 export interface MatchingItemDraft {
   leftText: string
   rightText: string

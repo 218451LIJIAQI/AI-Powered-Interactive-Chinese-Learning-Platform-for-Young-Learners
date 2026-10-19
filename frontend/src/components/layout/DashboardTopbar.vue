@@ -81,7 +81,13 @@
           :aria-label="t('dashboard.accountMenu')"
           @keydown="handleMenuKeydown"
         >
-          <RouterLink :to="profilePath" class="menu-item" role="menuitem" @click="closeUserMenu">
+          <RouterLink
+            v-if="role !== 'ADMIN'"
+            :to="profilePath"
+            class="menu-item"
+            role="menuitem"
+            @click="closeUserMenu"
+          >
             <IconGlyph name="profile" :size="18" />
             <span>{{ globalT('nav.profile') }}</span>
           </RouterLink>
@@ -219,8 +225,11 @@ const { t, locale } = useI18n({
   },
 })
 
-const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
-const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
+// A signed-in user keeps their own role chrome, also on the public catalogue (/courses); guests use previewRole.
+const role = computed<UserRole>(
+  () => (auth.isAuthenticated ? auth.activeRole : (route.meta.previewRole as UserRole | undefined)) ?? 'STUDENT',
+)
+const isGuestCatalog = computed(() => route.path.startsWith('/courses') && !auth.isAuthenticated)
 const activeRoleCopy = computed(() => ROLE_TOPBAR_COPY[role.value])
 const PREVIEW_NOTIFICATIONS = {
   STUDENT: studentNotifications,

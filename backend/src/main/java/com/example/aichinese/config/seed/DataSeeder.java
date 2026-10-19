@@ -64,7 +64,7 @@ public class DataSeeder implements CommandLineRunner {
             .toList();
     private static final List<SettingSeed> SYSTEM_SETTINGS = List.of(
             new SettingSeed(
-                    "platform_name",
+                    PlatformSettingsService.PLATFORM_NAME_KEY,
                     PlatformSettingsService.DEFAULT_PLATFORM_NAME,
                     "Displayed platform name.",
                     false),

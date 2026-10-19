@@ -1,12 +1,5 @@
 <template>
-  <div
-    class="portrait-avatar"
-    :class="avatarClass"
-    :style="avatarStyle"
-    :role="ariaLabel ? 'img' : undefined"
-    :aria-label="ariaLabel || undefined"
-    :aria-hidden="ariaLabel ? undefined : 'true'"
-  >
+  <div class="portrait-avatar" :class="avatarClass" :style="avatarStyle" aria-hidden="true">
     <span v-if="initials" class="portrait-initials" aria-hidden="true">{{ initials }}</span>
     <template v-else>
       <span class="portrait-backdrop" />
@@ -25,8 +18,7 @@ import type { AvatarTone } from './avatarTone'
  * Neutral user avatar (D21): initials when a name is given, otherwise a neutral silhouette.
  * It never infers gender, religion or appearance from a name or a list position.
  * `tone` picks a token pair (fill + text) whose initials meet WCAG AA contrast.
- * The avatar always sits next to the visible name, so it is decorative (hidden from assistive tech) unless an
- * `ariaLabel` is passed.
+ * The avatar always sits next to the visible name, so it is decorative (hidden from assistive tech).
  */
 type AvatarShape = 'circle' | 'soft'
 
@@ -35,7 +27,6 @@ interface Props {
   name?: string | null
   tone?: AvatarTone
   rounded?: AvatarShape
-  ariaLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -43,7 +34,6 @@ const props = withDefaults(defineProps<Props>(), {
   name: null,
   tone: 'primary',
   rounded: 'circle',
-  ariaLabel: '',
 })
 
 const initials = computed(() => {

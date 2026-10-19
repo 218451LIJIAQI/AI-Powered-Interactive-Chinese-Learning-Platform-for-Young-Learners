@@ -201,8 +201,7 @@ public class ContentModerationService {
                 target.targetType(),
                 target.targetId(),
                 "Admin applied moderation action " + action.name()
-                        + " to " + target.targetType() + " #" + target.targetId() + ".",
-                null);
+                        + " to " + target.targetType() + " #" + target.targetId() + ".");
     }
 
     /** D14: HIDE / UNPUBLISH / ARCHIVE -> ARCHIVED; REQUEST_REVISION -> REJECTED with reason; RESTORE -> PUBLISHED. */

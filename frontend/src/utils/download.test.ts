@@ -31,9 +31,7 @@ describe('sanitizeDownloadFileName', () => {
   })
 
   it('removes path separators, reserved filename characters, controls, and bidi format controls', () => {
-    expect(sanitizeDownloadFileName('../invoice\u0000\u202ereport:1?.pdf', 'fallback.pdf')).toBe(
-      '_invoice_report_1_.pdf',
-    )
+    expect(sanitizeDownloadFileName('../notes\u0000\u202ereport:1?.pdf', 'fallback.pdf')).toBe('_notes_report_1_.pdf')
   })
 
   it('strips leading dots and falls back for empty or traversal-only names', () => {

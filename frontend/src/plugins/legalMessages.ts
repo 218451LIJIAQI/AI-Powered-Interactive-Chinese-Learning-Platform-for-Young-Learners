@@ -36,7 +36,7 @@ export const legalMessages = {
         'To provide sign-in and role-based access, deliver lessons and practice, track progress, let verified teachers give feedback, review AI reports and teacher applications, keep the platform secure, and evaluate the prototype for the project.',
       aiTitle: 'AI provider',
       aiCopy:
-        "AI features send the learner's request text to the OpenAI Responses API only through our backend, never directly from your browser. Requests are sent with store=false so the provider does not keep them for training or storage.",
+        "AI features send the learner's request text, and for handwriting feedback the uploaded handwriting image, to the OpenAI Responses API only through our backend, never directly from your browser. Requests are sent with store=false so the provider does not keep them for training or storage.",
       minimisationTitle: 'Data minimisation',
       minimisationCopy:
         'Your name, email, account ID and verification data are never sent to the AI provider. Email addresses, phone numbers and NRIC-like numbers typed into AI requests are redacted before sending. We only collect what the learning functions need.',
@@ -96,7 +96,7 @@ export const legalMessages = {
         'Untuk menyediakan log masuk dan akses berasaskan peranan, menyampaikan pelajaran dan latihan, menjejak kemajuan, membolehkan guru yang disahkan memberi maklum balas, menyemak laporan AI dan permohonan guru, memastikan platform selamat dan menilai prototaip untuk projek.',
       aiTitle: 'Penyedia AI',
       aiCopy:
-        'Ciri AI menghantar teks permintaan pelajar ke OpenAI Responses API hanya melalui pelayan kami, tidak sekali-kali terus daripada pelayar anda. Permintaan dihantar dengan store=false supaya penyedia tidak menyimpannya untuk latihan atau storan.',
+        'Ciri AI menghantar teks permintaan pelajar, dan bagi maklum balas tulisan tangan imej tulisan tangan yang dimuat naik, ke OpenAI Responses API hanya melalui pelayan kami, tidak sekali-kali terus daripada pelayar anda. Permintaan dihantar dengan store=false supaya penyedia tidak menyimpannya untuk latihan atau storan.',
       minimisationTitle: 'Peminimuman data',
       minimisationCopy:
         'Nama, e-mel, ID akaun dan data pengesahan anda tidak pernah dihantar kepada penyedia AI. Alamat e-mel, nombor telefon dan nombor seperti NRIC yang ditaip dalam permintaan AI disunting sebelum dihantar. Kami hanya mengumpul apa yang diperlukan oleh fungsi pembelajaran.',
@@ -153,7 +153,7 @@ export const legalMessages = {
         '用于提供登录和基于角色的访问、提供课时与练习、追踪进度、让认证教师提供反馈、审核 AI 举报和教师申请、保障平台安全，以及为项目评估原型。',
       aiTitle: 'AI 服务提供方',
       aiCopy:
-        'AI 功能仅通过我们的后端将学习者的请求文本发送至 OpenAI Responses API，绝不会从您的浏览器直接发送。请求以 store=false 发送，提供方不会将其保存用于训练或存储。',
+        'AI 功能仅通过我们的后端将学习者的请求文本（以及手写反馈所上传的手写图片）发送至 OpenAI Responses API，绝不会从您的浏览器直接发送。请求以 store=false 发送，提供方不会将其保存用于训练或存储。',
       minimisationTitle: '数据最小化',
       minimisationCopy:
         '您的姓名、电子邮箱、账号 ID 和认证数据绝不会发送给 AI 提供方。在 AI 请求中输入的电子邮箱、电话号码和类似身份证（NRIC）的号码会在发送前被遮盖。我们只收集学习功能所需的数据。',

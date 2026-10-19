@@ -346,12 +346,13 @@ import {
   formatDate,
   formatDateTime,
   formatPercent,
+  formatSignedInteger,
   nonNegativeInteger,
-  toFiniteNumber,
 } from '@/utils/format'
 import { sortByLearningStage } from '@/utils/learningStage'
 import { normalizeAppLanguage } from '@/utils/locale'
-import { announceNotificationsRead, markNotificationRead } from '@/utils/notifications'
+import { announceNotificationsRead, markAllLoadedRead, markNotificationRead } from '@/utils/notifications'
+import { emptyStudentProgress } from '@/utils/progressSummary'
 
 const { t } = useI18n({
   messages: {
@@ -400,15 +401,7 @@ const emptyRewards = {
   badges: [],
   recentPoints: [],
 }
-const emptyProgress = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-}
+const emptyProgress = emptyStudentProgress()
 const emptyActivities = {
   items: [],
   page: 0,
@@ -539,7 +532,7 @@ const pointsFeed = computed(() =>
     title: item.reason,
     subtitle: knownStatusLabel('pointsSource', item.sourceType, item.sourceType),
     time: formatDateTime(item.createdAt),
-    value: signedIntegerLabel(item.pointsDelta),
+    value: formatSignedInteger(item.pointsDelta),
   })),
 )
 
@@ -631,9 +624,7 @@ async function markAllNotificationsRead(): Promise<void> {
   markingNotificationsRead.value = true
   try {
     const result = await notificationsApi.markAllRead()
-    notificationsResource.data.value = notifications.value.map((item) =>
-      item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() },
-    )
+    notificationsResource.data.value = markAllLoadedRead(notifications.value)
     announceNotificationsRead()
     actionSuccess.value =
       result.updatedCount > 0
@@ -644,11 +635,6 @@ async function markAllNotificationsRead(): Promise<void> {
   } finally {
     markingNotificationsRead.value = false
   }
-}
-
-function signedIntegerLabel(value: number): string {
-  const rounded = Math.round(toFiniteNumber(value))
-  return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
 function reloadAll(): void {

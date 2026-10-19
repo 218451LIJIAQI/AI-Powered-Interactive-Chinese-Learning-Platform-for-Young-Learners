@@ -87,7 +87,7 @@
                 </h3>
                 <p class="student-practice-card-instructions">{{ selectedActivityInstructions }}</p>
 
-                <p v-if="loadingActivity" class="student-practice-card-loading" role="status">
+                <p v-if="loadingActivity || flashcardLoading" class="student-practice-card-loading" role="status">
                   <span class="spinner is-sm" aria-hidden="true" />
                   {{ t('studentPractice.loading') }}
                 </p>
@@ -360,7 +360,7 @@ import {
   type ActivitySubmission,
 } from '@/utils/activityCompletion'
 import { resolveApiError } from '@/utils/apiError'
-import { clampPercent, formatDate, formatNumber, ratioPercent } from '@/utils/format'
+import { clampPercent, formatDate, formatNumber, formatPercent, ratioPercent } from '@/utils/format'
 import {
   inferPracticeActivityFromText,
   normalizePracticeActivity,
@@ -368,6 +368,8 @@ import {
   type StudentPracticeActivityType,
 } from '@/utils/practiceRoute'
 import { sortByLearningStage } from '@/utils/learningStage'
+import { emptyStudentDashboard, emptyStudentProgress } from '@/utils/progressSummary'
+import { positiveIntQuery } from '@/utils/routeCompat'
 
 const { t } = useI18n({
   messages: {
@@ -387,11 +389,7 @@ interface PracticeLessonContext {
   title: string
   moduleTitle?: string | null
 }
-const contextLessonId = computed(() => {
-  const raw = Array.isArray(route.query.lessonId) ? route.query.lessonId[0] : route.query.lessonId
-  const parsed = Number(raw)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-})
+const contextLessonId = computed(() => positiveIntQuery(route.query.lessonId))
 const lessonContext = ref<PracticeLessonContext | null>(null)
 let lessonContextSequence = 0
 
@@ -424,7 +422,7 @@ watch(
 )
 type PracticeActivityType = StudentPracticeActivityType
 
-const activitiesResource = useResource(() => studentApi.activityLibrary({ size: 50 }), activityLibrary)
+const activitiesResource = useResource(() => studentApi.activityLibrary({ size: 100 }), activityLibrary)
 const wrongAnswersResource = useResource(() => studentApi.wrongAnswers(), studentWrongAnswers)
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboardDemo)
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
@@ -457,41 +455,31 @@ const resultPreview = ref(false)
 const playerKey = ref(0)
 
 const activities = computed(
-  () =>
-    activitiesResource.data.value ??
-    (activitiesResource.usingFallback.value
-      ? activityLibrary
-      : { items: [], page: 0, size: 0, totalItems: 0, totalPages: 0 }),
+  () => activitiesResource.data.value ?? { items: [], page: 0, size: 0, totalItems: 0, totalPages: 0 },
 )
-const wrongAnswers = computed(
-  () => wrongAnswersResource.data.value ?? (wrongAnswersResource.usingFallback.value ? studentWrongAnswers : []),
-)
-const emptyDashboard = {
-  ...studentDashboardDemo,
-  points: 0,
-  recentQuizResults: [],
-  unfinishedLessons: [],
-  weakAreas: [],
-}
-const emptyProgress = {
-  ...studentProgressDemo,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  recentLessons: [],
-}
+const wrongAnswers = computed(() => wrongAnswersResource.data.value ?? [])
+const emptyDashboard = emptyStudentDashboard()
+const emptyProgress = emptyStudentProgress()
 const selectedFlashcardId = computed(() => selectedActivityForType('FLASHCARD')?.id ?? null)
 const flashcardResource = useResource<StudentFlashcardResponse | null>(
   () => (selectedFlashcardId.value ? studentApi.flashcard(selectedFlashcardId.value) : Promise.resolve(null)),
   () => previewFlashcardDetail(selectedFlashcardId.value),
 )
-const flashcard = computed(() => (selectedFlashcardId.value === null ? null : flashcardResource.data.value))
-const dashboard = computed(
-  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboardDemo : emptyDashboard),
+const flashcard = computed(() => {
+  const card = flashcardResource.data.value
+  if (selectedFlashcardId.value === null || !card) return null
+  return flashcardResource.usingFallback.value || card.id === selectedFlashcardId.value ? card : null
+})
+/** The flashcard detail is loading (first load or a level change); shown inside the player only. */
+const flashcardLoading = computed(
+  () =>
+    selectedActivityType.value === 'FLASHCARD' &&
+    selectedFlashcardId.value !== null &&
+    flashcard.value === null &&
+    !flashcardResource.error.value,
 )
-const progress = computed(
-  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
-)
+const dashboard = computed(() => dashboardResource.data.value ?? emptyDashboard)
+const progress = computed(() => progressResource.data.value ?? emptyProgress)
 
 const usingFallback = computed(
   () =>
@@ -505,7 +493,6 @@ const pageLoading = computed(
   () =>
     activitiesResource.loading.value ||
     wrongAnswersResource.loading.value ||
-    flashcardResource.loading.value ||
     dashboardResource.loading.value ||
     progressResource.loading.value,
 )
@@ -513,7 +500,6 @@ const pageError = computed(
   () =>
     activitiesResource.error.value ||
     wrongAnswersResource.error.value ||
-    flashcardResource.error.value ||
     dashboardResource.error.value ||
     progressResource.error.value,
 )
@@ -526,9 +512,9 @@ const previewMode = computed(() =>
 )
 const playerLocked = computed(() => submittingActivity.value || result.value !== null)
 
-const totalPracticeItems = computed(() => Math.max(activities.value.items.length, 1))
+const totalPracticeItems = computed(() => activities.value.items.length)
 const completedActivities = computed(() => activities.value.items.filter((item) => item.completed).length)
-const quizAverageLabel = computed(() => `${clampPercent(progress.value.quizAverage)}%`)
+const quizAverageLabel = computed(() => formatPercent(progress.value.quizAverage))
 const activityCompletionProgress = computed(() => ratioPercent(completedActivities.value, totalPracticeItems.value))
 const activityCompletionLabel = computed(() => `${completedActivities.value} / ${totalPracticeItems.value}`)
 const practiceProgress = computed(() =>
@@ -628,6 +614,7 @@ const playerLabel = computed(() =>
   }),
 )
 const emptyPlayerMessage = computed(() => {
+  if (selectedActivityType.value === 'FLASHCARD' && flashcardResource.error.value) return flashcardResource.error.value
   if (selectedActivityType.value === 'FLASHCARD' && currentSummary.value) return t('studentPractice.noFlashcard')
   return t('studentPractice.noActivityType')
 })

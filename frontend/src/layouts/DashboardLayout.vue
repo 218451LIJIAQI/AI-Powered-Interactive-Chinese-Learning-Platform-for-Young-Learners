@@ -29,7 +29,7 @@ const auth = useAuthStore()
 const { t } = useI18n()
 
 const activeRole = computed<UserRole>(
-  () => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT',
+  () => (auth.isAuthenticated ? auth.activeRole : (route.meta.previewRole as UserRole | undefined)) ?? 'STUDENT',
 )
 const roleSlug = computed<string>(() => activeRole.value.toLowerCase())
 

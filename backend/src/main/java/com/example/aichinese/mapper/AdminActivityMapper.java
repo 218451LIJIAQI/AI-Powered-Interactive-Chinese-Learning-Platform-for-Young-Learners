@@ -1,7 +1,6 @@
 package com.example.aichinese.mapper;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -69,16 +68,6 @@ public class AdminActivityMapper {
                 .distinct()
                 .collect(Collectors.joining(","));
         return joined.isEmpty() ? null : joined;
-    }
-
-    private static List<String> splitTags(String tags) {
-        if (tags == null || tags.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(tags.split(","))
-                .map(TextUtils::trimToNull)
-                .filter(Objects::nonNull)
-                .toList();
     }
 
     private static String normalizeDelimitedToken(String value) {
@@ -154,7 +143,7 @@ public class AdminActivityMapper {
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),
-                splitTags(entity.getTags()),
+                TextUtils.splitCsv(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 creatorId(entity.getCreatedByUser()),
@@ -230,7 +219,7 @@ public class AdminActivityMapper {
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),
-                splitTags(entity.getTags()),
+                TextUtils.splitCsv(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 creatorId(entity.getCreatedByUser()),
@@ -284,7 +273,7 @@ public class AdminActivityMapper {
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),
-                splitTags(entity.getTags()),
+                TextUtils.splitCsv(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 creatorId(entity.getCreatedByUser()),
@@ -343,7 +332,7 @@ public class AdminActivityMapper {
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),
-                splitTags(entity.getTags()),
+                TextUtils.splitCsv(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 creatorId(entity.getCreatedByUser()),
@@ -417,7 +406,7 @@ public class AdminActivityMapper {
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),
-                splitTags(entity.getTags()),
+                TextUtils.splitCsv(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 creatorId(entity.getCreatedByUser()),
@@ -500,7 +489,7 @@ public class AdminActivityMapper {
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),
-                splitTags(entity.getTags()),
+                TextUtils.splitCsv(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 creatorId(entity.getCreatedByUser()),
@@ -545,7 +534,7 @@ public class AdminActivityMapper {
                 hskLevel,
                 difficulty,
                 topic,
-                splitTags(tagsCsv),
+                TextUtils.splitCsv(tagsCsv),
                 xpReward,
                 estimatedSeconds,
                 creatorId(createdBy),

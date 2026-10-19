@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  * strips, but does <i>not</i> escape — the result is still plain text the
  * downstream prompt builders can interpolate. JSON output formatting,
  * structured parsing and the per-feature fallback path remain the main
- * line of defence (see {@code AiService.fallback*} methods); this
+ * line of defence (see AiService); this
  * sanitiser only removes the most obvious abuse vectors.</p>
  *
  * <h2>Truncation safety</h2>

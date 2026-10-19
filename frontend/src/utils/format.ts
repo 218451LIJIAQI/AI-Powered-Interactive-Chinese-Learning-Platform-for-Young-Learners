@@ -28,6 +28,12 @@ export function clampPercent(value: number | null | undefined, fallback = 0): nu
   return Math.round(clampNumber(value, 0, 100, fallback))
 }
 
+/** "+5" for gains, "-3" for deductions, "0" otherwise (rounded). */
+export function formatSignedInteger(value: number | null | undefined): string {
+  const rounded = Math.round(toFiniteNumber(value))
+  return rounded > 0 ? `+${rounded}` : String(rounded)
+}
+
 export function ratioPercent(numerator: number | null | undefined, denominator: number | null | undefined): number {
   const divisor = toFiniteNumber(denominator)
   if (divisor <= 0) return 0

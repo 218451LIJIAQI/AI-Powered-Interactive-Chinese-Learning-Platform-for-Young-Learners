@@ -1,8 +1,44 @@
-import type { LessonMastery, StudentProgressLessonResponse, StudentProgressSummaryResponse } from '@/types/api'
+import type {
+  LessonMastery,
+  StudentDashboardResponse,
+  StudentProgressLessonResponse,
+  StudentProgressSummaryResponse,
+} from '@/types/api'
 import { clampPercent, nonNegativeInteger } from '@/utils/format'
 import { masteryRank, normalizeMastery } from '@/utils/mastery'
 
 /** Student progress page helpers (D25 mastery, weak areas = lesson titles of recent wrong answers). */
+
+/** Live empty state of `GET /students/progress` (no lessons started yet). */
+export function emptyStudentProgress(): StudentProgressSummaryResponse {
+  return {
+    totalLessonsStarted: 0,
+    completedLessons: 0,
+    quizAverage: 0,
+    overallCompletionPercent: 0,
+    weakAreas: [],
+    lastActivitySummary: null,
+    recentLessons: [],
+    lessons: [],
+  }
+}
+
+/** Live empty state of `GET /students/dashboard`. */
+export function emptyStudentDashboard(): StudentDashboardResponse {
+  return {
+    fullName: '',
+    currentLevel: '',
+    learningProgressPercent: 0,
+    dailyStreak: 0,
+    points: 0,
+    badgeCount: 0,
+    recentQuizResults: [],
+    weakAreas: [],
+    unfinishedLessons: [],
+    recentNotifications: [],
+    recommendedNextStep: null,
+  }
+}
 
 export type MasteryCounts = Record<LessonMastery, number>
 export type MasteryFilter = 'ALL' | LessonMastery

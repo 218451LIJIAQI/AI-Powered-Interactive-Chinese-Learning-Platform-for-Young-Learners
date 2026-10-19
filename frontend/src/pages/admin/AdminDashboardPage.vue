@@ -196,7 +196,14 @@
                   @read="markAdminNotificationRead"
                 >
                   <span class="admin-feed-item">
-                    <span class="admin-notification-dot" :class="{ 'is-unread': item.status !== 'READ' }" />
+                    <span
+                      class="admin-notification-dot"
+                      :class="{ 'is-unread': item.status !== 'READ' }"
+                      aria-hidden="true"
+                    />
+                    <span v-if="item.status !== 'READ'" class="sr-only">{{
+                      statusLabel('notificationStatus', 'UNREAD')
+                    }}</span>
                     <span class="admin-feed-copy">
                       <span class="admin-feed-title">{{ item.title }}</span>
                       <span class="admin-feed-text">{{ item.message }}</span>
@@ -254,8 +261,16 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { adminApi, systemApi } from '@/api/services'
+import { adminApi, notificationsApi, systemApi } from '@/api/services'
 import AdminKpiTile from '@/components/admin/AdminKpiTile.vue'
+import {
+  aiReportStatusTone,
+  auditIcon,
+  auditTone,
+  EMPTY_ADMIN_ANALYTICS,
+  EMPTY_HEALTH,
+  previewHealth,
+} from '@/components/admin/adminDisplay'
 import type { AdminTone } from '@/components/admin/adminTone'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -279,6 +294,7 @@ import {
   teacherApplicationsPending,
 } from '@/demo/data'
 import { adminDashboardMessages } from '@/plugins/adminDashboardMessages'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import {
   formatDate,
   formatDateTime,
@@ -290,11 +306,7 @@ import {
 
 const AVATAR_TONES: readonly AvatarTone[] = ['primary', 'info', 'success', 'warning']
 
-const HEALTH_FALLBACK = {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-}
+const HEALTH_FALLBACK = previewHealth()
 
 const router = useRouter()
 const { t, locale } = useI18n({
@@ -310,7 +322,7 @@ const dashboardResource = useResource(() => adminApi.dashboard(), adminDashboard
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
 const teachersResource = useResource(() => adminApi.pendingTeachers(), teacherApplicationsPending)
 const moderationResource = useResource(() => adminApi.moderationRecords(), adminModerationRecords)
-const notificationsResource = useResource(() => adminApi.notifications(), adminNotifications)
+const notificationsResource = useResource(() => notificationsApi.list(), adminNotifications)
 const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
 const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
 const healthResource = useResource(() => systemApi.health(), HEALTH_FALLBACK)
@@ -320,46 +332,18 @@ const emptyDashboard = {
   totalStudents: 0,
   totalTeachers: 0,
   pendingTeacherApprovals: 0,
-  totalModules: 0,
-  totalLessons: 0,
-  totalQuizzes: 0,
-  totalGames: 0,
-  recentUserActivity: [],
   aiUsageSummary: {
     totalRequests: 0,
     successfulRequests: 0,
   },
-  recentAuditLogs: [],
-}
-const emptyAnalytics = {
-  overview: {
-    totalStudents: 0,
-    totalTeachers: 0,
-    pendingTeacherApprovals: 0,
-    approvedTeachers: 0,
-    rejectedTeachers: 0,
-    publishedContentItems: 0,
-    moderationActions: 0,
-    auditLogEntries: 0,
-    adminUnreadNotifications: 0,
-    aiRequests: 0,
-  },
-  userRegistrationTrend: [],
-  teacherApprovalBreakdown: [],
-  contentStatusBreakdown: [],
-  aiStatusBreakdown: [],
-}
-const emptyHealth = {
-  status: 'UNKNOWN',
-  service: 'backend',
-  timestamp: '',
 }
 
 const dashboard = computed(
   () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? adminDashboard : emptyDashboard),
 )
 const analytics = computed(
-  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics),
+  () =>
+    analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : EMPTY_ADMIN_ANALYTICS),
 )
 const pendingTeachers = computed(
   () => teachersResource.data.value ?? (teachersResource.usingFallback.value ? teacherApplicationsPending : []),
@@ -375,7 +359,7 @@ const aiReports = computed(
   () => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []),
 )
 const health = computed(
-  () => healthResource.data.value ?? (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
+  () => healthResource.data.value ?? (healthResource.usingFallback.value ? HEALTH_FALLBACK : EMPTY_HEALTH),
 )
 
 const pageLoading = computed(
@@ -492,7 +476,7 @@ const moderationItems = computed(() => {
     label: formatStatus(item.status),
     tone: 'primary' as AdminTone,
     icon: 'ai',
-    statusTone: reportStatusTone(item.status),
+    statusTone: aiReportStatusTone(item.status),
   }))
 
   return [...contentItems, ...aiItems].slice(0, 4)
@@ -537,20 +521,6 @@ const quickActions = computed(() => [
   { label: t('adminDashboard.settings'), icon: 'settings', to: '/admin/settings' },
 ])
 
-function auditIcon(actionType: string): string {
-  if (actionType.includes('APPROVE')) return 'status'
-  if (actionType.includes('REJECT')) return 'close'
-  if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'content'
-  return 'history'
-}
-
-function auditTone(actionType: string): AdminTone {
-  if (actionType.includes('APPROVE')) return 'success'
-  if (actionType.includes('REJECT')) return 'danger'
-  if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'primary'
-  return 'info'
-}
-
 function formatStatus(status: string): string {
   const statusKeys: Record<string, string> = {
     PENDING_REVIEW: 'statusPendingReview',
@@ -569,25 +539,7 @@ function formatStatus(status: string): string {
   const normalized = status.trim().toUpperCase()
   const translatedKey = statusKeys[normalized]
   if (translatedKey) return t(`adminDashboard.${translatedKey}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
-}
-
-function reportStatusTone(status: string): 'info' | 'primary' | 'success' | 'warning' {
-  switch (status) {
-    case 'PENDING_REVIEW':
-      return 'warning' as const
-    case 'IN_REVIEW':
-      return 'info' as const
-    case 'DISMISSED':
-      return 'primary' as const
-    case 'RESOLVED':
-      return 'success' as const
-    default:
-      return 'primary' as const
-  }
+  return humanizeEnumValue(status)
 }
 
 function openTeacherVerification(): void {

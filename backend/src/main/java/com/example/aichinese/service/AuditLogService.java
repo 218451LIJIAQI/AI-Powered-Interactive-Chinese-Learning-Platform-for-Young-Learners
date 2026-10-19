@@ -57,7 +57,7 @@ public class AuditLogService {
 
     @Transactional
     public void record(User actor, String actionType, String targetType, Long targetId, String description) {
-        record(actor, actionType, targetType, targetId, description, null);
+        record(actor, actor == null ? null : actor.getEmail(), actionType, targetType, targetId, description);
     }
 
     @Transactional
@@ -66,13 +66,7 @@ public class AuditLogService {
                 ? null
                 : userRepository.getReferenceById(actor.getUserId());
         record(actorReference, actor == null ? null : actor.getUsername(),
-                actionType, targetType, targetId, description, null);
-    }
-
-    @Transactional
-    public void record(User actor, String actionType, String targetType, Long targetId, String description, String ipAddress) {
-        record(actor, actor == null ? null : actor.getEmail(),
-                actionType, targetType, targetId, description, ipAddress);
+                actionType, targetType, targetId, description);
     }
 
     private void record(
@@ -81,8 +75,7 @@ public class AuditLogService {
             String actionType,
             String targetType,
             Long targetId,
-            String description,
-            String ipAddress) {
+            String description) {
         AuditLog auditLog = new AuditLog();
         auditLog.setActorUser(actor);
         auditLog.setActorEmail(actorEmail);
@@ -90,15 +83,14 @@ public class AuditLogService {
         auditLog.setTargetType(targetType);
         auditLog.setTargetId(targetId);
         auditLog.setDescription(sanitizeDescription(description));
-        auditLog.setIpAddress(ipAddress);
         auditLog.setRequestId(RequestIdHolder.get());
         auditLogRepository.save(auditLog);
     }
 
     @Transactional
-    public void safeRecord(User actor, String actionType, String targetType, Long targetId, String description, String ipAddress) {
+    public void safeRecord(User actor, String actionType, String targetType, Long targetId, String description) {
         try {
-            record(actor, actionType, targetType, targetId, description, ipAddress);
+            record(actor, actionType, targetType, targetId, description);
         } catch (Exception exception) {
             log.warn("Audit log creation failed for action {} on {}:{}: {}",
                     actionType,

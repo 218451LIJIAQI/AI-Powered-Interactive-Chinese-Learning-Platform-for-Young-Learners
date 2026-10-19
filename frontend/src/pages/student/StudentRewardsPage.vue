@@ -274,11 +274,12 @@ import {
   clampPercent,
   formatDate,
   formatNumber,
+  formatSignedInteger,
   nonNegativeInteger,
   ratioPercent,
-  toFiniteNumber,
 } from '@/utils/format'
 import { inferPracticeActivityFromText, normalizePracticeActivity, practiceRoute } from '@/utils/practiceRoute'
+import { emptyStudentDashboard, emptyStudentProgress } from '@/utils/progressSummary'
 
 const { t } = useI18n({
   messages: {
@@ -298,7 +299,7 @@ const resource = useResource(() => studentApi.rewards(), studentRewards)
 const historyResource = useResource(() => studentApi.pointsHistory(), studentPointsHistory)
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboardDemo)
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
-const activitiesResource = useResource(() => studentApi.activityLibrary({ size: 20 }), activityLibrary)
+const activitiesResource = useResource(() => studentApi.activityLibrary({ size: 100 }), activityLibrary)
 
 const emptyRewards = {
   totalPoints: 0,
@@ -312,28 +313,8 @@ const emptyRewards = {
   badges: [],
   recentPoints: [],
 }
-const emptyDashboard = {
-  fullName: '',
-  currentLevel: '',
-  learningProgressPercent: 0,
-  dailyStreak: 0,
-  points: 0,
-  badgeCount: 0,
-  recentQuizResults: [],
-  weakAreas: [],
-  unfinishedLessons: [],
-  recentNotifications: [],
-  recommendedNextStep: null,
-}
-const emptyProgress = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-}
+const emptyDashboard = emptyStudentDashboard()
+const emptyProgress = emptyStudentProgress()
 const emptyActivities = {
   items: [],
   page: 0,
@@ -422,6 +403,12 @@ const heroStats = computed(() => [
     label: t('studentRewards.currentStreak'),
     value: t('studentRewards.days', { count: currentStreakCount.value }),
     icon: 'streak',
+  },
+  // SDD 6.2: current and best streak.
+  {
+    label: t('studentRewards.bestStreak'),
+    value: t('studentRewards.days', { count: nonNegativeInteger(rewards.value.streak.bestStreak) }),
+    icon: 'trophy',
   },
   {
     label: t('studentRewards.badgeCount'),
@@ -530,7 +517,7 @@ const rewardHistoryCards = computed(() =>
     id: item.id,
     title: item.reason,
     date: formatDate(item.createdAt),
-    pointsLabel: signedIntegerLabel(item.pointsDelta),
+    pointsLabel: formatSignedInteger(item.pointsDelta),
     icon: rewardHistoryIcon(index),
   })),
 )
@@ -595,11 +582,6 @@ function openProfile(): void {
 
 function openRewardPractice(): void {
   void router.push(practiceRoute(recommendedPracticeActivity.value))
-}
-
-function signedIntegerLabel(value: number): string {
-  const rounded = Math.round(toFiniteNumber(value))
-  return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
 function reloadAll(): void {

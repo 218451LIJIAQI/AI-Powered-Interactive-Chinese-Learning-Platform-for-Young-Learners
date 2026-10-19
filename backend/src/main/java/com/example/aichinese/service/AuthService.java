@@ -66,8 +66,6 @@ public class AuthService {
     private static final int RESET_TOKEN_GENERATION_ATTEMPTS = 3;
     private static final String ACCOUNT_UNAVAILABLE_MESSAGE =
             "This account is currently unavailable. Please contact the platform administrator.";
-    private static final int MIN_PASSWORD_LENGTH = 8;
-    private static final int MAX_PASSWORD_LENGTH = 72;
     private static final String GENERIC_RESET_TOKEN_INVALID_MESSAGE =
             "Reset token is invalid or has already been used.";
 
@@ -116,20 +114,8 @@ public class AuthService {
 
     @Transactional
     public RegistrationResponse registerStudent(RegisterStudentRequest request) {
-        validatePasswords(request.password(), request.confirmPassword());
-        String email = normalizeEmail(request.email());
-        ensureEmailIsAvailable(email);
-
-        Role studentRole = getRole(RoleName.STUDENT);
-
-        User user = new User();
-        user.setDisplayName(requireDisplayName(request.fullName()));
-        user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setPreferredLanguage(normalizePreferredLanguage(request.preferredLanguage()));
-        user.setActive(true);
-        user.setRoles(Set.of(studentRole));
-        User savedUser = userRepository.save(user);
+        User savedUser = createUser(request.fullName(), request.email(), request.password(), request.confirmPassword(),
+                normalizePreferredLanguage(request.preferredLanguage()), RoleName.STUDENT);
 
         StudentProfile profile = new StudentProfile();
         profile.setUser(savedUser);
@@ -141,20 +127,8 @@ public class AuthService {
 
     @Transactional
     public RegistrationResponse registerTeacher(RegisterTeacherRequest request) {
-        validatePasswords(request.password(), request.confirmPassword());
-        String email = normalizeEmail(request.email());
-        ensureEmailIsAvailable(email);
-
-        Role teacherRole = getRole(RoleName.TEACHER);
-
-        User user = new User();
-        user.setDisplayName(requireDisplayName(request.fullName()));
-        user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setPreferredLanguage("en");
-        user.setActive(true);
-        user.setRoles(Set.of(teacherRole));
-        User savedUser = userRepository.save(user);
+        User savedUser = createUser(request.fullName(), request.email(), request.password(), request.confirmPassword(),
+                "en", RoleName.TEACHER);
 
         TeacherProfile profile = new TeacherProfile();
         profile.setUser(savedUser);
@@ -164,6 +138,23 @@ public class AuthService {
         teacherProfileRepository.save(profile);
 
         return toRegistrationResponse(savedUser, profile.getTeacherStatus());
+    }
+
+    /** Shared account creation for both public registration paths (FR-AUTH-01, FR-AUTH-02). */
+    private User createUser(
+            String fullName, String rawEmail, String password, String confirmPassword, String language, RoleName roleName) {
+        validatePasswords(password, confirmPassword);
+        String email = normalizeEmail(rawEmail);
+        ensureEmailIsAvailable(email);
+
+        User user = new User();
+        user.setDisplayName(requireDisplayName(fullName));
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setPreferredLanguage(language);
+        user.setActive(true);
+        user.setRoles(Set.of(getRole(roleName)));
+        return userRepository.save(user);
     }
 
     public AuthSessionResponse login(LoginRequest request, String clientIp, String userAgent) {
@@ -276,8 +267,7 @@ public class AuthService {
                 "LOGOUT",
                 "USER",
                 user.getId(),
-                "User signed out and invalidated existing bearer tokens.",
-                null);
+                "User signed out and invalidated existing bearer tokens.");
     }
 
     @Transactional
@@ -308,8 +298,7 @@ public class AuthService {
                 "PASSWORD_RESET_REQUESTED",
                 "USER",
                 user.getId(),
-                "Password reset token issued.",
-                null);
+                "Password reset token issued.");
     }
 
     @Transactional
@@ -351,8 +340,7 @@ public class AuthService {
                 "PASSWORD_RESET_COMPLETED",
                 "USER",
                 user.getId(),
-                "Password reset completed via valid token.",
-                null);
+                "Password reset completed via valid token.");
     }
 
     /**
@@ -380,8 +368,7 @@ public class AuthService {
                 "PROFILE_UPDATED",
                 "USER",
                 user.getId(),
-                "User updated their display name or preferred language.",
-                null);
+                "User updated their display name or preferred language.");
         return getCurrentUser(currentUser);
     }
 
@@ -404,15 +391,11 @@ public class AuthService {
                     TOO_MANY_REQUESTS,
                     "Too many failed attempts. Please try again in " + retrySeconds + " seconds.");
         }
-        if (request.currentPassword() == null || !passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
             recordLoginFailure(limiterKey, clientIp);
             throw new ResponseStatusException(BAD_REQUEST, "Current password is incorrect.");
         }
         loginAttemptLimiter.recordSuccess(limiterKey, clientIp);
-        if (request.newPassword() == null || request.newPassword().length() < MIN_PASSWORD_LENGTH
-                || request.newPassword().length() > MAX_PASSWORD_LENGTH) {
-            throw new ResponseStatusException(BAD_REQUEST, "Password must be between 8 and 72 characters.");
-        }
         validatePasswords(request.newPassword(), request.confirmPassword());
         if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(BAD_REQUEST, "New password must be different from the current password.");
@@ -428,8 +411,7 @@ public class AuthService {
                 "PASSWORD_CHANGED",
                 "USER",
                 saved.getId(),
-                "User changed their password; other sessions were signed out.",
-                null);
+                "User changed their password; other sessions were signed out.");
 
         User withRoles = userRepository.findByEmailWithRoles(saved.getEmail()).orElse(saved);
         TeacherStatus teacherStatus = teacherProfileRepository.findByUserId(saved.getId())
@@ -479,8 +461,7 @@ public class AuthService {
                     "LOGIN_LOCKOUT",
                     "USER",
                     null,
-                    "Login lockout engaged after repeated failed attempts.",
-                    null);
+                    "Login lockout engaged after repeated failed attempts.");
         }
     }
 

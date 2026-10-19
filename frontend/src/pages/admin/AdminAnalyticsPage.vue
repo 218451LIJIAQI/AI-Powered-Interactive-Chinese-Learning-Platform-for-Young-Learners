@@ -206,6 +206,13 @@ import { useI18n } from 'vue-i18n'
 
 import { adminApi, systemApi } from '@/api/services'
 import AdminKpiTile from '@/components/admin/AdminKpiTile.vue'
+import {
+  auditIcon,
+  auditTone,
+  EMPTY_ADMIN_ANALYTICS,
+  EMPTY_HEALTH,
+  previewHealth,
+} from '@/components/admin/adminDisplay'
 import type { AdminTone } from '@/components/admin/adminTone'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -219,14 +226,11 @@ import { useStatusLabels } from '@/composables/useStatusLabels'
 import { useResource } from '@/composables/useResource'
 import { adminAnalytics, adminAuditLogs } from '@/demo/data'
 import { adminAnalyticsMessages } from '@/plugins/adminAnalyticsMessages'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import type { AdminAiUsageLogResponse, AiFeatureKey, AnalyticsBreakdownItem, LiveClassResponse } from '@/types/api'
 import { formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
 
-const HEALTH_FALLBACK = {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-}
+const HEALTH_FALLBACK = previewHealth()
 
 const router = useRouter()
 const { t } = useI18n({
@@ -250,38 +254,15 @@ const aiUsageResource = useResource(() => adminApi.aiUsageLogs({ size: 8 }), {
 const liveClassesResource = useResource(() => adminApi.liveClasses(), [])
 const healthResource = useResource(() => systemApi.health(), HEALTH_FALLBACK)
 
-const emptyAnalytics = {
-  overview: {
-    totalStudents: 0,
-    totalTeachers: 0,
-    pendingTeacherApprovals: 0,
-    approvedTeachers: 0,
-    rejectedTeachers: 0,
-    publishedContentItems: 0,
-    moderationActions: 0,
-    auditLogEntries: 0,
-    adminUnreadNotifications: 0,
-    aiRequests: 0,
-  },
-  userRegistrationTrend: [],
-  teacherApprovalBreakdown: [],
-  contentStatusBreakdown: [],
-  aiStatusBreakdown: [],
-}
-const emptyHealth = {
-  status: 'UNKNOWN',
-  service: 'backend',
-  timestamp: '',
-}
-
 const analytics = computed(
-  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics),
+  () =>
+    analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : EMPTY_ADMIN_ANALYTICS),
 )
 const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? adminAuditLogs : []))
 const aiUsageLogs = computed(() => aiUsageResource.data.value?.items ?? [])
 const liveClasses = computed(() => liveClassesResource.data.value ?? [])
 const health = computed(
-  () => healthResource.data.value ?? (healthResource.usingFallback.value ? HEALTH_FALLBACK : emptyHealth),
+  () => healthResource.data.value ?? (healthResource.usingFallback.value ? HEALTH_FALLBACK : EMPTY_HEALTH),
 )
 
 const pageLoading = computed(
@@ -447,7 +428,7 @@ const liveClassRows = computed(() =>
       enrolled: formatNumber(item.enrolledCount),
       capacity: item.maxParticipants ?? t('adminAnalytics.unlimited'),
     }),
-    status: formatStatus(item.liveClassStatus),
+    status: statusLabel('liveClass', item.liveClassStatus),
     tone: liveClassTone(item),
   })),
 )
@@ -492,35 +473,14 @@ function formatStatus(status: string): string {
     DRAFT: 'statusDraft',
     ARCHIVED: 'statusArchived',
     UNKNOWN: 'statusUnknown',
+    SUCCESS: 'statusSuccess',
     FAILED: 'statusFailed',
-    COMPLETED: 'statusCompleted',
     UNAVAILABLE: 'statusUnavailableValue',
-    SCHEDULED: 'statusScheduled',
-    ONGOING: 'statusOngoing',
-    RESCHEDULED: 'statusRescheduled',
-    CANCELLED: 'statusCancelled',
   }
   const normalized = status.trim().toUpperCase()
   const translatedKey = statusKeys[normalized]
   if (translatedKey) return t(`adminAnalytics.${translatedKey}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
-}
-
-function auditIcon(actionType: string): string {
-  if (actionType.includes('APPROVE')) return 'status'
-  if (actionType.includes('REJECT')) return 'close'
-  if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'content'
-  return 'history'
-}
-
-function auditTone(actionType: string): AdminTone {
-  if (actionType.includes('APPROVE')) return 'success'
-  if (actionType.includes('REJECT')) return 'danger'
-  if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'primary'
-  return 'info'
+  return humanizeEnumValue(status)
 }
 
 function formatFeatureKey(featureKey: string): string {
@@ -535,10 +495,7 @@ function formatFeatureKey(featureKey: string): string {
   }
   const key = (keys as Record<string, string | undefined>)[featureKey.toUpperCase()]
   if (key) return t(`adminAnalytics.${key}`)
-  return featureKey
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+  return humanizeEnumValue(featureKey)
 }
 
 function aiUsageTone(item: AdminAiUsageLogResponse): AdminTone {

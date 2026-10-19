@@ -44,7 +44,10 @@ public interface LessonRepository extends JpaRepository<Lesson, Long>, JpaSpecif
     @EntityGraph(value = Lesson.GRAPH_DETAIL)
     List<Lesson> findByIdIn(List<Long> ids);
 
-    long countByTeacherIdAndContentStatus(Long teacherId, ContentStatus contentStatus);
+    /** Published lessons a visitor can find: the lesson and its module (if any) are both published. */
+    @Query("select count(l) from Lesson l left join l.module m where l.teacher.id = :teacherId"
+            + " and l.contentStatus = :status and (m is null or m.contentStatus = :status)")
+    long countPublicLessonsByTeacherId(@Param("teacherId") Long teacherId, @Param("status") ContentStatus status);
 
     @Override
     @EntityGraph(value = Lesson.GRAPH_DETAIL)
@@ -55,8 +58,6 @@ public interface LessonRepository extends JpaRepository<Lesson, Long>, JpaSpecif
 
     @Query("select l.contentStatus as status, count(l) as count from Lesson l where l.teacher.id = :teacherId group by l.contentStatus")
     List<StatusCountProjection> groupByContentStatusForTeacher(@Param("teacherId") Long teacherId);
-
-    long countByContentStatus(ContentStatus contentStatus);
 
     @Query("select l.contentStatus as status, count(l) as count from Lesson l group by l.contentStatus")
     List<StatusCountProjection> groupByContentStatus();

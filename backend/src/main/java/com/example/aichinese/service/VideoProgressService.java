@@ -3,9 +3,10 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Objects;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,8 +37,8 @@ import com.example.aichinese.util.PaginationUtils;
  * {@link LiveLearningAccessService} so progress cannot be recorded against
  * content that is no longer published.</p>
  *
- * <p>A {@code COMPLETED} notification is dispatched the first time the
- * student crosses the completion threshold, ensuring teachers see
+ * <p>A {@code PROGRESS_UPDATE} notification is sent to the lesson's teacher the
+ * first time the student crosses the completion threshold, so teachers see
  * engagement signals without double-firing on subsequent rewatch.</p>
  */
 @Service
@@ -154,25 +155,18 @@ public class VideoProgressService {
         liveLearningAccessService.requireOwnedLesson(currentUser, lessonId);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        List<VideoProgress> accessibleProgress = videoProgressRepository.findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(
+        Page<VideoProgress> progressPage = videoProgressRepository.findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(
                 currentUser.getUserId(),
-                lessonId).stream()
-                .filter(VideoProgressService::hasCurrentProgressAccess)
-                .toList();
-        int startIndex = PaginationUtils.startIndex(safePage, safeSize, accessibleProgress.size());
-        int endIndex = PaginationUtils.endIndex(startIndex, safeSize, accessibleProgress.size());
+                lessonId,
+                PageRequest.of(safePage, safeSize));
         return new PageResponse<>(
-                accessibleProgress.subList(startIndex, endIndex).stream()
+                progressPage.getContent().stream()
                         .map(VideoProgressService::toLessonVideoProgressSummary)
                         .toList(),
                 safePage,
                 safeSize,
-                accessibleProgress.size(),
-                PaginationUtils.totalPages(accessibleProgress.size(), safeSize));
-    }
-
-    private static boolean hasCurrentProgressAccess(VideoProgress progress) {
-        return progress.getStudent() != null;
+                progressPage.getTotalElements(),
+                progressPage.getTotalPages());
     }
 
     private RecordedLessonVideo requireAccessibleVideo(SecurityUserDetails currentUser, Long videoId) {
@@ -214,7 +208,7 @@ public class VideoProgressService {
                 progress.isCompleted(),
                 progress.getWatchedSeconds(),
                 progress.getTotalSeconds(),
-                progress.getLastWatchedAt() == null ? null : progress.getLastWatchedAt().toString());
+                progress.getLastWatchedAt());
     }
 
     private static VideoProgress createDefaultProgress(StudentProfile student, RecordedLessonVideo video) {

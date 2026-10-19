@@ -1,8 +1,5 @@
 package com.example.aichinese.service.ai;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,11 +9,8 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -36,7 +30,6 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiResponsesAiProviderClient.class);
 
-    private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1";
     private static final String RESPONSES_PATH = "/responses";
     private static final String ROLE_USER = "user";
     private static final String ROLE_ASSISTANT = "assistant";
@@ -44,10 +37,6 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
     private static final String STATUS_INCOMPLETE = "incomplete";
     /** Low detail keeps image token usage bounded; a single handwritten character does not need more. */
     private static final String IMAGE_DETAIL = "low";
-    private static final BigInteger INTEGER_MAX_VALUE = BigInteger.valueOf(Integer.MAX_VALUE);
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP_RESPONSE_TYPE =
-            new ParameterizedTypeReference<>() {
-            };
 
     private final AiProperties aiProperties;
     private final RestTemplate restTemplate;
@@ -56,12 +45,7 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
             AiProperties aiProperties,
             RestTemplateBuilder restTemplateBuilder) {
         this.aiProperties = Objects.requireNonNull(aiProperties, "aiProperties");
-        Objects.requireNonNull(restTemplateBuilder, "restTemplateBuilder");
-        Duration timeout = Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1));
-        this.restTemplate = restTemplateBuilder
-                .connectTimeout(timeout)
-                .readTimeout(timeout)
-                .build();
+        this.restTemplate = AiProviderSupport.restTemplate(aiProperties, restTemplateBuilder);
     }
 
     @Override
@@ -79,7 +63,7 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
             return AiProviderResult.failure(providerName, modelName, "AI API key is missing.");
         }
 
-        String endpoint = resolveEndpoint();
+        String endpoint = AiProviderSupport.endpoint(aiProperties, RESPONSES_PATH);
         if (endpoint == null) {
             return AiProviderResult.failure(providerName, modelName, "AI API base URL is missing or invalid.");
         }
@@ -88,8 +72,8 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     endpoint,
                     HttpMethod.POST,
-                    new HttpEntity<>(buildRequestBody(modelName, prompt), buildHeaders(apiKey)),
-                    MAP_RESPONSE_TYPE);
+                    new HttpEntity<>(buildRequestBody(modelName, prompt), AiProviderSupport.bearerJsonHeaders(apiKey)),
+                    AiProviderSupport.MAP_RESPONSE_TYPE);
             return parseResponse(providerName, modelName, response.getBody(), prompt.expectJson());
         } catch (RuntimeException ex) {
             log.warn("AI provider request failed for feature {} with exception type {}.",
@@ -97,13 +81,6 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
             return AiProviderResult.failure(providerName, modelName,
                     "Provider request failed or timed out.");
         }
-    }
-
-    private static HttpHeaders buildHeaders(String apiKey) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
-        return headers;
     }
 
     private static Map<String, Object> buildRequestBody(String modelName, AiProviderPrompt prompt) {
@@ -167,7 +144,7 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
                     "Provider response text was empty.");
         }
 
-        Integer tokenCount = extractTokenCount(responseBody.get("usage"));
+        Integer tokenCount = AiProviderSupport.extractTokenCount(responseBody.get("usage"));
         return AiProviderResult.success(providerName, modelName, text.trim(), tokenCount);
     }
 
@@ -192,40 +169,5 @@ public class OpenAiResponsesAiProviderClient implements AiProviderClient {
             }
         }
         return text.toString();
-    }
-
-    private String resolveEndpoint() {
-        String raw = TextUtils.trimToNull(aiProperties.getApiBaseUrl());
-        String baseUrl = AiProviderSupport.validateAndNormalizeBaseUrl(
-                raw != null ? raw : DEFAULT_BASE_URL);
-        return baseUrl != null ? baseUrl + RESPONSES_PATH : null;
-    }
-
-    private static Integer extractTokenCount(Object usageObject) {
-        if (!(usageObject instanceof Map<?, ?> usageMap)) {
-            return null;
-        }
-        Object totalTokens = usageMap.get("total_tokens");
-        if (totalTokens instanceof BigInteger bigInteger) {
-            return toNonNegativeInt(bigInteger);
-        }
-        if (totalTokens instanceof BigDecimal bigDecimal) {
-            try {
-                return toNonNegativeInt(bigDecimal.toBigIntegerExact());
-            } catch (ArithmeticException exception) {
-                return null;
-            }
-        }
-        if (totalTokens instanceof Number number) {
-            long tokenCount = number.longValue();
-            return tokenCount >= 0 && tokenCount <= Integer.MAX_VALUE ? (int) tokenCount : null;
-        }
-        return null;
-    }
-
-    private static Integer toNonNegativeInt(BigInteger value) {
-        return value.signum() >= 0 && value.compareTo(INTEGER_MAX_VALUE) <= 0
-                ? value.intValue()
-                : null;
     }
 }

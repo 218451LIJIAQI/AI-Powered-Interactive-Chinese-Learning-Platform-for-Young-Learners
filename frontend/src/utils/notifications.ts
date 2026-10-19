@@ -1,5 +1,6 @@
 import type { NotificationQuery } from '@/api/services'
 import type { NotificationResponse, NotificationStatus, PageResponse } from '@/types/api'
+import { pagePreviewItems } from '@/utils/previewPaging'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 
 /** Filter tabs of the notifications page (D20); `ALL` omits the server `status` parameter. */
@@ -26,16 +27,8 @@ export function pagePreviewNotifications(
   page: number,
   size = NOTIFICATION_PAGE_SIZE,
 ): PageResponse<NotificationResponse> {
-  const filtered = filter === 'ALL' ? [...items] : items.filter((item) => item.status === filter)
-  const totalPages = Math.max(1, Math.ceil(filtered.length / size))
-  const safePage = Math.min(Math.max(0, page), totalPages - 1)
-  return {
-    items: filtered.slice(safePage * size, safePage * size + size),
-    page: safePage,
-    size,
-    totalItems: filtered.length,
-    totalPages,
-  }
+  const filtered = filter === 'ALL' ? items : items.filter((item) => item.status === filter)
+  return pagePreviewItems(filtered, page, size)
 }
 
 /** Only first-party, known app routes may be opened from a notification. */
@@ -50,6 +43,16 @@ export function markNotificationRead(
   readAt = new Date().toISOString(),
 ): NotificationResponse[] {
   return items.map((item) => (item.id === id && item.status !== 'READ' ? { ...item, status: 'READ', readAt } : item))
+}
+
+/** Marks every loaded notification read after `PATCH /notifications/read-all` (local update, no refetch). */
+export function markAllLoadedRead(
+  items: readonly NotificationResponse[],
+  readAt = new Date().toISOString(),
+): NotificationResponse[] {
+  return items.map((item) =>
+    item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? readAt },
+  )
 }
 
 export function announceNotificationsRead(notificationId?: number): void {

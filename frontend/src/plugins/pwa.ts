@@ -19,5 +19,6 @@ export async function clearOfflineCaches(): Promise<void> {
 }
 
 function isManagedOfflineCache(cacheName: string): boolean {
-  return cacheName.startsWith('mandarin-spark-') || cacheName.includes('workbox')
+  // Only the runtime cache can hold fetched pages; the Workbox precache holds build assets and backs the offline shell.
+  return cacheName.startsWith('mandarin-spark-')
 }

@@ -518,7 +518,10 @@ async function decide(action: ReviewAction): Promise<void> {
       default:
         updated = await adminApi.restoreContent(type, id)
     }
-    detail.value = { ...detail.value, item: { ...detail.value.item, ...updated } }
+    // The admin may have opened another item while the request ran; only merge into the decided item.
+    if (detail.value?.item.type === type && detail.value.item.id === id) {
+      detail.value = { ...detail.value, item: { ...detail.value.item, ...updated } }
+    }
     const successKey = { approve: 'approved', reject: 'rejected', archive: 'archived', restore: 'restored' }[action]
     actionSuccess.value = t(`adminContentReview.${successKey}`, { title })
     resetDecisionInputs()

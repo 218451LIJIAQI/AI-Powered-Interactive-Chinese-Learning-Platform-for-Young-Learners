@@ -97,13 +97,11 @@ describe('effectiveLiveClassStatus (D21)', () => {
   const classWindow = { startTime: '2026-05-20T09:00:00Z', endTime: '2026-05-20T09:45:00Z' }
   const during = Date.parse('2026-05-20T09:10:00Z')
 
-  it('keeps an in-progress status only while now is inside the class window', () => {
-    for (const status of ['ONGOING', 'IN_PROGRESS', 'LIVE']) {
-      const item = { ...classWindow, liveClassStatus: status }
-      expect(effectiveLiveClassStatus(item, during)).toBe(status)
-      expect(effectiveLiveClassStatus(item, Date.parse('2026-05-20T08:59:00Z'))).toBe('SCHEDULED')
-      expect(effectiveLiveClassStatus(item, Date.parse('2026-05-20T09:46:00Z'))).toBe('COMPLETED')
-    }
+  it('keeps an ONGOING status only while now is inside the class window', () => {
+    const item = { ...classWindow, liveClassStatus: 'ONGOING' }
+    expect(effectiveLiveClassStatus(item, during)).toBe('ONGOING')
+    expect(effectiveLiveClassStatus(item, Date.parse('2026-05-20T08:59:00Z'))).toBe('SCHEDULED')
+    expect(effectiveLiveClassStatus(item, Date.parse('2026-05-20T09:46:00Z'))).toBe('COMPLETED')
     expect(effectiveLiveClassStatus({ ...classWindow, liveClassStatus: 'ongoing' }, during)).toBe('ongoing')
   })
 

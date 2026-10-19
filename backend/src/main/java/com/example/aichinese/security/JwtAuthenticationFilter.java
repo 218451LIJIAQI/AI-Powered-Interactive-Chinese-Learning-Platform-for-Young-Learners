@@ -31,8 +31,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
 
-    private static final long DEFAULT_SESSION_VERSION = 0L;
-
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
 
@@ -96,13 +94,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isTokenValidForCurrentSession(@NonNull String token, @NonNull UserDetails userDetails) {
-        if (userDetails instanceof SecurityUserDetails securityUserDetails) {
-            return jwtService.isTokenValid(
-                    token,
-                    securityUserDetails.getUsername(),
-                    securityUserDetails.getSessionVersion());
-        }
-
-        return jwtService.isTokenValid(token, userDetails.getUsername(), DEFAULT_SESSION_VERSION);
+        // Only SecurityUserDetails carries the session version that revokes old tokens (SDD 3.3); fail closed otherwise.
+        return userDetails instanceof SecurityUserDetails securityUserDetails
+                && jwtService.isTokenValid(
+                        token,
+                        securityUserDetails.getUsername(),
+                        securityUserDetails.getSessionVersion());
     }
 }

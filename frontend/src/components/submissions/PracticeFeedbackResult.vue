@@ -7,7 +7,7 @@
   >
     <div class="practice-feedback-head">
       <h2 :id="titleId">{{ t('practiceSubmissions.resultTitle') }}</h2>
-      <AiResultLabel feedback />
+      <AiResultLabel v-if="aiProduced" feedback />
     </div>
     <p class="practice-feedback-target">
       <strong class="cjk-text" lang="zh-CN">{{ heading }}</strong>
@@ -37,7 +37,7 @@
     </p>
     <small class="practice-feedback-muted">{{ t('practiceSubmissions.notScore') }}</small>
     <AiReportButton
-      v-if="snapshot"
+      v-if="snapshot && aiProduced"
       :feature-key="result.kind === 'audio' ? 'PRONUNCIATION_FEEDBACK' : 'WRITING_FEEDBACK'"
       :response-snapshot="snapshot"
       :prompt-snapshot="result.target"
@@ -72,10 +72,12 @@ const heading = computed(() =>
 )
 
 /** The upload endpoints answer SUCCESS / UNAVAILABLE / FAILED; show them with the practice AI-status labels. */
-const statusText = computed(() => {
-  const status = (props.result.response.status || 'UNAVAILABLE').toUpperCase()
-  return statusLabel('aiFeedbackStatus', status === 'SUCCESS' ? 'AVAILABLE' : status)
-})
+const responseStatus = computed(() => (props.result.response.status || 'UNAVAILABLE').toUpperCase())
+const statusText = computed(() =>
+  statusLabel('aiFeedbackStatus', responseStatus.value === 'SUCCESS' ? 'AVAILABLE' : responseStatus.value),
+)
+/** Only SUCCESS text came from the AI; UNAVAILABLE / FAILED texts are fixed server messages (not reportable). */
+const aiProduced = computed(() => responseStatus.value === 'SUCCESS')
 
 const feedbackText = computed(() => {
   const result = props.result

@@ -8,7 +8,7 @@ export const responsibleAiMessages = {
       'This page explains what the AI helper does, what it does not do, how its answers are bounded and how your data is protected when you use it.',
     roleTitle: 'Optional support for beginners',
     roleCopy:
-      'The AI helper (chat tutor, vocabulary helper, sentence practice, quiz and story generators, pronunciation and handwriting feedback) is optional, supplementary support for Mandarin beginners. Your lessons, practice activities and teacher remain the main way to learn.',
+      'The AI helper (chat tutor, vocabulary helper, sentence practice, quiz and story generators, handwriting feedback) is optional, supplementary support for Mandarin beginners. Your lessons, practice activities and teacher remain the main way to learn.',
     limitsTitle: 'AI can be wrong',
     limitsCopy:
       'AI responses may contain errors and do not replace your teacher. Check important answers with your lessons or your teacher. The AI does not replace teachers or formal assessment and never gives official grades.',
@@ -40,7 +40,7 @@ export const responsibleAiMessages = {
       'Halaman ini menerangkan apa yang dilakukan dan tidak dilakukan oleh pembantu AI, bagaimana jawapannya dihadkan dan bagaimana data anda dilindungi apabila anda menggunakannya.',
     roleTitle: 'Sokongan pilihan untuk pemula',
     roleCopy:
-      'Pembantu AI (tutor sembang, pembantu kosa kata, latihan ayat, penjana kuiz dan cerita, maklum balas sebutan dan tulisan tangan) ialah sokongan tambahan pilihan untuk pemula Mandarin. Pelajaran, aktiviti latihan dan guru anda kekal sebagai cara utama untuk belajar.',
+      'Pembantu AI (tutor sembang, pembantu kosa kata, latihan ayat, penjana kuiz dan cerita, maklum balas tulisan tangan) ialah sokongan tambahan pilihan untuk pemula Mandarin. Pelajaran, aktiviti latihan dan guru anda kekal sebagai cara utama untuk belajar.',
     limitsTitle: 'AI boleh tersilap',
     limitsCopy:
       'Jawapan AI mungkin mengandungi kesilapan dan tidak menggantikan guru anda. Semak jawapan penting dengan pelajaran atau guru anda. AI tidak menggantikan guru atau penilaian rasmi dan tidak pernah memberi gred rasmi.',
@@ -71,7 +71,7 @@ export const responsibleAiMessages = {
     intro: '本页说明 AI 助手能做什么、不能做什么、回答受到哪些限制，以及使用时您的数据如何受到保护。',
     roleTitle: '面向初学者的可选辅助',
     roleCopy:
-      'AI 助手（对话导师、词汇助手、句子练习、测验与故事生成、发音和手写反馈）是面向中文初学者的可选补充支持。课时、练习活动和教师仍是主要的学习方式。',
+      'AI 助手（对话导师、词汇助手、句子练习、测验与故事生成、手写反馈）是面向中文初学者的可选补充支持。课时、练习活动和教师仍是主要的学习方式。',
     limitsTitle: 'AI 可能出错',
     limitsCopy:
       'AI 回答可能有错误，不能替代您的教师。重要的答案请对照课时或向教师确认。AI 不能替代教师或正式评估，也绝不会给出正式成绩。',

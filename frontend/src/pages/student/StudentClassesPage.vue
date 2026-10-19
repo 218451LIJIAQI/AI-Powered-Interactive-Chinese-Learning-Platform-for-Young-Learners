@@ -110,7 +110,7 @@
                   <div class="student-class-card-title">
                     <h3>{{ card.item.title }}</h3>
                     <StatusPill
-                      :label="formatStatus(card.item.liveClassStatus)"
+                      :label="statusLabel('liveClass', card.item.liveClassStatus)"
                       :tone="statusTone(card.item.liveClassStatus)"
                     />
                     <StatusPill
@@ -355,7 +355,9 @@ import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
+import { useStatusLabels } from '@/composables/useStatusLabels'
 import { publicCourseDetails, studentLiveClasses, teacherCoursePackages } from '@/demo/data'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
 import type { CoursePackageResponse, LiveClassResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
@@ -379,6 +381,7 @@ const { locale, t } = useI18n({
   },
 })
 
+const { statusLabel } = useStatusLabels()
 const dateLocale = computed(() => getDisplayLocale(locale.value))
 
 const router = useRouter()
@@ -406,9 +409,7 @@ function isLiveNow(item: LiveClassResponse): boolean {
 
 const liveResource = useResource(() => studentApi.liveClasses(), studentLiveClasses)
 
-const liveClasses = computed(() =>
-  sortLiveClassesByStart(liveResource.data.value ?? (liveResource.usingFallback.value ? studentLiveClasses : [])),
-)
+const liveClasses = computed(() => sortLiveClassesByStart(liveResource.data.value ?? []))
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 type PendingAction = 'enrol' | 'cancel' | 'join'
@@ -446,7 +447,7 @@ const classCards = computed(() =>
       timeLabel: schedule
         ? t('studentClasses.timeInZone', { time: schedule.time, zone: schedule.timeZone })
         : t('studentClasses.scheduleUnavailable'),
-      platformLabel: formatStatus(item.meetingPlatform || 'OTHER'),
+      platformLabel: statusLabel('platform', item.meetingPlatform || 'OTHER'),
     }
   }),
 )
@@ -490,7 +491,7 @@ function primaryActionLabel(item: LiveClassResponse): string {
   if (primary === 'enrol') return t('studentClasses.enrol')
   if (primary === 'full') return t('studentClasses.classFull')
   if (primary === 'waiting') return t('studentClasses.startsLater')
-  return isTerminalLiveClass(item) ? formatStatus(item.liveClassStatus) : t('studentClasses.notJoinable')
+  return isTerminalLiveClass(item) ? statusLabel('liveClass', item.liveClassStatus) : t('studentClasses.notJoinable')
 }
 
 function primaryActionDisabled(item: LiveClassResponse): boolean {
@@ -582,7 +583,7 @@ const weeklySchedule = computed(() =>
       ),
       liveNow: isLiveNow(item),
       status: item.liveClassStatus,
-      statusLabel: formatStatus(item.liveClassStatus),
+      statusLabel: statusLabel('liveClass', item.liveClassStatus),
     }
   }),
 )
@@ -617,7 +618,7 @@ const watchAgainSubtitle = computed(() => {
 
 const watchAgainMeta = computed(() => {
   if (upcomingClass.value) {
-    return `${formatStatus(upcomingClass.value.liveClassStatus)} - ${upcomingMeetingPlatformLabel.value}`
+    return `${statusLabel('liveClass', upcomingClass.value.liveClassStatus)} - ${upcomingMeetingPlatformLabel.value}`
   }
 
   return t('studentClasses.waitingSchedule')
@@ -634,13 +635,15 @@ const reminders = computed(() => {
     },
     {
       title: upcomingClass.value.canEnrol ? t('studentClasses.enrolAvailable') : t('studentClasses.enrolRequired'),
-      copy: t('studentClasses.status', { status: formatStatus(upcomingClass.value.liveClassStatus) }),
+      copy: t('studentClasses.status', { status: statusLabel('liveClass', upcomingClass.value.liveClassStatus) }),
       time: upcomingMeetingPlatformLabel.value,
     },
   ]
 })
 
-const upcomingMeetingPlatformLabel = computed(() => formatStatus(upcomingClass.value?.meetingPlatform ?? 'OTHER'))
+const upcomingMeetingPlatformLabel = computed(() =>
+  statusLabel('platform', upcomingClass.value?.meetingPlatform ?? 'OTHER'),
+)
 
 interface RecordedLessonRow {
   id: string
@@ -660,7 +663,7 @@ function recordedRowsFromClass(item: LiveClassResponse): RecordedLessonRow[] {
         packageId: null,
         title: item.lesson.lessonTitle,
         context: t('studentClasses.lessonLinked'),
-        meta: formatStatus(item.lesson.learningType),
+        meta: formatLearningType(item.lesson.learningType),
       },
     ]
   }
@@ -673,7 +676,7 @@ function recordedRowsFromClass(item: LiveClassResponse): RecordedLessonRow[] {
         packageId: item.coursePackage.packageId,
         title: item.coursePackage.packageTitle,
         context: t('studentClasses.packageLinked'),
-        meta: formatStatus(item.coursePackage.learningType),
+        meta: formatLearningType(item.coursePackage.learningType),
       },
     ]
   }
@@ -866,27 +869,10 @@ function seatTone(item: LiveClassResponse): PillTone {
   return kind === 'available' ? 'success' : 'neutral'
 }
 
-function formatStatus(status: string): string {
-  const keys: Record<string, string> = {
-    SCHEDULED: 'statusScheduled',
-    ONGOING: 'statusOngoing',
-    COMPLETED: 'statusCompleted',
-    CANCELLED: 'statusCancelled',
-    RESCHEDULED: 'statusRescheduled',
-    LIVE: 'typeLive',
-    RECORDED: 'typeRecorded',
-    HYBRID: 'typeHybrid',
-    ZOOM: 'platformZoom',
-    GOOGLE_MEET: 'platformMeet',
-    MICROSOFT_TEAMS: 'platformTeams',
-    OTHER: 'platformOther',
-  }
-  const key = keys[status.toUpperCase()]
-  if (key) return t(`studentClasses.${key}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+function formatLearningType(learningType: string): string {
+  const keys: Record<string, string> = { LIVE: 'typeLive', RECORDED: 'typeRecorded', HYBRID: 'typeHybrid' }
+  const key = keys[learningType.toUpperCase()]
+  return key ? t(`studentClasses.${key}`) : humanizeEnumValue(learningType)
 }
 
 function reloadAll(): void {

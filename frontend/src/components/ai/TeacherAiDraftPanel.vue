@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { teacherApi } from '@/api/services'
@@ -135,7 +135,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { AiQuizGeneratorResponse, AiStoryGeneratorResponse } from '@/types/api'
 import { storyVocabularyBlock } from '@/utils/aiDraft'
-import { vocabularyMeaning } from '@/utils/aiPracticeQuiz'
+import { storyVocabularyRows } from '@/utils/aiPracticeQuiz'
 import { isForbiddenApiError, resolveApiError } from '@/utils/apiError'
 
 /**
@@ -173,15 +173,7 @@ const resultMessage = ref<string | null>(null)
 const storyDraft = ref<AiStoryGeneratorResponse | null>(null)
 const copyMessage = ref('')
 
-const storyVocabulary = computed(() =>
-  (storyDraft.value?.vocabularyList ?? [])
-    .filter((item) => item.chineseWord?.trim())
-    .map((item) => ({
-      chineseWord: item.chineseWord?.trim() ?? '',
-      pinyin: item.pinyin?.trim() ?? '',
-      meaning: vocabularyMeaning(item, ui.locale),
-    })),
-)
+const storyVocabulary = computed(() => storyVocabularyRows(storyDraft.value, ui.locale))
 
 const previewMode = computed(() => auth.isPreviewSession && !auth.isAuthenticated)
 const controlsDisabled = computed(
@@ -189,10 +181,17 @@ const controlsDisabled = computed(
 )
 const unavailableMessage = computed(() => availabilityMessage.value?.trim() || t('teacherAiDraft.unavailable'))
 
-onMounted(() => {
-  if (previewMode.value || props.disabled) return
-  void checkAvailability()
-})
+// Checked once, the first time the panel is enabled (it can start disabled and be enabled without remounting).
+let availabilityChecked = false
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled || previewMode.value || availabilityChecked) return
+    availabilityChecked = true
+    void checkAvailability()
+  },
+  { immediate: true },
+)
 
 async function checkAvailability(): Promise<void> {
   checkingAvailability.value = true

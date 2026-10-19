@@ -6,7 +6,6 @@ import {
   buildFollowUpSuggestion,
   followUpFeedbackType,
   lessonMasteryRows,
-  masteryCounts,
   shouldApplySuggestion,
   studentNeedsSupport,
   studentSupportReasons,
@@ -68,7 +67,6 @@ describe('teacher roster: lesson mastery', () => {
       ['Greetings', 'IN_PROGRESS', 100, null],
       ['Numbers 1-10', 'MASTERED', 100, 90],
     ])
-    expect(masteryCounts(rows)).toEqual({ NOT_STARTED: 1, IN_PROGRESS: 1, COMPLETED: 0, MASTERED: 1 })
   })
 
   it('returns weak-area lesson titles trimmed and de-duplicated', () => {

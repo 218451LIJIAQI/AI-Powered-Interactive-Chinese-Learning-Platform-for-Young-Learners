@@ -77,7 +77,7 @@ class NotificationServiceTests {
         NotificationService service = service();
         User recipient = user(STUDENT_USER_ID, RoleName.STUDENT);
 
-        assertThatThrownBy(() -> service.createNotification(null, TITLE, MESSAGE, STUDENT_PATH))
+        assertThatThrownBy(() -> service.createNotification(null, NotificationType.SYSTEM, TITLE, MESSAGE, null, null, STUDENT_PATH, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("recipient");
         assertThatThrownBy(() -> service.createNotification(
@@ -91,10 +91,10 @@ class NotificationServiceTests {
                 null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("type");
-        assertThatThrownBy(() -> service.createNotification(recipient, " ", MESSAGE, STUDENT_PATH))
+        assertThatThrownBy(() -> service.createNotification(recipient, NotificationType.SYSTEM, " ", MESSAGE, null, null, STUDENT_PATH, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("title");
-        assertThatThrownBy(() -> service.createNotification(recipient, TITLE, "\t", STUDENT_PATH))
+        assertThatThrownBy(() -> service.createNotification(recipient, NotificationType.SYSTEM, TITLE, "\t", null, null, STUDENT_PATH, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("message");
     }
@@ -175,13 +175,11 @@ class NotificationServiceTests {
 
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.of(feedback));
-        when(studentProfileRepository.findByUserId(STUDENT_USER_ID)).thenReturn(Optional.of(student));
-
         assertThat(service.isNotificationCurrentlyAccessible(securityUser(studentUser), notification)).isFalse();
     }
 
     @Test
-    void teacherFeedbackNotificationIsVisibleForPublishedLessonWithoutAnyPurchase() {
+    void teacherFeedbackNotificationIsVisibleForPublishedLesson() {
         NotificationService service = service();
         User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
         StudentProfile student = student(studentUser);
@@ -194,8 +192,6 @@ class NotificationServiceTests {
 
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.of(feedback));
-        when(studentProfileRepository.findByUserId(STUDENT_USER_ID)).thenReturn(Optional.of(student));
-
         assertThat(service.isNotificationCurrentlyAccessible(securityUser(studentUser), notification)).isTrue();
     }
 

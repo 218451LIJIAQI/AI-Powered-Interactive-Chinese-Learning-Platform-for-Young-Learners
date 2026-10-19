@@ -56,9 +56,9 @@ public class TransactionalEmailDispatcher {
                 case PASSWORD_RESET ->
                         emailService.sendPasswordResetEmail(recipient, event.primaryContent(), event.secondaryContent());
                 case TEACHER_APPROVAL ->
-                        emailService.safeSendTeacherApprovalNotice(recipient, event.primaryContent());
+                        emailService.sendTeacherApprovalNotice(recipient, event.primaryContent());
                 case TEACHER_REJECTION ->
-                        emailService.safeSendTeacherRejectionNotice(recipient, event.primaryContent());
+                        emailService.sendTeacherRejectionNotice(recipient, event.primaryContent());
             }
         } catch (Exception exception) {
             Long recipientId = recipientId(event);

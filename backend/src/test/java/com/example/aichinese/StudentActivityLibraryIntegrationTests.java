@@ -41,7 +41,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *   <li>Only PUBLISHED activities are surfaced to students.</li>
  *   <li>Completion awards the activity's {@code xpReward} exactly once via
  *       the {@code points_transactions} table.</li>
- *   <li>Filtering by HSK / topic / type narrows results.</li>
+ *   <li>Filtering by topic / type narrows results.</li>
  *   <li>Role gates: admins, teachers and guests cannot use the student
  *       endpoints.</li>
  * </ul>
@@ -134,6 +134,10 @@ class StudentActivityLibraryIntegrationTests {
         mockMvc.perform(authenticatedGet(studentFlashcardPath(publishedId), studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.frontText").value("你好"))
+                // SDD T06 / FR-LRN-03: the card shows the meaning and Pinyin.
+                .andExpect(jsonPath("$.data.backText").value("Hello"))
+                .andExpect(jsonPath("$.data.pinyin").value("nǐ hǎo"))
+                .andExpect(jsonPath("$.data.englishMeaning").value("Hello"))
                 .andExpect(jsonPath("$.data.xpReward").value(15))
                 .andExpect(jsonPath("$.data.completed").value(false));
 
@@ -298,6 +302,10 @@ class StudentActivityLibraryIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.passed").value(false))
                 .andExpect(jsonPath("$.data.correctCount").value(0))
+                // SDD T07: each item is marked, without revealing the answers.
+                .andExpect(jsonPath("$.data.totalCount").value(2))
+                .andExpect(jsonPath("$.data.results.length()").value(2))
+                .andExpect(jsonPath("$.data.results[?(@.correct == true)]").isEmpty())
                 .andExpect(jsonPath("$.data.earnedPoints").value(0))
                 .andExpect(jsonPath("$.data.firstCompletion").value(false));
 
@@ -383,6 +391,8 @@ class StudentActivityLibraryIntegrationTests {
                 Map.entry("title", title),
                 Map.entry("frontText", frontText),
                 Map.entry("backText", backText),
+                Map.entry("pinyin", "nǐ hǎo"),
+                Map.entry("englishMeaning", backText),
                 Map.entry("hskLevel", hskLevel),
                 Map.entry("topic", topic),
                 Map.entry("xpReward", xpReward),

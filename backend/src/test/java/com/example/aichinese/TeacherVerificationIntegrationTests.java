@@ -25,8 +25,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-import com.example.aichinese.entity.AuditLog;
-import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.TeacherStatus;
@@ -42,9 +40,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * End-to-end MockMvc coverage of the teacher self-service profile +
  * verification document upload surface. Pins the document upload
- * pipeline (extension + content-type + magic-byte verification) and
- * the immutable document storage contract. Uploaded blobs are
- * referenced rather than duplicated when admin reviews them.
+ * pipeline (extension + content-type + magic-byte verification).
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
@@ -97,7 +93,8 @@ class TeacherVerificationIntegrationTests {
     private static final String TOO_LARGE_MESSAGE =
             "The file is too large. Please choose a smaller file and try again.";
     private static final String REJECTION_REASON = "Please provide a clearer qualification document.";
-    private static final int MAX_UPLOAD_BYTES_PLUS_ONE = 6 * 1024 * 1024;
+    /** Larger than both the test-profile (1 KB) and production (5 MB) verification-document limits. */
+    private static final int OVERSIZED_UPLOAD_BYTES = 6 * 1024 * 1024;
     private static final int MAX_CATEGORY_LENGTH = 60;
     private static final String TEACHING_CATEGORIES_TOO_LONG_MESSAGE =
             "Teaching categories must not exceed 500 characters in total.";
@@ -201,12 +198,13 @@ class TeacherVerificationIntegrationTests {
 
         TeacherProfile profile = teacherProfileRepository.findDetailedByUserId(findUserIdByEmail(email)).orElseThrow();
         assertThat(teacherVerificationDocumentRepository.countByTeacherId(profile.getId())).isEqualTo(1);
+        // Scoped to this upload: other tests in the shared context upload verification documents too.
+        Long documentId = latestDocumentId(profile);
         assertThat(auditLogRepository.findAll())
-                .extracting(AuditLog::getActionType)
-                .contains(UPLOAD_AUDIT_ACTION);
+                .anyMatch(log -> UPLOAD_AUDIT_ACTION.equals(log.getActionType()) && documentId.equals(log.getTargetId()));
         assertThat(notificationRepository.findAll())
-                .extracting(Notification::getTitle)
-                .contains(UPLOAD_NOTIFICATION_TITLE);
+                .anyMatch(notification -> UPLOAD_NOTIFICATION_TITLE.equals(notification.getTitle())
+                        && notification.getMessage().contains("Teacher " + email));
     }
 
     @Test
@@ -254,7 +252,7 @@ class TeacherVerificationIntegrationTests {
         String email = uniqueEmail("teacher-large-upload");
         String token = registerAndLoginTeacher(email);
 
-        byte[] payload = new byte[MAX_UPLOAD_BYTES_PLUS_ONE];
+        byte[] payload = new byte[OVERSIZED_UPLOAD_BYTES];
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 LARGE_FILE_NAME,

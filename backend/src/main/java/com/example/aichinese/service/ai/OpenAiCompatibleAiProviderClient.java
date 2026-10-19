@@ -1,8 +1,5 @@
 package com.example.aichinese.service.ai;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,11 +9,9 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -29,16 +24,11 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleAiProviderClient.class);
 
-    private static final String DEFAULT_BASE_URL = "https://api.deepseek.com";
     private static final String CHAT_COMPLETIONS_PATH = "/chat/completions";
     private static final String ROLE_SYSTEM = "system";
     private static final String ROLE_USER = "user";
     private static final double DEFAULT_TEMPERATURE = 0.7;
     static final String IMAGE_INPUT_UNSUPPORTED = "Image input is not supported by the configured provider.";
-    private static final BigInteger INTEGER_MAX_VALUE = BigInteger.valueOf(Integer.MAX_VALUE);
-    private static final ParameterizedTypeReference<Map<String, Object>> MAP_RESPONSE_TYPE =
-            new ParameterizedTypeReference<>() {
-            };
 
     private final AiProperties aiProperties;
     private final RestTemplate restTemplate;
@@ -47,12 +37,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             AiProperties aiProperties,
             RestTemplateBuilder restTemplateBuilder) {
         this.aiProperties = Objects.requireNonNull(aiProperties, "aiProperties");
-        Objects.requireNonNull(restTemplateBuilder, "restTemplateBuilder");
-        Duration timeout = Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1));
-        this.restTemplate = restTemplateBuilder
-                .connectTimeout(timeout)
-                .readTimeout(timeout)
-                .build();
+        this.restTemplate = AiProviderSupport.restTemplate(aiProperties, restTemplateBuilder);
     }
 
     @Override
@@ -74,7 +59,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             return AiProviderResult.failure(providerName, modelName, "AI API key is missing.");
         }
 
-        String endpoint = resolveEndpoint();
+        String endpoint = AiProviderSupport.endpoint(aiProperties, CHAT_COMPLETIONS_PATH);
         if (endpoint == null) {
             return AiProviderResult.failure(providerName, modelName, "AI API base URL is missing or invalid.");
         }
@@ -83,16 +68,9 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
                 providerName,
                 modelName,
                 endpoint,
-                buildHeaders(apiKey),
+                AiProviderSupport.bearerJsonHeaders(apiKey),
                 buildRequestBody(modelName, prompt),
                 prompt.featureKey());
-    }
-
-    private static HttpHeaders buildHeaders(String apiKey) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
-        return headers;
     }
 
     private static Map<String, Object> buildRequestBody(String modelName, AiProviderPrompt prompt) {
@@ -133,7 +111,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
                     endpoint,
                     HttpMethod.POST,
                     new HttpEntity<>(body, headers),
-                    MAP_RESPONSE_TYPE);
+                    AiProviderSupport.MAP_RESPONSE_TYPE);
 
             return parseResponse(providerName, modelName, response.getBody());
         } catch (RuntimeException ex) {
@@ -177,42 +155,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
                     "Provider response text was empty.");
         }
 
-        Integer tokenCount = extractTokenCount(responseBody.get("usage"));
+        Integer tokenCount = AiProviderSupport.extractTokenCount(responseBody.get("usage"));
         return AiProviderResult.success(providerName, modelName, text.trim(), tokenCount);
-    }
-
-    private String resolveEndpoint() {
-        String raw = TextUtils.trimToNull(aiProperties.getApiBaseUrl());
-        String baseUrl = AiProviderSupport.validateAndNormalizeBaseUrl(
-                raw != null ? raw : DEFAULT_BASE_URL);
-        return baseUrl != null ? baseUrl + CHAT_COMPLETIONS_PATH : null;
-    }
-
-    private static Integer extractTokenCount(Object usageObject) {
-        if (!(usageObject instanceof Map<?, ?> usageMap)) {
-            return null;
-        }
-        Object totalTokens = usageMap.get("total_tokens");
-        if (totalTokens instanceof BigInteger bigInteger) {
-            return toNonNegativeInt(bigInteger);
-        }
-        if (totalTokens instanceof BigDecimal bigDecimal) {
-            try {
-                return toNonNegativeInt(bigDecimal.toBigIntegerExact());
-            } catch (ArithmeticException exception) {
-                return null;
-            }
-        }
-        if (totalTokens instanceof Number number) {
-            long tokenCount = number.longValue();
-            return tokenCount >= 0 && tokenCount <= Integer.MAX_VALUE ? (int) tokenCount : null;
-        }
-        return null;
-    }
-
-    private static Integer toNonNegativeInt(BigInteger value) {
-        return value.signum() >= 0 && value.compareTo(INTEGER_MAX_VALUE) <= 0
-                ? value.intValue()
-                : null;
     }
 }

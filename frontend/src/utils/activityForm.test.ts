@@ -6,7 +6,6 @@ import {
   activityFormFromDetail,
   buildActivityPayload,
   createEmptyActivityForm,
-  isActivityType,
   LISTENING_PAYLOAD_EXAMPLE,
   listeningPayloadWarnings,
   optionsPayloadToText,
@@ -158,7 +157,5 @@ describe('shared practice-activity form (admin library and teacher activities)',
   it('converts story options between text lines and the JSON payload', () => {
     expect(optionsTextToPayload(' A \n\nB')).toBe('["A","B"]')
     expect(optionsPayloadToText('Xiao Ming\nXiao Hong')).toBe('Xiao Ming\nXiao Hong')
-    expect(isActivityType('TRACING_EXERCISE')).toBe(true)
-    expect(isActivityType('QUIZ')).toBe(false)
   })
 })

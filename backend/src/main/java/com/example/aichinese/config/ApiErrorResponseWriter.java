@@ -19,12 +19,12 @@ import jakarta.servlet.http.HttpServletResponse;
  * reaches Spring MVC and therefore cannot rely on {@code GlobalExceptionHandler}
  * to render the platform's standard JSON envelope.
  */
-final class ApiErrorResponseWriter {
+public final class ApiErrorResponseWriter {
 
     private ApiErrorResponseWriter() {
     }
 
-    static void write(
+    public static void write(
             ObjectMapper objectMapper,
             HttpServletResponse response,
             HttpStatus status,

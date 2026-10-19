@@ -118,7 +118,7 @@ import { useI18n } from 'vue-i18n'
 import CjkText from '@/components/learning/CjkText.vue'
 import { studentAiHelperMessages } from '@/plugins/studentAiHelperMessages'
 import type { AiStoryGeneratorResponse, AppLanguage } from '@/types/api'
-import { correctOptionIndexes, storyTranslations, vocabularyMeaning } from '@/utils/aiPracticeQuiz'
+import { correctOptionIndexes, storyTranslations, storyVocabularyRows } from '@/utils/aiPracticeQuiz'
 
 /** Full AI-generated reading story (FR-AIGEN-08): story, pinyin, translations, vocabulary and comprehension. */
 const props = defineProps<{ story: AiStoryGeneratorResponse; language: AppLanguage }>()
@@ -139,15 +139,7 @@ const revealed = reactive<Record<number, boolean>>({})
 
 const pinyin = computed(() => props.story.pinyin?.trim() ?? '')
 const translations = computed(() => storyTranslations(props.story, props.language))
-const vocabulary = computed(() =>
-  (props.story.vocabularyList ?? [])
-    .filter((item) => item.chineseWord?.trim())
-    .map((item) => ({
-      chineseWord: item.chineseWord?.trim() ?? '',
-      pinyin: item.pinyin?.trim() ?? '',
-      meaning: vocabularyMeaning(item, props.language),
-    })),
-)
+const vocabulary = computed(() => storyVocabularyRows(props.story, props.language))
 const questions = computed(() =>
   (props.story.comprehensionQuestions ?? [])
     .filter((question) => question.question?.trim())

@@ -58,8 +58,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <ul>
  *   <li>Login lockout after threshold via
  *       {@code LoginAttemptLimiter}.</li>
- *   <li>Register / forgot-password 429 via
- *       {@code PublicAuthRequestLimiter}.</li>
+ *   <li>Forgot-password 429 via {@code PublicAuthRequestLimiter} (the register
+ *       quota is unit-tested in PublicAuthRequestLimiterTests).</li>
  *   <li>Forgot-password response is identical whether or not the
  *       email exists.</li>
  *   <li>Reset tokens are single-use, 60-minute TTL, only the hash is
@@ -427,6 +427,16 @@ class AuthControllerIntegrationTests {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Invalid email or password."));
+
+        // An unregistered email gets the same general message, so accounts cannot be enumerated (T02).
+        mockMvc.perform(post(LOGIN_PATH)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "email", uniqueEmail("never-registered"),
+                        "password", "WrongPassword999!"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid email or password."));
     }
 
     @Test
@@ -731,7 +741,8 @@ class AuthControllerIntegrationTests {
 
         User user = userByEmail(email);
         PasswordResetToken token = activePasswordResetTokenFor(user);
-        assertThat(token.getExpiresAt()).isAfter(LocalDateTime.now());
+        // 60-minute lifetime (SDD 5.1).
+        assertThat(token.getExpiresAt()).isBetween(LocalDateTime.now().plusMinutes(59), LocalDateTime.now().plusMinutes(61));
         assertThat(token.getTokenHash()).isNotBlank().isNotEqualTo(rawResetToken);
 
         // First use of the token: must succeed and update the stored hash.

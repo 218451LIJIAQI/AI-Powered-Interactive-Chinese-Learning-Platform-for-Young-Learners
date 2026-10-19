@@ -1,18 +1,12 @@
 package com.example.aichinese.util;
 
 /**
- * Side-effect-free helpers used by every service that paginates a result
- * set in JVM memory (cross-type unified feeds, in-memory merge-sorts of
- * heterogeneous repositories, etc.).
- *
- * <p>Spring Data's {@link org.springframework.data.domain.Pageable} is
- * preferred whenever the database can do the slicing; these helpers only
- * exist for the rarer case where the service must merge several
- * repository results into a single in-memory list and then return a page
- * of the merged result. Every method is defensive about bad caller input
- * (negative pages, zero-or-negative sizes, out-of-range start indexes)
- * and uses {@code long} arithmetic to prevent integer overflow when the
- * caller passes large values.</p>
+ * Page and size clamping shared by every paged service (at most
+ * {@value #DEFAULT_MAX_PAGE_SIZE} items per page), plus index helpers for the
+ * few services that page a merged in-memory list. Every method is defensive
+ * about bad caller input (negative pages, zero-or-negative sizes, out-of-range
+ * start indexes) and uses {@code long} arithmetic to prevent integer overflow
+ * when the caller passes large values.
  */
 public final class PaginationUtils {
 

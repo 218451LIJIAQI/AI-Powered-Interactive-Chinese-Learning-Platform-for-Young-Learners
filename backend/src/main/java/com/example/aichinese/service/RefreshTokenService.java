@@ -32,7 +32,6 @@ public class RefreshTokenService {
     private static final int MAX_USER_AGENT_LENGTH = 255;
     private static final int MAX_IP_LENGTH = 64;
     private static final int MAX_RAW_TOKEN_LENGTH = 512;
-    private static final int TOKEN_GENERATION_ATTEMPTS = 5;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -51,7 +50,7 @@ public class RefreshTokenService {
     @Transactional
     public RefreshTokenIssue issue(User user, String clientIp, String userAgent) {
         Objects.requireNonNull(user, "user");
-        String rawToken = generateUniqueRawToken();
+        String rawToken = generateRawToken();
         Duration ttl = refreshTokenTtl();
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
@@ -79,8 +78,13 @@ public class RefreshTokenService {
                 .orElseThrow(RefreshTokenService::unauthorizedRefresh);
         LocalDateTime now = LocalDateTime.now();
 
-        if (isConsumed(current) || isExpired(current, now)) {
+        if (isConsumed(current)) {
+            // Reuse of a rotated token: revoke every token of the same sign-in (SDD 3.3).
             revokeFamilyAndSession(current, now);
+            throw unauthorizedRefresh();
+        }
+        if (isExpired(current, now)) {
+            // An expired token is not a replay, so other sessions of the user stay signed in.
             throw unauthorizedRefresh();
         }
 
@@ -90,7 +94,7 @@ public class RefreshTokenService {
             throw unauthorizedRefresh();
         }
 
-        String replacementRawToken = generateUniqueRawToken();
+        String replacementRawToken = generateRawToken();
         Duration ttl = refreshTokenTtl();
         RefreshToken replacement = new RefreshToken();
         replacement.setUser(user);
@@ -130,16 +134,11 @@ public class RefreshTokenService {
         }
     }
 
-    private String generateUniqueRawToken() {
-        for (int attempt = 0; attempt < TOKEN_GENERATION_ATTEMPTS; attempt++) {
-            byte[] bytes = new byte[TOKEN_BYTES];
-            secureRandom.nextBytes(bytes);
-            String candidate = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-            if (!refreshTokenRepository.existsByTokenHash(hash(candidate))) {
-                return candidate;
-            }
-        }
-        throw new IllegalStateException("Unable to generate a unique refresh token.");
+    /** 256 random bits; token_hash is UNIQUE in the schema, so a (practically impossible) collision cannot be stored. */
+    private String generateRawToken() {
+        byte[] bytes = new byte[TOKEN_BYTES];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private Duration refreshTokenTtl() {

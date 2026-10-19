@@ -130,7 +130,8 @@ class OpenAiResponsesAiProviderClientTests {
                 // The client has already given up.
             }
         });
-        server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newCachedThreadPool();
+        server.setExecutor(executor);
         server.start();
         try {
             AiProperties properties = properties(server);
@@ -146,6 +147,7 @@ class OpenAiResponsesAiProviderClientTests {
             assertThat(elapsedMillis).as("the call is bounded by the timeout").isLessThan(2_400L);
         } finally {
             server.stop(0);
+            executor.shutdownNow();
         }
     }
 
@@ -255,6 +257,8 @@ class OpenAiResponsesAiProviderClientTests {
         assertThat(openAiAvailability.available()).isTrue();
         assertThat(openAiAvailability.imageAnalysisAvailable()).isTrue();
         assertThat(openAiAvailability.audioAnalysisAvailable()).isFalse();
+        // SDD T26: the availability response sent to the browser never carries the API key.
+        assertThat(openAiAvailability.toString()).doesNotContain(API_KEY);
         assertThat(deepseekAvailability.available()).isTrue();
         assertThat(deepseekAvailability.imageAnalysisAvailable()).isFalse();
         assertThat(disabledAvailability.imageAnalysisAvailable()).isFalse();
@@ -279,6 +283,9 @@ class OpenAiResponsesAiProviderClientTests {
         assertThat(defaults.getApiBaseUrl()).isEqualTo("https://api.openai.com/v1");
         assertThat(defaults.getModelName()).isEqualTo(MODEL_NAME);
         assertThat(defaults.isEnableRealProvider()).isFalse();
+        // SDD 5.6: 30-second timeout and at most 1,200 output tokens.
+        assertThat(defaults.getTimeoutSeconds()).isEqualTo(30);
+        assertThat(defaults.getMaxOutputTokens()).isEqualTo(1_200);
     }
 
     private OpenAiResponsesAiProviderClient client(AiProperties properties) {

@@ -4,24 +4,14 @@ import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.ConstructorBinding;
-import org.springframework.validation.annotation.Validated;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Positive;
-
-@Validated
 @ConfigurationProperties(prefix = "app.security.jwt")
 public record SecurityProperties(
-        @NotBlank(message = "JWT secret must not be blank.")
         String secret,
-        @Positive(message = "JWT expiration must be greater than zero.")
         long expiration,
-        @Positive(message = "Refresh token expiration must be greater than zero.")
         long refreshTokenExpiration,
-        @NotBlank(message = "Refresh token cookie name must not be blank.")
         String refreshTokenCookieName,
         boolean refreshTokenCookieSecure,
-        @NotBlank(message = "Refresh token SameSite policy must not be blank.")
         String refreshTokenSameSite) {
 
     private static final long DEFAULT_REFRESH_TOKEN_EXPIRATION_MS = 604_800_000L;

@@ -16,15 +16,7 @@ import com.example.aichinese.entity.AuditLog;
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSpecificationExecutor<AuditLog> {
 
     @EntityGraph(attributePaths = { "actorUser" })
-    List<AuditLog> findTop5ByOrderByCreatedAtDesc();
-
-    @EntityGraph(attributePaths = { "actorUser" })
     List<AuditLog> findTop10ByTargetTypeAndTargetIdOrderByCreatedAtDesc(String targetType, Long targetId);
-
-    @Override
-    @EntityGraph(attributePaths = { "actorUser" })
-    @NonNull
-    List<AuditLog> findAll();
 
     @Override
     @EntityGraph(attributePaths = { "actorUser" })

@@ -37,7 +37,7 @@
                   {{ bestQuizLabel }}
                 </span>
               </div>
-              <h2 id="student-learn-lesson-title" class="student-learn-hero-title">{{ lesson.title }}</h2>
+              <h2 id="student-learn-lesson-title" class="student-learn-hero-title">{{ lessonTitle }}</h2>
               <p class="student-learn-hero-text">{{ lessonDescription }}</p>
 
               <div v-if="hasActiveLesson" class="student-learn-hero-progress">
@@ -237,6 +237,19 @@
                     {{ isVideoCompleted(video) ? t('studentLearn.completed') : t('studentLearn.markComplete') }}
                   </button>
                 </div>
+                <template v-if="playingVideoId === video.id">
+                  <p v-if="videoFileLoading" class="student-learn-muted" role="status">
+                    {{ t('studentLearn.loadingVideo') }}
+                  </p>
+                  <video
+                    v-else-if="videoObjectUrl"
+                    class="student-learn-inline-video"
+                    :src="videoObjectUrl"
+                    :aria-label="video.title"
+                    controls
+                    playsinline
+                  />
+                </template>
               </li>
             </ul>
             <p v-else class="student-learn-muted">{{ t('studentLearn.noVideos') }}</p>
@@ -297,6 +310,7 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import LearningBreadcrumb, { type BreadcrumbItem } from '@/components/learning/LearningBreadcrumb.vue'
 import LinkifiedText from '@/components/learning/LinkifiedText.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import { useAuthorizedFile } from '@/composables/useAuthorizedFile'
 import { useResource } from '@/composables/useResource'
 import { studentLessonPlayer, studentProgress as studentProgressDemo } from '@/demo/data'
 import { learningContextMessages } from '@/plugins/learningContextMessages'
@@ -307,15 +321,17 @@ import type {
   RecordedLessonVideoResponse,
   StudentLessonPlayerResponse,
   StudentLessonProgressResponse,
-  StudentProgressSummaryResponse,
   StudentQuizSummaryResponse,
   VideoProgressResponse,
 } from '@/types/api'
-import { resolveApiError } from '@/utils/apiError'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { splitLessonParagraphs } from '@/utils/cjkText'
 import { clampPercent, formatPercent, nonNegativeInteger } from '@/utils/format'
 import { sortByLearningStage } from '@/utils/learningStage'
 import { safeImageUrl } from '@/utils/linkify'
+import { formatRecordingTime } from '@/utils/practiceUpload'
+import { emptyStudentProgress } from '@/utils/progressSummary'
+import { positiveIntQuery } from '@/utils/routeCompat'
 import { openSafeHttpUrl, safeHttpUrl } from '@/utils/url'
 
 const { t } = useI18n({
@@ -330,24 +346,13 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const requestedVideoId = computed(() => numericQuery(route.query.videoId))
+const requestedVideoId = computed(() => positiveIntQuery(route.query.videoId))
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
-const emptyProgress: StudentProgressSummaryResponse = {
-  completedLessons: 0,
-  totalLessonsStarted: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-  lessons: [],
-}
-const progress = computed(
-  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
-)
+const emptyProgress = emptyStudentProgress()
+const progress = computed(() => progressResource.data.value ?? emptyProgress)
 const lessonCandidateIds = computed(() => {
   const lessonIds = [
-    numericQuery(route.query.lessonId),
+    positiveIntQuery(route.query.lessonId),
     ...progress.value.recentLessons.map((recentLesson) => recentLesson.lessonId),
   ]
 
@@ -362,8 +367,8 @@ const resource = useResource(loadLessonPlayer, fallbackLesson)
 
 const emptyLesson: StudentLessonPlayerResponse = {
   lessonId: 0,
-  title: t('studentLearn.lessonUnavailable'),
-  description: t('studentLearn.unassigned'),
+  title: '',
+  description: '',
   basicContent: null,
   estimatedDurationMinutes: null,
   completionPercent: 0,
@@ -376,9 +381,12 @@ const emptyLesson: StudentLessonPlayerResponse = {
   bestQuizPercentage: null,
   quizzes: [],
 }
-const lesson = computed(() => resource.data.value ?? (resource.usingFallback.value ? studentLessonPlayer : emptyLesson))
-const lessonDescription = computed(() => lesson.value.description || t('studentLearn.noLessonDetails'))
+const lesson = computed(() => resource.data.value ?? emptyLesson)
 const hasActiveLesson = computed(() => lesson.value.lessonId > 0)
+const lessonTitle = computed(() => (hasActiveLesson.value ? lesson.value.title : t('studentLearn.lessonUnavailable')))
+const lessonDescription = computed(() =>
+  hasActiveLesson.value ? lesson.value.description || t('studentLearn.noLessonDetails') : t('studentLearn.unassigned'),
+)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 /** Latest progress returned by `POST /students/lessons/{id}/viewed` (newer than the lesson player payload). */
@@ -389,7 +397,7 @@ const videoProgressLoading = ref(false)
 const videoActionId = ref<number | null>(null)
 let videoProgressSequence = 0
 
-const pageLoading = computed(() => resource.loading.value || progressResource.loading.value)
+const pageLoading = computed(() => resource.loading.value || progressResource.loading.value || switchingLesson.value)
 const pageError = computed(() => resource.error.value || progressResource.error.value)
 const usingFallback = computed(() => resource.usingFallback.value || progressResource.usingFallback.value)
 const studentName = computed(
@@ -428,7 +436,7 @@ const heroChipLabel = computed(() => {
 })
 const lessonParagraphs = computed(() => splitLessonParagraphs(lesson.value.basicContent))
 const lessonCoverUrl = computed(() => safeImageUrl(lesson.value.coverImageUrl))
-const coverImageAlt = computed(() => t('learningContext.coverImageAlt', { title: lesson.value.title }))
+const coverImageAlt = computed(() => t('learningContext.coverImageAlt', { title: lessonTitle.value }))
 /** FR-LRN-02: Course / Module / Lesson the learner is studying. */
 const lessonBreadcrumb = computed<BreadcrumbItem[]>(() => [
   { kind: 'section', label: t('learningContext.learn') },
@@ -441,7 +449,7 @@ const lessonBreadcrumb = computed<BreadcrumbItem[]>(() => [
       : undefined,
   },
   { kind: 'module', label: lesson.value.moduleTitle },
-  { kind: 'lesson', label: lesson.value.title },
+  { kind: 'lesson', label: lessonTitle.value },
 ])
 const lessonQuizzes = computed(() => sortByLearningStage(lesson.value.quizzes ?? []))
 const lessonVideos = computed(() =>
@@ -536,9 +544,15 @@ const learningModules = computed<LearningModule[]>(() =>
   }),
 )
 
-watch(selectedLessonId, () => {
-  videoProgressById.value = {}
-  void resource.reload()
+// resource.reload() keeps the previous lesson on screen, so show the loading state while switching lessons.
+const switchingLesson = ref(false)
+watch(selectedLessonId, async () => {
+  switchingLesson.value = true
+  try {
+    await resource.reload()
+  } finally {
+    switchingLesson.value = false
+  }
 })
 
 watch(
@@ -564,18 +578,6 @@ watch(
   { immediate: true, flush: 'post' },
 )
 
-function numericQuery(value: unknown): number | null {
-  const rawValue = Array.isArray(value) ? value[0] : value
-  if (rawValue === null || rawValue === undefined || rawValue === '') return null
-
-  const parsed = Number(rawValue)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-function responseStatus(reason: unknown): number | null {
-  return (reason as { response?: { status?: number } } | null)?.response?.status ?? null
-}
-
 function iconForProgress(completionPercent: number, completed: boolean): ModuleIcon {
   if (completed || completionPercent >= 100) return 'status'
   if (completionPercent > 0) return 'flash'
@@ -600,7 +602,7 @@ async function loadLessonPlayer(): Promise<StudentLessonPlayerResponse> {
     try {
       return await studentApi.lessonPlayer(lessonId)
     } catch (reason) {
-      if (responseStatus(reason) !== 404) {
+      if (apiErrorStatus(reason) !== 404) {
         throw reason
       }
     }
@@ -623,16 +625,9 @@ async function recordLessonViewed(lessonId: number): Promise<void> {
   }
 }
 
-function formatDuration(totalSeconds: number): string {
-  const safeSeconds = nonNegativeInteger(totalSeconds)
-  const minutes = Math.floor(safeSeconds / 60)
-  const seconds = safeSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
 function videoDurationLabel(video: RecordedLessonVideoResponse): string {
   const durationSeconds = nonNegativeInteger(video.durationSeconds)
-  return durationSeconds > 0 ? formatDuration(durationSeconds) : t('studentLearn.durationUnavailable')
+  return durationSeconds > 0 ? formatRecordingTime(durationSeconds) : t('studentLearn.durationUnavailable')
 }
 
 function playableVideoUrl(video: RecordedLessonVideoResponse): string | null {
@@ -705,12 +700,35 @@ async function loadVideoProgress(): Promise<void> {
   }
 }
 
+/**
+ * Uploaded videos are played inline from a Blob fetched with the bearer token (the token lives in memory only, so a
+ * plain link to the stream endpoint would be refused); external videos open in a new tab.
+ */
+const {
+  objectUrl: videoObjectUrl,
+  loading: videoFileLoading,
+  error: videoFileError,
+  load: loadVideoFile,
+} = useAuthorizedFile()
+const playingVideoId = ref<number | null>(null)
+
 async function openRecordedVideo(video: RecordedLessonVideoResponse): Promise<void> {
   if (videoActionId.value !== null) return
   actionError.value = null
   actionSuccess.value = null
-  const url = playableVideoUrl(video)
-  if (!openSafeHttpUrl(url, { allowRelative: true, sameOriginOnly: video.sourceType === 'UPLOAD' })) {
+  const uploaded = video.sourceType === 'UPLOADED_FILE' && !resource.usingFallback.value
+  if (uploaded) {
+    if (!playableVideoUrl(video)) {
+      actionError.value = t('studentLearn.noPlayableLink')
+      return
+    }
+    playingVideoId.value = video.id
+    const loaded = await loadVideoFile(() => studentApi.recordedVideoFile(video.id), t('studentLearn.videoFileError'))
+    if (!loaded) {
+      if (videoFileError.value) actionError.value = videoFileError.value
+      return
+    }
+  } else if (!openSafeHttpUrl(playableVideoUrl(video), { allowRelative: true })) {
     actionError.value = t('studentLearn.noPlayableLink')
     return
   }
@@ -1189,6 +1207,14 @@ function openCatalog(): void {
 }
 
 /* Side: recorded lessons */
+.student-learn-inline-video {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  border-radius: var(--radius-md);
+  background: var(--color-ink-900);
+}
+
 .student-learn-video-scene {
   position: relative;
   display: grid;

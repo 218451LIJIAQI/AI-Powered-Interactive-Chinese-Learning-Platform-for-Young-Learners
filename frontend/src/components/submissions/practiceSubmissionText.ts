@@ -55,5 +55,5 @@ export function usePracticeSubmissionText() {
     return errors
   }
 
-  return { t, maxSizeLabel, issueMessage, fieldErrors }
+  return { t, maxSizeLabel, fieldErrors }
 }

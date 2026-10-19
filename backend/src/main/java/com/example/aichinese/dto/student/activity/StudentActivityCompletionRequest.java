@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.student.activity;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 
 import java.util.List;
@@ -37,9 +38,10 @@ public record StudentActivityCompletionRequest(
         String responseText) {
 
     public StudentActivityCompletionRequest {
-        matches = matches == null ? List.of() : List.copyOf(matches);
-        placements = placements == null ? List.of() : List.copyOf(placements);
-        answers = answers == null ? List.of() : List.copyOf(answers);
+        // Null elements are kept so that the @NotNull element constraints report field errors.
+        matches = immutableListOrEmpty(matches);
+        placements = immutableListOrEmpty(placements);
+        answers = immutableListOrEmpty(answers);
         responseText = strip(responseText);
     }
 

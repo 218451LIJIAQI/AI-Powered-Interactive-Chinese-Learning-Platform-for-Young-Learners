@@ -11,16 +11,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import { publicApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import { appEnv } from '@/config/env'
 import { aiSafetyMessages } from '@/plugins/aiSafetyMessages'
 
 /**
- * AI disclaimer shown next to every AI tool (D19, FR-AI-09). Pass the admin-configured
- * platformSettings.aiDisclaimerText when available; the translated default is used otherwise.
+ * AI disclaimer shown next to every AI tool (D19, FR-AI-09, FR-PUB-04). A parent may pass the admin-configured
+ * platformSettings.aiDisclaimerText; otherwise the component loads it once per page load from the public settings.
+ * The translated default is used when no admin text is available.
  */
 const props = withDefaults(defineProps<{ text?: string | null; showGuidanceLink?: boolean }>(), {
   text: null,
@@ -35,7 +38,33 @@ const { t } = useI18n({
   },
 })
 
-const disclaimerText = computed(() => props.text?.trim() || t('aiSafety.disclaimer'))
+const adminText = ref<string | null>(null)
+
+onMounted(async () => {
+  if (props.text != null) return
+  adminText.value = await loadAdminDisclaimer()
+})
+
+const disclaimerText = computed(() => props.text?.trim() || adminText.value || t('aiSafety.disclaimer'))
+</script>
+
+<script lang="ts">
+let sharedAdminDisclaimer: Promise<string | null> | null = null
+
+/** Loads the admin disclaimer once and shares it between instances; preview builds keep the default text. */
+function loadAdminDisclaimer(): Promise<string | null> {
+  if (appEnv.useDemoData && appEnv.enablePreviewMode) return Promise.resolve(null)
+  if (!sharedAdminDisclaimer) {
+    sharedAdminDisclaimer = Promise.resolve()
+      .then(() => publicApi.platformSettings())
+      .then((settings) => settings.aiDisclaimerText?.trim() || null)
+      .catch(() => {
+        sharedAdminDisclaimer = null
+        return null
+      })
+  }
+  return sharedAdminDisclaimer
+}
 </script>
 
 <style scoped>

@@ -85,7 +85,7 @@ class MySqlMigrationSmokeTests {
                   and (table_collation is null or table_collation <> 'utf8mb4_0900_ai_ci')
                 """,
                 Long.class)).isZero();
-        // Chinese characters and tone-marked Pinyin survive a round trip (utf8mb4).
+        // The JDBC connection transfers Chinese characters and tone-marked Pinyin without loss (utf8mb4).
         assertThat(jdbcTemplate.queryForObject("select convert('你好 nǐ hǎo' using utf8mb4)", String.class))
                 .isEqualTo("你好 nǐ hǎo");
     }

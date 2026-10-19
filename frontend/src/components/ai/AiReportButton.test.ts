@@ -79,4 +79,17 @@ describe('AiReportButton', () => {
     expect(mocks.reportResponse).not.toHaveBeenCalled()
     expect(preview.text()).toContain('Preview mode: the report was not sent.')
   })
+
+  it('clears the previous report status when a new AI result arrives', async () => {
+    const wrapper = mountButton({ featureKey: 'VOCABULARY_HELPER', responseSnapshot: 'first reply' })
+    await wrapper.get('[data-testid="ai-report-toggle"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Thanks. An admin will review this response.')
+
+    await wrapper.setProps({ responseSnapshot: 'second reply' })
+
+    expect(wrapper.text()).not.toContain('Thanks. An admin will review this response.')
+    expect(wrapper.find('form').exists()).toBe(false)
+  })
 })

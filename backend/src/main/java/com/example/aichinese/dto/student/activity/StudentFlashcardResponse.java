@@ -17,7 +17,6 @@ public record StudentFlashcardResponse(
         String imageUrl,
         String audioUrl,
         Integer sortOrder,
-        String extraPayload,
         Integer hskLevel,
         ActivityDifficulty difficulty,
         String topic,

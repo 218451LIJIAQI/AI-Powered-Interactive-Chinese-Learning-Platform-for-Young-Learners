@@ -23,7 +23,6 @@ class PlatformPropertiesTests {
                 true);
 
         assertThat(properties.defaultTimeZone()).isEqualTo(DEFAULT_TIME_ZONE);
-        assertThat(properties.defaultZoneId().getId()).isEqualTo(DEFAULT_TIME_ZONE);
         assertThat(properties.deploymentMode()).isEqualTo(MULTI_INSTANCE);
         assertThat(properties.sharedAuthRateLimitingEnabled()).isTrue();
         assertThat(properties.isMultiInstance()).isTrue();

@@ -399,7 +399,7 @@ class LiveRecordedLearningIntegrationTests {
     }
 
     @Test
-    void studentLiveClassListingOffersEveryPublishedLessonClassWithoutPurchase() throws Exception {
+    void studentLiveClassListingOffersEveryPublishedLessonClass() throws Exception {
         String teacherEmail = uniqueEmail("listing-teacher");
         approveTeacherProfile(teacherEmail);
         String teacherToken = userToken(teacherEmail);
@@ -739,7 +739,7 @@ class LiveRecordedLearningIntegrationTests {
     }
 
     @Test
-    void wrongRoleAndGuestCannotAccessProtectedPhaseTenEndpoints() throws Exception {
+    void wrongRoleAndGuestCannotAccessLiveClassEndpoints() throws Exception {
         String teacherEmail = uniqueEmail("phase10-protect-teacher");
         approveTeacherProfile(teacherEmail);
         String teacherToken = userToken(teacherEmail);
@@ -748,10 +748,10 @@ class LiveRecordedLearningIntegrationTests {
         mockMvc.perform(authenticatedGet("/api/v1/teachers/live-classes", studentToken))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(authenticatedGet("/api/v1/admin/schedule", studentToken))
+        mockMvc.perform(authenticatedGet("/api/v1/admin/live-classes", studentToken))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(authenticatedGet("/api/v1/students/schedule", teacherToken))
+        mockMvc.perform(authenticatedGet("/api/v1/students/live-classes", teacherToken))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/v1/students/live-classes"))

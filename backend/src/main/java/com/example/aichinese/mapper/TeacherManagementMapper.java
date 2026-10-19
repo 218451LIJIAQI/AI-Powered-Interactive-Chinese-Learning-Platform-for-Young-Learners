@@ -1,6 +1,5 @@
 package com.example.aichinese.mapper;
 
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -10,7 +9,6 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.dto.admin.AdminAuditSummaryResponse;
-import com.example.aichinese.dto.admin.AdminStudentListItemResponse;
 import com.example.aichinese.dto.admin.AdminTeacherDetailResponse;
 import com.example.aichinese.dto.admin.AdminTeacherListItemResponse;
 import com.example.aichinese.dto.admin.AdminUserListItemResponse;
@@ -20,7 +18,6 @@ import com.example.aichinese.dto.teacher.TeacherVerificationDocumentSummaryRespo
 import com.example.aichinese.dto.teacher.TeacherVerificationReviewSummaryResponse;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.Role;
-import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.TeacherVerificationDocument;
 import com.example.aichinese.entity.TeacherVerificationReview;
@@ -49,7 +46,7 @@ public class TeacherManagementMapper {
                 profile.getId(),
                 profile.getBio(),
                 profile.getQualificationSummary(),
-                splitCategories(profile.getTeachingCategories()),
+                TextUtils.splitCsv(profile.getTeachingCategories()),
                 profile.getTeacherStatus(),
                 profile.getRejectionReason(),
                 mapList(documents, this::toDocumentSummary),
@@ -112,7 +109,7 @@ public class TeacherManagementMapper {
                 user.getEmail(),
                 profile.getBio(),
                 profile.getQualificationSummary(),
-                splitCategories(profile.getTeachingCategories()),
+                TextUtils.splitCsv(profile.getTeachingCategories()),
                 profile.getTeacherStatus(),
                 profile.getRejectionReason(),
                 profile.getVerifiedAt(),
@@ -142,24 +139,13 @@ public class TeacherManagementMapper {
                 user.getUpdatedAt());
     }
 
-    public AdminStudentListItemResponse toAdminStudentListItem(StudentProfile studentProfile) {
-        User user = studentProfile.getUser();
-        return new AdminStudentListItemResponse(
-                studentProfile.getId(),
-                user.getId(),
-                user.getDisplayName(),
-                user.getEmail(),
-                user.getPreferredLanguage(),
-                studentProfile.getCreatedAt());
-    }
-
     public PublicTeacherProfileResponse toPublicTeacherProfileResponse(TeacherProfile teacherProfile, int courseCount) {
         return new PublicTeacherProfileResponse(
                 teacherProfile.getId(),
                 teacherProfile.getUser().getDisplayName(),
                 teacherProfile.getBio(),
                 teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED,
-                splitCategories(teacherProfile.getTeachingCategories()),
+                TextUtils.splitCsv(teacherProfile.getTeachingCategories()),
                 courseCount);
     }
 
@@ -186,16 +172,6 @@ public class TeacherManagementMapper {
                 .limit(MAX_CATEGORIES)
                 .collect(Collectors.joining(CATEGORY_DELIMITER));
         return joined.isEmpty() ? null : joined;
-    }
-
-    private static List<String> splitCategories(String categories) {
-        if (categories == null || categories.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(categories.split(","))
-                .map(TextUtils::trimToNull)
-                .filter(value -> value != null)
-                .toList();
     }
 
     private static <T, R> List<R> mapList(List<T> source, Function<? super T, R> mapper) {

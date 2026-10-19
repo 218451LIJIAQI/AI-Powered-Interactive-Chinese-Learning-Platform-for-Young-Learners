@@ -47,6 +47,7 @@
                 <option value="ALL">{{ t('teacherFeedback.allContexts') }}</option>
                 <option value="QUIZ">{{ t('teacherFeedback.quiz') }}</option>
                 <option value="LESSON">{{ t('teacherFeedback.lesson') }}</option>
+                <option value="PRACTICE">{{ t('teacherFeedback.practiceCategory') }}</option>
                 <option value="GENERAL">{{ t('teacherFeedback.general') }}</option>
               </select>
             </div>
@@ -126,7 +127,7 @@
                     :tone="priorityPillTone(selectedFeedbackItem.priorityTone)"
                   />
                   <span class="type-caption">
-                    {{ t('teacherFeedback.savedAt', { date: selectedFeedbackItem.createdExact }) }}
+                    {{ t('teacherFeedback.savedAt', { date: selectedFeedbackItem.createdLabel }) }}
                   </span>
                 </div>
               </div>
@@ -278,7 +279,7 @@
                     :disabled="feedbackFormDisabled || !commentForm.lessonId || loadingQuizzes"
                   >
                     <option :value="0">{{ quizPlaceholder }}</option>
-                    <option v-for="quiz in quizOptions" :key="quiz.id" :value="quiz.id">
+                    <option v-for="quiz in quizzes" :key="quiz.id" :value="quiz.id">
                       {{ quiz.title }}
                     </option>
                   </select>
@@ -406,11 +407,7 @@
         </div>
       </section>
 
-      <TeacherPracticeReviewSection
-        :locked="teacherApprovalLocked"
-        @forbidden="markApprovalLocked"
-        @reviewed="onPracticeReviewed"
-      />
+      <TeacherPracticeReviewSection @forbidden="markApprovalLocked" @reviewed="onPracticeReviewed" />
 
       <p class="teacher-feedback-tip">
         <IconGlyph name="hint" :size="16" aria-hidden="true" />
@@ -475,7 +472,7 @@ const { statusLabel } = useStatusLabels()
 const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage, guardTeacherRequest, markApprovalLocked } =
   useTeacherAccess()
 
-type QueueFilter = 'ALL' | 'QUIZ' | 'LESSON' | 'GENERAL'
+type QueueFilter = 'ALL' | 'QUIZ' | 'LESSON' | 'PRACTICE' | 'GENERAL'
 type FeedbackTab = 'History' | 'Create'
 
 interface StudentOption extends TeacherStudentSummaryResponse {
@@ -495,14 +492,11 @@ interface FeedbackQueueItem {
   typeDisplay: string
   feedbackTypeLabel: string
   createdLabel: string
-  createdExact: string
   priority: string
   priorityTone: 'high' | 'medium' | 'low'
-  lessonId?: number | null
-  quizAttemptId?: number | null
   progressLabel: string
   quizAverageLabel: string
-  category: 'QUIZ' | 'LESSON' | 'GENERAL'
+  category: 'QUIZ' | 'LESSON' | 'PRACTICE' | 'GENERAL'
 }
 
 const feedbackResource = useResource(
@@ -538,12 +532,8 @@ const quizAttempts = ref<TeacherQuizAttemptSummaryResponse[]>([])
 let quizzesRequest = 0
 let quizAttemptsRequest = 0
 
-const feedback = computed<TeacherFeedbackResponse[]>(
-  () => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []),
-)
-const lessons = computed<LessonResponse[]>(
-  () => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []),
-)
+const feedback = computed<TeacherFeedbackResponse[]>(() => feedbackResource.data.value ?? [])
+const lessons = computed<LessonResponse[]>(() => lessonsResource.data.value ?? [])
 const studentOptions = computed<StudentOption[]>(() =>
   (studentsResource.data.value ?? []).map((item: TeacherStudentSummaryResponse) => ({
     ...item,
@@ -556,7 +546,6 @@ const studentOptions = computed<StudentOption[]>(() =>
 const lessonOptions = computed<LessonResponse[]>(() =>
   lessons.value.filter((item: LessonResponse) => item.contentStatus !== 'ARCHIVED'),
 )
-const quizOptions = computed<TeacherQuizResponse[]>(() => quizzes.value)
 const quizAttemptOptions = computed<TeacherQuizAttemptSummaryResponse[]>(() =>
   quizAttempts.value.filter(
     (item: TeacherQuizAttemptSummaryResponse) => !commentForm.studentId || item.studentId === commentForm.studentId,
@@ -566,16 +555,14 @@ const quizAttemptOptions = computed<TeacherQuizAttemptSummaryResponse[]>(() =>
 const pageLoading = computed(
   () => feedbackResource.loading.value || studentsResource.loading.value || lessonsResource.loading.value,
 )
-const pageError = computed(() =>
-  teacherApprovalLocked.value
-    ? null
-    : feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value,
+const pageError = computed(
+  () => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value,
 )
 const usingFallback = computed(
   () =>
     feedbackResource.usingFallback.value || studentsResource.usingFallback.value || lessonsResource.usingFallback.value,
 )
-const feedbackReadOnly = computed(() => teacherApprovalLocked.value || usingFallback.value)
+const feedbackReadOnly = computed(() => usingFallback.value)
 const feedbackFormDisabled = computed(() => feedbackReadOnly.value || submittingCreate.value || submittingUpdate.value)
 const isHistoryTab = computed(() => activeTab.value === 'History')
 const queueTitle = computed(() =>
@@ -633,11 +620,8 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
       typeDisplay: feedbackCategoryDisplay(category),
       feedbackTypeLabel: feedbackTypeLabel(item.feedbackType),
       createdLabel: formatDateTime(item.createdAt),
-      createdExact: formatDateTime(item.createdAt),
       priority: feedbackPriorityLabel(linkedStudent),
       priorityTone: feedbackPriorityTone(linkedStudent),
-      lessonId: item.lessonId,
-      quizAttemptId: item.quizAttemptId,
       progressLabel: progress,
       quizAverageLabel: quizAverage,
       category,
@@ -703,9 +687,7 @@ const progressMetrics = computed(() => {
 
 const draftGuidance = computed(() => {
   const student =
-    selectedStudentOption.value?.label.split(' ')[0] ??
-    selectedFeedbackItem.value?.studentName.split(' ')[0] ??
-    t('teacherFeedback.learner')
+    selectedStudentOption.value?.label ?? selectedFeedbackItem.value?.studentName ?? t('teacherFeedback.learner')
   const weakest =
     selectedStudentOption.value?.weakAreas[0] ??
     studentOptions.value.find((item: StudentOption) => item.studentId === selectedFeedbackItem.value?.studentId)
@@ -735,22 +717,26 @@ watch(
       selectedFeedbackRecordId.value = items[0]?.id ?? 0
     }
   },
-  { immediate: true, deep: true },
+  { immediate: true },
+)
+
+// Keyed on the record id: a reload of the list (new objects) must not overwrite a message being edited.
+watch(
+  [() => selectedExistingFeedback.value?.id, activeTab],
+  () => {
+    if (activeTab.value === 'History' && selectedExistingFeedback.value) syncCommentFormFromExisting()
+  },
+  { immediate: true },
 )
 
 watch(
-  [selectedExistingFeedback, studentOptions, activeTab],
+  [studentOptions, activeTab],
   () => {
-    if (activeTab.value === 'History' && selectedExistingFeedback.value) {
-      syncCommentFormFromExisting()
-      return
-    }
-
     if (activeTab.value === 'Create' && !commentForm.studentId) {
       commentForm.studentId = studentOptions.value[0]?.studentId ?? 0
     }
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 watch(
@@ -805,12 +791,14 @@ watch(
 )
 
 function feedbackCategory(item: TeacherFeedbackResponse): FeedbackQueueItem['category'] {
+  if (item.practiceSubmissionId != null) return 'PRACTICE'
   if (item.quizAttemptId != null) return 'QUIZ'
   if (item.lessonId != null) return 'LESSON'
   return 'GENERAL'
 }
 
 function feedbackContextLine(item: TeacherFeedbackResponse): string {
+  if (item.practiceSubmissionId != null) return t('teacherFeedback.practiceContext', { id: item.practiceSubmissionId })
   if (item.quizTitle) return t('teacherFeedback.quizAttempt', { id: item.quizAttemptId ?? '--' })
   if (item.lessonTitle) return t('teacherFeedback.lessonContext', { id: item.lessonId ?? '--' })
   return t('teacherFeedback.generalFeedback')
@@ -819,12 +807,14 @@ function feedbackContextLine(item: TeacherFeedbackResponse): string {
 function feedbackCategoryLabel(category: FeedbackQueueItem['category']): string {
   if (category === 'QUIZ') return t('teacherFeedback.quiz')
   if (category === 'LESSON') return t('teacherFeedback.lesson')
+  if (category === 'PRACTICE') return t('teacherFeedback.practiceCategory')
   return t('teacherFeedback.general')
 }
 
 function feedbackCategoryDisplay(category: FeedbackQueueItem['category']): string {
   if (category === 'QUIZ') return t('teacherFeedback.quizFeedback')
   if (category === 'LESSON') return t('teacherFeedback.lessonFeedback')
+  if (category === 'PRACTICE') return t('teacherFeedback.practiceFeedbackTitle')
   return t('teacherFeedback.generalFeedbackTitle')
 }
 
@@ -838,7 +828,7 @@ function tabLabel(tab: FeedbackTab): string {
 }
 
 function feedbackTypeLabel(type: string | null | undefined): string {
-  return statusLabel('feedbackType', type?.trim() ? type.trim().toUpperCase() : 'GENERAL')
+  return statusLabel('feedbackType', type?.trim() || 'GENERAL')
 }
 
 function onPracticeReviewed(): void {
@@ -858,12 +848,6 @@ function feedbackPriorityTone(student: StudentOption | undefined): FeedbackQueue
 
 async function loadQuizzesForLesson(lessonId: number): Promise<void> {
   const request = ++quizzesRequest
-  if (teacherApprovalLocked.value) {
-    quizzes.value = []
-    loadingQuizzes.value = false
-    return
-  }
-
   loadingQuizzes.value = true
   try {
     const items = usingFallback.value
@@ -881,12 +865,6 @@ async function loadQuizzesForLesson(lessonId: number): Promise<void> {
 
 async function loadQuizAttempts(quizId: number): Promise<void> {
   const request = ++quizAttemptsRequest
-  if (teacherApprovalLocked.value) {
-    quizAttempts.value = []
-    loadingQuizAttempts.value = false
-    return
-  }
-
   loadingQuizAttempts.value = true
   try {
     const items = usingFallback.value ? teacherQuizAttempts : await teacherApi.quizAttempts(quizId)
@@ -980,9 +958,7 @@ async function submitFeedback(): Promise<void> {
   feedbackMessageError.value = null
 
   if (feedbackReadOnly.value) {
-    actionError.value = teacherApprovalLocked.value
-      ? teacherApprovalMessage.value
-      : t('teacherFeedback.previewMutation')
+    actionError.value = t('teacherFeedback.previewMutation')
     return
   }
 

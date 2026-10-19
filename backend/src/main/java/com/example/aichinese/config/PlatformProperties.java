@@ -28,10 +28,6 @@ public record PlatformProperties(
         deploymentMode = normalizeDeploymentMode(deploymentMode);
     }
 
-    public ZoneId defaultZoneId() {
-        return ZoneId.of(defaultTimeZone);
-    }
-
     public boolean isMultiInstance() {
         return MULTI_INSTANCE.equals(deploymentMode);
     }

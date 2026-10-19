@@ -578,12 +578,12 @@ public class TeacherController {
                 teacherQuizService.updateQuiz(currentUser, quizId, request));
     }
 
-    @DeleteMapping("/quizzes/{quizId}")
-    public ApiResponse<Void> deleteQuiz(
+    @PatchMapping("/quizzes/{quizId}/archive")
+    public ApiResponse<Void> archiveQuiz(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long quizId) {
-        teacherQuizService.deleteQuiz(currentUser, quizId);
-        return ApiResponse.success("Quiz deleted successfully.", null);
+        teacherQuizService.archiveQuiz(currentUser, quizId);
+        return ApiResponse.success("Quiz archived successfully.", null);
     }
 
     @PostMapping("/quizzes/{quizId}/questions")

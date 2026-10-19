@@ -132,3 +132,12 @@ export function normalizeAppRoute(path: string | null | undefined): string | nul
 
   return trimmed
 }
+
+/** A positive integer from a route param or query value (first entry of an array), otherwise null. */
+export function positiveIntQuery(value: unknown): number | null {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  if (rawValue === null || rawValue === undefined || rawValue === '') return null
+
+  const parsed = Number(rawValue)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}

@@ -14,7 +14,7 @@ public record AdminStoryQuestionRequest(
         String questionText,
 
         @NotBlank(message = "Options payload (JSON) is required.")
-        @Size(max = 32_000, message = "Options payload is too large.")
+        @Size(max = 16_000, message = "Options payload is too large.")
         String optionsPayload,
 
         @Size(max = 1000, message = "Explanation must not exceed 1000 characters.")

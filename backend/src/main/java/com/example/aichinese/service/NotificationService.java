@@ -41,6 +41,7 @@ import com.example.aichinese.repository.TeacherFeedbackRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class NotificationService {
@@ -78,11 +79,6 @@ public class NotificationService {
     }
 
     @Transactional
-    public void createNotification(User recipient, String title, String message, String targetPath) {
-        createNotification(recipient, NotificationType.SYSTEM, title, message, null, null, targetPath, null);
-    }
-
-    @Transactional
     public Notification createNotification(
             User recipient,
             NotificationType notificationType,
@@ -107,9 +103,9 @@ public class NotificationService {
         notification.setMessage(normalizedMessage);
         notification.setNotificationType(notificationType);
         notification.setNotificationStatus(NotificationStatus.UNREAD);
-        notification.setTargetType(optionalText(targetType));
+        notification.setTargetType(TextUtils.trimToNull(targetType));
         notification.setTargetId(targetId);
-        notification.setTargetPath(optionalText(targetPath));
+        notification.setTargetPath(TextUtils.trimToNull(targetPath));
         notification.setCreatedByUser(createdByUser);
         notification.setReadAt(null);
         return notificationRepository.save(notification);
@@ -169,11 +165,6 @@ public class NotificationService {
             log.warn("Notification creation failed for recipient user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
             log.debug("Notification creation stack trace for recipient user id {}.", recipientId, exception);
         }
-    }
-
-    @Transactional(readOnly = true)
-    public PageResponse<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser, int page, int size) {
-        return getCurrentUserNotifications(currentUser, null, page, size);
     }
 
     /** Notifications page (D20): optional READ / UNREAD filter, newest first. */
@@ -278,15 +269,12 @@ public class NotificationService {
 
     private boolean isTeacherFeedbackNotificationAccessible(SecurityUserDetails currentUser, Notification notification) {
         return teacherFeedbackRepository.findByIdAndStudentUserId(notification.getTargetId(), currentUser.getUserId())
-                .map(feedback -> isStudentFeedbackCurrentlyAccessible(currentUser, feedback))
+                .map(NotificationService::isStudentFeedbackCurrentlyAccessible)
                 .orElse(false);
     }
 
-    private boolean isStudentFeedbackCurrentlyAccessible(SecurityUserDetails currentUser, TeacherFeedback feedback) {
-        StudentProfile student = studentProfileRepository.findByUserId(currentUser.getUserId()).orElse(null);
-        if (student == null) {
-            return false;
-        }
+    /** The feedback was found by the current student's user id, so the student profile is known to exist. */
+    private static boolean isStudentFeedbackCurrentlyAccessible(TeacherFeedback feedback) {
         Lesson feedbackLesson = feedback.getLesson();
         if (feedbackLesson != null) {
             return isPublishedLesson(feedbackLesson);
@@ -411,18 +399,10 @@ public class NotificationService {
     }
 
     private static String requireText(String value, String fieldName) {
-        String stripped = optionalText(value);
+        String stripped = TextUtils.trimToNull(value);
         if (stripped == null) {
             throw new IllegalArgumentException(fieldName + " must not be blank.");
         }
         return stripped;
-    }
-
-    private static String optionalText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String stripped = value.strip();
-        return stripped.isEmpty() ? null : stripped;
     }
 }

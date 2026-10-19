@@ -1,11 +1,5 @@
 <template>
-  <span
-    class="mastery-chip"
-    :class="`is-${tone}`"
-    :data-mastery="normalized"
-    data-testid="mastery-chip"
-    :title="titleText || undefined"
-  >
+  <span class="mastery-chip" :class="`is-${tone}`" :data-mastery="normalized" data-testid="mastery-chip">
     <IconGlyph :name="icon" :size="14" />
     {{ statusLabel('mastery', normalized) }}
   </span>
@@ -20,16 +14,12 @@ import type { LessonMastery } from '@/types/api'
 import { masteryIcon, masteryTone, normalizeMastery } from '@/utils/mastery'
 
 /** Lesson mastery indicator (D25): NOT_STARTED / IN_PROGRESS / COMPLETED / MASTERED. */
-const props = withDefaults(defineProps<{ mastery?: LessonMastery | string | null; title?: string | null }>(), {
-  mastery: null,
-  title: null,
-})
+const props = withDefaults(defineProps<{ mastery?: LessonMastery | string | null }>(), { mastery: null })
 
 const { statusLabel } = useStatusLabels()
 const normalized = computed(() => normalizeMastery(props.mastery))
 const tone = computed(() => masteryTone(normalized.value))
 const icon = computed(() => masteryIcon(normalized.value))
-const titleText = computed(() => props.title?.trim() ?? '')
 </script>
 
 <style scoped>

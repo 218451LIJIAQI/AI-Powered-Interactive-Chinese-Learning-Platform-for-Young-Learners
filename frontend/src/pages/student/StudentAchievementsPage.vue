@@ -237,15 +237,10 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { useStatusLabels } from '@/composables/useStatusLabels'
-import {
-  studentBadges,
-  studentPointsHistory,
-  studentProgress as studentProgressDemo,
-  studentRewards,
-  studentStreak,
-} from '@/demo/data'
+import { studentProgress as studentProgressDemo, studentRewards } from '@/demo/data'
 import { studentAchievementsMessages } from '@/plugins/studentAchievementsMessages'
-import { clampPercent, formatDate, formatNumber, nonNegativeInteger } from '@/utils/format'
+import { clampPercent, formatDate, formatNumber, formatSignedInteger, nonNegativeInteger } from '@/utils/format'
+import { emptyStudentProgress } from '@/utils/progressSummary'
 
 const { t } = useI18n({
   messages: {
@@ -258,74 +253,28 @@ const { statusLabel } = useStatusLabels()
 
 const router = useRouter()
 const baseId = useId()
-const badgesResource = useResource(() => studentApi.badges(), studentBadges)
-const streakResource = useResource(() => studentApi.streak(), studentStreak)
+// The reward summary already carries the streak, the earned badges (only five exist) and the latest points rows.
 const rewardsResource = useResource(() => studentApi.rewards(), studentRewards)
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
-const pointsResource = useResource(() => studentApi.pointsHistory(), studentPointsHistory)
 
-const emptyStreak = {
-  currentStreak: 0,
-  bestStreak: 0,
-  lastLearningDate: null,
-}
 const emptyRewards = {
   totalPoints: 0,
   currentLevelNumber: 1,
   progressToNextLevelPercent: 0,
-  streak: emptyStreak,
+  streak: { currentStreak: 0, bestStreak: 0, lastLearningDate: null },
   badges: [],
   recentPoints: [],
 }
-const emptyProgress = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-}
+const emptyProgress = emptyStudentProgress()
 
-const badges = computed(() => badgesResource.data.value ?? (badgesResource.usingFallback.value ? studentBadges : []))
-const streak = computed(
-  () => streakResource.data.value ?? (streakResource.usingFallback.value ? studentStreak : emptyStreak),
-)
-const rewards = computed(
-  () => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards),
-)
-const progress = computed(
-  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
-)
-const pointsHistory = computed(
-  () =>
-    pointsResource.data.value ??
-    (pointsResource.usingFallback.value ? studentPointsHistory : rewards.value.recentPoints),
-)
-const pageLoading = computed(
-  () =>
-    badgesResource.loading.value ||
-    streakResource.loading.value ||
-    rewardsResource.loading.value ||
-    progressResource.loading.value ||
-    pointsResource.loading.value,
-)
-const pageError = computed(
-  () =>
-    badgesResource.error.value ||
-    streakResource.error.value ||
-    rewardsResource.error.value ||
-    progressResource.error.value ||
-    pointsResource.error.value,
-)
-const usingFallback = computed(
-  () =>
-    badgesResource.usingFallback.value ||
-    streakResource.usingFallback.value ||
-    rewardsResource.usingFallback.value ||
-    progressResource.usingFallback.value ||
-    pointsResource.usingFallback.value,
-)
+const rewards = computed(() => rewardsResource.data.value ?? emptyRewards)
+const progress = computed(() => progressResource.data.value ?? emptyProgress)
+const badges = computed(() => rewards.value.badges)
+const streak = computed(() => rewards.value.streak)
+const pointsHistory = computed(() => rewards.value.recentPoints)
+const pageLoading = computed(() => rewardsResource.loading.value || progressResource.loading.value)
+const pageError = computed(() => rewardsResource.error.value || progressResource.error.value)
+const usingFallback = computed(() => rewardsResource.usingFallback.value || progressResource.usingFallback.value)
 const currentLevelNumber = computed(() => Math.max(1, nonNegativeInteger(rewards.value.currentLevelNumber, 1)))
 const levelTitle = computed(() => {
   if (currentLevelNumber.value >= 10) return t('studentAchievements.champion')
@@ -356,7 +305,7 @@ const achievementStats = computed(() => [
     label: t('studentAchievements.badges'),
   },
 ])
-const badgeCount = computed(() => (badges.value.length > 0 ? badges.value.length : rewards.value.badges.length))
+const badgeCount = computed(() => badges.value.length)
 
 const badgeCards = computed(() =>
   badges.value.slice(0, 5).map((badge) => ({
@@ -373,16 +322,16 @@ const milestoneCards = computed(() =>
     icon: iconForSource(item.sourceType),
     title: item.reason,
     subtitle: `${formatDate(item.createdAt)} - ${formatSource(item.sourceType)}`,
-    reward: `${signedIntegerLabel(item.pointsDelta)} XP`,
+    reward: `${formatSignedInteger(item.pointsDelta)} XP`,
     tone: toneForSource(item.sourceType),
   })),
 )
 
 type ProgressTone = 'primary' | 'success' | 'warning' | 'info'
-type SourceIcon = 'quiz' | 'star' | 'status' | 'streak'
-type BadgeIcon = 'learn' | 'moderation' | 'quiz' | 'streak' | 'trophy'
-type BadgeTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink'
-type SourceTone = 'blue' | 'green' | 'orange' | 'purple'
+type SourceIcon = 'quiz' | 'star' | 'status'
+type BadgeIcon = 'learn' | 'quiz' | 'streak' | 'trophy'
+type BadgeTone = 'blue' | 'gold' | 'green' | 'pink'
+type SourceTone = 'blue' | 'green' | 'purple'
 type ModuleTone = 'blue' | 'green' | 'orange'
 
 const moduleProgress = computed<
@@ -411,44 +360,35 @@ const moduleProgress = computed<
 function iconForSource(sourceType: string): SourceIcon {
   const normalized = sourceType.toUpperCase()
   if (normalized.includes('QUIZ')) return 'quiz'
-  if (normalized.includes('STREAK')) return 'streak'
   if (normalized.includes('LESSON')) return 'status'
   return 'star'
 }
 
 function iconForBadge(iconKey?: string | null): BadgeIcon {
   const normalized = (iconKey ?? '').toUpperCase()
-  if (normalized.includes('STREAK') || normalized.includes('FIRE')) return 'streak'
+  if (normalized.includes('STREAK')) return 'streak'
   if (normalized.includes('QUIZ')) return 'quiz'
-  if (normalized.includes('SPEAK')) return 'moderation'
   if (normalized.includes('LESSON') || normalized.includes('BOOK')) return 'learn'
   return 'trophy'
 }
 
 function toneForBadge(iconKey?: string | null): BadgeTone {
   const normalized = (iconKey ?? '').toUpperCase()
-  if (normalized.includes('STREAK') || normalized.includes('FIRE')) return 'pink'
+  if (normalized.includes('STREAK')) return 'pink'
   if (normalized.includes('QUIZ')) return 'blue'
   if (normalized.includes('LESSON') || normalized.includes('BOOK')) return 'green'
-  if (normalized.includes('LEVEL') || normalized.includes('CROWN')) return 'orange'
   return 'gold'
 }
 
 function toneForSource(sourceType: string): SourceTone {
   const normalized = sourceType.toUpperCase()
   if (normalized.includes('QUIZ')) return 'blue'
-  if (normalized.includes('STREAK')) return 'orange'
   if (normalized.includes('LESSON')) return 'green'
   return 'purple'
 }
 
 function formatSource(sourceType: string): string {
   return statusLabel('pointsSource', sourceType)
-}
-
-function signedIntegerLabel(value: number): string {
-  const rounded = Math.round(Number.isFinite(value) ? value : 0)
-  return rounded > 0 ? `+${rounded}` : String(rounded)
 }
 
 function lessonIdLabel(lessonId: number | null | undefined, index: number): string {
@@ -460,11 +400,8 @@ function lessonTitleFallback(index: number): string {
 }
 
 function reloadAll(): void {
-  void badgesResource.reload()
-  void streakResource.reload()
   void rewardsResource.reload()
   void progressResource.reload()
-  void pointsResource.reload()
 }
 
 function toneForProgress(progressPercent: number): { tone: ModuleTone; barTone: ProgressTone } {
@@ -763,11 +700,6 @@ function openLearn(): void {
 
 .student-achievements-badge-icon.is-pink {
   background: var(--color-danger-strong);
-  color: var(--color-white);
-}
-
-.student-achievements-badge-icon.is-orange {
-  background: var(--color-warning-strong);
   color: var(--color-white);
 }
 

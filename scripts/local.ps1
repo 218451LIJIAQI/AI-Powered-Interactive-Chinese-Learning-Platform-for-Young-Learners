@@ -15,7 +15,7 @@ $vite = Join-Path $frontend 'node_modules\vite\bin\vite.js'
 function Get-OwnedProcess([string]$pidFile, [string]$marker) {
     if (-not (Test-Path -LiteralPath $pidFile)) { return $null }
     $savedPid = 0
-    if (-not [int]::TryParse((Get-Content -LiteralPath $pidFile -Raw).Trim(), [ref]$savedPid)) { return $null }
+    if (-not [int]::TryParse(("" + (Get-Content -LiteralPath $pidFile -Raw)).Trim(), [ref]$savedPid)) { return $null }
     $process = Get-CimInstance Win32_Process -Filter "ProcessId = $savedPid" -ErrorAction SilentlyContinue
     if ($process -and $process.CommandLine -like "*$marker*") { return $process }
     return $null

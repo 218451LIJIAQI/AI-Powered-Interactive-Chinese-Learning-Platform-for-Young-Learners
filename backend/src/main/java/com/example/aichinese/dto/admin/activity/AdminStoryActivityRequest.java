@@ -30,10 +30,10 @@ public record AdminStoryActivityRequest(
         @Size(max = 200_000, message = "Story text is too long.")
         String storyText,
 
-        @Size(max = 32_000, message = "Pinyin is too long.")
+        @Size(max = 16_000, message = "Pinyin is too long.")
         String pinyin,
 
-        @Size(max = 32_000, message = "Translation is too long.")
+        @Size(max = 16_000, message = "Translation is too long.")
         String translation,
 
         @Pattern(

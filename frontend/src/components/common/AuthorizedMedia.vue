@@ -33,15 +33,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import type { DownloadResult } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useAuthorizedFile } from '@/composables/useAuthorizedFile'
 import { mediaMessages } from '@/plugins/mediaMessages'
-
-interface AuthorizedDownload {
-  blob: Blob
-  contentType: string | null
-  fileName: string | null
-}
 
 /**
  * Plays / shows a protected practice-submission file. The file is fetched with the bearer token through the
@@ -50,7 +45,7 @@ interface AuthorizedDownload {
 const props = withDefaults(
   defineProps<{
     kind: 'audio' | 'image'
-    loader: () => Promise<AuthorizedDownload>
+    loader: () => Promise<DownloadResult>
     target?: string | null
     disabled?: boolean
     disabledMessage?: string | null
@@ -71,7 +66,9 @@ const { objectUrl, loading, error, load, reset } = useAuthorizedFile()
 const imageAlt = computed(() =>
   props.target ? t('media.imageAlt', { target: props.target }) : t('media.imageAltGeneric'),
 )
-const audioLabel = computed(() => t('media.audioLabel', { target: props.target ?? '' }))
+const audioLabel = computed(() =>
+  props.target ? t('media.audioLabel', { target: props.target }) : t('media.audioLabelGeneric'),
+)
 
 function open(): void {
   void load(props.loader, t('media.loadError'))

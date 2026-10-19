@@ -200,7 +200,8 @@ class PracticeSubmissionAndAccountIntegrationTests {
         mockMvc.perform(api.authGet("/api/v1/admin/practice-submissions/" + submissionId + "/file", adminToken))
                 .andExpect(status().isOk());
         assertThat(auditLogRepository.findAll())
-                .anyMatch(log -> "PRACTICE_SUBMISSION_FILE_VIEWED".equals(log.getActionType()));
+                .anyMatch(log -> "PRACTICE_SUBMISSION_FILE_VIEWED".equals(log.getActionType())
+                        && Long.valueOf(submissionId).equals(log.getTargetId()));
         mockMvc.perform(api.authGet("/api/v1/admin/practice-submissions", studentToken))
                 .andExpect(status().isForbidden());
     }
@@ -241,7 +242,13 @@ class PracticeSubmissionAndAccountIntegrationTests {
     void profileUpdateAndPasswordChangeRevokeOtherSessionsAndKeepBcryptHashes() throws Exception {
         String email = LearningApiTestClient.uniqueEmail("w4-account");
         String firstSession = api.registerStudent(email);
-        String secondSession = api.login(email, LearningApiTestClient.USER_PASSWORD);
+        MvcResult secondLogin = mockMvc.perform(api.jsonPost("/api/v1/auth/login", null, Map.of(
+                        "email", email, "password", LearningApiTestClient.USER_PASSWORD)))
+                .andExpect(status().isOk())
+                .andReturn();
+        String secondSession = api.data(secondLogin).path("token").asText();
+        jakarta.servlet.http.Cookie secondRefreshCookie = secondLogin.getResponse().getCookie("mandarin_spark_refresh");
+        assertThat(secondRefreshCookie).isNotNull();
         User user = userRepository.findByEmailWithRoles(email).orElseThrow();
         // Proposal Table 6.2 "bcrypt": BCrypt format with the configured cost and a matching raw password.
         assertThat(user.getPasswordHash()).matches(BCRYPT_PATTERN).startsWith("$2a$12$")
@@ -295,6 +302,10 @@ class PracticeSubmissionAndAccountIntegrationTests {
         mockMvc.perform(api.authGet("/api/v1/auth/me", freshToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.fullName").value("Mei Ling"));
+        // SDD 3.3 / T33: the other session's refresh token is revoked as well. Presenting a revoked token counts as
+        // reuse, which also rotates the session version, so this check runs after the fresh token was verified.
+        mockMvc.perform(post("/api/v1/auth/refresh").with(csrf()).cookie(secondRefreshCookie))
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(api.jsonPost("/api/v1/auth/login", null, Map.of("email", email, "password", LearningApiTestClient.USER_PASSWORD)))
                 .andExpect(status().isUnauthorized());
@@ -345,7 +356,7 @@ class PracticeSubmissionAndAccountIntegrationTests {
 
     @Test
     void resetPasswordIsRateLimitedPerClientIpLikeForgotPassword() throws Exception {
-        String remoteIp = "203.0.113." + (10 + (int) (Math.random() * 200));
+        String remoteIp = "203.0.113.210";
         for (int attempt = 0; attempt < 10; attempt++) {
             mockMvc.perform(resetRequest(remoteIp)).andExpect(status().isBadRequest());
         }

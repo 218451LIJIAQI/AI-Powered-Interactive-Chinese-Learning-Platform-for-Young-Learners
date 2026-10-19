@@ -45,11 +45,11 @@ import { computed, type StyleValue } from 'vue'
 
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 
-type SceneVariant = 'panda' | 'people' | 'pagoda' | 'travel' | 'general'
+import type { CourseSceneVariant } from './courseSceneVariant'
 
 interface Props {
   size?: number
-  variant?: SceneVariant
+  variant?: CourseSceneVariant
 }
 
 const props = withDefaults(defineProps<Props>(), {

@@ -35,6 +35,11 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
     private static final String VERIFICATION_DOCUMENTS_PATH = "/api/v1/teachers/verification-documents";
     private static final String AI_PRONUNCIATION_PATH = "/api/v1/ai/pronunciation-feedback";
     private static final String AI_WRITING_PATH = "/api/v1/ai/writing-feedback";
+    /**
+     * Boundaries, part headers and small form fields sent with the file. Without this allowance a file
+     * exactly at its documented limit (SDD 5.9) would be rejected because Content-Length covers the whole body.
+     */
+    static final long MULTIPART_OVERHEAD_BYTES = 64L * 1024;
 
     private final UploadProperties uploadProperties;
     private final ObjectMapper objectMapper;
@@ -63,7 +68,7 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
     }
 
     private static boolean exceedsLimit(long contentLength, long maxRequestBytes) {
-        return maxRequestBytes > 0 && contentLength > maxRequestBytes;
+        return maxRequestBytes > 0 && contentLength > maxRequestBytes + MULTIPART_OVERHEAD_BYTES;
     }
 
     private long maxRequestBytes(HttpServletRequest request) {

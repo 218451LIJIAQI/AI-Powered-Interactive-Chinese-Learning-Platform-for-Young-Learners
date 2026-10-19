@@ -228,10 +228,18 @@ public class LiveLearningAccessService {
     @Transactional(readOnly = true)
     public void ensureStudentCanEnrol(LiveClass liveClass) {
         ensureLiveClassVisibleToStudents(liveClass);
+        if (hasEnded(liveClass)) {
+            throw new ResponseStatusException(BAD_REQUEST, "This live class has already ended.");
+        }
         if (liveClass.getMaxParticipants() != null
                 && countSeatsTaken(liveClass) >= liveClass.getMaxParticipants()) {
             throw new ResponseStatusException(BAD_REQUEST, "This live class is already full.");
         }
+    }
+
+    /** Students enrol only in upcoming or running classes (SRS 4.12): a class past its planned end is closed. */
+    public static boolean hasEnded(LiveClass liveClass) {
+        return liveClass.getScheduledEndAt() != null && !LocalDateTime.now().isBefore(liveClass.getScheduledEndAt());
     }
 
     /** Seats taken under the participant limit: ENROLLED and ATTENDED enrolments (D26). */
@@ -311,10 +319,6 @@ public class LiveLearningAccessService {
         }
         return RecordedVideoSourceType.tryFrom(value)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Recorded video source type is invalid."));
-    }
-
-    public String validateMeetingLink(String meetingLink) {
-        return normalizeSupportedWebUri(meetingLink, "Meeting link must be a valid URL.");
     }
 
     public String validateMeetingLink(String meetingLink, MeetingPlatform platform) {

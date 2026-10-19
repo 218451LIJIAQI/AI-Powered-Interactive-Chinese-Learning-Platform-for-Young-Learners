@@ -152,9 +152,12 @@ class DatabaseMigrationConfigurationTests {
         assertThat(addCheck).isGreaterThan(remap);
         assertThat(migration)
                 .contains("for young adults in malaysia")
-                .contains("'admin_email_notifications_enabled'")
-                .contains("'strict_content_filtering_enabled'")
                 .contains("set preferred_language = 'zh-cn'");
+        // The retired settings are deleted, not inserted.
+        int deleteSettings = migration.indexOf("delete from system_settings");
+        assertThat(deleteSettings).isPositive();
+        assertThat(migration.indexOf("'admin_email_notifications_enabled'", deleteSettings)).isPositive();
+        assertThat(migration.indexOf("'strict_content_filtering_enabled'", deleteSettings)).isPositive();
     }
 
     @Test

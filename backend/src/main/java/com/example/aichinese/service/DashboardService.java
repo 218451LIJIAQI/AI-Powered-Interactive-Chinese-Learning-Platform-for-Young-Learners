@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -13,31 +12,23 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.dashboard.AdminDashboardResponse;
+import com.example.aichinese.dto.dashboard.DashboardNotificationSummary;
 import com.example.aichinese.dto.dashboard.StudentDashboardResponse;
 import com.example.aichinese.dto.dashboard.TeacherDashboardResponse;
 import com.example.aichinese.entity.LessonProgress;
-import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.AiUsageLogRepository;
-import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.DailyStreakRepository;
-import com.example.aichinese.repository.FlashcardRepository;
-import com.example.aichinese.repository.LearningModuleRepository;
 import com.example.aichinese.repository.LessonProgressRepository;
 import com.example.aichinese.repository.LessonRepository;
-import com.example.aichinese.repository.ListeningExerciseRepository;
-import com.example.aichinese.repository.MatchingGameRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
-import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.StudentBadgeRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
-import com.example.aichinese.repository.TracingExerciseRepository;
-import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.repository.projection.WrongAnswerCountProjection;
 import com.example.aichinese.security.SecurityUserDetails;
 
@@ -54,15 +45,7 @@ public class DashboardService {
     private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
     private final LessonProgressRepository lessonProgressRepository;
     private final LessonRepository lessonRepository;
-    private final UserRepository userRepository;
-    private final LearningModuleRepository learningModuleRepository;
-    private final QuizRepository quizRepository;
-    private final MatchingGameRepository matchingGameRepository;
-    private final FlashcardRepository flashcardRepository;
-    private final ListeningExerciseRepository listeningExerciseRepository;
-    private final TracingExerciseRepository tracingExerciseRepository;
     private final AiUsageLogRepository aiUsageLogRepository;
-    private final AuditLogRepository auditLogRepository;
     private final NotificationService notificationService;
     private final AnalyticsService analyticsService;
 
@@ -75,15 +58,7 @@ public class DashboardService {
             QuizAttemptAnswerRepository quizAttemptAnswerRepository,
             LessonProgressRepository lessonProgressRepository,
             LessonRepository lessonRepository,
-            UserRepository userRepository,
-            LearningModuleRepository learningModuleRepository,
-            QuizRepository quizRepository,
-            MatchingGameRepository matchingGameRepository,
-            FlashcardRepository flashcardRepository,
-            ListeningExerciseRepository listeningExerciseRepository,
-            TracingExerciseRepository tracingExerciseRepository,
             AiUsageLogRepository aiUsageLogRepository,
-            AuditLogRepository auditLogRepository,
             NotificationService notificationService,
             AnalyticsService analyticsService) {
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
@@ -94,15 +69,7 @@ public class DashboardService {
         this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
         this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
-        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
-        this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
-        this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
-        this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
-        this.listeningExerciseRepository = Objects.requireNonNull(listeningExerciseRepository, "listeningExerciseRepository");
-        this.tracingExerciseRepository = Objects.requireNonNull(tracingExerciseRepository, "tracingExerciseRepository");
         this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
-        this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.analyticsService = Objects.requireNonNull(analyticsService, "analyticsService");
     }
@@ -148,8 +115,7 @@ public class DashboardService {
                         progress.getLastAccessedAt()))
                 .toList();
 
-        List<StudentDashboardResponse.NotificationSummary> notifications = mapStudentNotifications(
-                notificationService.findRecentAccessibleNotifications(currentUser, RECENT_ITEM_LIMIT));
+        List<DashboardNotificationSummary> notifications = recentNotifications(currentUser);
 
         return new StudentDashboardResponse(
                 currentUser.getDisplayName(),
@@ -170,10 +136,7 @@ public class DashboardService {
         TeacherProfile teacherProfile = teacherProfileRepository.findByUserId(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Teacher profile could not be found."));
 
-        List<TeacherDashboardResponse.NotificationSummary> recentNotifications = notificationService
-                .findRecentAccessibleNotifications(currentUser, RECENT_ITEM_LIMIT).stream()
-                .map(DashboardService::mapTeacherNotification)
-                .toList();
+        List<DashboardNotificationSummary> recentNotifications = recentNotifications(currentUser);
         if (teacherProfile.getTeacherStatus() != TeacherStatus.APPROVED) {
             // D13 dashboard shell: pending / rejected teachers see no learner data.
             return new TeacherDashboardResponse(
@@ -211,53 +174,19 @@ public class DashboardService {
 
     @Transactional(readOnly = true)
     public AdminDashboardResponse getAdminDashboard(SecurityUserDetails currentUser) {
-        long totalGames = matchingGameRepository.count()
-                + flashcardRepository.count()
-                + listeningExerciseRepository.count()
-                + tracingExerciseRepository.count();
-
-        List<AdminDashboardResponse.RecentUserActivity> recentUserActivity = userRepository
-                .findTop5ByOrderByCreatedAtDesc().stream()
-                .map(user -> new AdminDashboardResponse.RecentUserActivity(
-                        user.getId(),
-                        user.getDisplayName(),
-                        user.getEmail(),
-                        user.getRoles().stream()
-                                .map(role -> role.getName().name())
-                                .sorted(Comparator.naturalOrder())
-                                .toList(),
-                        user.getCreatedAt()))
-                .toList();
-
-        List<AdminDashboardResponse.RecentAuditLogSummary> recentAuditLogs = auditLogRepository
-                .findTop5ByOrderByCreatedAtDesc().stream()
-                .map(log -> new AdminDashboardResponse.RecentAuditLogSummary(
-                        log.getId(),
-                        log.getActionType(),
-                        log.getTargetType(),
-                        log.getDescription(),
-                        log.getCreatedAt()))
-                .toList();
-
         return new AdminDashboardResponse(
                 currentUser.getDisplayName(),
                 studentProfileRepository.count(),
                 teacherProfileRepository.count(),
                 teacherProfileRepository.countByTeacherStatus(TeacherStatus.PENDING),
-                learningModuleRepository.count(),
-                lessonRepository.count(),
-                quizRepository.count(),
-                totalGames,
-                recentUserActivity,
                 new AdminDashboardResponse.AiUsageSummary(
                         aiUsageLogRepository.count(),
-                        aiUsageLogRepository.countByStatusIgnoreCase("SUCCESS")),
-                recentAuditLogs);
+                        aiUsageLogRepository.countByStatusIgnoreCase("SUCCESS")));
     }
 
-    private static List<StudentDashboardResponse.NotificationSummary> mapStudentNotifications(List<Notification> notifications) {
-        return notifications.stream()
-                .map(notification -> new StudentDashboardResponse.NotificationSummary(
+    private List<DashboardNotificationSummary> recentNotifications(SecurityUserDetails currentUser) {
+        return notificationService.findRecentAccessibleNotifications(currentUser, RECENT_ITEM_LIMIT).stream()
+                .map(notification -> new DashboardNotificationSummary(
                         notification.getId(),
                         notification.getTitle(),
                         notification.getMessage(),
@@ -265,16 +194,6 @@ public class DashboardService {
                         notification.getTargetPath(),
                         notification.getCreatedAt()))
                 .toList();
-    }
-
-    private static TeacherDashboardResponse.NotificationSummary mapTeacherNotification(Notification notification) {
-        return new TeacherDashboardResponse.NotificationSummary(
-                notification.getId(),
-                notification.getTitle(),
-                notification.getMessage(),
-                notification.getNotificationStatus().name(),
-                notification.getTargetPath(),
-                notification.getCreatedAt());
     }
 
     /**

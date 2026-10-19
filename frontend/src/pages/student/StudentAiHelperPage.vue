@@ -263,7 +263,7 @@
                   :id="`${baseId}-audio`"
                   class="input"
                   type="file"
-                  accept=".webm,.wav,.mp3,audio/webm,audio/wav,audio/mpeg,audio/mp3"
+                  :accept="UPLOAD_ACCEPT.audio"
                   @change="selectPronunciationFile"
                 />
               </div>
@@ -310,7 +310,7 @@
                   :id="`${baseId}-image`"
                   class="input"
                   type="file"
-                  accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                  :accept="UPLOAD_ACCEPT.image"
                   @change="selectWritingFile"
                 />
               </div>
@@ -595,6 +595,7 @@ import {
   studentProgress,
 } from '@/demo/data'
 import { AI_REPORT_REASON_KEYS, aiSafetyMessages } from '@/plugins/aiSafetyMessages'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import { studentAiHelperMessages } from '@/plugins/studentAiHelperMessages'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -612,7 +613,14 @@ import type {
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, nonNegativeInteger } from '@/utils/format'
-import { MAX_PRACTICE_UPLOAD_BYTES } from '@/utils/practiceUpload'
+import {
+  buildPronunciationFormData,
+  buildWritingFormData,
+  isAcceptedUploadType,
+  MAX_PRACTICE_UPLOAD_BYTES,
+  UPLOAD_ACCEPT,
+} from '@/utils/practiceUpload'
+import { emptyStudentProgress } from '@/utils/progressSummary'
 
 const { t } = useI18n({
   messages: {
@@ -632,8 +640,6 @@ function defaultPlatformSettings(): PublicPlatformSettingsResponse {
   return {
     platformName: appEnv.appName,
     aiDisclaimerText: t('aiSafety.disclaimer'),
-    sensitiveWordFilter: true,
-    aiSafetyCheck: true,
   }
 }
 
@@ -642,7 +648,7 @@ const progressResource = useResource(() => studentApi.progress(), studentProgres
 const platformSettingsResource = useResource(() => publicApi.platformSettings(), defaultPlatformSettings)
 
 const previewFallbackEnabled = computed(() => appEnv.useDemoData && auth.isPreviewSession)
-const emptyAvailability = {
+const emptyAvailability = computed(() => ({
   available: false,
   provider: null,
   model: null,
@@ -651,19 +657,11 @@ const emptyAvailability = {
   textGenerationAvailable: false,
   audioAnalysisAvailable: false,
   imageAnalysisAvailable: false,
-}
-const emptyProgress = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-}
+}))
+const emptyProgress = emptyStudentProgress()
 
 const availability = computed(
-  () => availabilityResource.data.value ?? (previewFallbackEnabled.value ? aiAvailability : emptyAvailability),
+  () => availabilityResource.data.value ?? (previewFallbackEnabled.value ? aiAvailability : emptyAvailability.value),
 )
 const progress = computed(
   () => progressResource.data.value ?? (previewFallbackEnabled.value ? studentProgress : emptyProgress),
@@ -676,9 +674,7 @@ const usingFallback = computed(
     reportsResource.usingFallback.value ||
     platformSettingsResource.usingFallback.value,
 )
-const rawAiReports = computed(
-  () => reportsResource.data.value ?? (reportsResource.usingFallback.value ? studentAiReports : []),
-)
+const rawAiReports = computed(() => reportsResource.data.value ?? [])
 const aiReports = computed(() =>
   rawAiReports.value.filter((item): item is StudentAiResponseReportResponse =>
     Boolean(item?.id && item.reasonCategory && item.status),
@@ -720,7 +716,7 @@ const chatForm = reactive({ message: '' })
 const wordForm = reactive({ word: '' })
 const sentenceForm = reactive({ sentence: '' })
 const storyForm = reactive({ topic: '' })
-const quizForm = reactive({ topic: t('studentAi.quizPlaceholder') })
+const quizForm = reactive({ topic: '' })
 interface PronunciationForm {
   targetText: string
   pinyin: string
@@ -762,12 +758,6 @@ const pronunciationReply = ref<AiPronunciationFeedbackResponse | null>(null)
 const writingReply = ref<AiWritingFeedbackResponse | null>(null)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
-const maxPronunciationFileSize = MAX_PRACTICE_UPLOAD_BYTES
-const maxWritingFileSize = MAX_PRACTICE_UPLOAD_BYTES
-const pronunciationExtensions = ['.webm', '.wav', '.mp3'] as const
-const writingExtensions = ['.png', '.jpg', '.jpeg'] as const
-const pronunciationMimeTypes = new Set(['audio/webm', 'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3'])
-const writingMimeTypes = new Set(['image/png', 'image/jpeg'])
 // A reports error with no rows is already shown (with a retry) in the "My reports" panel, so it stays out of the notice.
 const loadError = computed(
   () =>
@@ -786,7 +776,6 @@ const availabilityTone = computed<PillTone>(() => {
   if (availabilityResource.loading.value) return 'neutral'
   const status = availability.value.status?.toUpperCase()
   if (status === 'AVAILABLE') return 'success'
-  if (status === 'DEGRADED') return 'warning'
   return 'danger'
 })
 const hasToolResults = computed(() =>
@@ -846,9 +835,7 @@ const vocabularySnapshot = computed(() => {
     `${reply.chineseWord ?? ''} ${reply.pinyin ?? ''}`,
     reply.englishMeaning,
     reply.bahasaMelayuMeaning,
-    reply.simpleExplanation,
     reply.exampleSentence,
-    reply.exampleSentenceTranslation,
   ])
 })
 const sentenceSnapshot = computed(() => {
@@ -891,7 +878,7 @@ const pronunciationSnapshot = computed(() => {
 const writingSnapshot = computed(() => {
   const reply = writingReply.value
   if (!reply) return ''
-  return joinSnapshot([reply.feedback, reply.clarityComment, reply.improvementTips])
+  return joinSnapshot([reply.feedback, reply.clarityComment, writingSupportText.value])
 })
 
 type AiResponseStatusCarrier = { status?: string | null }
@@ -942,16 +929,9 @@ function applyUploadStatus(
   actionError.value = t('studentAi.responseStatus', { message: errorMessage, status: formatStatus(status || 'FAILED') })
 }
 
-function hasAllowedExtension(file: File, extensions: readonly string[]): boolean {
-  const name = file.name.toLowerCase()
-  return extensions.some((extension) => name.endsWith(extension))
-}
-
-function hasAllowedUploadType(file: File, extensions: readonly string[], mimeTypes: ReadonlySet<string>): boolean {
-  const mimeType = file.type.trim().toLowerCase()
-  if (mimeType) return mimeTypes.has(mimeType)
-
-  return hasAllowedExtension(file, extensions)
+/** Same rules as the practice upload forms and the server: allowed type and extension, not empty, at most 10 MB. */
+function isUploadableFile(file: File, kind: 'audio' | 'image'): boolean {
+  return isAcceptedUploadType(file, kind) && file.size > 0 && file.size <= MAX_PRACTICE_UPLOAD_BYTES
 }
 
 function showPreviewResponse(message: string): void {
@@ -978,10 +958,7 @@ function selectPronunciationFile(event: Event): void {
     return
   }
 
-  if (
-    !hasAllowedUploadType(file, pronunciationExtensions, pronunciationMimeTypes) ||
-    file.size > maxPronunciationFileSize
-  ) {
+  if (!isUploadableFile(file, 'audio')) {
     pronunciationForm.file = null
     clearFileInput(event)
     actionError.value = t('studentAi.uploadAudioInvalid')
@@ -1000,7 +977,7 @@ function selectWritingFile(event: Event): void {
     return
   }
 
-  if (!hasAllowedUploadType(file, writingExtensions, writingMimeTypes) || file.size > maxWritingFileSize) {
+  if (!isUploadableFile(file, 'image')) {
     writingForm.file = null
     clearFileInput(event)
     actionError.value = t('studentAi.uploadImageInvalid')
@@ -1028,8 +1005,9 @@ async function runChat(): Promise<void> {
     return
   }
   submitting.chat = true
+  const previousReply = chatReply.value
   try {
-    const sessionId = chatReply.value?.sessionId ?? null
+    const sessionId = previousReply?.sessionId ?? null
     chatReply.value = {
       sessionId,
       userMessage: message,
@@ -1054,7 +1032,8 @@ async function runChat(): Promise<void> {
     // The page was left while SparkBot was still answering: nothing to show.
     if (reason instanceof DOMException && reason.name === 'AbortError') return
     actionError.value = resolveApiError(reason, t('studentAi.chatError'))
-    chatReply.value = null
+    // Keep the last good exchange so the next question continues the same session (and its history).
+    chatReply.value = previousReply
     streamingChatText.value = ''
   } finally {
     submitting.chat = false
@@ -1089,14 +1068,16 @@ async function runVocabulary(): Promise<void> {
   }
   submitting.vocab = true
   try {
-    vocabularyReply.value = await aiApi.vocabularyHelper({
+    const reply = await aiApi.vocabularyHelper({
       word,
       inputLanguage: 'zh-CN',
       outputLanguage: languagePreference.value,
       languagePreference: languagePreference.value,
     })
     lastPrompts.vocabulary = word
-    applyAiResponseStatus(vocabularyReply.value, t('studentAi.vocabReady'), t('studentAi.vocabFallback'))
+    // An UNAVAILABLE / FAILED reply carries a fixed server message, not AI output: show only the notice.
+    vocabularyReply.value = aiResponseSucceeded(reply) ? reply : null
+    applyAiResponseStatus(reply, t('studentAi.vocabReady'), t('studentAi.vocabFallback'))
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('studentAi.vocabError'))
     vocabularyReply.value = null
@@ -1122,13 +1103,15 @@ async function runSentence(): Promise<void> {
   }
   submitting.sentence = true
   try {
-    sentenceReply.value = await aiApi.sentencePractice({
+    const reply = await aiApi.sentencePractice({
       sentence,
       learnerLevel: learnerLevelLabel.value,
       languagePreference: languagePreference.value,
     })
     lastPrompts.sentence = sentence
-    applyAiResponseStatus(sentenceReply.value, t('studentAi.sentenceReady'), t('studentAi.sentenceFallback'))
+    // An UNAVAILABLE / FAILED reply carries a fixed server message, not AI output: show only the notice.
+    sentenceReply.value = aiResponseSucceeded(reply) ? reply : null
+    applyAiResponseStatus(reply, t('studentAi.sentenceReady'), t('studentAi.sentenceFallback'))
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('studentAi.sentenceError'))
     sentenceReply.value = null
@@ -1154,13 +1137,15 @@ async function runStory(): Promise<void> {
   }
   submitting.story = true
   try {
-    storyReply.value = await aiApi.storyGenerator({
+    const reply = await aiApi.storyGenerator({
       topic,
       level: learnerLevelLabel.value,
       languagePreference: languagePreference.value,
     })
     lastPrompts.story = topic
-    applyAiResponseStatus(storyReply.value, t('studentAi.storyReady'), t('studentAi.storyFallback'))
+    // An UNAVAILABLE / FAILED reply carries a fixed server message, not AI output: show only the notice.
+    storyReply.value = aiResponseSucceeded(reply) ? reply : null
+    applyAiResponseStatus(reply, t('studentAi.storyReady'), t('studentAi.storyFallback'))
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('studentAi.storyError'))
     storyReply.value = null
@@ -1186,7 +1171,7 @@ async function runQuiz(): Promise<void> {
   }
   submitting.quiz = true
   try {
-    quizReply.value = await aiApi.quizGenerator({
+    const reply = await aiApi.quizGenerator({
       topic,
       level: learnerLevelLabel.value,
       numberOfQuestions: 3,
@@ -1194,7 +1179,9 @@ async function runQuiz(): Promise<void> {
       languagePreference: languagePreference.value,
     })
     lastPrompts.quiz = topic
-    applyAiResponseStatus(quizReply.value, t('studentAi.quizSuccess'), t('studentAi.quizFallback'))
+    // An UNAVAILABLE / FAILED reply carries a fixed server message, not AI output: show only the notice.
+    quizReply.value = aiResponseSucceeded(reply) ? reply : null
+    applyAiResponseStatus(reply, t('studentAi.quizSuccess'), t('studentAi.quizFallback'))
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('studentAi.quizError'))
     quizReply.value = null
@@ -1229,13 +1216,12 @@ async function runPronunciation(): Promise<void> {
   }
   submitting.pronunciation = true
   try {
-    const formData = new FormData()
-    formData.append('file', pronunciationForm.file)
-    formData.append('targetText', targetText)
-    if (pronunciationForm.pinyin.trim()) {
-      formData.append('pinyin', pronunciationForm.pinyin.trim())
-    }
-    formData.append('languagePreference', languagePreference.value)
+    const formData = buildPronunciationFormData({
+      file: pronunciationForm.file,
+      targetText,
+      pinyin: pronunciationForm.pinyin,
+      languagePreference: languagePreference.value,
+    })
     pronunciationReply.value = await aiApi.pronunciationFeedback(formData)
     lastPrompts.pronunciation = targetText
     applyUploadStatus(
@@ -1273,10 +1259,11 @@ async function runWriting(): Promise<void> {
   }
   submitting.writing = true
   try {
-    const formData = new FormData()
-    formData.append('file', writingForm.file)
-    formData.append('targetCharacter', targetCharacter)
-    formData.append('languagePreference', languagePreference.value)
+    const formData = buildWritingFormData({
+      file: writingForm.file,
+      targetCharacter,
+      languagePreference: languagePreference.value,
+    })
     writingReply.value = await aiApi.writingFeedback(formData)
     lastPrompts.writing = targetCharacter
     applyUploadStatus(
@@ -1305,17 +1292,10 @@ function fillSentenceSuggestion(sentence: string): void {
   sentenceForm.sentence = sentence
 }
 
-function formatEnumLabel(value: string): string {
-  return value
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
-}
-
 function formatReportReason(value: string): string {
   const key = AI_REPORT_REASON_KEYS[value.toUpperCase() as AiResponseReportReason]
   if (key) return t(`aiSafety.${key}`)
-  return formatEnumLabel(value)
+  return humanizeEnumValue(value)
 }
 
 function formatStatus(value: string): string {
@@ -1327,12 +1307,11 @@ function formatStatus(value: string): string {
     SUCCESS: 'statusSuccess',
     FAILED: 'statusFailed',
     AVAILABLE: 'statusAvailable',
-    DEGRADED: 'statusDegraded',
     UNAVAILABLE: 'statusUnavailable',
   }
   const key = keys[value.toUpperCase()]
   if (key) return t(`studentAi.${key}`)
-  return formatEnumLabel(value)
+  return humanizeEnumValue(value)
 }
 </script>
 

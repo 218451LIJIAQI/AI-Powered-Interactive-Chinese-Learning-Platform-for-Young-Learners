@@ -53,7 +53,7 @@ class DashboardControllerIntegrationTests {
     private ObjectMapper objectMapper;
 
     @Test
-    void shouldRequireStudentRoleForStudentDashboard() throws Exception {
+    void studentGetsOwnDashboardSummary() throws Exception {
         String token = registerAndLoginStudent(uniqueEmail("student-dashboard"));
 
         mockMvc.perform(get("/api/v1/students/dashboard")
@@ -67,7 +67,7 @@ class DashboardControllerIntegrationTests {
     }
 
     @Test
-    void shouldRequireTeacherRoleForTeacherDashboard() throws Exception {
+    void pendingTeacherGetsTeacherDashboardSummary() throws Exception {
         String token = registerAndLoginTeacher(uniqueEmail("teacher-dashboard"));
 
         mockMvc.perform(get("/api/v1/teachers/dashboard")
@@ -82,7 +82,7 @@ class DashboardControllerIntegrationTests {
     }
 
     @Test
-    void shouldRequireAdminRoleForAdminDashboard() throws Exception {
+    void adminGetsAdminDashboardSummary() throws Exception {
         String token = userToken(ADMIN_EMAIL, ADMIN_PASSWORD);
 
         mockMvc.perform(get("/api/v1/admin/dashboard")

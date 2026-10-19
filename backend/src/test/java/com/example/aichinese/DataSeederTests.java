@@ -33,7 +33,6 @@ class DataSeederTests {
     private static final long EXPECTED_ROLE_COUNT = 3;
     private static final long EXPECTED_LEVEL_COUNT = 3;
     private static final long EXPECTED_CATEGORY_COUNT = 15;
-    private static final long MIN_BADGE_COUNT = 3;
     private static final long MIN_SYSTEM_SETTING_COUNT = 3;
 
     @Autowired
@@ -59,7 +58,10 @@ class DataSeederTests {
         assertThat(roleRepository.count()).isEqualTo(EXPECTED_ROLE_COUNT);
         assertThat(learningLevelRepository.count()).isEqualTo(EXPECTED_LEVEL_COUNT);
         assertThat(learningCategoryRepository.count()).isEqualTo(EXPECTED_CATEGORY_COUNT);
-        assertThat(badgeRepository.count()).isGreaterThanOrEqualTo(MIN_BADGE_COUNT);
+        // SDD 5.5: the catalogue contains exactly these five badges.
+        assertThat(badgeRepository.findAll())
+                .extracting(com.example.aichinese.entity.Badge::getName)
+                .containsExactlyInAnyOrder("First Steps", "Quiz Star", "Lesson Finisher", "Streak Explorer", "Point Starter");
         // Seeded badges are exactly the badges the reward service awards (no never-awarded badges).
         assertThat(badgeRepository.findAll())
                 .extracting(com.example.aichinese.entity.Badge::getName)

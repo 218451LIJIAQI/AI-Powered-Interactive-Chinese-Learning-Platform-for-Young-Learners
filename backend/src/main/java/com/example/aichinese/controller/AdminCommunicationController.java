@@ -21,12 +21,10 @@ import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
 import com.example.aichinese.dto.communication.AuditLogResponse;
 import com.example.aichinese.dto.communication.CreateModerationActionRequest;
 import com.example.aichinese.dto.communication.ModerationRecordResponse;
-import com.example.aichinese.dto.communication.NotificationResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.ContentModerationService;
-import com.example.aichinese.service.NotificationService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
@@ -38,30 +36,17 @@ public class AdminCommunicationController {
 
     private static final String MODERATION_ACTION_APPLIED = "Moderation action applied successfully.";
 
-    private final NotificationService notificationService;
     private final ContentModerationService contentModerationService;
     private final AuditLogService auditLogService;
     private final AiResponseReportService aiResponseReportService;
 
     public AdminCommunicationController(
-            NotificationService notificationService,
             ContentModerationService contentModerationService,
             AuditLogService auditLogService,
             AiResponseReportService aiResponseReportService) {
-        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.contentModerationService = Objects.requireNonNull(contentModerationService, "contentModerationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
         this.aiResponseReportService = Objects.requireNonNull(aiResponseReportService, "aiResponseReportService");
-    }
-
-    @GetMapping("/notifications")
-    public ApiResponse<PageResponse<NotificationResponse>> getAdminNotifications(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
-        return ApiResponse.success(
-                "Admin notifications retrieved successfully.",
-                notificationService.getCurrentUserNotifications(currentUser, page, size));
     }
 
     @GetMapping("/moderation-records")

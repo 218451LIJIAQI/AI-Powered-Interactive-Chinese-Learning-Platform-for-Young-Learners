@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { isUnauthorizedApiError, resolveApiError } from './apiError'
+import { resolveApiError } from './apiError'
 
 describe('resolveApiError', () => {
   afterEach(() => {
@@ -77,10 +77,5 @@ describe('resolveApiError', () => {
     document.documentElement.lang = 'ms-MY'
     expect(resolveApiError({ response: { status: 403, data: {} } })).toContain('tiada kebenaran')
     expect(resolveApiError({ code: 'ECONNABORTED' })).toContain('terlalu lama')
-  })
-
-  it('detects unauthorized responses', () => {
-    expect(isUnauthorizedApiError({ response: { status: 401 } })).toBe(true)
-    expect(isUnauthorizedApiError({ response: { status: 403 } })).toBe(false)
   })
 })

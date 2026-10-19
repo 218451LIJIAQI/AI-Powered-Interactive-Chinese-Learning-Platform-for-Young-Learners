@@ -26,6 +26,7 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
             @Param("studentId") Long studentId,
             @Param("lessonId") Long lessonId);
 
+    @EntityGraph(attributePaths = { "lesson" })
     List<LessonProgress> findByStudentIdOrderByUpdatedAtDesc(Long studentId);
 
     @Query("""

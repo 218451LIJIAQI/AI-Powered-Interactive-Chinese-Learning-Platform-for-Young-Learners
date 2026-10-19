@@ -112,6 +112,15 @@ class AiUsageLimiterTests {
                 .doesNotThrowAnyException();
     }
 
+    /** SDD 5.6: per-user limits of 10 AI requests per minute and 100 per day. */
+    @Test
+    void springManagedLimiterUsesTheDocumentedQuota() {
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(springManagedLimiter, "requestsPerMinute"))
+                .isEqualTo(10);
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(springManagedLimiter, "requestsPerDay"))
+                .isEqualTo(100);
+    }
+
     @Test
     void repairsMissingWindowFieldsOnExistingCounter() {
         UserRepository userRepository = mock(UserRepository.class);

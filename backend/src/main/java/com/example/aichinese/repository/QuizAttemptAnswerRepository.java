@@ -20,8 +20,6 @@ public interface QuizAttemptAnswerRepository extends JpaRepository<QuizAttemptAn
             from QuizAttemptAnswer answer
             join answer.quizAttempt attempt
             join answer.question question
-            join question.quiz quiz
-            join quiz.lesson lesson
             where attempt.student.id = :studentId
               and answer.correct = false
             group by question.questionType

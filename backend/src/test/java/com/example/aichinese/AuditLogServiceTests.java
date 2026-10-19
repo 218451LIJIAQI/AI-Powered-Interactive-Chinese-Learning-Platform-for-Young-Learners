@@ -51,7 +51,7 @@ class AuditLogServiceTests {
                 .contains("token=[REDACTED]")
                 .contains("api_key=[REDACTED]")
                 .contains("Authorization: [REDACTED]")
-                .doesNotContain("SuperSecret123", "abc123", "bearer-token", "reset-token")
+                .doesNotContain("SuperSecret123", "abc123", "sk-live", "bearer-token", "reset-token")
                 .hasSizeLessThanOrEqualTo(MAX_AUDIT_DESCRIPTION_LENGTH);
     }
 
@@ -88,8 +88,7 @@ class AuditLogServiceTests {
                 ACTION_TYPE,
                 TARGET_TYPE,
                 TARGET_ID,
-                "description",
-                "127.0.0.1"))
+                "description"))
                 .doesNotThrowAnyException();
 
         assertThat(output)

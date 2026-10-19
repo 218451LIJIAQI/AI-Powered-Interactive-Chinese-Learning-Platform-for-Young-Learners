@@ -36,19 +36,6 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
     @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user" })
     List<LiveClassEnrolment> findByLiveClassIdOrderByEnrolledAtAsc(Long liveClassId);
 
-    @EntityGraph(attributePaths = {
-            "liveClass",
-            "liveClass.teacher",
-            "liveClass.teacher.user",
-            "liveClass.lesson",
-            "liveClass.coursePackage",
-            "student",
-            "student.user"
-    })
-    List<LiveClassEnrolment> findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(
-            Long studentId,
-            LiveClassEnrolmentStatus enrolmentStatus);
-
     @EntityGraph(attributePaths = { "liveClass", "liveClass.lesson", "liveClass.coursePackage", "student" })
     @Query("""
             select enrolment from LiveClassEnrolment enrolment
@@ -84,8 +71,6 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
     })
     List<LiveClassEnrolment> findByLiveClassTeacherIdAndStudentIdIn(Long teacherId, List<Long> studentIds);
 
-    long countByLiveClassIdAndEnrolmentStatus(Long liveClassId, LiveClassEnrolmentStatus enrolmentStatus);
-
     long countByLiveClassIdAndEnrolmentStatusIn(Long liveClassId, Collection<LiveClassEnrolmentStatus> statuses);
 
     boolean existsByLiveClassIdAndStudentIdAndEnrolmentStatusIn(
@@ -93,10 +78,9 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
             Long studentId,
             Collection<LiveClassEnrolmentStatus> statuses);
 
-    boolean existsByStudentIdAndLiveClassTeacherUserId(Long studentId, Long teacherUserId);
-
-    boolean existsByStudentIdAndLiveClassLessonIdAndLiveClassTeacherUserId(
+    boolean existsByStudentIdAndLiveClassLessonIdAndLiveClassTeacherUserIdAndEnrolmentStatusNot(
             Long studentId,
             Long lessonId,
-            Long teacherUserId);
+            Long teacherUserId,
+            LiveClassEnrolmentStatus enrolmentStatus);
 }

@@ -25,7 +25,6 @@ import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
 import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
 import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
 import com.example.aichinese.dto.communication.CreateTeacherFeedbackRequest;
-import com.example.aichinese.dto.content.ContentApprovalRequest;
 import com.example.aichinese.dto.content.CreateLessonRequest;
 import com.example.aichinese.dto.learning.CreateLiveClassRequest;
 import com.example.aichinese.dto.learning.CreateQuizRequest;
@@ -38,6 +37,7 @@ import com.example.aichinese.dto.learning.UpdateLiveClassStatusRequest;
 import com.example.aichinese.dto.learning.UpdateLiveClassRequest;
 import com.example.aichinese.dto.learning.UpdateQuizQuestionRequest;
 import com.example.aichinese.dto.learning.UpdateQuizRequest;
+import com.example.aichinese.dto.review.ContentReviewNoteRequest;
 import com.example.aichinese.dto.system.AdminPlatformSettingsUpdateRequest;
 import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
@@ -48,8 +48,9 @@ import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 
 /**
- * Pins the Jakarta Validation annotations declared on every public
- * request DTO. Acts as a contract guard so a future refactor that
+ * Pins the Jakarta Validation annotations declared on the content,
+ * learning, AI, feedback, teacher-profile, activity and settings
+ * request DTOs. Acts as a contract guard so a future refactor that
  * loosens a {@code @NotBlank} / {@code @Size} / {@code @Email} /
  * {@code @Min} constraint trips an explicit unit failure rather than
  * silently widening the API attack surface.
@@ -189,7 +190,7 @@ class RequestDtoValidationTests {
                 10,
                 "  Lesson body  ",
                 IDEOGRAPHIC_SPACE);
-        ContentApprovalRequest approvalRequest = new ContentApprovalRequest(ideographicWrapped("Needs review"));
+        ContentReviewNoteRequest approvalRequest = new ContentReviewNoteRequest(ideographicWrapped("Needs review"));
         CreateTeacherFeedbackRequest feedbackRequest = new CreateTeacherFeedbackRequest(
                 1L,
                 null,

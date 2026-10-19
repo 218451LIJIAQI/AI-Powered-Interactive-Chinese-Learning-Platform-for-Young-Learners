@@ -179,8 +179,10 @@ class AdminActivityLibraryIntegrationTests {
         // have produced an audit-log entry. Without this guard, admin actions
         // can silently bypass compliance review.
         assertThat(auditLogRepository.count()).isGreaterThanOrEqualTo(auditBefore + 4);
-        assertThat(auditLogRepository.findAll())
-                .extracting(AuditLog::getActionType)
+        // Scoped to this flashcard: other tests in the shared context write the same action types.
+        assertThat(auditLogRepository.findAll().stream()
+                .filter(log -> "Flashcard".equals(log.getTargetType()) && Long.valueOf(flashcardId).equals(log.getTargetId()))
+                .map(AuditLog::getActionType))
                 .contains("ADMIN_ACTIVITY_CREATE",
                         "ADMIN_ACTIVITY_UPDATE",
                         "ADMIN_ACTIVITY_STATUS",
@@ -402,7 +404,7 @@ class AdminActivityLibraryIntegrationTests {
 
     @Test
     void adminCannotPublishAnIncompleteMatchingGame() throws Exception {
-        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
+        String adminToken = adminToken();
         MvcResult created = mockMvc.perform(post("/api/v1/admin/activities/matching-games")
                 .with(csrf())
                 .header(AUTHORIZATION, bearer(adminToken))
@@ -411,7 +413,7 @@ class AdminActivityLibraryIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.learningStage").value("SCAFFOLDED"))
                 .andReturn();
-        long gameId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asLong();
+        long gameId = responseDataId(created);
 
         mockMvc.perform(patch("/api/v1/admin/activities/matching-games/" + gameId + "/status")
                 .with(csrf())

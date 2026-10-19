@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   aiStoryDraft: vi.fn(),
   aiQuizDraft: vi.fn(),
   ui: { locale: 'en' as 'en' | 'ms' | 'zh-CN' },
+  auth: { isPreviewSession: true, isAuthenticated: false },
 }))
 
 vi.mock('@/api/services', () => ({
@@ -18,7 +19,7 @@ vi.mock('@/api/services', () => ({
     aiQuizDraft: (...args: unknown[]) => mocks.aiQuizDraft(...args),
   },
 }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isPreviewSession: true, isAuthenticated: false }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => mocks.auth }))
 vi.mock('@/stores/ui', () => ({ useUiStore: () => mocks.ui }))
 
 import TeacherAiDraftPanel from './TeacherAiDraftPanel.vue'
@@ -29,6 +30,8 @@ describe('TeacherAiDraftPanel story vocabulary (FR-AIGEN-08)', () => {
     mocks.ui.locale = 'en'
     mocks.aiAvailability.mockReset()
     mocks.aiStoryDraft.mockReset()
+    mocks.aiQuizDraft.mockReset()
+    mocks.auth = { isPreviewSession: true, isAuthenticated: false }
   })
 
   it('emits the draft and shows its vocabulary read-only without saving anything', async () => {
@@ -51,5 +54,39 @@ describe('TeacherAiDraftPanel story vocabulary (FR-AIGEN-08)', () => {
     expect(rows[0].text()).toContain('canteen')
     expect(wrapper.get('[data-testid="teacher-ai-draft-vocabulary"]').text()).toContain('Instructions field')
     expect(wrapper.get('[data-testid="teacher-ai-draft-result"]').text()).toContain('Not saved')
+  })
+
+  it('checks AI availability once the panel becomes enabled and clamps the live quiz question count', async () => {
+    mocks.auth = { isPreviewSession: false, isAuthenticated: true }
+    mocks.aiAvailability.mockResolvedValue({ available: true, textGenerationAvailable: true })
+    mocks.aiQuizDraft.mockResolvedValue({ title: 'Food', questions: [] })
+    const wrapper = mount(TeacherAiDraftPanel, {
+      props: { mode: 'quiz', disabled: true },
+      global: { plugins: [i18n], stubs: { IconGlyph: true, RouterLink: true, AiDisclaimer: true } },
+    })
+    await flushPromises()
+    expect(mocks.aiAvailability).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ disabled: false })
+    await flushPromises()
+    expect(mocks.aiAvailability).toHaveBeenCalledOnce()
+
+    await wrapper.get('[data-testid="teacher-ai-draft-topic"]').setValue('Food')
+    await wrapper.get('input[type="number"]').setValue(25)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.aiQuizDraft).toHaveBeenCalledWith(expect.objectContaining({ topic: 'Food', numberOfQuestions: 10 }))
+  })
+
+  it('emits forbidden when the teacher is not allowed to use AI drafts', async () => {
+    mocks.auth = { isPreviewSession: false, isAuthenticated: true }
+    mocks.aiAvailability.mockRejectedValue({ response: { status: 403, data: {} } })
+    const wrapper = mount(TeacherAiDraftPanel, {
+      props: { mode: 'story' },
+      global: { plugins: [i18n], stubs: { IconGlyph: true, RouterLink: true, AiDisclaimer: true } },
+    })
+    await flushPromises()
+
+    expect(wrapper.emitted('forbidden')).toHaveLength(1)
   })
 })

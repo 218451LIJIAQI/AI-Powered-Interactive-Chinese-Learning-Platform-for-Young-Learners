@@ -35,14 +35,13 @@ afterEach(() => {
 })
 
 describe('W3 content governance wrappers', () => {
-  it('maps teacher submit-for-review, quiz read, activity list and AI draft endpoints', async () => {
+  it('maps teacher submit-for-review, activity list and AI draft endpoints', async () => {
     const calls = capture()
 
     await teacherApi.submitPackage(1)
     await teacherApi.submitModule(2)
     await teacherApi.submitLesson(3)
     await teacherApi.submitQuiz(4)
-    await teacherApi.quiz(4)
     await teacherApi.activities({ status: 'REJECTED', type: 'STORY_ACTIVITY', page: 0, size: 12 })
     await teacherApi.aiAvailability()
     await teacherApi.aiQuizDraft({ topic: 'Food', numberOfQuestions: 3, languagePreference: 'ms' })
@@ -53,20 +52,18 @@ describe('W3 content governance wrappers', () => {
       'POST /teachers/modules/2/submit',
       'POST /teachers/lessons/3/submit',
       'POST /teachers/quizzes/4/submit',
-      'GET /teachers/quizzes/4',
       'GET /teachers/activities',
       'GET /teachers/ai/availability',
       'POST /teachers/ai/quiz-draft',
       'POST /teachers/ai/story-draft',
     ])
-    expect(calls[5].params).toEqual({ status: 'REJECTED', type: 'STORY_ACTIVITY', page: 0, size: 12 })
-    expect(calls[7].data).toEqual({ topic: 'Food', numberOfQuestions: 3, languagePreference: 'ms' })
+    expect(calls[4].params).toEqual({ status: 'REJECTED', type: 'STORY_ACTIVITY', page: 0, size: 12 })
+    expect(calls[6].data).toEqual({ topic: 'Food', numberOfQuestions: 3, languagePreference: 'ms' })
   })
 
   it('maps teacher-authored activity CRUD and submit onto /teachers/activities/{slug}', async () => {
     const calls = capture()
 
-    await teacherActivityGateway.list('MATCHING_GAME', { status: 'DRAFT' })
     await teacherActivityGateway.create('FLASHCARD', flashcard)
     await teacherActivityGateway.detail('LISTENING_EXERCISE', 5)
     await teacherActivityGateway.update('TRACING_EXERCISE', 6, { title: '人' })
@@ -74,14 +71,13 @@ describe('W3 content governance wrappers', () => {
     await teacherActivityGateway.submit('STORY_ACTIVITY', 8)
 
     expect(calls.map(({ method, url }) => `${method} ${url}`)).toEqual([
-      'GET /teachers/activities/matching-games',
       'POST /teachers/activities/flashcards',
       'GET /teachers/activities/listening-exercises/5',
       'PUT /teachers/activities/tracing-exercises/6',
       'DELETE /teachers/activities/drag-drop-activities/7',
       'POST /teachers/activities/story-activities/8/submit',
     ])
-    expect(calls[1].data).toEqual(flashcard)
+    expect(calls[0].data).toEqual(flashcard)
   })
 
   it('keeps the admin library on /admin/activities with the same shared payloads', async () => {

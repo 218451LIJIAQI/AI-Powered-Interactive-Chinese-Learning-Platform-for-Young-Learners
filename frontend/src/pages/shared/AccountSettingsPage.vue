@@ -250,7 +250,6 @@ async function saveProfile(): Promise<void> {
   try {
     const user = await accountApi.updateProfile({ displayName, preferredLanguage: profileForm.preferredLanguage })
     auth.applyProfileUpdate(user)
-    if (!normalizeAppLanguage(user.preferredLanguage)) ui.setLocale(profileForm.preferredLanguage)
     noticeSuccess.value = t('account.profileSaved')
   } catch (reason) {
     noticeError.value = resolveApiError(reason, t('account.profileError'))

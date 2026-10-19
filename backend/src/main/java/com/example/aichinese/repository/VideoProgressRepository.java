@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import com.example.aichinese.entity.VideoProgress;
@@ -34,7 +35,6 @@ public interface VideoProgressRepository extends JpaRepository<VideoProgress, Lo
                    progress.updatedAt as updatedAt
             from VideoProgress progress
             join progress.lesson lesson
-            join progress.recordedVideo video
             where progress.student.id = :studentId and progress.id > :afterId
             order by progress.id asc
             """)
@@ -42,7 +42,8 @@ public interface VideoProgressRepository extends JpaRepository<VideoProgress, Lo
             @Param("studentId") Long studentId, @Param("afterId") Long afterId, Pageable pageable);
 
     @EntityGraph(attributePaths = { "student", "student.user", "lesson", "recordedVideo" })
-    List<VideoProgress> findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(Long teacherUserId, Long lessonId);
+    Page<VideoProgress> findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(
+            Long teacherUserId, Long lessonId, Pageable pageable);
 
     long countByStudentIdAndRecordedVideoIdInAndCompletedTrue(Long studentId, Collection<Long> recordedVideoIds);
 }

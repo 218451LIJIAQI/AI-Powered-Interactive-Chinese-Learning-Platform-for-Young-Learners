@@ -25,7 +25,7 @@ export type ReviewContentType =
   | 'DRAG_DROP_ACTIVITY'
   | 'STORY_ACTIVITY'
 export type LiveClassStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED'
-type AiResponseReportStatus = 'PENDING_REVIEW' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED'
+export type AiResponseReportStatus = 'PENDING_REVIEW' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED'
 export type AiResponseReportReviewStatus = Exclude<AiResponseReportStatus, 'PENDING_REVIEW'>
 export type AiResponseReportReason =
   | 'INCORRECT_CONTENT'
@@ -213,7 +213,6 @@ export interface PublicCourseDetail {
   status: ContentStatus
   basicContent?: string | null
   packageItems: PublicCourseItemSummary[]
-  callToAction?: string | null
 }
 
 export interface NotificationResponse {
@@ -512,7 +511,6 @@ export interface StudentFlashcardResponse {
   imageUrl?: string | null
   audioUrl?: string | null
   sortOrder?: number | null
-  extraPayload?: string | null
   hskLevel?: number | null
   difficulty?: string | null
   topic?: string | null
@@ -1245,28 +1243,10 @@ export interface AdminDashboardResponse {
   totalStudents: number
   totalTeachers: number
   pendingTeacherApprovals: number
-  totalModules: number
-  totalLessons: number
-  totalQuizzes: number
-  totalGames: number
-  recentUserActivity: Array<{
-    userId: number
-    fullName: string
-    email: string
-    roles: UserRole[]
-    createdAt: string
-  }>
   aiUsageSummary: {
     totalRequests: number
     successfulRequests: number
   }
-  recentAuditLogs: Array<{
-    auditLogId: number
-    actionType: string
-    targetType: string
-    description: string
-    createdAt: string
-  }>
 }
 
 export interface AdminAnalyticsResponse {
@@ -1336,16 +1316,6 @@ export interface AdminTeacherDetailResponse {
   recentAuditLogs: AdminAuditSummaryResponse[]
   createdAt: string
   updatedAt: string
-}
-
-export interface AdminStudentListItemResponse {
-  studentId: number
-  userId: number
-  fullName: string
-  email: string
-  /** en | ms | zh-CN; legacy accounts may return the old Chinese code (normalise with normalizeAppLanguage). */
-  preferredLanguage?: string | null
-  createdAt: string
 }
 
 export interface ContentSubmissionResponse {
@@ -1472,10 +1442,7 @@ export interface AiVocabularyHelperResponse {
   bahasaMelayuMeaning?: string | null
   simpleExplanation?: string | null
   exampleSentence?: string | null
-  exampleSentencePinyin?: string | null
   exampleSentenceTranslation?: string | null
-  imagePromptOrDescription?: string | null
-  miniPracticeQuestion?: string | null
   encouragement?: string | null
   status: string
 }
@@ -1487,8 +1454,6 @@ export interface AiSentencePracticeResponse {
   englishMeaning?: string | null
   bahasaMelayuMeaning?: string | null
   improvementExplanation?: string | null
-  naturalSentenceVersion?: string | null
-  practiceTask?: string | null
   encouragement?: string | null
   status: string
 }
@@ -1623,6 +1588,4 @@ export interface AdminPlatformSettingsUpdateRequest {
 export interface PublicPlatformSettingsResponse {
   platformName: string
   aiDisclaimerText: string
-  sensitiveWordFilter: boolean
-  aiSafetyCheck: boolean
 }

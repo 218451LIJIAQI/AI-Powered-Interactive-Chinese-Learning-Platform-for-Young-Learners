@@ -5,7 +5,7 @@
         <button
           class="btn btn-primary"
           type="button"
-          :disabled="markingAll || unreadOnPage === 0"
+          :disabled="markingAll || unreadTotal === 0"
           :aria-busy="markingAll"
           data-testid="notifications-mark-all"
           @click="markAllRead"
@@ -35,7 +35,7 @@
       </div>
       <p class="notifications-count" aria-live="polite">
         <span class="notifications-count-dot" aria-hidden="true" />
-        {{ t('notifications.unreadCount', unreadOnPage) }}
+        {{ t('notifications.unreadCount', unreadTotal) }}
       </p>
     </div>
 
@@ -178,6 +178,12 @@ const resource = useResource<PageResponse<NotificationResponse>>(
   () => pagePreviewNotifications(previewItems.value, filter.value, page.value),
 )
 
+// Account-wide unread total (FR-NOTIF): independent of the filter and page on screen.
+const unreadResource = useResource(
+  () => notificationsApi.unreadCount(),
+  () => ({ unreadCount: previewItems.value.filter((item) => item.status === 'UNREAD').length }),
+)
+
 const filterOptions = computed(() => [
   { value: 'ALL' as const, label: t('notifications.filterAll') },
   { value: 'UNREAD' as const, label: t('notifications.filterUnread') },
@@ -185,7 +191,7 @@ const filterOptions = computed(() => [
 ])
 const items = computed(() => resource.data.value?.items ?? [])
 const totalPages = computed(() => Math.max(1, resource.data.value?.totalPages ?? 1))
-const unreadOnPage = computed(() => items.value.filter((item) => item.status === 'UNREAD').length)
+const unreadTotal = computed(() => unreadResource.data.value?.unreadCount ?? 0)
 const emptyTitle = computed(() =>
   filter.value === 'UNREAD'
     ? t('notifications.emptyUnreadTitle')
@@ -229,13 +235,14 @@ function applyLocalRead(id: number): void {
   }
 }
 
-async function markRead(item: NotificationResponse): Promise<boolean> {
+async function markRead(item: NotificationResponse): Promise<void> {
   clearMessages()
   if (resource.usingFallback.value) {
     previewItems.value = markNotificationRead(previewItems.value, item.id)
     applyLocalRead(item.id)
+    void unreadResource.reload()
     actionSuccess.value = t('notifications.previewAction')
-    return true
+    return
   }
 
   pendingId.value = item.id
@@ -243,12 +250,11 @@ async function markRead(item: NotificationResponse): Promise<boolean> {
     await notificationsApi.markAsRead(item.id)
     applyLocalRead(item.id)
     announceNotificationsRead(item.id)
+    void unreadResource.reload()
     actionSuccess.value = t('notifications.markedRead')
     if (filter.value === 'UNREAD') void reload()
-    return true
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('notifications.markReadError'))
-    return false
   } finally {
     pendingId.value = null
   }
@@ -262,7 +268,7 @@ async function markAllRead(): Promise<void> {
       status: 'READ',
       readAt: item.readAt ?? new Date().toISOString(),
     }))
-    await reload()
+    await Promise.all([reload(), unreadResource.reload()])
     actionSuccess.value = t('notifications.previewAction')
     return
   }
@@ -271,7 +277,7 @@ async function markAllRead(): Promise<void> {
   try {
     const result = await notificationsApi.markAllRead()
     announceNotificationsRead()
-    await reload()
+    await Promise.all([reload(), unreadResource.reload()])
     actionSuccess.value = t('notifications.markedAllRead', result.updatedCount)
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('notifications.markAllError'))

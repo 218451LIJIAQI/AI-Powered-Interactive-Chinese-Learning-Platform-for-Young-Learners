@@ -70,10 +70,15 @@ describe('validateUpload', () => {
 })
 
 describe('isAcceptedUploadType / parseLessonId', () => {
-  it('falls back to the extension when the browser gives no type', () => {
-    expect(isAcceptedUploadType({ name: 'take.WEBM', type: '' }, 'audio')).toBe(true)
+  it('requires both an allowed content type and an allowed extension, like the server', () => {
+    expect(isAcceptedUploadType({ name: 'take.WEBM', type: '' }, 'audio')).toBe(false)
     expect(isAcceptedUploadType({ name: 'take.m4a', type: '' }, 'audio')).toBe(false)
     expect(isAcceptedUploadType({ name: 'take.webm', type: 'audio/webm;codecs=opus' }, 'audio')).toBe(true)
+    expect(isAcceptedUploadType({ name: 'take.webm', type: 'video/webm' }, 'audio')).toBe(true)
+    expect(isAcceptedUploadType({ name: 'take.wav', type: 'audio/wave' }, 'audio')).toBe(false)
+    expect(isAcceptedUploadType({ name: 'take.ogg', type: 'audio/webm' }, 'audio')).toBe(false)
+    expect(isAcceptedUploadType({ name: 'note.jpg', type: 'image/jpg' }, 'image')).toBe(false)
+    expect(isAcceptedUploadType({ name: 'note.jpg', type: 'image/jpeg' }, 'image')).toBe(true)
   })
 
   it('parses positive integer lesson ids only', () => {

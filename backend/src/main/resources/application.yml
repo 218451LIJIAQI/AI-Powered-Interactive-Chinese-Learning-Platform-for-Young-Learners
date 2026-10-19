@@ -120,7 +120,7 @@ app:
       max-tracked-records: ${PUBLIC_AUTH_MAX_TRACKED_RECORDS:10000}
     jwt:
       # JWT_SECRET must be supplied via environment variable; the default is empty so the
-      # SecurityProperties @NotBlank validation fails fast at startup if it is not set.
+      # SecurityProperties constructor rejects it at startup if it is not set.
       secret: ${JWT_SECRET:}
       # Access tokens are deliberately short-lived; browser continuity is
       # handled by rotating HttpOnly refresh-token cookies.

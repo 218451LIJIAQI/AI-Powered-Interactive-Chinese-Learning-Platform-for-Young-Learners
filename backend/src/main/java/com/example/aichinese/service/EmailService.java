@@ -1,15 +1,10 @@
 package com.example.aichinese.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.example.aichinese.entity.User;
-import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.TextUtils;
 
 public interface EmailService {
 
-    Logger log = LoggerFactory.getLogger(EmailService.class);
     String BLANK_LINE = System.lineSeparator() + System.lineSeparator();
 
     void sendEmail(User recipient, String subject, String body);
@@ -23,10 +18,6 @@ public interface EmailService {
                         + optionalParagraph("Note: ", normalizedNote));
     }
 
-    default void safeSendTeacherApprovalNotice(User recipient, String note) {
-        safeSendTeacherNotice(recipient, "approval", () -> sendTeacherApprovalNotice(recipient, note));
-    }
-
     default void sendTeacherRejectionNotice(User recipient, String reason) {
         String normalizedReason = TextUtils.trimToNull(reason);
         sendEmail(
@@ -34,20 +25,6 @@ public interface EmailService {
                 "Teacher verification update",
                 "Your teacher account verification was not approved."
                         + optionalParagraph("Reason: ", normalizedReason));
-    }
-
-    default void safeSendTeacherRejectionNotice(User recipient, String reason) {
-        safeSendTeacherNotice(recipient, "rejection", () -> sendTeacherRejectionNotice(recipient, reason));
-    }
-
-    private void safeSendTeacherNotice(User recipient, String noticeType, Runnable delivery) {
-        try {
-            delivery.run();
-        } catch (Exception exception) {
-            Long recipientId = recipient != null ? recipient.getId() : null;
-            log.warn("Teacher {} email delivery failed for user id {}: {}", noticeType, recipientId, ExceptionLogUtils.safeSummary(exception));
-            log.debug("Teacher {} email delivery stack trace for user id {}.", noticeType, recipientId, exception);
-        }
     }
 
     default void sendPasswordResetEmail(User recipient, String resetLink, String rawToken) {

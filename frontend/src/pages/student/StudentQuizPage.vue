@@ -1,6 +1,10 @@
 <template>
   <div class="page-stack student-quiz-page">
-    <PageHeaderBlock :title="quiz.title" :description="quizMetaLabel" icon="quiz">
+    <PageHeaderBlock
+      :title="quizTitle"
+      :description="hasQuizSelection ? quizMetaLabel : t('studentQuiz.chooseQuizHint')"
+      icon="quiz"
+    >
       <template v-if="hasQuizSelection" #before>
         <LearningBreadcrumb :items="quizBreadcrumb" data-testid="quiz-breadcrumb" />
       </template>
@@ -33,7 +37,7 @@
                 <h2 id="student-quiz-result-title" class="student-quiz-result-title">
                   {{ t('studentQuiz.resultTitle') }}
                 </h2>
-                <span>{{ resultData.quizTitle || quiz.title }}</span>
+                <span>{{ resultData.quizTitle || quizTitle }}</span>
               </div>
               <StatusPill
                 :label="resultData.passed ? t('studentQuiz.passed') : t('studentQuiz.notPassed')"
@@ -433,16 +437,12 @@ import { studentProgress as studentProgressDemo, studentQuiz, studentWrongAnswer
 import { demoQuizHint, gradeDemoQuiz } from '@/demo/quizPreview'
 import { learningContextMessages } from '@/plugins/learningContextMessages'
 import { studentQuizMessages } from '@/plugins/studentQuizMessages'
-import type {
-  QuizAttemptResultResponse,
-  StudentProgressSummaryResponse,
-  StudentQuizQuestionResponse,
-  StudentQuizResponse,
-} from '@/types/api'
-import { resolveApiError } from '@/utils/apiError'
+import type { QuizAttemptResultResponse, StudentQuizQuestionResponse, StudentQuizResponse } from '@/types/api'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, formatPercent, nonNegativeInteger } from '@/utils/format'
 import { normalizeLearningStage, sortByLearningStage } from '@/utils/learningStage'
 import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
+import { emptyStudentProgress } from '@/utils/progressSummary'
 import {
   buildQuizSubmission,
   canRequestHint,
@@ -454,6 +454,7 @@ import {
   wrongResultAnswers,
   type QuizAnswerValue,
 } from '@/utils/quizAnswers'
+import { positiveIntQuery } from '@/utils/routeCompat'
 
 const { t } = useI18n({
   messages: {
@@ -481,8 +482,8 @@ const resultIsPreview = ref(false)
 const resultCard = ref<HTMLElement | null>(null)
 /** Bumped by resetAttempt(); hint and submit responses of an earlier attempt are ignored. */
 let attemptSequence = 0
-const currentQuizId = computed(() => numericParam(route.params.quizId))
-const requestedLessonId = computed(() => numericParam(route.query.lessonId))
+const currentQuizId = computed(() => positiveIntQuery(route.params.quizId))
+const requestedLessonId = computed(() => positiveIntQuery(route.query.lessonId))
 
 const quizResource = useResource(loadQuiz, () => studentQuiz)
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
@@ -495,8 +496,8 @@ const emptyQuiz = {
   id: 0,
   lessonId: 0,
   lessonTitle: '',
-  title: t('studentQuiz.chooseQuiz'),
-  description: t('studentQuiz.chooseQuizHint'),
+  title: '',
+  description: '',
   timeLimitMinutes: null,
   totalPoints: 0,
   learningStage: null,
@@ -504,16 +505,7 @@ const emptyQuiz = {
   moduleId: null,
   moduleTitle: null,
 } satisfies StudentQuizResponse
-const emptyProgress: StudentProgressSummaryResponse = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-  lessons: [],
-}
+const emptyProgress = emptyStudentProgress()
 
 const quiz = computed(() => quizResource.data.value ?? (quizResource.usingFallback.value ? studentQuiz : emptyQuiz))
 const progress = computed(
@@ -528,6 +520,8 @@ const usingFallback = computed(() => quizResource.usingFallback.value || progres
 /** Preview quiz: graded locally with the demo key, nothing is sent to the API. */
 const quizReadOnly = computed(() => quizResource.usingFallback.value)
 const hasQuizSelection = computed(() => Boolean(quiz.value.id))
+// Translated when shown (not frozen at setup), so it follows a language switch.
+const quizTitle = computed(() => (hasQuizSelection.value ? quiz.value.title : t('studentQuiz.chooseQuiz')))
 const quizIsIndependent = computed(() => normalizeLearningStage(quiz.value.learningStage) === 'INDEPENDENT')
 const orderedQuestions = computed(() =>
   [...quiz.value.questions].sort((first, second) => first.displayOrder - second.displayOrder),
@@ -679,18 +673,6 @@ function goToNextQuestion(): void {
   goToQuestion(activeQuestionIndex.value + 1)
 }
 
-function numericParam(value: unknown): number | null {
-  const rawValue = Array.isArray(value) ? value[0] : value
-  if (rawValue === null || rawValue === undefined || rawValue === '') return null
-
-  const parsed = Number(rawValue)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-function responseStatus(reason: unknown): number | null {
-  return (reason as { response?: { status?: number } } | null)?.response?.status ?? null
-}
-
 async function loadQuiz(): Promise<StudentQuizResponse> {
   const quizId = currentQuizId.value
   if (quizId) {
@@ -741,7 +723,7 @@ async function toggleHint(question: StudentQuizQuestionResponse): Promise<void> 
     openHintId.value = question.id
   } catch (reason) {
     if (attempt !== attemptSequence) return
-    const status = responseStatus(reason)
+    const status = apiErrorStatus(reason)
     if (status === 403) hintErrors[question.id] = t('studentQuiz.hintIndependent')
     else if (status === 404) hintErrors[question.id] = t('studentQuiz.hintMissing')
     else hintErrors[question.id] = resolveApiError(reason, t('studentQuiz.hintError'))

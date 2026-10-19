@@ -106,8 +106,7 @@ public class AiResponseReportService {
                 "AI_RESPONSE_REPORT_CREATE",
                 TARGET_TYPE,
                 saved.getId(),
-                "Student reported an AI response for review.",
-                null);
+                "Student reported an AI response for review.");
         return toStudentResponse(saved);
     }
 
@@ -162,13 +161,12 @@ public class AiResponseReportService {
                 "Reviewer note is required."));
         report.setReviewedAt(LocalDateTime.now());
 
-        auditLogService.safeRecord(
+        auditLogService.record(
                 reviewer,
                 "AI_RESPONSE_REPORT_REVIEW",
                 TARGET_TYPE,
                 report.getId(),
-                "Admin reviewed an AI response report with status " + newStatus.name() + ".",
-                null);
+                "Admin reviewed an AI response report with status " + newStatus.name() + ".");
 
         if (newStatus.isTerminal()) {
             notificationService.safeCreateNotification(

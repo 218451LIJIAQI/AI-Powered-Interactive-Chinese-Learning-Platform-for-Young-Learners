@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { aiApi } from '@/api/services'
@@ -125,6 +125,16 @@ function close(): void {
   open.value = false
   description.value = ''
 }
+
+// A new AI result reuses this instance: drop the previous report state.
+watch(
+  () => props.responseSnapshot,
+  () => {
+    statusMessage.value = null
+    statusIsError.value = false
+    close()
+  },
+)
 
 async function submit(): Promise<void> {
   if (submitting.value || !canReport.value) return

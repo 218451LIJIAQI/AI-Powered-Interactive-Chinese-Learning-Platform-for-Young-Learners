@@ -7,6 +7,7 @@ import { dataNoticeMessages } from './dataNoticeMessages'
 import { mediaMessages } from './mediaMessages'
 import { notificationsMessages } from './notificationsMessages'
 import { statusLabelMessages } from './statusLabelMessages'
+import { teacherActivitiesMessages } from './teacherActivitiesMessages'
 
 type Bundle = Record<'en' | 'ms' | 'zh-CN', Record<string, string>>
 
@@ -17,6 +18,7 @@ const bundles: Record<string, Bundle> = {
   media: mediaMessages,
   notifications: notificationsMessages,
   statusLabels: statusLabelMessages,
+  teacherActivities: teacherActivitiesMessages,
 }
 
 describe('W4 shared message bundles', () => {

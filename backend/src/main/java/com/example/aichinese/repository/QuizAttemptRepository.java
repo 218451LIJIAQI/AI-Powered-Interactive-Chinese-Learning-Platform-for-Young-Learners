@@ -51,7 +51,6 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
     @Query("""
             select attempt
             from QuizAttempt attempt
-            join attempt.quiz quiz
             where attempt.student.id = :studentId
             order by attempt.completedAt desc, attempt.createdAt desc
             """)

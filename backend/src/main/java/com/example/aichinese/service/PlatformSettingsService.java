@@ -73,9 +73,7 @@ public class PlatformSettingsService {
     public PublicPlatformSettingsResponse getPublicPlatformSettings() {
         return new PublicPlatformSettingsResponse(
                 stringSetting(PLATFORM_NAME_KEY),
-                stringSetting(AI_DISCLAIMER_TEXT_KEY),
-                booleanSetting(SENSITIVE_WORD_FILTER_KEY),
-                booleanSetting(AI_SAFETY_CHECK_KEY));
+                stringSetting(AI_DISCLAIMER_TEXT_KEY));
     }
 
     @Transactional

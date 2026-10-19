@@ -188,7 +188,7 @@ public class StudentLearningProgressService {
                 .existsByStudentIdAndSourceTypeAndSourceId(lockedStudent.getId(), sourceType, sourceId);
         int earnedPoints = alreadyAwarded
                 ? 0
-                : awardPointsIfFirst(lockedStudent, sourceType, sourceId, Math.max(0, xpReward), reason);
+                : awardPoints(lockedStudent, sourceType, sourceId, Math.max(0, xpReward), reason);
         touchDailyStreak(lockedStudent);
         student.setTotalPoints(lockedStudent.getTotalPoints());
         return new PlatformActivityOutcome(!alreadyAwarded, earnedPoints, totalPoints(lockedStudent));
@@ -429,10 +429,13 @@ public class StudentLearningProgressService {
     }
 
     private int awardPointsIfFirst(StudentProfile student, String sourceType, Long sourceId, int points, String reason) {
-        if (pointsTransactionRepository.existsByStudentIdAndSourceTypeAndSourceId(student.getId(), sourceType, sourceId)) {
-            return 0;
-        }
+        return pointsTransactionRepository.existsByStudentIdAndSourceTypeAndSourceId(student.getId(), sourceType, sourceId)
+                ? 0
+                : awardPoints(student, sourceType, sourceId, points, reason);
+    }
 
+    /** Writes the points transaction; UNIQUE(student_id, source_key) still prevents a duplicate award. */
+    private int awardPoints(StudentProfile student, String sourceType, Long sourceId, int points, String reason) {
         PointsTransaction transaction = new PointsTransaction();
         transaction.setStudent(student);
         transaction.setPointsDelta(points);

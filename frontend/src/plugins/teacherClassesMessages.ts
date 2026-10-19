@@ -13,8 +13,6 @@ export const teacherClassesMessages = {
     noLiveClasses: 'No live classes are scheduled yet.',
     openMeeting: 'Open Meeting Link',
     viewRoster: 'View Roster',
-    detailsAria: 'Open class details',
-    details: 'Details',
     externalSupport:
       'Live support uses external tools such as Zoom or Google Meet. MandarinSpark does not include built-in video conferencing.',
     needHelp: 'Need help with live classes?',
@@ -146,8 +144,6 @@ export const teacherClassesMessages = {
     noLiveClasses: 'Belum ada kelas langsung dijadualkan.',
     openMeeting: 'Buka Pautan Mesyuarat',
     viewRoster: 'Lihat Senarai',
-    detailsAria: 'Buka butiran kelas',
-    details: 'Butiran',
     externalSupport:
       'Sokongan langsung menggunakan alat luar seperti Zoom atau Google Meet. MandarinSpark tidak menyediakan persidangan video terbina dalam.',
     needHelp: 'Perlukan bantuan untuk kelas langsung?',
@@ -278,8 +274,6 @@ export const teacherClassesMessages = {
     noLiveClasses: '尚未安排直播课。',
     openMeeting: '打开会议链接',
     viewRoster: '查看名单',
-    detailsAria: '打开课堂详情',
-    details: '详情',
     externalSupport: '直播支持使用 Zoom 或 Google Meet 等外部工具。MandarinSpark 不提供内置视频会议。',
     needHelp: '需要直播课帮助？',
     newClass: '新建课堂',

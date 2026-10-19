@@ -1,7 +1,6 @@
 package com.example.aichinese.support;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -187,6 +186,7 @@ public final class LearningApiTestClient {
                         "answers", List.of(
                                 Map.of("questionId", optionQuestion.path("id").asLong(), "optionId", optionId),
                                 Map.of("questionId", fillQuestion.path("id").asLong(), "answerText", fillBlank)))))
+                .andExpect(status().isOk())
                 .andReturn();
     }
 
@@ -202,10 +202,6 @@ public final class LearningApiTestClient {
 
     public MockHttpServletRequestBuilder authPatch(String path, String token) {
         return patch(path).with(csrf()).header(HttpHeaders.AUTHORIZATION, bearer(token));
-    }
-
-    public MockHttpServletRequestBuilder authDelete(String path, String token) {
-        return delete(path).with(csrf()).header(HttpHeaders.AUTHORIZATION, bearer(token));
     }
 
     public MockHttpServletRequestBuilder jsonPost(String path, String token, Object body) throws Exception {

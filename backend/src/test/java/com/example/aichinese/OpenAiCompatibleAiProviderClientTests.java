@@ -154,7 +154,7 @@ class OpenAiCompatibleAiProviderClientTests {
     }
 
     @Test
-    void malformedProviderResponseReturnsFailureInsteadOfThrowing() throws Exception {
+    void emptyProviderTextReturnsFailureInsteadOfThrowing() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(LOOPBACK_HOST, 0), 0);
         server.createContext(CHAT_COMPLETIONS_PATH, exchange -> sendJson(exchange, EMPTY_TEXT_RESPONSE));
         server.start();

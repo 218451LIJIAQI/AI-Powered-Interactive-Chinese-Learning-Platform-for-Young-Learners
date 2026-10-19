@@ -8,7 +8,7 @@
 import { useRouter } from 'vue-router'
 
 import { notificationsApi } from '@/api/services'
-import { NOTIFICATION_READ_EVENT } from '@/utils/notifications'
+import { announceNotificationsRead } from '@/utils/notifications'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 
 interface Props {
@@ -31,9 +31,7 @@ function notificationTarget(): string {
 
 function emitRead(notificationId: number): void {
   emit('read', notificationId)
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(NOTIFICATION_READ_EVENT, { detail: { notificationId } }))
-  }
+  announceNotificationsRead(notificationId)
 }
 
 async function markReadInBackground(notificationId: number): Promise<void> {

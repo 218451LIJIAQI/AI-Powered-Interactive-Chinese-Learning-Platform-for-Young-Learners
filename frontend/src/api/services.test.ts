@@ -44,7 +44,7 @@ function chatPayload(overrides: Partial<ChatStreamPayload> = {}): ChatStreamPayl
 }
 
 function completeEvent(payload: ChatStreamPayload): string {
-  return `event: complete\ndata: ${JSON.stringify(payload)}`
+  return `event:complete\ndata:${JSON.stringify(payload)}`
 }
 
 function mockFetchResponse(response: Response): void {
@@ -126,7 +126,7 @@ describe('aiApi.chatStream', () => {
 
   it('processes the final SSE event even when the stream omits a trailing blank line', async () => {
     const payload = chatPayload()
-    mockFetchResponse(sseResponse(`event: delta\ndata: ni\n\n${completeEvent(payload)}`))
+    mockFetchResponse(sseResponse(`event:delta\ndata:ni\n\n${completeEvent(payload)}`))
     const onDelta = vi.fn()
     const onComplete = vi.fn()
 
@@ -142,7 +142,7 @@ describe('aiApi.chatStream', () => {
       aiResponse: 'line one\nline two',
       language: 'en',
     })
-    mockFetchResponse(sseResponse(`event: delta\ndata: line one\ndata: line two\n\n${completeEvent(payload)}`))
+    mockFetchResponse(sseResponse(`event:delta\ndata:line one\ndata:line two\n\n${completeEvent(payload)}`))
     const onDelta = vi.fn()
 
     await aiApi.chatStream(chatRequest(), { onDelta })
@@ -150,8 +150,19 @@ describe('aiApi.chatStream', () => {
     expect(onDelta).toHaveBeenCalledWith('line one\nline two')
   })
 
+  it('keeps the leading space of a streamed chunk (Spring writes data: without a separator)', async () => {
+    const payload = chatPayload({ aiResponse: 'Hello world' })
+    mockFetchResponse(sseResponse(`event:delta\ndata:Hello\n\nevent:delta\ndata: world\n\n${completeEvent(payload)}`))
+    const onDelta = vi.fn()
+
+    await aiApi.chatStream(chatRequest(), { onDelta })
+
+    expect(onDelta).toHaveBeenNthCalledWith(1, 'Hello')
+    expect(onDelta).toHaveBeenNthCalledWith(2, ' world')
+  })
+
   it('maps malformed complete events to a friendly API envelope error', async () => {
-    mockFetchResponse(sseResponse('event: complete\ndata: {not-json}'))
+    mockFetchResponse(sseResponse('event:complete\ndata:{not-json}'))
 
     await streamErrorExpectation(MALFORMED_FINAL_RESPONSE_MESSAGE)
   })
@@ -231,7 +242,7 @@ describe('aiApi.chatStream', () => {
   })
 
   it('reports an incomplete stream when no final complete event arrives', async () => {
-    mockFetchResponse(sseResponse('event: delta\ndata: partial\n\n'))
+    mockFetchResponse(sseResponse('event:delta\ndata:partial\n\n'))
 
     await streamErrorExpectation(INCOMPLETE_STREAM_MESSAGE)
   })
@@ -267,7 +278,7 @@ describe('aiApi.chatStream', () => {
     let cancelled = false
     const body = new ReadableStream<Uint8Array>({
       start(streamController) {
-        streamController.enqueue(encoder.encode('event: delta\ndata: ni\n\n'))
+        streamController.enqueue(encoder.encode('event:delta\ndata:ni\n\n'))
       },
       cancel() {
         cancelled = true

@@ -214,7 +214,7 @@ public class AdminActivityService {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
         Flashcard entity = findFlashcard(id, null);
-        applyAdminStatus(ReviewContentType.FLASHCARD, entity, target);
+        applyAdminStatus(admin, ReviewContentType.FLASHCARD, entity, target);
         Flashcard saved = flashcardRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "Flashcard", saved.getId(),
                 "Admin set flashcard status to " + target + ".");
@@ -313,7 +313,7 @@ public class AdminActivityService {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
         MatchingGame entity = findMatchingGame(id, null);
-        applyAdminStatus(ReviewContentType.MATCHING_GAME, entity, target);
+        applyAdminStatus(admin, ReviewContentType.MATCHING_GAME, entity, target);
         MatchingGame saved = matchingGameRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "MatchingGame", saved.getId(),
                 "Admin set matching game status to " + target + ".");
@@ -420,7 +420,7 @@ public class AdminActivityService {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
         ListeningExercise entity = findListeningExercise(id, null);
-        applyAdminStatus(ReviewContentType.LISTENING_EXERCISE, entity, target);
+        applyAdminStatus(admin, ReviewContentType.LISTENING_EXERCISE, entity, target);
         ListeningExercise saved = listeningExerciseRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "ListeningExercise", saved.getId(),
                 "Admin set listening exercise status to " + target + ".");
@@ -511,7 +511,7 @@ public class AdminActivityService {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
         TracingExercise entity = findTracingExercise(id, null);
-        applyAdminStatus(ReviewContentType.TRACING_EXERCISE, entity, target);
+        applyAdminStatus(admin, ReviewContentType.TRACING_EXERCISE, entity, target);
         TracingExercise saved = tracingExerciseRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "TracingExercise", saved.getId(),
                 "Admin set tracing exercise status to " + target + ".");
@@ -610,7 +610,7 @@ public class AdminActivityService {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
         DragDropActivity entity = findDragDropActivity(id, null);
-        applyAdminStatus(ReviewContentType.DRAG_DROP_ACTIVITY, entity, target);
+        applyAdminStatus(admin, ReviewContentType.DRAG_DROP_ACTIVITY, entity, target);
         DragDropActivity saved = dragDropActivityRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "DragDropActivity", saved.getId(),
                 "Admin set drag-drop activity status to " + target + ".");
@@ -725,7 +725,7 @@ public class AdminActivityService {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
         StoryActivity entity = findStoryActivity(id, null);
-        applyAdminStatus(ReviewContentType.STORY_ACTIVITY, entity, target);
+        applyAdminStatus(admin, ReviewContentType.STORY_ACTIVITY, entity, target);
         StoryActivity saved = storyActivityRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "StoryActivity", saved.getId(),
                 "Admin set story activity status to " + target + ".");
@@ -866,12 +866,13 @@ public class AdminActivityService {
     }
 
     /** Admin library status change; publishing requires a complete activity. */
-    private void applyAdminStatus(ReviewContentType type, PracticeActivityContent entity, ContentStatus target) {
+    private void applyAdminStatus(User admin, ReviewContentType type, PracticeActivityContent entity, ContentStatus target) {
         if (target == ContentStatus.PUBLISHED) {
             contentReviewService.requireComplete(type, entity);
             entity.setRejectionReason(null);
         }
         entity.setContentStatus(target);
+        contentReviewService.notifyOwnerOfAdminStatusChange(admin, type, entity);
     }
 
     private void auditCreate(Actor actor, String targetType, Long id, String label) {

@@ -25,7 +25,7 @@ import com.example.aichinese.service.PlatformSettingsService;
  * Unit coverage for {@code PlatformSettingsService} - pins the
  * default values applied when system-setting rows are missing
  * (platform name, AI disclaimer, sensitive-word filter and AI safety
- * check; the unenforced toggles were removed) and the admin / public response shape split.
+ * check).
  */
 class PlatformSettingsServiceTests {
 

@@ -148,7 +148,7 @@ public class TeacherContentAccessService {
         lesson.setTitle(contentSafetyService.requireSafeText(
                 title, ContentDtoConstants.TITLE_MAX_LENGTH, "Title is required."));
         lesson.setSummary(contentSafetyService.optionalSafeText(
-                description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
+                description, ContentDtoConstants.SHORT_DESCRIPTION_MAX_LENGTH));
         lesson.setLessonContent(contentSafetyService.optionalSafeText(
                 lessonContent, ContentDtoConstants.LESSON_CONTENT_MAX_LENGTH));
         lesson.setLearningType(learningType);

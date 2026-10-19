@@ -167,6 +167,9 @@
                   :class="{ 'is-unread': item.status !== 'READ' }"
                   aria-hidden="true"
                 />
+                <span v-if="item.status !== 'READ'" class="sr-only">{{
+                  statusLabel('notificationStatus', 'UNREAD')
+                }}</span>
                 <span class="teacher-dashboard-activity-copy">
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.message }}</span>
@@ -276,13 +279,6 @@ const { t, locale } = useI18n({
 const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage } = useTeacherAccess()
 const { statusLabel } = useStatusLabels()
 
-const dashboardResource = useResource(() => teacherApi.dashboard(), teacherDashboard)
-const analyticsResource = useResource(() => teacherApi.analytics(), teacherAnalytics)
-const liveClassesResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.liveClasses()),
-  teacherLiveClasses,
-)
-
 const emptyDashboard: TeacherDashboardResponse = {
   fullName: '',
   teacherStatus: 'PENDING',
@@ -307,6 +303,17 @@ const emptyAnalytics = {
   quizScoreTrend: [],
   contentStatusBreakdown: [],
 }
+
+const dashboardResource = useResource(() => teacherApi.dashboard(), teacherDashboard)
+// Analytics is an approved-teacher feature (403 otherwise); a locked teacher still gets the dashboard shell.
+const analyticsResource = useResource(
+  () => (teacherApprovalLocked.value ? Promise.resolve(emptyAnalytics) : teacherApi.analytics()),
+  teacherAnalytics,
+)
+const liveClassesResource = useResource(
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.liveClasses()),
+  teacherLiveClasses,
+)
 
 const dashboard = computed(
   () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? teacherDashboard : emptyDashboard),
@@ -431,7 +438,7 @@ function contentStatusLabel(status: string | null | undefined): string {
 function liveClassStatusLabel(status: string | null | undefined): string {
   const normalized = (status ?? '').trim().toUpperCase()
   if (!normalized) return t('teacherDashboard.unknown')
-  return statusLabel('liveClass', normalized === 'LIVE' || normalized === 'IN_PROGRESS' ? 'ONGOING' : normalized)
+  return statusLabel('liveClass', normalized)
 }
 
 function scoreLabel(score: number, maxScore: number): string {

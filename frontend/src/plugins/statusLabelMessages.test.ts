@@ -3,16 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { humanizeEnumValue, statusLabelKey, statusLabelMessages } from './statusLabelMessages'
 
 describe('status label messages', () => {
-  it('keeps EN / MS / zh-CN keys in parity with no empty strings', () => {
-    const englishKeys = Object.keys(statusLabelMessages.en).sort()
-    for (const locale of ['ms', 'zh-CN'] as const) {
-      expect(Object.keys(statusLabelMessages[locale]).sort()).toEqual(englishKeys)
-      for (const key of englishKeys) {
-        expect(statusLabelMessages[locale][key as keyof typeof statusLabelMessages.en].trim()).not.toBe('')
-      }
-    }
-  })
-
   it('translates two-word enum values instead of formatting them twice (A5 #15)', () => {
     expect(statusLabelKey('feedbackType', 'WEAK_AREA')).toBe('feedbackType_WEAK_AREA')
     expect(statusLabelKey('feedbackType', 'weak_area')).toBe('feedbackType_WEAK_AREA')

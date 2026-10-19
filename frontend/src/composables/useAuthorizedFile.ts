@@ -1,12 +1,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 
+import type { DownloadResult } from '@/api/services'
 import { resolveApiError } from '@/utils/apiError'
-
-interface AuthorizedDownload {
-  blob: Blob
-  contentType: string | null
-  fileName: string | null
-}
 
 type ObjectUrlApi = Pick<typeof URL, 'createObjectURL' | 'revokeObjectURL'>
 
@@ -29,7 +24,7 @@ export function useAuthorizedFile(urlApi: ObjectUrlApi = URL) {
     contentType.value = null
   }
 
-  async function load(loader: () => Promise<AuthorizedDownload>, errorFallback: string): Promise<boolean> {
+  async function load(loader: () => Promise<DownloadResult>, errorFallback: string): Promise<boolean> {
     const current = ++sequence
     release()
     loading.value = true

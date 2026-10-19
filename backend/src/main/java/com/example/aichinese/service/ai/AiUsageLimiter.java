@@ -45,7 +45,7 @@ public class AiUsageLimiter {
             @Value("${app.ai.rate-limit.requests-per-day:100}") int requestsPerDay,
             UserRepository userRepository,
             AiUsageQuotaCounterRepository quotaCounterRepository) {
-        this(Clock.systemUTC(), requestsPerMinute, requestsPerDay, userRepository, quotaCounterRepository);
+        this(Clock.systemDefaultZone(), requestsPerMinute, requestsPerDay, userRepository, quotaCounterRepository);
     }
 
     AiUsageLimiter(

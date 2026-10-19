@@ -4,7 +4,6 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
@@ -92,8 +91,7 @@ public class FileStorageService {
         String extension = UploadStorageSupport.getRequiredExtension(
                 originalFileName,
                 "Uploaded file must include a valid extension. Allowed types are PDF, JPG, JPEG, and PNG.");
-        String normalizedExtension = extension.toLowerCase(Locale.ROOT);
-        if (!ALLOWED_EXTENSIONS.contains(normalizedExtension)) {
+        if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new ResponseStatusException(
                     BAD_REQUEST,
                     "Unsupported file type. Allowed types are PDF, JPG, JPEG, and PNG.");
@@ -108,12 +106,12 @@ public class FileStorageService {
 
         UploadStorageSupport.validateFileSignature(
                 multipartFile,
-                normalizedExtension,
+                extension,
                 contentType,
                 ALLOWED_SIGNATURES,
                 "Uploaded file content does not match the declared PDF/JPG/PNG type.");
 
-        return new ValidatedUpload(originalFileName, normalizedExtension);
+        return new ValidatedUpload(originalFileName, extension);
     }
 
     private Path resolveBaseDirectory() {

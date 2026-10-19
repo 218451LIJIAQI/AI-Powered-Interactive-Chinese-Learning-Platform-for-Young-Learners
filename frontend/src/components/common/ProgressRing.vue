@@ -22,6 +22,8 @@
 <script setup lang="ts">
 import { computed, type StyleValue } from 'vue'
 
+import { clampPercent } from '@/utils/format'
+
 type RingTone = 'primary' | 'success' | 'warning'
 
 interface Props {
@@ -39,11 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
   size: 'md',
 })
 
-function clampProgress(value: number): number {
-  return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : 0
-}
-
-const progressValue = computed<number>(() => clampProgress(props.progress))
+const progressValue = computed<number>(() => clampPercent(props.progress))
 const label = computed<string>(() => `${progressValue.value}%`)
 const ariaLabel = computed<string>(() => `${props.title}: ${label.value}`)
 const ringStyle = computed<StyleValue>(() => ({ '--progress': progressValue.value }))

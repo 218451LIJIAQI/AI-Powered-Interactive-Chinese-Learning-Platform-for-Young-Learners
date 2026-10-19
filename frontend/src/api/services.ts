@@ -13,6 +13,7 @@ import type {
   AdminActivitySummaryResponse,
   AdminActivityType,
   AdminAiResponseReportResponse,
+  AiResponseReportStatus,
   AdminAiUsageLogResponse,
   AdminDragDropActivityResponse,
   AdminFlashcardResponse,
@@ -22,7 +23,6 @@ import type {
   AdminPlatformSettingsUpdateRequest,
   AdminStoryActivityResponse,
   AdminDashboardResponse,
-  AdminStudentListItemResponse,
   AdminTeacherDetailResponse,
   AdminTeacherListItemResponse,
   AdminTracingExerciseResponse,
@@ -43,7 +43,6 @@ import type {
   AppLanguage,
   AuditLogResponse,
   AuthResponse,
-  BadgeSummaryResponse,
   BulkOperationResponse,
   ContentReviewDetailResponse,
   ContentReviewItemResponse,
@@ -204,7 +203,7 @@ type AiStreamHandlers = {
   signal?: AbortSignal
 }
 
-type DownloadResult = {
+export type DownloadResult = {
   blob: Blob
   contentType: string | null
   fileName: string | null
@@ -338,7 +337,7 @@ function parseSseEvent(rawEvent: string): { event: string; data: string } | null
     if (line.startsWith(SSE_EVENT_PREFIX)) {
       event = line.slice(SSE_EVENT_PREFIX.length).trim()
     } else if (line.startsWith(SSE_DATA_PREFIX)) {
-      dataLines.push(line.slice(SSE_DATA_PREFIX.length).trimStart())
+      dataLines.push(line.slice(SSE_DATA_PREFIX.length))
     }
   })
   if (!dataLines.length) return null
@@ -641,7 +640,7 @@ export interface PracticeSubmissionQuery {
 }
 
 export interface ReviewPracticeSubmissionQuery extends PracticeSubmissionQuery {
-  /** Teacher default SUBMITTED, admin default ALL. */
+  /** Server default SUBMITTED; ALL lists every state. */
   reviewStatus?: PracticeReviewStatus | 'ALL'
 }
 
@@ -871,10 +870,6 @@ export interface ActivityGateway {
 }
 
 export interface TeacherActivityGateway extends ActivityGateway {
-  list<T extends AdminActivityType>(
-    type: T,
-    params?: { status?: ContentStatus; page?: number; size?: number; sort?: string },
-  ): Promise<PageResponse<ActivityResponseByType[T]>>
   submit<T extends AdminActivityType>(type: T, id: number): Promise<ActivityResponseByType[T]>
 }
 
@@ -907,14 +902,6 @@ export const adminActivityGateway: ActivityGateway = createActivityGateway(ADMIN
 /** Teacher-authored practice activities: own items only, created as DRAFT and submitted for admin review (D5). */
 export const teacherActivityGateway: TeacherActivityGateway = {
   ...createActivityGateway(TEACHER_ACTIVITIES_PATH),
-  list<T extends AdminActivityType>(
-    type: T,
-    params: { status?: ContentStatus; page?: number; size?: number; sort?: string } = {},
-  ) {
-    return unwrap<PageResponse<ActivityResponseByType[T]>>(
-      http.get(`${TEACHER_ACTIVITIES_PATH}/${ACTIVITY_TYPE_SLUGS[type]}`, { params }),
-    )
-  },
   submit<T extends AdminActivityType>(type: T, id: number) {
     return unwrap<ActivityResponseByType[T]>(
       http.post(`${TEACHER_ACTIVITIES_PATH}/${ACTIVITY_TYPE_SLUGS[type]}/${id}/submit`),
@@ -1030,9 +1017,6 @@ export const studentApi = {
   rewards() {
     return unwrap<RewardSummaryResponse>(http.get('/students/rewards'))
   },
-  badges() {
-    return unwrapPageItems<BadgeSummaryResponse>(http.get('/students/rewards/badges'))
-  },
   pointsHistory() {
     return unwrapPageItems<PointsTransactionResponse>(http.get('/students/rewards/points-history'))
   },
@@ -1104,12 +1088,13 @@ export const studentApi = {
       http.get('/students/practice-submissions', { params: query }),
     )
   },
-  practiceSubmission(id: number) {
-    return unwrap<PracticeSubmissionResponse>(http.get(`/students/practice-submissions/${id}`))
-  },
   /** Authorised file stream fetched with the bearer token as a Blob. */
   practiceSubmissionFile(id: number) {
     return unwrapDownload(http.get(`/students/practice-submissions/${id}/file`, { responseType: 'blob' }))
+  },
+  /** Uploaded recorded lesson video as a Blob (the stream endpoint needs the bearer token, so no plain link). */
+  recordedVideoFile(videoId: number) {
+    return unwrapDownload(http.get(`/students/recorded-videos/${videoId}/stream`, { responseType: 'blob' }))
   },
   feedback() {
     return unwrapPageItems<StudentTeacherFeedbackResponse>(http.get('/students/feedback'))
@@ -1345,8 +1330,8 @@ export const teacherApi = {
   updateQuiz(quizId: number, payload: TeacherQuizPayload) {
     return unwrap<TeacherQuizResponse>(http.put(`/teachers/quizzes/${quizId}`, payload))
   },
-  deleteQuiz(quizId: number) {
-    return unwrap<void>(http.delete(`/teachers/quizzes/${quizId}`))
+  archiveQuiz(quizId: number) {
+    return unwrap<void>(http.patch(`/teachers/quizzes/${quizId}/archive`))
   },
   addQuizQuestion(quizId: number, payload: TeacherQuizQuestionPayload) {
     return unwrap<TeacherQuizResponse>(http.post(`/teachers/quizzes/${quizId}/questions`, payload))
@@ -1384,9 +1369,6 @@ export const teacherApi = {
       http.get('/teachers/practice-submissions', { params: query }),
     )
   },
-  practiceSubmission(id: number) {
-    return unwrap<PracticeSubmissionResponse>(http.get(`/teachers/practice-submissions/${id}`))
-  },
   practiceSubmissionFile(id: number) {
     return unwrapDownload(http.get(`/teachers/practice-submissions/${id}/file`, { responseType: 'blob' }))
   },
@@ -1408,9 +1390,6 @@ export const teacherApi = {
   },
   submitQuiz(quizId: number) {
     return unwrap<TeacherQuizResponse>(http.post(`/teachers/quizzes/${quizId}/submit`))
-  },
-  quiz(quizId: number) {
-    return unwrap<TeacherQuizResponse>(http.get(`/teachers/quizzes/${quizId}`))
   },
   /* Teacher-authored practice activities (D5); per-type CRUD lives in teacherActivityGateway. */
   activities(params: TeacherActivityFilters = {}) {
@@ -1444,9 +1423,6 @@ export const adminApi = {
   },
   updateUserStatus(id: number, payload: { active: boolean }) {
     return unwrap<AdminUserListItemResponse>(http.patch(`/admin/users/${id}/status`, payload))
-  },
-  students(params: QueryParams = {}) {
-    return unwrap<PageResponse<AdminStudentListItemResponse>>(http.get('/admin/students', { params }))
   },
   teachers(params: QueryParams = {}) {
     return unwrap<PageResponse<AdminTeacherListItemResponse>>(http.get('/admin/teachers', { params }))
@@ -1512,6 +1488,15 @@ export const adminApi = {
   moderationRecords(params: QueryParams = {}) {
     return unwrapPageItems<ModerationRecordResponse>(http.get('/admin/moderation-records', { params }))
   },
+  /** Paged report queue (newest first); `status` narrows it, e.g. to PENDING_REVIEW. */
+  aiReportPage(query: { status?: AiResponseReportStatus; page?: number; size?: number } = {}) {
+    return unwrap<PageResponse<AdminAiResponseReportResponse>>(
+      http.get('/admin/ai-response-reports', { params: query }),
+    )
+  },
+  moderationRecordPage(params: QueryParams = {}) {
+    return unwrap<PageResponse<ModerationRecordResponse>>(http.get('/admin/moderation-records', { params }))
+  },
   aiReports(status?: string, params: QueryParams = {}) {
     return unwrapPageItems<AdminAiResponseReportResponse>(
       http.get('/admin/ai-response-reports', { params: { ...params, status } }),
@@ -1522,9 +1507,6 @@ export const adminApi = {
   },
   moderationAction(action: ModerationAction, payload: ModerationPayload) {
     return unwrap<ModerationRecordResponse>(http.post(MODERATION_ACTION_ENDPOINTS[action], payload))
-  },
-  notifications(params: QueryParams = {}) {
-    return unwrapPageItems<NotificationResponse>(http.get('/admin/notifications', { params }))
   },
   auditLogs(params: QueryParams = {}) {
     return unwrapPageItems<AuditLogResponse>(http.get('/admin/audit-logs', { params }))
@@ -1556,16 +1538,6 @@ export const adminApi = {
     return unwrap<ContentReviewItemResponse>(
       http.post(`/admin/content-review/${type}/${id}/restore`, note ? { note } : {}),
     )
-  },
-  /* Practice submissions (read-only moderation view). */
-  practiceSubmissions(query: ReviewPracticeSubmissionQuery = {}) {
-    return unwrap<PageResponse<PracticeSubmissionResponse>>(http.get('/admin/practice-submissions', { params: query }))
-  },
-  practiceSubmission(id: number) {
-    return unwrap<PracticeSubmissionResponse>(http.get(`/admin/practice-submissions/${id}`))
-  },
-  practiceSubmissionFile(id: number) {
-    return unwrapDownload(http.get(`/admin/practice-submissions/${id}/file`, { responseType: 'blob' }))
   },
   platformSettings() {
     return unwrap<AdminPlatformSettingsResponse>(http.get('/admin/system-settings/platform'))

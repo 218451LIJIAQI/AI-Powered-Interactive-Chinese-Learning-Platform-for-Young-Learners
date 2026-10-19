@@ -164,6 +164,7 @@ import { useI18n } from 'vue-i18n'
 
 import { publicApi } from '@/api/services'
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
+import type { CourseSceneVariant } from '@/components/common/courseSceneVariant'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
@@ -220,18 +221,10 @@ const emptyCourse = computed<PublicCourseDetail>(() => ({
   status: 'DRAFT' as const,
   basicContent: t('courseDetail.unavailableContent'),
   packageItems: [],
-  callToAction: t('courseDetail.unavailableAction'),
 }))
 
 const resource = useResource(
-  () => {
-    const previewDetail = readDemoCourseDetail()
-    if (auth.isPreviewSession && previewDetail) {
-      return Promise.resolve(previewDetail)
-    }
-
-    return publicApi.getCourseDetail(courseId.value)
-  },
+  () => publicApi.getCourseDetail(courseId.value),
   () => readDemoCourseDetail() ?? emptyCourse.value,
 )
 
@@ -248,9 +241,10 @@ const course = computed(() => resource.data.value ?? emptyCourse.value)
 const displayedCallToAction = computed(() => {
   if (canUseStudentActions.value) return t('courseDetail.startFromDashboard')
   if (studentOnlyViewer.value) return t('courseDetail.studentAccountRequired')
-  return course.value.callToAction || t('courseDetail.defaultAction')
+  // Translated in every interface language (FR-I18N-05); contentId 0 marks the unavailable placeholder.
+  return course.value.contentId === 0 ? t('courseDetail.unavailableAction') : t('courseDetail.defaultAction')
 })
-const courseSceneVariant = computed<'people' | 'general' | 'pagoda' | 'panda' | 'travel'>(() => {
+const courseSceneVariant = computed<CourseSceneVariant>(() => {
   const title = course.value.title.toLowerCase()
   if (title.includes('conversation') || title.includes('campus')) return 'people'
   if (title.includes('travel')) return 'travel'

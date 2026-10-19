@@ -326,10 +326,12 @@ import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminTeacherDetail, adminTeachers, teacherApplicationsPending } from '@/demo/data'
 import { adminTeacherVerificationMessages } from '@/plugins/adminTeacherVerificationMessages'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import type { AdminTeacherDetailResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
-import { formatDate, formatDateTime, formatNumber, getDisplayLocale, toFiniteNumber } from '@/utils/format'
+import { formatDate, formatDateTime, formatNumber, getDisplayLocale } from '@/utils/format'
+import { formatFileSize } from '@/utils/practiceUpload'
 import { canDecideVerification, nextSelectedTeacherId } from '@/utils/teacherVerification'
 
 const { t, locale } = useI18n({
@@ -557,7 +559,7 @@ const reviewDocuments = computed<ApplicantDocument[]>(() =>
       ? t('adminTeacherVerification.currentVersion')
       : t('adminTeacherVerification.olderVersion'),
     tone: document.currentVersion ? 'success' : 'warning',
-    meta: `${document.contentType} • ${formatByteSize(document.fileSize)} • ${formatDateTime(document.submittedAt)}`,
+    meta: `${document.contentType} • ${formatFileSize(document.fileSize)} • ${formatDateTime(document.submittedAt)}`,
   })),
 )
 
@@ -582,7 +584,7 @@ const auditTrail = computed<ApplicantAudit[]>(() =>
 const statCards = computed<Array<{ label: string; value: string; copy: string; icon: string; tone: AdminTone }>>(() => [
   {
     label: t('adminTeacherVerification.pendingReview'),
-    value: formatNumber(filteredApplicants.value.length),
+    value: formatNumber(pendingApplicants.value.length),
     copy: t('adminTeacherVerification.pendingQueue'),
     icon: 'verification',
     tone: 'warning',
@@ -603,7 +605,7 @@ const statCards = computed<Array<{ label: string; value: string; copy: string; i
   },
   {
     label: t('adminTeacherVerification.documentsQueue'),
-    value: formatNumber(filteredApplicants.value.reduce((sum, item) => sum + item.documentCount, 0)),
+    value: formatNumber(pendingApplicants.value.reduce((sum, item) => sum + item.documentCount, 0)),
     copy: t('adminTeacherVerification.pendingDocumentCount'),
     icon: 'file',
     tone: 'primary',
@@ -622,7 +624,7 @@ const sortModeLabel = computed(() =>
   sortMode.value === 'newest' ? t('adminTeacherVerification.newestFirst') : t('adminTeacherVerification.alphabetical'),
 )
 // Queue load errors are shown (with a retry) by the ResourceSection, so only detail and action errors reach the notice.
-const noticeError = computed(() => actionError.value || detailResource.error.value)
+const noticeError = computed(() => actionError.value)
 const approveButtonLabel = computed(() =>
   submittingApprove.value ? t('adminTeacherVerification.approving') : t('adminTeacherVerification.approve'),
 )
@@ -715,10 +717,12 @@ async function selectTeacher(id: number): Promise<void> {
     const detail = await adminApi.teacherDetail(id)
     if (selectedTeacherId.value === id) detailResource.data.value = detail
   } catch (reason) {
+    // A late failure for a previously selected applicant must not clear the current one.
+    if (selectedTeacherId.value !== id) return
     actionError.value = resolveApiError(reason, t('adminTeacherVerification.loadDetailError'))
     detailResource.data.value = null
   } finally {
-    detailLoading.value = false
+    if (selectedTeacherId.value === id) detailLoading.value = false
   }
 }
 
@@ -762,7 +766,6 @@ async function approveTeacher(): Promise<void> {
     await adminApi.approveTeacher(selectedApplicant.value.teacherId, approvalNote.value.trim() || undefined)
     await pendingResource.reload()
     await Promise.all([approvedTeachersResource.reload(), rejectedTeachersResource.reload()])
-    detailResource.data.value = null
     approvalNote.value = ''
     rejectionReason.value = ''
     actionSuccess.value = t('adminTeacherVerification.approved')
@@ -807,7 +810,6 @@ async function rejectTeacher(): Promise<void> {
     await adminApi.rejectTeacher(selectedApplicant.value.teacherId, normalizedReason)
     await pendingResource.reload()
     await Promise.all([approvedTeachersResource.reload(), rejectedTeachersResource.reload()])
-    detailResource.data.value = null
     approvalNote.value = ''
     rejectionReason.value = ''
     actionSuccess.value = t('adminTeacherVerification.rejected')
@@ -818,28 +820,15 @@ async function rejectTeacher(): Promise<void> {
   }
 }
 
-/** Localised "1,234 bytes" / "1,234 bait" / "1,234字节" without a hand-written unit string. */
-function formatByteSize(size: number): string {
-  return new Intl.NumberFormat(getDisplayLocale(locale.value), {
-    style: 'unit',
-    unit: 'byte',
-    unitDisplay: 'long',
-  }).format(toFiniteNumber(size))
-}
-
 function formatStatus(status: string): string {
   const keys: Record<string, string> = {
     PENDING: 'statusPending',
     APPROVED: 'statusApproved',
     REJECTED: 'statusRejected',
-    UNDER_REVIEW: 'statusUnderReview',
   }
   const key = keys[status.toUpperCase()]
   if (key) return t(`adminTeacherVerification.${key}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+  return humanizeEnumValue(status)
 }
 </script>
 

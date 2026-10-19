@@ -47,8 +47,8 @@
           :aria-labelledby="questionId(question.index)"
         >
           <button
-            v-for="option in question.options"
-            :key="option"
+            v-for="(option, optionIndex) in question.options"
+            :key="optionIndex"
             type="button"
             class="practice-choice"
             data-testid="listening-answer"

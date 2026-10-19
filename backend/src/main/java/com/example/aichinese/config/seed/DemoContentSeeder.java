@@ -6,7 +6,6 @@ import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,7 +41,6 @@ import com.example.aichinese.repository.UserRepository;
 @Component
 @Order(1)
 @Profile("demo & !prod & !production")
-@ConditionalOnProperty(name = "app.demo.seed-content", havingValue = "true", matchIfMissing = true)
 public class DemoContentSeeder implements CommandLineRunner {
 
     private static final String TEACHER_EMAIL = "teacher@fyp.local";

@@ -2,7 +2,7 @@ export const studentPracticeSubmissionMessages = {
   en: {
     title: 'Practice Submissions',
     description:
-      'Record your pronunciation or upload a photo of your handwriting. You get limited AI-assisted feedback (never a score) and your teacher can review every upload.',
+      'Record your pronunciation or upload a photo of your handwriting. Handwriting photos get limited AI-assisted feedback (never a score); recordings are saved for your teacher, who can review every upload.',
     openAiHelper: 'Open AI Helper',
     previewTitle: 'Preview practice submissions',
     previewMessage: 'Showing sample submissions. Preview: uploads are not saved and files cannot be played.',
@@ -111,7 +111,7 @@ export const studentPracticeSubmissionMessages = {
   ms: {
     title: 'Hantaran Latihan',
     description:
-      'Rakam sebutan anda atau muat naik foto tulisan tangan anda. Anda menerima maklum balas terhad berbantu AI (bukan markah) dan guru anda boleh menyemak setiap muat naik.',
+      'Rakam sebutan anda atau muat naik foto tulisan tangan anda. Foto tulisan tangan menerima maklum balas terhad berbantu AI (bukan markah); rakaman disimpan untuk guru anda, yang boleh menyemak setiap muat naik.',
     openAiHelper: 'Buka Pembantu AI',
     previewTitle: 'Pratonton hantaran latihan',
     previewMessage: 'Memaparkan contoh hantaran. Pratonton: muat naik tidak disimpan dan fail tidak boleh dimainkan.',
@@ -220,7 +220,8 @@ export const studentPracticeSubmissionMessages = {
   },
   'zh-CN': {
     title: '练习提交',
-    description: '录下你的发音或上传手写照片。你会获得有限的 AI 辅助反馈（绝不是分数），教师也可以查看你的每一次上传。',
+    description:
+      '录下你的发音或上传手写照片。手写照片会获得有限的 AI 辅助反馈（绝不是分数）；录音会保存给教师，教师可以查看你的每一次上传。',
     openAiHelper: '打开 AI 助手',
     previewTitle: '预览练习提交',
     previewMessage: '正在显示示例提交。预览：上传不会保存，文件也无法播放。',

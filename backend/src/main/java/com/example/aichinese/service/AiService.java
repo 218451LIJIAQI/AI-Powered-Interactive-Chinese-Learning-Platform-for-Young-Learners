@@ -105,7 +105,8 @@ public class AiService {
     private static final int MAX_AI_OPTION_ITEMS = 8;
     private static final int DEFAULT_QUIZ_QUESTIONS = 5;
     private static final int MAX_RETAINED_AI_CHAT_RESPONSE_CHARS = 4000;
-    private static final int USAGE_LOG_SUMMARY_LIMIT = 500;
+    private static final String QUOTA_EXCEEDED_ERROR = "Platform AI request quota exceeded.";
+    private static final String BLOCKED_CHAT_MESSAGE_PLACEHOLDER = "[Message withheld by the AI safety check]";
     private static final String RELATED_ENTITY_CHAT_SESSION = "AiChatSession";
     private static final String RELATED_ENTITY_UPLOADED_FILE = "UploadedFile";
     private static final String PROVIDER_TIMEOUT_ERROR = "Provider request failed or timed out.";
@@ -177,7 +178,6 @@ public class AiService {
                 .map(this::toAiMessage)
                 .toList();
 
-        aiLogService.appendChatMessage(session, AiChatSenderRole.USER, sanitizedUserMessage);
         AiExecutionResult execution = generateText(
                 user,
                 AiFeatureKey.CHAT_TUTOR,
@@ -187,6 +187,12 @@ public class AiService {
                 history,
                 RELATED_ENTITY_CHAT_SESSION,
                 session.getId());
+        // Stored only after the safety check and quota: a blocked message must not re-enter later
+        // turns through the chat history, and a rejected (HTTP 429) turn leaves no orphan message.
+        aiLogService.appendChatMessage(session, AiChatSenderRole.USER,
+                AiSafetyGuard.BLOCKED_INPUT_LOG.equals(execution.errorSummary())
+                        ? BLOCKED_CHAT_MESSAGE_PLACEHOLDER
+                        : sanitizedUserMessage);
 
         String responseText = execution.status() == AiRequestStatus.SUCCESS
                 ? execution.responseText()
@@ -221,13 +227,8 @@ public class AiService {
             return unavailableVocabularyResponse(execution);
         }
 
-        ParsedAiJson parsed = parseJsonMap(execution.responseText());
-        if (!parsed.valid()) {
-            return unavailableVocabularyResponse(unparseableProviderResponse(
-                    execution,
-                    "AI vocabulary helper response could not be parsed."));
-        }
-        return parseVocabularyResponse(parsed.values(), execution.status().name());
+        // generateText only reports SUCCESS for JSON tools after the reply parsed as a non-empty object.
+        return parseVocabularyResponse(parseJsonMap(execution.responseText()).values(), execution.status().name());
     }
 
     public AiSentencePracticeResponse sentencePractice(SecurityUserDetails currentUser, AiSentencePracticeRequest request) {
@@ -240,7 +241,7 @@ public class AiService {
                 user,
                 AiFeatureKey.SENTENCE_PRACTICE,
                 language,
-                buildSentencePrompt(request, language),
+                buildSentencePrompt(request, sanitizedSentence, language),
                 true,
                 List.of(),
                 null,
@@ -249,14 +250,8 @@ public class AiService {
         if (execution.status() != AiRequestStatus.SUCCESS) {
             return unavailableSentenceResponse(sanitizedSentence, execution);
         }
-
-        ParsedAiJson parsed = parseJsonMap(execution.responseText());
-        if (!parsed.valid()) {
-            return unavailableSentenceResponse(
-                    sanitizedSentence,
-                    unparseableProviderResponse(execution, "AI sentence practice response could not be parsed."));
-        }
-        return parseSentenceResponse(sanitizedSentence, parsed.values(), execution.status().name());
+        return parseSentenceResponse(
+                sanitizedSentence, parseJsonMap(execution.responseText()).values(), execution.status().name());
     }
 
     /** Usage mode of a teacher AI draft (D6): returned to the teacher, never saved as content. */
@@ -305,19 +300,8 @@ public class AiService {
                     List.of(),
                     execution.status().name());
         }
-
-        ParsedAiJson parsed = parseJsonMap(execution.responseText());
-        if (!parsed.valid()) {
-            return new AiQuizGeneratorResponse(
-                    "AI quiz unavailable",
-                    sanitizedTopic,
-                    sanitizePromptFragment(request.level()),
-                    sanitizePromptFragment(request.category()),
-                    usageMode,
-                    List.of(),
-                    AiRequestStatus.FAILED.name());
-        }
-        return parseQuizResponse(request, usageMode, parsed.values(), execution.status().name());
+        return parseQuizResponse(
+                request, sanitizedTopic, usageMode, parseJsonMap(execution.responseText()).values(), execution.status().name());
     }
 
     public AiStoryGeneratorResponse storyGenerator(SecurityUserDetails currentUser, AiStoryGeneratorRequest request) {
@@ -341,13 +325,8 @@ public class AiService {
         if (execution.status() != AiRequestStatus.SUCCESS) {
             return fallbackStoryResponse(sanitizedTopic, usageMode, execution.status().name(), execution.userMessage());
         }
-
-        ParsedAiJson parsed = parseJsonMap(execution.responseText());
-        if (!parsed.valid()) {
-            return fallbackStoryResponse(sanitizedTopic, usageMode, AiRequestStatus.FAILED.name(),
-                    AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE);
-        }
-        return parseStoryResponse(sanitizedTopic, usageMode, parsed.values(), execution.status().name());
+        return parseStoryResponse(
+                sanitizedTopic, usageMode, parseJsonMap(execution.responseText()).values(), execution.status().name());
     }
 
     /**
@@ -391,7 +370,7 @@ public class AiService {
                 aiAvailabilityService.normalizedProvider(),
                 null,
                 null,
-                summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
+                inputSummary,
                 null,
                 "Configured model does not support audio input.",
                 RELATED_ENTITY_UPLOADED_FILE,
@@ -459,7 +438,7 @@ public class AiService {
                     availability.provider(),
                     availability.model(),
                     null,
-                    summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
+                    inputSummary,
                     null,
                     IMAGE_READ_ERROR,
                     RELATED_ENTITY_UPLOADED_FILE,
@@ -592,7 +571,7 @@ public class AiService {
             Long relatedEntityId,
             AiProviderPrompt.AiImageInput image) {
         String userRole = primaryRole(user);
-        String inputSummary = summarize(userPrompt, USAGE_LOG_SUMMARY_LIMIT);
+        String inputSummary = userPrompt;
         AiAvailabilityResponse availability = aiAvailabilityService.getAvailability();
         if (!availability.available()) {
             aiLogService.createUsageLog(
@@ -639,7 +618,26 @@ public class AiService {
                     AiSafetyGuard.BLOCKED_INPUT_LOG);
         }
 
-        aiUsageLimiter.checkProviderCallAllowed(user.getId());
+        try {
+            aiUsageLimiter.checkProviderCallAllowed(user.getId());
+        } catch (ResponseStatusException quotaExceeded) {
+            // SDD 5.6: every AI request is summarised in the AI-usage log, including quota rejections (HTTP 429).
+            aiLogService.createUsageLog(
+                    user,
+                    userRole,
+                    featureKey,
+                    language,
+                    AiRequestStatus.FAILED,
+                    availability.provider(),
+                    availability.model(),
+                    null,
+                    inputSummary,
+                    null,
+                    QUOTA_EXCEEDED_ERROR,
+                    relatedEntityType,
+                    relatedEntityId);
+            throw quotaExceeded;
+        }
         AiProviderPrompt prompt = aiPromptBuilder.buildPrompt(featureKey, language, userPrompt, expectJson, history, image);
         Timer.Sample providerTimer = Timer.start(meterRegistry);
         AiProviderResult result;
@@ -746,7 +744,7 @@ public class AiService {
                 result.modelName(),
                 result.tokenCount(),
                 inputSummary,
-                summarize(result.text(), USAGE_LOG_SUMMARY_LIMIT),
+                result.text(),
                 null,
                 relatedEntityType,
                 relatedEntityId);
@@ -824,28 +822,29 @@ public class AiService {
     private String buildVocabularyPrompt(AiVocabularyHelperRequest request, String language) {
         String outputLanguage = normalizedPromptLanguage(request.outputLanguage(), language);
         return "Create a short beginner vocabulary card in JSON for the word or phrase \""
-                + AiInputSanitizer.sanitizeShort(request.word())
-                + "\". Input language: " + AiInputSanitizer.sanitizeShort(request.inputLanguage())
+                + requireSanitizedShort(request.word(), "Word is required.")
+                + "\". Input language: "
+                + TextUtils.defaultIfBlank(AiInputSanitizer.sanitizeShort(request.inputLanguage()), "not specified")
                 + ". Output language preference: " + outputLanguage
                 + ". Learner level: " + defaultLevel(request.learnerLevel())
                 + ". Use an everyday young-adult example (university, work, food, travel or daily life)."
-                + " Return keys: chineseWord, pinyin, englishMeaning, bahasaMelayuMeaning, simpleExplanation, exampleSentence, exampleSentencePinyin, exampleSentenceTranslation, imagePromptOrDescription, miniPracticeQuestion, encouragement.";
+                + " Return keys: chineseWord, pinyin, englishMeaning, bahasaMelayuMeaning, simpleExplanation, exampleSentence, exampleSentenceTranslation, encouragement.";
     }
 
-    private String buildSentencePrompt(AiSentencePracticeRequest request, String language) {
+    private String buildSentencePrompt(AiSentencePracticeRequest request, String sanitizedSentence, String language) {
         return "Check this beginner Mandarin practice sentence and return JSON: \""
-                + AiInputSanitizer.sanitizeLong(request.sentence())
+                + sanitizedSentence
                 + "\". Learner level: " + defaultLevel(request.learnerLevel())
                 + ". Language preference: " + language
                 + ". Explain at most two corrections briefly; do not give a grade."
-                + " Return keys: correctedSentence, pinyin, englishMeaning, bahasaMelayuMeaning, improvementExplanation, naturalSentenceVersion, practiceTask, encouragement.";
+                + " Return keys: correctedSentence, pinyin, englishMeaning, bahasaMelayuMeaning, improvementExplanation, encouragement.";
     }
 
     private String buildQuizPrompt(AiQuizGeneratorRequest request, String language, String usageMode) {
         return "Generate a short beginner Mandarin self-practice quiz in JSON for a young adult learner. Topic: "
                 + AiInputSanitizer.sanitizeShort(request.topic())
                 + ". Level: " + defaultLevel(request.level())
-                + ". Category: " + AiInputSanitizer.sanitizeShort(request.category())
+                + ". Category: " + TextUtils.defaultIfBlank(AiInputSanitizer.sanitizeShort(request.category()), "general")
                 + ". Number of questions: " + resolveNumberOfQuestions(request.numberOfQuestions())
                 + ". Question types: " + sanitizedQuestionTypes(request.questionTypes())
                 + ". Usage mode: " + usageMode
@@ -857,7 +856,7 @@ public class AiService {
         return "Generate a short beginner Mandarin reading passage in JSON about an everyday young-adult situation. Topic: "
                 + AiInputSanitizer.sanitizeShort(request.topic())
                 + ". Level: " + defaultLevel(request.level())
-                + ". Length preference: " + AiInputSanitizer.sanitizeShort(request.lengthPreference())
+                + ". Length preference: " + TextUtils.defaultIfBlank(AiInputSanitizer.sanitizeShort(request.lengthPreference()), "short")
                 + ". Usage mode: " + usageMode
                 + ". Language preference: " + language
                 + ". Return keys: title, chineseStory, pinyin, englishTranslation, bahasaMelayuTranslation, vocabularyList, comprehensionQuestions, encouragement.";
@@ -926,7 +925,7 @@ public class AiService {
                 availability.provider(),
                 availability.model(),
                 null,
-                summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
+                inputSummary,
                 null,
                 availability.available()
                         ? "Configured provider does not support image input."
@@ -944,11 +943,8 @@ public class AiService {
     }
 
     private static AiWritingFeedbackResponse failedWritingFeedback(AiExecutionResult execution) {
-        String message = execution.status() == AiRequestStatus.SUCCESS
-                ? AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE
-                : execution.userMessage();
         return new AiWritingFeedbackResponse(
-                message,
+                execution.userMessage(),
                 null,
                 "Write the character again slowly and compare it with the model character.",
                 "Your teacher can review the saved image.",
@@ -989,9 +985,6 @@ public class AiService {
                 execution.userMessage(),
                 null,
                 null,
-                null,
-                null,
-                "Try again later with a short Chinese word or phrase.",
                 "You can also check the word with your teacher.",
                 execution.status().name());
     }
@@ -1004,8 +997,6 @@ public class AiService {
                 null,
                 null,
                 execution.userMessage(),
-                originalSentence,
-                "Try one short sentence again later.",
                 "You can also ask your teacher to check the sentence.",
                 execution.status().name());
     }
@@ -1024,14 +1015,6 @@ public class AiService {
                 status);
     }
 
-    private AiExecutionResult unparseableProviderResponse(AiExecutionResult execution, String errorSummary) {
-        return AiExecutionResult.failed(
-                execution.providerName(),
-                execution.modelName(),
-                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
-                errorSummary);
-    }
-
     private AiVocabularyHelperResponse parseVocabularyResponse(Map<String, Object> map, String status) {
         return new AiVocabularyHelperResponse(
                 text(map, "chineseWord"),
@@ -1040,10 +1023,7 @@ public class AiService {
                 text(map, "bahasaMelayuMeaning"),
                 TextUtils.defaultIfBlank(text(map, "simpleExplanation"), "This word is useful for beginner practice."),
                 text(map, "exampleSentence"),
-                text(map, "exampleSentencePinyin"),
                 text(map, "exampleSentenceTranslation"),
-                text(map, "imagePromptOrDescription"),
-                text(map, "miniPracticeQuestion"),
                 TextUtils.defaultIfBlank(text(map, "encouragement"), "Try using the word in your own sentence."),
                 status);
     }
@@ -1056,18 +1036,17 @@ public class AiService {
                 text(map, "englishMeaning"),
                 text(map, "bahasaMelayuMeaning"),
                 TextUtils.defaultIfBlank(text(map, "improvementExplanation"), "No major issue was found in this sentence."),
-                TextUtils.defaultIfBlank(text(map, "naturalSentenceVersion"), originalSentence),
-                TextUtils.defaultIfBlank(text(map, "practiceTask"), "Write one more short sentence about the same topic."),
                 TextUtils.defaultIfBlank(text(map, "encouragement"), "Keep practising with short sentences."),
                 status);
     }
 
     private AiQuizGeneratorResponse parseQuizResponse(
             AiQuizGeneratorRequest request,
+            String topic,
             String usageMode,
             Map<String, Object> map,
             String status) {
-        String topic = requireSanitizedShort(request.topic(), "Topic is required.");
+        // Only questions the learner can answer and check in the browser are kept (SDD 5.6, Table 5.6).
         List<AiGeneratedQuizQuestionResponse> questions = mapObjectList(
                 map.get("questions"),
                 MAX_QUIZ_QUESTIONS,
@@ -1079,6 +1058,9 @@ public class AiService {
                         text(question, "explanation"),
                         text(question, "pinyin"),
                         text(question, "translation")));
+        questions = questions.stream()
+                .filter(question -> question.questionText() != null && question.correctAnswer() != null)
+                .toList();
         if (questions.isEmpty()) {
             return new AiQuizGeneratorResponse(
                     "AI quiz unavailable",
@@ -1251,14 +1233,6 @@ public class AiService {
                 .tag("feature", featureKey.name())
                 .tag("outcome", outcome)
                 .register(meterRegistry));
-    }
-
-    private String summarize(String value, int limit) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : TextUtils.safeTruncate(trimmed, limit);
     }
 
     private AdminAiUsageLogResponse toAdminUsageLogResponse(AiUsageLog logRecord) {

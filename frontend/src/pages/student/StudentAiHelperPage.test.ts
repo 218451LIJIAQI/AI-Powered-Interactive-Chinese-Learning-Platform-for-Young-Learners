@@ -87,7 +87,7 @@ describe('StudentAiHelperPage learner level', () => {
       await imageInput.trigger('change')
     }
 
-    await selectImage(6 * 1024 * 1024)
+    await selectImage(10 * 1024 * 1024)
     expect(wrapper.text()).not.toContain('Upload a PNG or JPG writing image under 10 MB.')
 
     await selectImage(10 * 1024 * 1024 + 1)

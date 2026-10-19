@@ -636,6 +636,10 @@ test('teacher roster shows lesson mastery and support reasons; feedback lists pr
 
   await expect(page.getByTestId('student-lesson-mastery').first()).toBeVisible()
   await expect(page.getByText('@example.com')).toHaveCount(0)
+  await expect(page.getByTestId('needs-support-indicator')).toHaveCount(1)
+  await page.getByRole('button', { name: /Zhang Yi/ }).click()
+  await expect(page.getByTestId('student-support-status')).toContainText('Quiz average below 60%')
+  await expect(page.getByTestId('student-support-status')).toContainText('No activity for 14 days')
 
   await page.goto('/teacher/feedback')
   const section = page.getByTestId('practice-review-section')

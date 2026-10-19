@@ -1,9 +1,20 @@
 package com.example.aichinese.service.ai;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URI;
+import java.time.Duration;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.client.RestTemplate;
+
+import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.util.TextUtils;
 
 final class AiProviderSupport {
@@ -21,6 +32,12 @@ final class AiProviderSupport {
     static final Set<String> SUPPORTED_PROVIDERS = Set.of(OPENAI, DEEPSEEK, OPENAI_COMPATIBLE);
 
     private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1");
+
+    private static final BigInteger INTEGER_MAX_VALUE = BigInteger.valueOf(Integer.MAX_VALUE);
+
+    static final ParameterizedTypeReference<Map<String, Object>> MAP_RESPONSE_TYPE =
+            new ParameterizedTypeReference<>() {
+            };
 
     private AiProviderSupport() {
     }
@@ -96,5 +113,55 @@ final class AiProviderSupport {
             normalized = normalized.substring(1, normalized.length() - 1);
         }
         return LOOPBACK_HOSTS.contains(normalized);
+    }
+
+    /** RestTemplate whose connect and read timeouts both use the configured AI timeout (SDD 5.6). */
+    static RestTemplate restTemplate(AiProperties aiProperties, RestTemplateBuilder restTemplateBuilder) {
+        Duration timeout = Duration.ofSeconds(Math.max(aiProperties.getTimeoutSeconds(), 1));
+        return restTemplateBuilder
+                .connectTimeout(timeout)
+                .readTimeout(timeout)
+                .build();
+    }
+
+    static HttpHeaders bearerJsonHeaders(String apiKey) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiKey);
+        return headers;
+    }
+
+    /** Configured base URL plus {@code path}, or {@code null} when the base URL is missing or not allowed. */
+    static String endpoint(AiProperties aiProperties, String path) {
+        String baseUrl = validateAndNormalizeBaseUrl(aiProperties.getApiBaseUrl());
+        return baseUrl != null ? baseUrl + path : null;
+    }
+
+    static Integer extractTokenCount(Object usageObject) {
+        if (!(usageObject instanceof Map<?, ?> usageMap)) {
+            return null;
+        }
+        Object totalTokens = usageMap.get("total_tokens");
+        if (totalTokens instanceof BigInteger bigInteger) {
+            return toNonNegativeInt(bigInteger);
+        }
+        if (totalTokens instanceof BigDecimal bigDecimal) {
+            try {
+                return toNonNegativeInt(bigDecimal.toBigIntegerExact());
+            } catch (ArithmeticException exception) {
+                return null;
+            }
+        }
+        if (totalTokens instanceof Number number) {
+            long tokenCount = number.longValue();
+            return tokenCount >= 0 && tokenCount <= Integer.MAX_VALUE ? (int) tokenCount : null;
+        }
+        return null;
+    }
+
+    private static Integer toNonNegativeInt(BigInteger value) {
+        return value.signum() >= 0 && value.compareTo(INTEGER_MAX_VALUE) <= 0
+                ? value.intValue()
+                : null;
     }
 }

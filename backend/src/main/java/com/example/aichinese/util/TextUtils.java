@@ -1,15 +1,13 @@
 package com.example.aichinese.util;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
  * Shared, side-effect-free helpers for normalising user-supplied text inputs.
- *
- * <p>Centralised here to eliminate the previous duplicated copies of the same
- * {@code trimToNull} / {@code defaultIfBlank} logic that lived inside several
- * services (AuthService, TeacherManagementService,
- * TeacherContentAccessService, AiService, AiAvailabilityService).</p>
  *
  * <h2>Unicode-aware whitespace</h2>
  * <p>The strip-style helpers below use {@link String#strip()} rather than
@@ -69,6 +67,17 @@ public final class TextUtils {
      * log-safe / UI-safe one-line summaries where multi-line input should not
      * leak layout control into the response.
      */
+    /** Comma-separated stored value (tags, teaching categories) as trimmed, non-blank items. */
+    public static List<String> splitCsv(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     public static String collapseWhitespaceToNull(String value) {
         if (value == null) {
             return null;

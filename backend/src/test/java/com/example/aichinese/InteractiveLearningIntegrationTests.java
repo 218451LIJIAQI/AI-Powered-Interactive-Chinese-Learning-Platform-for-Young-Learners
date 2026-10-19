@@ -47,13 +47,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end MockMvc coverage of the lesson + quiz player flow:
- * lesson read, quiz start / submit / score, wrong-answer surface,
- * progress + XP + streak side-effects, and badge awards.
+ * lesson read, quiz start / submit / score, wrong-answer surface, and the
+ * points awarded for a first submission and lesson completion.
  *
  * <p>Pins the published-content gate (only published lessons and quizzes
- * reach students; all published content is free), the quiz answer-key boundary (student
- * responses never include the correct answer flag), and the streak
- * deduplication so a single completion can't double-count.</p>
+ * reach students; all published content is free) and the quiz answer-key boundary (student
+ * responses never include the correct answer flag).</p>
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
@@ -129,14 +128,14 @@ class InteractiveLearningIntegrationTests {
         mockMvc.perform(oversizedPageGet("/api/v1/students/quizzes", studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.size").value(MAX_PAGE_SIZE))
-                .andExpect(jsonPath("$.data.items[0].id").value(quizId))
-                .andExpect(jsonPath("$.data.items[0].questionCount").value(2));
+                .andExpect(jsonPath("$.data.size").value(MAX_PAGE_SIZE));
 
+        // Filtered by lesson so the result does not depend on quizzes published by other test classes.
         mockMvc.perform(oversizedPageGet("/api/v1/students/quizzes", studentToken)
                 .param("lessonId", String.valueOf(lessonId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].id").value(quizId));
+                .andExpect(jsonPath("$.data.items[0].id").value(quizId))
+                .andExpect(jsonPath("$.data.items[0].questionCount").value(2));
 
         MvcResult loadQuizResult = mockMvc.perform(
                 authenticatedGet("/api/v1/students/quizzes/" + quizId, studentToken))
@@ -464,6 +463,9 @@ class InteractiveLearningIntegrationTests {
                 .path("id")
                 .asLong();
 
+        long attemptsBefore = quizAttemptRepository.count();
+        long answersBefore = quizAttemptAnswerRepository.count();
+
         mockMvc.perform(submitQuizAttempt(
                 firstQuizId,
                 studentToken,
@@ -480,6 +482,10 @@ class InteractiveLearningIntegrationTests {
                 answer(foreignQuestionId, "ma1")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(FOREIGN_ANSWER_MESSAGE));
+
+        // SDD T32: a rejected submission leaves no partial attempt or answers.
+        assertThat(quizAttemptRepository.count()).isEqualTo(attemptsBefore);
+        assertThat(quizAttemptAnswerRepository.count()).isEqualTo(answersBefore);
     }
 
     private void approveTeacherProfile(String teacherEmail) throws Exception {

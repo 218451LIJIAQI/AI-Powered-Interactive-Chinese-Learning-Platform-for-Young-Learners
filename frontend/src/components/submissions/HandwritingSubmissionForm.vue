@@ -34,7 +34,7 @@
         placeholder="好"
         :disabled="formDisabled"
         :aria-invalid="Boolean(errors.target) || undefined"
-        :aria-describedby="targetDescribedBy"
+        :aria-describedby="describedBy('target')"
         data-testid="submission-target"
       />
       <small :id="`${baseId}-target-hint`" class="field-hint">
@@ -57,7 +57,7 @@
         :accept="UPLOAD_ACCEPT.image"
         :disabled="formDisabled"
         :aria-invalid="Boolean(errors.file) || undefined"
-        :aria-describedby="fileDescribedBy"
+        :aria-describedby="describedBy('file')"
         data-testid="submission-file-input"
         @change="selectFile"
       />
@@ -145,12 +145,9 @@ const formError = ref<string | null>(null)
 const submitting = ref(false)
 const previewUrl = ref<string | null>(null)
 const formDisabled = computed(() => props.disabled || submitting.value)
-const targetDescribedBy = computed(() =>
-  [`${baseId}-target-hint`, errors.value.target ? `${baseId}-target-error` : ''].filter(Boolean).join(' '),
-)
-const fileDescribedBy = computed(() =>
-  [`${baseId}-file-hint`, errors.value.file ? `${baseId}-file-error` : ''].filter(Boolean).join(' '),
-)
+function describedBy(field: 'target' | 'file'): string {
+  return [`${baseId}-${field}-hint`, errors.value[field] ? `${baseId}-${field}-error` : ''].filter(Boolean).join(' ')
+}
 const previewAlt = computed(() => form.targetCharacter.trim() || t('practiceSubmissions.handwritingTitle'))
 
 watch(

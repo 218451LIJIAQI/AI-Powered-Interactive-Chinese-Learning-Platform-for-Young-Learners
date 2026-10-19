@@ -141,6 +141,7 @@ import AppBrand from '@/components/layout/AppBrand.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
+import { isValidEmail } from '@/utils/email'
 import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
 import { getSessionStorage, safeGetItem, safeRemoveItem, storageKeys } from '@/utils/storage'
 import '@/styles/auth.css'
@@ -162,9 +163,8 @@ const submitting = ref(false)
 
 removeSensitiveQueryFromAddressBar()
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizedEmail = computed(() => email.value.trim().toLowerCase())
-const emailValid = computed(() => emailPattern.test(normalizedEmail.value))
+const emailValid = computed(() => isValidEmail(normalizedEmail.value))
 const canSubmit = computed(() => emailValid.value && !submitting.value)
 const submitLabel = computed(() => (submitting.value ? t('recovery.forgot.sending') : t('recovery.forgot.send')))
 

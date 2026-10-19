@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.learning;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -24,7 +25,7 @@ public record LessonVideoProgressSummaryResponse(
         boolean completed,
         Integer watchedSeconds,
         Integer totalSeconds,
-        String lastWatchedAt) {
+        LocalDateTime lastWatchedAt) {
 
     public LessonVideoProgressSummaryResponse {
         Objects.requireNonNull(studentId, "studentId must not be null");

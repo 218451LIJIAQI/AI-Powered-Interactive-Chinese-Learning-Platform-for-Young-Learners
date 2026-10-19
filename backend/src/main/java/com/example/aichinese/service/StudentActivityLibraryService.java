@@ -213,7 +213,6 @@ public class StudentActivityLibraryService {
                 entity.getImageUrl(),
                 entity.getAudioUrl(),
                 entity.getSortOrder(),
-                entity.getExtraPayload(),
                 entity.getHskLevel(),
                 entity.getDifficulty(),
                 entity.getTopic(),

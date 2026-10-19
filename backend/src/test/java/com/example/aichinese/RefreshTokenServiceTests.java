@@ -74,7 +74,6 @@ class RefreshTokenServiceTests {
         RefreshToken current = activeToken(user);
 
         when(fixture.refreshTokenRepository().findLockedByTokenHash(anyString())).thenReturn(Optional.of(current));
-        when(fixture.refreshTokenRepository().existsByTokenHash(anyString())).thenReturn(false);
 
         RefreshTokenService.RefreshSession session = fixture.service()
                 .rotate(RAW_REFRESH_TOKEN, CLIENT_IP, USER_AGENT);
@@ -108,12 +107,28 @@ class RefreshTokenServiceTests {
     }
 
     @Test
+    void rotateRejectsExpiredTokenWithoutSigningOutOtherSessions() {
+        ServiceFixture fixture = serviceFixture();
+        User user = activeUser(ACTIVE_SESSION_VERSION);
+        RefreshToken expired = activeToken(user);
+        expired.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+
+        when(fixture.refreshTokenRepository().findLockedByTokenHash(anyString())).thenReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> fixture.service().rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(INVALID_REFRESH_MESSAGE);
+
+        assertThat(user.getSessionVersion()).isEqualTo(ACTIVE_SESSION_VERSION);
+        verify(fixture.refreshTokenRepository(), never()).revokeActiveTokenFamily(anyString(), any(LocalDateTime.class));
+        verify(fixture.userRepository(), never()).findLockedById(USER_ID);
+    }
+
+    @Test
     void issueTruncatesUserAgentWithoutSplittingUnicodeSurrogatePair() {
         ServiceFixture fixture = serviceFixture();
         User user = activeUser(ACTIVE_SESSION_VERSION);
         ArgumentCaptor<RefreshToken> savedToken = ArgumentCaptor.forClass(RefreshToken.class);
-
-        when(fixture.refreshTokenRepository().existsByTokenHash(anyString())).thenReturn(false);
 
         fixture.service().issue(user, CLIENT_IP, oversizedUserAgentWithSurrogatePair());
 

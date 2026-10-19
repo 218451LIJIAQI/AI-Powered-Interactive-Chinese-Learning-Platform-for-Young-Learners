@@ -20,6 +20,7 @@ import type {
   StudentStoryQuestionResponse,
   TracingCompletionRequest,
 } from '@/types/api'
+import { containsHan } from '@/utils/cjkText'
 
 /** What a player hands to the page when the learner submits. */
 export type ActivitySubmission =
@@ -30,11 +31,9 @@ export type ActivitySubmission =
   | { type: 'LISTENING_EXERCISE'; body: ListeningCompletionRequest }
   | { type: 'STORY_ACTIVITY'; body: StoryCompletionRequest }
 
-const CJK_PATTERN = /[㐀-䶿一-鿿豈-﫿]/
-
 /** `zh-CN` when the text contains Chinese characters (for `lang` + the larger CJK font), otherwise undefined. */
 export function cjkLang(text: string | null | undefined): 'zh-CN' | undefined {
-  return text && CJK_PATTERN.test(text) ? 'zh-CN' : undefined
+  return containsHan(text) ? 'zh-CN' : undefined
 }
 
 /* ---------------------------------------------------------------- matching */

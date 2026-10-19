@@ -97,6 +97,8 @@ describe('sanitizeSentryEvent', () => {
       'learner@example.com',
       'new-password',
       'raw-session',
+      'raw-api-key',
+      'raw-note-token',
     ]
 
     sensitiveValues.forEach((sensitiveValue) => {

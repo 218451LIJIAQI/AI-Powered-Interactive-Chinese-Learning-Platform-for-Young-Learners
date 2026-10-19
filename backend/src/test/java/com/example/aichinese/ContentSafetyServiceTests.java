@@ -36,6 +36,8 @@ class ContentSafetyServiceTests {
         assertThatThrownBy(() -> requireSafeText(service, "Friendly p.o.r.n wording"))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(SAFETY_MESSAGE);
+        // Full-width letters are folded by the NFKC normalisation step.
+        assertThat(service.containsSensitiveContent("ｐｏｒｎ")).isTrue();
     }
 
     @Test

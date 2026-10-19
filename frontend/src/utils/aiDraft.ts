@@ -5,7 +5,7 @@
 import { teacherAiDraftMessages } from '@/plugins/teacherAiDraftMessages'
 import type { AiQuizGeneratorResponse, AiStoryGeneratorResponse, AppLanguage, QuizQuestionType } from '@/types/api'
 import { createEmptyStoryQuestion, type ActivityEditorForm, type StoryQuestionDraft } from '@/utils/activityForm'
-import { answersMatch, correctOptionIndexes, storyTranslations, vocabularyMeaning } from '@/utils/aiPracticeQuiz'
+import { correctOptionIndexes, resolveAnswerKey, storyTranslations, vocabularyMeaning } from '@/utils/aiPracticeQuiz'
 
 /** Backend limit of the story activity `instructions` field (AdminStoryActivityRequest). */
 export const STORY_INSTRUCTIONS_MAX_LENGTH = 1000
@@ -52,10 +52,10 @@ export function quizDraftToQuestionDrafts(response: AiQuizGeneratorResponse): Qu
     .map((question) => {
       const optionTexts = (question.options ?? []).map((option) => clean(option)).filter(Boolean)
       // Normalised match, or a single-letter key (A-D) pointing at an option; the teacher still reviews it.
-      const correctIndexes = correctOptionIndexes(optionTexts, question.correctAnswer)
-      const rawAnswer = clean(question.correctAnswer)
-      const letterResolved = correctIndexes.length === 1 && !answersMatch(optionTexts[correctIndexes[0]], rawAnswer)
-      const correctAnswer = letterResolved ? optionTexts[correctIndexes[0]] : rawAnswer
+      const { indexes: correctIndexes, display: correctAnswer } = resolveAnswerKey(
+        optionTexts,
+        clean(question.correctAnswer),
+      )
       const options = optionTexts.map((optionText, index) => ({
         optionText,
         correctOption: correctIndexes.includes(index),

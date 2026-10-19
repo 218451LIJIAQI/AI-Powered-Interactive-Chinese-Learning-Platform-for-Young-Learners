@@ -2,13 +2,8 @@
  * Pure rules for the teacher's practice-submission review (D7 / D7a): filters, the feedback-message validation
  * (5..2000 characters, same as the backend) and a local page helper for preview fixtures.
  */
-import type {
-  PageResponse,
-  PracticeReviewStatus,
-  PracticeSubmissionResponse,
-  PracticeSubmissionType,
-  TeacherFeedbackType,
-} from '@/types/api'
+import type { PageResponse, PracticeReviewStatus, PracticeSubmissionResponse, TeacherFeedbackType } from '@/types/api'
+import { pagePreviewItems } from '@/utils/previewPaging'
 
 export type PracticeReviewFilter = PracticeReviewStatus | 'ALL'
 
@@ -39,16 +34,6 @@ export function validatePracticeFeedbackMessage(message: string | null | undefin
   return null
 }
 
-/** Audio for pronunciation recordings, image for handwriting uploads (falls back to the stored content type). */
-export function practiceMediaKind(
-  submission: Pick<PracticeSubmissionResponse, 'submissionType' | 'contentType'>,
-): 'audio' | 'image' {
-  const type: PracticeSubmissionType = submission.submissionType
-  if (type === 'PRONUNCIATION_AUDIO') return 'audio'
-  if (type === 'HANDWRITING_IMAGE') return 'image'
-  return submission.contentType?.startsWith('audio/') ? 'audio' : 'image'
-}
-
 export function matchesPracticeReviewFilter(
   submission: Pick<PracticeSubmissionResponse, 'reviewStatus'>,
   filter: PracticeReviewFilter,
@@ -66,16 +51,7 @@ export function pagePracticeSubmissions(
   const matching = items
     .filter((item) => matchesPracticeReviewFilter(item, filter))
     .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())
-  const safeSize = Math.max(1, Math.floor(size))
-  const totalPages = Math.max(1, Math.ceil(matching.length / safeSize))
-  const safePage = Math.min(Math.max(0, Math.floor(page)), totalPages - 1)
-  return {
-    items: matching.slice(safePage * safeSize, safePage * safeSize + safeSize),
-    page: safePage,
-    size: safeSize,
-    totalItems: matching.length,
-    totalPages,
-  }
+  return pagePreviewItems(matching, page, size)
 }
 
 /** Replaces one submission in a page with the server's updated copy (e.g. REVIEWED after feedback). */

@@ -18,7 +18,7 @@ import { computed } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
-type BannerTone = 'green' | 'purple' | 'blue' | 'pearl'
+type BannerTone = 'green' | 'purple' | 'blue'
 
 interface Props {
   icon: string
@@ -116,10 +116,5 @@ const showBadge = computed(() => props.badge.trim().length > 0)
 .is-blue {
   --banner-tone-soft: var(--color-info-soft);
   --banner-tone-text: var(--color-info-text);
-}
-
-.is-pearl {
-  --banner-tone-soft: var(--surface-subtle);
-  --banner-tone-text: var(--text-secondary);
 }
 </style>

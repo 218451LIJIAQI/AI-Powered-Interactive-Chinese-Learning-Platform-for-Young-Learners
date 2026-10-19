@@ -83,10 +83,12 @@ class QuizScoringTests {
     }
 
     @Test
-    void percentageHandlesZeroMaxScoreAndRounding() {
+    void percentageHandlesZeroMaxScoreAndRoundsDown() {
         assertThat(QuizScoring.percentage(0, 0)).isZero();
         assertThat(QuizScoring.percentage(5, 10)).isEqualTo(50);
-        assertThat(QuizScoring.percentage(2, 3)).isEqualTo(67);
+        assertThat(QuizScoring.percentage(2, 3)).isEqualTo(66);
+        // 79.59 % must not count as "at least 80 %" (Quiz Star bonus, Mastered).
+        assertThat(QuizScoring.percentage(39, 49)).isEqualTo(79);
         assertThat(QuizScoring.percentage(10, 10)).isEqualTo(100);
     }
 

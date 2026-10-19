@@ -2,7 +2,6 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.DateTimeException;
 import java.time.LocalDateTime;
@@ -200,12 +199,12 @@ public class LiveClassService {
             Long liveClassId,
             int page,
             int size) {
-        liveLearningAccessService.requireTeacherOwnedLiveClass(currentUser, liveClassId);
+        LiveClass liveClass = liveLearningAccessService.requireTeacherOwnedLiveClass(currentUser, liveClassId);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        List<LiveClassEnrolment> accessibleEnrolments = liveClassEnrolmentRepository.findByLiveClassIdOrderByEnrolledAtAsc(liveClassId).stream()
-                .filter(this::hasCurrentEnrolmentAccess)
-                .toList();
+        List<LiveClassEnrolment> accessibleEnrolments = hasAccess(liveClass)
+                ? liveClassEnrolmentRepository.findByLiveClassIdOrderByEnrolledAtAsc(liveClassId)
+                : List.of();
         int startIndex = PaginationUtils.startIndex(safePage, safeSize, accessibleEnrolments.size());
         int endIndex = PaginationUtils.endIndex(startIndex, safeSize, accessibleEnrolments.size());
         return new PageResponse<>(
@@ -278,9 +277,7 @@ public class LiveClassService {
                 liveClass.getId(),
                 "Student enrolled in a live class.");
 
-        LiveClass refreshedLiveClass = liveClassRepository.findById(liveClassId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Live class was not found."));
-        return toStudentResponse(refreshedLiveClass, student);
+        return toStudentResponse(liveClass, student);
     }
 
     @Transactional
@@ -329,8 +326,7 @@ public class LiveClassService {
                     "STUDENT_LIVE_CLASS_ATTENDED",
                     LIVE_CLASS_AUDIT_TARGET_TYPE,
                     liveClassId,
-                    "Student joined a live class (attendance recorded).",
-                    null);
+                    "Student joined a live class (attendance recorded).");
         }
 
         return new JoinLiveClassResponse(
@@ -479,14 +475,13 @@ public class LiveClassService {
     }
 
     private LiveClassResponse toTeacherResponse(LiveClass liveClass) {
-        long enrolledCount = countCurrentEnrolledStudents(liveClass);
+        // Same seat rule (ENROLLED + ATTENDED) as the student view and the capacity check (FR-LIVE-05).
+        long enrolledCount = liveLearningAccessService.countSeatsTaken(liveClass);
         return liveLearningMapper.toLiveClassResponse(liveClass, enrolledCount, false, false, true, false, true);
     }
 
     private LiveClassResponse toAdminResponse(LiveClass liveClass) {
-        long enrolledCount = liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatus(
-                liveClass.getId(),
-                LiveClassEnrolmentStatus.ENROLLED);
+        long enrolledCount = liveLearningAccessService.countSeatsTaken(liveClass);
         return liveLearningMapper.toLiveClassResponse(liveClass, enrolledCount, false, false, true, false, true);
     }
 
@@ -500,6 +495,7 @@ public class LiveClassService {
         boolean canEnrol = !enrolled
                 && accessAllowed
                 && hasSeat
+                && !LiveLearningAccessService.hasEnded(liveClass)
                 && STUDENT_VISIBLE_STATUSES.contains(liveClass.getLiveClassStatus());
         boolean canJoin = enrolled
                 && accessAllowed
@@ -520,32 +516,13 @@ public class LiveClassService {
         return coursePackage == null || ContentVisibilityPolicy.isPackageVisible(coursePackage);
     }
 
-    /**
-     * ENROLLED students of a class whose linked content is still visible. Every enrolment of the class
-     * shares the same access rule, so a COUNT query replaces loading each enrolment row per listed class.
-     */
-    private long countCurrentEnrolledStudents(LiveClass liveClass) {
-        if (!hasAccess(liveClass)) {
-            return 0L;
-        }
-        return liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatus(
-                liveClass.getId(),
-                LiveClassEnrolmentStatus.ENROLLED);
-    }
-
-    private boolean hasCurrentEnrolmentAccess(LiveClassEnrolment enrolment) {
-        if (enrolment.getStudent() == null || enrolment.getLiveClass() == null) {
-            return false;
-        }
-        return hasAccess(enrolment.getLiveClass());
-    }
-
     private void notifyEnrolledStudents(LiveClass liveClass, String title, String message, String targetPath) {
+        if (!hasAccess(liveClass)) {
+            return;
+        }
         for (LiveClassEnrolment enrolment : liveClassEnrolmentRepository.findByLiveClassIdOrderByEnrolledAtAsc(liveClass.getId())) {
             if (enrolment.getEnrolmentStatus() == LiveClassEnrolmentStatus.ENROLLED
-                    && enrolment.getStudent() != null
-                    && enrolment.getStudent().getUser() != null
-                    && hasCurrentEnrolmentAccess(enrolment)) {
+                    && enrolment.getStudent().getUser() != null) {
                 notificationService.safeCreateNotification(
                         enrolment.getStudent().getUser(),
                         NotificationType.LIVE_CLASS_REMINDER,

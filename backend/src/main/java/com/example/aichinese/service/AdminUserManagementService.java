@@ -14,23 +14,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
-import com.example.aichinese.dto.admin.AdminStudentListItemResponse;
 import com.example.aichinese.dto.admin.AdminUserListItemResponse;
 import com.example.aichinese.dto.admin.AdminUserStatusUpdateRequest;
-import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.mapper.TeacherManagementMapper;
-import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
@@ -42,7 +38,6 @@ public class AdminUserManagementService {
     private static final Logger log = LoggerFactory.getLogger(AdminUserManagementService.class);
 
     private final UserRepository userRepository;
-    private final StudentProfileRepository studentProfileRepository;
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherManagementMapper teacherManagementMapper;
     private final NotificationService notificationService;
@@ -51,14 +46,12 @@ public class AdminUserManagementService {
 
     public AdminUserManagementService(
             UserRepository userRepository,
-            StudentProfileRepository studentProfileRepository,
             TeacherProfileRepository teacherProfileRepository,
             TeacherManagementMapper teacherManagementMapper,
             NotificationService notificationService,
             AuditLogService auditLogService,
             RefreshTokenService refreshTokenService) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.teacherManagementMapper = Objects.requireNonNull(teacherManagementMapper, "teacherManagementMapper");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
@@ -116,20 +109,6 @@ public class AdminUserManagementService {
                 .toList();
 
         return new PageResponse<>(items, sanitizedPage, sanitizedSize, userIdPage.getTotalElements(), userIdPage.getTotalPages());
-    }
-
-    @Transactional(readOnly = true)
-    public PageResponse<AdminStudentListItemResponse> listStudents(int page, int size) {
-        int sanitizedPage = PaginationUtils.sanitizePage(page);
-        int sanitizedSize = PaginationUtils.sanitizeSize(size);
-
-        Page<StudentProfile> studentPage = studentProfileRepository.findAll(
-                PageRequest.of(sanitizedPage, sanitizedSize, Sort.by(Sort.Direction.DESC, "createdAt")));
-
-        List<AdminStudentListItemResponse> items = studentPage.getContent().stream()
-                .map(teacherManagementMapper::toAdminStudentListItem)
-                .toList();
-        return new PageResponse<>(items, sanitizedPage, sanitizedSize, studentPage.getTotalElements(), studentPage.getTotalPages());
     }
 
     @Transactional

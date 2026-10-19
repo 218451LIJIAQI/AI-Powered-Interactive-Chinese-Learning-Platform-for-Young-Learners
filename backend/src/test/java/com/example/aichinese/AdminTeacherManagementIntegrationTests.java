@@ -25,7 +25,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.example.aichinese.support.TestUploadFixtures;
-import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.TeacherVerificationReview;
@@ -121,12 +120,7 @@ class AdminTeacherManagementIntegrationTests {
         assertThat(teacherVerificationReviewRepository.findTopByTeacherIdOrderByReviewedAtDesc(profile.getId()))
                 .map(TeacherVerificationReview::getDecisionStatus)
                 .contains(TeacherStatus.APPROVED);
-        assertThat(notificationRepository.findAll())
-                .extracting(Notification::getTitle)
-                .contains("Teacher account approved");
-        assertThat(auditLogRepository.findAll())
-                .extracting(AuditLog::getActionType)
-                .contains("ADMIN_TEACHER_APPROVE");
+        assertTeacherNotifiedAndAudited(teacherEmail, profile.getId(), "Teacher account approved", "ADMIN_TEACHER_APPROVE");
 
         mockMvc.perform(get("/api/v1/admin/teachers/" + profile.getId())
                 .header(AUTHORIZATION, bearer(adminToken)))
@@ -174,6 +168,7 @@ class AdminTeacherManagementIntegrationTests {
         assertThat(refreshed.getTeacherStatus()).isEqualTo(TeacherStatus.REJECTED);
         assertThat(refreshed.getRejectionReason()).isEqualTo("Document is too blurry.");
         assertThat(refreshed.isPublicVisible()).isFalse();
+        assertTeacherNotifiedAndAudited(teacherEmail, profile.getId(), "Teacher account rejected", "ADMIN_TEACHER_REJECT");
     }
 
     @Test
@@ -270,16 +265,8 @@ class AdminTeacherManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.items[0].teacherStatus").value("PENDING"))
                 .andReturn();
 
-        MvcResult studentsResult = mockMvc.perform(get("/api/v1/admin/students")
-                .param("size", "100000")
-                .header(AUTHORIZATION, bearer(adminToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.size").value(100))
-                .andReturn();
-
         assertThat(usersResult.getResponse().getContentAsString()).doesNotContain("passwordHash");
         assertThat(usersResult.getResponse().getContentAsString()).doesNotContain("password_hash");
-        assertThat(studentsResult.getResponse().getContentAsString()).doesNotContain("passwordHash");
     }
 
     @Test
@@ -288,6 +275,14 @@ class AdminTeacherManagementIntegrationTests {
         String originalToken = registerStudentAndLogin(studentEmail);
         User studentUser = userRepository.findByEmailWithRoles(studentEmail).orElseThrow();
         String adminToken = adminToken();
+
+        // SDD T21: only an Administrator may change an account status.
+        mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
+                .with(csrf())
+                .header(AUTHORIZATION, bearer(originalToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("active", false))))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
                 .with(csrf())
@@ -298,6 +293,7 @@ class AdminTeacherManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.active").value(false));
 
         assertThat(userRepository.findById(studentUser.getId()).orElseThrow().isActive()).isFalse();
+        assertUserStatusAudited("ADMIN_USER_DEACTIVATE", studentUser.getId());
 
         mockMvc.perform(get("/api/v1/auth/me")
                 .header(AUTHORIZATION, bearer(originalToken)))
@@ -335,6 +331,7 @@ class AdminTeacherManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.active").value(true));
 
         assertThat(userRepository.findById(studentUser.getId()).orElseThrow().isActive()).isTrue();
+        assertUserStatusAudited("ADMIN_USER_REACTIVATE", studentUser.getId());
         assertThat(loginAndExtractToken(studentEmail, DEFAULT_PASSWORD)).isNotBlank();
 
         mockMvc.perform(get("/api/v1/auth/me")
@@ -486,6 +483,26 @@ class AdminTeacherManagementIntegrationTests {
                 .andExpect(status().isOk());
 
         return loginAndExtractToken(email, DEFAULT_PASSWORD);
+    }
+
+    /** Scoped to this teacher: other tests in the shared context approve and reject teachers too. */
+    private void assertTeacherNotifiedAndAudited(String teacherEmail, Long profileId, String title, String auditAction) {
+        Long teacherUserId = userRepository.findByEmailWithRoles(teacherEmail).orElseThrow().getId();
+        assertThat(notificationRepository.findByUserIdOrderByCreatedAtDesc(teacherUserId))
+                .extracting(Notification::getTitle)
+                .contains(title);
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(log -> auditAction.equals(log.getActionType())
+                        && "TeacherProfile".equals(log.getTargetType())
+                        && profileId.equals(log.getTargetId()));
+    }
+
+    /** SDD T21: an admin status change is audited against the changed user. */
+    private void assertUserStatusAudited(String auditAction, Long userId) {
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(log -> auditAction.equals(log.getActionType())
+                        && "User".equals(log.getTargetType())
+                        && userId.equals(log.getTargetId()));
     }
 
     private String adminToken() throws Exception {

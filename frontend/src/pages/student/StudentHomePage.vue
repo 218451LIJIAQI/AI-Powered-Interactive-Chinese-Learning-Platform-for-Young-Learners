@@ -285,9 +285,9 @@ import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { studentDashboard, studentProgress } from '@/demo/data'
 import { studentHomeMessages } from '@/plugins/studentHomeMessages'
-import type { StudentDashboardResponse, StudentProgressSummaryResponse } from '@/types/api'
 import { clampPercent, nonNegativeInteger, ratioPercent } from '@/utils/format'
-import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
+import { practiceRoute } from '@/utils/practiceRoute'
+import { emptyStudentDashboard, emptyStudentProgress } from '@/utils/progressSummary'
 
 const router = useRouter()
 const { t } = useI18n({
@@ -300,42 +300,16 @@ const { t } = useI18n({
 const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboard)
 const progressResource = useResource(() => studentApi.progress(), studentProgress)
 
-const emptyDashboard: StudentDashboardResponse = {
-  fullName: '',
-  currentLevel: '',
-  learningProgressPercent: 0,
-  dailyStreak: 0,
-  points: 0,
-  badgeCount: 0,
-  recentQuizResults: [],
-  weakAreas: [],
-  unfinishedLessons: [],
-  recentNotifications: [],
-  recommendedNextStep: null,
-}
-const emptyProgress: StudentProgressSummaryResponse = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-  lessons: [],
-}
+const emptyDashboard = emptyStudentDashboard()
+const emptyProgress = emptyStudentProgress()
 
-const dashboard = computed(
-  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboard : emptyDashboard),
-)
-const progress = computed(
-  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgress : emptyProgress),
-)
+const dashboard = computed(() => dashboardResource.data.value ?? emptyDashboard)
+const progress = computed(() => progressResource.data.value ?? emptyProgress)
 const pageLoading = computed(() => dashboardResource.loading.value || progressResource.loading.value)
 const pageError = computed(() => dashboardResource.error.value || progressResource.error.value)
 const usingFallback = computed(() => dashboardResource.usingFallback.value || progressResource.usingFallback.value)
 
 type CompletionIcon = 'history' | 'status'
-type LessonVariant = 'campus' | 'greeting' | 'listening' | 'numbers' | 'pinyin' | 'tones'
 type PathNodeBadgeClass = 'is-check' | 'is-current'
 type PathNodeBadgeIcon = 'flash' | 'status'
 type ProgressTone = 'info' | 'success' | 'warning'
@@ -364,9 +338,9 @@ interface LearningGoal {
 
 const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || t('studentHome.learner')).trim())
 const overallProgress = computed(() =>
-  safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
+  clampPercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
 )
-const quizAveragePercent = computed(() => safePercent(progress.value.quizAverage))
+const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
 const nextLesson = computed(() => {
   const unfinished = dashboard.value.unfinishedLessons[0]
   const recent = progress.value.recentLessons[0]
@@ -374,7 +348,7 @@ const nextLesson = computed(() => {
   return {
     id: unfinished?.lessonId ?? recent?.lessonId ?? null,
     title: unfinished?.lessonTitle ?? recent?.lessonTitle ?? t('studentHome.fallbackLesson'),
-    completionPercent: safePercent(unfinished?.completionPercent ?? recent?.completionPercent ?? 0),
+    completionPercent: clampPercent(unfinished?.completionPercent ?? recent?.completionPercent ?? 0),
   }
 })
 const nextStep = computed(() => dashboard.value.recommendedNextStep || t('studentHome.fallbackNextStep'))
@@ -387,9 +361,9 @@ const heroMetrics = computed(() => [
   { label: t('studentHome.streak'), value: formatDayCount(dashboard.value.dailyStreak) },
 ])
 const heroWords = [
-  { hanzi: '你好', pinyin: 'ni hao' },
-  { hanzi: '声调', pinyin: 'sheng diao' },
-  { hanzi: '练习', pinyin: 'lian xi' },
+  { hanzi: '你好', pinyin: 'nǐ hǎo' },
+  { hanzi: '声调', pinyin: 'shēng diào' },
+  { hanzi: '练习', pinyin: 'liàn xí' },
 ]
 const heroFocusText = computed(() =>
   quizAveragePercent.value >= 80 ? t('studentHome.keepRhythm') : t('studentHome.retryQuiz'),
@@ -447,7 +421,7 @@ const pathNodes = computed<PathNode[]>(() => {
   }
 
   return source.slice(0, 4).map((lesson, index) => {
-    const completionPercent = safePercent(lesson.completionPercent)
+    const completionPercent = clampPercent(lesson.completionPercent)
     const completed = lesson.completed || completionPercent >= 100
     const current = lesson.lessonId === nextLesson.value.id && completionPercent < 100
     return {
@@ -519,31 +493,17 @@ const rewards = computed(() => [
   { label: t('studentHome.badges'), value: nonNegativeInteger(dashboard.value.badgeCount), icon: 'shield' },
 ])
 
-function safePercent(value: number): number {
-  return clampPercent(value)
-}
-
 function formatDayCount(value: number): string {
   const days = nonNegativeInteger(value)
   return `${days} ${t(days === 1 ? 'studentHome.day' : 'studentHome.days')}`
 }
 
-function variantForLesson(title: string): LessonVariant {
-  const normalized = title.toLowerCase()
-  if (normalized.includes('pinyin')) return 'pinyin'
-  if (normalized.includes('tone')) return 'tones'
-  if (normalized.includes('university') || normalized.includes('campus')) return 'campus'
-  if (normalized.includes('number')) return 'numbers'
-  if (normalized.includes('listen')) return 'listening'
-  return 'greeting'
-}
-
 function iconForLesson(title: string): string {
-  const variant = variantForLesson(title)
-  if (variant === 'pinyin' || variant === 'tones') return 'language'
-  if (variant === 'campus') return 'students'
-  if (variant === 'numbers') return 'quiz'
-  if (variant === 'listening') return 'live'
+  const normalized = title.toLowerCase()
+  if (normalized.includes('pinyin') || normalized.includes('tone')) return 'language'
+  if (normalized.includes('university') || normalized.includes('campus')) return 'students'
+  if (normalized.includes('number')) return 'quiz'
+  if (normalized.includes('listen')) return 'live'
   return 'practice'
 }
 
@@ -646,7 +606,7 @@ function openFallbackNodeRoute(lessonId: number | null): void {
   }
 
   if (lessonId === -2) {
-    openPracticeTool(practiceRoute(inferPracticeActivityFromText('listening')))
+    openPracticeTool(practiceRoute('LISTENING_EXERCISE'))
     return
   }
 

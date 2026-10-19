@@ -8,6 +8,7 @@ export const mediaMessages = {
     imageAlt: 'Uploaded handwriting for {target}',
     imageAltGeneric: 'Uploaded handwriting image',
     audioLabel: 'Recording for {target}',
+    audioLabelGeneric: 'Uploaded recording',
     hide: 'Hide',
   },
   ms: {
@@ -18,6 +19,7 @@ export const mediaMessages = {
     imageAlt: 'Tulisan tangan yang dimuat naik untuk {target}',
     imageAltGeneric: 'Imej tulisan tangan yang dimuat naik',
     audioLabel: 'Rakaman untuk {target}',
+    audioLabelGeneric: 'Rakaman yang dimuat naik',
     hide: 'Sembunyi',
   },
   'zh-CN': {
@@ -28,6 +30,7 @@ export const mediaMessages = {
     imageAlt: '为“{target}”上传的手写图片',
     imageAltGeneric: '上传的手写图片',
     audioLabel: '“{target}”的录音',
+    audioLabelGeneric: '上传的录音',
     hide: '隐藏',
   },
 } as const

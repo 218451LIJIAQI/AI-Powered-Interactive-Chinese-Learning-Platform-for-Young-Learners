@@ -7,30 +7,26 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 
 import jakarta.persistence.LockModeType;
 
-public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmailIgnoreCase(String email);
 
-    @Query("select distinct u from User u left join fetch u.roles where lower(u.email) = lower(:email)")
+    @Query("select distinct u from User u left join fetch u.roles where u.email = lower(:email)")
     Optional<User> findByEmailWithRoles(@Param("email") String email);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select u from User u where lower(u.email) = lower(:email)")
+    @Query("select u from User u where u.email = lower(:email)")
     Optional<User> findLockedByEmail(@Param("email") String email);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -39,13 +35,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     @Query("select count(distinct u) from User u join u.roles r where r.name = :roleName")
     long countByRoleName(@Param("roleName") RoleName roleName);
-
-    List<User> findTop5ByOrderByCreatedAtDesc();
-
-    @Override
-    @EntityGraph(attributePaths = { "roles" })
-    @NonNull
-    Page<User> findAll(@Nullable Specification<User> specification, @NonNull Pageable pageable);
 
     @EntityGraph(attributePaths = { "roles" })
     List<User> findByIdIn(Collection<Long> ids);

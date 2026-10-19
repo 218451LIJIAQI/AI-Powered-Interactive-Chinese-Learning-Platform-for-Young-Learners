@@ -12,8 +12,6 @@ public final class ContentDtoConstants {
 
     public static final int COVER_IMAGE_URL_MAX_LENGTH = 255;
 
-    public static final int MODERATION_NOTE_MAX_LENGTH = 1000;
-
     private ContentDtoConstants() {
     }
 }

@@ -226,12 +226,13 @@ import { useResource } from '@/composables/useResource'
 import { useStatusLabels } from '@/composables/useStatusLabels'
 import { studentProgress as studentProgressDemo } from '@/demo/data'
 import { studentProgressMessages } from '@/plugins/studentProgressMessages'
-import type { LessonMastery, StudentProgressSummaryResponse } from '@/types/api'
+import type { LessonMastery } from '@/types/api'
 import { formatDate, formatPercent } from '@/utils/format'
 import { LESSON_MASTERY_ORDER, MASTERY_QUIZ_THRESHOLD, normalizeMastery } from '@/utils/mastery'
 import {
   bestQuizPercent,
   countMastery,
+  emptyStudentProgress,
   filterLessonsByMastery,
   lessonRoute,
   progressOverview,
@@ -252,25 +253,13 @@ const { statusLabel } = useStatusLabels()
 
 const resource = useResource(() => studentApi.progress(), studentProgressDemo)
 
-const emptySummary: StudentProgressSummaryResponse = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-  lessons: [],
-}
+const emptySummary = emptyStudentProgress()
 
 const masteryFilter = ref<MasteryFilter>('ALL')
 const lessonSort = ref<LessonSort>('recent')
 
 const summary = computed(() => resource.data.value ?? emptySummary)
-const allLessons = computed(() => {
-  const lessons = summary.value.lessons?.length ? summary.value.lessons : (summary.value.recentLessons ?? [])
-  return lessons.filter((lesson) => lesson && lesson.lessonId > 0)
-})
+const allLessons = computed(() => summary.value.lessons.filter((lesson) => lesson && lesson.lessonId > 0))
 const overview = computed(() => progressOverview(summary.value))
 const masteryCounts = computed(() => countMastery(allLessons.value))
 const visibleLessons = computed(() =>

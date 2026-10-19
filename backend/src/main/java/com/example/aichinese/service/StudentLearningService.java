@@ -52,13 +52,11 @@ import com.example.aichinese.entity.QuizQuestion;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.enums.ContentStatus;
-import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
 import com.example.aichinese.entity.enums.PackageItemType;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.mapper.QuizMapper;
-import com.example.aichinese.repository.LiveClassEnrolmentRepository;
 import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
@@ -90,7 +88,6 @@ public class StudentLearningService {
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
     private final LiveClassRepository liveClassRepository;
-    private final LiveClassEnrolmentRepository liveClassEnrolmentRepository;
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final QuizMapper quizMapper;
     private final LiveLearningAccessService liveLearningAccessService;
@@ -106,7 +103,6 @@ public class StudentLearningService {
             QuizAttemptRepository quizAttemptRepository,
             QuizAttemptAnswerRepository quizAttemptAnswerRepository,
             LiveClassRepository liveClassRepository,
-            LiveClassEnrolmentRepository liveClassEnrolmentRepository,
             RecordedLessonVideoRepository recordedLessonVideoRepository,
             QuizMapper quizMapper,
             LiveLearningAccessService liveLearningAccessService,
@@ -121,7 +117,6 @@ public class StudentLearningService {
         this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
         this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
         this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
-        this.liveClassEnrolmentRepository = Objects.requireNonNull(liveClassEnrolmentRepository, "liveClassEnrolmentRepository");
         this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
         this.quizMapper = Objects.requireNonNull(quizMapper, "quizMapper");
         this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
@@ -335,19 +330,16 @@ public class StudentLearningService {
                 correctCount,
                 completionOutcome.earnedPoints(),
                 completionOutcome.totalPoints(),
-                answerResults.stream()
-                        .sorted(Comparator.comparing(QuizAttemptResultQuestionResponse::questionId))
-                        .toList());
+                // Display order, the same order as the quiz and as the attempt reopened later.
+                List.copyOf(answerResults));
     }
 
     @Transactional(readOnly = true)
     public QuizAttemptResultResponse getQuizAttempt(SecurityUserDetails currentUser, Long attemptId) {
-        StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
+        studentLearningAccessService.requireStudent(currentUser);
+        // The lookup is by the student's own user id, so the attempt always belongs to this student.
         QuizAttempt attempt = quizAttemptRepository.findByIdAndStudentUserId(attemptId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, QUIZ_ATTEMPT_NOT_FOUND));
-        if (!Objects.equals(attempt.getStudent().getId(), student.getId())) {
-            throw new ResponseStatusException(FORBIDDEN, "You do not have access to this quiz attempt.");
-        }
         ensureQuizAttemptStillAccessible(attempt);
         List<QuizAttemptAnswer> answers = quizAttemptAnswerRepository
                 .findByQuizAttemptIdOrderByCreatedAtAsc(attempt.getId());
@@ -465,12 +457,12 @@ public class StudentLearningService {
                 .filter(liveClass -> liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
                         && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
                 .map(liveClass -> {
-                    long enrolledCount = liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatus(
-                            liveClass.getId(),
-                            LiveClassEnrolmentStatus.ENROLLED);
+                    // Same seat and enrolment rules as the Classes page (FR-LIVE-05).
+                    long enrolledCount = liveLearningAccessService.countSeatsTaken(liveClass);
                     boolean enrolled = liveLearningAccessService.isStudentEnrolled(liveClass.getId(), student.getId());
                     boolean accessAllowed = hasLiveClassAccess(liveClass);
-                    boolean canEnrol = !enrolled && accessAllowed;
+                    boolean hasSeat = liveClass.getMaxParticipants() == null || enrolledCount < liveClass.getMaxParticipants();
+                    boolean canEnrol = !enrolled && accessAllowed && hasSeat && !LiveLearningAccessService.hasEnded(liveClass);
                     boolean canJoin = enrolled && accessAllowed
                             && liveLearningAccessService.isJoinWindowOpen(liveClass);
                     return liveLearningMapper.toLiveClassResponse(
@@ -489,7 +481,7 @@ public class StudentLearningService {
 
     private List<RecordedLessonVideoResponse> buildRecordedVideos(Lesson lesson, Set<Long> relatedPackageIds) {
         return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
-                .filter(video -> canAccessVideo(video))
+                .filter(StudentLearningService::canAccessVideo)
                 .map(video -> liveLearningMapper.toRecordedVideoResponse(
                         video,
                         studentRecordedVideoStreamUrl(video),
@@ -499,30 +491,14 @@ public class StudentLearningService {
                 .toList();
     }
 
-    private boolean hasLiveClassAccess(LiveClass liveClass) {
-        try {
-            if (liveClass.getLesson() != null) {
-                liveLearningAccessService.ensurePublishedLesson(liveClass.getLesson());
-            }
-            if (liveClass.getCoursePackage() != null) {
-                liveLearningAccessService.ensurePublishedPackage(liveClass.getCoursePackage());
-            }
-            return true;
-        } catch (ResponseStatusException exception) {
-            return false;
-        }
+    private static boolean hasLiveClassAccess(LiveClass liveClass) {
+        return (liveClass.getLesson() == null || ContentVisibilityPolicy.isLessonVisible(liveClass.getLesson()))
+                && (liveClass.getCoursePackage() == null || ContentVisibilityPolicy.isPackageVisible(liveClass.getCoursePackage()));
     }
 
-    private boolean canAccessVideo(RecordedLessonVideo video) {
-        try {
-            liveLearningAccessService.ensurePublishedLesson(video.getLesson());
-            if (video.getCoursePackage() != null) {
-                liveLearningAccessService.ensurePublishedPackage(video.getCoursePackage());
-            }
-            return true;
-        } catch (ResponseStatusException exception) {
-            return false;
-        }
+    private static boolean canAccessVideo(RecordedLessonVideo video) {
+        return ContentVisibilityPolicy.isLessonVisible(video.getLesson())
+                && (video.getCoursePackage() == null || ContentVisibilityPolicy.isPackageVisible(video.getCoursePackage()));
     }
 
     /** Options of all the given questions in one query, grouped by question id in display order. */

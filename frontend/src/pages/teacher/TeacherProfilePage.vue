@@ -155,7 +155,7 @@
                 :icon="verificationStatusIcon"
               />
               <p class="teacher-verification-note">
-                {{ verification.latestReviewResult?.note || t('teacherProfile.currentStatus') }}
+                {{ verificationNote || t('teacherProfile.currentStatus') }}
               </p>
             </div>
             <div v-if="verification.resubmissionAllowed" class="card-footer">
@@ -304,7 +304,7 @@ import type { TeacherVerificationDocumentType } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
 import { formatDateTime } from '@/utils/format'
-import { announceNotificationsRead } from '@/utils/notifications'
+import { announceNotificationsRead, markAllLoadedRead, markNotificationRead } from '@/utils/notifications'
 
 const { t } = useI18n({
   messages: {
@@ -379,7 +379,7 @@ const profileIntroLabel = computed(
 const verificationStatusTone = computed<StatusTone>(() => {
   const status = verification.value.teacherStatus
   if (status === 'APPROVED') return 'success'
-  if (status === 'REJECTED' || status === 'SUSPENDED') return 'danger'
+  if (status === 'REJECTED') return 'danger'
   return 'warning'
 })
 const verificationStatusIcon = computed(() => (verification.value.teacherStatus === 'APPROVED' ? 'status' : 'alert'))
@@ -388,7 +388,6 @@ const verificationStatusLabel = computed(() => {
     PENDING: 'statusPending',
     APPROVED: 'statusApproved',
     REJECTED: 'statusRejected',
-    SUSPENDED: 'statusSuspended',
   }
   const key = keys[verification.value.teacherStatus]
   return key ? t(`teacherProfile.${key}`) : verification.value.teacherStatus
@@ -439,9 +438,22 @@ const fileDescribedBy = computed(() =>
   fileError.value ? 'teacher-verification-file-error teacher-verification-file-hint' : 'teacher-verification-file-hint',
 )
 
+/**
+ * The latest review note only describes the current status when it decided it: after a resubmission the teacher is
+ * PENDING again while the latest review is still the old rejection.
+ */
+const verificationNote = computed(() => {
+  const value = verification.value
+  if (value.teacherStatus === 'REJECTED') return value.rejectionReason || value.latestReviewResult?.note || null
+  const review = value.latestReviewResult
+  return review && review.decisionStatus === value.teacherStatus ? review.note || null : null
+})
+
+// Refill the form on first load and after a profile save only, so unsaved edits survive a document upload.
 watch(
-  profile,
-  (value) => {
+  () => `${profile.value.userId}|${profile.value.updatedAt}`,
+  () => {
+    const value = profile.value
     profileForm.fullName = value.fullName || ''
     profileForm.bio = value.bio || ''
     profileForm.shortIntroduction = value.shortIntroduction || ''
@@ -556,9 +568,7 @@ async function downloadVerificationDocument(documentId: number, originalFileName
 }
 
 function markTeacherNotificationRead(notificationId: number): void {
-  notificationsResource.data.value = notifications.value.map((item) =>
-    item.id === notificationId ? { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() } : item,
-  )
+  notificationsResource.data.value = markNotificationRead(notifications.value, notificationId)
 }
 
 async function markAllNotificationsRead(): Promise<void> {
@@ -574,9 +584,7 @@ async function markAllNotificationsRead(): Promise<void> {
   markingNotificationsRead.value = true
   try {
     const result = await notificationsApi.markAllRead()
-    notificationsResource.data.value = notifications.value.map((item) =>
-      item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() },
-    )
+    notificationsResource.data.value = markAllLoadedRead(notifications.value)
     announceNotificationsRead()
     actionSuccess.value =
       result.updatedCount > 0
@@ -601,8 +609,7 @@ async function resubmitVerification(): Promise<void> {
   actionSuccess.value = null
   resubmitting.value = true
   try {
-    await teacherApi.resubmitVerification()
-    await verificationResource.reload()
+    verificationResource.data.value = await teacherApi.resubmitVerification()
     actionSuccess.value = t('teacherProfile.resubmitted')
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('teacherProfile.resubmitError'))
@@ -641,8 +648,8 @@ async function uploadDocument(): Promise<void> {
     formData.append('file', file)
     formData.append('documentType', uploadForm.documentType)
     formData.append('description', uploadForm.description.trim())
-    await teacherApi.uploadVerificationDocument(formData)
-    await verificationResource.reload()
+    verificationResource.data.value = await teacherApi.uploadVerificationDocument(formData)
+    // The documents list comes from the profile.
     await profileResource.reload()
     resetVerificationFileInput()
     uploadForm.documentType = 'IDENTITY'

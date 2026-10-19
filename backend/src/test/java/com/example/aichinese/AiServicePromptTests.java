@@ -23,7 +23,11 @@ import com.example.aichinese.dto.ai.AiAvailabilityResponse;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorResponse;
 import com.example.aichinese.dto.ai.AiSentencePracticeRequest;
+import com.example.aichinese.dto.ai.AiSentencePracticeResponse;
+import com.example.aichinese.dto.ai.AiStoryComprehensionQuestionResponse;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
+import com.example.aichinese.dto.ai.AiStoryGeneratorResponse;
+import com.example.aichinese.dto.ai.AiStoryVocabularyItemResponse;
 import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperResponse;
 import com.example.aichinese.dto.ai.AiWritingFeedbackResponse;
@@ -51,6 +55,7 @@ import com.example.aichinese.service.ai.AiProviderRouter;
 import com.example.aichinese.service.ai.AiSafetyGuard;
 import com.example.aichinese.service.ai.AiUsageLimiter;
 import com.example.aichinese.service.ai.OpenAiCompatibleAiProviderClient;
+import com.example.aichinese.util.AiInputSanitizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -207,11 +212,14 @@ class AiServicePromptTests {
         String everything = sent.systemInstruction() + sent.userPrompt() + sent.messageHistory();
         assertThat(everything)
                 .doesNotContain(student.getEmail())
-                .doesNotContain(student.getDisplayName() + " ")
+                .doesNotContain("Aisyah", "Rahman")
                 .doesNotContain(String.valueOf(STUDENT_ID))
                 .contains("[EMAIL]");
         assertThat(sent.languagePreference()).isEqualTo("zh-CN");
         verify(aiLogService).appendChatMessage(eq(session), any(), eq("How do I say hello? My email is [EMAIL]"));
+        // The provider receives at most the 20 most recent messages of the session.
+        verify(messageRepository).findBySessionIdOrderByCreatedAtDesc(
+                eq(9L), eq(org.springframework.data.domain.PageRequest.of(0, 20)));
     }
 
     @Test
@@ -439,7 +447,7 @@ class AiServicePromptTests {
         assertThat(response.status()).isEqualTo(AiRequestStatus.FAILED.name());
         assertThat(response.simpleExplanation()).isEqualTo(AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE);
         assertThat(response.chineseWord()).isNull();
-        assertThat(response.miniPracticeQuestion()).contains("Try again later");
+        assertThat(response.encouragement()).contains("teacher");
         verifyFailedUsageLog(
                 aiLogService,
                 student,
@@ -489,6 +497,100 @@ class AiServicePromptTests {
                 AiFeatureKey.QUIZ_GENERATOR,
                 INVALID_JSON_TOKEN_COUNT,
                 "Provider response was not valid JSON.");
+    }
+
+    /** SDD T12: a valid provider reply is parsed into the vocabulary card fields. */
+    @Test
+    void vocabularyHelperParsesSuccessfulProviderJson() {
+        User student = studentUser();
+        AiService service = serviceReturning(student,
+                "{\"chineseWord\":\"苹果\",\"pinyin\":\"píngguǒ\",\"englishMeaning\":\"apple\","
+                        + "\"bahasaMelayuMeaning\":\"epal\",\"simpleExplanation\":\"A common fruit.\","
+                        + "\"exampleSentence\":\"我喜欢吃苹果。\",\"exampleSentenceTranslation\":\"I like eating apples.\"}");
+
+        AiVocabularyHelperResponse response = service.vocabularyHelper(
+                new SecurityUserDetails(student),
+                new AiVocabularyHelperRequest("苹果", DEFAULT_LANGUAGE, "en", "Beginner", DEFAULT_LANGUAGE));
+
+        assertThat(response.status()).isEqualTo(AiRequestStatus.SUCCESS.name());
+        assertThat(response.chineseWord()).isEqualTo("苹果");
+        assertThat(response.pinyin()).isEqualTo("píngguǒ");
+        assertThat(response.englishMeaning()).isEqualTo("apple");
+        assertThat(response.bahasaMelayuMeaning()).isEqualTo("epal");
+        assertThat(response.exampleSentence()).isEqualTo("我喜欢吃苹果。");
+    }
+
+    /** SDD T13: sentence practice returns a correction and explanation. */
+    @Test
+    void sentencePracticeParsesSuccessfulProviderJson() {
+        User student = studentUser();
+        AiService service = serviceReturning(student,
+                "{\"correctedSentence\":\"我很喜欢猫。\",\"improvementExplanation\":\"Add 很 before 喜欢.\"}");
+
+        AiSentencePracticeResponse response = service.sentencePractice(
+                new SecurityUserDetails(student),
+                new AiSentencePracticeRequest("我喜欢猫", "Beginner", DEFAULT_LANGUAGE));
+
+        assertThat(response.status()).isEqualTo(AiRequestStatus.SUCCESS.name());
+        assertThat(response.originalSentence()).isEqualTo("我喜欢猫");
+        assertThat(response.correctedSentence()).isEqualTo("我很喜欢猫。");
+        assertThat(response.improvementExplanation()).isEqualTo("Add 很 before 喜欢.");
+    }
+
+    /** SDD T14 / Table 5.6: only questions the learner can answer and check are returned. */
+    @Test
+    void quizGeneratorKeepsOnlyAnswerableQuestions() {
+        User student = studentUser();
+        AiService service = serviceReturning(student,
+                "{\"title\":\"Greetings\",\"questions\":["
+                        + "{\"questionText\":\"你好 means?\",\"options\":[\"hello\",\"bye\"],\"correctAnswer\":\"hello\"},"
+                        + "{\"questionText\":\"Missing answer\",\"options\":[\"a\",\"b\"]}]}");
+
+        AiQuizGeneratorResponse response = service.quizGenerator(
+                new SecurityUserDetails(student),
+                new AiQuizGeneratorRequest("greetings", "Beginner", null, 2, List.of(), DEFAULT_LANGUAGE));
+
+        assertThat(response.status()).isEqualTo(AiRequestStatus.SUCCESS.name());
+        assertThat(response.questions()).hasSize(1);
+        assertThat(response.questions().get(0).correctAnswer()).isEqualTo("hello");
+    }
+
+    /** SDD T14: the story keeps its Pinyin, translations, vocabulary list and comprehension questions. */
+    @Test
+    void storyGeneratorParsesSuccessfulProviderJson() {
+        User student = studentUser();
+        AiService service = serviceReturning(student,
+                "{\"title\":\"At the market\",\"chineseStory\":\"我去市场。\",\"pinyin\":\"Wǒ qù shìchǎng.\","
+                        + "\"englishTranslation\":\"I go to the market.\",\"bahasaMelayuTranslation\":\"Saya pergi ke pasar.\","
+                        + "\"vocabularyList\":[{\"chineseWord\":\"市场\",\"pinyin\":\"shìchǎng\",\"englishMeaning\":\"market\"}],"
+                        + "\"comprehensionQuestions\":[{\"question\":\"Where?\",\"options\":[\"market\",\"school\"],\"answer\":\"market\"}]}");
+
+        AiStoryGeneratorResponse response = service.storyGenerator(
+                new SecurityUserDetails(student),
+                new AiStoryGeneratorRequest("market", "Beginner", DEFAULT_LANGUAGE, "short"));
+
+        assertThat(response.status()).isEqualTo(AiRequestStatus.SUCCESS.name());
+        assertThat(response.chineseStory()).isEqualTo("我去市场。");
+        assertThat(response.pinyin()).isEqualTo("Wǒ qù shìchǎng.");
+        assertThat(response.bahasaMelayuTranslation()).isEqualTo("Saya pergi ke pasar.");
+        assertThat(response.vocabularyList()).extracting(AiStoryVocabularyItemResponse::chineseWord).containsExactly("市场");
+        assertThat(response.comprehensionQuestions()).extracting(AiStoryComprehensionQuestionResponse::answer)
+                .containsExactly("market");
+    }
+
+    private static AiService serviceReturning(User student, String providerJson) {
+        AiProviderRouter providerRouter = mock(AiProviderRouter.class);
+        AiProviderClient client = mock(AiProviderClient.class);
+        when(providerRouter.resolveClient()).thenReturn(client);
+        when(client.generateText(any(AiProviderPrompt.class)))
+                .thenReturn(AiProviderResult.success(PROVIDER_NAME, MODEL_NAME, providerJson, 30));
+        return newService(
+                studentRepository(student),
+                new AiPromptBuilder(new AiProperties()),
+                providerRouter,
+                availableAi(true),
+                mock(AiLogService.class),
+                mock(AiUsageLimiter.class));
     }
 
     private static AiService newService() {
@@ -613,9 +715,11 @@ class AiServicePromptTests {
     }
 
     private static String invokeBuildSentencePrompt(AiService service, AiSentencePracticeRequest request) throws Exception {
-        Method method = AiService.class.getDeclaredMethod("buildSentencePrompt", AiSentencePracticeRequest.class, String.class);
+        Method method = AiService.class.getDeclaredMethod(
+                "buildSentencePrompt", AiSentencePracticeRequest.class, String.class, String.class);
         method.setAccessible(true);
-        return (String) method.invoke(service, request, DEFAULT_LANGUAGE);
+        // sentencePractice passes the already sanitised and redacted sentence.
+        return (String) method.invoke(service, request, AiInputSanitizer.sanitizeLong(request.sentence()), DEFAULT_LANGUAGE);
     }
 
     private static String invokeBuildStoryPrompt(AiService service, AiStoryGeneratorRequest request) throws Exception {

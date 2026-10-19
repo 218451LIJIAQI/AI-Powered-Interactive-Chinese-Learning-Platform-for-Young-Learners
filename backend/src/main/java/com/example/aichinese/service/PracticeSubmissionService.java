@@ -231,18 +231,29 @@ public class PracticeSubmissionService {
         }
         TeacherProfile teacher = requireApprovedTeacher(currentUser);
         PracticeSubmission submission = requireReviewable(teacher, id);
+        recordSubmissionFeedback(teacher, submission, request.feedbackType(), request.message());
+        return toResponse(submission, TEACHER_FILE_PATH);
+    }
+
+    /**
+     * Saves teacher feedback linked to a reviewable submission, marks it REVIEWED and notifies the
+     * student. Shared by the review endpoint and {@code POST /teachers/feedback}.
+     */
+    @Transactional
+    public TeacherFeedback recordSubmissionFeedback(
+            TeacherProfile teacher, PracticeSubmission submission, String feedbackType, String message) {
         TeacherFeedback feedback = new TeacherFeedback();
         feedback.setTeacher(teacher);
         feedback.setStudent(submission.getStudent());
         feedback.setLesson(submission.getLesson());
         feedback.setPracticeSubmission(submission);
-        feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
+        feedback.setFeedbackType(parseFeedbackType(feedbackType).name());
         feedback.setFeedbackMessage(contentSafetyService.requireSafeText(
-                request.message(), MAX_FEEDBACK_MESSAGE_LENGTH, "Feedback message is required."));
+                message, MAX_FEEDBACK_MESSAGE_LENGTH, "Feedback message is required."));
         TeacherFeedback saved = teacherFeedbackRepository.save(feedback);
         markReviewed(submission);
         afterFeedback(teacher, submission, saved);
-        return toResponse(submission, TEACHER_FILE_PATH);
+        return saved;
     }
 
     /**
@@ -258,8 +269,7 @@ public class PracticeSubmissionService {
         return submission;
     }
 
-    @Transactional
-    public void markReviewed(PracticeSubmission submission) {
+    private void markReviewed(PracticeSubmission submission) {
         submission.setReviewStatus(PracticeReviewStatus.REVIEWED);
         if (submission.getReviewedAt() == null) {
             submission.setReviewedAt(LocalDateTime.now());
@@ -268,7 +278,7 @@ public class PracticeSubmissionService {
     }
 
     /** Student notification + audit after feedback on a submission. */
-    public void afterFeedback(TeacherProfile teacher, PracticeSubmission submission, TeacherFeedback feedback) {
+    private void afterFeedback(TeacherProfile teacher, PracticeSubmission submission, TeacherFeedback feedback) {
         notificationService.safeCreateNotification(
                 submission.getStudent().getUser(),
                 NotificationType.TEACHER_FEEDBACK,
@@ -283,8 +293,7 @@ public class PracticeSubmissionService {
                 "PRACTICE_SUBMISSION_REVIEWED",
                 TARGET_PRACTICE_SUBMISSION,
                 submission.getId(),
-                "Teacher reviewed a practice submission.",
-                null);
+                "Teacher reviewed a practice submission.");
     }
 
     private PracticeSubmission requireReviewable(TeacherProfile teacher, Long id) {
@@ -302,8 +311,11 @@ public class PracticeSubmissionService {
         if (lesson != null && lesson.getTeacher() != null && Objects.equals(lesson.getTeacher().getId(), teacher.getId())) {
             return true;
         }
-        Long studentId = submission.getStudent().getId();
-        Long teacherUserId = teacher.getUser().getId();
+        return isOnRoster(submission.getStudent().getId(), teacher.getUser().getId());
+    }
+
+    /** FR-TEACH-02 roster: viewed or attempted the teacher's lessons or quizzes, or a non-cancelled live-class enrolment. */
+    boolean isOnRoster(Long studentId, Long teacherUserId) {
         return lessonProgressRepository.existsByStudentIdAndLessonTeacherUserId(studentId, teacherUserId)
                 || quizAttemptRepository.existsByStudentIdAndQuizTeacherUserId(studentId, teacherUserId)
                 || liveClassEnrolmentRepository.existsByStudentIdAndLiveClassTeacherUserIdAndEnrolmentStatusNot(

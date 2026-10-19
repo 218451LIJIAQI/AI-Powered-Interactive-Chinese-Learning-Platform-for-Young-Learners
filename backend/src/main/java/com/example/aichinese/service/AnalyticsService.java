@@ -29,8 +29,6 @@ import com.example.aichinese.dto.analytics.AnalyticsBreakdownItemResponse;
 import com.example.aichinese.dto.analytics.AnalyticsTrendPointResponse;
 import com.example.aichinese.dto.analytics.StudentAnalyticsResponse;
 import com.example.aichinese.dto.analytics.TeacherAnalyticsResponse;
-import com.example.aichinese.entity.LiveClass;
-import com.example.aichinese.entity.LiveClassEnrolment;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.ContentStatus;
@@ -132,11 +130,10 @@ public class AnalyticsService {
 
         StudentQuizAnalytics quiz = summarizeStudentQuizAttempts(student.getId());
         StudentProgressAnalytics progress = summarizeStudentProgress(student.getId());
-        List<LiveClassEnrolment> enrolments = liveClassEnrolmentRepository
+        // The query already keeps only ENROLLED, not-yet-started, open classes.
+        long upcomingLiveClasses = liveClassEnrolmentRepository
                 .findUpcomingForStudent(student.getId(), LiveClassEnrolmentStatus.ENROLLED,
-                        LocalDateTime.now(), CLOSED_LIVE_CLASS_STATUSES).stream()
-                .filter(enrolment -> enrolment.getStudent() != null && enrolment.getLiveClass() != null)
-                .toList();
+                        LocalDateTime.now(), CLOSED_LIVE_CLASS_STATUSES).size();
 
         long inProgressLessons = Math.max(progress.totalTrackedLessons() - progress.completedLessons(), 0);
 
@@ -147,7 +144,7 @@ public class AnalyticsService {
                         progress.totalTrackedLessons(),
                         quiz.average(),
                         progress.completedVideos(),
-                        countUpcomingStudentLiveClasses(enrolments),
+                        upcomingLiveClasses,
                         notificationService.countAccessibleUnreadNotifications(currentUser)),
                 quiz.trend(),
                 buildStudentActivityTrend(progress.recentActivity(), quiz.recentActivity()),
@@ -192,26 +189,30 @@ public class AnalyticsService {
 
     @Transactional(readOnly = true)
     public AdminAnalyticsResponse getAdminAnalytics(SecurityUserDetails currentUser) {
+        // Each count is queried once and shared by the overview and the breakdowns.
+        Map<String, Long> teacherCounts = new LinkedHashMap<>();
+        for (TeacherStatus status : List.of(TeacherStatus.PENDING, TeacherStatus.APPROVED, TeacherStatus.REJECTED)) {
+            teacherCounts.put(status.name(), teacherProfileRepository.countByTeacherStatus(status));
+        }
+        Map<String, Long> contentCounts = initializeContentStatusCounts();
+        mergeProjectionCounts(contentCounts, learningModuleRepository.groupByContentStatus());
+        mergeProjectionCounts(contentCounts, lessonRepository.groupByContentStatus());
+        mergeProjectionCounts(contentCounts, coursePackageRepository.groupByContentStatus());
         return new AdminAnalyticsResponse(
                 new AdminAnalyticsResponse.Overview(
                         userRepository.countByRoleName(RoleName.STUDENT),
                         userRepository.countByRoleName(RoleName.TEACHER),
-                        teacherProfileRepository.countByTeacherStatus(TeacherStatus.PENDING),
-                        teacherProfileRepository.countByTeacherStatus(TeacherStatus.APPROVED),
-                        teacherProfileRepository.countByTeacherStatus(TeacherStatus.REJECTED),
-                        learningModuleRepository.countByContentStatus(ContentStatus.PUBLISHED)
-                                + lessonRepository.countByContentStatus(ContentStatus.PUBLISHED)
-                                + coursePackageRepository.countByContentStatus(ContentStatus.PUBLISHED),
+                        teacherCounts.get(TeacherStatus.PENDING.name()),
+                        teacherCounts.get(TeacherStatus.APPROVED.name()),
+                        teacherCounts.get(TeacherStatus.REJECTED.name()),
+                        contentCounts.get(ContentStatus.PUBLISHED.name()),
                         contentModerationRecordRepository.count(),
                         auditLogRepository.count(),
                         notificationService.countAccessibleUnreadNotifications(currentUser),
                         aiUsageLogRepository.count()),
                 buildUserRegistrationTrend(),
-                buildTeacherApprovalBreakdown(),
-                buildContentStatusBreakdownFromProjections(
-                        learningModuleRepository.groupByContentStatus(),
-                        lessonRepository.groupByContentStatus(),
-                        coursePackageRepository.groupByContentStatus()),
+                buildBreakdownFromMap(teacherCounts),
+                buildBreakdownFromMap(contentCounts),
                 buildAiStatusBreakdownFromProjections(aiUsageLogRepository.groupByAiStatus()));
     }
 
@@ -438,25 +439,6 @@ public class AnalyticsService {
                 .toList();
     }
 
-    private List<AnalyticsBreakdownItemResponse> buildTeacherApprovalBreakdown() {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        counts.put("PENDING", teacherProfileRepository.countByTeacherStatus(TeacherStatus.PENDING));
-        counts.put("APPROVED", teacherProfileRepository.countByTeacherStatus(TeacherStatus.APPROVED));
-        counts.put("REJECTED", teacherProfileRepository.countByTeacherStatus(TeacherStatus.REJECTED));
-        return buildBreakdownFromMap(counts);
-    }
-
-    private List<AnalyticsBreakdownItemResponse> buildContentStatusBreakdownFromProjections(
-            List<StatusCountProjection> moduleCounts,
-            List<StatusCountProjection> lessonCounts,
-            List<StatusCountProjection> packageCounts) {
-        Map<String, Long> counts = initializeContentStatusCounts();
-        mergeProjectionCounts(counts, moduleCounts);
-        mergeProjectionCounts(counts, lessonCounts);
-        mergeProjectionCounts(counts, packageCounts);
-        return buildBreakdownFromMap(counts);
-    }
-
     private static void mergeProjectionCounts(Map<String, Long> counts, List<StatusCountProjection> projections) {
         for (StatusCountProjection projection : projections) {
             if (projection.getStatus() != null) {
@@ -481,14 +463,6 @@ public class AnalyticsService {
             names[i] = constants[i].name();
         }
         return names;
-    }
-
-    private long countUpcomingStudentLiveClasses(List<LiveClassEnrolment> enrolments) {
-        LocalDateTime now = LocalDateTime.now();
-        return enrolments.stream()
-                .map(LiveClassEnrolment::getLiveClass)
-                .filter(liveClass -> isUpcomingLiveClass(liveClass, now))
-                .count();
     }
 
     private Map<String, Long> initializeContentStatusCounts() {
@@ -519,13 +493,6 @@ public class AnalyticsService {
         countsByDay.computeIfPresent(time.toLocalDate(), (ignored, current) -> current.add(increment));
     }
 
-    private boolean isUpcomingLiveClass(LiveClass liveClass, LocalDateTime now) {
-        return liveClass != null
-                && liveClass.getScheduledStartAt() != null
-                && liveClass.getScheduledStartAt().isAfter(now)
-                && !CLOSED_LIVE_CLASS_STATUSES.contains(liveClass.getLiveClassStatus());
-    }
-
     private LocalDateTime resolveAttemptTime(QuizAttemptAnalyticsRow attempt) {
         if (attempt.getCompletedAt() != null) {
             return attempt.getCompletedAt();
@@ -540,11 +507,8 @@ public class AnalyticsService {
                 && attempt.getMaxScore() > 0;
     }
 
+    /** Callers skip attempts without a valid percentage first. */
     private BigDecimal percentageForAttempt(QuizAttemptAnalyticsRow attempt) {
-        if (!hasValidPercentage(attempt)) {
-            return ZERO.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
-        }
-
         return BigDecimal.valueOf(attempt.getScore())
                 .multiply(HUNDRED)
                 .divide(BigDecimal.valueOf(attempt.getMaxScore()), DECIMAL_SCALE, RoundingMode.HALF_UP);

@@ -6,9 +6,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -125,8 +127,8 @@ class ContentManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.platformName").isString())
                 .andExpect(jsonPath("$.data.aiDisclaimerText").isString())
                 .andExpect(jsonPath("$.data.strictContentFiltering").doesNotExist())
-                .andExpect(jsonPath("$.data.sensitiveWordFilter").isBoolean())
-                .andExpect(jsonPath("$.data.aiSafetyCheck").isBoolean());
+                .andExpect(jsonPath("$.data.sensitiveWordFilter").doesNotExist())
+                .andExpect(jsonPath("$.data.aiSafetyCheck").doesNotExist());
     }
 
     @Test
@@ -301,6 +303,29 @@ class ContentManagementIntegrationTests {
                 .header(HttpHeaders.AUTHORIZATION, bearer(secondTeacherToken)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false));
+
+        // SDD T18 / FR-CONT-08: another teacher's module can be neither changed, archived nor authored into.
+        mockMvc.perform(put("/api/v1/teachers/modules/" + moduleId)
+                .with(csrf())
+                .header(HttpHeaders.AUTHORIZATION, bearer(secondTeacherToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(modulePayload("Hijacked module"))))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(authenticatedJsonPatch(
+                        "/api/v1/teachers/modules/" + moduleId + "/archive", secondTeacherToken, Map.of()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(authenticatedJsonPost("/api/v1/teachers/lessons", secondTeacherToken, Map.of(
+                        "title", "Foreign module lesson",
+                        "moduleId", moduleId,
+                        "levelId", beginnerLevelId(),
+                        "categoryId", categoryId("Vocabulary"),
+                        "learningType", LEARNING_RECORDED,
+                        "estimatedDurationMinutes", 10,
+                        "basicContent", "Lesson intro")))
+                .andExpect(status().is4xxClientError());
+        assertThat(learningModuleRepository.findById(moduleId).orElseThrow().getTitle()).isEqualTo("Owner module");
+        assertThat(learningModuleRepository.findById(moduleId).orElseThrow().getContentStatus())
+                .isNotEqualTo(ContentStatus.ARCHIVED);
     }
 
     @Test
@@ -718,7 +743,7 @@ class ContentManagementIntegrationTests {
         String teacherToken = teacherToken(teacherEmail);
         String adminToken = adminToken();
 
-        Long lessonId = createLesson(teacherToken, "Package item source lesson");
+        Long lessonId = createPublishedLesson(teacherToken, "Package item source lesson");
         Long packageId = createPackage(teacherToken, "Bounded public package");
         CoursePackage coursePackage = coursePackageRepository.findById(packageId).orElseThrow();
 
@@ -745,6 +770,35 @@ class ContentManagementIntegrationTests {
                 .andExpect(jsonPath("$.data.packageItems.length()").value(MAX_PAGE_SIZE))
                 .andExpect(jsonPath("$.data.packageItems[0].titleSnapshot").value("Package item 0"))
                 .andExpect(jsonPath("$.data.packageItems[99].titleSnapshot").value("Package item 99"));
+    }
+
+    @Test
+    void publicPackageDetailListsOnlyPublishedItems() throws Exception {
+        // FR-CONT-13 / FR-PUB-01: a published course must not reveal the titles of unpublished lessons.
+        String teacherEmail = uniqueEmail("public-package-visible");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = teacherToken(teacherEmail);
+        String adminToken = adminToken();
+        Long publishedLessonId = createPublishedLesson(teacherToken, "Published item lesson");
+        Long draftLessonId = createLesson(teacherToken, "Draft item lesson");
+        Long packageId = createPackage(teacherToken, "Mixed visibility package");
+        CoursePackage coursePackage = coursePackageRepository.findById(packageId).orElseThrow();
+        int sortOrder = 0;
+        for (Long lessonId : List.of(publishedLessonId, draftLessonId)) {
+            PackageItem item = new PackageItem();
+            item.setCoursePackage(coursePackage);
+            item.setItemType(PackageItemType.LESSON);
+            item.setItemId(lessonId);
+            item.setSortOrder(sortOrder++);
+            item.setTitleSnapshot(lessonId.equals(draftLessonId) ? "Draft item lesson" : "Published item lesson");
+            packageItemRepository.save(item);
+        }
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken, TYPE_PACKAGE, packageId);
+
+        mockMvc.perform(get("/api/v1/public/courses/PACKAGE-" + packageId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.packageItems.length()").value(1))
+                .andExpect(jsonPath("$.data.packageItems[0].title").value("Published item lesson"));
     }
 
     @Test

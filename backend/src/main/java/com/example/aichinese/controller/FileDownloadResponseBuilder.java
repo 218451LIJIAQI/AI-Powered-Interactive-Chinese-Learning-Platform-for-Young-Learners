@@ -145,7 +145,7 @@ final class FileDownloadResponseBuilder {
         while (cleaned.startsWith(".")) {
             cleaned = cleaned.substring(1).trim();
         }
-        return cleaned.isEmpty() || ".".equals(cleaned) || "..".equals(cleaned) ? DEFAULT_FILE_NAME : cleaned;
+        return cleaned.isEmpty() ? DEFAULT_FILE_NAME : cleaned;
     }
 
     private static boolean isUnsafeFileNameCodePoint(int codePoint) {

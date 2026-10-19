@@ -125,10 +125,8 @@ import PracticeFeedbackResult from '@/components/submissions/PracticeFeedbackRes
 import PracticeSubmissionItem from '@/components/submissions/PracticeSubmissionItem.vue'
 import { usePracticeSubmissionText } from '@/components/submissions/practiceSubmissionText'
 import PronunciationSubmissionForm from '@/components/submissions/PronunciationSubmissionForm.vue'
-import { appEnv } from '@/config/env'
 import { useResource } from '@/composables/useResource'
 import { studentPracticeSubmissions, studentProgress } from '@/demo/data'
-import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { PageResponse, PracticeSubmissionResponse, PracticeSubmissionType } from '@/types/api'
 import {
@@ -141,7 +139,6 @@ import {
 const PAGE_SIZE = 10
 
 const { t } = usePracticeSubmissionText()
-const auth = useAuthStore()
 const ui = useUiStore()
 const route = useRoute()
 const listTitleId = `${useId()}-list`
@@ -162,7 +159,7 @@ const listResource = useResource<PageResponse<PracticeSubmissionResponse>>(
 const progressResource = useResource(() => studentApi.progress(), studentProgress)
 
 /** Preview: fixtures only, uploads disabled and protected files are not loaded (nothing is saved). */
-const previewMode = computed(() => listResource.usingFallback.value || (appEnv.useDemoData && auth.isPreviewSession))
+const previewMode = computed(() => listResource.usingFallback.value)
 
 const items = computed(() => listResource.data.value?.items ?? [])
 const totalItems = computed(() => listResource.data.value?.totalItems ?? items.value.length)
@@ -170,7 +167,7 @@ const totalPages = computed(() => Math.max(1, listResource.data.value?.totalPage
 
 const lessonOptions = computed<PracticeLessonOption[]>(() => {
   const summary = progressResource.data.value
-  const source = summary?.lessons?.length ? summary.lessons : (summary?.recentLessons ?? [])
+  const source = summary?.lessons ?? []
   const seen = new Set<number>()
   const options: PracticeLessonOption[] = []
   for (const lesson of source) {

@@ -23,16 +23,10 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.service.EmailService;
 import com.example.aichinese.service.SmtpEmailService;
 
-/**
- * Unit coverage for the {@code EmailService} default helpers -
- * proves the {@code safe*} wrappers swallow delivery failures and
- * log at {@code WARN} so a transient SMTP outage cannot abort the
- * triggering business transaction (teacher approval, etc.).
- */
+/** Unit coverage for the {@code EmailService} default message helpers and {@code SmtpEmailService}. */
 @ExtendWith(OutputCaptureExtension.class)
 class EmailServiceTests {
 
-    private static final long TEACHER_ID = 99L;
     private static final long STUDENT_ID = 123L;
     private static final String TEACHER_EMAIL = "teacher@example.com";
     private static final String STUDENT_EMAIL = "student@example.com";
@@ -41,30 +35,6 @@ class EmailServiceTests {
     private static final String PASSWORD_RESET_BASE_URL = "https://example.com/reset-password";
     private static final String WELCOME_SUBJECT = "Welcome";
     private static final String WELCOME_BODY = "Hello from MandarinSpark";
-    private static final String TEACHER_APPROVAL_FAILURE_LOG =
-            "Teacher approval email delivery failed for user id " + TEACHER_ID + ": RuntimeException";
-    private static final String TEACHER_REJECTION_FAILURE_LOG =
-            "Teacher rejection email delivery failed for user id " + TEACHER_ID + ": RuntimeException";
-
-    @Test
-    void teacherApprovalAndRejectionSafeEmailMethodsDoNotPropagateDeliveryFailures(CapturedOutput output) {
-        EmailService failingEmailService = (recipient, subject, body) -> {
-            throw new RuntimeException("SMTP provider unavailable token=secret-token");
-        };
-        User recipient = user(TEACHER_ID, TEACHER_EMAIL);
-        recipient.setDisplayName("Teacher");
-
-        assertThatCode(() -> failingEmailService.safeSendTeacherApprovalNotice(recipient, "Approved"))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> failingEmailService.safeSendTeacherRejectionNotice(recipient, "Documents incomplete"))
-                .doesNotThrowAnyException();
-
-        assertThat(output).contains(TEACHER_APPROVAL_FAILURE_LOG);
-        assertThat(output).contains(TEACHER_REJECTION_FAILURE_LOG);
-        assertThat(output).contains("token=[REDACTED]");
-        assertThat(output).doesNotContain("secret-token");
-        assertThat(output).doesNotContain("at com.example.aichinese");
-    }
 
     @Test
     void teacherDecisionEmailsStripUnicodeWhitespaceFromNotesAndReasons() {

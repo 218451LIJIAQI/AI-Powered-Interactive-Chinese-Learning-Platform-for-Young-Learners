@@ -57,7 +57,6 @@ public interface StudentProfileRepository
                     select qa.student_id as student_id, coalesce(qa.completed_at, qa.created_at) as activity_at
                     from quiz_attempts qa
                     join quizzes q on qa.quiz_id = q.id
-                    join lessons ql on q.lesson_id = ql.id
                     where q.teacher_id = :teacherId
                     union all
                     select lce.student_id as student_id, coalesce(lce.attended_at, lce.enrolled_at, lce.created_at) as activity_at
@@ -83,7 +82,6 @@ public interface StudentProfileRepository
                     select qa.student_id as student_id
                     from quiz_attempts qa
                     join quizzes q on qa.quiz_id = q.id
-                    join lessons ql on q.lesson_id = ql.id
                     where q.teacher_id = :teacherId
                     union
                     select lce.student_id as student_id

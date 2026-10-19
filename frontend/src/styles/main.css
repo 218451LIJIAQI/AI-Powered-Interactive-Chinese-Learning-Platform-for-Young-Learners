@@ -191,11 +191,6 @@ progress {
   min-width: 0;
 }
 
-.list {
-  display: grid;
-  gap: var(--space-3);
-}
-
 .u-gap-10 {
   gap: var(--space-2-5);
 }
@@ -1192,9 +1187,7 @@ progress {
 }
 
 .pill-switch button.is-active,
-.segmented-option.is-active,
-.segmented-option[aria-pressed='true'],
-.segmented-option[aria-checked='true'] {
+.segmented-option[aria-pressed='true'] {
   color: var(--color-primary-700);
   background: var(--surface-card);
   box-shadow: var(--shadow-xs);
@@ -1397,10 +1390,6 @@ progress {
   width: var(--control-height-sm);
 }
 
-.btn-icon.btn-lg {
-  width: var(--control-height-lg);
-}
-
 .btn-block {
   width: 100%;
 }
@@ -1570,7 +1559,7 @@ progress {
 .select:disabled,
 .textarea:disabled {
   border-color: var(--border-default);
-  background: var(--surface-sunken);
+  background-color: var(--surface-sunken);
   color: var(--text-disabled);
   cursor: not-allowed;
 }
@@ -2131,11 +2120,6 @@ progress {
 .status-pill.info {
   background: var(--color-info-soft);
   color: var(--color-info-text);
-}
-
-.status-pill.primary {
-  background: var(--color-primary-50);
-  color: var(--color-primary-700);
 }
 
 .status-pill.neutral {
@@ -2920,7 +2904,7 @@ progress {
 }
 
 /* ==========================================================================
-   Page sections (owned by page agents; page-prefixed classes only)
+   Page sections (page-prefixed classes only)
    ========================================================================== */
 
 /* Admin console: patterns shared by every admin page (dashboard, users, verification, content,
@@ -3601,7 +3585,6 @@ progress {
   }
 
   .admin-table,
-  .admin-table tbody,
   .admin-table td {
     display: block;
   }
@@ -4479,9 +4462,5 @@ progress {
   .public-shell--auth {
     width: min(calc(100% - 2 * var(--space-7)), 1548px);
     margin-top: var(--space-5);
-  }
-
-  .public-shell--auth > .page-stack {
-    margin-top: 0;
   }
 }

@@ -38,8 +38,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end MockMvc coverage of the teacher "my students" surface.
- * It proves the roster is derived from engagement signals (lesson
- * progress, quiz attempts, live-class enrolments) rather than an
+ * It proves the roster is derived from engagement signals (here: a
+ * quiz attempt on the teacher's lesson) rather than an
  * explicit relationship table, and that the PII boundary holds
  * (student email and other account details never leak through to the
  * teacher view).

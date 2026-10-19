@@ -62,14 +62,14 @@ public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLes
 
     @EntityGraph(value = RecordedLessonVideo.GRAPH_DETAIL)
     @Query(value = """
-            select distinct v from RecordedLessonVideo v
+            select v from RecordedLessonVideo v
             left join v.coursePackage p
             where v.active = true
               and v.lesson.id = :lessonId
               and (p is null or p.contentStatus = :published)
             order by v.sortOrder asc, v.createdAt asc
             """, countQuery = """
-            select count(distinct v.id) from RecordedLessonVideo v
+            select count(v) from RecordedLessonVideo v
             left join v.coursePackage p
             where v.active = true
               and v.lesson.id = :lessonId

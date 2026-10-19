@@ -71,6 +71,16 @@ export function correctOptionIndexes(options: readonly string[], correctAnswer: 
   return letterIndex >= 0 && letterIndex < options.length ? [letterIndex] : []
 }
 
+/**
+ * Correct option indexes for an AI answer key plus the text to show as the answer: a single-letter key (A-D) is
+ * resolved to its option text, any other key is shown as given.
+ */
+export function resolveAnswerKey(options: readonly string[], answer: string): { indexes: number[]; display: string } {
+  const indexes = correctOptionIndexes(options, answer)
+  const resolvedFromLetter = indexes.length === 1 && !answersMatch(options[indexes[0]], answer)
+  return { indexes, display: resolvedFromLetter ? options[indexes[0]] : answer }
+}
+
 /** Cleans AI quiz questions for display: blank questions and blank options are dropped. */
 export function preparePracticeQuiz(quiz: AiQuizGeneratorResponse | null | undefined): PracticeQuizQuestion[] {
   return (quiz?.questions ?? [])
@@ -78,14 +88,13 @@ export function preparePracticeQuiz(quiz: AiQuizGeneratorResponse | null | undef
     .map((question) => {
       const options = (question.options ?? []).map((option) => clean(option)).filter(Boolean)
       const correctAnswer = clean(question.correctAnswer)
-      const indexes = correctOptionIndexes(options, correctAnswer)
-      const resolvedFromLetter = indexes.length === 1 && !answersMatch(options[indexes[0]], correctAnswer)
+      const { indexes, display } = resolveAnswerKey(options, correctAnswer)
       return {
         questionText: clean(question.questionText),
         questionType: clean(question.questionType),
         options,
         correctAnswer,
-        correctAnswerDisplay: resolvedFromLetter ? options[indexes[0]] : correctAnswer,
+        correctAnswerDisplay: display,
         correctOptionIndexes: indexes,
         explanation: clean(question.explanation),
         pinyin: clean(question.pinyin),
@@ -126,6 +135,20 @@ export function vocabularyMeaning(item: AiStoryVocabularyItem, language: AppLang
   const english = clean(item.englishMeaning)
   const malay = clean(item.bahasaMelayuMeaning)
   return language === 'ms' ? malay || english : english || malay
+}
+
+/** Story vocabulary rows for display: blank words dropped, word and Pinyin trimmed, meaning in the interface language. */
+export function storyVocabularyRows(
+  story: AiStoryGeneratorResponse | null | undefined,
+  language: AppLanguage,
+): Array<{ chineseWord: string; pinyin: string; meaning: string }> {
+  return (story?.vocabularyList ?? [])
+    .filter((item) => item.chineseWord?.trim())
+    .map((item) => ({
+      chineseWord: item.chineseWord?.trim() ?? '',
+      pinyin: item.pinyin?.trim() ?? '',
+      meaning: vocabularyMeaning(item, language),
+    }))
 }
 
 export interface StoryTranslation {

@@ -29,6 +29,7 @@ import com.example.aichinese.entity.QuizAttemptAnswer;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherFeedback;
 import com.example.aichinese.entity.TeacherProfile;
+import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.repository.LessonProgressRepository;
 import com.example.aichinese.repository.LiveClassEnrolmentRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
@@ -156,7 +157,9 @@ public class TeacherStudentService {
 
         for (LiveClassEnrolment enrolment : enrolments) {
             StudentAggregate aggregate = aggregateFor(aggregates, enrolment.getStudent());
-            if (aggregate != null && enrolment.getLiveClass() != null) {
+            // Cancelled enrolments are not on the roster, so they are not learner activity either.
+            if (aggregate != null && enrolment.getLiveClass() != null
+                    && enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.CANCELLED) {
                 aggregate.captureEnrolment(enrolment);
             }
         }

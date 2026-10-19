@@ -32,13 +32,11 @@ public class RecordedLessonService {
     private static final int MAX_VIDEO_DESCRIPTION_LENGTH = 1000;
     private static final int MAX_VIDEO_SORT_ORDER = 10_000;
     private static final String RECORDED_VIDEO_AUDIT_TARGET = "RecordedLessonVideo";
-    private static final String TEACHER_CLASSES_PATH = "/teacher/classes";
 
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LiveLearningAccessService liveLearningAccessService;
     private final RecordedVideoStorageService recordedVideoStorageService;
     private final LiveLearningMapper liveLearningMapper;
-    private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final ContentSafetyService contentSafetyService;
 
@@ -47,14 +45,12 @@ public class RecordedLessonService {
             LiveLearningAccessService liveLearningAccessService,
             RecordedVideoStorageService recordedVideoStorageService,
             LiveLearningMapper liveLearningMapper,
-            NotificationService notificationService,
             AuditLogService auditLogService,
             ContentSafetyService contentSafetyService) {
         this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
         this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
         this.recordedVideoStorageService = Objects.requireNonNull(recordedVideoStorageService, "recordedVideoStorageService");
         this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
-        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
         this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
@@ -83,11 +79,6 @@ public class RecordedLessonService {
         applyVideoUpdate(video, lesson, coursePackage, request, sourceType, uploadedFile, externalVideoUrl);
         RecordedLessonVideo saved = recordedLessonVideoRepository.save(video);
 
-        notificationService.safeCreateNotification(
-                lesson.getTeacher().getUser(),
-                "Recorded lesson video added",
-                "A recorded lesson video was added to " + lesson.getTitle() + ".",
-                TEACHER_CLASSES_PATH);
         auditLogService.record(
                 lesson.getTeacher().getUser(),
                 "TEACHER_RECORDED_VIDEO_CREATE",
@@ -214,10 +205,6 @@ public class RecordedLessonService {
             RecordedVideoSourceType sourceType,
             UploadedFile uploadedFile,
             String externalVideoUrl) {
-        if (sourceType == RecordedVideoSourceType.UPLOADED_FILE && uploadedFile == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Uploaded file is required for recorded video.");
-        }
-
         video.setLesson(lesson);
         video.setCoursePackage(coursePackage);
         video.setTitle(contentSafetyService.requireSafeText(request.title(), MAX_VIDEO_TITLE_LENGTH, "Title is required."));

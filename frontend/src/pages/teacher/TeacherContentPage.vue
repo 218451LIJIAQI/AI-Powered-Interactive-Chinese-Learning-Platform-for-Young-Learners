@@ -113,16 +113,6 @@
             :message="t('teacherContent.selectOrCreateCourse')"
             compact
           />
-
-          <button
-            v-if="displayCourses.length"
-            class="btn btn-link teacher-view-all"
-            type="button"
-            @click="showAllCourses"
-          >
-            <span>{{ t('teacherContent.viewAllCourses') }}</span>
-            <IconGlyph name="chevronRight" :size="16" />
-          </button>
         </aside>
 
         <div
@@ -716,14 +706,14 @@
                       {{ submitReviewLabel('quiz', quiz.id, quiz.contentStatus) }}
                     </button>
                     <button
-                      class="btn btn-danger-soft btn-sm"
+                      class="btn btn-ghost btn-sm"
                       type="button"
                       :aria-describedby="`teacher-quiz-${quiz.id}`"
-                      :disabled="previewReadOnly || quizDeleteId === quiz.id || quiz.contentStatus === 'SUBMITTED'"
-                      :aria-busy="quizDeleteId === quiz.id"
-                      @click="deleteQuiz(quiz.id)"
+                      :disabled="previewReadOnly || quizArchiveId === quiz.id || quiz.contentStatus === 'SUBMITTED'"
+                      :aria-busy="quizArchiveId === quiz.id"
+                      @click="archiveQuiz(quiz.id)"
                     >
-                      {{ quizDeleteLabel(quiz.id) }}
+                      {{ quizArchiveLabel(quiz.id) }}
                     </button>
                   </div>
                 </div>
@@ -1444,6 +1434,7 @@
                   id="teacher-recording-lesson"
                   v-model.number="resourceForm.lessonId"
                   class="select"
+                  :disabled="Boolean(editingResourceId)"
                   aria-required="true"
                   :aria-invalid="builderFieldInvalid('selectLessonRecording')"
                   :aria-describedby="
@@ -1594,12 +1585,13 @@
                     id="teacher-quiz-form-lesson"
                     v-model.number="quizForm.lessonId"
                     class="select"
+                    :disabled="Boolean(editingQuizId)"
                     aria-required="true"
                     :aria-invalid="builderFieldInvalid('selectLessonQuiz')"
                     :aria-describedby="builderFieldInvalid('selectLessonQuiz') ? 'teacher-builder-feedback' : undefined"
                   >
                     <option :value="0">{{ t('teacherContent.selectLesson') }}</option>
-                    <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">
+                    <option v-for="lesson in quizLessonOptions" :key="lesson.id" :value="lesson.id">
                       {{ lesson.title }}
                     </option>
                   </select>
@@ -2115,13 +2107,12 @@ const activityTypes = computed(() => [
     copy: t('teacherContent.activityDragHint'),
     icon: 'practice',
   },
+  { title: t('teacherContent.activityStory'), copy: t('teacherContent.activityStoryHint'), icon: 'content' },
 ])
 
 const resourceTypes = computed(() => [
   { label: t('teacherContent.images'), icon: 'content' },
-  { label: t('teacherContent.audio'), icon: 'live' },
   { label: t('teacherContent.videos'), icon: 'play' },
-  { label: t('teacherContent.documents'), icon: 'file' },
 ])
 
 const previewModuleRows = computed<DisplayModuleRow[]>(() => [
@@ -2146,7 +2137,7 @@ const moduleBusyId = ref<number | null>(null)
 const lessonBusyId = ref<number | null>(null)
 const packageItemRemovingId = ref<number | null>(null)
 const archivingResourceId = ref<number | null>(null)
-const quizDeleteId = ref<number | null>(null)
+const quizArchiveId = ref<number | null>(null)
 const questionDeleteId = ref<number | null>(null)
 
 const loadingResourceInsights = ref(false)
@@ -2399,6 +2390,12 @@ const lessonOptions = computed(() => {
   const items = lessonsResource.data.value ?? []
   return items.map((lesson) => ({ id: lesson.id, title: lesson.title }))
 })
+/** New quizzes need an editable (non-archived) lesson; the read-only filters keep archived lessons visible. */
+const quizLessonOptions = computed(() =>
+  (lessonsResource.data.value ?? [])
+    .filter((lesson) => lesson.contentStatus !== 'ARCHIVED' || lesson.id === quizForm.lessonId)
+    .map((lesson) => ({ id: lesson.id, title: lesson.title })),
+)
 
 const liveModuleOptions = computed(() =>
   liveModules.value
@@ -2679,8 +2676,8 @@ function resourceArchiveLabel(videoId: number): string {
   return archivingResourceId.value === videoId ? t('teacherContent.working') : t('teacherContent.archive')
 }
 
-function quizDeleteLabel(quizId: number): string {
-  return quizDeleteId.value === quizId ? t('teacherContent.working') : t('teacherContent.deleteAction')
+function quizArchiveLabel(quizId: number): string {
+  return quizArchiveId.value === quizId ? t('teacherContent.working') : t('teacherContent.archive')
 }
 
 function questionDeleteLabel(questionId: number): string {
@@ -3043,7 +3040,7 @@ function openQuizBuilder(item?: TeacherQuizResponse | null): void {
   quizForm.description = item.description ?? ''
   quizForm.timeLimitMinutes = item.timeLimitMinutes ?? 0
   quizForm.learningStage = item.learningStage ?? ''
-  selectedQuizId.value = item.id
+  selectQuiz(item.id)
 }
 
 function openQuestionBuilder(question?: TeacherQuizQuestionResponse | null): void {
@@ -3091,13 +3088,6 @@ function openBuilderForActiveSurface(): void {
     default:
       openPackageBuilder()
   }
-}
-
-function showAllCourses(): void {
-  clearActionFeedback()
-  selectedPackageId.value = displayCourses.value[0]?.id ?? 0
-  activeSurfaceTab.value = 'courses'
-  actionSuccess.value = t('teacherContent.showingAll')
 }
 
 async function loadResourceInsights(lessonId: number): Promise<void> {
@@ -3164,6 +3154,12 @@ async function loadQuizAttempts(quizId: number): Promise<void> {
 }
 
 function selectQuiz(quizId: number): void {
+  if (selectedQuizId.value !== quizId) {
+    selectedQuizId.value = quizId
+    quizAttempts.value = []
+    // A question being edited belongs to the previous quiz; saving it under this quiz would edit the wrong one.
+    resetQuestionForm()
+  }
   void loadQuizAttempts(quizId)
 }
 
@@ -3327,7 +3323,6 @@ async function submitPackage(): Promise<void> {
     await packagesResource.reload()
     selectedPackageId.value = response.id
     if (isEditing) {
-      editingPackageId.value = response.id
       actionSuccess.value = t('teacherContent.courseUpdated')
     } else {
       actionSuccess.value = t('teacherContent.courseCreated')
@@ -3371,7 +3366,6 @@ async function submitModule(): Promise<void> {
       : await teacherApi.createModule(payload)
 
     await modulesResource.reload()
-    editingModuleId.value = response.id
     actionSuccess.value = isEditing ? t('teacherContent.moduleSaved') : t('teacherContent.moduleCreated')
     openModuleBuilder(response, true)
   } catch (reason) {
@@ -3423,7 +3417,6 @@ async function submitLesson(): Promise<void> {
       : await teacherApi.createLesson(payload)
 
     await Promise.all([lessonsResource.reload(), modulesResource.reload()])
-    editingLessonId.value = response.id
     actionSuccess.value = isEditing ? t('teacherContent.lessonSaved') : t('teacherContent.lessonCreated')
     openLessonBuilder(response, response.moduleId ?? 0, true)
   } catch (reason) {
@@ -3468,7 +3461,7 @@ async function submitRecordedResource(): Promise<void> {
     formData.append('title', resourceForm.title.trim())
     formData.append('description', resourceForm.description.trim())
     formData.append('sourceType', resourceForm.sourceType)
-    formData.append('sortOrder', String(uploadedResourceVideos.value.length))
+    formData.append('sortOrder', String(editingResourceSource.value?.sortOrder ?? uploadedResourceVideos.value.length))
     if (resourceForm.packageId > 0) {
       formData.append('packageId', String(resourceForm.packageId))
     }
@@ -3487,8 +3480,12 @@ async function submitRecordedResource(): Promise<void> {
       ? await teacherApi.updateRecordedVideo(resourceForm.lessonId, editingResourceId.value, formData)
       : await teacherApi.createRecordedVideo(resourceForm.lessonId, formData)
 
-    resourceLessonId.value = response.lessonId
-    await loadResourceInsights(response.lessonId)
+    if (resourceLessonId.value !== response.lessonId) {
+      // The resourceLessonId watcher reloads the insights for the new lesson.
+      resourceLessonId.value = response.lessonId
+    } else {
+      await loadResourceInsights(response.lessonId)
+    }
     actionSuccess.value = isEditing ? t('teacherContent.recordingUpdated') : t('teacherContent.recordingCreated')
     openResourceBuilder(response)
   } catch (reason) {
@@ -3639,35 +3636,31 @@ async function submitQuestion(): Promise<void> {
   }
 }
 
-async function deleteQuiz(quizId: number): Promise<void> {
-  if (quizDeleteId.value) return
+async function archiveQuiz(quizId: number): Promise<void> {
+  if (quizArchiveId.value) return
   if (!ensureLiveWrite()) return
-  if (!confirmTeacherContentMutation(t('teacherContent.confirmDeleteQuiz'))) return
+  if (!confirmTeacherContentMutation(t('teacherContent.confirmArchiveQuiz'))) return
 
   clearActionFeedback()
-  quizDeleteId.value = quizId
+  quizArchiveId.value = quizId
   try {
-    await teacherApi.deleteQuiz(quizId)
+    await teacherApi.archiveQuiz(quizId)
     if (selectedQuizId.value === quizId) {
       resetQuestionForm()
       selectedQuizId.value = null
     }
     await loadQuizzesForLesson(quizLessonId.value)
-    actionSuccess.value = t('teacherContent.quizDeleted')
+    actionSuccess.value = t('teacherContent.quizArchived')
   } catch (reason) {
-    actionError.value = resolveApiError(reason, t('teacherContent.deleteQuizError'))
+    actionError.value = resolveApiError(reason, t('teacherContent.archiveQuizError'))
   } finally {
-    quizDeleteId.value = null
+    quizArchiveId.value = null
   }
 }
 
 async function deleteQuestion(questionId: number): Promise<void> {
   if (questionDeleteId.value) return
   if (!ensureLiveWrite()) return
-  if (isTeacherEditLocked(selectedQuiz.value?.contentStatus)) {
-    actionError.value = t('teacherContent.questionsLocked')
-    return
-  }
   // Deleting a question of a PUBLISHED quiz sends the quiz back to review, like any other edit (D24).
   if (!confirmEditAllowed(selectedQuiz.value)) return
   if (!confirmTeacherContentMutation(t('teacherContent.confirmDeleteQuestion'))) return
@@ -3832,10 +3825,6 @@ function confirmTeacherContentMutation(message: string): boolean {
   align-items: center;
   gap: var(--space-1) var(--space-2);
   margin-top: var(--space-1);
-}
-
-.teacher-view-all {
-  justify-self: center;
 }
 
 /* Workspace card */
@@ -4353,10 +4342,6 @@ function confirmTeacherContentMutation(message: string): boolean {
 
   .teacher-course-item {
     scroll-snap-align: start;
-  }
-
-  .teacher-view-all {
-    justify-self: end;
   }
 }
 

@@ -36,10 +36,6 @@ public class ContentManagementMapper {
 
     private static final String PACKAGE_ID_PREFIX = "PACKAGE-";
 
-    private static final String LESSON_CTA = "Sign in to start learning";
-
-    private static final String PACKAGE_CTA = "Register to start learning";
-
     private static LearningLevelResponse toLevelResponse(LearningLevel level) {
         if (level == null) {
             return null;
@@ -338,8 +334,7 @@ public class ContentManagementMapper {
                 lesson.getContentStatus(),
                 // D1/D17: public visitors get summaries only, never the full lesson body.
                 null,
-                List.of(),
-                LESSON_CTA);
+                List.of());
     }
 
     public PublicCourseDetailResponse toPublicCourseDetail(
@@ -361,8 +356,7 @@ public class ContentManagementMapper {
                 coursePackage.getCoverImageUrl(),
                 coursePackage.getContentStatus(),
                 null,
-                mapItems(items, this::toPublicCourseItemSummary),
-                PACKAGE_CTA);
+                mapItems(items, this::toPublicCourseItemSummary));
     }
 
     private PublicCourseItemSummaryResponse toPublicCourseItemSummary(PackageItem item) {

@@ -290,8 +290,9 @@ public class ContentReviewService {
             }
             case TRACING_EXERCISE -> {
                 TracingExercise tracing = (TracingExercise) item;
-                if (isBlank(tracing.getTargetCharacter()) || isBlank(tracing.getWorksheetUrl())) {
-                    incomplete("A tracing exercise needs a target character and a worksheet URL before it is reviewed.");
+                if (isBlank(tracing.getTargetCharacter())) {
+                    // The worksheet is optional (SDD 2 / 4.2.3); only the target character is required.
+                    incomplete("A tracing exercise needs a target character before it is reviewed.");
                 }
             }
             case DRAG_DROP_ACTIVITY -> {
@@ -525,6 +526,17 @@ public class ContentReviewService {
                 "Admin archived " + lower(type) + "." + noteSuffix(note));
     }
 
+    /**
+     * Tells the owning teacher about a status set directly in the admin practice-activity library
+     * (SDD 5.8), as the review decisions above do (FR-NOTIF-03). Audit is recorded by the caller.
+     */
+    public void notifyOwnerOfAdminStatusChange(User admin, ReviewContentType type, ReviewableContent item) {
+        notifyOwner(type, item, admin,
+                type.label() + " status changed",
+                "Your " + lower(type) + " \"" + displayTitle(item) + "\" was set to "
+                        + item.getContentStatus().name().toLowerCase(Locale.ROOT) + " by an admin.");
+    }
+
     /** ARCHIVED -> PUBLISHED after the completeness check; the teacher is notified. */
     private void applyRestore(User admin, ReviewContentType type, ReviewableContent item, String note, String auditAction) {
         requireComplete(type, item);
@@ -751,15 +763,14 @@ public class ContentReviewService {
 
     private static String requireReason(String reason) {
         String sanitized = AiInputSanitizer.sanitize(reason, MAX_REASON_LENGTH);
-        if (sanitized == null || sanitized.isBlank()) {
+        if (sanitized == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Rejection reason is required.");
         }
         return sanitized;
     }
 
     private static String sanitizeOptional(String note) {
-        String sanitized = AiInputSanitizer.sanitize(note, MAX_REASON_LENGTH);
-        return sanitized == null || sanitized.isBlank() ? null : sanitized;
+        return AiInputSanitizer.sanitize(note, MAX_REASON_LENGTH);
     }
 
     private static String noteSuffix(String note) {

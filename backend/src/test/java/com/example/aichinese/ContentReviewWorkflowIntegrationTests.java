@@ -530,14 +530,16 @@ class ContentReviewWorkflowIntegrationTests {
         String teacherToken = token(teacherEmail);
         String adminToken = adminToken();
         Long moduleId = createModule(teacherToken, "Audit module " + suffix());
+        // Dates are taken around the submit so the test also holds if it runs across midnight.
+        LocalDate submitStart = LocalDate.now();
         ContentReviewTestSupport.submit(mockMvc, teacherToken, "MODULE", moduleId);
+        LocalDate submitEnd = LocalDate.now();
         User teacher = userRepository.findByEmailWithRoles(teacherEmail).orElseThrow();
-        String today = LocalDate.now().toString();
-        String tomorrow = LocalDate.now().plusDays(1).toString();
-        String yesterday = LocalDate.now().minusDays(1).toString();
+        String tomorrow = submitEnd.plusDays(1).toString();
+        String yesterday = submitStart.minusDays(1).toString();
 
         mockMvc.perform(authGet("/api/v1/admin/audit-logs", adminToken)
-                        .param("actionType", "CONTENT_SUBMIT").param("from", today).param("to", today).param("size", "100"))
+                        .param("actionType", "CONTENT_SUBMIT").param("from", submitStart.toString()).param("to", submitEnd.toString()).param("size", "100"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[?(@.targetId==" + moduleId + ")]").exists());
         mockMvc.perform(authGet("/api/v1/admin/audit-logs", adminToken)
@@ -556,7 +558,7 @@ class ContentReviewWorkflowIntegrationTests {
                         .param("actor", teacherEmail.substring(0, 18)).param("actionType", "CONTENT_SUBMIT"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].actorEmail").value(teacherEmail));
-        mockMvc.perform(authGet("/api/v1/admin/audit-logs", adminToken).param("from", tomorrow).param("to", today))
+        mockMvc.perform(authGet("/api/v1/admin/audit-logs", adminToken).param("from", tomorrow).param("to", submitEnd.toString()))
                 .andExpect(status().isBadRequest());
     }
 

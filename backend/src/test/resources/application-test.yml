@@ -28,7 +28,7 @@ app:
   security:
     public-auth-rate-limit:
       # Integration tests create many accounts from MockMvc's shared IP in one JVM.
-      # The limiter's production threshold is covered by dedicated unit tests.
+      # The limiter logic is unit-tested in PublicAuthRequestLimiterTests; the forgot/reset-password default (10) stays active here.
       register-requests: 10000
     jwt:
       secret: RuntimeStyleJwtSecretForTests1234567890AB

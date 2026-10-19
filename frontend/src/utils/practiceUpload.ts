@@ -5,6 +5,7 @@ import type {
   PracticeSubmissionResponse,
   PracticeSubmissionType,
 } from '@/types/api'
+import { pagePreviewItems } from '@/utils/previewPaging'
 
 /**
  * Practice submission uploads (D7 / D7a): pronunciation recordings and handwriting images sent to
@@ -33,19 +34,22 @@ export const MAX_TONE_LENGTH = 50
 /** Upper bound of a single browser recording. */
 export const MAX_RECORDING_SECONDS = 60
 
-/** Formats the server stores (AiFileStorageService): WEBM / WAV / MP3 and PNG / JPEG. */
+/**
+ * Formats the server stores (AiFileStorageService / UploadStorageSupport): it requires both an allowed extension and
+ * an allowed content type, so the same pair of lists is checked here before uploading.
+ */
 const ACCEPTED_MIME_TYPES: Record<UploadKind, ReadonlySet<string>> = {
-  audio: new Set(['audio/webm', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mpeg', 'audio/mp3']),
-  image: new Set(['image/png', 'image/jpeg', 'image/jpg']),
+  audio: new Set(['audio/webm', 'video/webm', 'audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3']),
+  image: new Set(['image/png', 'image/jpeg']),
 }
 const ACCEPTED_EXTENSIONS: Record<UploadKind, readonly string[]> = {
-  audio: ['.webm', '.wav', '.mp3'],
+  audio: ['.webm', '.wav', '.mp3', '.mpeg'],
   image: ['.png', '.jpg', '.jpeg'],
 }
 
 /** `accept` attribute for the file inputs. */
 export const UPLOAD_ACCEPT: Record<UploadKind, string> = {
-  audio: 'audio/*,.webm,.wav,.mp3',
+  audio: 'audio/*,video/webm,.webm,.wav,.mp3,.mpeg',
   image: 'image/*,.png,.jpg,.jpeg',
 }
 
@@ -92,11 +96,12 @@ function fileExtension(name: string | null | undefined): string {
   return dot >= 0 ? lower.slice(dot) : ''
 }
 
-/** True when the file is an audio/* (or image/*) file in a format the server stores. */
+/** True when both the content type and the extension are in a format the server stores. */
 export function isAcceptedUploadType(file: Pick<File, 'name' | 'type'>, kind: UploadKind): boolean {
-  const mime = baseMimeType(file.type)
-  if (mime) return mime.startsWith(`${kind}/`) && ACCEPTED_MIME_TYPES[kind].has(mime)
-  return ACCEPTED_EXTENSIONS[kind].includes(fileExtension(file.name))
+  return (
+    ACCEPTED_MIME_TYPES[kind].has(baseMimeType(file.type)) &&
+    ACCEPTED_EXTENSIONS[kind].includes(fileExtension(file.name))
+  )
 }
 
 /** Positive integer lesson id, or null for "no lesson" / invalid input. */
@@ -269,14 +274,5 @@ export function pagePracticeSubmissions(
   const filtered = items
     .filter((item) => !type || item.submissionType === type)
     .sort((a, b) => Date.parse(b.submittedAt) - Date.parse(a.submittedAt))
-  const safeSize = Math.max(1, Math.floor(size))
-  const totalPages = Math.max(1, Math.ceil(filtered.length / safeSize))
-  const safePage = Math.min(Math.max(0, Math.floor(page)), totalPages - 1)
-  return {
-    items: filtered.slice(safePage * safeSize, safePage * safeSize + safeSize),
-    page: safePage,
-    size: safeSize,
-    totalItems: filtered.length,
-    totalPages,
-  }
+  return pagePreviewItems(filtered, page, size)
 }

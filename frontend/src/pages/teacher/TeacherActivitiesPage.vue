@@ -27,6 +27,7 @@
             class="btn btn-secondary btn-sm"
             type="button"
             data-testid="teacher-activity-new"
+            :disabled="mutating"
             @click="startNewDraft()"
           >
             <IconGlyph name="plus" :size="14" />
@@ -79,6 +80,7 @@
               class="teacher-activities-row"
               :class="{ 'is-active': item.id === selectedId && item.type === selectedType }"
               :aria-pressed="item.id === selectedId && item.type === selectedType"
+              :disabled="mutating"
               @click="selectActivity(item)"
             >
               <span class="teacher-activities-row-head">
@@ -308,6 +310,8 @@ const loadingDetail = ref(false)
 const saving = ref(false)
 const submitting = ref(false)
 const deleting = ref(false)
+// NFR-PERF-06: no switching records while a save / submit / delete runs (it would apply to the wrong record).
+const mutating = computed(() => saving.value || submitting.value || deleting.value)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 /** Status of a record saved in this session (the list may lag behind until it reloads). */
@@ -424,6 +428,7 @@ function goToPage(page: number): void {
 }
 
 async function selectActivity(item: AdminActivitySummaryResponse): Promise<void> {
+  if (mutating.value) return
   clearFeedback()
   selectedType.value = item.type
   selectedId.value = item.id

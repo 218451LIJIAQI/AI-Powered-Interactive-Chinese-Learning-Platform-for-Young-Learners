@@ -85,11 +85,7 @@ const teacherName = computed<string>(() => props.course.teacher.displayName)
 const contentTypeLabel = computed(() => t(`catalog.${COURSE_TYPE_KEYS[props.course.type]}`))
 const categoryLabel = computed(() => props.course.category.name)
 
-const levelLabel = computed(() => {
-  if (props.course.level.id <= 2) return t('catalog.beginner')
-  if (props.course.level.id === 3) return t('catalog.intermediate')
-  return props.course.level.name
-})
+const levelLabel = computed(() => props.course.level.name)
 
 const learningTypeMeta = computed(() => LEARNING_TYPE_META[props.course.learningType])
 const modeLabel = computed(() => t(`catalog.${learningTypeMeta.value.labelKey}`))

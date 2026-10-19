@@ -290,26 +290,27 @@ public class AdminContentReviewService {
             Long id,
             String note) {
         User adminUser = findAdmin(currentUser);
+        String cleanedNote = cleanNote(note);
 
         ContentSubmissionDetailResponse response = switch (contentType) {
             case MODULE -> {
                 LearningModule module = findModule(id);
                 requireNotAlreadyArchived(module.getContentStatus(), "module");
-                contentReviewService.applyArchive(adminUser, ReviewContentType.MODULE, module, cleanNote(note), ACTION_ARCHIVE);
+                contentReviewService.applyArchive(adminUser, ReviewContentType.MODULE, module, cleanedNote, ACTION_ARCHIVE);
                 learningModuleRepository.save(module);
                 yield contentManagementMapper.toSubmissionDetailResponse(module, List.of());
             }
             case LESSON -> {
                 Lesson lesson = findLesson(id);
                 requireNotAlreadyArchived(lesson.getContentStatus(), "lesson");
-                contentReviewService.applyArchive(adminUser, ReviewContentType.LESSON, lesson, cleanNote(note), ACTION_ARCHIVE);
+                contentReviewService.applyArchive(adminUser, ReviewContentType.LESSON, lesson, cleanedNote, ACTION_ARCHIVE);
                 lessonRepository.save(lesson);
                 yield contentManagementMapper.toSubmissionDetailResponse(lesson);
             }
             case PACKAGE -> {
                 CoursePackage coursePackage = findPackage(id);
                 requireNotAlreadyArchived(coursePackage.getContentStatus(), "package");
-                contentReviewService.applyArchive(adminUser, ReviewContentType.PACKAGE, coursePackage, cleanNote(note), ACTION_ARCHIVE);
+                contentReviewService.applyArchive(adminUser, ReviewContentType.PACKAGE, coursePackage, cleanedNote, ACTION_ARCHIVE);
                 coursePackageRepository.save(coursePackage);
                 yield contentManagementMapper.toSubmissionDetailResponse(
                         coursePackage,
@@ -319,14 +320,13 @@ public class AdminContentReviewService {
             }
         };
 
-        recordModeration(adminUser, contentType, id, response.title(), note);
+        recordModeration(adminUser, contentType, id, response.title(), cleanedNote);
         log.info("Content archived: type={}, id={}, adminUserId={}", contentType, id, adminUser.getId());
         return response;
     }
 
     private static String cleanNote(String note) {
-        String sanitized = AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH);
-        return sanitized == null || sanitized.isBlank() ? null : sanitized;
+        return AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH);
     }
 
     private static void requireNotAlreadyArchived(ContentStatus currentStatus, String entityName) {
@@ -377,7 +377,7 @@ public class AdminContentReviewService {
         record.setTargetId(id);
         record.setTargetTitleSnapshot(title == null ? null : TextUtils.safeTruncate(title, MAX_TARGET_TITLE_LENGTH));
         record.setActionTaken("ARCHIVE");
-        record.setNote(AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH));
+        record.setNote(note);
         contentModerationRecordRepository.save(record);
     }
 }

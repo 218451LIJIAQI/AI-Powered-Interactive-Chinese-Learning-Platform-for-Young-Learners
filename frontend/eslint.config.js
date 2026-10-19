@@ -3,47 +3,11 @@ import prettier from 'eslint-config-prettier'
 import vue from 'eslint-plugin-vue'
 import tseslint from 'typescript-eslint'
 
-const readonlyGlobals = (names) => Object.fromEntries(names.map((name) => [name, 'readonly']))
-
-const allowEmptyCatch = ['error', { allowEmptyCatch: true }]
+// TypeScript and vue-tsc already report undefined names, so no-undef (and a globals list) is not needed.
 const baseSourceRules = {
-  '@typescript-eslint/no-unused-vars': 'error',
-  'no-empty': allowEmptyCatch,
+  'no-empty': ['error', { allowEmptyCatch: true }],
   'no-undef': 'off',
 }
-
-const browserGlobals = readonlyGlobals([
-  'Blob',
-  'clearTimeout',
-  'console',
-  'CustomEvent',
-  'document',
-  'Event',
-  'File',
-  'FormData',
-  'HTMLInputElement',
-  'navigator',
-  'setTimeout',
-  'SpeechSynthesisUtterance',
-  'Storage',
-  'URL',
-  'URLSearchParams',
-  'window',
-])
-
-const configGlobals = readonlyGlobals([
-  '__dirname',
-  'Blob',
-  'Buffer',
-  'clearTimeout',
-  'console',
-  'fetch',
-  'FormData',
-  'process',
-  'setTimeout',
-  'URL',
-  'WebSocket',
-])
 
 export default tseslint.config(
   {
@@ -60,7 +24,6 @@ export default tseslint.config(
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
-      globals: browserGlobals,
     },
     rules: {
       ...baseSourceRules,
@@ -74,14 +37,7 @@ export default tseslint.config(
   },
   {
     files: ['*.config.*'],
-    languageOptions: {
-      globals: configGlobals,
-    },
-    rules: {
-      ...baseSourceRules,
-      'no-useless-assignment': 'error',
-      '@typescript-eslint/no-unused-expressions': 'error',
-    },
+    rules: baseSourceRules,
   },
   prettier,
 )

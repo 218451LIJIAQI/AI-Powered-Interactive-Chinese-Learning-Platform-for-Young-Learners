@@ -67,7 +67,7 @@ class AiLogServiceTests {
                 AiRequestStatus.SUCCESS,
                 "deepseek",
                 "deepseek-chat",
-                42,
+                7,
                 "Adult prompt with private learning details",
                 "Provider answer that should not be retained in usage logs",
                 null,
@@ -75,6 +75,7 @@ class AiLogServiceTests {
                 99L);
 
         assertThat(saved.getInputSummary()).isEqualTo("content_length=42");
+        assertThat(saved.getTokenCount()).isEqualTo(7);
         assertThat(saved.getOutputSummary()).isEqualTo("content_length=57");
         assertThat(saved.getInputSummary()).doesNotContain("Adult prompt");
         assertThat(saved.getOutputSummary()).doesNotContain("Provider answer");

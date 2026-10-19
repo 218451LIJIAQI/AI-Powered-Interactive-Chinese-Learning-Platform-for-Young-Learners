@@ -111,7 +111,6 @@ export const useAuthStore = defineStore('auth', {
           clearPersistedPreviewRole()
         }
 
-        persistToken(this.token)
         try {
           this.currentUser = await authApi.me()
         } catch {

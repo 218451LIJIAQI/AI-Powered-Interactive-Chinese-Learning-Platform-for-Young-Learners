@@ -12,7 +12,7 @@
         </div>
         <div v-if="submission.learningType">
           <dt>{{ t('adminContentReview.learningType') }}</dt>
-          <dd>{{ submission.learningType }}</dd>
+          <dd>{{ t(`adminContentReview.learningType${submission.learningType}`) }}</dd>
         </div>
         <div v-if="submission.moduleTitle">
           <dt>{{ t('adminContentReview.module') }}</dt>

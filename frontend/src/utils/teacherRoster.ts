@@ -11,7 +11,6 @@ import type {
 } from '@/types/api'
 import { clampPercent } from '@/utils/format'
 import { masteryRank, normalizeMastery } from '@/utils/mastery'
-import { countMastery } from '@/utils/progressSummary'
 
 /** Canonical order of the server's support reasons (quiz average < 60 %, no activity for 14 days). */
 const SUPPORT_REASONS: readonly StudentSupportReason[] = ['LOW_QUIZ_SCORE', 'INACTIVE']
@@ -56,11 +55,6 @@ export function lessonMasteryRows(items: TeacherStudentLessonMasteryResponse[] |
         left.completionPercent - right.completionPercent ||
         left.lessonTitle.localeCompare(right.lessonTitle),
     )
-}
-
-/** Number of lessons per mastery level. */
-export function masteryCounts(rows: LessonMasteryRow[]): Record<LessonMastery, number> {
-  return countMastery(rows)
 }
 
 /** Weak areas are lesson titles of recent wrong answers: trimmed, non-empty, de-duplicated. */

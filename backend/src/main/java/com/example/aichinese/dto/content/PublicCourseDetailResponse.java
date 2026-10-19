@@ -21,8 +21,7 @@ import com.example.aichinese.entity.enums.ManagedContentType;
         "coverImageUrl",
         "status",
         "basicContent",
-        "packageItems",
-        "callToAction"
+        "packageItems"
 })
 public record PublicCourseDetailResponse(
         String id,
@@ -37,8 +36,7 @@ public record PublicCourseDetailResponse(
         String coverImageUrl,
         ContentStatus status,
         String basicContent,
-        List<PublicCourseItemSummaryResponse> packageItems,
-        String callToAction) {
+        List<PublicCourseItemSummaryResponse> packageItems) {
 
     public PublicCourseDetailResponse {
         Objects.requireNonNull(id, "id must not be null");
@@ -46,7 +44,6 @@ public record PublicCourseDetailResponse(
         Objects.requireNonNull(type, "type must not be null");
         Objects.requireNonNull(title, "title must not be null");
         Objects.requireNonNull(status, "status must not be null");
-        Objects.requireNonNull(callToAction, "callToAction must not be null");
         packageItems = packageItems == null ? List.of() : List.copyOf(packageItems);
     }
 }

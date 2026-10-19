@@ -159,8 +159,10 @@ class LearnerExperienceIntegrationTests {
         long studentProfileId = api.data(rosterAfterLowScore).path("items").get(0).path("studentId").asLong();
 
         // Retake (FR-QUIZ-07): everything correct -> 100 % and MASTERED.
-        mockMvc.perform(api.authGet("/api/v1/students/quizzes/" + quizId, studentToken)).andExpect(status().isOk());
-        api.submitQuiz(studentToken, quizId, true, " HǍO ");
+        MvcResult normalised = api.submitQuiz(studentToken, quizId, true, " HǍO ");
+        assertThat(api.data(normalised).path("percentage").asInt())
+                .as("case and surrounding whitespace are normalised")
+                .isEqualTo(100);
         MvcResult retake = api.submitQuiz(studentToken, quizId, true, "hǎo");
         assertThat(retake.getResponse().getStatus()).isEqualTo(200);
         assertThat(api.data(retake).path("percentage").asInt()).isEqualTo(100);
@@ -248,12 +250,13 @@ class LearnerExperienceIntegrationTests {
                                 Map.of("questionId", fillQuestionId, "answerText", "hǎo")))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Choose one of the listed options for every multiple-choice question."));
-        // An option id of another question.
+        // An option id that is not one of this question's options.
         mockMvc.perform(api.jsonPost("/api/v1/students/quizzes/" + quizId + "/attempts", studentToken, Map.of(
                         "answers", List.of(
                                 Map.of("questionId", optionQuestionId, "optionId", 987_654L),
                                 Map.of("questionId", fillQuestionId, "answerText", "hǎo")))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Choose one of the listed options for every multiple-choice question."));
 
         assertThat(quizAttemptRepository.count()).isEqualTo(attemptsBefore);
         assertThat(quizAttemptAnswerRepository.count()).isEqualTo(answersBefore);
@@ -439,6 +442,10 @@ class LearnerExperienceIntegrationTests {
                 .andExpect(jsonPath("$.data.earnedPoints").value(12));
 
         assertThat(student(studentEmail).getTotalPoints()).isEqualTo(20 + 15 + 10 + 12);
+        // SDD T16: the Home dashboard shows the points after a reload.
+        mockMvc.perform(api.authGet("/api/v1/students/dashboard", studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.points").value(20 + 15 + 10 + 12));
     }
 
     @Test

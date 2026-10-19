@@ -16,6 +16,11 @@ export interface TextRun {
 const CJK_CHARACTER = /[\p{Script=Han}\u{3000}-\u{303f}\u{ff00}-\u{ffef}]/u
 const HAN_CHARACTER = /\p{Script=Han}/u
 
+/** True when the text contains at least one Han character. */
+export function containsHan(text: string | null | undefined): boolean {
+  return Boolean(text) && HAN_CHARACTER.test(text as string)
+}
+
 /** Splits text into alternating CJK / non-CJK runs; empty input gives an empty list. */
 export function splitCjkRuns(text: string | null | undefined): TextRun[] {
   const source = text ?? ''

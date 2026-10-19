@@ -32,12 +32,15 @@ class DataSeederDefaultAdminTests {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
     @Test
     void shouldCreateDefaultAdminWhenEnvironmentVariablesAreProvided() {
         User admin = userRepository.findByEmailWithRoles(DEFAULT_ADMIN_EMAIL).orElseThrow();
 
         assertThat(admin.getDisplayName()).isEqualTo(DEFAULT_ADMIN_DISPLAY_NAME);
-        assertThat(admin.getPasswordHash()).isNotBlank();
+        assertThat(passwordEncoder.matches("SuperSecure123!", admin.getPasswordHash())).isTrue();
         assertThat(admin.getRoles())
                 .extracting(Role::getName)
                 .contains(RoleName.ADMIN);

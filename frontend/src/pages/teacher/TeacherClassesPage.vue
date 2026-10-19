@@ -107,15 +107,6 @@
                 <IconGlyph name="students" :size="16" aria-hidden="true" />
                 {{ t('teacherClasses.viewRoster') }}
               </button>
-              <button
-                class="btn btn-ghost btn-sm btn-icon"
-                type="button"
-                :aria-label="t('teacherClasses.detailsAria')"
-                :data-tooltip="t('teacherClasses.details')"
-                @click="selectClass(item.id)"
-              >
-                <IconGlyph name="more" :size="18" aria-hidden="true" />
-              </button>
             </div>
           </li>
         </ul>
@@ -126,7 +117,7 @@
               class="btn btn-secondary btn-sm"
               type="button"
               :disabled="teacherApprovalLocked"
-              @click="openComposer"
+              @click="createNewClass"
             >
               {{ t('teacherClasses.openScheduler') }}
             </button>
@@ -340,7 +331,7 @@
 
             <div class="form-actions">
               <button
-                v-if="selectedLiveClass && !confirmingCancel"
+                v-if="selectedLiveClass && !confirmingCancel && !selectedClassTerminal"
                 class="btn btn-danger-soft"
                 type="button"
                 :disabled="classesReadOnly || submittingCancel"
@@ -352,7 +343,7 @@
                 class="btn btn-primary"
                 type="submit"
                 :aria-busy="submittingCreate || submittingUpdate"
-                :disabled="classesReadOnly || submittingCreate || submittingUpdate"
+                :disabled="classComposerDisabled"
               >
                 {{ submitClassButtonLabel }}
               </button>
@@ -365,7 +356,7 @@
             <div class="card-header">
               <div class="teacher-classes-card-heading">
                 <h2 id="teacher-classes-roster-title" class="card-title">{{ t('teacherClasses.selectedRoster') }}</h2>
-                <p v-if="selectedLiveClass" class="card-subtitle">{{ selectedLiveClass.title }}</p>
+                <p v-if="rosterClass" class="card-subtitle">{{ rosterClass.title }}</p>
               </div>
               <span class="chip">{{ t('teacherClasses.learners', { count: enrolments.length }) }}</span>
             </div>
@@ -401,8 +392,8 @@
               <button
                 class="btn btn-link"
                 type="button"
-                :disabled="!focusClass"
-                @click="focusClass && loadEnrolments(focusClass.id)"
+                :disabled="!attendanceClass"
+                @click="attendanceClass && loadEnrolments(attendanceClass.id)"
               >
                 {{ t('teacherClasses.viewDetails') }}
               </button>
@@ -412,12 +403,12 @@
               <div
                 class="teacher-classes-attendance-ring"
                 role="img"
-                :aria-label="`${t('teacherClasses.checkedIn')}: ${attendanceRate}% (${presentCount} / ${totalRosterCount})`"
+                :aria-label="`${t('teacherClasses.checkedIn')}: ${attendanceRate}% (${attendedCount} / ${totalRosterCount})`"
               >
                 <div class="teacher-classes-attendance-inner" aria-hidden="true">
                   <small>{{ t('teacherClasses.checkedIn') }}</small>
                   <strong>{{ attendanceRate }}%</strong>
-                  <span>{{ presentCount }} / {{ totalRosterCount }}</span>
+                  <span>{{ attendedCount }} / {{ totalRosterCount }}</span>
                 </div>
               </div>
 
@@ -581,10 +572,17 @@ import {
 } from '@/demo/data'
 import { teacherClassesMessages } from '@/plugins/teacherClassesMessages'
 import { useAuthStore } from '@/stores/auth'
-import type { CoursePackageResponse, LessonResponse } from '@/types/api'
+import type {
+  CoursePackageResponse,
+  LessonResponse,
+  LessonVideoProgressSummaryResponse,
+  LiveClassEnrolmentResponse,
+  RecordedLessonVideoResponse,
+  TeacherAnalyticsResponse,
+} from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, getDisplayLocale, nonNegativeInteger, ratioPercent } from '@/utils/format'
-import { effectiveLiveClassStatus } from '@/utils/liveClassActions'
+import { effectiveLiveClassStatus, isTerminalLiveClass } from '@/utils/liveClassActions'
 import { openSafeHttpUrl } from '@/utils/url'
 
 type MeetingPlatformValue = TeacherLiveClassPayload['meetingPlatform']
@@ -610,7 +608,10 @@ const liveClassesResource = useResource(
   () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.liveClasses())),
   teacherLiveClasses,
 )
-const analyticsResource = useResource(() => teacherApi.analytics(), teacherAnalytics)
+const analyticsResource = useResource<TeacherAnalyticsResponse | null>(
+  () => (teacherApprovalLocked.value ? Promise.resolve(null) : guardTeacherRequest(() => teacherApi.analytics())),
+  teacherAnalytics,
+)
 const lessonsResource = useResource(
   () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.lessons())),
   teacherLessons,
@@ -621,33 +622,19 @@ const packagesResource = useResource(
 )
 const selectedClassId = ref<number | null>(null)
 const selectedLessonId = ref<number | null>(null)
-const enrolmentsResource = useResource(
-  () => {
-    if (teacherApprovalLocked.value || !selectedClassId.value) {
-      return Promise.resolve([])
-    }
-    return teacherApi.enrolments(selectedClassId.value)
-  },
+// Written directly by loadEnrolments / loadRecordedResources; useResource only provides the preview fixtures.
+const enrolmentsResource = useResource<LiveClassEnrolmentResponse[]>(
+  () => Promise.resolve([]),
   teacherEnrolments,
   false,
 )
-const recordedResource = useResource(
-  () => {
-    if (teacherApprovalLocked.value || !selectedLessonId.value) {
-      return Promise.resolve([])
-    }
-    return teacherApi.recordedVideos(selectedLessonId.value)
-  },
+const recordedResource = useResource<RecordedLessonVideoResponse[]>(
+  () => Promise.resolve([]),
   teacherRecordedVideos,
   false,
 )
-const progressResource = useResource(
-  () => {
-    if (teacherApprovalLocked.value || !selectedLessonId.value) {
-      return Promise.resolve([])
-    }
-    return teacherApi.lessonVideoProgress(selectedLessonId.value)
-  },
+const progressResource = useResource<LessonVideoProgressSummaryResponse[]>(
+  () => Promise.resolve([]),
   teacherVideoProgress,
   false,
 )
@@ -655,13 +642,7 @@ const progressResource = useResource(
 const liveClasses = computed(
   () => liveClassesResource.data.value ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses : []),
 )
-const analytics = computed(
-  () =>
-    analyticsResource.data.value ??
-    (analyticsResource.usingFallback.value
-      ? teacherAnalytics
-      : { ...teacherAnalytics, overview: { ...teacherAnalytics.overview, totalActiveStudents: 0 } }),
-)
+const totalActiveStudents = computed(() => analyticsResource.data.value?.overview.totalActiveStudents ?? 0)
 const lessons = computed<LessonResponse[]>(
   () => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []),
 )
@@ -689,21 +670,17 @@ const pageLoading = computed(
     liveClassesResource.loading.value ||
     analyticsResource.loading.value ||
     lessonsResource.loading.value ||
-    packagesResource.loading.value ||
-    enrolmentsResource.loading.value ||
-    recordedResource.loading.value ||
-    progressResource.loading.value,
+    packagesResource.loading.value,
 )
 // While locked, errors of the approved-teacher endpoints are replaced by the verification message.
 const pageError = computed(
   () =>
     (teacherApprovalLocked.value
       ? null
-      : liveClassesResource.error.value || lessonsResource.error.value || packagesResource.error.value) ||
-    analyticsResource.error.value ||
-    enrolmentsResource.error.value ||
-    recordedResource.error.value ||
-    progressResource.error.value,
+      : liveClassesResource.error.value ||
+        lessonsResource.error.value ||
+        packagesResource.error.value ||
+        analyticsResource.error.value) || null,
 )
 const usingFallback = computed(
   () =>
@@ -722,7 +699,9 @@ const classesReadOnly = computed(
     lessonsResource.usingFallback.value ||
     packagesResource.usingFallback.value,
 )
-const classComposerDisabled = computed(() => classesReadOnly.value || submittingCreate.value || submittingUpdate.value)
+const classComposerDisabled = computed(
+  () => classesReadOnly.value || selectedClassTerminal.value || submittingCreate.value || submittingUpdate.value,
+)
 const composerToggleLabel = computed(() => {
   if (teacherApprovalLocked.value) return t('teacherClasses.verificationPending')
   return showComposer.value ? t('teacherClasses.closeScheduler') : t('teacherClasses.scheduleClass')
@@ -796,13 +775,18 @@ const currentDateLabel = computed(() =>
   }).format(new Date()),
 )
 
-const focusClass = computed(
-  () => liveClasses.value[0] ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses[0] : null),
+const focusClass = computed(() => liveClasses.value[0] ?? null)
+const selectedClassTerminal = computed(() =>
+  Boolean(selectedLiveClass.value && isTerminalLiveClass(selectedLiveClass.value)),
 )
 const selectedLiveClass = computed(() => liveClasses.value.find((item) => item.id === selectedClassId.value) ?? null)
+/** Class whose roster is currently loaded (View Roster does not change the class being edited). */
+const rosterClassId = ref<number | null>(null)
+const rosterClass = computed(() => liveClasses.value.find((item) => item.id === rosterClassId.value) ?? null)
+const attendanceClass = computed(() => selectedLiveClass.value ?? focusClass.value)
 
 const liveClassCards = computed(() =>
-  liveClasses.value.slice(0, 3).map((item, index) => {
+  liveClasses.value.map((item, index) => {
     const start = new Date(item.startTime)
     const platform = normalizeMeetingPlatform(item.meetingPlatform)
     const platformLabel = formatMeetingPlatform(platform)
@@ -857,30 +841,27 @@ const pendingCheckInCount = computed(
 )
 const cancelledCount = computed(() => enrolments.value.filter((item) => item.enrolmentStatus === 'CANCELLED').length)
 const totalRosterCount = computed(() => enrolments.value.length)
-const presentCount = computed(() => attendedCount.value)
-const attendanceRate = computed(() => ratioPercent(presentCount.value, totalRosterCount.value))
+const attendanceRate = computed(() => ratioPercent(attendedCount.value, totalRosterCount.value))
 const pendingCheckInTone = computed(() => (pendingCheckInCount.value > 0 ? 'orange' : 'green'))
 
 const attendanceLegend = computed(() => {
-  const total = Math.max(totalRosterCount.value, 1)
-
   return [
     {
       label: t('teacherClasses.checkedIn'),
-      count: presentCount.value,
-      percent: ratioPercent(presentCount.value, total),
+      count: attendedCount.value,
+      percent: ratioPercent(attendedCount.value, totalRosterCount.value),
       tone: 'green',
     },
     {
       label: t('teacherClasses.pending'),
       count: pendingCheckInCount.value,
-      percent: ratioPercent(pendingCheckInCount.value, total),
+      percent: ratioPercent(pendingCheckInCount.value, totalRosterCount.value),
       tone: 'yellow',
     },
     {
       label: t('teacherClasses.cancelled'),
       count: cancelledCount.value,
-      percent: ratioPercent(cancelledCount.value, total),
+      percent: ratioPercent(cancelledCount.value, totalRosterCount.value),
       tone: 'red',
     },
   ]
@@ -949,9 +930,9 @@ const assignmentCards = computed(() => {
     {
       title: t('teacherClasses.activeLearners'),
       classCode: t('teacherClasses.rosterContext'),
-      deadline: t('teacherClasses.totalActive', { count: analytics.value.overview.totalActiveStudents }),
+      deadline: t('teacherClasses.totalActive', { count: totalActiveStudents.value }),
       progressLabel: t('teacherClasses.selectedRosterCount', { count: enrolments.value.length }),
-      progress: ratioPercent(enrolments.value.length, analytics.value.overview.totalActiveStudents),
+      progress: ratioPercent(enrolments.value.length, totalActiveStudents.value),
       icon: 'students',
       tone: 'purple',
     },
@@ -964,12 +945,6 @@ const quickActions = computed(() => [
     icon: 'classes',
     tone: 'purple',
     action: createNewClass,
-  },
-  {
-    title: t('teacherClasses.scheduleClass'),
-    icon: 'calendar',
-    tone: 'orange',
-    action: openComposer,
   },
   {
     title: t('teacherClasses.createContent'),
@@ -1027,16 +1002,12 @@ function formatClassDate(date: Date): string {
 
 // W4: every enum shown to teachers goes through the shared status labels (never raw ENROLLED / ZOOM values).
 function liveClassStatusLabel(status: string | null | undefined): string {
-  const normalized = (status ?? '').trim().toUpperCase()
-  const value = normalized === 'IN_PROGRESS' || normalized === 'LIVE' ? 'ONGOING' : normalized
-  return statusLabel('liveClass', value)
+  return statusLabel('liveClass', (status ?? '').trim().toUpperCase())
 }
 
 function liveClassStatusTone(status: string | null | undefined): 'info' | 'success' | 'neutral' | 'danger' {
   switch ((status ?? '').trim().toUpperCase()) {
     case 'ONGOING':
-    case 'IN_PROGRESS':
-    case 'LIVE':
       return 'success'
     case 'COMPLETED':
       return 'neutral'
@@ -1136,8 +1107,11 @@ function openComposer(): void {
 }
 
 function toggleComposer(): void {
-  showComposer.value = !showComposer.value
-  if (showComposer.value) void revealComposer()
+  if (showComposer.value) {
+    showComposer.value = false
+  } else {
+    createNewClass()
+  }
 }
 
 function createNewClass(): void {
@@ -1164,10 +1138,8 @@ async function selectClass(classId: number): Promise<void> {
   selectedClassId.value = classId
   const item = liveClasses.value.find((entry) => entry.id === classId)
   if (item) {
-    selectedLessonId.value = item.lesson?.lessonId ?? null
     applyClassToForm(item)
-    showComposer.value = true
-    void revealComposer()
+    openComposer()
   }
   await loadDependentResources(classId, item?.lesson?.lessonId ?? null)
 }
@@ -1260,6 +1232,7 @@ async function loadEnrolments(classId: number, announceSuccess = true): Promise<
   if (previewFallbackEnabled.value) {
     enrolmentsResource.data.value = teacherEnrolments
     enrolmentsResource.usingFallback.value = true
+    rosterClassId.value = classId
     if (announceSuccess) actionSuccess.value = t('teacherClasses.rosterPreview')
     return
   }
@@ -1270,6 +1243,7 @@ async function loadEnrolments(classId: number, announceSuccess = true): Promise<
     const items = await teacherApi.enrolments(classId)
     if (request !== enrolmentsRequest) return
     enrolmentsResource.data.value = items
+    rosterClassId.value = classId
     if (announceSuccess) actionSuccess.value = t('teacherClasses.rosterLoaded')
   } catch (reason) {
     if (request !== enrolmentsRequest) return
@@ -1376,7 +1350,6 @@ watch(
     }
 
     selectedClassId.value = activeClass.id
-    selectedLessonId.value = activeClass.lesson?.lessonId ?? null
     applyClassToForm(activeClass)
     void loadDependentResources(activeClass.id, activeClass.lesson?.lessonId ?? null)
   },

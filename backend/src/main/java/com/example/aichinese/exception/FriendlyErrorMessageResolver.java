@@ -26,7 +26,8 @@ public final class FriendlyErrorMessageResolver {
             "hints are not available for independent practice",
             "current password is incorrect",
             "new password must be different",
-            "daily ai request limit reached");
+            "daily ai request limit reached",
+            "not available to join");
 
     private static final List<String> RATE_LIMIT_HINTS = List.of(
             "too many requests",
@@ -34,29 +35,13 @@ public final class FriendlyErrorMessageResolver {
             "rate limit");
 
     private static final List<String> EMAIL_ALREADY_REGISTERED_HINTS = List.of(
-            "email is already registered",
-            "email already registered");
+            "email is already registered");
 
     private static final List<String> PASSWORD_MISMATCH_HINTS = List.of(
-            "confirm password does not match",
-            "password mismatch",
-            "passwords do not match");
+            "confirm password does not match");
 
     private static final List<String> BAD_CREDENTIALS_HINTS = List.of(
-            "invalid email or password",
-            "bad credentials");
-
-    private static final List<String> OPERATION_FAILED_HINTS = List.of(
-            "already enrolled",
-            "already archived",
-            "already full",
-            "not available to join",
-            "cannot receive requester replies",
-            "resubmit verification");
-
-    private static final List<String> FORBIDDEN_DETAIL_HINTS = List.of(
-            "permission to access this resource",
-            "access this resource");
+            "invalid email or password");
 
     private static final List<String> NOT_FOUND_HINTS = List.of(
             "not found",
@@ -64,20 +49,12 @@ public final class FriendlyErrorMessageResolver {
             "was not found");
 
     private static final List<String> UPLOAD_TOO_LARGE_HINTS = List.of(
-            "uploaded file exceeds the maximum allowed file size",
-            "file is too large",
-            "max upload");
+            "uploaded file exceeds the maximum allowed file size");
 
     private static final List<String> UPLOAD_INVALID_TYPE_HINTS = List.of(
-            "file type is not supported",
-            "unsupported file type",
-            "allowed file types",
-            "permitted file format",
-            "invalid file extension",
-            "supported format");
+            "unsupported file type");
 
     private static final List<String> UPLOAD_FAILED_HINTS = List.of(
-            "uploaded file could not be processed",
             "verification document file is required",
             "uploaded file is required",
             "file upload");
@@ -88,19 +65,11 @@ public final class FriendlyErrorMessageResolver {
             "access denied",
             "can only",
             "only approved",
-            "requires a student account",
-            "requires a teacher or admin account",
-            "requires an admin account",
-            "do not have access");
+            "requires a student account");
 
     private static final List<String> MALFORMED_REQUEST_HINTS = List.of(
             "request body",
             "malformed",
-            "json payload",
-            "query parameter",
-            "route or query parameter",
-            "invalid value for parameter",
-            "invalid numeric",
             "invalid content status filter",
             "invalid teacher status filter",
             "invalid user role filter",
@@ -108,18 +77,14 @@ public final class FriendlyErrorMessageResolver {
             "invalid feedback type");
 
     private static final List<String> VALIDATION_HINTS = List.of(
-            "validation failed",
             "required",
             "must not",
             "must be",
             "at least one",
             "exactly one",
             "does not match",
-            "do not match",
             "not be blank",
             "invalid email",
-            "invalid password",
-            "missing a correct option",
             "selected learning level does not exist",
             "selected learning category does not exist",
             "between 0 and 100");
@@ -155,12 +120,6 @@ public final class FriendlyErrorMessageResolver {
         }
 
         if (status == HttpStatus.FORBIDDEN.value()) {
-            if (containsAny(normalized, OPERATION_FAILED_HINTS)) {
-                return operationFailedMessage();
-            }
-            if (containsAny(normalized, FORBIDDEN_DETAIL_HINTS)) {
-                return passthrough(rawMessage);
-            }
             return permissionDeniedMessage();
         }
 
@@ -174,9 +133,6 @@ public final class FriendlyErrorMessageResolver {
 
         if (status == HttpStatus.PAYLOAD_TOO_LARGE.value()) {
             return uploadTooLargeMessage();
-        }
-        if (status == HttpStatus.UNPROCESSABLE_ENTITY.value()) {
-            return validationFailedMessage();
         }
         if (status == HttpStatus.TOO_MANY_REQUESTS.value()) {
             return tooManyRequestsMessage();
@@ -200,9 +156,6 @@ public final class FriendlyErrorMessageResolver {
         }
         if (containsAny(normalized, VALIDATION_HINTS)) {
             return passthrough(rawMessage);
-        }
-        if (containsAny(normalized, OPERATION_FAILED_HINTS)) {
-            return operationFailedMessage();
         }
 
         return passthrough(rawMessage);

@@ -2,8 +2,7 @@ package com.example.aichinese.util;
 
 /**
  * Thread-local holder for the per-request correlation id that ties log
- * lines, audit records, and outbound HTTP calls back to a single inbound
- * HTTP request.
+ * lines and audit records back to a single inbound HTTP request.
  *
  * <h2>Lifecycle</h2>
  * <p>{@code RequestIdFilter} sets the id at the very start of the
@@ -16,19 +15,15 @@ package com.example.aichinese.util;
  * runs even on exceptional code paths.</p>
  *
  * <h2>Why not {@link InheritableThreadLocal}</h2>
- * <p>Spring's {@code @Async} executors and the platform's CompletableFuture
- * background tasks deliberately do <em>not</em> inherit the request id:
+ * <p>Spring's {@code @Async} executors deliberately do <em>not</em> inherit the request id:
  * inheriting it would pin the id to a background task long after the
  * inbound request returned, producing log lines that claim to belong to
  * a closed request. Background workers that need correlation ids set
  * them explicitly via {@link #set(String)} at the start of their run.</p>
  *
  * <h2>Wire-format contract</h2>
- * <p>The {@value #HEADER_NAME} header is the canonical name on both the
- * inbound and outbound sides — the front-end, reverse proxies, and
- * outbound HTTP clients (OpenAI / OpenAI-compatible AI providers) all
- * agree on this spelling so an id can be threaded end-to-end through a
- * full request fan-out.</p>
+ * <p>The {@value #HEADER_NAME} header is read from the client request and
+ * written back on the response by {@code RequestIdFilter}.</p>
  */
 public final class RequestIdHolder {
 

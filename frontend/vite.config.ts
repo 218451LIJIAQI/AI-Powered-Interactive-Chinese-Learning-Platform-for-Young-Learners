@@ -40,7 +40,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,ico,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: ({ sameOrigin, url }) => sameOrigin && !url.pathname.startsWith('/api/'),
+            // Static assets only, so API responses are never cached whatever VITE_API_BASE_URL is.
+            urlPattern: ({ sameOrigin, request }) =>
+              sameOrigin && ['style', 'script', 'image', 'font'].includes(request.destination),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'mandarin-spark-static-v1',

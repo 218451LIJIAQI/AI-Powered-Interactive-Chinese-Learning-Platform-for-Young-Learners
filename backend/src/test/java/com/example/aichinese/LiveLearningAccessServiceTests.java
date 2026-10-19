@@ -67,7 +67,7 @@ class LiveLearningAccessServiceTests {
             mock(TeacherContentAccessService.class));
 
     @Test
-    void publishedLessonsAndCoursesNeedNoPurchaseButUnpublishedOnesAreHidden() {
+    void publishedLessonsAndCoursesAreVisibleButUnpublishedOnesAreHidden() {
         TeacherProfile approvedTeacher = teacher(TeacherStatus.APPROVED, true);
         Lesson publishedLesson = new Lesson();
         publishedLesson.setContentStatus(ContentStatus.PUBLISHED);
@@ -123,7 +123,7 @@ class LiveLearningAccessServiceTests {
 
     @Test
     void validateMeetingLinkReturnsCanonicalSafeHttpUrl() {
-        assertThat(service.validateMeetingLink("  HTTPS://example.com/live/../class?room=1  "))
+        assertThat(service.validateMeetingLink("  HTTPS://example.com/live/../class?room=1  ", MeetingPlatform.OTHER))
                 .isEqualTo(CANONICAL_MEETING_LINK);
     }
 
@@ -253,7 +253,7 @@ class LiveLearningAccessServiceTests {
     }
 
     private void assertUnsafeMeetingUrl(String value) {
-        assertThatThrownBy(() -> service.validateMeetingLink(value))
+        assertThatThrownBy(() -> service.validateMeetingLink(value, MeetingPlatform.OTHER))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_MEETING_LINK_MESSAGE);
     }

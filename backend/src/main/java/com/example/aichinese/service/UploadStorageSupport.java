@@ -38,9 +38,9 @@ import com.example.aichinese.service.storage.StoredObject;
  * <h2>Defence in depth</h2>
  * <p>Provides the three independent checks every upload runs:</p>
  * <ol>
- *   <li>Safe original file-name extraction — strips path components,
- *       CR/LF, and other shell-tricky characters; rejects empty,
- *       over-long or traversal-attempt names.</li>
+ *   <li>Safe original file-name extraction — strips path components
+ *       (so {@code ../x.pdf} becomes {@code x.pdf}), CR/LF and other
+ *       shell-tricky characters; rejects empty or over-long names.</li>
  *   <li>Extension + Content-Type whitelist matching.</li>
  *   <li>Magic-byte / file-signature verification reading the first
  *       {@link #SIGNATURE_PREFIX_BYTES} bytes — defeats the classic
@@ -56,7 +56,8 @@ import com.example.aichinese.service.storage.StoredObject;
  *
  * <h2>Why a class instead of utility methods</h2>
  * <p>Package-private static methods keep the pipeline narrow — only
- * the three storage services in this package can call them, so a
+ * classes in this package (the storage services and LocalStorageProvider)
+ * can call them, so a
  * future change cannot accidentally widen the surface to a less
  * defended path.</p>
  */

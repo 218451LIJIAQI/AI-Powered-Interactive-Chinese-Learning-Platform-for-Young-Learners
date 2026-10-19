@@ -62,7 +62,7 @@
               <h3 class="teacher-practice-review-name">{{ item.studentName }}</h3>
               <span class="teacher-practice-review-muted">
                 <IconGlyph
-                  :name="practiceMediaKind(item) === 'audio' ? 'mic' : 'image'"
+                  :name="submissionMediaKind(item.submissionType) === 'audio' ? 'mic' : 'image'"
                   :size="14"
                   aria-hidden="true"
                 />
@@ -103,7 +103,7 @@
               </dl>
 
               <AuthorizedMedia
-                :kind="practiceMediaKind(item)"
+                :kind="submissionMediaKind(item.submissionType)"
                 :loader="() => teacherApi.practiceSubmissionFile(item.id)"
                 :target="item.targetText"
                 :disabled="previewMode"
@@ -189,7 +189,12 @@
                   >
                     {{ draftFor(item.id).error }}
                   </small>
-                  <small v-else class="field-hint">{{ t('teacherFeedback.practiceLengthHint') }}</small>
+                  <small v-else class="field-hint">{{
+                    t('teacherFeedback.practiceLengthHint', {
+                      min: PRACTICE_FEEDBACK_MIN_LENGTH,
+                      max: PRACTICE_FEEDBACK_MAX_LENGTH,
+                    })
+                  }}</small>
                   <small :id="`practice-review-counter-${item.id}`" class="field-hint teacher-practice-review-counter">
                     {{
                       t('teacherFeedback.practiceCounter', {
@@ -259,13 +264,13 @@ import { teacherFeedbackMessages } from '@/plugins/teacherFeedbackMessages'
 import type { PageResponse, PracticeSubmissionResponse, TeacherFeedbackType } from '@/types/api'
 import { isForbiddenApiError, resolveApiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+import { submissionMediaKind } from '@/utils/practiceUpload'
 import {
   PRACTICE_FEEDBACK_MAX_LENGTH,
   PRACTICE_FEEDBACK_MIN_LENGTH,
   PRACTICE_REVIEW_FILTERS,
   TEACHER_FEEDBACK_TYPES,
   pagePracticeSubmissions,
-  practiceMediaKind,
   replacePracticeSubmission,
   validatePracticeFeedbackMessage,
   type PracticeReviewFilter,
@@ -275,7 +280,8 @@ import {
  * Teacher review of learners' pronunciation / handwriting practice submissions (D7 / D7a). Files are fetched as
  * Blobs through the authorised endpoint; the AI note is labelled AI-assisted (not a score).
  */
-const props = withDefaults(defineProps<{ locked?: boolean; pageSize?: number }>(), { locked: false, pageSize: 5 })
+// The parent unmounts this section while the teacher is locked (approval required); `forbidden` reports a 403.
+const props = withDefaults(defineProps<{ pageSize?: number }>(), { pageSize: 5 })
 const emit = defineEmits<{ forbidden: []; reviewed: [submission: PracticeSubmissionResponse] }>()
 
 const { t } = useI18n({
@@ -299,17 +305,8 @@ const submittingId = ref<number | null>(null)
 const successMessage = ref<string | null>(null)
 const drafts = reactive<Record<number, ReviewDraft>>({})
 
-const emptyPage = (): PageResponse<PracticeSubmissionResponse> => ({
-  items: [],
-  page: 0,
-  size: props.pageSize,
-  totalItems: 0,
-  totalPages: 1,
-})
-
 const resource = useResource<PageResponse<PracticeSubmissionResponse>>(
   async () => {
-    if (props.locked) return emptyPage()
     try {
       return await teacherApi.practiceSubmissions({
         reviewStatus: filter.value,
@@ -355,7 +352,7 @@ function draftFor(id: number): ReviewDraft {
 
 /** Typing stays possible in preview (to try the counter / validation); only sending is disabled there. */
 function fieldsDisabled(): boolean {
-  return props.locked || submittingId.value !== null
+  return submittingId.value !== null
 }
 
 function submitDisabled(): boolean {
@@ -397,7 +394,7 @@ async function submitReview(item: PracticeSubmissionResponse): Promise<void> {
   successMessage.value = null
   draft.error = validationMessage(draft.message)
   if (draft.error || submittingId.value !== null) return
-  if (previewMode.value || props.locked) {
+  if (previewMode.value) {
     draft.error = t('teacherFeedback.practicePreviewNotSaved')
     return
   }

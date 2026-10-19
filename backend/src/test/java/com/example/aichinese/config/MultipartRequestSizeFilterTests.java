@@ -52,6 +52,18 @@ class MultipartRequestSizeFilterTests {
     }
 
     @Test
+    void allowsFileExactlyAtLimitPlusMultipartOverhead() throws Exception {
+        MockHttpServletRequest request = multipartRequest(
+                "/api/v1/ai/pronunciation-feedback",
+                uploadProperties.getAiAudioMaxFileSize().toBytes() + MultipartRequestSizeFilter.MULTIPART_OVERHEAD_BYTES);
+        TrackingFilterChain chain = new TrackingFilterChain();
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(chain.invoked).isTrue();
+    }
+
+    @Test
     void rejectsAiAudioAboveAudioLimit() throws Exception {
         RejectedRequest rejected = rejectMultipartRequest("/api/v1/ai/pronunciation-feedback", overAiAudioLimit());
 
@@ -131,11 +143,11 @@ class MultipartRequestSizeFilterTests {
     }
 
     private long overVerificationDocumentLimit() {
-        return uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + 1;
+        return uploadProperties.getVerificationDocumentMaxFileSize().toBytes() + MultipartRequestSizeFilter.MULTIPART_OVERHEAD_BYTES + 1;
     }
 
     private long overAiAudioLimit() {
-        return uploadProperties.getAiAudioMaxFileSize().toBytes() + 1;
+        return uploadProperties.getAiAudioMaxFileSize().toBytes() + MultipartRequestSizeFilter.MULTIPART_OVERHEAD_BYTES + 1;
     }
 
     private void assertPayloadTooLargeEnvelope(MockHttpServletResponse response) throws Exception {

@@ -399,6 +399,7 @@ type AdminUserRoute =
   | '/admin/teacher-verification'
 
 const SEARCH_DEBOUNCE_MS = 300
+const AUDIT_PANEL_SIZE = 5
 const roleAvatarTones: Record<PrimaryRole, AvatarTone> = {
   ADMIN: 'primary',
   TEACHER: 'info',
@@ -435,7 +436,15 @@ const usersResource = useResource(
   () => adminApi.users(userQuery.value),
   () => filterDemoAdminUsers(adminUsers.items, userQuery.value),
 )
-const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
+const selectedUserId = ref<number | null>(null)
+// The side panel lists the latest audit events performed by the selected user (FR-ADM-03), not the platform feed.
+const auditResource = useResource(
+  () =>
+    selectedUserId.value === null
+      ? Promise.resolve([])
+      : adminApi.auditLogs({ actorId: selectedUserId.value, size: AUDIT_PANEL_SIZE }),
+  adminAuditLogs,
+)
 
 const emptyUserPage: PageResponse<AdminUserListItemResponse> = {
   items: [],
@@ -577,7 +586,6 @@ const hasActiveFilters = computed(
     teacherStatusFilter.value !== 'ALL',
 )
 
-const selectedUserId = ref<number | null>(null)
 const selectedUser = computed(() => {
   if (selectedUserId.value === null) return null
   return pagedUsers.value.find((item) => item.userId === selectedUserId.value) ?? null
@@ -604,6 +612,10 @@ watch(
   },
   { immediate: true, deep: true },
 )
+
+watch(selectedUserId, () => {
+  if (!auditResource.usingFallback.value) void auditResource.reload()
+})
 
 const selectedUserStatusActionLabel = computed(() => {
   if (!selectedUser.value) return t('adminUsers.updateAccount')
@@ -716,7 +728,7 @@ const secondaryActionLabel = computed(() => {
 })
 
 const selectedAudit = computed(() =>
-  auditLogs.value.slice(0, 5).map((item) => ({
+  auditLogs.value.slice(0, AUDIT_PANEL_SIZE).map((item) => ({
     id: item.id,
     title: auditActionLabel(item.actionType),
     time: formatDateTime(item.createdAt),
@@ -734,7 +746,6 @@ function clearFilters(): void {
   roleFilter.value = 'ALL'
   activeFilter.value = 'ALL'
   teacherStatusFilter.value = 'ALL'
-  currentPage.value = 0
 }
 
 function setRoleFilter(role: AdminUserRoleFilter): void {
@@ -879,7 +890,8 @@ function getStatusKey(active: boolean, role: PrimaryRole, teacherStatus: string 
   if (!active) return 'INACTIVE'
   if (role !== 'TEACHER') return 'ACTIVE'
   if (teacherStatus === 'PENDING') return 'PENDING'
-  return teacherStatus === 'REJECTED' ? 'INACTIVE' : 'ACTIVE'
+  // A rejected teacher's account is still active; the verification state is shown in its own column.
+  return 'ACTIVE'
 }
 
 function statusLabel(status: StatusKey): string {

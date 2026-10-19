@@ -94,11 +94,6 @@ public class QuizMapper {
                 lesson == null || lesson.getModule() == null ? null : lesson.getModule().getTitle());
     }
 
-    public StudentQuizQuestionResponse toStudentQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
-        Objects.requireNonNull(question, "question");
-        return toStudentQuizQuestionResponse(question, options, hintsAllowed(question.getQuiz()));
-    }
-
     public StudentQuizQuestionResponse toStudentQuizQuestionResponse(
             QuizQuestion question,
             List<QuizOption> options,

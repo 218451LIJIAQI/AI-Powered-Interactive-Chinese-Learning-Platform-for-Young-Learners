@@ -175,8 +175,11 @@ const { t } = useI18n({
 const isPreview = computed(() => auth.isPreviewSession)
 const studentProfile = computed(() => auth.currentUser?.studentProfile ?? null)
 
-const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
-const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
+// A signed-in user keeps their own role navigation, also on the public catalogue (/courses); guests use previewRole.
+const role = computed<UserRole>(
+  () => (auth.isAuthenticated ? auth.activeRole : (route.meta.previewRole as UserRole | undefined)) ?? 'STUDENT',
+)
+const isGuestCatalog = computed(() => route.path.startsWith('/courses') && !auth.isAuthenticated)
 const sceneRole = computed(() => (isGuestCatalog.value ? 'student' : role.value.toLowerCase()))
 
 const activeRoleCopy = computed(() => ROLE_SIDEBAR_COPY[role.value])

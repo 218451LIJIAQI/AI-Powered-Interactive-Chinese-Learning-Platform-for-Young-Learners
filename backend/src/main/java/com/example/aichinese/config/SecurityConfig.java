@@ -10,7 +10,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -28,7 +27,6 @@ import com.example.aichinese.security.JwtAuthenticationFilter;
 import jakarta.servlet.DispatcherType;
 
 @Configuration(proxyBeanMethods = false)
-@EnableMethodSecurity
 @EnableConfigurationProperties({
         SecurityProperties.class,
         ForwardedHeaderProperties.class,
@@ -111,6 +109,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HEALTH_ENDPOINTS).permitAll()
+                        // Any other actuator endpoint exposed through MANAGEMENT_EXPOSED_ENDPOINTS is admin-only.
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers(API_DOC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_POST_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()

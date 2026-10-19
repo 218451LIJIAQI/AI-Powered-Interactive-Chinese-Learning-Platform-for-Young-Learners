@@ -32,6 +32,7 @@ import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.ContentModerationRecordRepository;
@@ -96,6 +97,9 @@ class CommunicationModerationIntegrationTests {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @Autowired
+    private com.example.aichinese.repository.LessonRepository lessonRepository;
+
     @Test
     void notificationsSupportOwnershipMarkingAndAdminVisibility() throws Exception {
         String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
@@ -123,7 +127,7 @@ class CommunicationModerationIntegrationTests {
                         "message", "Great effort. Review the first-tone example again."))))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/admin/notifications")
+        mockMvc.perform(get("/api/v1/notifications")
                 .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(header().string(CACHE_CONTROL_HEADER,
@@ -131,7 +135,7 @@ class CommunicationModerationIntegrationTests {
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.size").value(20));
 
-        mockMvc.perform(get("/api/v1/admin/notifications")
+        mockMvc.perform(get("/api/v1/notifications")
                 .param("size", "100000")
                 .header(AUTHORIZATION_HEADER, bearer(adminToken)))
                 .andExpect(status().isOk())
@@ -358,6 +362,13 @@ class CommunicationModerationIntegrationTests {
                         "reason", ""))))
                 .andExpect(status().isBadRequest());
 
+        // SDD T35: content returned for revision becomes Rejected and its teacher is notified.
+        assertThat(lessonRepository.findById(lessonId).orElseThrow().getContentStatus()).isEqualTo(ContentStatus.REJECTED);
+        Long teacherUserId = userRepository.findByEmailWithRoles(teacherEmail).orElseThrow().getId();
+        assertThat(notificationRepository.findByUserIdOrderByCreatedAtDesc(teacherUserId))
+                .anyMatch(notification -> "LESSON".equals(notification.getTargetType())
+                        && lessonId.equals(notification.getTargetId()));
+
         mockMvc.perform(post("/api/v1/admin/moderation/hide")
                 .with(csrf())
                 .header(AUTHORIZATION_HEADER, bearer(teacherToken))
@@ -368,14 +379,13 @@ class CommunicationModerationIntegrationTests {
                         "reason", "Teachers must not use admin moderation routes."))))
                 .andExpect(status().isForbidden());
 
-        assertThat(contentModerationRecordRepository.findAll()).isNotEmpty();
         assertThat(contentModerationRecordRepository.findAll().stream()
                 .map(com.example.aichinese.entity.ContentModerationRecord::getNote)
                 .toList())
                 .allSatisfy(note -> assertThat(note).doesNotContain("<|im_start|>", "<|im_end|>"));
         assertThat(auditLogRepository.findAll())
-                .extracting(log -> log.getActionType())
-                .contains("MODERATION_REQUEST_REVISION");
+                .anyMatch(log -> "MODERATION_REQUEST_REVISION".equals(log.getActionType())
+                        && lessonId.equals(log.getTargetId()));
 
         mockMvc.perform(get("/api/v1/admin/moderation-records")
                 .header(AUTHORIZATION_HEADER, bearer(adminToken)))
@@ -453,6 +463,7 @@ class CommunicationModerationIntegrationTests {
                         "targetId", lessonId,
                         "reason", "Hide for first-time review."))))
                 .andExpect(status().isOk());
+        assertThat(lessonRepository.findById(lessonId).orElseThrow().getContentStatus()).isEqualTo(ContentStatus.ARCHIVED);
 
         // Second HIDE on the now-ARCHIVED (no longer PUBLISHED) lesson must
         // fail instead of writing duplicate moderation side effects.
@@ -466,6 +477,18 @@ class CommunicationModerationIntegrationTests {
                         "reason", "Trying to hide an already-hidden lesson."))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+
+        // RESTORE on the ARCHIVED lesson publishes it again.
+        mockMvc.perform(post("/api/v1/admin/moderation/restore")
+                .with(csrf())
+                .header(AUTHORIZATION_HEADER, bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "targetType", "LESSON",
+                        "targetId", lessonId,
+                        "reason", "Restored after review."))))
+                .andExpect(status().isOk());
+        assertThat(lessonRepository.findById(lessonId).orElseThrow().getContentStatus()).isEqualTo(ContentStatus.PUBLISHED);
     }
 
     private Long submitQuizAttempt(String studentToken, Long quizId) throws Exception {

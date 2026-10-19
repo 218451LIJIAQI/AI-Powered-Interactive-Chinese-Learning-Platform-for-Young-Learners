@@ -43,10 +43,8 @@ import com.example.aichinese.repository.UserRepository;
  * surfaces (student / teacher / admin): time-series trends, breakdown
  * aggregates, and per-persona authorization scope.
  *
- * <p>Pins the row-level filter: a teacher only sees their own
- * classes / students, a student only their own progress, an admin
- * sees platform-wide aggregates, so a refactor of
- * {@code AnalyticsService} cannot quietly leak cross-tenant data.</p>
+ * <p>Pins the per-persona role checks: each analytics path accepts only
+ * its own role and rejects anonymous and wrong-role requests.</p>
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",

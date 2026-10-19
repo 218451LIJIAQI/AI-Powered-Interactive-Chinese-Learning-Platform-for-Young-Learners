@@ -123,7 +123,7 @@ class Batch4MapperContractTests {
 
         Map<Long, List<QuizOption>> grouped = quizMapper.groupOptionsByQuestionId(
                 List.of(secondOption, orphan, firstOption));
-        StudentQuizQuestionResponse studentQuestion = quizMapper.toStudentQuizQuestionResponse(firstQuestion, null);
+        StudentQuizQuestionResponse studentQuestion = quizMapper.toStudentQuizQuestionResponse(firstQuestion, null, true);
 
         assertThat(grouped.keySet()).containsExactly(20L, 10L);
         assertThat(grouped.get(20L)).containsExactly(secondOption);

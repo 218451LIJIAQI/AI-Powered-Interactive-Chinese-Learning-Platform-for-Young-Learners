@@ -155,7 +155,8 @@ public class AdminTeacherManagementService {
 
         teacherProfile.setTeacherStatus(TeacherStatus.APPROVED);
         teacherProfile.setRejectionReason(null);
-        teacherProfile.setPublicVisible(true);
+        // A deactivated teacher stays hidden until reactivated (see AdminUserManagementService.updateUserStatus).
+        teacherProfile.setPublicVisible(teacherProfile.getUser().isActive());
         teacherProfile.setVerifiedAt(LocalDateTime.now());
         teacherProfileRepository.save(teacherProfile);
 

@@ -98,7 +98,8 @@
                 v-else-if="item.contentStatus !== 'ARCHIVED'"
                 class="btn btn-ghost btn-sm"
                 type="button"
-                :disabled="contentReadOnly"
+                :disabled="contentReadOnly || archivingKey !== null"
+                :aria-busy="archivingKey === `${item.contentType}-${item.id}`"
                 @click="archiveContent(item.contentType, item.id, item.title)"
               >
                 <IconGlyph name="archive" :size="14" />
@@ -126,7 +127,7 @@
           </div>
 
           <StatePanel
-            v-if="detailResource.loading.value"
+            v-if="detailLoading"
             compact
             tone="loading"
             icon="progress"
@@ -197,7 +198,7 @@
             <button
               class="btn btn-primary"
               type="submit"
-              :disabled="contentReadOnly || detailReadOnly || submittingModeration"
+              :disabled="contentReadOnly || detailReadOnly || submittingModeration || !canReturnToTeacher"
               :aria-busy="submittingModeration"
             >
               {{ submittingModeration ? t('adminContent.submitting') : t('adminContent.returnToTeacher') }}
@@ -288,8 +289,13 @@ const contentStats = computed<Array<{ icon: string; label: string; value: string
     },
   ]
 })
-const moderationReason = ref(t('adminContent.defaultReason'))
+// Starts empty so a real reason is recorded and sent to the teacher (FR-ADM-07), not boilerplate.
+const moderationReason = ref('')
 const submittingModeration = ref(false)
+const archivingKey = ref<string | null>(null)
+const detailLoading = ref(false)
+// The server accepts a return-to-teacher (REQUEST_REVISION) only for Published or Submitted content.
+const canReturnToTeacher = computed(() => ['PUBLISHED', 'SUBMITTED'].includes(detail.value?.contentStatus ?? ''))
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 
@@ -323,6 +329,7 @@ async function loadDetail(contentType: ManagedContentType, id: number): Promise<
   }
 
   const requested = selectedContent.value
+  detailLoading.value = true
   try {
     const loaded = await adminApi.contentDetail(contentType, id)
     // Ignore a slow response for an item the admin has already moved away from.
@@ -333,6 +340,8 @@ async function loadDetail(contentType: ManagedContentType, id: number): Promise<
     if (selectedContent.value !== requested) return
     actionError.value = resolveApiError(reason, t('adminContent.detailError'))
     detailResource.data.value = null
+  } finally {
+    if (selectedContent.value === requested) detailLoading.value = false
   }
 }
 
@@ -357,16 +366,21 @@ function previewContentDetail(contentType: ManagedContentType, id: number): Cont
 }
 
 async function archiveContent(contentType: string, id: number, title: string): Promise<void> {
+  if (archivingKey.value !== null) return
   if (!ensureLiveContent(t('adminContent.archivePreviewError'))) return
   if (!window.confirm(t('adminContent.confirmArchive', { title }))) return
   actionError.value = null
   actionSuccess.value = null
+  // NFR-PERF-06: one archive request at a time.
+  archivingKey.value = `${contentType}-${id}`
   try {
     await adminApi.archiveContent(contentType, id, t('adminContent.archiveReason'))
     await contentResource.reload()
     actionSuccess.value = t('adminContent.archived')
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('adminContent.archiveError'))
+  } finally {
+    archivingKey.value = null
   }
 }
 
@@ -388,19 +402,27 @@ async function moderate(action: 'archive' | 'request-revision' | 'restore'): Pro
   actionError.value = null
   actionSuccess.value = null
   submittingModeration.value = true
+  const moderatedType = detail.value.contentType
+  const moderatedId = detail.value.id
   try {
     await adminApi.moderationAction(action, {
-      targetType: detail.value.contentType,
-      targetId: detail.value.id,
+      targetType: moderatedType,
+      targetId: moderatedId,
       reason: moderationReason.value.trim(),
     })
-    const moderatedType = detail.value.contentType
-    const moderatedId = detail.value.id
-    await contentResource.reload()
-    detailResource.data.value = await adminApi.contentDetail(moderatedType, moderatedId)
-    actionSuccess.value = t('adminContent.moderated')
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('adminContent.moderationError'))
+    submittingModeration.value = false
+    return
+  }
+  // The action is applied from here on; a failed refresh must not report the action as failed.
+  actionSuccess.value = t('adminContent.moderated')
+  moderationReason.value = ''
+  try {
+    await contentResource.reload()
+    detailResource.data.value = await adminApi.contentDetail(moderatedType, moderatedId)
+  } catch (reason) {
+    actionError.value = resolveApiError(reason, t('adminContent.detailError'))
   } finally {
     submittingModeration.value = false
   }

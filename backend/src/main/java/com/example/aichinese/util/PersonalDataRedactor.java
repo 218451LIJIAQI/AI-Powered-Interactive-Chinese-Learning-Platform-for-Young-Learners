@@ -57,9 +57,4 @@ public final class PersonalDataRedactor {
         String withoutIdNumbers = NRIC.matcher(withoutEmails).replaceAll(ID_NUMBER_PLACEHOLDER);
         return PHONE.matcher(withoutIdNumbers).replaceAll(PHONE_PLACEHOLDER);
     }
-
-    /** {@code true} when {@link #redact(String)} would change the text. */
-    public static boolean containsDirectIdentifier(String text) {
-        return text != null && !text.equals(redact(text));
-    }
 }

@@ -358,7 +358,7 @@
                     {{ t('teacherStudents.feedbackAria') }}<span class="required-mark" aria-hidden="true">*</span>
                   </label>
                   <p class="teacher-students-greeting">
-                    {{ t('teacherStudents.greeting', { name: selectedStudentFirstName }) }}
+                    {{ t('teacherStudents.greeting', { name: selectedStudentName }) }}
                   </p>
                   <textarea
                     id="teacher-followup-message"
@@ -433,6 +433,7 @@ import { teacherStudentsMessages } from '@/plugins/teacherStudentsMessages'
 import type { StudentSupportReason, TeacherFeedbackResponse, TeacherStudentSummaryResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, formatDateTime, formatPercent } from '@/utils/format'
+import { countMastery } from '@/utils/progressSummary'
 import {
   PRACTICE_FEEDBACK_MAX_LENGTH,
   PRACTICE_FEEDBACK_MIN_LENGTH,
@@ -442,7 +443,6 @@ import {
   buildFollowUpSuggestion,
   followUpFeedbackType,
   lessonMasteryRows,
-  masteryCounts,
   shouldApplySuggestion,
   studentNeedsSupport,
   studentSupportReasons,
@@ -514,16 +514,13 @@ const students = computed<StudentRecord[]>(() =>
   })),
 )
 
-const feedback = computed<TeacherFeedbackResponse[]>(
-  () => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []),
-)
+const feedback = computed<TeacherFeedbackResponse[]>(() => feedbackResource.data.value ?? [])
 
 const pageLoading = computed(() => studentsResource.loading.value || feedbackResource.loading.value)
-const pageError = computed(() =>
-  teacherApprovalLocked.value ? null : studentsResource.error.value || feedbackResource.error.value,
-)
+// The page content (and so this error) is only shown when the lock panel is not.
+const pageError = computed(() => studentsResource.error.value || feedbackResource.error.value)
 const usingFallback = computed(() => studentsResource.usingFallback.value || feedbackResource.usingFallback.value)
-const feedbackReadOnly = computed(() => usingFallback.value || teacherApprovalLocked.value)
+const feedbackReadOnly = computed(() => usingFallback.value)
 const followUpDisabled = computed(() => feedbackReadOnly.value || submittingFollowUp.value || !selectedStudent.value)
 const followUpDescribedBy = computed(() =>
   followUpMessageError.value ? 'teacher-followup-error teacher-followup-hint' : 'teacher-followup-hint',
@@ -645,7 +642,7 @@ const selectedWeakAreas = computed(() => selectedStudent.value?.weakLessons ?? [
 const selectedMasteredLabel = computed(() => {
   const rows = selectedMasteryRows.value
   if (!rows.length) return '--'
-  return t('teacherStudents.masteredLessonsValue', { mastered: masteryCounts(rows).MASTERED, total: rows.length })
+  return t('teacherStudents.masteredLessonsValue', { mastered: countMastery(rows).MASTERED, total: rows.length })
 })
 
 const selectedInsights = computed(() => {
@@ -653,7 +650,7 @@ const selectedInsights = computed(() => {
     return []
   }
 
-  const learner = selectedStudentFirstName.value
+  const learner = selectedStudentName.value
   const weakArea = selectedWeakAreas.value[0]
   const quizAverage =
     selectedStudent.value.quizAveragePercent == null
@@ -716,9 +713,8 @@ const selectedRiskStatusLabel = computed(() =>
 const selectedStudentBadgeLabel = computed(() =>
   selectedStudent.value?.needsSupport ? t('teacherStudents.alert') : t('teacherStudents.active'),
 )
-const selectedStudentFirstName = computed(
-  () => selectedStudent.value?.displayName.split(' ')[0] ?? t('teacherStudents.student'),
-)
+// Full display name: the first word is often the surname (Chen Hao) or a title-like name part (Nur Aisyah).
+const selectedStudentName = computed(() => selectedStudent.value?.displayName ?? t('teacherStudents.student'))
 
 const manualFollowupDraft = computed(() => {
   if (!selectedStudent.value) {
@@ -727,7 +723,7 @@ const manualFollowupDraft = computed(() => {
 
   return buildFollowUpSuggestion(
     {
-      name: selectedStudentFirstName.value,
+      name: selectedStudentName.value,
       tone: followUpTone.value,
       focus: followUpFocus.value,
       weakLesson: selectedWeakAreas.value[0] ?? null,
@@ -749,7 +745,7 @@ watch(
       selectedStudentId.value = items[0]?.studentId ?? null
     }
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 // A5 #11: refresh the suggestion when tone / focus / learner change, but only while the teacher has not typed
@@ -802,7 +798,7 @@ function riskTone(needsSupport: boolean): string {
 }
 
 function feedbackTypeLabel(type: string | null | undefined): string {
-  return statusLabel('feedbackType', type?.trim() ? type.trim().toUpperCase() : 'GENERAL')
+  return statusLabel('feedbackType', type?.trim() || 'GENERAL')
 }
 
 function setSort(mode: SortMode): void {

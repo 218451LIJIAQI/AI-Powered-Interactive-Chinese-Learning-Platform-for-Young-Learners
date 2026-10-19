@@ -54,11 +54,10 @@ interface ChartPoint {
 interface Props {
   values: AnalyticsTrendPoint[]
   stroke?: string
-  label?: string
+  label: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  label: 'Trend chart',
   /** Any CSS colour, including a token such as var(--color-success). */
   stroke: 'var(--color-primary-500)',
 })
@@ -94,6 +93,9 @@ const points = computed<ChartPoint[]>(() => {
   })
 })
 
-const ariaLabel = computed<string>(() => `${props.label}: ${props.values.length} points`)
+// Language-neutral and carries the data, so screen readers get the values in every locale.
+const ariaLabel = computed<string>(
+  () => `${props.label}: ${props.values.map((point) => `${point.label} ${point.value}`).join(', ')}`,
+)
 const polylinePoints = computed<string>(() => points.value.map((p) => `${p.x},${p.y}`).join(' '))
 </script>

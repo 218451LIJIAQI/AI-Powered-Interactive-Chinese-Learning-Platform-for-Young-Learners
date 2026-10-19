@@ -52,46 +52,48 @@ class AdminSettingsIntegrationTests {
         String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
         String studentToken = registerStudentAndLogin(uniqueEmail("platform-settings-student"));
 
-        mockMvc.perform(put(PLATFORM_SETTINGS_PATH)
-                .with(csrf())
-                .header(AUTHORIZATION_HEADER, bearer(adminToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json(Map.of(
-                        "aiDisclaimerText", "Teacher guidance should still be reviewed.",
-                        "sensitiveWordFilter", true,
-                        "aiSafetyCheck", false))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.aiDisclaimerText").value("Teacher guidance should still be reviewed."))
-                .andExpect(jsonPath("$.data.sensitiveWordFilter").value(true))
-                .andExpect(jsonPath("$.data.aiSafetyCheck").value(false))
-                .andExpect(jsonPath("$.data.emailNotifications").doesNotExist())
-                .andExpect(jsonPath("$.data.inAppNotifications").doesNotExist())
-                .andExpect(jsonPath("$.data.dailySummary").doesNotExist())
-                .andExpect(jsonPath("$.data.strictContentFiltering").doesNotExist());
+        try {
+            mockMvc.perform(put(PLATFORM_SETTINGS_PATH)
+                    .with(csrf())
+                    .header(AUTHORIZATION_HEADER, bearer(adminToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json(Map.of(
+                            "aiDisclaimerText", "Teacher guidance should still be reviewed.",
+                            "sensitiveWordFilter", true,
+                            "aiSafetyCheck", false))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.aiDisclaimerText").value("Teacher guidance should still be reviewed."))
+                    .andExpect(jsonPath("$.data.sensitiveWordFilter").value(true))
+                    .andExpect(jsonPath("$.data.aiSafetyCheck").value(false))
+                    .andExpect(jsonPath("$.data.emailNotifications").doesNotExist())
+                    .andExpect(jsonPath("$.data.inAppNotifications").doesNotExist())
+                    .andExpect(jsonPath("$.data.dailySummary").doesNotExist())
+                    .andExpect(jsonPath("$.data.strictContentFiltering").doesNotExist());
 
-        mockMvc.perform(get(PLATFORM_SETTINGS_PATH)
-                .header(AUTHORIZATION_HEADER, bearer(adminToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.platformName")
-                        .value("AI-Powered Interactive Chinese Learning Platform for Young Adults in Malaysia"))
-                .andExpect(jsonPath("$.data.aiDisclaimerText").value("Teacher guidance should still be reviewed."))
-                .andExpect(jsonPath("$.data.aiSafetyCheck").value(false));
+            mockMvc.perform(get(PLATFORM_SETTINGS_PATH)
+                    .header(AUTHORIZATION_HEADER, bearer(adminToken)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.platformName")
+                            .value("AI-Powered Interactive Chinese Learning Platform for Young Adults in Malaysia"))
+                    .andExpect(jsonPath("$.data.aiDisclaimerText").value("Teacher guidance should still be reviewed."))
+                    .andExpect(jsonPath("$.data.aiSafetyCheck").value(false));
 
-        mockMvc.perform(get(PLATFORM_SETTINGS_PATH)
-                .header(AUTHORIZATION_HEADER, bearer(studentToken)))
-                .andExpect(status().isForbidden());
-
-        // Restore the defaults so other tests sharing this context see the enforced AI safety check.
-        mockMvc.perform(put(PLATFORM_SETTINGS_PATH)
-                .with(csrf())
-                .header(AUTHORIZATION_HEADER, bearer(adminToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json(Map.of(
-                        "aiDisclaimerText", "AI responses may contain errors and do not replace your teacher.",
-                        "sensitiveWordFilter", true,
-                        "aiSafetyCheck", true))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.aiSafetyCheck").value(true));
+            mockMvc.perform(get(PLATFORM_SETTINGS_PATH)
+                    .header(AUTHORIZATION_HEADER, bearer(studentToken)))
+                    .andExpect(status().isForbidden());
+        } finally {
+            // Always restore the defaults so other tests sharing this context see the enforced AI safety check.
+            mockMvc.perform(put(PLATFORM_SETTINGS_PATH)
+                    .with(csrf())
+                    .header(AUTHORIZATION_HEADER, bearer(adminToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json(Map.of(
+                            "aiDisclaimerText", "AI responses may contain errors and do not replace your teacher.",
+                            "sensitiveWordFilter", true,
+                            "aiSafetyCheck", true))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.aiSafetyCheck").value(true));
+        }
     }
 
     @Test

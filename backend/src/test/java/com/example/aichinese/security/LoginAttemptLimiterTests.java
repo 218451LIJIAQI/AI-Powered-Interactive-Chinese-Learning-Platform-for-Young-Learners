@@ -40,6 +40,14 @@ class LoginAttemptLimiterTests {
     private static final int SPRAY_ATTEMPTS = 20;
     private static final int LOCKOUT_SPRAY_ATTEMPTS = 30;
 
+    /** SDD 3.3: five failed sign-in attempts lock sign-in for 15 minutes. */
+    @Test
+    void productionDefaultsMatchTheDocumentedLockoutPolicy() {
+        assertThat(LoginAttemptLimiter.MAX_FAILED_ATTEMPTS).isEqualTo(5);
+        assertThat(LoginAttemptLimiter.ATTEMPT_WINDOW).isEqualTo(DEFAULT_ATTEMPT_WINDOW);
+        assertThat(LoginAttemptLimiter.LOCK_DURATION).isEqualTo(DEFAULT_LOCK_DURATION);
+    }
+
     @Test
     void allowsLoginWhenNoFailuresRecorded() {
         LoginAttemptLimiter limiter = limiter();

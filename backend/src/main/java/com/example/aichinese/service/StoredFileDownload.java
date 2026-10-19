@@ -4,6 +4,8 @@ import java.util.Objects;
 
 import org.springframework.core.io.Resource;
 
+import com.example.aichinese.util.TextUtils;
+
 public record StoredFileDownload(
         Resource resource,
         String originalFileName,
@@ -11,15 +13,7 @@ public record StoredFileDownload(
 
     public StoredFileDownload {
         resource = Objects.requireNonNull(resource, "resource");
-        originalFileName = optionalText(originalFileName);
-        contentType = optionalText(contentType);
-    }
-
-    private static String optionalText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String stripped = value.strip();
-        return stripped.isEmpty() ? null : stripped;
+        originalFileName = TextUtils.trimToNull(originalFileName);
+        contentType = TextUtils.trimToNull(contentType);
     }
 }

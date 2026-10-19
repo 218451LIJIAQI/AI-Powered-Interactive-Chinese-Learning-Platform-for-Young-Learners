@@ -9,8 +9,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "englishMeaning",
         "bahasaMelayuMeaning",
         "improvementExplanation",
-        "naturalSentenceVersion",
-        "practiceTask",
         "encouragement",
         "status"
 })
@@ -21,8 +19,6 @@ public record AiSentencePracticeResponse(
         String englishMeaning,
         String bahasaMelayuMeaning,
         String improvementExplanation,
-        String naturalSentenceVersion,
-        String practiceTask,
         String encouragement,
         String status) {
 }

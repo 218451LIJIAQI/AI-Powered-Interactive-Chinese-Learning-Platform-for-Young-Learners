@@ -248,13 +248,11 @@ describe('REST API wrappers', () => {
     const calls = installCaptureAdapter({ items: LIST_ITEMS })
 
     await expect(notificationsApi.list({ status: 'UNREAD' })).resolves.toEqual(LIST_ITEMS)
-    await expect(studentApi.badges()).resolves.toEqual(LIST_ITEMS)
     await expect(teacherApi.liveClasses()).resolves.toEqual(LIST_ITEMS)
     await expect(adminApi.moderationRecords({ status: 'OPEN' })).resolves.toEqual(LIST_ITEMS)
 
     expect(calls).toEqual([
       { method: 'GET', url: '/notifications', params: { status: 'UNREAD' } },
-      { method: 'GET', url: '/students/rewards/badges' },
       { method: 'GET', url: '/teachers/live-classes', params: { size: 100 } },
       { method: 'GET', url: '/admin/moderation-records', params: { status: 'OPEN' } },
     ])
@@ -784,10 +782,10 @@ describe('REST API wrappers', () => {
         url: '/teachers/quizzes/9',
       },
       {
-        name: 'teacher delete quiz',
-        run: () => teacherApi.deleteQuiz(9),
-        method: 'DELETE',
-        url: '/teachers/quizzes/9',
+        name: 'teacher archive quiz',
+        run: () => teacherApi.archiveQuiz(9),
+        method: 'PATCH',
+        url: '/teachers/quizzes/9/archive',
       },
       {
         name: 'teacher add quiz question',
@@ -878,7 +876,6 @@ describe('REST API wrappers', () => {
         method: 'PATCH',
         url: '/admin/users/2/status',
       },
-      { name: 'admin students', run: () => adminApi.students({ page: 0 }), method: 'GET', url: '/admin/students' },
       { name: 'admin teachers', run: () => adminApi.teachers({ page: 0 }), method: 'GET', url: '/admin/teachers' },
       {
         name: 'admin pending teachers',
@@ -1109,12 +1106,6 @@ describe('REST API wrappers', () => {
         method: 'GET',
         url: '/admin/ai-response-reports',
       },
-      {
-        name: 'admin notifications',
-        run: () => adminApi.notifications({ page: 0 }),
-        method: 'GET',
-        url: '/admin/notifications',
-      },
       { name: 'admin audit logs', run: () => adminApi.auditLogs({ page: 0 }), method: 'GET', url: '/admin/audit-logs' },
       {
         name: 'admin platform settings',
@@ -1153,13 +1144,9 @@ describe('W4 REST API wrappers', () => {
     await studentApi.markLessonViewed(5)
     await studentApi.wrongAnswers({ page: 0, size: 20 })
     await studentApi.practiceSubmissions({ type: 'PRONUNCIATION_AUDIO', page: 0 })
-    await studentApi.practiceSubmission(21)
     await teacherApi.practiceSubmissions({ reviewStatus: 'SUBMITTED', page: 0 })
-    await teacherApi.practiceSubmission(21)
     await teacherApi.reviewPracticeSubmission(21, { feedbackType: 'CORRECTIVE', message: 'Watch the third tone.' })
     await teacherApi.createFeedback({ studentId: 4, practiceSubmissionId: 21, message: 'Good effort.' })
-    await adminApi.practiceSubmissions({ reviewStatus: 'ALL' })
-    await adminApi.practiceSubmission(21)
 
     expect(calls).toEqual([
       { method: 'PUT', url: '/users/me/profile', data: { displayName: 'Aina', preferredLanguage: 'ms' } },
@@ -1173,9 +1160,7 @@ describe('W4 REST API wrappers', () => {
       { method: 'POST', url: '/students/lessons/5/viewed' },
       { method: 'GET', url: '/students/wrong-answers', params: { page: 0, size: 20 } },
       { method: 'GET', url: '/students/practice-submissions', params: { type: 'PRONUNCIATION_AUDIO', page: 0 } },
-      { method: 'GET', url: '/students/practice-submissions/21' },
       { method: 'GET', url: '/teachers/practice-submissions', params: { reviewStatus: 'SUBMITTED', page: 0 } },
-      { method: 'GET', url: '/teachers/practice-submissions/21' },
       {
         method: 'POST',
         url: '/teachers/practice-submissions/21/feedback',
@@ -1186,8 +1171,6 @@ describe('W4 REST API wrappers', () => {
         url: '/teachers/feedback',
         data: { studentId: 4, practiceSubmissionId: 21, message: 'Good effort.' },
       },
-      { method: 'GET', url: '/admin/practice-submissions', params: { reviewStatus: 'ALL' } },
-      { method: 'GET', url: '/admin/practice-submissions/21' },
     ])
   })
 
@@ -1207,7 +1190,7 @@ describe('W4 REST API wrappers', () => {
     ])
   })
 
-  it('loads practice-submission files as authorised blobs for students, teachers and admins', async () => {
+  it('loads practice-submission files and uploaded lesson videos as authorised blobs', async () => {
     const blob = new Blob(['audio'], { type: 'audio/webm' })
     const urls: Array<{ url: string; responseType: unknown; params: unknown }> = []
     http.defaults.adapter = (async (config) => {
@@ -1217,12 +1200,12 @@ describe('W4 REST API wrappers', () => {
 
     await expect(studentApi.practiceSubmissionFile(21)).resolves.toMatchObject({ blob })
     await expect(teacherApi.practiceSubmissionFile(21)).resolves.toMatchObject({ blob })
-    await expect(adminApi.practiceSubmissionFile(21)).resolves.toMatchObject({ blob })
+    await expect(studentApi.recordedVideoFile(31)).resolves.toMatchObject({ blob })
 
     expect(urls).toEqual([
       { url: '/students/practice-submissions/21/file', responseType: 'blob', params: undefined },
       { url: '/teachers/practice-submissions/21/file', responseType: 'blob', params: undefined },
-      { url: '/admin/practice-submissions/21/file', responseType: 'blob', params: undefined },
+      { url: '/students/recorded-videos/31/stream', responseType: 'blob', params: undefined },
     ])
   })
 })

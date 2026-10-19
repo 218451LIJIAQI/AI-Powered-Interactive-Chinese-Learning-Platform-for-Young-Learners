@@ -403,6 +403,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { AppLanguage, UserRole } from '@/types/api'
 import { isForbiddenApiError, resolveApiError } from '@/utils/apiError'
+import { isValidEmail } from '@/utils/email'
 import { isPasswordLengthValid } from '@/utils/password'
 import { normalizeAppRoute } from '@/utils/routeCompat'
 import { defaultRouteForRole } from '@/utils/role'
@@ -449,13 +450,12 @@ const register = reactive({
   agreedToTerms: false,
 })
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const normalizedLoginEmail = computed(() => login.email.trim().toLowerCase())
-const loginEmailValid = computed(() => emailPattern.test(normalizedLoginEmail.value))
+const loginEmailValid = computed(() => isValidEmail(normalizedLoginEmail.value))
 const canSubmitLogin = computed(() => !auth.loading && loginEmailValid.value && login.password.trim().length > 0)
 const normalizedRegisterFullName = computed(() => register.fullName.trim())
 const normalizedRegisterEmail = computed(() => register.email.trim().toLowerCase())
-const registerEmailValid = computed(() => emailPattern.test(normalizedRegisterEmail.value))
+const registerEmailValid = computed(() => isValidEmail(normalizedRegisterEmail.value))
 const registerPasswordReady = computed(() => isPasswordLengthValid(register.password))
 const registerPasswordsMatch = computed(
   () => register.password === register.confirmPassword && register.confirmPassword.length > 0,
@@ -495,10 +495,12 @@ watch(
   { immediate: true },
 )
 
+// Only an explicit ?role changes the account type: switching to the sign-in tab drops the query but keeps the choice.
 watch(
-  () => (route.query.role === 'teacher' ? ('TEACHER' as const) : ('STUDENT' as const)),
-  (nextRole) => {
-    register.role = nextRole
+  () => route.query.role,
+  (role) => {
+    if (role === 'teacher') register.role = 'TEACHER'
+    else if (role === 'student') register.role = 'STUDENT'
   },
   { immediate: true },
 )

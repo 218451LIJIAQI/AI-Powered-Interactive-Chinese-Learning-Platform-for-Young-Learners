@@ -27,9 +27,11 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.ApiResponse;
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.exception.GlobalExceptionHandler;
 import com.example.aichinese.util.RequestIdHolder;
 
@@ -37,10 +39,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * Unit tests for {@link GlobalExceptionHandler} that exercise the null/blank
- * exception-message safety net. These guarantees are not covered by the
- * integration tests because no service throws an unmessaged exception today,
- * but a future caller (or library) easily could.
+ * Unit tests for {@link GlobalExceptionHandler}: safe fallbacks for null/blank messages,
+ * status mapping (400/403/405/409/413/415/429/500), request-id propagation and when
+ * field errors are exposed or suppressed.
  */
 class GlobalExceptionHandlerTests {
 
@@ -144,6 +145,30 @@ class GlobalExceptionHandlerTests {
                 new MultipartException("multipart failed", new MaxUploadSizeExceededException(1024L)));
 
         assertPayloadTooLarge(response);
+    }
+
+    /** SDD T27: an unexpected server failure returns a generic message without internals. */
+    @Test
+    void unexpectedExceptionReturnsGenericServerErrorWithoutInternals() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleGenericException(
+                new IllegalStateException("select * from users where password='secret' token=abc"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        ApiResponse<Void> body = body(response);
+        assertThat(body.success()).isFalse();
+        assertThat(body.message()).isEqualTo(FriendlyErrorMessageResolver.serverUnavailableMessage());
+        assertThat(body.errors()).containsExactly(body.message());
+        assertThat(body.message()).doesNotContain("select", "secret", "token");
+    }
+
+    @Test
+    void missingMultipartFilePartReturnsBadRequestInsteadOfServerError() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleMissingServletRequestPartException(
+                new MissingServletRequestPartException("file"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo(FriendlyErrorMessageResolver.uploadFailedMessage());
     }
 
     @Test

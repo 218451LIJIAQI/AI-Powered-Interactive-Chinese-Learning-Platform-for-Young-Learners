@@ -54,7 +54,7 @@
                 <span class="admin-queue-copy">
                   <span class="admin-queue-title">
                     <strong>{{ formatReportReason(item.reasonCategory) }}</strong>
-                    <StatusPill :label="formatStatus(item.status)" :tone="reportStatusTone(item.status)" />
+                    <StatusPill :label="formatStatus(item.status)" :tone="aiReportStatusTone(item.status)" />
                   </span>
                   <span class="admin-feed-text">{{ item.description || formatFeatureKey(item.featureKey) }}</span>
                   <span class="admin-meta-row">
@@ -72,6 +72,16 @@
             :title="t('adminModeration.noReportsTitle')"
             :message="t('adminModeration.noReport')"
           />
+          <PaginationBar
+            v-if="reportTotalPages > 1"
+            :info="t('adminModeration.pageOf', { page: reportPage, total: reportTotalPages })"
+            :previous-label="t('adminModeration.previous')"
+            :next-label="t('adminModeration.next')"
+            :previous-disabled="reportPage <= 1"
+            :next-disabled="reportPage >= reportTotalPages"
+            @previous="reportPage -= 1"
+            @next="reportPage += 1"
+          />
         </article>
 
         <form class="panel admin-panel" @submit.prevent="reviewAiReport">
@@ -86,7 +96,7 @@
             <StatusPill
               v-if="selectedReport"
               :label="formatStatus(selectedReport.status)"
-              :tone="reportStatusTone(selectedReport.status)"
+              :tone="aiReportStatusTone(selectedReport.status)"
             />
           </div>
 
@@ -258,9 +268,11 @@ import type {
   AiResponseReportReviewStatus,
 } from '@/types/api'
 import AdminKpiTile from '@/components/admin/AdminKpiTile.vue'
+import { aiReportStatusTone } from '@/components/admin/adminDisplay'
 import type { AdminTone } from '@/components/admin/adminTone'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
@@ -268,8 +280,10 @@ import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAiReports, adminModerationRecords } from '@/demo/data'
 import { adminModerationMessages } from '@/plugins/adminModerationMessages'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+import { pagePreviewItems } from '@/utils/previewPaging'
 
 const { t } = useI18n({
   messages: {
@@ -279,19 +293,36 @@ const { t } = useI18n({
   },
 })
 
-type PillTone = 'info' | 'primary' | 'success' | 'warning'
+const PAGE_SIZE = 20
+/** 1-based page of the AI report queue; every report stays reachable (FR-REP-03), not only the newest page. */
+const reportPage = ref(1)
 
-const defaultReviewerNote = computed(() => t('adminModeration.defaultNote'))
-
-const moderationResource = useResource(() => adminApi.moderationRecords(), adminModerationRecords)
-const aiReportsResource = useResource(() => adminApi.aiReports(), adminAiReports)
-
-const moderationRecords = computed(
-  () => moderationResource.data.value ?? (moderationResource.usingFallback.value ? adminModerationRecords : []),
+const moderationResource = useResource(
+  () => adminApi.moderationRecordPage({ size: PAGE_SIZE }),
+  () => pagePreviewItems(adminModerationRecords, 0, PAGE_SIZE),
 )
-const aiReports = computed(
-  () => aiReportsResource.data.value ?? (aiReportsResource.usingFallback.value ? adminAiReports : []),
+const aiReportsResource = useResource(
+  () => adminApi.aiReportPage({ page: reportPage.value - 1, size: PAGE_SIZE }),
+  () => pagePreviewItems(adminAiReports, reportPage.value - 1, PAGE_SIZE),
 )
+/** KPI totals come from the server, so they count every report, not only the rows on screen. */
+const reportCountsResource = useResource(
+  async () => {
+    const [pending, inReview] = await Promise.all([
+      adminApi.aiReportPage({ status: 'PENDING_REVIEW', size: 1 }),
+      adminApi.aiReportPage({ status: 'IN_REVIEW', size: 1 }),
+    ])
+    return { pending: pending.totalItems, inReview: inReview.totalItems }
+  },
+  () => ({
+    pending: adminAiReports.filter((item) => item.status === 'PENDING_REVIEW').length,
+    inReview: adminAiReports.filter((item) => item.status === 'IN_REVIEW').length,
+  }),
+)
+
+const moderationRecords = computed(() => moderationResource.data.value?.items ?? [])
+const aiReports = computed(() => aiReportsResource.data.value?.items ?? [])
+const reportTotalPages = computed(() => aiReportsResource.data.value?.totalPages ?? 1)
 const selectedReportId = ref(0)
 const selectedReport = computed(() => aiReports.value.find((item) => item.id === selectedReportId.value) ?? null)
 
@@ -300,7 +331,7 @@ const reviewForm = reactive<{
   reviewerNote: string
 }>({
   status: 'IN_REVIEW',
-  reviewerNote: defaultReviewerNote.value,
+  reviewerNote: '',
 })
 
 const reviewStatusOptions = computed<Array<{ value: AiResponseReportReviewStatus; label: string }>>(() => [
@@ -313,12 +344,12 @@ const submittingReview = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
 const pageLoading = computed(() => moderationResource.loading.value || aiReportsResource.loading.value)
-const loadError = computed(() => moderationResource.error.value || aiReportsResource.error.value)
-
-const openReportCount = computed(
-  () => aiReports.value.filter((item) => item.status === 'PENDING_REVIEW' || item.status === 'IN_REVIEW').length,
+const loadError = computed(
+  () => moderationResource.error.value || aiReportsResource.error.value || reportCountsResource.error.value,
 )
-const pendingReviewCount = computed(() => aiReports.value.filter((item) => item.status === 'PENDING_REVIEW').length)
+
+const pendingReviewCount = computed(() => reportCountsResource.data.value?.pending ?? 0)
+const openReportCount = computed(() => pendingReviewCount.value + (reportCountsResource.data.value?.inReview ?? 0))
 const reviewReadOnly = computed(() => aiReportsResource.usingFallback.value)
 const reviewClosed = computed(() => isClosedStatus(selectedReport.value?.status))
 const reviewDisabled = computed(() => reviewReadOnly.value || !selectedReport.value || reviewClosed.value)
@@ -339,7 +370,7 @@ const moderationStats = computed<Array<{ icon: string; label: string; value: str
   {
     icon: 'shield',
     label: t('adminModeration.records'),
-    value: String(moderationRecords.value.length),
+    value: String(moderationResource.data.value?.totalItems ?? 0),
     tone: 'primary',
   },
   { icon: 'ai', label: t('adminModeration.openReports'), value: String(openReportCount.value), tone: 'info' },
@@ -366,19 +397,24 @@ watch(
   (report) => {
     if (!report) {
       reviewForm.status = 'IN_REVIEW'
-      reviewForm.reviewerNote = defaultReviewerNote.value
+      reviewForm.reviewerNote = ''
       return
     }
 
     reviewForm.status = report.status === 'IN_REVIEW' ? 'RESOLVED' : 'IN_REVIEW'
-    reviewForm.reviewerNote = report.reviewerNote || defaultReviewerNote.value
+    reviewForm.reviewerNote = report.reviewerNote || ''
   },
   { immediate: true },
 )
 
+watch(reportPage, () => {
+  void aiReportsResource.reload()
+})
+
 function reloadAll(): void {
   void moderationResource.reload()
   void aiReportsResource.reload()
+  void reportCountsResource.reload()
 }
 
 async function reviewAiReport(): Promise<void> {
@@ -416,7 +452,7 @@ async function reviewAiReport(): Promise<void> {
       status: submittedStatus,
       reviewerNote: reviewForm.reviewerNote.trim(),
     })
-    await aiReportsResource.reload()
+    await Promise.all([aiReportsResource.reload(), reportCountsResource.reload()])
     actionSuccess.value = t('adminModeration.updated', { status: formatStatus(submittedStatus) })
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('adminModeration.updateError'))
@@ -445,10 +481,7 @@ function formatStatus(status: string): string {
   }
   const key = keys[status.toUpperCase()]
   if (key) return t(`adminModeration.${key}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+  return humanizeEnumValue(status)
 }
 
 function formatTargetType(targetType: string): string {
@@ -488,21 +521,6 @@ function formatReportReason(reason: string): string {
   const key = (keys as Record<string, string | undefined>)[reason.toUpperCase()]
   if (key) return t(`adminModeration.${key}`)
   return formatStatus(reason)
-}
-
-function reportStatusTone(status: string): PillTone {
-  switch (status) {
-    case 'PENDING_REVIEW':
-      return 'warning' as const
-    case 'IN_REVIEW':
-      return 'info' as const
-    case 'RESOLVED':
-      return 'success' as const
-    case 'DISMISSED':
-      return 'primary' as const
-    default:
-      return 'primary' as const
-  }
 }
 
 function isClosedStatus(status?: string | null): boolean {

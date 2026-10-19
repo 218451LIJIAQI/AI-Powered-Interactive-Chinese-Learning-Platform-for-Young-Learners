@@ -20,23 +20,11 @@
 
             <div class="field">
               <label for="admin-settings-language">{{ t('adminSettings.languageAria') }}</label>
-              <select
-                id="admin-settings-language"
-                v-model="ui.locale"
-                class="select"
-                :disabled="platformSettingsReadOnly"
-                @change="ui.setLocale(ui.locale)"
-              >
+              <select id="admin-settings-language" v-model="ui.locale" class="select" @change="ui.setLocale(ui.locale)">
                 <option value="en">English (EN)</option>
                 <option value="ms">Bahasa Melayu (BM)</option>
                 <option value="zh-CN">简体中文</option>
               </select>
-            </div>
-
-            <div class="form-actions">
-              <button class="btn btn-primary" type="button" :disabled="platformSettingsReadOnly" @click="saveLocale">
-                {{ t('adminSettings.save') }}
-              </button>
             </div>
           </article>
 
@@ -221,7 +209,14 @@
                   @read="markAdminNotificationRead"
                 >
                   <span class="admin-feed-item">
-                    <span class="admin-notification-dot" :class="{ 'is-unread': item.status !== 'READ' }" />
+                    <span
+                      class="admin-notification-dot"
+                      :class="{ 'is-unread': item.status !== 'READ' }"
+                      aria-hidden="true"
+                    />
+                    <span v-if="item.status !== 'READ'" class="sr-only">{{
+                      statusLabel('notificationStatus', 'UNREAD')
+                    }}</span>
                     <span class="admin-feed-copy">
                       <span class="admin-feed-title">{{ item.title }}</span>
                       <span class="admin-feed-text">{{ item.message }}</span>
@@ -322,12 +317,7 @@
             <button class="btn btn-ghost" type="button" @click="resetAuditFilters">
               {{ t('adminSettings.auditReset') }}
             </button>
-            <button
-              class="btn btn-primary"
-              type="submit"
-              :disabled="auditResource.loading.value"
-              :aria-busy="auditResource.loading.value"
-            >
+            <button class="btn btn-primary" type="submit">
               <IconGlyph name="filter" :size="16" />
               <span>{{ t('adminSettings.auditApply') }}</span>
             </button>
@@ -335,7 +325,7 @@
         </form>
 
         <div
-          v-if="filteredAuditLogs.length"
+          v-if="normalizedAuditLogs.length"
           class="data-table-wrap admin-table-wrap"
           role="region"
           :aria-label="t('adminSettings.auditLogs')"
@@ -351,7 +341,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in filteredAuditLogs" :key="item.id">
+              <tr v-for="item in normalizedAuditLogs" :key="item.id">
                 <td>
                   <div class="admin-table-cell">
                     <span class="admin-icon-badge is-sm" :class="`admin-tone-${item.tone}`" aria-hidden="true">
@@ -377,14 +367,6 @@
             </tbody>
           </table>
         </div>
-        <StatePanel
-          v-else-if="auditResource.loading.value"
-          compact
-          tone="loading"
-          icon="progress"
-          :title="t('adminSettings.auditLoading')"
-          :message="t('adminSettings.auditHint')"
-        />
         <StatePanel
           v-else
           compact
@@ -423,6 +405,7 @@ import { useRouter } from 'vue-router'
 import { adminApi, notificationsApi, systemApi } from '@/api/services'
 import { appEnv } from '@/config/env'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import { EMPTY_ADMIN_ANALYTICS, EMPTY_HEALTH, previewHealth } from '@/components/admin/adminDisplay'
 import type { AdminTone } from '@/components/admin/adminTone'
 import DataNotice from '@/components/common/DataNotice.vue'
 import NotificationLinkButton from '@/components/common/NotificationLinkButton.vue'
@@ -435,6 +418,7 @@ import { useStatusLabels } from '@/composables/useStatusLabels'
 import { useResource } from '@/composables/useResource'
 import { adminAnalytics, adminAuditLogs } from '@/demo/data'
 import { adminSettingsMessages } from '@/plugins/adminSettingsMessages'
+import { aiSafetyMessages } from '@/plugins/aiSafetyMessages'
 import { useUiStore } from '@/stores/ui'
 import type { AdminPlatformSettingsResponse, AuditLogResponse, PageResponse } from '@/types/api'
 import { auditLogQuery, isValidAuditDateRange, type AuditLogFilterForm } from '@/utils/auditLog'
@@ -445,9 +429,9 @@ import { announceNotificationsRead } from '@/utils/notifications'
 const router = useRouter()
 const { t } = useI18n({
   messages: {
-    en: { adminSettings: adminSettingsMessages.en },
-    ms: { adminSettings: adminSettingsMessages.ms },
-    'zh-CN': { adminSettings: adminSettingsMessages['zh-CN'] },
+    en: { adminSettings: adminSettingsMessages.en, aiSafety: aiSafetyMessages.en },
+    ms: { adminSettings: adminSettingsMessages.ms, aiSafety: aiSafetyMessages.ms },
+    'zh-CN': { adminSettings: adminSettingsMessages['zh-CN'], aiSafety: aiSafetyMessages['zh-CN'] },
   },
 })
 const ui = useUiStore()
@@ -459,15 +443,11 @@ const DEFAULT_PLATFORM_NAME = 'AI-Powered Interactive Chinese Learning Platform 
 
 const platformSettingsFallback: AdminPlatformSettingsResponse = {
   platformName: DEFAULT_PLATFORM_NAME,
-  aiDisclaimerText: t('adminSettings.defaultDisclaimer'),
+  aiDisclaimerText: t('aiSafety.disclaimer'),
   sensitiveWordFilter: true,
   aiSafetyCheck: true,
 }
-const healthFallback = {
-  status: 'UP',
-  service: 'backend',
-  timestamp: new Date().toISOString(),
-}
+const healthFallback = previewHealth()
 
 const AUDIT_PAGE_SIZE = 10
 const AUDIT_ACTION_TYPE_SUGGESTIONS = [
@@ -502,43 +482,20 @@ const auditResource = useResource(
   auditFallback,
 )
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
-const notificationsResource = useResource(() => adminApi.notifications({ size: 8 }), [])
+const notificationsResource = useResource(() => notificationsApi.list({ size: 8 }), [])
 const platformSettingsResource = useResource(() => adminApi.platformSettings(), platformSettingsFallback)
 const healthResource = useResource(() => systemApi.health(), healthFallback)
-const emptyHealth = {
-  status: 'UNKNOWN',
-  service: 'backend',
-  timestamp: '',
-}
-
-const emptyAnalytics = {
-  overview: {
-    totalStudents: 0,
-    totalTeachers: 0,
-    pendingTeacherApprovals: 0,
-    approvedTeachers: 0,
-    rejectedTeachers: 0,
-    publishedContentItems: 0,
-    moderationActions: 0,
-    auditLogEntries: 0,
-    adminUnreadNotifications: 0,
-    aiRequests: 0,
-  },
-  userRegistrationTrend: [],
-  teacherApprovalBreakdown: [],
-  contentStatusBreakdown: [],
-  aiStatusBreakdown: [],
-}
 
 const auditPage = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? auditFallback : null))
 const auditLogs = computed(() => auditPage.value?.items ?? [])
 const analytics = computed(
-  () => analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : emptyAnalytics),
+  () =>
+    analyticsResource.data.value ?? (analyticsResource.usingFallback.value ? adminAnalytics : EMPTY_ADMIN_ANALYTICS),
 )
 const adminNotifications = computed(() => notificationsResource.data.value ?? [])
 const platformSettings = computed(() => platformSettingsResource.data.value ?? platformSettingsFallback)
 const health = computed(
-  () => healthResource.data.value ?? (healthResource.usingFallback.value ? healthFallback : emptyHealth),
+  () => healthResource.data.value ?? (healthResource.usingFallback.value ? healthFallback : EMPTY_HEALTH),
 )
 
 const pageLoading = computed(
@@ -604,6 +561,7 @@ const safetyOptions = computed<Array<{ key: LocalSettingKey; title: string; desc
   },
 ])
 
+/** The server filters, orders (newest first) and pages the audit log (D16); rows are only mapped for display here. */
 const normalizedAuditLogs = computed(() =>
   auditLogs.value.map((item) => {
     const action = item.actionType.toUpperCase()
@@ -612,7 +570,10 @@ const normalizedAuditLogs = computed(() =>
         ? 'SECURITY'
         : action.includes('APPROVE') || action.includes('REJECT') || action.includes('ADMIN')
           ? 'ADMIN_ACTION'
-          : action.includes('CONTENT') || action.includes('UPDATE')
+          : action.includes('CONTENT') ||
+              action.includes('UPDATE') ||
+              action.includes('CREATE') ||
+              action.includes('DELETE')
             ? 'CONTENT_CHANGE'
             : 'MODERATION'
 
@@ -664,8 +625,6 @@ const normalizedAuditLogs = computed(() =>
 /** Live check of the date range so the error shows next to the "To" field before the filters are applied. */
 const auditRangeInvalid = computed(() => !isValidAuditDateRange(auditFilters))
 
-/** The server filters, orders (newest first) and pages the audit log (D16). */
-const filteredAuditLogs = computed(() => normalizedAuditLogs.value)
 const totalAuditCount = computed(() => auditPage.value?.totalItems ?? 0)
 const totalPages = computed(() => Math.max(1, auditPage.value?.totalPages ?? 1))
 const paginationLabel = computed(() => {
@@ -709,17 +668,6 @@ function markAdminNotificationRead(notificationId: number): void {
 function toggleSetting(key: LocalSettingKey): void {
   if (platformSettingsFormDisabled.value) return
   localSettings.value[key] = !localSettings.value[key]
-}
-
-function saveLocale(): void {
-  if (platformSettingsReadOnly.value) {
-    actionError.value = t('adminSettings.previewSettings')
-    actionSuccess.value = null
-    return
-  }
-  ui.setLocale(ui.locale)
-  actionError.value = null
-  actionSuccess.value = t('adminSettings.localeSaved')
 }
 
 async function saveDisclaimer(): Promise<void> {

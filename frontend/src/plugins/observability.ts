@@ -28,6 +28,8 @@ export function initObservability(app: App, router: Router): void {
     integrations: [Sentry.browserTracingIntegration({ router })],
     tracesSampleRate: appEnv.environment === 'production' ? 0.05 : 0,
     beforeSend: sanitizeSentryEvent,
+    // Tracing events bypass beforeSend, so URLs and span data are scrubbed here too.
+    beforeSendTransaction: sanitizeSentryEvent,
   })
 }
 

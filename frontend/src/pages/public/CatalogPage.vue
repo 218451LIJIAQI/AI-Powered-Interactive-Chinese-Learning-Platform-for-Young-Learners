@@ -299,15 +299,10 @@ const categoriesResource = useResource(() => publicApi.getCategories(), demoCate
 const signedInWithoutStudentRole = computed(() => auth.isAuthenticated && !auth.hasRole('STUDENT'))
 const isStudentViewer = computed(() => auth.hasRole('STUDENT') && (auth.isAuthenticated || auth.isPreviewSession))
 
-const levels = computed<LearningLevel[]>(
-  () => levelsResource.data.value ?? (levelsResource.usingFallback.value ? demoLevels : []),
-)
-const categories = computed<LearningCategory[]>(
-  () => categoriesResource.data.value ?? (categoriesResource.usingFallback.value ? demoCategories : []),
-)
-const courses = computed<PublicCourseSummary[]>(
-  () => coursesResource.data.value?.items ?? (coursesResource.usingFallback.value ? publicCourses : []),
-)
+// useResource always holds data while it serves preview fixtures, so `?? []` only covers the live empty state.
+const levels = computed<LearningLevel[]>(() => levelsResource.data.value ?? [])
+const categories = computed<LearningCategory[]>(() => categoriesResource.data.value ?? [])
+const courses = computed<PublicCourseSummary[]>(() => coursesResource.data.value?.items ?? [])
 const courseTotalPages = computed(() =>
   coursesResource.usingFallback.value ? 1 : Math.max(1, coursesResource.data.value?.totalPages ?? 1),
 )
@@ -468,6 +463,11 @@ function goToStudentLearn(): void {
 }
 
 function goToAiHelperSignIn(): void {
+  // A signed-in (or preview) student goes straight there; the auth route would redirect them to their home page.
+  if (isStudentViewer.value) {
+    void router.push('/student/ai-helper')
+    return
+  }
   void router.push({ name: 'auth', query: { redirect: '/student/ai-helper' } })
 }
 

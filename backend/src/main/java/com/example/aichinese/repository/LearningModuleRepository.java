@@ -15,7 +15,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.LearningModule;
-import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.repository.projection.StatusCountProjection;
 
 public interface LearningModuleRepository extends JpaRepository<LearningModule, Long>, JpaSpecificationExecutor<LearningModule> {
@@ -35,8 +34,6 @@ public interface LearningModuleRepository extends JpaRepository<LearningModule, 
     @EntityGraph(value = LearningModule.GRAPH_DETAIL)
     @NonNull
     Page<LearningModule> findAll(@Nullable Specification<LearningModule> specification, @NonNull Pageable pageable);
-
-    long countByContentStatus(ContentStatus contentStatus);
 
     long countByTeacherId(Long teacherId);
 

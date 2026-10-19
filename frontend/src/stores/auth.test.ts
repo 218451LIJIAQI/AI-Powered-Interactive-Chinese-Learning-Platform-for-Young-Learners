@@ -10,13 +10,6 @@ const studentUser: CurrentUserResponse = {
   roles: ['STUDENT'],
 }
 
-const teacherPreviewUser: CurrentUserResponse = {
-  id: 2,
-  email: 'preview.teacher@example.com',
-  fullName: 'Preview Teacher',
-  roles: ['TEACHER'],
-}
-
 function authSessionFor(user: CurrentUserResponse, token: string): AuthResponse {
   return {
     token,
@@ -189,7 +182,7 @@ describe('auth store token storage', () => {
     expect(mocks.refresh).not.toHaveBeenCalled()
     expect(auth.token).toBeNull()
     expect(auth.previewRole).toBe('TEACHER')
-    expect(auth.currentUser).toEqual(teacherPreviewUser)
+    expect(auth.currentUser).toEqual(mocks.teacherPreviewUser)
   })
 
   it('refuses preview role selection when preview mode is not explicitly enabled', () => {
@@ -224,7 +217,7 @@ describe('auth store token storage', () => {
     auth.setPreviewRole('TEACHER')
 
     expect(auth.previewRole).toBe('TEACHER')
-    expect(auth.currentUser).toEqual(teacherPreviewUser)
+    expect(auth.currentUser).toEqual(mocks.teacherPreviewUser)
     expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBe('TEACHER')
 

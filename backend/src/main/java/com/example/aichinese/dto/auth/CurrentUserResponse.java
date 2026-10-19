@@ -48,10 +48,6 @@ public record CurrentUserResponse(
             currentLevel = normalizeOptionalText(currentLevel);
             institution = normalizeOptionalText(institution);
         }
-
-        public StudentProfileSummary(Long id, String displayName, String currentLevel, Integer totalPoints) {
-            this(id, displayName, currentLevel, totalPoints, null);
-        }
     }
 
     @JsonPropertyOrder({ "id", "teacherStatus", "bio", "rejectionReason" })

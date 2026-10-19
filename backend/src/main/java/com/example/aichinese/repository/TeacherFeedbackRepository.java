@@ -20,7 +20,7 @@ public interface TeacherFeedbackRepository extends JpaRepository<TeacherFeedback
     List<TeacherFeedback> findByTeacherIdAndStudentIdInOrderByCreatedAtDesc(Long teacherId, List<Long> studentIds);
 
     @EntityGraph(value = TeacherFeedback.GRAPH_DETAIL)
-    List<TeacherFeedback> findByStudentUserIdOrderByCreatedAtDesc(Long studentUserId);
+    Page<TeacherFeedback> findByStudentUserIdOrderByCreatedAtDesc(Long studentUserId, Pageable pageable);
 
     @EntityGraph(value = TeacherFeedback.GRAPH_DETAIL)
     Optional<TeacherFeedback> findByIdAndTeacherUserId(Long id, Long teacherUserId);

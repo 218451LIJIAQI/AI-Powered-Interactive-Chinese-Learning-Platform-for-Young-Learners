@@ -98,11 +98,12 @@ export function resolveApiError(reason: unknown, fallback?: string): string {
   return resolvedFallback
 }
 
-export function isUnauthorizedApiError(reason: unknown): boolean {
-  return (reason as ApiErrorPayload | null)?.response?.status === 401
-}
-
 /** True for HTTP 403, e.g. a pending or rejected teacher calling an approved-only teaching endpoint (D13). */
 export function isForbiddenApiError(reason: unknown): boolean {
   return (reason as ApiErrorPayload | null)?.response?.status === 403
+}
+
+/** HTTP status of a failed request, or null for network errors and non-HTTP failures. */
+export function apiErrorStatus(reason: unknown): number | null {
+  return (reason as ApiErrorPayload | null)?.response?.status ?? null
 }

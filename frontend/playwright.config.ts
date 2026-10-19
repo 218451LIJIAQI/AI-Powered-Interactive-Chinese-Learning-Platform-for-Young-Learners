@@ -9,7 +9,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || undefined,
     baseURL: 'http://127.0.0.1:5185',
-    trace: 'on-first-retry',
+    // No retries are configured, so keep the trace of every failing test.
+    trace: 'retain-on-failure',
   },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 5185 --strictPort',

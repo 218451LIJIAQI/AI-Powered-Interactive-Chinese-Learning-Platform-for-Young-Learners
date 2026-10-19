@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
     enablePreviewMode: false,
   },
   auth: {
-    isPreviewSession: false,
     isAuthenticated: false,
   },
 }))
@@ -26,10 +25,9 @@ vi.mock('@/stores/auth', () => ({
 
 const wrappers: VueWrapper[] = []
 
-function enablePreviewFallbacks(isPreviewSession = true): void {
+function enablePreviewFallbacks(): void {
   mocks.appEnv.useDemoData = true
   mocks.appEnv.enablePreviewMode = true
-  mocks.auth.isPreviewSession = isPreviewSession
 }
 
 function mountResource<T>(loader: () => Promise<T>, fallback?: (() => T) | T, immediate = true) {
@@ -55,7 +53,6 @@ describe('useResource guarded fallback behavior', () => {
   beforeEach(() => {
     mocks.appEnv.useDemoData = false
     mocks.appEnv.enablePreviewMode = false
-    mocks.auth.isPreviewSession = false
     mocks.auth.isAuthenticated = false
   })
 
@@ -78,23 +75,8 @@ describe('useResource guarded fallback behavior', () => {
     expect(resource.loading.value).toBe(false)
   })
 
-  it('uses preview fixtures without issuing a live request when preview mode is active', async () => {
-    enablePreviewFallbacks()
-    const fallback = { message: 'safe preview fixture' }
-    const loader = vi.fn().mockResolvedValue({ message: 'live data' })
-    const resource = mountResource(loader, () => fallback)
-
-    await flushPromises()
-
-    expect(loader).not.toHaveBeenCalled()
-    expect(resource.data.value).toEqual(fallback)
-    expect(resource.usingFallback.value).toBe(true)
-    expect(resource.error.value).toBeNull()
-    expect(resource.loading.value).toBe(false)
-  })
-
   it('uses preview fixtures for anonymous public preview pages without issuing a live request', async () => {
-    enablePreviewFallbacks(false)
+    enablePreviewFallbacks()
     const fallback = { message: 'anonymous preview fixture' }
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
     const resource = mountResource(loader, () => fallback)
@@ -129,7 +111,7 @@ describe('useResource guarded fallback behavior', () => {
   })
 
   it('never serves fixtures to a real signed-in user while the API answers, even in a preview build', async () => {
-    enablePreviewFallbacks(false)
+    enablePreviewFallbacks()
     mocks.auth.isAuthenticated = true
     const loader = vi.fn().mockResolvedValue({ message: 'live data' })
     const resource = mountResource(loader, { message: 'demo fixture' })
@@ -142,7 +124,7 @@ describe('useResource guarded fallback behavior', () => {
   })
 
   it('shows HTTP errors (e.g. 404) to a real signed-in user instead of demo data', async () => {
-    enablePreviewFallbacks(false)
+    enablePreviewFallbacks()
     mocks.auth.isAuthenticated = true
     const loader = vi.fn().mockRejectedValue({ response: { status: 404, data: { message: 'Lesson was not found.' } } })
     const resource = mountResource(loader, { message: 'demo fixture' })
@@ -155,7 +137,7 @@ describe('useResource guarded fallback behavior', () => {
   })
 
   it('falls back to the preview fixture for a signed-in user only when the API is unreachable', async () => {
-    enablePreviewFallbacks(false)
+    enablePreviewFallbacks()
     mocks.auth.isAuthenticated = true
     const loader = vi.fn().mockRejectedValue({ request: {} })
     const resource = mountResource(loader, { message: 'demo fixture' })

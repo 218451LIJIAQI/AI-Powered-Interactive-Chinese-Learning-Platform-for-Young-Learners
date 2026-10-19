@@ -261,6 +261,7 @@ import { useI18n } from 'vue-i18n'
 
 import { publicApi } from '@/api/services'
 import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
+import type { CourseSceneVariant } from '@/components/common/courseSceneVariant'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
@@ -274,7 +275,6 @@ import { landingMessages } from '@/plugins/landingMessages'
 import '@/styles/landing.css'
 import type { PublicCourseSummary } from '@/types/api'
 
-type CourseSceneVariant = 'panda' | 'people' | 'pagoda' | 'travel' | 'general'
 type FeatureTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink' | 'purple'
 
 const router = useRouter()
@@ -295,14 +295,7 @@ const featuredCoursesResource = useResource(() => publicApi.listCourses({ size: 
   totalItems: previewFeaturedCourses.length,
   totalPages: 1,
 })
-const liveFeaturedCourses = computed(() => featuredCoursesResource.data.value?.items ?? [])
-const featuredCourses = computed<PublicCourseSummary[]>(() =>
-  liveFeaturedCourses.value.length
-    ? liveFeaturedCourses.value
-    : featuredCoursesResource.usingFallback.value
-      ? previewFeaturedCourses
-      : [],
-)
+const featuredCourses = computed<PublicCourseSummary[]>(() => featuredCoursesResource.data.value?.items ?? [])
 
 const featureStrip = computed(
   () =>

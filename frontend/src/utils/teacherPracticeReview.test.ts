@@ -7,7 +7,6 @@ import {
   PRACTICE_REVIEW_FILTERS,
   matchesPracticeReviewFilter,
   pagePracticeSubmissions,
-  practiceMediaKind,
   replacePracticeSubmission,
   validatePracticeFeedbackMessage,
 } from './teacherPracticeReview'
@@ -25,11 +24,6 @@ describe('teacher practice review rules', () => {
     expect(validatePracticeFeedbackMessage('Good tone')).toBeNull()
     expect(validatePracticeFeedbackMessage('a'.repeat(PRACTICE_FEEDBACK_MAX_LENGTH))).toBeNull()
     expect(validatePracticeFeedbackMessage('a'.repeat(PRACTICE_FEEDBACK_MAX_LENGTH + 1))).toBe('tooLong')
-  })
-
-  it('picks the media player from the submission type', () => {
-    expect(practiceMediaKind({ submissionType: 'PRONUNCIATION_AUDIO', contentType: 'audio/webm' })).toBe('audio')
-    expect(practiceMediaKind({ submissionType: 'HANDWRITING_IMAGE', contentType: 'image/png' })).toBe('image')
   })
 
   it('pages preview fixtures by review status, newest first', () => {

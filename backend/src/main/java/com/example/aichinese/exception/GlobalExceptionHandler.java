@@ -34,6 +34,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.validation.method.ParameterErrors;
@@ -192,6 +193,15 @@ public class GlobalExceptionHandler {
             return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                     .body(failure(FriendlyErrorMessageResolver.uploadTooLargeMessage()));
         }
+        return badRequest(FriendlyErrorMessageResolver.uploadFailedMessage());
+    }
+
+    /** A required multipart part (for example {@code file}) is missing: a client error, not a server fault. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingServletRequestPartException(
+            MissingServletRequestPartException exception) {
+        log.warn("Missing multipart part rejected with HTTP 400 [requestId={}]: {}",
+                requestId(), exception.getRequestPartName());
         return badRequest(FriendlyErrorMessageResolver.uploadFailedMessage());
     }
 

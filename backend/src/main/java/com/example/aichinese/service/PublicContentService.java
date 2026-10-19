@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -19,13 +21,17 @@ import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.content.PublicCourseDetailResponse;
 import com.example.aichinese.dto.content.PublicCourseSummaryResponse;
 import com.example.aichinese.entity.CoursePackage;
+import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
+import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.ManagedContentType;
+import com.example.aichinese.entity.enums.PackageItemType;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.CoursePackageRepository;
+import com.example.aichinese.repository.LearningModuleRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.util.PaginationUtils;
@@ -40,6 +46,7 @@ public class PublicContentService {
     private static final int PUBLIC_PACKAGE_ITEM_LIMIT = 100;
 
     private final LessonRepository lessonRepository;
+    private final LearningModuleRepository learningModuleRepository;
     private final CoursePackageRepository coursePackageRepository;
     private final PackageItemRepository packageItemRepository;
     private final ContentManagementMapper contentManagementMapper;
@@ -47,11 +54,13 @@ public class PublicContentService {
 
     public PublicContentService(
             LessonRepository lessonRepository,
+            LearningModuleRepository learningModuleRepository,
             CoursePackageRepository coursePackageRepository,
             PackageItemRepository packageItemRepository,
             ContentManagementMapper contentManagementMapper,
             EntityManager entityManager) {
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
+        this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
         this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
@@ -116,14 +125,38 @@ public class PublicContentService {
                                 TeacherStatus.APPROVED)
                         .filter(ContentVisibilityPolicy::isPackageVisible)
                         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published course was not found."));
-                yield contentManagementMapper.toPublicCourseDetail(
-                        coursePackage,
-                        packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(
-                                coursePackage.getId(),
-                                PageRequest.of(0, PUBLIC_PACKAGE_ITEM_LIMIT)).getContent());
+                yield contentManagementMapper.toPublicCourseDetail(coursePackage, publicPackageItems(coursePackage));
             }
             case MODULE -> throw new ResponseStatusException(NOT_FOUND, "Published course was not found.");
         };
+    }
+
+    /**
+     * Items of a published course that are themselves visible (FR-CONT-13, FR-PUB-01): a course may list
+     * lessons or modules that are still Draft, Submitted or Rejected, and their titles must stay private.
+     */
+    private List<PackageItem> publicPackageItems(CoursePackage coursePackage) {
+        List<PackageItem> items = packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(
+                coursePackage.getId(),
+                PageRequest.of(0, PUBLIC_PACKAGE_ITEM_LIMIT)).getContent();
+        Set<Long> visibleLessonIds = lessonRepository.findAllById(itemIds(items, PackageItemType.LESSON)).stream()
+                .filter(ContentVisibilityPolicy::isLessonVisible)
+                .map(Lesson::getId)
+                .collect(Collectors.toSet());
+        Set<Long> visibleModuleIds = learningModuleRepository.findAllById(itemIds(items, PackageItemType.MODULE)).stream()
+                .filter(module -> module.getContentStatus() == ContentStatus.PUBLISHED
+                        && ContentVisibilityPolicy.isActiveApprovedTeacher(module.getTeacher()))
+                .map(LearningModule::getId)
+                .collect(Collectors.toSet());
+        return items.stream()
+                .filter(item -> item.getItemType() == PackageItemType.LESSON
+                        ? visibleLessonIds.contains(item.getItemId())
+                        : visibleModuleIds.contains(item.getItemId()))
+                .toList();
+    }
+
+    private static List<Long> itemIds(List<PackageItem> items, PackageItemType type) {
+        return items.stream().filter(item -> item.getItemType() == type).map(PackageItem::getItemId).toList();
     }
 
     private long countPublicCourses(

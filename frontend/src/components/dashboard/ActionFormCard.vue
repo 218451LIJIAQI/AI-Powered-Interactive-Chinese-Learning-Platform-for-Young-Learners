@@ -36,8 +36,8 @@ interface Props {
   title: string
   subtitle?: string
   icon?: string
-  submitLabel?: string
-  submittingLabel?: string
+  submitLabel: string
+  submittingLabel: string
   submitting?: boolean
   disabled?: boolean
   /** Demote the submit button when a view already has a primary action (one primary per view). */
@@ -47,8 +47,6 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   subtitle: '',
   icon: 'dashboard',
-  submitLabel: 'Save',
-  submittingLabel: 'Saving...',
   submitting: false,
   disabled: false,
   submitVariant: 'primary',

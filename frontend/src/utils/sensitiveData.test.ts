@@ -16,13 +16,13 @@ describe('sensitive data scrubbing', () => {
     expect(isSensitiveKey('email')).toBe(true)
     expect(isSensitiveKey('reset_token')).toBe(true)
     expect(isSensitiveKey('sessionId')).toBe(true)
-    expect(isSensitiveKey('stripeApiKey')).toBe(true)
+    expect(isSensitiveKey('openAiApiKey')).toBe(true)
     expect(isSensitiveKey('displayName')).toBe(false)
   })
 
   it('redacts tokens, passwords, emails, cookies, bearer credentials, and JSON secret fields', () => {
     const scrubbed = scrubSensitiveValue(
-      'Authorization: Bearer abc.def token=reset-secret password:super-secret email=learner@example.com {"apiKey":"sk_live_secret"}',
+      'Authorization: Bearer abc.def token=reset-secret password:super-secret email=learner@example.com {"apiKey":"test_secret_value"}',
     )
 
     expect(scrubbed).toContain('[Filtered]')
@@ -33,7 +33,7 @@ describe('sensitive data scrubbing', () => {
     expect(scrubbed).not.toContain('reset-secret')
     expect(scrubbed).not.toContain('super-secret')
     expect(scrubbed).not.toContain('learner@example.com')
-    expect(scrubbed).not.toContain('sk_live_secret')
+    expect(scrubbed).not.toContain('test_secret_value')
   })
 
   it('redacts sensitive absolute URL query values while preserving safe navigation context', () => {

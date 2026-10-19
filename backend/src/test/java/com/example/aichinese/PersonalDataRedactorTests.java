@@ -44,15 +44,12 @@ class PersonalDataRedactorTests {
                 + "count 1 2 3 4 5 6 7 8 9 10. 你好 (nǐ hǎo)!";
 
         assertThat(PersonalDataRedactor.redact(learningText)).isEqualTo(learningText);
-        assertThat(PersonalDataRedactor.containsDirectIdentifier(learningText)).isFalse();
     }
 
     @Test
     void handlesNullAndEmptyInput() {
         assertThat(PersonalDataRedactor.redact(null)).isNull();
         assertThat(PersonalDataRedactor.redact("")).isEmpty();
-        assertThat(PersonalDataRedactor.containsDirectIdentifier(null)).isFalse();
-        assertThat(PersonalDataRedactor.containsDirectIdentifier("a@b.co")).isTrue();
     }
 
     @Test

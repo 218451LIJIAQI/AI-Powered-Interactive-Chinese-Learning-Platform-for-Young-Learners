@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
-import com.example.aichinese.dto.admin.AdminStudentListItemResponse;
 import com.example.aichinese.dto.admin.AdminTeacherDetailResponse;
 import com.example.aichinese.dto.admin.AdminTeacherListItemResponse;
 import com.example.aichinese.dto.admin.AdminUserListItemResponse;
@@ -28,11 +27,11 @@ import com.example.aichinese.dto.admin.ApproveTeacherRequest;
 import com.example.aichinese.dto.admin.RejectTeacherRequest;
 import com.example.aichinese.dto.ai.AdminAiUsageLogResponse;
 import com.example.aichinese.dto.analytics.AdminAnalyticsResponse;
-import com.example.aichinese.dto.content.ContentApprovalRequest;
 import com.example.aichinese.dto.content.ContentSubmissionDetailResponse;
 import com.example.aichinese.dto.content.ContentSubmissionResponse;
 import com.example.aichinese.dto.dashboard.AdminDashboardResponse;
 import com.example.aichinese.dto.learning.LiveClassResponse;
+import com.example.aichinese.dto.review.ContentReviewNoteRequest;
 import com.example.aichinese.entity.enums.ManagedContentType;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AdminContentReviewService;
@@ -219,15 +218,6 @@ public class AdminController {
                 aiService.getUsageLogs(featureType, status, userRole, dateFrom, dateTo, page, size));
     }
 
-    @GetMapping("/students")
-    public ApiResponse<PageResponse<AdminStudentListItemResponse>> listStudents(
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "10") int size) {
-        return ApiResponse.success(
-                "Students retrieved successfully.",
-                adminUserManagementService.listStudents(page, size));
-    }
-
     @GetMapping("/content/submissions")
     public ApiResponse<PageResponse<ContentSubmissionResponse>> listContentSubmissions(
             @Size(max = 40, message = "Content type must not exceed 40 characters.")
@@ -260,7 +250,7 @@ public class AdminController {
             @Size(max = 40, message = "Content type must not exceed 40 characters.")
             @PathVariable String contentType,
             @PathVariable Long id,
-            @Valid @RequestBody(required = false) ContentApprovalRequest request) {
+            @Valid @RequestBody(required = false) ContentReviewNoteRequest request) {
         return ApiResponse.success(
                 "Content archived successfully.",
                 adminContentReviewService.archiveContent(
@@ -274,7 +264,7 @@ public class AdminController {
         return request == null ? null : request.note();
     }
 
-    private static String noteOf(ContentApprovalRequest request) {
+    private static String noteOf(ContentReviewNoteRequest request) {
         return request == null ? null : request.note();
     }
 }

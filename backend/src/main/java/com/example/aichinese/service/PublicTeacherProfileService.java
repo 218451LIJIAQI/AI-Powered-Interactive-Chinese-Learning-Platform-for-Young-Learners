@@ -44,7 +44,7 @@ public class PublicTeacherProfileService {
                 .filter(ContentVisibilityPolicy::isActiveApprovedTeacher)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Approved teacher profile was not found."));
 
-        long courseCount = lessonRepository.countByTeacherIdAndContentStatus(teacherId, ContentStatus.PUBLISHED)
+        long courseCount = lessonRepository.countPublicLessonsByTeacherId(teacherId, ContentStatus.PUBLISHED)
                 + coursePackageRepository.countByTeacherIdAndContentStatus(teacherId, ContentStatus.PUBLISHED);
         return teacherManagementMapper.toPublicTeacherProfileResponse(teacherProfile, clampToInt(courseCount));
     }

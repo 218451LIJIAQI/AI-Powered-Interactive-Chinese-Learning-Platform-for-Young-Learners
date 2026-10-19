@@ -73,8 +73,9 @@ public final class QuizScoring {
         return new ScoredAnswer(isCorrect, submitted, null, null);
     }
 
+    /** Whole percentage rounded down, so 79.6 % never meets an "at least 80 %" rule (SDD 5.5). */
     public static int percentage(int score, int maxScore) {
-        return maxScore <= 0 ? 0 : (int) Math.round(score * 100.0 / maxScore);
+        return maxScore <= 0 ? 0 : (int) (score * 100L / maxScore);
     }
 
     /** NFKC (full-width to half-width), trimmed, inner whitespace collapsed, lower-cased. */

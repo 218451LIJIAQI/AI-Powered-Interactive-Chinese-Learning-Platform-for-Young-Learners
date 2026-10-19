@@ -9,10 +9,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "bahasaMelayuMeaning",
         "simpleExplanation",
         "exampleSentence",
-        "exampleSentencePinyin",
         "exampleSentenceTranslation",
-        "imagePromptOrDescription",
-        "miniPracticeQuestion",
         "encouragement",
         "status"
 })
@@ -23,10 +20,7 @@ public record AiVocabularyHelperResponse(
         String bahasaMelayuMeaning,
         String simpleExplanation,
         String exampleSentence,
-        String exampleSentencePinyin,
         String exampleSentenceTranslation,
-        String imagePromptOrDescription,
-        String miniPracticeQuestion,
         String encouragement,
         String status) {
 }

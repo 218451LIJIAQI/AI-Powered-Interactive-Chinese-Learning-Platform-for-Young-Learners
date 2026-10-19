@@ -11,7 +11,7 @@ export const demoUsers: Record<UserRole, CurrentUserResponse> = {
       id: 201,
       displayName: 'Learner',
       currentLevel: 'Level 3 Developing Learner',
-      totalPoints: 850,
+      totalPoints: 250,
       institution: 'Universiti Malaya',
     },
     teacherProfile: null,

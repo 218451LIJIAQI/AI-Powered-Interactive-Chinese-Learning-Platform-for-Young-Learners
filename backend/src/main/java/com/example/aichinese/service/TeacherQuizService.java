@@ -201,13 +201,15 @@ public class TeacherQuizService {
     }
 
     @Transactional
-    public void deleteQuiz(SecurityUserDetails currentUser, Long quizId) {
+    public void archiveQuiz(SecurityUserDetails currentUser, Long quizId) {
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         requireLessonNotArchived(quiz.getLesson());
         if (quiz.getContentStatus() == ContentStatus.ARCHIVED) {
             return;
         }
+        // Same rule as modules, lessons and courses: nothing is pulled out of the admin review queue.
+        teacherContentAccessService.validateArchivableStatus(quiz.getContentStatus(), "Quiz");
         quiz.setContentStatus(ContentStatus.ARCHIVED);
         quizRepository.save(quiz);
         auditLogService.record(teacherProfile.getUser(), ACTION_QUIZ_ARCHIVE, AUDIT_TARGET_QUIZ, quiz.getId(),
