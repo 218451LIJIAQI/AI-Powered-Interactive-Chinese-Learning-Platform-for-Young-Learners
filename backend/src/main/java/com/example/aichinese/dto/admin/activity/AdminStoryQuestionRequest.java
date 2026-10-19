@@ -22,7 +22,12 @@ public record AdminStoryQuestionRequest(
 
         @PositiveOrZero(message = "Sort order must be non-negative.")
         @Max(value = 10_000, message = "Sort order must not exceed 10000.")
-        Integer sortOrder) {
+        Integer sortOrder,
+
+        /** 0-based index of the correct option (kept on the server; required before review). */
+        @PositiveOrZero(message = "Correct option index must be non-negative.")
+        @Max(value = 50, message = "Correct option index must not exceed 50.")
+        Integer correctOptionIndex) {
 
     public AdminStoryQuestionRequest {
         questionText = strip(questionText);

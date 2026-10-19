@@ -1,121 +1,145 @@
 <template>
-  <section class="public-page auth-reset-page">
-    <div class="auth-reset-shell">
-      <aside class="auth-reset-art">
+  <section class="public-page auth-showcase-page">
+    <div class="auth-showcase-shell">
+      <aside class="auth-showcase-art">
         <AppBrand />
 
-        <div class="auth-reset-art-copy">
-          <span class="auth-reset-kicker">{{ t('recovery.reset.eyebrow') }}</span>
+        <div class="auth-showcase-copy">
+          <p class="auth-showcase-eyebrow">{{ t('recovery.reset.eyebrow') }}</p>
           <h1>
             {{ t('recovery.reset.heroStart') }}
             <span>{{ t('recovery.reset.heroHighlight') }}</span>
           </h1>
-          <p>{{ t('recovery.reset.heroCopy') }}</p>
+          <p class="auth-showcase-lead">{{ t('recovery.reset.heroCopy') }}</p>
         </div>
 
-        <div class="auth-reset-scene">
-          <span class="auth-reset-cloud auth-reset-cloud--one" />
-          <span class="auth-reset-cloud auth-reset-cloud--two" />
-          <span class="auth-reset-bamboo" />
-          <span class="auth-reset-pagoda" />
-          <PandaIllustration class="auth-reset-panda" :size="190" outfit="#6f4cff" accent="#ffcc2f" />
+        <div class="auth-showcase-scene" aria-hidden="true">
+          <span class="auth-scene-bamboo" />
+          <span class="auth-scene-card auth-scene-card--one" />
+          <span class="auth-scene-card auth-scene-card--two" />
+          <PandaIllustration class="auth-showcase-panda" :size="190" outfit="#6f4cff" accent="#ffcc2f" />
         </div>
 
-        <div class="auth-reset-safety-card">
-          <strong><IconGlyph name="shield" :size="18" /> {{ t('recovery.reset.safetyTitle') }}</strong>
-          <span>{{ t('recovery.reset.safetyCopy') }}</span>
+        <div class="auth-showcase-safety">
+          <span class="auth-showcase-safety-icon" aria-hidden="true"><IconGlyph name="shield" :size="20" /></span>
+          <div>
+            <strong>{{ t('recovery.reset.safetyTitle') }}</strong>
+            <span>{{ t('recovery.reset.safetyCopy') }}</span>
+          </div>
         </div>
       </aside>
 
-      <div class="surface-card auth-reset-card">
-        <div class="auth-reset-language"><LanguageSwitcher size="compact" /></div>
-        <div class="auth-reset-card-head">
-          <span class="auth-reset-card-icon"><IconGlyph name="safe" :size="24" /></span>
+      <section class="auth-showcase-card">
+        <div class="auth-showcase-topbar"><LanguageSwitcher size="compact" /></div>
+
+        <div class="auth-recovery-head">
+          <span class="auth-recovery-icon" aria-hidden="true"><IconGlyph name="safe" :size="22" /></span>
           <div class="auth-form-title">
             <h2>{{ t('recovery.reset.title') }}</h2>
             <p>{{ t('recovery.reset.cardCopy') }}</p>
           </div>
         </div>
 
-        <div v-if="error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
+        <div v-if="error" id="reset-error" class="alert alert-danger" role="alert" aria-live="assertive">
+          <IconGlyph name="alert" :size="18" />
           <span>{{ error }}</span>
         </div>
 
-        <div v-if="success" class="soft-banner auth-alert auth-alert--success" role="status" aria-live="polite">
+        <div v-if="success" class="alert alert-success" role="status" aria-live="polite">
+          <IconGlyph name="status" :size="18" />
           <span>{{ success }}</span>
         </div>
 
-        <form class="auth-reset-form" @submit.prevent="submitReset">
+        <form class="auth-form-panel" @submit.prevent="submitReset">
           <div class="field">
-            <label for="reset-token">{{ t('recovery.reset.token') }}</label>
+            <label for="reset-token">
+              {{ t('recovery.reset.token') }}<span class="required-mark" aria-hidden="true">*</span>
+            </label>
             <input
               id="reset-token"
               v-model="token"
-              class="input auth-input"
+              class="input"
               autocomplete="one-time-code"
+              aria-required="true"
               :placeholder="t('recovery.reset.tokenPlaceholder')"
             />
           </div>
 
           <div class="field">
-            <label for="reset-password">{{ t('recovery.reset.newPassword') }}</label>
+            <label for="reset-password">
+              {{ t('recovery.reset.newPassword') }}<span class="required-mark" aria-hidden="true">*</span>
+            </label>
             <input
               id="reset-password"
               v-model="password"
-              class="input auth-input"
+              class="input"
               autocomplete="new-password"
               type="password"
+              aria-required="true"
               :placeholder="t('recovery.reset.newPasswordPlaceholder')"
+              :aria-invalid="Boolean(error)"
+              :aria-describedby="error ? 'reset-error reset-password-strength' : 'reset-password-strength'"
             />
           </div>
 
-          <div class="auth-reset-strength">
-            <div class="row-between">
+          <div id="reset-password-strength" class="auth-strength">
+            <p class="auth-steps-head">
               <span>{{ t('recovery.reset.readiness') }}</span>
               <strong>{{ passwordStrengthLabel }}</strong>
-            </div>
-            <div class="auth-reset-strength-track">
+            </p>
+            <div class="auth-reset-strength-track" aria-hidden="true">
               <span :class="passwordStrengthClass" :style="{ width: passwordStrengthWidth }" />
             </div>
-            <div class="auth-reset-check-grid">
-              <span v-for="check in passwordChecks" :key="check.label" :class="{ 'is-met': check.met }">
-                <IconGlyph :name="passwordCheckIcon(check.met)" :size="14" /> {{ check.label }}
-              </span>
-            </div>
+            <ul class="auth-check-list">
+              <li v-for="check in passwordChecks" :key="check.label" :class="{ 'is-met': check.met }">
+                <IconGlyph :name="passwordCheckIcon(check.met)" :size="16" />
+                <span>{{ check.label }}</span>
+              </li>
+            </ul>
           </div>
 
           <div class="field">
-            <label for="reset-confirm-password">{{ t('recovery.reset.confirmPassword') }}</label>
+            <label for="reset-confirm-password">
+              {{ t('recovery.reset.confirmPassword') }}<span class="required-mark" aria-hidden="true">*</span>
+            </label>
             <input
               id="reset-confirm-password"
               v-model="confirmPassword"
-              class="input auth-input"
+              class="input"
               autocomplete="new-password"
               type="password"
+              aria-required="true"
               :placeholder="t('recovery.reset.confirmPlaceholder')"
+              :aria-invalid="confirmMismatch"
+              :aria-describedby="confirmMismatch ? 'reset-confirm-error' : undefined"
             />
+            <p v-if="confirmMismatch" id="reset-confirm-error" class="field-error">
+              {{ t('recovery.reset.mismatch') }}
+            </p>
           </div>
 
-          <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmit" type="submit">
+          <button
+            class="btn btn-primary btn-lg btn-block auth-submit-button"
+            :disabled="!canSubmit"
+            :aria-busy="submitting"
+            type="submit"
+          >
             <span>{{ submitLabel }}</span>
-            <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
+            <IconGlyph name="chevronRight" :size="18" />
           </button>
         </form>
 
-        <div class="auth-reset-help-row">
-          <span>{{ t('recovery.reset.rememberPassword') }}</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/auth">{{
-            t('recovery.reset.backSignIn')
-          }}</RouterLink>
+        <div class="auth-recovery-links">
+          <p>
+            <span>{{ t('recovery.reset.rememberPassword') }}</span>
+            <RouterLink class="btn btn-link" to="/auth">{{ t('recovery.reset.backSignIn') }}</RouterLink>
+          </p>
+          <p>
+            <span>{{ t('recovery.reset.needLink') }}</span>
+            <RouterLink class="btn btn-link" to="/forgot-password">{{ t('recovery.reset.requestOne') }}</RouterLink>
+          </p>
         </div>
-
-        <div class="auth-reset-help-row">
-          <span>{{ t('recovery.reset.needLink') }}</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/forgot-password">{{
-            t('recovery.reset.requestOne')
-          }}</RouterLink>
-        </div>
-      </div>
+      </section>
     </div>
   </section>
 </template>
@@ -134,6 +158,7 @@ import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { isPasswordLengthValid } from '@/utils/password'
 import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
+import '@/styles/auth.css'
 
 const route = useRoute()
 const router = useRouter()
@@ -141,7 +166,7 @@ const { t } = useI18n({
   messages: {
     en: { recovery: recoveryMessages.en },
     ms: { recovery: recoveryMessages.ms },
-    zh: { recovery: recoveryMessages.zh },
+    'zh-CN': { recovery: recoveryMessages['zh-CN'] },
   },
 })
 
@@ -157,6 +182,8 @@ const passwordStrengthKeys = ['strengthStart', 'strengthClose', 'strengthAlmost'
 
 removeSensitiveQueryFromAddressBar()
 
+/** Shown once the learner has typed a confirmation that differs from the new password. */
+const confirmMismatch = computed(() => Boolean(confirmPassword.value) && password.value !== confirmPassword.value)
 const canSubmit = computed(
   () =>
     !submitting.value &&
@@ -229,10 +256,3 @@ function passwordCheckIcon(met: boolean): PasswordCheckIcon {
   return met ? 'status' : 'close'
 }
 </script>
-
-<style scoped>
-.auth-reset-language {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

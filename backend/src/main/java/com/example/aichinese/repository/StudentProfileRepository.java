@@ -53,72 +53,18 @@ public interface StudentProfileRepository
                     from lesson_progress lp
                     join lessons l on lp.lesson_id = l.id
                     where l.teacher_id = :teacherId
-                      and (
-                          l.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = lp.student_id
-                                and pe.active = true
-                                and (
-                                    pe.item_type = 'LESSON' and pe.item_id = l.id
-                                    or pe.item_type = 'MODULE' and pe.item_id = l.module_id
-                                )
-                          )
-                      )
                     union all
                     select qa.student_id as student_id, coalesce(qa.completed_at, qa.created_at) as activity_at
                     from quiz_attempts qa
                     join quizzes q on qa.quiz_id = q.id
                     join lessons ql on q.lesson_id = ql.id
                     where q.teacher_id = :teacherId
-                      and (
-                          ql.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = qa.student_id
-                                and pe.active = true
-                                and (
-                                    pe.item_type = 'LESSON' and pe.item_id = ql.id
-                                    or pe.item_type = 'MODULE' and pe.item_id = ql.module_id
-                                )
-                          )
-                      )
                     union all
                     select lce.student_id as student_id, coalesce(lce.attended_at, lce.enrolled_at, lce.created_at) as activity_at
                     from live_class_enrolments lce
                     join live_classes lc on lce.live_class_id = lc.id
-                    left join lessons ll on lc.lesson_id = ll.id
-                    left join course_packages cp on lc.course_package_id = cp.id
                     where lc.teacher_id = :teacherId
                       and lce.enrolment_status <> 'CANCELLED'
-                      and (
-                          ll.id is null
-                          or ll.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = lce.student_id
-                                and pe.active = true
-                                and (
-                                    pe.item_type = 'LESSON' and pe.item_id = ll.id
-                                    or pe.item_type = 'MODULE' and pe.item_id = ll.module_id
-                                )
-                          )
-                      )
-                      and (
-                          cp.id is null
-                          or cp.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = lce.student_id
-                                and pe.active = true
-                                and pe.item_type = 'PACKAGE'
-                                and pe.item_id = cp.id
-                          )
-                      )
                 ) linked
                 group by linked.student_id
             ) latest on latest.student_id = sp.id
@@ -133,76 +79,43 @@ public interface StudentProfileRepository
                     from lesson_progress lp
                     join lessons l on lp.lesson_id = l.id
                     where l.teacher_id = :teacherId
-                      and (
-                          l.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = lp.student_id
-                                and pe.active = true
-                                and (
-                                    pe.item_type = 'LESSON' and pe.item_id = l.id
-                                    or pe.item_type = 'MODULE' and pe.item_id = l.module_id
-                                )
-                          )
-                      )
                     union
                     select qa.student_id as student_id
                     from quiz_attempts qa
                     join quizzes q on qa.quiz_id = q.id
                     join lessons ql on q.lesson_id = ql.id
                     where q.teacher_id = :teacherId
-                      and (
-                          ql.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = qa.student_id
-                                and pe.active = true
-                                and (
-                                    pe.item_type = 'LESSON' and pe.item_id = ql.id
-                                    or pe.item_type = 'MODULE' and pe.item_id = ql.module_id
-                                )
-                          )
-                      )
                     union
                     select lce.student_id as student_id
                     from live_class_enrolments lce
                     join live_classes lc on lce.live_class_id = lc.id
-                    left join lessons ll on lc.lesson_id = ll.id
-                    left join course_packages cp on lc.course_package_id = cp.id
                     where lc.teacher_id = :teacherId
                       and lce.enrolment_status <> 'CANCELLED'
-                      and (
-                          ll.id is null
-                          or ll.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = lce.student_id
-                                and pe.active = true
-                                and (
-                                    pe.item_type = 'LESSON' and pe.item_id = ll.id
-                                    or pe.item_type = 'MODULE' and pe.item_id = ll.module_id
-                                )
-                          )
-                      )
-                      and (
-                          cp.id is null
-                          or cp.access_type <> 'PAID'
-                          or exists (
-                              select 1
-                              from payment_entitlements pe
-                              where pe.student_id = lce.student_id
-                                and pe.active = true
-                                and pe.item_type = 'PACKAGE'
-                                and pe.item_id = cp.id
-                          )
-                      )
                 ) linked
                 group by linked.student_id
             ) counted
             """,
             nativeQuery = true)
     Page<Long> findLinkedStudentIdsByTeacherId(@Param("teacherId") Long teacherId, Pageable pageable);
+
+    /** Every student on the teacher's roster (same sources as {@link #findLinkedStudentIdsByTeacherId}). */
+    @Query(value = """
+            select lp.student_id
+            from lesson_progress lp
+            join lessons l on lp.lesson_id = l.id
+            where l.teacher_id = :teacherId
+            union
+            select qa.student_id
+            from quiz_attempts qa
+            join quizzes q on qa.quiz_id = q.id
+            where q.teacher_id = :teacherId
+            union
+            select lce.student_id
+            from live_class_enrolments lce
+            join live_classes lc on lce.live_class_id = lc.id
+            where lc.teacher_id = :teacherId
+              and lce.enrolment_status <> 'CANCELLED'
+            """,
+            nativeQuery = true)
+    List<Long> findAllLinkedStudentIdsByTeacherId(@Param("teacherId") Long teacherId);
 }

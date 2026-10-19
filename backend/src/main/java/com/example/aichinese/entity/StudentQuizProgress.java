@@ -7,6 +7,7 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -40,6 +41,15 @@ public class StudentQuizProgress extends BaseEntity {
 
     @Column(name = "quiz_id", nullable = false, updatable = false)
     private Long quizId;
+
+    /**
+     * Read-only mapping of {@code quiz_id} so the schema declares the foreign key to quizzes
+     * (V5, audit A4 §5.1); writes go through {@link #quizId}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "quiz_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_student_quiz_progress_quiz"))
+    private Quiz quiz;
 
     @Column(name = "completed", nullable = false)
     private boolean completed;

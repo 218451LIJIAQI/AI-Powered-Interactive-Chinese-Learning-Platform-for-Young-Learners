@@ -12,12 +12,12 @@ export const resourceSectionMessages = {
     loadingTitle: 'Memuatkan kandungan anda',
     loadingMessage: 'Tunggu sebentar sementara kami menyediakan semuanya untuk anda!',
     loadingEyebrow: 'Memuatkan',
-    errorTitle: 'Sesuatu telah berlaku',
+    errorTitle: 'Sesuatu tidak kena',
     defaultError: 'Perkhidmatan pembelajaran tidak dapat dicapai sekarang.',
     errorEyebrow: 'Perlu perhatian',
     retry: 'Cuba lagi',
   },
-  zh: {
+  'zh-CN': {
     loadingTitle: '正在加载内容',
     loadingMessage: '请稍候，我们正在为你准备内容！',
     loadingEyebrow: '正在加载',

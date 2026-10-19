@@ -39,8 +39,8 @@ import com.example.aichinese.service.storage.StoredObject;
  * <p>Provides the three independent checks every upload runs:</p>
  * <ol>
  *   <li>Safe original file-name extraction — strips path components,
- *       CR/LF, and other shell-tricky characters; rejects empty or
- *       traversal-attempt names.</li>
+ *       CR/LF, and other shell-tricky characters; rejects empty,
+ *       over-long or traversal-attempt names.</li>
  *   <li>Extension + Content-Type whitelist matching.</li>
  *   <li>Magic-byte / file-signature verification reading the first
  *       {@link #SIGNATURE_PREFIX_BYTES} bytes — defeats the classic
@@ -63,6 +63,8 @@ import com.example.aichinese.service.storage.StoredObject;
 final class UploadStorageSupport {
 
     private static final int SIGNATURE_PREFIX_BYTES = 64;
+    /** Length of {@code uploaded_files.file_name}, which stores the sanitised original name. */
+    private static final int MAX_ORIGINAL_FILE_NAME_LENGTH = 255;
 
     private UploadStorageSupport() {
     }
@@ -73,7 +75,7 @@ final class UploadStorageSupport {
         }
 
         String cleaned = sanitizeOriginalFileName(extractLastPathSegment(originalFileName));
-        if (cleaned.isBlank()) {
+        if (cleaned.isBlank() || cleaned.length() > MAX_ORIGINAL_FILE_NAME_LENGTH) {
             throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
         }
         return cleaned;

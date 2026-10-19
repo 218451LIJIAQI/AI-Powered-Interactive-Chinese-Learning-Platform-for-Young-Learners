@@ -31,6 +31,7 @@ import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherFeedback;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.entity.enums.NotificationType;
@@ -41,16 +42,14 @@ import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherFeedbackRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.CommunicationMapper;
-import com.example.aichinese.service.LiveLearningAccessService;
 import com.example.aichinese.service.NotificationService;
-import com.example.aichinese.service.StudentLearningAccessService;
 
 /**
- * Unit coverage for {@code NotificationService} - pins row-level
- * access (a caller only sees their own notifications), the
- * unread-count badge contract, the bulk mark-all-read transaction
- * isolation (separate transaction so the badge updates promptly),
- * and the cross-user notification dispatch path.
+ * Unit coverage for {@code NotificationService} - pins input validation
+ * and trimming on create, the fail-safe {@code safeCreateNotification}
+ * path (independent transaction, sanitised log), hiding of notifications
+ * whose target is no longer accessible, and the unread-count and
+ * mark-all-read contracts across repository batches.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class NotificationServiceTests {
@@ -72,7 +71,6 @@ class NotificationServiceTests {
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
     private final TeacherFeedbackRepository teacherFeedbackRepository = mock(TeacherFeedbackRepository.class);
     private final StudentProfileRepository studentProfileRepository = mock(StudentProfileRepository.class);
-    private final StudentLearningAccessService studentLearningAccessService = mock(StudentLearningAccessService.class);
 
     @Test
     void createNotificationRejectsInvalidRequiredFieldsBeforePersistence() {
@@ -141,9 +139,7 @@ class NotificationServiceTests {
                 mock(TeacherFeedbackRepository.class),
                 mock(RecordedLessonVideoRepository.class),
                 mock(LiveClassRepository.class),
-                mock(StudentProfileRepository.class),
-                mock(StudentLearningAccessService.class),
-                mock(LiveLearningAccessService.class));
+                mock(StudentProfileRepository.class));
 
         User recipient = new User();
         recipient.setId(SAFE_CREATE_RECIPIENT_ID);
@@ -166,11 +162,12 @@ class NotificationServiceTests {
     }
 
     @Test
-    void teacherFeedbackNotificationIsHiddenWhenStudentNoLongerHasLessonAccess() {
+    void teacherFeedbackNotificationIsHiddenWhenLessonIsNoLongerPublished() {
         NotificationService service = service();
         User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
         StudentProfile student = student(studentUser);
         Lesson lesson = lesson(LESSON_ID);
+        lesson.setContentStatus(ContentStatus.ARCHIVED);
         TeacherFeedback feedback = new TeacherFeedback();
         feedback.setStudent(student);
         feedback.setLesson(lesson);
@@ -179,9 +176,27 @@ class NotificationServiceTests {
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.of(feedback));
         when(studentProfileRepository.findByUserId(STUDENT_USER_ID)).thenReturn(Optional.of(student));
-        when(studentLearningAccessService.hasLessonAccess(student, lesson)).thenReturn(false);
 
         assertThat(service.isNotificationCurrentlyAccessible(securityUser(studentUser), notification)).isFalse();
+    }
+
+    @Test
+    void teacherFeedbackNotificationIsVisibleForPublishedLessonWithoutAnyPurchase() {
+        NotificationService service = service();
+        User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
+        StudentProfile student = student(studentUser);
+        Lesson lesson = lesson(LESSON_ID);
+        lesson.setContentStatus(ContentStatus.PUBLISHED);
+        TeacherFeedback feedback = new TeacherFeedback();
+        feedback.setStudent(student);
+        feedback.setLesson(lesson);
+        Notification notification = unreadTeacherFeedbackNotification(studentUser);
+
+        when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
+                .thenReturn(Optional.of(feedback));
+        when(studentProfileRepository.findByUserId(STUDENT_USER_ID)).thenReturn(Optional.of(student));
+
+        assertThat(service.isNotificationCurrentlyAccessible(securityUser(studentUser), notification)).isTrue();
     }
 
     @Test
@@ -192,7 +207,7 @@ class NotificationServiceTests {
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
         when(notificationRepository.findUserStatusBatchBefore(
-                any(), any(), nullable(java.time.LocalDateTime.class), any(), any()))
+                any(), any(), nullable(LocalDateTime.class), any(), any()))
                 .thenReturn(List.of(hidden, visible));
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.empty());
@@ -208,7 +223,7 @@ class NotificationServiceTests {
         Notification visible = notification(studentUser, null, null, NotificationStatus.UNREAD);
 
         when(notificationRepository.findUserStatusBatchBefore(
-                any(), any(), nullable(java.time.LocalDateTime.class), any(), any()))
+                any(), any(), nullable(LocalDateTime.class), any(), any()))
                 .thenReturn(List.of(hidden, visible));
         when(teacherFeedbackRepository.findByIdAndStudentUserId(FEEDBACK_ID, STUDENT_USER_ID))
                 .thenReturn(Optional.empty());
@@ -239,7 +254,8 @@ class NotificationServiceTests {
 
         when(notificationRepository.findUserStatusBatchBefore(
                 any(), any(), nullable(LocalDateTime.class), any(), any()))
-                .thenReturn(firstBatch, List.of(finalNotification));
+                .thenReturn(firstBatch)
+                .thenReturn(List.of(finalNotification));
 
         assertThat(service.countAccessibleUnreadNotifications(securityUser(studentUser))).isEqualTo(251);
         verify(notificationRepository, times(2))
@@ -254,9 +270,7 @@ class NotificationServiceTests {
                 teacherFeedbackRepository,
                 mock(RecordedLessonVideoRepository.class),
                 mock(LiveClassRepository.class),
-                studentProfileRepository,
-                studentLearningAccessService,
-                mock(LiveLearningAccessService.class));
+                studentProfileRepository);
     }
 
     private static User user(Long id, RoleName roleName) {
@@ -286,6 +300,13 @@ class NotificationServiceTests {
         Lesson lesson = new Lesson();
         lesson.setId(id);
         lesson.setTitle("Lesson " + id);
+        // Student visibility (D13) also needs an approved, active owning teacher.
+        User teacherUser = new User();
+        teacherUser.setActive(true);
+        com.example.aichinese.entity.TeacherProfile teacher = new com.example.aichinese.entity.TeacherProfile();
+        teacher.setUser(teacherUser);
+        teacher.setTeacherStatus(com.example.aichinese.entity.enums.TeacherStatus.APPROVED);
+        lesson.setTeacher(teacher);
         return lesson;
     }
 

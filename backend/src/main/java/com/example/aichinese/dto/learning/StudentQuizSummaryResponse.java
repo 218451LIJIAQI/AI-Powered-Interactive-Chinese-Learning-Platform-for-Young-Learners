@@ -3,6 +3,7 @@ package com.example.aichinese.dto.learning;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.example.aichinese.entity.enums.LearningStage;
 
 @JsonPropertyOrder({
         "id",
@@ -22,7 +23,8 @@ public record StudentQuizSummaryResponse(
         String description,
         Integer timeLimitMinutes,
         Integer totalPoints,
-        int questionCount) {
+        int questionCount,
+        LearningStage learningStage) {
 
     public StudentQuizSummaryResponse {
         Objects.requireNonNull(id, "id must not be null");

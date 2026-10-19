@@ -20,7 +20,6 @@ import com.example.aichinese.dto.content.PublicCourseDetailResponse;
 import com.example.aichinese.dto.content.PublicCourseSummaryResponse;
 import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.Lesson;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.ManagedContentType;
@@ -44,7 +43,6 @@ public class PublicContentService {
     private final CoursePackageRepository coursePackageRepository;
     private final PackageItemRepository packageItemRepository;
     private final ContentManagementMapper contentManagementMapper;
-    private final CommerceSettingsService commerceSettingsService;
     private final EntityManager entityManager;
 
     public PublicContentService(
@@ -52,13 +50,11 @@ public class PublicContentService {
             CoursePackageRepository coursePackageRepository,
             PackageItemRepository packageItemRepository,
             ContentManagementMapper contentManagementMapper,
-            CommerceSettingsService commerceSettingsService,
             EntityManager entityManager) {
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
         this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
-        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
         this.entityManager = Objects.requireNonNull(entityManager, "entityManager");
     }
 
@@ -67,12 +63,10 @@ public class PublicContentService {
             String keyword,
             Long levelId,
             Long categoryId,
-            String accessType,
             String learningType,
             String sort,
             int page,
             int size) {
-        AccessType accessTypeFilter = parseAccessType(accessType);
         LearningType learningTypeFilter = parseLearningType(learningType);
         String normalizedKeyword = TextUtils.trimToOptional(keyword)
                 .map(value -> value.toLowerCase(Locale.ROOT))
@@ -80,13 +74,11 @@ public class PublicContentService {
         PublicCourseFilters filters = new PublicCourseFilters(
                 levelId,
                 categoryId,
-                accessTypeFilter,
                 learningTypeFilter,
                 normalizedKeyword);
 
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        String currencyCode = commerceSettingsService.getDefaultCurrency();
         long totalItems = countPublicCourses(filters);
         long offset = (long) safePage * safeSize;
         List<PublicCourseSummaryResponse> items = offset >= totalItems
@@ -95,8 +87,7 @@ public class PublicContentService {
                         filters,
                         sort,
                         offset,
-                        safeSize),
-                        currencyCode);
+                        safeSize));
         int totalPages = PaginationUtils.totalPages(totalItems, safeSize);
 
         return new PageResponse<>(items, safePage, safeSize, totalItems, totalPages);
@@ -105,7 +96,6 @@ public class PublicContentService {
     @Transactional(readOnly = true)
     public PublicCourseDetailResponse getCourseDetail(String id) {
         CourseKey courseKey = parseCourseKey(id);
-        String currencyCode = commerceSettingsService.getDefaultCurrency();
 
         return switch (courseKey.type()) {
             case LESSON -> {
@@ -114,8 +104,9 @@ public class PublicContentService {
                                 courseKey.id(),
                                 ContentStatus.PUBLISHED,
                                 TeacherStatus.APPROVED)
+                        .filter(ContentVisibilityPolicy::isLessonVisible)
                         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published lesson was not found."));
-                yield contentManagementMapper.toPublicCourseDetail(lesson, currencyCode);
+                yield contentManagementMapper.toPublicCourseDetail(lesson);
             }
             case PACKAGE -> {
                 CoursePackage coursePackage = coursePackageRepository
@@ -123,13 +114,13 @@ public class PublicContentService {
                                 courseKey.id(),
                                 ContentStatus.PUBLISHED,
                                 TeacherStatus.APPROVED)
-                        .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published package was not found."));
+                        .filter(ContentVisibilityPolicy::isPackageVisible)
+                        .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published course was not found."));
                 yield contentManagementMapper.toPublicCourseDetail(
                         coursePackage,
                         packageItemRepository.findByCoursePackageIdOrderBySortOrderAscCreatedAtAsc(
                                 coursePackage.getId(),
-                                PageRequest.of(0, PUBLIC_PACKAGE_ITEM_LIMIT)).getContent(),
-                        currencyCode);
+                                PageRequest.of(0, PUBLIC_PACKAGE_ITEM_LIMIT)).getContent());
             }
             case MODULE -> throw new ResponseStatusException(NOT_FOUND, "Published course was not found.");
         };
@@ -168,7 +159,7 @@ public class PublicContentService {
         return keys;
     }
 
-    private List<PublicCourseSummaryResponse> loadCourseSummaries(List<CourseKey> keys, String currencyCode) {
+    private List<PublicCourseSummaryResponse> loadCourseSummaries(List<CourseKey> keys) {
         if (keys.isEmpty()) {
             return List.of();
         }
@@ -202,12 +193,12 @@ public class PublicContentService {
             if (key.type() == ManagedContentType.LESSON) {
                 Lesson lesson = lessonsById.get(key.id());
                 if (lesson != null) {
-                    items.add(contentManagementMapper.toPublicCourseSummary(lesson, currencyCode));
+                    items.add(contentManagementMapper.toPublicCourseSummary(lesson));
                 }
             } else if (key.type() == ManagedContentType.PACKAGE) {
                 CoursePackage coursePackage = packagesById.get(key.id());
                 if (coursePackage != null) {
-                    items.add(contentManagementMapper.toPublicCourseSummary(coursePackage, currencyCode));
+                    items.add(contentManagementMapper.toPublicCourseSummary(coursePackage));
                 }
             }
         }
@@ -216,12 +207,16 @@ public class PublicContentService {
 
     private static String publicCourseUnionSql(PublicCourseFilters filters) {
         StringBuilder lessonSql = new StringBuilder("""
-                select 'LESSON' as item_type, l.id as item_id, l.title as title
+                select 'LESSON' as item_type, l.id as item_id, l.title as title, l.created_at as created_at
                 from lessons l
                 join teacher_profiles tp on tp.id = l.teacher_id
+                join users tu on tu.id = tp.user_id
+                left join learning_modules lm on lm.id = l.module_id
                 where l.content_status = 'PUBLISHED'
+                  and (lm.id is null or lm.content_status = 'PUBLISHED')
                   and tp.teacher_status = 'APPROVED'
                   and tp.public_visible = true
+                  and tu.active = true
                 """);
         appendPublicCourseFilters(lessonSql, "l", filters);
         if (filters.keyword() != null) {
@@ -229,12 +224,14 @@ public class PublicContentService {
         }
 
         StringBuilder packageSql = new StringBuilder("""
-                select 'PACKAGE' as item_type, p.id as item_id, p.title as title
+                select 'PACKAGE' as item_type, p.id as item_id, p.title as title, p.created_at as created_at
                 from course_packages p
                 join teacher_profiles tp on tp.id = p.teacher_id
+                join users tu on tu.id = tp.user_id
                 where p.content_status = 'PUBLISHED'
                   and tp.teacher_status = 'APPROVED'
                   and tp.public_visible = true
+                  and tu.active = true
                 """);
         appendPublicCourseFilters(packageSql, "p", filters);
         if (filters.keyword() != null) {
@@ -254,9 +251,6 @@ public class PublicContentService {
         if (filters.categoryId() != null) {
             sql.append(" and ").append(alias).append(".category_id = :categoryId");
         }
-        if (filters.accessType() != null) {
-            sql.append(" and ").append(alias).append(".access_type = :accessType");
-        }
         if (filters.learningType() != null) {
             sql.append(" and ").append(alias).append(".learning_type = :learningType");
         }
@@ -268,9 +262,6 @@ public class PublicContentService {
         }
         if (filters.categoryId() != null) {
             query.setParameter("categoryId", filters.categoryId());
-        }
-        if (filters.accessType() != null) {
-            query.setParameter("accessType", filters.accessType().name());
         }
         if (filters.learningType() != null) {
             query.setParameter("learningType", filters.learningType().name());
@@ -284,18 +275,10 @@ public class PublicContentService {
         String normalizedSort = sort == null || sort.isBlank() ? "newest" : sort.trim().toLowerCase(Locale.ROOT);
         return switch (normalizedSort) {
             case "title" -> " order by lower(title) asc, item_type asc, item_id asc";
-            case "newest" -> " order by item_id desc, item_type asc";
+            // Lesson and package ids come from separate sequences, so recency must use created_at.
+            case "newest" -> " order by created_at desc, item_id desc, item_type asc";
             default -> throw new ResponseStatusException(BAD_REQUEST, "Supported course sort options are newest and title.");
         };
-    }
-
-    private static AccessType parseAccessType(String accessType) {
-        if (accessType == null || accessType.isBlank()) {
-            return null;
-        }
-
-        return AccessType.tryFrom(accessType)
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid access type filter."));
     }
 
     private static LearningType parseLearningType(String learningType) {
@@ -334,7 +317,6 @@ public class PublicContentService {
     private record PublicCourseFilters(
             Long levelId,
             Long categoryId,
-            AccessType accessType,
             LearningType learningType,
             String keyword) {
     }

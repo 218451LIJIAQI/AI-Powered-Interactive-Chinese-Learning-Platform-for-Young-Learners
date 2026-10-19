@@ -200,7 +200,7 @@ public class AdminTeacherManagementService {
                 "Teacher account rejected",
                 "Your teacher account was rejected. Please review the rejection reason and resubmit your verification.",
                 "/teacher/profile");
-        log.info("Teacher rejected: teacherId={}, adminUserId={}, reason={}", teacherProfile.getId(), adminUser.getId(), trimmedReason);
+        log.info("Teacher rejected: teacherId={}, adminUserId={}", teacherProfile.getId(), adminUser.getId());
         auditLogService.record(adminUser, "ADMIN_TEACHER_REJECT", "TeacherProfile", teacherProfile.getId(),
                 "Admin rejected teacher verification. Reason: " + trimmedReason);
         transactionalEmailDispatcher.enqueueTeacherRejection(teacherProfile.getUser(), trimmedReason);

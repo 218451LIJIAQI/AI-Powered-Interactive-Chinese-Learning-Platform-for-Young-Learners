@@ -56,8 +56,8 @@ public class LiveClass extends BaseEntity {
 
     public static final String GRAPH_DETAIL = "LiveClass.detail";
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "teacher_id", nullable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY)

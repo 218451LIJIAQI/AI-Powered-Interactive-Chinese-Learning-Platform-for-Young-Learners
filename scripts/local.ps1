@@ -144,5 +144,5 @@ if (-not (Wait-ForUrl 'http://127.0.0.1:5174/' 30)) {
 }
 
 Write-Host 'FYP is running at http://127.0.0.1:5174'
-Write-Host "Admin login details: $adminFile"
+Write-Host "Demo login details (admin, teacher, student): $adminFile"
 Start-Process 'http://127.0.0.1:5174'

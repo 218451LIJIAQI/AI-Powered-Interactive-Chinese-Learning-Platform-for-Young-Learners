@@ -3,6 +3,7 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.Locale;
 import java.util.Objects;
 
 import org.slf4j.Logger;
@@ -19,8 +20,7 @@ import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.communication.CreateModerationActionRequest;
 import com.example.aichinese.dto.communication.ModerationRecordResponse;
 import com.example.aichinese.entity.ContentModerationRecord;
-import com.example.aichinese.entity.CoursePackage;
-import com.example.aichinese.entity.Lesson;
+import com.example.aichinese.entity.base.ReviewableContent;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ContentModerationAction;
@@ -46,6 +46,7 @@ public class ContentModerationService {
     private final CommunicationMapper communicationMapper;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final ContentReviewService contentReviewService;
 
     public ContentModerationService(
             ContentModerationRecordRepository contentModerationRecordRepository,
@@ -53,13 +54,15 @@ public class ContentModerationService {
             CommunicationTargetResolver communicationTargetResolver,
             CommunicationMapper communicationMapper,
             NotificationService notificationService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentReviewService contentReviewService) {
         this.contentModerationRecordRepository = Objects.requireNonNull(contentModerationRecordRepository, "contentModerationRecordRepository");
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.communicationTargetResolver = Objects.requireNonNull(communicationTargetResolver, "communicationTargetResolver");
         this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
     }
 
     @Transactional(readOnly = true)
@@ -121,22 +124,25 @@ public class ContentModerationService {
                 request.targetType(),
                 request.targetId());
 
-        if (target.lesson() != null) {
-            requireValidContentTransition(target.lesson().getContentStatus(), action, "lesson");
-            updateLessonStatus(target.lesson(), action);
-        } else if (target.coursePackage() != null) {
-            requireValidContentTransition(target.coursePackage().getContentStatus(), action, "package");
-            updatePackageStatus(target.coursePackage(), action);
+        String reason = requireModerationNote(request.reason());
+        if (target.content() != null) {
+            String entityName = target.contentType().label().toLowerCase(Locale.ROOT);
+            requireValidContentTransition(target.content().getContentStatus(), action, entityName);
+            if (action == ContentModerationAction.RESTORE) {
+                contentReviewService.requireComplete(target.contentType(), target.content());
+            }
+            applyContentStatus(target.content(), action, reason);
         } else if (target.teacherProfile() != null) {
             requireValidVisibilityTransition(target.teacherProfile().isPublicVisible(), action, "teacher profile");
+            requireRestorableTeacherProfile(target.teacherProfile(), action);
             updateTeacherProfileVisibility(target.teacherProfile(), action);
         }
 
-        ContentModerationRecord saved = saveModerationRecord(admin, target, action, request.reason());
+        ContentModerationRecord saved = saveModerationRecord(admin, target, action, reason);
         log.info("Moderation action applied: action={}, targetType={}, targetId={}, adminUserId={}",
                 action, target.targetType(), target.targetId(), admin.getId());
 
-        notifyTeacher(target, action, admin);
+        notifyTeacher(target, action, admin, reason);
         auditModerationAction(admin, target, action);
 
         return communicationMapper.toModerationRecordResponse(saved);
@@ -153,7 +159,7 @@ public class ContentModerationService {
         record.setTargetId(target.targetId());
         record.setTargetTitleSnapshot(target.targetTitle());
         record.setActionTaken(action.name());
-        record.setNote(requireModerationNote(reason));
+        record.setNote(reason);
         record.setRelatedTeacher(target.relatedTeacher());
         return contentModerationRecordRepository.save(record);
     }
@@ -161,18 +167,27 @@ public class ContentModerationService {
     private void notifyTeacher(
             CommunicationTargetResolver.ResolvedTarget target,
             ContentModerationAction action,
-            User admin) {
+            User admin,
+            String reason) {
         if (target.relatedTeacher() == null || target.relatedTeacher().getUser() == null) {
             return;
         }
+        String subject = target.targetTitle() == null ? "your content" : "\"" + target.targetTitle() + "\"";
+        String outcome = switch (action) {
+            case HIDE, UNPUBLISH, ARCHIVE -> target.content() != null
+                    ? "An admin archived " + subject + "; it is hidden from students."
+                    : "An admin hid " + subject + " from the public catalogue.";
+            case REQUEST_REVISION -> "An admin returned " + subject + " for changes.";
+            case RESTORE -> "An admin restored " + subject + ".";
+        };
         notificationService.safeCreateNotification(
                 target.relatedTeacher().getUser(),
                 NotificationType.MODERATION_ACTION,
                 "Content moderation update",
-                "An admin has applied a moderation action: " + action.name() + ".",
+                outcome + " Reason: " + reason,
                 target.targetType(),
                 target.targetId(),
-                TEACHER_FEEDBACK_PATH,
+                target.content() != null ? ContentReviewService.TEACHER_CONTENT_PATH : TEACHER_FEEDBACK_PATH,
                 admin);
     }
 
@@ -190,12 +205,22 @@ public class ContentModerationService {
                 null);
     }
 
-    private void updateLessonStatus(Lesson lesson, ContentModerationAction action) {
-        lesson.setContentStatus(mapContentStatus(action, lesson.getContentStatus()));
+    /** D14: HIDE / UNPUBLISH / ARCHIVE -> ARCHIVED; REQUEST_REVISION -> REJECTED with reason; RESTORE -> PUBLISHED. */
+    private static void applyContentStatus(ReviewableContent content, ContentModerationAction action, String reason) {
+        content.setContentStatus(mapContentStatus(action));
+        if (action == ContentModerationAction.REQUEST_REVISION) {
+            content.setRejectionReason(reason);
+        } else if (action == ContentModerationAction.RESTORE) {
+            content.setRejectionReason(null);
+        }
     }
 
-    private void updatePackageStatus(CoursePackage coursePackage, ContentModerationAction action) {
-        coursePackage.setContentStatus(mapContentStatus(action, coursePackage.getContentStatus()));
+    private static void requireRestorableTeacherProfile(TeacherProfile teacherProfile, ContentModerationAction action) {
+        if (action == ContentModerationAction.RESTORE
+                && !ContentVisibilityPolicy.isActiveApprovedTeacher(teacherProfile)) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "Only approved and active teacher profiles can be made visible again.");
+        }
     }
 
     private void updateTeacherProfileVisibility(TeacherProfile teacherProfile, ContentModerationAction action) {
@@ -208,12 +233,11 @@ public class ContentModerationService {
         }
     }
 
-    private static ContentStatus mapContentStatus(ContentModerationAction action, ContentStatus currentStatus) {
+    private static ContentStatus mapContentStatus(ContentModerationAction action) {
         return switch (action) {
-            case HIDE, UNPUBLISH -> ContentStatus.APPROVED;
-            case ARCHIVE -> ContentStatus.ARCHIVED;
+            case HIDE, UNPUBLISH, ARCHIVE -> ContentStatus.ARCHIVED;
             case REQUEST_REVISION -> ContentStatus.REJECTED;
-            case RESTORE -> currentStatus == ContentStatus.ARCHIVED ? ContentStatus.APPROVED : ContentStatus.PUBLISHED;
+            case RESTORE -> ContentStatus.PUBLISHED;
         };
     }
 
@@ -234,13 +258,13 @@ public class ContentModerationService {
                 }
             }
             case REQUEST_REVISION -> {
-                if (current != ContentStatus.PUBLISHED && current != ContentStatus.APPROVED) {
+                if (current != ContentStatus.PUBLISHED && current != ContentStatus.SUBMITTED) {
                     throw new ResponseStatusException(BAD_REQUEST,
-                            "Only published or approved " + entityName + "s can have a revision requested.");
+                            "Only published or submitted " + entityName + "s can be returned for revision.");
                 }
             }
             case RESTORE -> {
-                if (current != ContentStatus.ARCHIVED) {
+                if (current != ContentStatus.ARCHIVED && current != ContentStatus.APPROVED) {
                     throw new ResponseStatusException(BAD_REQUEST,
                             "Only archived " + entityName + "s can be restored.");
                 }
@@ -249,7 +273,7 @@ public class ContentModerationService {
     }
 
     private static String actionLabel(ContentModerationAction action) {
-        return action.name().toLowerCase().replace('_', '-');
+        return action.name().toLowerCase(Locale.ROOT).replace('_', '-');
     }
 
     private static void requireValidVisibilityTransition(

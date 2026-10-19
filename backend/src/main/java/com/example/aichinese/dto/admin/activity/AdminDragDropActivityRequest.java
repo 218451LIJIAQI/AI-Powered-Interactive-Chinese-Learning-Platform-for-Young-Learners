@@ -8,7 +8,6 @@ import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -16,6 +15,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminDragDropActivityRequest(
         @NotBlank(message = "Title is required.")
@@ -28,8 +28,6 @@ public record AdminDragDropActivityRequest(
         @Min(value = 1, message = "HSK level must be between 1 and 6.")
         @Max(value = 6, message = "HSK level must be between 1 and 6.")
         Integer hskLevel,
-
-        AgeBand ageBand,
 
         ActivityDifficulty difficulty,
 
@@ -52,7 +50,8 @@ public record AdminDragDropActivityRequest(
 
         @Valid
         @Size(max = 200, message = "A drag-drop activity cannot contain more than 200 items.")
-        List<@NotNull(message = "Drag-drop item must not be null.") AdminDragDropItemRequest> items) {
+        List<@NotNull(message = "Drag-drop item must not be null.") AdminDragDropItemRequest> items,
+        LearningStage learningStage) {
 
     public AdminDragDropActivityRequest {
         title = strip(title);

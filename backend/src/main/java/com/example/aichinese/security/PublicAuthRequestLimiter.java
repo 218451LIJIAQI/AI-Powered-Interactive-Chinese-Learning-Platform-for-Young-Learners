@@ -82,6 +82,11 @@ public class PublicAuthRequestLimiter {
         checkAllowed("FORGOT_PASSWORD_EMAIL", email, "", maxForgotPasswordRequests);
     }
 
+    /** Reset-password submissions get their own per-IP bucket capped at the forgot-password limit (audit A1 §2.4). */
+    public void checkResetPasswordAllowed(String clientIp) {
+        checkAllowed("RESET_PASSWORD_IP", "", clientIp, maxForgotPasswordRequests);
+    }
+
     int trackedRequestCount() {
         requests.cleanUp();
         return Math.toIntExact(requests.estimatedSize());

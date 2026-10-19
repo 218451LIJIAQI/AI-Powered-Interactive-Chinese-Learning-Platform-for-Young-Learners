@@ -1,10 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Collections;
-import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 public enum LiveClassEnrolmentStatus {
 
@@ -15,9 +12,6 @@ public enum LiveClassEnrolmentStatus {
     ATTENDED,
 
     MISSED;
-
-    public static final Set<LiveClassEnrolmentStatus> TERMINAL =
-            Collections.unmodifiableSet(EnumSet.of(CANCELLED, ATTENDED, MISSED));
 
     private static final Map<String, LiveClassEnrolmentStatus> LOOKUP =
             EnumLookups.indexByName(LiveClassEnrolmentStatus.class);
@@ -33,21 +27,5 @@ public enum LiveClassEnrolmentStatus {
                 "Live class enrolment status is required.",
                 () -> "Invalid live class enrolment status. Allowed values are ENROLLED, "
                         + "CANCELLED, ATTENDED, or MISSED.");
-    }
-
-    public boolean isActive() {
-        return this == ENROLLED;
-    }
-
-    public boolean isTerminal() {
-        return TERMINAL.contains(this);
-    }
-
-    public boolean isAttended() {
-        return this == ATTENDED;
-    }
-
-    public boolean isCancelled() {
-        return this == CANCELLED;
     }
 }

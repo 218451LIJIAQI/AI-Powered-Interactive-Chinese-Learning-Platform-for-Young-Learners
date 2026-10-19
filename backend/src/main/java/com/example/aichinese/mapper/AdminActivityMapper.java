@@ -41,8 +41,8 @@ import com.example.aichinese.entity.StoryQuestion;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.util.TextUtils;
 
 @Component
@@ -127,7 +127,6 @@ public class AdminActivityMapper {
         entity.setSortOrder(Objects.requireNonNullElse(request.sortOrder(), 0));
         entity.setExtraPayload(request.extraPayload());
         entity.setHskLevel(request.hskLevel());
-        entity.setAgeBand(request.ageBand());
         entity.setDifficulty(request.difficulty());
         entity.setTopic(request.topic());
         entity.setTags(joinTags(request.tags()));
@@ -135,6 +134,7 @@ public class AdminActivityMapper {
             entity.setXpReward(request.xpReward());
         }
         entity.setEstimatedSeconds(request.estimatedSeconds());
+        entity.setLearningStage(request.learningStage());
     }
 
     public AdminFlashcardResponse toResponse(Flashcard entity) {
@@ -152,7 +152,6 @@ public class AdminActivityMapper {
                 entity.getExtraPayload(),
                 entity.getContentStatus(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
@@ -161,7 +160,9 @@ public class AdminActivityMapper {
                 creatorId(entity.getCreatedByUser()),
                 creatorName(entity.getCreatedByUser()),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt());
+                entity.getUpdatedAt(),
+                entity.getRejectionReason(),
+                entity.getLearningStage());
     }
 
     public AdminActivitySummaryResponse toSummary(Flashcard entity) {
@@ -169,10 +170,10 @@ public class AdminActivityMapper {
         String summaryTitle = title == null || title.isBlank() ? entity.getFrontText() : title;
         return buildSummary(
                 entity.getId(), ActivityType.FLASHCARD, summaryTitle,
-                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
-                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(), entity.getTags(),
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
-                entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                entity.getRejectionReason(), entity.getLearningStage());
     }
 
     public MatchingGame toEntity(AdminMatchingGameRequest request, User admin) {
@@ -186,7 +187,6 @@ public class AdminActivityMapper {
     public void applyTo(AdminMatchingGameRequest request, MatchingGame entity) {
         entity.setTitle(request.title());
         entity.setHskLevel(request.hskLevel());
-        entity.setAgeBand(request.ageBand());
         entity.setDifficulty(request.difficulty());
         entity.setTopic(request.topic());
         entity.setTags(joinTags(request.tags()));
@@ -194,11 +194,12 @@ public class AdminActivityMapper {
             entity.setXpReward(request.xpReward());
         }
         entity.setEstimatedSeconds(request.estimatedSeconds());
+        entity.setLearningStage(request.learningStage());
     }
 
-    public MatchingGameItem toEntity(AdminMatchingGameItemRequest request, MatchingGame parent) {
+    public MatchingGameItem toEntity(AdminMatchingGameItemRequest request, MatchingGame owner) {
         MatchingGameItem item = new MatchingGameItem();
-        item.setMatchingGame(parent);
+        item.setMatchingGame(owner);
         item.setLeftText(request.leftText());
         item.setRightText(request.rightText());
         item.setLeftImageUrl(request.leftImageUrl());
@@ -227,7 +228,6 @@ public class AdminActivityMapper {
                 entity.getTitle(),
                 entity.getContentStatus(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
@@ -237,16 +237,18 @@ public class AdminActivityMapper {
                 creatorName(entity.getCreatedByUser()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                itemResponses);
+                itemResponses,
+                entity.getRejectionReason(),
+                entity.getLearningStage());
     }
 
     public AdminActivitySummaryResponse toSummary(MatchingGame entity) {
         return buildSummary(
                 entity.getId(), ActivityType.MATCHING_GAME, entity.getTitle(),
-                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
-                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(), entity.getTags(),
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
-                entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                entity.getRejectionReason(), entity.getLearningStage());
     }
 
     public ListeningExercise toEntity(AdminListeningExerciseRequest request, User admin) {
@@ -262,7 +264,6 @@ public class AdminActivityMapper {
         entity.setAudioUrl(request.audioUrl());
         entity.setQuestionPayload(request.questionPayload());
         entity.setHskLevel(request.hskLevel());
-        entity.setAgeBand(request.ageBand());
         entity.setDifficulty(request.difficulty());
         entity.setTopic(request.topic());
         entity.setTags(joinTags(request.tags()));
@@ -270,6 +271,7 @@ public class AdminActivityMapper {
             entity.setXpReward(request.xpReward());
         }
         entity.setEstimatedSeconds(request.estimatedSeconds());
+        entity.setLearningStage(request.learningStage());
     }
 
     public AdminListeningExerciseResponse toResponse(ListeningExercise entity) {
@@ -280,7 +282,6 @@ public class AdminActivityMapper {
                 entity.getQuestionPayload(),
                 entity.getContentStatus(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
@@ -289,16 +290,18 @@ public class AdminActivityMapper {
                 creatorId(entity.getCreatedByUser()),
                 creatorName(entity.getCreatedByUser()),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt());
+                entity.getUpdatedAt(),
+                entity.getRejectionReason(),
+                entity.getLearningStage());
     }
 
     public AdminActivitySummaryResponse toSummary(ListeningExercise entity) {
         return buildSummary(
                 entity.getId(), ActivityType.LISTENING_EXERCISE, entity.getTitle(),
-                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
-                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(), entity.getTags(),
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
-                entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                entity.getRejectionReason(), entity.getLearningStage());
     }
 
     public TracingExercise toEntity(AdminTracingExerciseRequest request, User admin) {
@@ -317,7 +320,6 @@ public class AdminActivityMapper {
         entity.setMeaning(request.meaning());
         entity.setInstructions(request.instructions());
         entity.setHskLevel(request.hskLevel());
-        entity.setAgeBand(request.ageBand());
         entity.setDifficulty(request.difficulty());
         entity.setTopic(request.topic());
         entity.setTags(joinTags(request.tags()));
@@ -325,6 +327,7 @@ public class AdminActivityMapper {
             entity.setXpReward(request.xpReward());
         }
         entity.setEstimatedSeconds(request.estimatedSeconds());
+        entity.setLearningStage(request.learningStage());
     }
 
     public AdminTracingExerciseResponse toResponse(TracingExercise entity) {
@@ -338,7 +341,6 @@ public class AdminActivityMapper {
                 entity.getInstructions(),
                 entity.getContentStatus(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
@@ -347,16 +349,18 @@ public class AdminActivityMapper {
                 creatorId(entity.getCreatedByUser()),
                 creatorName(entity.getCreatedByUser()),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt());
+                entity.getUpdatedAt(),
+                entity.getRejectionReason(),
+                entity.getLearningStage());
     }
 
     public AdminActivitySummaryResponse toSummary(TracingExercise entity) {
         return buildSummary(
                 entity.getId(), ActivityType.TRACING_EXERCISE, entity.getTitle(),
-                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
-                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(), entity.getTags(),
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
-                entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                entity.getRejectionReason(), entity.getLearningStage());
     }
 
     public DragDropActivity toEntity(AdminDragDropActivityRequest request, User admin) {
@@ -371,7 +375,6 @@ public class AdminActivityMapper {
         entity.setTitle(request.title());
         entity.setInstructions(request.instructions());
         entity.setHskLevel(request.hskLevel());
-        entity.setAgeBand(request.ageBand());
         entity.setDifficulty(request.difficulty());
         entity.setTopic(request.topic());
         entity.setTags(joinTags(request.tags()));
@@ -379,11 +382,12 @@ public class AdminActivityMapper {
             entity.setXpReward(request.xpReward());
         }
         entity.setEstimatedSeconds(request.estimatedSeconds());
+        entity.setLearningStage(request.learningStage());
     }
 
-    public DragDropItem toEntity(AdminDragDropItemRequest request, DragDropActivity parent) {
+    public DragDropItem toEntity(AdminDragDropItemRequest request, DragDropActivity owner) {
         DragDropItem item = new DragDropItem();
-        item.setDragDropActivity(parent);
+        item.setDragDropActivity(owner);
         item.setDragText(request.dragText());
         item.setTargetZone(request.targetZone());
         item.setPinyin(request.pinyin());
@@ -411,7 +415,6 @@ public class AdminActivityMapper {
                 entity.getInstructions(),
                 entity.getContentStatus(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
@@ -421,16 +424,18 @@ public class AdminActivityMapper {
                 creatorName(entity.getCreatedByUser()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                itemResponses);
+                itemResponses,
+                entity.getRejectionReason(),
+                entity.getLearningStage());
     }
 
     public AdminActivitySummaryResponse toSummary(DragDropActivity entity) {
         return buildSummary(
                 entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, entity.getTitle(),
-                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
-                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(), entity.getTags(),
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
-                entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                entity.getRejectionReason(), entity.getLearningStage());
     }
 
     public StoryActivity toEntity(AdminStoryActivityRequest request, User admin) {
@@ -449,7 +454,6 @@ public class AdminActivityMapper {
         entity.setTranslation(request.translation());
         entity.setImageUrl(request.imageUrl());
         entity.setHskLevel(request.hskLevel());
-        entity.setAgeBand(request.ageBand());
         entity.setDifficulty(request.difficulty());
         entity.setTopic(request.topic());
         entity.setTags(joinTags(request.tags()));
@@ -457,15 +461,17 @@ public class AdminActivityMapper {
             entity.setXpReward(request.xpReward());
         }
         entity.setEstimatedSeconds(request.estimatedSeconds());
+        entity.setLearningStage(request.learningStage());
     }
 
-    public StoryQuestion toEntity(AdminStoryQuestionRequest request, StoryActivity parent) {
+    public StoryQuestion toEntity(AdminStoryQuestionRequest request, StoryActivity owner) {
         StoryQuestion question = new StoryQuestion();
-        question.setStoryActivity(parent);
+        question.setStoryActivity(owner);
         question.setQuestionText(request.questionText());
         question.setOptionsPayload(request.optionsPayload());
         question.setExplanation(request.explanation());
         question.setSortOrder(Objects.requireNonNullElse(request.sortOrder(), 0));
+        question.setCorrectOptionIndex(request.correctOptionIndex());
         return question;
     }
 
@@ -475,7 +481,8 @@ public class AdminActivityMapper {
                 question.getQuestionText(),
                 question.getOptionsPayload(),
                 question.getExplanation(),
-                question.getSortOrder());
+                question.getSortOrder(),
+                question.getCorrectOptionIndex());
     }
 
     public AdminStoryActivityResponse toResponse(StoryActivity entity, List<StoryQuestion> questions) {
@@ -491,7 +498,6 @@ public class AdminActivityMapper {
                 entity.getImageUrl(),
                 entity.getContentStatus(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
@@ -501,16 +507,18 @@ public class AdminActivityMapper {
                 creatorName(entity.getCreatedByUser()),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                questionResponses);
+                questionResponses,
+                entity.getRejectionReason(),
+                entity.getLearningStage());
     }
 
     public AdminActivitySummaryResponse toSummary(StoryActivity entity) {
         return buildSummary(
                 entity.getId(), ActivityType.STORY_ACTIVITY, entity.getTitle(),
-                entity.getContentStatus(), entity.getHskLevel(), entity.getAgeBand(),
-                entity.getDifficulty(), entity.getTopic(), entity.getTags(),
+                entity.getContentStatus(), entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(), entity.getTags(),
                 entity.getXpReward(), entity.getEstimatedSeconds(), entity.getCreatedByUser(),
-                entity.getCreatedAt(), entity.getUpdatedAt());
+                entity.getCreatedAt(), entity.getUpdatedAt(),
+                entity.getRejectionReason(), entity.getLearningStage());
     }
 
     private AdminActivitySummaryResponse buildSummary(
@@ -519,7 +527,6 @@ public class AdminActivityMapper {
             String title,
             ContentStatus status,
             Integer hskLevel,
-            AgeBand ageBand,
             ActivityDifficulty difficulty,
             String topic,
             String tagsCsv,
@@ -527,14 +534,15 @@ public class AdminActivityMapper {
             Integer estimatedSeconds,
             User createdBy,
             LocalDateTime createdAt,
-            LocalDateTime updatedAt) {
+            LocalDateTime updatedAt,
+            String rejectionReason,
+            LearningStage learningStage) {
         return new AdminActivitySummaryResponse(
                 id,
                 type,
                 title,
                 status,
                 hskLevel,
-                ageBand,
                 difficulty,
                 topic,
                 splitTags(tagsCsv),
@@ -543,6 +551,8 @@ public class AdminActivityMapper {
                 creatorId(createdBy),
                 creatorName(createdBy),
                 createdAt,
-                updatedAt);
+                updatedAt,
+                rejectionReason,
+                learningStage);
     }
 }

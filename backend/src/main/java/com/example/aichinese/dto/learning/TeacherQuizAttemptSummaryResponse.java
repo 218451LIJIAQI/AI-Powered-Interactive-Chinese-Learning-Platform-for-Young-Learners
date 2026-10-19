@@ -5,14 +5,16 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-@JsonPropertyOrder({ "attemptId", "studentId", "studentName", "score", "maxScore", "submittedAt" })
+@JsonPropertyOrder({ "attemptId", "studentId", "studentName", "score", "maxScore", "submittedAt", "percentage", "hintsUsed" })
 public record TeacherQuizAttemptSummaryResponse(
         Long attemptId,
         Long studentId,
         String studentName,
         Integer score,
         Integer maxScore,
-        LocalDateTime submittedAt) {
+        LocalDateTime submittedAt,
+        int percentage,
+        long hintsUsed) {
 
     public TeacherQuizAttemptSummaryResponse {
         Objects.requireNonNull(attemptId, "attemptId must not be null");

@@ -6,12 +6,12 @@ import { sanitizeSentryEvent } from './observability'
 describe('sanitizeSentryEvent', () => {
   it('redacts secrets and identity from every Sentry event surface the app populates', () => {
     const event: Event = {
-      message: 'Reset failed for parent@example.com token=raw-token',
+      message: 'Reset failed for learner@example.com token=raw-token',
       logentry: {
         message: 'Authorization: Bearer raw-bearer',
       },
       request: {
-        url: 'https://learn.example/reset-password?token=raw-token&tab=account&email=parent@example.com',
+        url: 'https://learn.example/reset-password?token=raw-token&tab=account&email=learner@example.com',
         headers: {
           Authorization: 'Bearer raw-bearer',
           'X-Request-Name': 'reset',
@@ -22,7 +22,7 @@ describe('sanitizeSentryEvent', () => {
         query_string: [
           ['token', 'raw-token'],
           ['tab', 'account'],
-          ['email', 'parent@example.com'],
+          ['email', 'learner@example.com'],
         ],
         data: {
           password: 'new-password',
@@ -32,8 +32,8 @@ describe('sanitizeSentryEvent', () => {
       transaction: '/reset-password?token=raw-token',
       user: {
         id: '42',
-        email: 'parent@example.com',
-        username: 'parent',
+        email: 'learner@example.com',
+        username: 'learner',
         ip_address: '203.0.113.10',
         role: 'STUDENT',
         sessionId: 'raw-session',
@@ -45,7 +45,7 @@ describe('sanitizeSentryEvent', () => {
       extra: {
         payload: {
           resetToken: 'raw-token',
-          email: 'parent@example.com',
+          email: 'learner@example.com',
         },
       },
       contexts: {
@@ -94,7 +94,7 @@ describe('sanitizeSentryEvent', () => {
       'raw-token',
       'raw-bearer',
       'raw-refresh-cookie',
-      'parent@example.com',
+      'learner@example.com',
       'new-password',
       'raw-session',
     ]

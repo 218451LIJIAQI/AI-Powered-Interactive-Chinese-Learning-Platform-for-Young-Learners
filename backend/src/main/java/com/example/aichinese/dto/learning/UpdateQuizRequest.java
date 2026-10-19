@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import com.example.aichinese.entity.enums.LearningStage;
 
 @JsonPropertyOrder({ "title", "description", "timeLimitMinutes" })
 public record UpdateQuizRequest(
@@ -17,7 +18,8 @@ public record UpdateQuizRequest(
         @Size(max = 1000, message = "Quiz description must not exceed 1000 characters.")
         String description,
         @PositiveOrZero(message = "Time limit must be greater than or equal to 0.")
-        Integer timeLimitMinutes) {
+        Integer timeLimitMinutes,
+        LearningStage learningStage) {
 
     public UpdateQuizRequest {
         title = strip(title);

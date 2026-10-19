@@ -2,7 +2,6 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
@@ -10,17 +9,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.RecordedLessonVideo;
-import com.example.aichinese.entity.enums.PayoutStatus;
 import com.example.aichinese.repository.LiveClassRepository;
-import com.example.aichinese.repository.PayoutRequestRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.repository.TeacherVerificationDocumentRepository;
 
@@ -39,8 +34,6 @@ class RepositoryBoundaryContractTests {
 
     private static final List<Long> PACKAGE_IDS = List.of(PACKAGE_ID);
     private static final List<Long> TEACHER_IDS = List.of(TEACHER_ID);
-    private static final Set<PayoutStatus> PAYOUT_STATUSES = PayoutStatus.COMMITTED;
-    private static final BigDecimal PAYOUT_TOTAL = new BigDecimal("12.34");
 
     @Test
     void liveClassRelatedLookupFallsBackToDirectLessonQueryWhenPackageIdsAreMissing() {
@@ -91,27 +84,6 @@ class RepositoryBoundaryContractTests {
     }
 
     @Test
-    void payoutSumReturnsZeroForMissingStatusSet() {
-        PayoutRequestRepository repository = payoutRequestRepository();
-
-        assertPayoutSumIsZero(repository.sumAmountByTeacherIdAndPayoutStatusIn(TEACHER_ID, null));
-        assertPayoutSumIsZero(repository.sumAmountByTeacherIdAndPayoutStatusIn(TEACHER_ID, Set.of()));
-        assertPayoutSumIsZero(repository.sumAmountByTeacherIdAndPayoutStatusIn(null, PAYOUT_STATUSES));
-
-        verify(repository, never()).sumAmountByTeacherIdAndPayoutStatusInInternal(eq(TEACHER_ID), anySet());
-    }
-
-    @Test
-    void payoutSumDelegatesWhenStatusesExist() {
-        PayoutRequestRepository repository = payoutRequestRepository();
-        when(repository.sumAmountByTeacherIdAndPayoutStatusInInternal(TEACHER_ID, PAYOUT_STATUSES))
-                .thenReturn(PAYOUT_TOTAL);
-
-        assertThat(repository.sumAmountByTeacherIdAndPayoutStatusIn(TEACHER_ID, PAYOUT_STATUSES))
-                .isEqualByComparingTo(PAYOUT_TOTAL);
-    }
-
-    @Test
     void teacherDocumentCountReturnsEmptyRowsForMissingTeacherIds() {
         TeacherVerificationDocumentRepository repository = teacherVerificationDocumentRepository();
 
@@ -138,15 +110,7 @@ class RepositoryBoundaryContractTests {
         return mock(RecordedLessonVideoRepository.class, CALLS_REAL_METHODS);
     }
 
-    private static PayoutRequestRepository payoutRequestRepository() {
-        return mock(PayoutRequestRepository.class, CALLS_REAL_METHODS);
-    }
-
     private static TeacherVerificationDocumentRepository teacherVerificationDocumentRepository() {
         return mock(TeacherVerificationDocumentRepository.class, CALLS_REAL_METHODS);
-    }
-
-    private static void assertPayoutSumIsZero(BigDecimal amount) {
-        assertThat(amount).isEqualByComparingTo(BigDecimal.ZERO);
     }
 }

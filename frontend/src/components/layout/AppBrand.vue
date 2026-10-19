@@ -1,9 +1,9 @@
 <template>
   <div class="brand app-brand" :class="{ 'is-compact': compact }">
     <div class="brand-copy">
-      <h2 class="brand-title">
+      <p class="brand-title">
         Mandarin<span class="accent">Spark</span><IconGlyph name="star" :size="15" class="brand-star" />
-      </h2>
+      </p>
       <p v-if="!compact" class="brand-subtitle">{{ t('chrome.tagline') }}</p>
     </div>
   </div>

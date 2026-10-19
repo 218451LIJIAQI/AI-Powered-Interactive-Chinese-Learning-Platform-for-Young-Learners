@@ -7,14 +7,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -34,20 +29,13 @@ import com.example.aichinese.dto.analytics.AnalyticsBreakdownItemResponse;
 import com.example.aichinese.dto.analytics.AnalyticsTrendPointResponse;
 import com.example.aichinese.dto.analytics.StudentAnalyticsResponse;
 import com.example.aichinese.dto.analytics.TeacherAnalyticsResponse;
-import com.example.aichinese.entity.CoursePackage;
-import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
-import com.example.aichinese.entity.PaymentEntitlement;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.ContentStatus;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
-import com.example.aichinese.entity.enums.PaymentStatus;
-import com.example.aichinese.entity.enums.PayoutStatus;
-import com.example.aichinese.entity.enums.RefundStatus;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.AiUsageLogRepository;
@@ -59,20 +47,14 @@ import com.example.aichinese.repository.LessonProgressRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.LiveClassEnrolmentRepository;
 import com.example.aichinese.repository.LiveClassRepository;
-import com.example.aichinese.repository.PaymentRecordRepository;
-import com.example.aichinese.repository.PaymentEntitlementRepository;
-import com.example.aichinese.repository.PayoutRequestRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
-import com.example.aichinese.repository.RefundRequestRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
-import com.example.aichinese.repository.TeacherEarningRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.repository.VideoProgressRepository;
 import com.example.aichinese.repository.projection.StatusCountProjection;
 import com.example.aichinese.repository.projection.LessonProgressAnalyticsRow;
-import com.example.aichinese.repository.projection.MonthlyEarningProjection;
 import com.example.aichinese.repository.projection.QuizAttemptAnalyticsRow;
 import com.example.aichinese.repository.projection.VideoProgressAnalyticsRow;
 import com.example.aichinese.repository.projection.WrongAnswerCountProjection;
@@ -90,7 +72,6 @@ public class AnalyticsService {
     private static final Set<LiveClassStatus> CLOSED_LIVE_CLASS_STATUSES =
             EnumSet.of(LiveClassStatus.CANCELLED, LiveClassStatus.COMPLETED);
     private static final DateTimeFormatter DAY_LABEL_FORMATTER = DateTimeFormatter.ofPattern("dd MMM", Locale.ENGLISH);
-    private static final DateTimeFormatter MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH);
 
     private final StudentProfileRepository studentProfileRepository;
     private final TeacherProfileRepository teacherProfileRepository;
@@ -102,18 +83,12 @@ public class AnalyticsService {
     private final LearningModuleRepository learningModuleRepository;
     private final LessonRepository lessonRepository;
     private final CoursePackageRepository coursePackageRepository;
-    private final TeacherEarningRepository teacherEarningRepository;
     private final LiveClassRepository liveClassRepository;
     private final UserRepository userRepository;
-    private final PaymentRecordRepository paymentRecordRepository;
-    private final RefundRequestRepository refundRequestRepository;
-    private final PayoutRequestRepository payoutRequestRepository;
     private final ContentModerationRecordRepository contentModerationRecordRepository;
     private final AuditLogRepository auditLogRepository;
     private final AiUsageLogRepository aiUsageLogRepository;
-    private final PaymentEntitlementRepository paymentEntitlementRepository;
     private final NotificationService notificationService;
-    private final CommerceSettingsService commerceSettingsService;
 
     public AnalyticsService(
             StudentProfileRepository studentProfileRepository,
@@ -126,18 +101,12 @@ public class AnalyticsService {
             LearningModuleRepository learningModuleRepository,
             LessonRepository lessonRepository,
             CoursePackageRepository coursePackageRepository,
-            TeacherEarningRepository teacherEarningRepository,
             LiveClassRepository liveClassRepository,
             UserRepository userRepository,
-            PaymentRecordRepository paymentRecordRepository,
-            RefundRequestRepository refundRequestRepository,
-            PayoutRequestRepository payoutRequestRepository,
             ContentModerationRecordRepository contentModerationRecordRepository,
             AuditLogRepository auditLogRepository,
             AiUsageLogRepository aiUsageLogRepository,
-            PaymentEntitlementRepository paymentEntitlementRepository,
-            NotificationService notificationService,
-            CommerceSettingsService commerceSettingsService) {
+            NotificationService notificationService) {
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
@@ -148,32 +117,25 @@ public class AnalyticsService {
         this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
-        this.teacherEarningRepository = Objects.requireNonNull(teacherEarningRepository, "teacherEarningRepository");
         this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.paymentRecordRepository = Objects.requireNonNull(paymentRecordRepository, "paymentRecordRepository");
-        this.refundRequestRepository = Objects.requireNonNull(refundRequestRepository, "refundRequestRepository");
-        this.payoutRequestRepository = Objects.requireNonNull(payoutRequestRepository, "payoutRequestRepository");
         this.contentModerationRecordRepository = Objects.requireNonNull(contentModerationRecordRepository, "contentModerationRecordRepository");
         this.auditLogRepository = Objects.requireNonNull(auditLogRepository, "auditLogRepository");
         this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
-        this.paymentEntitlementRepository = Objects.requireNonNull(paymentEntitlementRepository, "paymentEntitlementRepository");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
-        this.commerceSettingsService = Objects.requireNonNull(commerceSettingsService, "commerceSettingsService");
     }
 
     @Transactional(readOnly = true)
     public StudentAnalyticsResponse getStudentAnalytics(SecurityUserDetails currentUser) {
         StudentProfile student = studentProfileRepository.findByUserId(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Student profile could not be found."));
-        Map<Long, Set<EntitlementKey>> entitlements = loadActiveEntitlements(Set.of(student.getId()));
 
-        StudentQuizAnalytics quiz = summarizeStudentQuizAttempts(student.getId(), entitlements);
-        StudentProgressAnalytics progress = summarizeStudentProgress(student.getId(), entitlements);
+        StudentQuizAnalytics quiz = summarizeStudentQuizAttempts(student.getId());
+        StudentProgressAnalytics progress = summarizeStudentProgress(student.getId());
         List<LiveClassEnrolment> enrolments = liveClassEnrolmentRepository
                 .findUpcomingForStudent(student.getId(), LiveClassEnrolmentStatus.ENROLLED,
                         LocalDateTime.now(), CLOSED_LIVE_CLASS_STATUSES).stream()
-                .filter(enrolment -> hasCurrentTeacherLiveEnrolmentAccess(enrolment, entitlements))
+                .filter(enrolment -> enrolment.getStudent() != null && enrolment.getLiveClass() != null)
                 .toList();
 
         long inProgressLessons = Math.max(progress.totalTrackedLessons() - progress.completedLessons(), 0);
@@ -204,10 +166,8 @@ public class AnalyticsService {
         mergeProjectionCounts(contentStatusCounts, lessonRepository.groupByContentStatusForTeacher(teacher.getId()));
         mergeProjectionCounts(contentStatusCounts, coursePackageRepository.groupByContentStatusForTeacher(teacher.getId()));
         TeacherQuizAnalytics quiz = summarizeTeacherQuizAttempts(teacher.getId());
-        List<MonthlyEarningProjection> earnings = teacherEarningRepository
-                .findMonthlyNetAmountByTeacherId(teacher.getId(), PageRequest.of(0, MAX_TREND_POINTS));
-        long teacherLiveEnrolmentsCount = liveClassEnrolmentRepository.countAccessibleByTeacherId(
-                teacher.getId(), LiveClassEnrolmentStatus.CANCELLED, AccessType.PAID);
+        long teacherLiveEnrolmentsCount = liveClassEnrolmentRepository.countActiveByTeacherId(
+                teacher.getId(), LiveClassEnrolmentStatus.CANCELLED);
 
         return new TeacherAnalyticsResponse(
                 new TeacherAnalyticsResponse.Overview(
@@ -218,14 +178,10 @@ public class AnalyticsService {
                         contentStatusCounts.get(ContentStatus.SUBMITTED.name()),
                         studentProfileRepository.findLinkedStudentIdsByTeacherId(teacher.getId(), PageRequest.of(0, 1)).getTotalElements(),
                         quiz.average(),
-                        defaultMoney(teacherEarningRepository.sumNetAmountByTeacherId(teacher.getId())),
-                        defaultMoney(teacherEarningRepository.sumAvailableNetAmountByTeacherId(teacher.getId())),
-                        commerceSettingsService.getDefaultCurrency(),
                         liveClassRepository.countByTeacherIdAndScheduledStartAtAfterAndLiveClassStatusNotIn(
                                 teacher.getId(), LocalDateTime.now(), CLOSED_LIVE_CLASS_STATUSES),
                         teacherLiveEnrolmentsCount),
                 quiz.trend(),
-                buildTeacherEarningsTrend(earnings),
                 buildBreakdownFromMap(contentStatusCounts));
     }
 
@@ -246,10 +202,6 @@ public class AnalyticsService {
                         learningModuleRepository.countByContentStatus(ContentStatus.PUBLISHED)
                                 + lessonRepository.countByContentStatus(ContentStatus.PUBLISHED)
                                 + coursePackageRepository.countByContentStatus(ContentStatus.PUBLISHED),
-                        defaultMoney(paymentRecordRepository.sumAmountByPaymentStatus(PaymentStatus.PAID)),
-                        commerceSettingsService.getDefaultCurrency(),
-                        refundRequestRepository.countByRefundStatus(RefundStatus.PENDING),
-                        payoutRequestRepository.countByPayoutStatus(PayoutStatus.PENDING),
                         contentModerationRecordRepository.count(),
                         auditLogRepository.count(),
                         notificationService.countAccessibleUnreadNotifications(currentUser),
@@ -260,14 +212,10 @@ public class AnalyticsService {
                         learningModuleRepository.groupByContentStatus(),
                         lessonRepository.groupByContentStatus(),
                         coursePackageRepository.groupByContentStatus()),
-                buildBreakdownFromProjections(
-                        paymentRecordRepository.groupByPaymentStatus(),
-                        enumNames(PaymentStatus.class)),
                 buildAiStatusBreakdownFromProjections(aiUsageLogRepository.groupByAiStatus()));
     }
 
-    private StudentQuizAnalytics summarizeStudentQuizAttempts(
-            Long studentId, Map<Long, Set<EntitlementKey>> entitlements) {
+    private StudentQuizAnalytics summarizeStudentQuizAttempts(Long studentId) {
         ScoreAggregate scores = new ScoreAggregate();
         Map<LocalDate, BigDecimal> recentActivity = initializeRecentDayMap();
         Comparator<QuizTrendSample> byTime = Comparator.comparing(QuizTrendSample::time)
@@ -284,9 +232,6 @@ public class AnalyticsService {
             }
             afterId = batch.get(batch.size() - 1).getId();
             for (QuizAttemptAnalyticsRow attempt : batch) {
-                if (!hasCurrentAttemptAccess(attempt, entitlements)) {
-                    continue;
-                }
                 LocalDateTime time = resolveAttemptTime(attempt);
                 addTrendPoint(recentActivity, time, BigDecimal.ONE);
                 if (!hasValidPercentage(attempt)) {
@@ -325,12 +270,8 @@ public class AnalyticsService {
                 break;
             }
             afterId = batch.get(batch.size() - 1).getId();
-            Set<Long> studentIds = new HashSet<>();
-            batch.stream().map(QuizAttemptAnalyticsRow::getStudentId).filter(Objects::nonNull)
-                    .forEach(studentIds::add);
-            Map<Long, Set<EntitlementKey>> entitlements = loadActiveEntitlements(studentIds);
             for (QuizAttemptAnalyticsRow attempt : batch) {
-                if (!hasCurrentAttemptAccess(attempt, entitlements) || !hasValidPercentage(attempt)) {
+                if (!hasValidPercentage(attempt)) {
                     continue;
                 }
                 BigDecimal percentage = percentageForAttempt(attempt);
@@ -356,17 +297,6 @@ public class AnalyticsService {
                         DAY_LABEL_FORMATTER.format(entry.getKey()), entry.getValue().average()))
                 .toList();
         return new TeacherQuizAnalytics(scores.average(), trend);
-    }
-
-    private boolean hasCurrentAttemptAccess(
-            QuizAttemptAnalyticsRow attempt, Map<Long, Set<EntitlementKey>> entitlements) {
-        if (attempt.getLessonId() == null || attempt.getLessonAccessType() != AccessType.PAID) {
-            return true;
-        }
-        Set<EntitlementKey> owned = entitlements.getOrDefault(attempt.getStudentId(), Set.of());
-        return owned.contains(new EntitlementKey("LESSON", attempt.getLessonId()))
-                || (attempt.getModuleId() != null
-                        && owned.contains(new EntitlementKey("MODULE", attempt.getModuleId())));
     }
 
     private record QuizTrendSample(
@@ -395,8 +325,7 @@ public class AnalyticsService {
         }
     }
 
-    private StudentProgressAnalytics summarizeStudentProgress(
-            Long studentId, Map<Long, Set<EntitlementKey>> entitlements) {
+    private StudentProgressAnalytics summarizeStudentProgress(Long studentId) {
         long completedLessons = 0;
         long totalTrackedLessons = 0;
         long completedVideos = 0;
@@ -415,10 +344,6 @@ public class AnalyticsService {
             }
             afterLessonProgressId = batch.get(batch.size() - 1).getId();
             for (LessonProgressAnalyticsRow row : batch) {
-                if (!hasLessonAccess(studentId, row.getLessonId(), row.getLessonAccessType(),
-                        row.getModuleId(), entitlements)) {
-                    continue;
-                }
                 totalTrackedLessons++;
                 if (row.isCompleted()) {
                     completedLessons++;
@@ -447,13 +372,6 @@ public class AnalyticsService {
             }
             afterVideoProgressId = batch.get(batch.size() - 1).getId();
             for (VideoProgressAnalyticsRow row : batch) {
-                boolean lessonAccess = hasLessonAccess(studentId, row.getLessonId(), row.getLessonAccessType(),
-                        row.getModuleId(), entitlements);
-                boolean packageAccess = hasPackageAccess(studentId, row.getPackageId(),
-                        row.getPackageAccessType(), entitlements);
-                if (!lessonAccess || !packageAccess) {
-                    continue;
-                }
                 if (row.isCompleted()) {
                     completedVideos++;
                 }
@@ -498,81 +416,12 @@ public class AnalyticsService {
     private List<AnalyticsBreakdownItemResponse> buildWeakAreaBreakdown(StudentProfile student) {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (WrongAnswerCountProjection item : quizAttemptAnswerRepository
-                .countAccessibleWrongAnswersByQuestionType(student.getId(), AccessType.PAID)) {
+                .countWrongAnswersByQuestionType(student.getId())) {
             if (item.getQuestionType() != null && !item.getQuestionType().isBlank()) {
                 counts.put(item.getQuestionType(), item.getAnswerCount());
             }
         }
         return buildBreakdownFromMap(counts);
-    }
-
-    private boolean hasCurrentTeacherLiveEnrolmentAccess(
-            LiveClassEnrolment enrolment, Map<Long, Set<EntitlementKey>> entitlements) {
-        if (enrolment.getStudent() == null || enrolment.getLiveClass() == null) {
-            return false;
-        }
-        Lesson lesson = enrolment.getLiveClass().getLesson();
-        CoursePackage coursePackage = enrolment.getLiveClass().getCoursePackage();
-        boolean lessonAccess = lesson == null || hasLessonAccess(enrolment.getStudent(), lesson, entitlements);
-        boolean packageAccess = coursePackage == null || hasPackageAccess(enrolment.getStudent(), coursePackage, entitlements);
-        return lessonAccess && packageAccess;
-    }
-
-    private Map<Long, Set<EntitlementKey>> loadActiveEntitlements(Collection<Long> studentIds) {
-        Map<Long, Set<EntitlementKey>> result = new HashMap<>();
-        List<Long> ids = new ArrayList<>(studentIds);
-        for (int offset = 0; offset < ids.size(); offset += 500) {
-            List<Long> batch = ids.subList(offset, Math.min(offset + 500, ids.size()));
-            for (PaymentEntitlement entitlement : paymentEntitlementRepository.findByStudentIdInAndActiveTrue(batch)) {
-                result.computeIfAbsent(entitlement.getStudent().getId(), ignored -> new HashSet<>())
-                        .add(new EntitlementKey(entitlement.getItemType(), entitlement.getItemId()));
-            }
-        }
-        return result;
-    }
-
-    private boolean hasLessonAccess(
-            StudentProfile student, Lesson lesson, Map<Long, Set<EntitlementKey>> entitlements) {
-        return hasLessonAccess(student.getId(), lesson.getId(), lesson.getAccessType(),
-                lesson.getModule() != null ? lesson.getModule().getId() : null, entitlements);
-    }
-
-    private boolean hasLessonAccess(
-            Long studentId, Long lessonId, AccessType accessType, Long moduleId,
-            Map<Long, Set<EntitlementKey>> entitlements) {
-        if (lessonId == null || accessType != AccessType.PAID) {
-            return true;
-        }
-        Set<EntitlementKey> owned = entitlements.getOrDefault(studentId, Set.of());
-        return owned.contains(new EntitlementKey("LESSON", lessonId))
-                || (moduleId != null && owned.contains(new EntitlementKey("MODULE", moduleId)));
-    }
-
-    private boolean hasPackageAccess(
-            StudentProfile student, CoursePackage coursePackage, Map<Long, Set<EntitlementKey>> entitlements) {
-        return hasPackageAccess(student.getId(), coursePackage.getId(), coursePackage.getAccessType(), entitlements);
-    }
-
-    private boolean hasPackageAccess(
-            Long studentId, Long packageId, AccessType accessType,
-            Map<Long, Set<EntitlementKey>> entitlements) {
-        return packageId == null || accessType != AccessType.PAID
-                || entitlements.getOrDefault(studentId, Set.of())
-                        .contains(new EntitlementKey("PACKAGE", packageId));
-    }
-
-    private record EntitlementKey(String itemType, Long itemId) { }
-
-    private List<AnalyticsTrendPointResponse> buildTeacherEarningsTrend(List<MonthlyEarningProjection> earnings) {
-        List<AnalyticsTrendPointResponse> trend = new ArrayList<>();
-        for (int index = earnings.size() - 1; index >= 0; index--) {
-            MonthlyEarningProjection earning = earnings.get(index);
-            YearMonth month = YearMonth.of(earning.getYear(), earning.getMonth());
-            trend.add(new AnalyticsTrendPointResponse(
-                    MONTH_LABEL_FORMATTER.format(month.atDay(1)),
-                    defaultMoney(earning.getAmount())));
-        }
-        return trend;
     }
 
     private List<AnalyticsTrendPointResponse> buildUserRegistrationTrend() {
@@ -594,14 +443,6 @@ public class AnalyticsService {
         counts.put("PENDING", teacherProfileRepository.countByTeacherStatus(TeacherStatus.PENDING));
         counts.put("APPROVED", teacherProfileRepository.countByTeacherStatus(TeacherStatus.APPROVED));
         counts.put("REJECTED", teacherProfileRepository.countByTeacherStatus(TeacherStatus.REJECTED));
-        return buildBreakdownFromMap(counts);
-    }
-
-    private List<AnalyticsBreakdownItemResponse> buildBreakdownFromProjections(
-            List<StatusCountProjection> projections,
-            String[] expectedStatuses) {
-        Map<String, Long> counts = initializeCounts(expectedStatuses);
-        mergeProjectionCounts(counts, projections);
         return buildBreakdownFromMap(counts);
     }
 
@@ -714,13 +555,6 @@ public class AnalyticsService {
             return UNKNOWN_STATUS;
         }
         return rawStatus.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private BigDecimal defaultMoney(BigDecimal amount) {
-        if (amount == null) {
-            return ZERO.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
-        }
-        return amount.setScale(DECIMAL_SCALE, RoundingMode.HALF_UP);
     }
 
     private List<AnalyticsBreakdownItemResponse> buildBreakdownFromMap(Map<String, Long> counts) {

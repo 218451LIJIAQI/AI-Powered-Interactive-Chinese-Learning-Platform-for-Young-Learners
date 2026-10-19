@@ -4,8 +4,6 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Objects;
 import java.util.Set;
 
@@ -20,7 +18,6 @@ import com.example.aichinese.entity.LearningLevel;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.TeacherStatus;
@@ -33,9 +30,7 @@ import com.example.aichinese.util.TextUtils;
 @Service
 public class TeacherContentAccessService {
 
-    private static final Set<ContentStatus> TEACHER_EDITABLE_STATUSES = ContentStatus.TEACHER_EDITABLE;
     private static final Set<ContentStatus> TEACHER_ARCHIVABLE_STATUSES = ContentStatus.TEACHER_ARCHIVABLE;
-    private static final BigDecimal ZERO_PRICE = BigDecimal.ZERO.setScale(ContentDtoConstants.PRICE_FRACTION_DIGITS);
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final LearningLevelRepository learningLevelRepository;
@@ -65,6 +60,37 @@ public class TeacherContentAccessService {
         return teacherProfile;
     }
 
+    /** Message of the central D13 guard for every protected teacher feature. */
+    public static final String APPROVED_TEACHER_FEATURE_MESSAGE = "Only approved teachers can use this teaching feature.";
+
+    /**
+     * The single teacher-approval guard (D13) used by {@code ApprovedTeacherInterceptor} for every
+     * protected {@code /api/v1/teachers/**} endpoint: the teacher must be APPROVED and active.
+     */
+    @Transactional(readOnly = true)
+    public void requireApprovedTeacherAccess(SecurityUserDetails currentUser) {
+        if (!isApprovedTeacher(currentUser)) {
+            throw new ResponseStatusException(FORBIDDEN, APPROVED_TEACHER_FEATURE_MESSAGE);
+        }
+    }
+
+    /** Same guard as {@link #requireApprovedTeacherAccess} with the content-authoring message. */
+    @Transactional(readOnly = true)
+    public void requireApprovedTeacherForContent(SecurityUserDetails currentUser) {
+        if (!isApprovedTeacher(currentUser)) {
+            throw new ResponseStatusException(FORBIDDEN, "Only approved teachers can create or submit learning content.");
+        }
+    }
+
+    /** True when the current teacher is APPROVED and active (dashboard shell for the rest). */
+    @Transactional(readOnly = true)
+    public boolean isApprovedTeacher(SecurityUserDetails currentUser) {
+        return currentUser != null && currentUser.getUserId() != null
+                && teacherProfileRepository.findDetailedByUserId(currentUser.getUserId())
+                        .map(ContentVisibilityPolicy::isActiveApprovedTeacher)
+                        .orElse(false);
+    }
+
     @Transactional(readOnly = true)
     public LearningLevel requireLevel(Long levelId) {
         return learningLevelRepository.findById(levelId)
@@ -77,62 +103,11 @@ public class TeacherContentAccessService {
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Selected learning category does not exist."));
     }
 
-    public void validateEditableStatus(ContentStatus currentStatus, String contentLabel) {
-        if (!TEACHER_EDITABLE_STATUSES.contains(currentStatus)) {
-            throw new ResponseStatusException(BAD_REQUEST,
-                    contentLabel + " cannot be edited once it has been archived.");
-        }
-    }
-
     public void validateArchivableStatus(ContentStatus currentStatus, String contentLabel) {
         if (!TEACHER_ARCHIVABLE_STATUSES.contains(currentStatus)) {
-            throw new ResponseStatusException(BAD_REQUEST,
-                    contentLabel + " has already been archived.");
-        }
-    }
-
-    public void validatePrice(AccessType accessType, BigDecimal price) {
-        if (accessType == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Access type is required.");
-        }
-        if (price != null) {
-            validateMoneyPrecision(price);
-        }
-        if (accessType == AccessType.PAID) {
-            if (price == null) {
-                throw new ResponseStatusException(BAD_REQUEST, "Price is required for paid content.");
-            }
-            if (price.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new ResponseStatusException(BAD_REQUEST, "Price must be greater than 0 for paid content.");
-            }
-            return;
-        }
-
-        if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
-            throw new ResponseStatusException(BAD_REQUEST, "Free content must not have a positive price.");
-        }
-    }
-
-    private static BigDecimal normalizePrice(AccessType accessType, BigDecimal price) {
-        if (accessType == AccessType.FREE || price == null) {
-            return ZERO_PRICE;
-        }
-        return price.setScale(ContentDtoConstants.PRICE_FRACTION_DIGITS, RoundingMode.UNNECESSARY);
-    }
-
-    private static void validateMoneyPrecision(BigDecimal price) {
-        if (price.signum() < 0) {
-            throw new ResponseStatusException(BAD_REQUEST, "Price must be greater than or equal to 0.");
-        }
-        BigDecimal normalized = price.stripTrailingZeros();
-        int scale = Math.max(0, normalized.scale());
-        int integerDigits = Math.max(1, normalized.precision() - normalized.scale());
-        if (scale > ContentDtoConstants.PRICE_FRACTION_DIGITS
-                || integerDigits > ContentDtoConstants.PRICE_INTEGER_DIGITS) {
-            throw new ResponseStatusException(BAD_REQUEST,
-                    "Price must fit within " + ContentDtoConstants.PRICE_INTEGER_DIGITS
-                            + " integer digits and " + ContentDtoConstants.PRICE_FRACTION_DIGITS
-                            + " decimal places.");
+            throw new ResponseStatusException(BAD_REQUEST, currentStatus == ContentStatus.ARCHIVED
+                    ? contentLabel + " has already been archived."
+                    : contentLabel + " cannot be archived while it is under review.");
         }
     }
 
@@ -143,8 +118,6 @@ public class TeacherContentAccessService {
             LearningCategory category,
             String title,
             String description,
-            AccessType accessType,
-            BigDecimal price,
             String coverImageUrl) {
         module.setTeacher(teacherProfile);
         module.setLevel(level);
@@ -153,8 +126,6 @@ public class TeacherContentAccessService {
                 title, ContentDtoConstants.TITLE_MAX_LENGTH, "Title is required."));
         module.setDescription(contentSafetyService.optionalSafeText(
                 description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
-        module.setAccessType(accessType);
-        module.setPrice(normalizePrice(accessType, price));
         module.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
     }
 
@@ -167,8 +138,6 @@ public class TeacherContentAccessService {
             String title,
             String description,
             String lessonContent,
-            AccessType accessType,
-            BigDecimal price,
             LearningType learningType,
             Integer estimatedDurationMinutes,
             String coverImageUrl) {
@@ -182,8 +151,6 @@ public class TeacherContentAccessService {
                 description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
         lesson.setLessonContent(contentSafetyService.optionalSafeText(
                 lessonContent, ContentDtoConstants.LESSON_CONTENT_MAX_LENGTH));
-        lesson.setAccessType(accessType);
-        lesson.setPrice(normalizePrice(accessType, price));
         lesson.setLearningType(learningType);
         lesson.setEstimatedDurationMinutes(estimatedDurationMinutes);
         lesson.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
@@ -196,8 +163,6 @@ public class TeacherContentAccessService {
             LearningCategory category,
             String title,
             String description,
-            AccessType accessType,
-            BigDecimal price,
             LearningType learningType,
             String coverImageUrl) {
         coursePackage.setTeacher(teacherProfile);
@@ -207,8 +172,6 @@ public class TeacherContentAccessService {
                 title, ContentDtoConstants.TITLE_MAX_LENGTH, "Title is required."));
         coursePackage.setDescription(contentSafetyService.optionalSafeText(
                 description, ContentDtoConstants.LONG_DESCRIPTION_MAX_LENGTH));
-        coursePackage.setAccessType(accessType);
-        coursePackage.setPrice(normalizePrice(accessType, price));
         coursePackage.setLearningType(learningType);
         coursePackage.setCoverImageUrl(TextUtils.trimToNull(coverImageUrl));
     }

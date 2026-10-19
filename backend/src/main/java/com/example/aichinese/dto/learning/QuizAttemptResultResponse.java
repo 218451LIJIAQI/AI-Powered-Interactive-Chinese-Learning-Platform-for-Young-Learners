@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
+import com.example.aichinese.entity.enums.LearningStage;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder({
@@ -20,7 +21,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "passed",
         "startedAt",
         "submittedAt",
-        "answers"
+        "answers",
+        "percentage",
+        "learningStage"
 })
 public record QuizAttemptResultResponse(
         Long attemptId,
@@ -36,7 +39,9 @@ public record QuizAttemptResultResponse(
         boolean passed,
         LocalDateTime startedAt,
         LocalDateTime submittedAt,
-        List<QuizAttemptResultQuestionResponse> answers) {
+        List<QuizAttemptResultQuestionResponse> answers,
+        int percentage,
+        LearningStage learningStage) {
 
     public QuizAttemptResultResponse {
         Objects.requireNonNull(attemptId, "attemptId must not be null");

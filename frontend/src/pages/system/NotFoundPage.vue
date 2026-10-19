@@ -1,42 +1,49 @@
 <template>
-  <main class="system-page system-page--not-found" :aria-label="t('system.notFoundAria')">
-    <span class="system-bg-orb system-bg-orb--one" />
-    <span class="system-bg-orb system-bg-orb--two" />
-    <div class="surface-card system-card">
-      <div class="system-card-copy">
+  <main id="main-content" class="system-page system-page--not-found" :aria-label="t('system.notFoundAria')">
+    <div class="system-card">
+      <div class="system-copy">
         <AppBrand />
 
-        <div class="system-kicker">
-          <IconGlyph name="search" :size="18" />
+        <p class="system-kicker">
+          <IconGlyph name="search" :size="16" />
           <span>{{ t('system.routeNotFound') }}</span>
-        </div>
+        </p>
 
         <h1>{{ t('system.notFoundTitle') }}</h1>
-        <p>{{ t('system.notFoundMessage') }}</p>
+        <p class="system-message">{{ t('system.notFoundMessage') }}</p>
 
-        <div class="system-action-row">
-          <RouterLink class="btn btn-primary" to="/">{{ t('system.returnHome') }}</RouterLink>
-          <RouterLink class="btn btn-ghost" to="/courses">{{ t('system.exploreCourses') }}</RouterLink>
+        <div class="system-actions">
+          <RouterLink class="btn btn-primary btn-lg" to="/">{{ t('system.returnHome') }}</RouterLink>
+          <RouterLink class="btn btn-secondary btn-lg" to="/courses">{{ t('system.exploreCourses') }}</RouterLink>
         </div>
 
-        <div class="system-link-grid">
-          <RouterLink to="/auth">
-            <strong>{{ t('system.signIn') }}</strong>
-            <span>{{ t('system.signInHint') }}</span>
-          </RouterLink>
-          <RouterLink to="/courses">
-            <strong>{{ t('system.courseCatalog') }}</strong>
-            <span>{{ t('system.courseCatalogHint') }}</span>
-          </RouterLink>
-        </div>
+        <ul class="system-links">
+          <li>
+            <RouterLink class="system-link" to="/auth">
+              <span class="system-link-icon" aria-hidden="true"><IconGlyph name="profile" :size="20" /></span>
+              <span class="system-link-copy">
+                <strong>{{ t('system.signIn') }}</strong>
+                <span>{{ t('system.signInHint') }}</span>
+              </span>
+              <IconGlyph class="system-link-arrow" name="chevronRight" :size="18" />
+            </RouterLink>
+          </li>
+          <li>
+            <RouterLink class="system-link" to="/courses">
+              <span class="system-link-icon" aria-hidden="true"><IconGlyph name="courses" :size="20" /></span>
+              <span class="system-link-copy">
+                <strong>{{ t('system.courseCatalog') }}</strong>
+                <span>{{ t('system.courseCatalogHint') }}</span>
+              </span>
+              <IconGlyph class="system-link-arrow" name="chevronRight" :size="18" />
+            </RouterLink>
+          </li>
+        </ul>
       </div>
 
-      <div class="system-visual">
+      <div class="system-visual" aria-hidden="true">
         <span class="system-code">404</span>
-        <span class="system-cloud system-cloud--one" />
-        <span class="system-cloud system-cloud--two" />
-        <span class="system-pagoda" />
-        <PandaIllustration class="system-panda" :size="220" outfit="#6f4cff" accent="#ffcc2f" />
+        <PandaIllustration class="system-panda" :size="200" outfit="#6f4cff" accent="#ffcc2f" />
       </div>
     </div>
   </main>
@@ -55,7 +62,7 @@ const { t } = useI18n({
   messages: {
     en: { system: systemMessages.en },
     ms: { system: systemMessages.ms },
-    zh: { system: systemMessages.zh },
+    'zh-CN': { system: systemMessages['zh-CN'] },
   },
 })
 </script>

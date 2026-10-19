@@ -65,6 +65,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
                   where tp.user_id = u.id
                     and tp.teacher_status = :teacherStatus
               ))
+              and (:active is null or u.active = :active)
             order by u.created_at desc, u.id desc
             """,
             countQuery = """
@@ -82,12 +83,14 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
                   where tp.user_id = u.id
                     and tp.teacher_status = :teacherStatus
               ))
+              and (:active is null or u.active = :active)
             """,
             nativeQuery = true)
     Page<Long> findAdminUserIds(
             @Param("roleName") String roleName,
             @Param("keyword") String keyword,
             @Param("teacherStatus") String teacherStatus,
+            @Param("active") Boolean active,
             Pageable pageable);
 
     @EntityGraph(attributePaths = { "roles" })

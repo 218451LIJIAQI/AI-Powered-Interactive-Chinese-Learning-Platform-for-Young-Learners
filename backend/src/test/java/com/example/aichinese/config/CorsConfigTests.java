@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -27,7 +28,7 @@ class CorsConfigTests {
     private static final String LOCALHOST_VITE_ORIGIN = "http://localhost:5173";
     private static final String EXAMPLE_ORIGIN = "https://example.test";
 
-    private final CorsConfig config = new CorsConfig();
+    private final CorsConfig config = new CorsConfig(new MockEnvironment());
 
     @Test
     void registersExactOriginsForApiPath() {
@@ -141,6 +142,20 @@ class CorsConfigTests {
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("https://localhost:5173"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("non-loopback public host");
+    }
+
+    @Test
+    void springWiredBeanAppliesProdProfileOriginRules() {
+        new ApplicationContextRunner()
+                .withInitializer(context -> context.getEnvironment().setActiveProfiles("prod"))
+                .withPropertyValues("app.cors.allowed-origins=" + LOCALHOST_VITE_ORIGIN)
+                .withUserConfiguration(CorsConfig.class)
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasRootCauseInstanceOf(IllegalStateException.class)
+                        .rootCause()
+                        .hasMessageContaining("HTTPS"));
     }
 
     private CorsConfiguration apiCorsConfiguration(String allowedOrigins) {

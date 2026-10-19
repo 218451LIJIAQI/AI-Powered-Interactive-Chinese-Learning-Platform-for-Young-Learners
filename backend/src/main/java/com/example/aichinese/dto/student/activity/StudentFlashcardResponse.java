@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record StudentFlashcardResponse(
         Long id,
@@ -19,13 +19,13 @@ public record StudentFlashcardResponse(
         Integer sortOrder,
         String extraPayload,
         Integer hskLevel,
-        AgeBand ageBand,
         ActivityDifficulty difficulty,
         String topic,
         List<String> tags,
         Integer xpReward,
         Integer estimatedSeconds,
-        boolean completed) {
+        boolean completed,
+        LearningStage learningStage) {
 
     public StudentFlashcardResponse {
         Objects.requireNonNull(id, "id must not be null");

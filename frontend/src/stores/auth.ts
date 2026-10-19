@@ -5,6 +5,7 @@ import { authApi } from '@/api/services'
 import { appEnv } from '@/config/env'
 import { demoUsers } from '@/demo/users'
 import { clearOfflineCaches } from '@/plugins/pwa'
+import { useUiStore } from '@/stores/ui'
 import type { CurrentUserResponse, UserRole } from '@/types/api'
 import { getSessionStorage, safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
 
@@ -86,7 +87,8 @@ export const useAuthStore = defineStore('auth', {
       if (state.previewRole && canUsePreviewMode() && !state.token) {
         return demoUsers[state.previewRole].fullName
       }
-      return 'Guest Learner'
+      // No hard-coded English name: callers fall back to their translated default label.
+      return ''
     },
     hasRole: (state) => (role: UserRole) =>
       (state.currentUser?.roles ?? []).includes(role) ||
@@ -161,9 +163,27 @@ export const useAuthStore = defineStore('auth', {
           this.clearSession()
           throw reason
         }
+
+        // D18: an explicit sign-in switches the interface to the account's preferred language (legacy zh -> zh-CN).
+        useUiStore().applyPreferredLanguage(this.currentUser.preferredLanguage)
       } finally {
         this.loading = false
       }
+    },
+    /** Applies `PUT /users/me/profile` (D12): refreshes the signed-in user and switches the UI language. */
+    applyProfileUpdate(user: CurrentUserResponse): void {
+      if (!this.token) return
+      this.currentUser = user
+      useUiStore().applyPreferredLanguage(user.preferredLanguage)
+    },
+    /**
+     * After a password change the server revokes every other session and returns a fresh access token for this
+     * tab (the refresh cookie is rotated by the response). Replace the in-memory token so requests keep working.
+     */
+    replaceAccessToken(token: string): void {
+      if (!this.token || !token) return
+      this.token = token
+      persistToken(token)
     },
     setPreviewRole(role: UserRole | null): void {
       if (this.token) {

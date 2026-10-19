@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteLocationNormalized, RouteLocationRaw } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 
 import type { UserRole } from '@/types/api'
 
 import { useAuthStore } from '@/stores/auth'
-import { normalizeAppRoute } from '@/utils/routeCompat'
-import { defaultRouteForRole } from '@/utils/role'
+
+import { resolveNavigation } from './guard'
+import { applyDocumentTitle } from './pageTitle'
 
 const PublicLayout = () => import('@/layouts/PublicLayout.vue')
 const DashboardLayout = () => import('@/layouts/DashboardLayout.vue')
@@ -13,11 +14,11 @@ const LandingPage = () => import('@/pages/public/LandingPage.vue')
 const AuthPage = () => import('@/pages/public/AuthPage.vue')
 const ForgotPasswordPage = () => import('@/pages/public/ForgotPasswordPage.vue')
 const ResetPasswordPage = () => import('@/pages/public/ResetPasswordPage.vue')
-const PaymentResultPage = () => import('@/pages/public/PaymentResultPage.vue')
 const CatalogPage = () => import('@/pages/public/CatalogPage.vue')
 const CourseDetailPage = () => import('@/pages/public/CourseDetailPage.vue')
 const TermsPage = () => import('@/pages/public/TermsPage.vue')
 const PrivacyPage = () => import('@/pages/public/PrivacyPage.vue')
+const ResponsibleAiPage = () => import('@/pages/public/ResponsibleAiPage.vue')
 const StudentHomePage = () => import('@/pages/student/StudentHomePage.vue')
 const StudentLearnPage = () => import('@/pages/student/StudentLearnPage.vue')
 const StudentPracticePage = () => import('@/pages/student/StudentPracticePage.vue')
@@ -27,20 +28,24 @@ const StudentAchievementsPage = () => import('@/pages/student/StudentAchievement
 const StudentRewardsPage = () => import('@/pages/student/StudentRewardsPage.vue')
 const StudentAiHelperPage = () => import('@/pages/student/StudentAiHelperPage.vue')
 const StudentProfilePage = () => import('@/pages/student/StudentProfilePage.vue')
+const StudentProgressPage = () => import('@/pages/student/StudentProgressPage.vue')
+const StudentPracticeSubmissionsPage = () => import('@/pages/student/StudentPracticeSubmissionsPage.vue')
+const NotificationsPage = () => import('@/pages/shared/NotificationsPage.vue')
+const AccountSettingsPage = () => import('@/pages/shared/AccountSettingsPage.vue')
 const TeacherDashboardPage = () => import('@/pages/teacher/TeacherDashboardPage.vue')
 const TeacherContentPage = () => import('@/pages/teacher/TeacherContentPage.vue')
+const TeacherActivitiesPage = () => import('@/pages/teacher/TeacherActivitiesPage.vue')
 const TeacherClassesPage = () => import('@/pages/teacher/TeacherClassesPage.vue')
 const TeacherStudentsPage = () => import('@/pages/teacher/TeacherStudentsPage.vue')
 const TeacherFeedbackPage = () => import('@/pages/teacher/TeacherFeedbackPage.vue')
 const TeacherProfilePage = () => import('@/pages/teacher/TeacherProfilePage.vue')
-const TeacherEarningsPage = () => import('@/pages/teacher/TeacherEarningsPage.vue')
 const AdminDashboardPage = () => import('@/pages/admin/AdminDashboardPage.vue')
 const AdminActivityLibraryPage = () => import('@/pages/admin/AdminActivityLibraryPage.vue')
 const AdminUsersPage = () => import('@/pages/admin/AdminUsersPage.vue')
 const AdminTeacherVerificationPage = () => import('@/pages/admin/AdminTeacherVerificationPage.vue')
 const AdminContentPage = () => import('@/pages/admin/AdminContentPage.vue')
+const AdminContentReviewPage = () => import('@/pages/admin/AdminContentReviewPage.vue')
 const AdminModerationPage = () => import('@/pages/admin/AdminModerationPage.vue')
-const AdminFinancePage = () => import('@/pages/admin/AdminFinancePage.vue')
 const AdminAnalyticsPage = () => import('@/pages/admin/AdminAnalyticsPage.vue')
 const AdminSettingsPage = () => import('@/pages/admin/AdminSettingsPage.vue')
 const UnauthorizedPage = () => import('@/pages/system/UnauthorizedPage.vue')
@@ -76,15 +81,13 @@ const router = createRouter({
           meta: { title: 'Reset password' },
         },
         { path: 'terms', name: 'terms', component: TermsPage, meta: { title: 'Terms of service' } },
-        { path: 'privacy', name: 'privacy', component: PrivacyPage, meta: { title: 'Privacy policy' } },
-      ],
-    },
-    {
-      path: '/payment',
-      component: PublicLayout,
-      children: [
-        { path: 'success', name: 'payment-success', component: PaymentResultPage, meta: { title: 'Payment success' } },
-        { path: 'cancel', name: 'payment-cancel', component: PaymentResultPage, meta: { title: 'Payment cancelled' } },
+        { path: 'privacy', name: 'privacy', component: PrivacyPage, meta: { title: 'Privacy notice' } },
+        {
+          path: 'responsible-ai',
+          name: 'responsible-ai',
+          component: ResponsibleAiPage,
+          meta: { title: 'Responsible AI Guidance' },
+        },
       ],
     },
     {
@@ -166,6 +169,30 @@ const router = createRouter({
           component: StudentProfilePage,
           meta: { title: 'Profile', roles: ['STUDENT'], previewRole: 'STUDENT' },
         },
+        {
+          path: 'progress',
+          name: 'student-progress',
+          component: StudentProgressPage,
+          meta: { title: 'My progress', roles: ['STUDENT'], previewRole: 'STUDENT' },
+        },
+        {
+          path: 'practice-submissions',
+          name: 'student-practice-submissions',
+          component: StudentPracticeSubmissionsPage,
+          meta: { title: 'Speaking and writing practice', roles: ['STUDENT'], previewRole: 'STUDENT' },
+        },
+        {
+          path: 'notifications',
+          name: 'student-notifications',
+          component: NotificationsPage,
+          meta: { title: 'Notifications', roles: ['STUDENT'], previewRole: 'STUDENT' },
+        },
+        {
+          path: 'account',
+          name: 'student-account',
+          component: AccountSettingsPage,
+          meta: { title: 'Account and security', roles: ['STUDENT'], previewRole: 'STUDENT' },
+        },
       ],
     },
     {
@@ -185,6 +212,12 @@ const router = createRouter({
           name: 'teacher-content',
           component: TeacherContentPage,
           meta: { title: 'Content management', roles: ['TEACHER'], previewRole: 'TEACHER' },
+        },
+        {
+          path: 'activities',
+          name: 'teacher-activities',
+          component: TeacherActivitiesPage,
+          meta: { title: 'Practice activities', roles: ['TEACHER'], previewRole: 'TEACHER' },
         },
         {
           path: 'classes',
@@ -211,10 +244,16 @@ const router = createRouter({
           meta: { title: 'Teacher profile', roles: ['TEACHER'], previewRole: 'TEACHER' },
         },
         {
-          path: 'earnings',
-          name: 'teacher-earnings',
-          component: TeacherEarningsPage,
-          meta: { title: 'Teacher earnings', roles: ['TEACHER'], previewRole: 'TEACHER' },
+          path: 'notifications',
+          name: 'teacher-notifications',
+          component: NotificationsPage,
+          meta: { title: 'Notifications', roles: ['TEACHER'], previewRole: 'TEACHER' },
+        },
+        {
+          path: 'account',
+          name: 'teacher-account',
+          component: AccountSettingsPage,
+          meta: { title: 'Account and security', roles: ['TEACHER'], previewRole: 'TEACHER' },
         },
       ],
     },
@@ -249,6 +288,12 @@ const router = createRouter({
           meta: { title: 'Content management', roles: ['ADMIN'], previewRole: 'ADMIN' },
         },
         {
+          path: 'content-review',
+          name: 'admin-content-review',
+          component: AdminContentReviewPage,
+          meta: { title: 'Content review', roles: ['ADMIN'], previewRole: 'ADMIN' },
+        },
+        {
           path: 'activities',
           name: 'admin-activities',
           component: AdminActivityLibraryPage,
@@ -261,12 +306,6 @@ const router = createRouter({
           meta: { title: 'Reports and moderation', roles: ['ADMIN'], previewRole: 'ADMIN' },
         },
         {
-          path: 'finance',
-          name: 'admin-finance',
-          component: AdminFinancePage,
-          meta: { title: 'Finance', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
           path: 'analytics',
           name: 'admin-analytics',
           component: AdminAnalyticsPage,
@@ -277,6 +316,18 @@ const router = createRouter({
           name: 'admin-settings',
           component: AdminSettingsPage,
           meta: { title: 'Settings and audit', roles: ['ADMIN'], previewRole: 'ADMIN' },
+        },
+        {
+          path: 'notifications',
+          name: 'admin-notifications',
+          component: NotificationsPage,
+          meta: { title: 'Notifications', roles: ['ADMIN'], previewRole: 'ADMIN' },
+        },
+        {
+          path: 'account',
+          name: 'admin-account',
+          component: AccountSettingsPage,
+          meta: { title: 'Account and security', roles: ['ADMIN'], previewRole: 'ADMIN' },
         },
       ],
     },
@@ -291,56 +342,15 @@ const router = createRouter({
   },
 })
 
-const AUTH_ROUTE_NAMES: ReadonlySet<string> = new Set(['auth', 'forgot-password', 'reset-password'])
 const SAFE_HASH_SELECTOR_PATTERN = /^#[A-Za-z][A-Za-z0-9_-]*$/
 
 function safeHashSelector(hash: string): string | null {
   return SAFE_HASH_SELECTOR_PATTERN.test(hash) ? hash : null
 }
 
-function pageTitle(to: RouteLocationNormalized): string {
-  return to.meta.title ? `${to.meta.title} | MandarinSpark` : 'MandarinSpark'
-}
+router.beforeEach((to): Promise<RouteLocationRaw | boolean> => resolveNavigation(to, useAuthStore()))
 
-router.beforeEach(async (to): Promise<RouteLocationRaw | boolean> => {
-  const normalizedRoute = normalizeAppRoute(to.fullPath)
-  if (normalizedRoute && normalizedRoute !== to.fullPath) {
-    return normalizedRoute
-  }
-
-  const auth = useAuthStore()
-  await auth.bootstrap()
-
-  document.title = pageTitle(to)
-
-  const requiredRoles = to.meta.roles ?? []
-
-  if (typeof to.name === 'string' && AUTH_ROUTE_NAMES.has(to.name) && auth.isAuthenticated) {
-    return defaultRouteForRole(auth.activeRole)
-  }
-
-  if (requiredRoles.length === 0) {
-    return true
-  }
-
-  if (
-    auth.isPreviewSession &&
-    auth.previewRole &&
-    to.meta.previewRole === auth.previewRole &&
-    requiredRoles.includes(auth.previewRole)
-  ) {
-    return true
-  }
-
-  if (!auth.isAuthenticated) {
-    return { name: 'auth', query: { redirect: to.fullPath } }
-  }
-
-  if (!requiredRoles.some((role) => auth.hasRole(role))) {
-    return { name: 'unauthorized' }
-  }
-
-  return true
-})
+// FR-I18N-05: the tab title follows the final route and the interface language (App.vue re-applies it on change).
+router.afterEach((to) => applyDocumentTitle(to))
 
 export { router }

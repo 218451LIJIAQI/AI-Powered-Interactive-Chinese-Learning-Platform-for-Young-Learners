@@ -41,10 +41,6 @@ public enum MeetingPlatform {
         return platform;
     }
 
-    public static MeetingPlatform fromValueOrOther(String value) {
-        return tryFrom(value).orElse(OTHER);
-    }
-
     public boolean allowsHost(String host) {
         if (this == OTHER) {
             return true;
@@ -62,10 +58,8 @@ public enum MeetingPlatform {
         for (MeetingPlatform platform : values()) {
             lookup.put(normalizeLookupKey(platform.name()).orElseThrow(), platform);
         }
-        lookup.put(normalizeLookupKey("Zoom").orElseThrow(), ZOOM);
-        lookup.put(normalizeLookupKey("Google Meet").orElseThrow(), GOOGLE_MEET);
+        // Display labels "Zoom", "Google Meet" and "Microsoft Teams" already normalize to the constant names.
         lookup.put(normalizeLookupKey("Meet").orElseThrow(), GOOGLE_MEET);
-        lookup.put(normalizeLookupKey("Microsoft Teams").orElseThrow(), MICROSOFT_TEAMS);
         lookup.put(normalizeLookupKey("MS Teams").orElseThrow(), MICROSOFT_TEAMS);
         lookup.put(normalizeLookupKey("Teams").orElseThrow(), MICROSOFT_TEAMS);
         return Map.copyOf(lookup);

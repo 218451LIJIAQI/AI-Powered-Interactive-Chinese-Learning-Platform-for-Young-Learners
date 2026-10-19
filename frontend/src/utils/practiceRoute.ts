@@ -1,15 +1,6 @@
-import type { AdminActivityType } from '@/types/api'
+import { ACTIVITY_TYPES } from '@/utils/activityForm'
 
-const PRACTICE_ACTIVITY_TYPES = [
-  'FLASHCARD',
-  'MATCHING_GAME',
-  'LISTENING_EXERCISE',
-  'TRACING_EXERCISE',
-  'DRAG_DROP_ACTIVITY',
-  'STORY_ACTIVITY',
-] as const satisfies readonly AdminActivityType[]
-
-export type StudentPracticeActivityType = (typeof PRACTICE_ACTIVITY_TYPES)[number]
+export type StudentPracticeActivityType = (typeof ACTIVITY_TYPES)[number]
 
 type StudentPracticeRoute = {
   name: 'student-practice'
@@ -46,7 +37,7 @@ const PRACTICE_ACTIVITY_ALIASES: Record<string, StudentPracticeActivityType> = {
   'story-activity': 'STORY_ACTIVITY',
 }
 
-const PRACTICE_ACTIVITY_TYPE_SET: ReadonlySet<string> = new Set(PRACTICE_ACTIVITY_TYPES)
+const PRACTICE_ACTIVITY_TYPE_SET: ReadonlySet<string> = new Set(ACTIVITY_TYPES)
 
 function normalizeAliasKey(value: string): string {
   return value.trim().toLowerCase().replaceAll('_', '-').replace(/\s+/g, '-')

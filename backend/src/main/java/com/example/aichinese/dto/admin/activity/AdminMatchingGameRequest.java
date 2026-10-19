@@ -8,7 +8,6 @@ import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -16,6 +15,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminMatchingGameRequest(
         @NotBlank(message = "Title is required.")
@@ -25,8 +25,6 @@ public record AdminMatchingGameRequest(
         @Min(value = 1, message = "HSK level must be between 1 and 6.")
         @Max(value = 6, message = "HSK level must be between 1 and 6.")
         Integer hskLevel,
-
-        AgeBand ageBand,
 
         ActivityDifficulty difficulty,
 
@@ -49,7 +47,8 @@ public record AdminMatchingGameRequest(
 
         @Valid
         @Size(max = 200, message = "A matching game cannot contain more than 200 pairs.")
-        List<@NotNull(message = "Matching game item must not be null.") AdminMatchingGameItemRequest> items) {
+        List<@NotNull(message = "Matching game item must not be null.") AdminMatchingGameItemRequest> items,
+        LearningStage learningStage) {
 
     public AdminMatchingGameRequest {
         title = strip(title);

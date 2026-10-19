@@ -1,4 +1,5 @@
 import type { AppLanguage } from '@/types/api'
+import { normalizeAppLanguage } from '@/utils/locale'
 
 export const storageKeys = {
   token: 'mandarin-spark.token',
@@ -55,9 +56,14 @@ export function safeRemoveItem(key: string, storage: Storage | null = getLocalSt
   writeStorage(storage, (availableStorage) => availableStorage.removeItem(key))
 }
 
-const validLocales: ReadonlySet<string> = new Set<AppLanguage>(['en', 'ms', 'zh'])
-
+/**
+ * Reads the stored interface language. A value saved by an earlier build with the legacy
+ * Chinese code is mapped to zh-CN and written back so the old value disappears.
+ */
 export function readPersistedLocale(): AppLanguage {
   const raw = safeGetItem(storageKeys.language)
-  return raw !== null && validLocales.has(raw) ? (raw as AppLanguage) : 'en'
+  const locale = normalizeAppLanguage(raw)
+  if (!locale) return 'en'
+  if (raw !== locale) safeSetItem(storageKeys.language, locale)
+  return locale
 }

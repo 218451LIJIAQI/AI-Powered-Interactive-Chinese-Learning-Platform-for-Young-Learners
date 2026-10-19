@@ -23,6 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.example.aichinese.support.QuizAnswerTestSupport;
+import com.example.aichinese.support.ContentReviewTestSupport;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
@@ -39,7 +41,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * It proves the roster is derived from engagement signals (lesson
  * progress, quiz attempts, live-class enrolments) rather than an
  * explicit relationship table, and that the PII boundary holds
- * (student email / age / parent contact never leak through to the
+ * (student email and other account details never leak through to the
  * teacher view).
  */
 @SpringBootTest(properties = {
@@ -71,7 +73,6 @@ class TeacherStudentsIntegrationTests {
     private static final String LOGIN_ENDPOINT = "/api/v1/auth/login";
     private static final String FEEDBACK_TYPE_PROGRESS = "PROGRESS";
     private static final String LEARNING_TYPE_RECORDED = "RECORDED";
-    private static final String ACCESS_TYPE_FREE = "FREE";
     private static final String CHOOSE_TONE = "CHOOSE_TONE";
     private static final String TRUE_FALSE = "TRUE_FALSE";
     private static final String DOCUMENT_TYPE_QUALIFICATION = "QUALIFICATION";
@@ -86,6 +87,9 @@ class TeacherStudentsIntegrationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private com.example.aichinese.repository.QuizOptionRepository quizOptionRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -135,7 +139,11 @@ class TeacherStudentsIntegrationTests {
                 .andExpect(jsonPath("$.data.items[0].progressPercent").value(100))
                 .andExpect(jsonPath("$.data.items[0].quizAveragePercent").value(50.0))
                 .andExpect(jsonPath("$.data.items[0].atRisk").value(true))
-                .andExpect(jsonPath("$.data.items[0].weakAreas[0]").value("Progress"))
+                // W4: flagged for the low quiz average (50 %), weak areas are lesson titles of wrong answers.
+                .andExpect(jsonPath("$.data.items[0].needsSupport").value(true))
+                .andExpect(jsonPath("$.data.items[0].supportReasons[0]").value("LOW_QUIZ_SCORE"))
+                .andExpect(jsonPath("$.data.items[0].weakAreas[0]").value("Teacher Students Lesson"))
+                .andExpect(jsonPath("$.data.items[0].lessonMastery[0].mastery").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.items[0].latestFeedbackType").value(FEEDBACK_TYPE_PROGRESS))
                 .andExpect(jsonPath("$.data.items[0].latestFeedbackAt").isNotEmpty())
                 .andExpect(jsonPath("$.data.items[0].latestActivityAt").isNotEmpty())
@@ -158,14 +166,15 @@ class TeacherStudentsIntegrationTests {
                         "levelId", DEFAULT_LEVEL_ID,
                         "categoryId", DEFAULT_CATEGORY_ID,
                         "learningType", LEARNING_TYPE_RECORDED,
-                        "accessType", ACCESS_TYPE_FREE,
-                        "price", 0,
                         "estimatedDurationMinutes", DEFAULT_DURATION_MINUTES,
                         "basicContent", "Teacher students integration content")))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return extractDataId(lessonResult);
+        Long lessonId = extractDataId(lessonResult);
+        // D4: lessons reach students only after admin approval.
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "LESSON", lessonId);
+        return lessonId;
     }
 
     private Long createQuizWithQuestions(String teacherToken, Long lessonId) throws Exception {
@@ -204,6 +213,7 @@ class TeacherStudentsIntegrationTests {
                         2)))
                 .andExpect(status().isOk());
 
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "QUIZ", quizId);
         return quizId;
     }
 
@@ -218,8 +228,8 @@ class TeacherStudentsIntegrationTests {
 
         mockMvc.perform(authenticatedJsonPost(studentQuizPath(quizId) + "/attempts", studentToken, Map.of(
                         "answers", List.of(
-                                Map.of("questionId", firstQuestionId, "answerText", "ma1"),
-                                Map.of("questionId", secondQuestionId, "answerText", "FALSE")))))
+                                QuizAnswerTestSupport.optionAnswer(quizOptionRepository, firstQuestionId, "ma1"),
+                                QuizAnswerTestSupport.optionAnswer(quizOptionRepository, secondQuestionId, "FALSE")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(QUESTION_POINTS))
                 .andExpect(jsonPath("$.data.maxScore").value(QUESTION_POINTS * 2));

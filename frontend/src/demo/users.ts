@@ -10,8 +10,9 @@ export const demoUsers: Record<UserRole, CurrentUserResponse> = {
     studentProfile: {
       id: 201,
       displayName: 'Learner',
-      currentLevel: 'Level 3 Little Learner',
+      currentLevel: 'Level 3 Developing Learner',
       totalPoints: 850,
+      institution: 'Universiti Malaya',
     },
     teacherProfile: null,
   },
@@ -25,7 +26,7 @@ export const demoUsers: Record<UserRole, CurrentUserResponse> = {
     teacherProfile: {
       id: 301,
       teacherStatus: 'APPROVED',
-      bio: 'Warm, structured beginner Mandarin teacher focused on primary learners.',
+      bio: 'Structured beginner Mandarin teacher for university students and young professionals, focused on everyday conversation and pinyin.',
       rejectionReason: null,
     },
   },

@@ -28,7 +28,6 @@ import lombok.Setter;
         @Index(name = "idx_live_class_enrolments_live_class_id", columnList = "live_class_id"),
         @Index(name = "idx_live_class_enrolments_student_id", columnList = "student_id")
 }, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_live_class_enrolments_live_class_student", columnNames = { "live_class_id", "student_id" }),
         @UniqueConstraint(name = "uk_live_class_enrolments_active_student", columnNames = { "active_enrolment_key" })
 })
 public class LiveClassEnrolment extends BaseEntity {

@@ -7,7 +7,6 @@ import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -15,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminFlashcardRequest(
         @Size(max = 200, message = "Title must not exceed 200 characters.")
@@ -60,8 +60,6 @@ public record AdminFlashcardRequest(
         @Max(value = 6, message = "HSK level must be between 1 and 6.")
         Integer hskLevel,
 
-        AgeBand ageBand,
-
         ActivityDifficulty difficulty,
 
         @Size(max = 100, message = "Topic must not exceed 100 characters.")
@@ -79,7 +77,8 @@ public record AdminFlashcardRequest(
 
         @Min(value = 0, message = "Estimated seconds must be non-negative.")
         @Max(value = 86_400, message = "Estimated seconds must not exceed 86400 (24 hours).")
-        Integer estimatedSeconds) {
+        Integer estimatedSeconds,
+        LearningStage learningStage) {
 
     public AdminFlashcardRequest {
         title = stripToNull(title);

@@ -30,7 +30,6 @@ import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherFeedback;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
@@ -59,8 +58,6 @@ public class NotificationService {
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LiveClassRepository liveClassRepository;
     private final StudentProfileRepository studentProfileRepository;
-    private final StudentLearningAccessService studentLearningAccessService;
-    private final LiveLearningAccessService liveLearningAccessService;
 
     public NotificationService(
             NotificationRepository notificationRepository,
@@ -69,9 +66,7 @@ public class NotificationService {
             TeacherFeedbackRepository teacherFeedbackRepository,
             RecordedLessonVideoRepository recordedLessonVideoRepository,
             LiveClassRepository liveClassRepository,
-            StudentProfileRepository studentProfileRepository,
-            StudentLearningAccessService studentLearningAccessService,
-            LiveLearningAccessService liveLearningAccessService) {
+            StudentProfileRepository studentProfileRepository) {
         this.notificationRepository = Objects.requireNonNull(notificationRepository, "notificationRepository");
         this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
         this.notificationTransactionTemplate = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
@@ -80,8 +75,6 @@ public class NotificationService {
         this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
         this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
-        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
-        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
     }
 
     @Transactional
@@ -180,6 +173,16 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public PageResponse<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser, int page, int size) {
+        return getCurrentUserNotifications(currentUser, null, page, size);
+    }
+
+    /** Notifications page (D20): optional READ / UNREAD filter, newest first. */
+    @Transactional(readOnly = true)
+    public PageResponse<NotificationResponse> getCurrentUserNotifications(
+            SecurityUserDetails currentUser,
+            NotificationStatus status,
+            int page,
+            int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         long requestedStart = (long) safePage * safeSize;
@@ -187,7 +190,7 @@ public class NotificationService {
         List<NotificationResponse> items = new ArrayList<>(safeSize);
         NotificationCursor cursor = NotificationCursor.initial();
         while (true) {
-            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), null, cursor);
+            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), status, cursor);
             if (batch.isEmpty()) {
                 break;
             }
@@ -286,13 +289,13 @@ public class NotificationService {
         }
         Lesson feedbackLesson = feedback.getLesson();
         if (feedbackLesson != null) {
-            return hasFeedbackLessonAccess(student, feedbackLesson);
+            return isPublishedLesson(feedbackLesson);
         }
         Lesson quizLesson = feedback.getQuizAttempt() == null || feedback.getQuizAttempt().getQuiz() == null
                 ? null
                 : feedback.getQuizAttempt().getQuiz().getLesson();
         if (quizLesson != null) {
-            return hasFeedbackLessonAccess(student, quizLesson);
+            return isPublishedLesson(quizLesson);
         }
         return true;
     }
@@ -303,34 +306,29 @@ public class NotificationService {
         if (student == null || video == null) {
             return false;
         }
-        return hasLiveLessonAccess(student, video.getLesson())
-                && hasLivePackageAccess(student, video.getCoursePackage());
+        return isPublishedOrAbsent(video.getLesson())
+                && isPublishedOrAbsent(video.getCoursePackage());
     }
 
     private boolean isLiveClassNotificationAccessible(Notification notification) {
         StudentProfile student = resolveNotificationStudent(notification);
         Long targetId = notification.getTargetId();
         return student != null && targetId != null && liveClassRepository.findById(targetId)
-                .map(liveClass -> hasLiveLessonAccess(student, liveClass.getLesson())
-                        && hasLivePackageAccess(student, liveClass.getCoursePackage()))
+                .map(liveClass -> isPublishedOrAbsent(liveClass.getLesson())
+                        && isPublishedOrAbsent(liveClass.getCoursePackage()))
                 .orElse(false);
     }
 
-    private boolean hasFeedbackLessonAccess(StudentProfile student, Lesson lesson) {
-        return lesson.getContentStatus() == ContentStatus.PUBLISHED
-                && studentLearningAccessService.hasLessonAccess(student, lesson);
+    private static boolean isPublishedLesson(Lesson lesson) {
+        return ContentVisibilityPolicy.isLessonVisible(lesson);
     }
 
-    private boolean hasLiveLessonAccess(StudentProfile student, Lesson lesson) {
-        return lesson == null
-                || (lesson.getContentStatus() == ContentStatus.PUBLISHED
-                        && liveLearningAccessService.hasStudentLessonAccess(student, lesson));
+    private static boolean isPublishedOrAbsent(Lesson lesson) {
+        return lesson == null || ContentVisibilityPolicy.isLessonVisible(lesson);
     }
 
-    private boolean hasLivePackageAccess(StudentProfile student, CoursePackage coursePackage) {
-        return coursePackage == null
-                || (coursePackage.getContentStatus() == ContentStatus.PUBLISHED
-                        && liveLearningAccessService.hasStudentPackageAccess(student, coursePackage));
+    private static boolean isPublishedOrAbsent(CoursePackage coursePackage) {
+        return coursePackage == null || ContentVisibilityPolicy.isPackageVisible(coursePackage);
     }
 
     private StudentProfile resolveNotificationStudent(Notification notification) {

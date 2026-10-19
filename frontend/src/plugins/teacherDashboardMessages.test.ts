@@ -5,7 +5,7 @@ import { teacherDashboardMessages } from './teacherDashboardMessages'
 
 function expectCompleteTranslations(messages: Record<string, Record<string, string>>) {
   const englishKeys = Object.keys(messages.en ?? {}).sort()
-  for (const locale of ['ms', 'zh']) {
+  for (const locale of ['ms', 'zh-CN']) {
     expect(Object.keys(messages[locale] ?? {}).sort()).toEqual(englishKeys)
     for (const key of englishKeys) {
       expect(messages[locale]?.[key]?.trim()).not.toBe('')

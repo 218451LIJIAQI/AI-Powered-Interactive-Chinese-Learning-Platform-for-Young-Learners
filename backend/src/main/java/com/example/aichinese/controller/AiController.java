@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.example.aichinese.dto.ApiResponse;
@@ -26,8 +28,6 @@ import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.ai.AiAvailabilityResponse;
 import com.example.aichinese.dto.ai.AiChatRequest;
 import com.example.aichinese.dto.ai.AiChatResponse;
-import com.example.aichinese.dto.ai.AiLearningRecommendationRequest;
-import com.example.aichinese.dto.ai.AiLearningRecommendationResponse;
 import com.example.aichinese.dto.ai.AiPronunciationFeedbackResponse;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorResponse;
@@ -40,6 +40,7 @@ import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperResponse;
 import com.example.aichinese.dto.ai.AiWritingFeedbackResponse;
 import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.AiService;
@@ -61,6 +62,7 @@ public class AiController {
     private static final String SSE_DELTA_EVENT = "delta";
     private static final String SSE_COMPLETE_EVENT = "complete";
     private static final String SSE_ERROR_EVENT = "error";
+    private static final String STREAM_FAILED_MESSAGE = "AI chat stream failed. Please try again.";
     private static final String MDC_REQUEST_ID = "requestId";
     private static final long CHAT_STREAM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
     private static final int STREAM_CHUNK_SIZE = 24;
@@ -130,7 +132,7 @@ public class AiController {
                 log.warn("AI chat stream failed for user id {} with exception type {}.",
                         currentUser == null ? null : currentUser.getUserId(),
                         exception.getClass().getSimpleName());
-                completeWithSafeError(emitter);
+                completeWithSafeError(emitter, safeStreamErrorMessage(exception));
             } finally {
                 clearRequestContext();
             }
@@ -205,18 +207,8 @@ public class AiController {
                 aiService.storyGenerator(currentUser, request));
     }
 
-    @PostMapping("/learning-recommendation")
-    @Operation(summary = "Generate learning recommendations", description = "Uses progress context to suggest the student's next Mandarin practice step.")
-    public ApiResponse<AiLearningRecommendationResponse> learningRecommendation(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @Valid @RequestBody AiLearningRecommendationRequest request) {
-        return ApiResponse.success(
-                "AI learning recommendation request processed.",
-                aiService.learningRecommendation(currentUser, request));
-    }
-
     @PostMapping("/pronunciation-feedback")
-    @Operation(summary = "Upload pronunciation audio", description = "Stores a prototype pronunciation recording and returns provider capability feedback.")
+    @Operation(summary = "Upload pronunciation audio", description = "Stores a pronunciation recording as a practice submission for teacher review (returns submissionId); AI audio feedback is not supported by the configured model.")
     public ApiResponse<AiPronunciationFeedbackResponse> pronunciationFeedback(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam("file") MultipartFile file,
@@ -228,14 +220,15 @@ public class AiController {
             @Size(max = 20, message = "Tone must not exceed 20 characters.")
             @RequestParam(value = "tone", required = false) String tone,
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
-            @RequestParam(value = "languagePreference", required = false) String languagePreference) {
+            @RequestParam(value = "languagePreference", required = false) String languagePreference,
+            @RequestParam(value = "lessonId", required = false) Long lessonId) {
         return ApiResponse.success(
                 "AI pronunciation feedback request processed.",
-                aiService.pronunciationFeedback(currentUser, file, targetText, pinyin, tone, languagePreference));
+                aiService.pronunciationFeedback(currentUser, file, targetText, pinyin, tone, languagePreference, lessonId));
     }
 
     @PostMapping("/writing-feedback")
-    @Operation(summary = "Upload writing image", description = "Stores a prototype handwriting image and returns provider capability feedback.")
+    @Operation(summary = "Upload writing image", description = "Stores a handwriting image as a practice submission for teacher review (returns submissionId) and, when the configured provider accepts images, returns limited AI-assisted feedback (not a score).")
     public ApiResponse<AiWritingFeedbackResponse> writingFeedback(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam("file") MultipartFile file,
@@ -243,10 +236,11 @@ public class AiController {
             @Size(max = 100, message = "Target character must not exceed 100 characters.")
             @RequestParam("targetCharacter") String targetCharacter,
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
-            @RequestParam(value = "languagePreference", required = false) String languagePreference) {
+            @RequestParam(value = "languagePreference", required = false) String languagePreference,
+            @RequestParam(value = "lessonId", required = false) Long lessonId) {
         return ApiResponse.success(
                 "AI writing feedback request processed.",
-                aiService.writingFeedback(currentUser, file, targetCharacter, languagePreference));
+                aiService.writingFeedback(currentUser, file, targetCharacter, languagePreference, lessonId));
     }
 
     private static void sendChunkedText(SseEmitter emitter, String text) throws IOException {
@@ -278,11 +272,20 @@ public class AiController {
         RequestIdHolder.clear();
     }
 
-    private static void completeWithSafeError(SseEmitter emitter) {
+    /** A reached AI quota keeps its friendly 429 text (minute or daily limit); any other failure stays generic. */
+    private static String safeStreamErrorMessage(Exception exception) {
+        if (exception instanceof ResponseStatusException statusException
+                && statusException.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+            return FriendlyErrorMessageResolver.resolve(statusException.getStatusCode(), statusException.getReason());
+        }
+        return STREAM_FAILED_MESSAGE;
+    }
+
+    private static void completeWithSafeError(SseEmitter emitter, String message) {
         try {
             emitter.send(SseEmitter.event()
                     .name(SSE_ERROR_EVENT)
-                    .data("AI chat stream failed. Please try again."));
+                    .data(message));
         } catch (IOException | IllegalStateException ignored) {
             // Client may have disconnected; the caller already logged a safe failure summary.
         }

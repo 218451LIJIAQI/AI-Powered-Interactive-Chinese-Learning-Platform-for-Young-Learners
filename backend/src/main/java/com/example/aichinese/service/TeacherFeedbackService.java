@@ -4,7 +4,9 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -21,11 +23,11 @@ import com.example.aichinese.dto.communication.CreateTeacherFeedbackRequest;
 import com.example.aichinese.dto.communication.StudentTeacherFeedbackResponse;
 import com.example.aichinese.dto.communication.TeacherFeedbackResponse;
 import com.example.aichinese.dto.communication.UpdateTeacherFeedbackRequest;
-import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LessonProgress;
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
+import com.example.aichinese.entity.PracticeSubmission;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherFeedback;
@@ -71,8 +73,8 @@ public class TeacherFeedbackService {
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final StudentLearningAccessService studentLearningAccessService;
-    private final LiveLearningAccessService liveLearningAccessService;
     private final ContentSafetyService contentSafetyService;
+    private final PracticeSubmissionService practiceSubmissionService;
 
     public TeacherFeedbackService(
             TeacherFeedbackRepository teacherFeedbackRepository,
@@ -86,8 +88,8 @@ public class TeacherFeedbackService {
             NotificationService notificationService,
             AuditLogService auditLogService,
             StudentLearningAccessService studentLearningAccessService,
-            LiveLearningAccessService liveLearningAccessService,
-            ContentSafetyService contentSafetyService) {
+            ContentSafetyService contentSafetyService,
+            PracticeSubmissionService practiceSubmissionService) {
         this.teacherFeedbackRepository = Objects.requireNonNull(teacherFeedbackRepository, "teacherFeedbackRepository");
         this.teacherProfileRepository = Objects.requireNonNull(teacherProfileRepository, "teacherProfileRepository");
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
@@ -99,8 +101,8 @@ public class TeacherFeedbackService {
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
-        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
         this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
+        this.practiceSubmissionService = Objects.requireNonNull(practiceSubmissionService, "practiceSubmissionService");
     }
 
     @Transactional
@@ -110,6 +112,9 @@ public class TeacherFeedbackService {
         }
         TeacherProfile teacher = requireTeacher(currentUser.getUserId());
         StudentProfile student = requireStudent(request.studentId());
+        if (request.practiceSubmissionId() != null) {
+            return createPracticeSubmissionFeedback(teacher, student, request);
+        }
         Lesson lesson = request.lessonId() != null ? requireTeacherLesson(request.lessonId(), currentUser.getUserId()) : null;
         QuizAttempt quizAttempt = request.quizAttemptId() != null ? requireTeacherQuizAttempt(request.quizAttemptId(), currentUser.getUserId()) : null;
         Lesson linkedLesson = linkedLesson(lesson, quizAttempt);
@@ -152,6 +157,33 @@ public class TeacherFeedbackService {
         return communicationMapper.toTeacherFeedbackResponse(saved);
     }
 
+    /**
+     * Feedback linked to a practice submission (D7a): the teacher must be allowed to review it
+     * (student on the roster or the submission's lesson is the teacher's); the submission becomes
+     * REVIEWED and the student is notified.
+     */
+    private TeacherFeedbackResponse createPracticeSubmissionFeedback(
+            TeacherProfile teacher,
+            StudentProfile student,
+            CreateTeacherFeedbackRequest request) {
+        PracticeSubmission submission = practiceSubmissionService.requireReviewableForFeedback(
+                teacher, request.practiceSubmissionId(), student);
+        TeacherFeedback feedback = new TeacherFeedback();
+        feedback.setTeacher(teacher);
+        feedback.setStudent(submission.getStudent());
+        feedback.setLesson(submission.getLesson());
+        feedback.setPracticeSubmission(submission);
+        feedback.setFeedbackType(parseFeedbackType(request.feedbackType()).name());
+        feedback.setFeedbackMessage(contentSafetyService.requireSafeText(
+                request.message(),
+                MAX_FEEDBACK_MESSAGE_LENGTH,
+                "Feedback message is required."));
+        TeacherFeedback saved = teacherFeedbackRepository.save(feedback);
+        practiceSubmissionService.markReviewed(submission);
+        practiceSubmissionService.afterFeedback(teacher, submission, saved);
+        return communicationMapper.toTeacherFeedbackResponse(saved);
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<TeacherFeedbackResponse> getTeacherFeedback(SecurityUserDetails currentUser, int page, int size) {
         int safePage = PaginationUtils.sanitizePage(page);
@@ -170,9 +202,12 @@ public class TeacherFeedbackService {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
+        // The relationship check loads the student's progress, attempts and enrolments, so it runs
+        // once per teacher instead of once per feedback item.
+        Map<Long, Boolean> relationshipByTeacherUserId = new HashMap<>();
         List<TeacherFeedback> accessibleFeedback = teacherFeedbackRepository.findByStudentUserIdOrderByCreatedAtDesc(
                 currentUser.getUserId()).stream()
-                .filter(feedback -> isStudentFeedbackCurrentlyAccessible(student, feedback))
+                .filter(feedback -> isStudentFeedbackCurrentlyAccessible(student, feedback, relationshipByTeacherUserId))
                 .toList();
         List<StudentTeacherFeedbackResponse> items = accessibleFeedback.stream()
                 .skip((long) safePage * safeSize)
@@ -192,7 +227,7 @@ public class TeacherFeedbackService {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         TeacherFeedback feedback = teacherFeedbackRepository.findByIdAndStudentUserId(feedbackId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, FEEDBACK_NOT_FOUND));
-        if (!isStudentFeedbackCurrentlyAccessible(student, feedback)) {
+        if (!isStudentFeedbackCurrentlyAccessible(student, feedback, new HashMap<>())) {
             throw new ResponseStatusException(NOT_FOUND, FEEDBACK_NOT_FOUND);
         }
         return communicationMapper.toStudentTeacherFeedbackResponse(feedback);
@@ -259,20 +294,26 @@ public class TeacherFeedbackService {
     }
 
     private void ensureStudentCanReceiveFeedback(StudentProfile student, Long teacherUserId, Lesson lesson) {
-        if (lesson != null && !studentLearningAccessService.hasLessonAccess(student, lesson)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Feedback can only be created for students with current access to the linked lesson.");
-        }
         if (lesson == null && !hasCurrentAccessibleTeacherRelationship(student, teacherUserId)) {
             throw new ResponseStatusException(BAD_REQUEST, "Feedback can only be created for students with current access to your content.");
         }
     }
 
-    private boolean isStudentFeedbackCurrentlyAccessible(StudentProfile student, TeacherFeedback feedback) {
+    private boolean isStudentFeedbackCurrentlyAccessible(
+            StudentProfile student,
+            TeacherFeedback feedback,
+            Map<Long, Boolean> relationshipByTeacherUserId) {
         Lesson lesson = linkedLesson(feedback.getLesson(), feedback.getQuizAttempt());
         if (lesson != null) {
-            return studentLearningAccessService.hasLessonAccess(student, lesson);
+            return true;
         }
-        return hasCurrentAccessibleTeacherRelationship(student, teacherUserId(feedback));
+        Long teacherUserId = teacherUserId(feedback);
+        if (teacherUserId == null) {
+            return false;
+        }
+        return relationshipByTeacherUserId.computeIfAbsent(
+                teacherUserId,
+                id -> hasCurrentAccessibleTeacherRelationship(student, id));
     }
 
     private boolean hasCurrentAccessibleTeacherRelationship(StudentProfile student, Long teacherUserId) {
@@ -281,10 +322,10 @@ public class TeacherFeedbackService {
         }
         boolean lessonProgressAccess = lessonProgressRepository.findByStudentIdOrderByUpdatedAtDesc(student.getId()).stream()
                 .map(LessonProgress::getLesson)
-                .anyMatch(lesson -> isTeacherLesson(lesson, teacherUserId) && studentLearningAccessService.hasLessonAccess(student, lesson));
+                .anyMatch(lesson -> isTeacherLesson(lesson, teacherUserId));
         boolean quizAttemptAccess = quizAttemptRepository.findByStudentIdOrderByCompletedAtDescCreatedAtDesc(student.getId()).stream()
                 .map(quizAttempt -> linkedLesson(null, quizAttempt))
-                .anyMatch(lesson -> isTeacherLesson(lesson, teacherUserId) && studentLearningAccessService.hasLessonAccess(student, lesson));
+                .anyMatch(lesson -> isTeacherLesson(lesson, teacherUserId));
         return lessonProgressAccess
                 || quizAttemptAccess
                 || hasAccessibleLiveClassRelationship(student, teacherUserId);
@@ -297,19 +338,7 @@ public class TeacherFeedbackService {
                 .anyMatch(status -> liveClassEnrolmentRepository
                         .findByStudentIdAndEnrolmentStatusOrderByLiveClassScheduledStartAtAsc(student.getId(), status).stream()
                         .map(LiveClassEnrolment::getLiveClass)
-                        .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId)
-                                && hasCurrentLiveClassAccess(student, liveClass)));
-    }
-
-    private boolean hasCurrentLiveClassAccess(StudentProfile student, LiveClass liveClass) {
-        if (liveClass == null) {
-            return false;
-        }
-        Lesson lesson = liveClass.getLesson();
-        CoursePackage coursePackage = liveClass.getCoursePackage();
-        boolean lessonAccess = lesson == null || liveLearningAccessService.hasStudentLessonAccess(student, lesson);
-        boolean packageAccess = coursePackage == null || liveLearningAccessService.hasStudentPackageAccess(student, coursePackage);
-        return lessonAccess && packageAccess;
+                        .anyMatch(liveClass -> isTeacherLiveClass(liveClass, teacherUserId)));
     }
 
     private static Lesson linkedLesson(Lesson lesson, QuizAttempt quizAttempt) {

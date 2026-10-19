@@ -22,7 +22,8 @@ import jakarta.validation.constraints.Size;
         "points",
         "displayOrder",
         "options",
-        "explanation"
+        "explanation",
+        "hint"
 })
 public record UpdateQuizQuestionRequest(
         @NotBlank(message = "Question type is required.")
@@ -42,13 +43,17 @@ public record UpdateQuizQuestionRequest(
         @Valid
         List<@NotNull(message = "Quiz option must not be null.") QuizOptionRequest> options,
         @Size(max = 2000, message = "Explanation must be 2000 characters or fewer.")
-        String explanation) {
+        String explanation,
+
+        @Size(max = 1000, message = "Hint must be 1000 characters or fewer.")
+        String hint) {
 
     public UpdateQuizQuestionRequest {
         questionType = strip(questionType);
         questionText = strip(questionText);
         correctAnswerText = stripToNull(correctAnswerText);
         explanation = stripToNull(explanation);
+        hint = stripToNull(hint);
         options = immutableListOrEmpty(options);
     }
 }

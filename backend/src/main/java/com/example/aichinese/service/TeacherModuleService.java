@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,8 +18,8 @@ import com.example.aichinese.dto.content.LearningModuleResponse;
 import com.example.aichinese.dto.content.UpdateModuleRequest;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.ReviewContentType;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.LearningModuleRepository;
 import com.example.aichinese.security.SecurityUserDetails;
@@ -45,21 +44,25 @@ public class TeacherModuleService {
     private static final String ACTION_CREATE = "TEACHER_MODULE_CREATE";
     private static final String ACTION_UPDATE = "TEACHER_MODULE_UPDATE";
     private static final String ACTION_ARCHIVE = "TEACHER_MODULE_ARCHIVE";
+    private static final ReviewContentType REVIEW_TYPE = ReviewContentType.MODULE;
 
     private final LearningModuleRepository learningModuleRepository;
     private final TeacherContentAccessService teacherContentAccessService;
     private final ContentManagementMapper contentManagementMapper;
     private final AuditLogService auditLogService;
+    private final ContentReviewService contentReviewService;
 
     public TeacherModuleService(
             LearningModuleRepository learningModuleRepository,
             TeacherContentAccessService teacherContentAccessService,
             ContentManagementMapper contentManagementMapper,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentReviewService contentReviewService) {
         this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
         this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
     }
 
     @Transactional(readOnly = true)
@@ -88,14 +91,11 @@ public class TeacherModuleService {
             throw new ResponseStatusException(BAD_REQUEST, MODULE_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
-        teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
         LearningModule module = new LearningModule();
         attachModuleMetadata(module, teacherProfile, ModuleMetadata.from(request));
-        // No admin review flow: teacher-created modules go live immediately so
-        // approved teachers fully own the publish/archive lifecycle of their
-        // own teaching containers.
-        module.setContentStatus(ContentStatus.PUBLISHED);
+        // Review workflow (D4): new modules are drafts until an admin approves them.
+        module.setContentStatus(ContentStatus.DRAFT);
         module.setRejectionReason(null);
 
         LearningModule saved = learningModuleRepository.save(module);
@@ -104,7 +104,7 @@ public class TeacherModuleService {
                 ACTION_CREATE,
                 AUDIT_TARGET_MODULE,
                 saved.getId(),
-                "Teacher created and published a learning module.");
+                "Teacher created a learning module draft.");
         return contentManagementMapper.toLearningModuleResponse(saved);
     }
 
@@ -115,10 +115,10 @@ public class TeacherModuleService {
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         LearningModule module = findOwnedModule(currentUser, moduleId);
-        teacherContentAccessService.validateEditableStatus(module.getContentStatus(), "Module");
-        teacherContentAccessService.validatePrice(request.accessType(), request.price());
+        contentReviewService.requireTeacherEditable(module, REVIEW_TYPE);
 
         attachModuleMetadata(module, teacherProfile, ModuleMetadata.from(request));
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, module);
 
         LearningModule saved = learningModuleRepository.save(module);
         auditLogService.record(
@@ -126,8 +126,16 @@ public class TeacherModuleService {
                 ACTION_UPDATE,
                 AUDIT_TARGET_MODULE,
                 saved.getId(),
-                "Teacher updated a learning module draft.");
+                "Teacher updated a learning module.");
         return contentManagementMapper.toLearningModuleResponse(saved);
+    }
+
+    @Transactional
+    public LearningModuleResponse submitModule(SecurityUserDetails currentUser, Long moduleId) {
+        TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
+        LearningModule module = findOwnedModule(currentUser, moduleId);
+        contentReviewService.submitForReview(teacherProfile.getUser(), REVIEW_TYPE, module);
+        return contentManagementMapper.toLearningModuleResponse(learningModuleRepository.save(module));
     }
 
     @Transactional
@@ -164,8 +172,6 @@ public class TeacherModuleService {
                 teacherContentAccessService.requireCategory(request.categoryId()),
                 request.title(),
                 request.description(),
-                request.accessType(),
-                request.price(),
                 request.coverImageUrl());
     }
 
@@ -174,8 +180,6 @@ public class TeacherModuleService {
             String description,
             Long levelId,
             Long categoryId,
-            AccessType accessType,
-            BigDecimal price,
             String coverImageUrl) {
 
         private static ModuleMetadata from(CreateModuleRequest request) {
@@ -184,8 +188,6 @@ public class TeacherModuleService {
                     request.description(),
                     request.levelId(),
                     request.categoryId(),
-                    request.accessType(),
-                    request.price(),
                     request.coverImageUrl());
         }
 
@@ -195,8 +197,6 @@ public class TeacherModuleService {
                     request.description(),
                     request.levelId(),
                     request.categoryId(),
-                    request.accessType(),
-                    request.price(),
                     request.coverImageUrl());
         }
     }

@@ -43,19 +43,7 @@ public enum LiveClassStatus {
                         + "COMPLETED, CANCELLED, or RESCHEDULED.");
     }
 
-    public boolean isOngoing() {
-        return this == ONGOING;
-    }
-
-    public boolean isJoinable() {
-        return JOINABLE.contains(this);
-    }
-
     public boolean isStudentVisible() {
         return STUDENT_VISIBLE.contains(this);
-    }
-
-    public boolean isTerminal() {
-        return TERMINAL.contains(this);
     }
 }

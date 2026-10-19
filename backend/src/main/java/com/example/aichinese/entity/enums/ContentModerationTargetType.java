@@ -7,6 +7,10 @@ public enum ContentModerationTargetType {
 
     LESSON,
 
+    /** A learning module; archiving it hides its lessons from students (D14). */
+    MODULE,
+
+    /** A free, teacher-curated course (stored as a CoursePackage). */
     PACKAGE,
 
     TEACHER_PROFILE,
@@ -25,11 +29,7 @@ public enum ContentModerationTargetType {
                 LOOKUP,
                 value,
                 "Moderation target type is required.",
-                () -> "Invalid moderation target type. Allowed values are LESSON, PACKAGE, "
+                () -> "Invalid moderation target type. Allowed values are LESSON, MODULE, PACKAGE, "
                         + "TEACHER_PROFILE, or OTHER.");
-    }
-
-    public static ContentModerationTargetType fromValueOrOther(String value) {
-        return tryFrom(value).orElse(OTHER);
     }
 }

@@ -16,11 +16,25 @@ describe('ui store', () => {
   it('persists locale changes and updates the i18n plugin', () => {
     const ui = useUiStore()
 
-    ui.setLocale('zh')
+    ui.setLocale('zh-CN')
 
-    expect(ui.locale).toBe('zh')
-    expect(i18n.global.locale.value).toBe('zh')
-    expect(document.documentElement.lang).toBe('zh')
-    expect(window.localStorage.getItem(storageKeys.language)).toBe('zh')
+    expect(ui.locale).toBe('zh-CN')
+    expect(i18n.global.locale.value).toBe('zh-CN')
+    expect(document.documentElement.lang).toBe('zh-CN')
+    expect(window.localStorage.getItem(storageKeys.language)).toBe('zh-CN')
+  })
+
+  it('applies an account preferred language, mapping the legacy Chinese code', () => {
+    const ui = useUiStore()
+
+    expect(ui.applyPreferredLanguage('zh')).toBe(true)
+    expect(ui.locale).toBe('zh-CN')
+
+    expect(ui.applyPreferredLanguage('ms')).toBe(true)
+    expect(ui.locale).toBe('ms')
+
+    expect(ui.applyPreferredLanguage('fr')).toBe(false)
+    expect(ui.applyPreferredLanguage(null)).toBe(false)
+    expect(ui.locale).toBe('ms')
   })
 })

@@ -47,6 +47,10 @@ public class TeacherManagementService {
     private static final String ACTION_DOCUMENT_UPLOAD = "TEACHER_VERIFICATION_DOCUMENT_UPLOAD";
     private static final String ACTION_DOCUMENT_VIEW = "TEACHER_VERIFICATION_DOCUMENT_VIEW";
     private static final String ACTION_VERIFICATION_RESUBMIT = "TEACHER_VERIFICATION_RESUBMIT";
+    /** Length of {@code teacher_profiles.teaching_categories}, which stores the joined category list. */
+    private static final int MAX_TEACHING_CATEGORIES_LENGTH = 500;
+    private static final String TEACHING_CATEGORIES_TOO_LONG =
+            "Teaching categories must not exceed " + MAX_TEACHING_CATEGORIES_LENGTH + " characters in total.";
 
     private final TeacherProfileRepository teacherProfileRepository;
     private final TeacherVerificationDocumentRepository teacherVerificationDocumentRepository;
@@ -89,6 +93,10 @@ public class TeacherManagementService {
         if (request == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Teacher profile update request is required.");
         }
+        String teachingCategories = teacherManagementMapper.joinCategories(request.teachingCategories());
+        if (teachingCategories != null && teachingCategories.length() > MAX_TEACHING_CATEGORIES_LENGTH) {
+            throw new ResponseStatusException(BAD_REQUEST, TEACHING_CATEGORIES_TOO_LONG);
+        }
         User user = getUserById(currentUser.getUserId());
         TeacherProfile profile = getTeacherProfileByUserId(currentUser.getUserId());
 
@@ -96,7 +104,7 @@ public class TeacherManagementService {
         user.setDisplayName(displayName == null ? user.getDisplayName() : displayName);
         profile.setBio(TextUtils.trimToNull(request.bio()));
         profile.setQualificationSummary(TextUtils.trimToNull(request.shortIntroduction()));
-        profile.setTeachingCategories(teacherManagementMapper.joinCategories(request.teachingCategories()));
+        profile.setTeachingCategories(teachingCategories);
 
         userRepository.save(user);
         teacherProfileRepository.save(profile);

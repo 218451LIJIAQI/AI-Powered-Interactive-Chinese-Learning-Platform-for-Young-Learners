@@ -37,8 +37,12 @@ public class QuizQuestion extends BaseEntity {
     @Column(name = "correct_answer_text", length = 1000)
     private String correctAnswerText;
 
-    @Column(name = "explanation", length = 1000)
+    @Column(name = "explanation", length = 2000)
     private String explanation;
+
+    /** Optional teacher-authored hint (D8), revealed to students only on request and never for INDEPENDENT quizzes. */
+    @Column(name = "hint", length = 1000)
+    private String hint;
 
     @Column(name = "points", nullable = false)
     private Integer points = 0;

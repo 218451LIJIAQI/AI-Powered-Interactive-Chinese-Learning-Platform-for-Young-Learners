@@ -1,10 +1,13 @@
+import type { AppLanguage } from '@/types/api'
+import { normalizeAppLanguage } from '@/utils/locale'
+
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
-const DISPLAY_LOCALES = { en: 'en-US', ms: 'ms-MY', zh: 'zh-CN' } as const
+const DISPLAY_LOCALES: Record<AppLanguage, string> = { en: 'en-US', ms: 'ms-MY', 'zh-CN': 'zh-CN' }
 
 export function getDisplayLocale(locale?: string): string {
   if (!locale && typeof document === 'undefined') return DISPLAY_LOCALES.en
-  const language = (locale ?? document.documentElement.lang).trim().toLowerCase().split('-')[0]
-  return DISPLAY_LOCALES[language as keyof typeof DISPLAY_LOCALES] ?? DISPLAY_LOCALES.en
+  const language = normalizeAppLanguage(locale ?? document.documentElement.lang)
+  return language ? DISPLAY_LOCALES[language] : DISPLAY_LOCALES.en
 }
 
 export function toFiniteNumber(value: number | null | undefined, fallback = 0): number {
@@ -36,55 +39,20 @@ export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat(getDisplayLocale()).format(toFiniteNumber(value))
 }
 
-const DEFAULT_CURRENCY_CODE = 'USD'
-const WELL_FORMED_CURRENCY_CODE = /^[A-Z]{3}$/
-let supportedCurrencyCodes: ReadonlySet<string> | null | undefined
-
-function getSupportedCurrencyCodes(): ReadonlySet<string> | null {
-  if (supportedCurrencyCodes !== undefined) {
-    return supportedCurrencyCodes
-  }
-
-  const supportedValuesOf = (Intl as typeof Intl & { supportedValuesOf?: (key: 'currency') => string[] })
-    .supportedValuesOf
-  if (typeof supportedValuesOf !== 'function') {
-    supportedCurrencyCodes = null
-    return supportedCurrencyCodes
-  }
-
-  try {
-    supportedCurrencyCodes = new Set(supportedValuesOf.call(Intl, 'currency'))
-  } catch {
-    supportedCurrencyCodes = null
-  }
-
-  return supportedCurrencyCodes
-}
-
-function normalizeCurrencyCode(currency: string | null | undefined): string {
-  const normalized = typeof currency === 'string' ? currency.trim().toUpperCase() : ''
-  if (!WELL_FORMED_CURRENCY_CODE.test(normalized)) {
-    return DEFAULT_CURRENCY_CODE
-  }
-
-  const supportedCodes = getSupportedCurrencyCodes()
-  if (supportedCodes && !supportedCodes.has(normalized)) {
-    return DEFAULT_CURRENCY_CODE
-  }
-
-  return normalized
-}
-
-export function formatCurrency(value: number | null | undefined, currency = DEFAULT_CURRENCY_CODE): string {
-  return new Intl.NumberFormat(getDisplayLocale(), {
-    style: 'currency',
-    currency: normalizeCurrencyCode(currency),
-    maximumFractionDigits: 2,
-  }).format(toFiniteNumber(value))
-}
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 
 function parseDate(value: string | null | undefined): Date | null {
   if (!value) return null
+
+  // A calendar date (backend LocalDate, e.g. the last learning day) is parsed as local midnight: `new Date('yyyy-MM-dd')`
+  // means UTC midnight and would show the previous day in time zones west of UTC.
+  const dateOnly = DATE_ONLY_PATTERN.exec(value)
+  if (dateOnly) {
+    const [year, month, day] = dateOnly.slice(1).map(Number)
+    const local = new Date(year, month - 1, day)
+    // Reject impossible dates such as 2026-02-30 instead of letting them roll over.
+    return local.getMonth() === month - 1 && local.getDate() === day ? local : null
+  }
 
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date

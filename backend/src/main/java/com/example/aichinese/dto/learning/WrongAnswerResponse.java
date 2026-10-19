@@ -14,7 +14,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "studentAnswer",
         "correctAnswer",
         "explanation",
-        "submittedAt"
+        "submittedAt",
+        "quizId",
+        "lessonId",
+        "lessonTitle"
 })
 public record WrongAnswerResponse(
         Long attemptId,
@@ -25,7 +28,10 @@ public record WrongAnswerResponse(
         String studentAnswer,
         String correctAnswer,
         String explanation,
-        LocalDateTime submittedAt) {
+        LocalDateTime submittedAt,
+        Long quizId,
+        Long lessonId,
+        String lessonTitle) {
 
     public WrongAnswerResponse {
         Objects.requireNonNull(attemptId, "attemptId must not be null");

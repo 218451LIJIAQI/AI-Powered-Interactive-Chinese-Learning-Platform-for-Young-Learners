@@ -1,5 +1,6 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,9 @@ import com.example.aichinese.entity.QuizOption;
 public interface QuizOptionRepository extends JpaRepository<QuizOption, Long> {
 
     List<QuizOption> findByQuestionIdOrderBySortOrderAscCreatedAtAsc(Long questionId);
+
+    /** Options of several questions in one query; group them with QuizMapper.groupOptionsByQuestionId. */
+    List<QuizOption> findByQuestionIdInOrderBySortOrderAscCreatedAtAsc(Collection<Long> questionIds);
 
     @Modifying
     @Transactional

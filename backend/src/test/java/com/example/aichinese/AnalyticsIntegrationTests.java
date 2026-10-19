@@ -26,7 +26,13 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.aichinese.entity.enums.TeacherStatus;
+import com.example.aichinese.entity.TeacherProfile;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.Quiz;
+import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningType;
+import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
@@ -38,7 +44,7 @@ import com.example.aichinese.repository.UserRepository;
  * aggregates, and per-persona authorization scope.
  *
  * <p>Pins the row-level filter: a teacher only sees their own
- * classes / earnings, a student only their own progress, an admin
+ * classes / students, a student only their own progress, an admin
  * sees platform-wide aggregates, so a refactor of
  * {@code AnalyticsService} cannot quietly leak cross-tenant data.</p>
  */
@@ -53,7 +59,6 @@ class AnalyticsIntegrationTests {
     private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String ADMIN_PASSWORD = "SuperSecure123!";
     private static final String USER_PASSWORD = "Password123!";
-    private static final String CURRENCY_CODE = "MYR";
     private static final String STUDENT_ANALYTICS_PATH = "/api/v1/students/analytics";
     private static final String TEACHER_ANALYTICS_PATH = "/api/v1/teachers/analytics";
     private static final String ADMIN_ANALYTICS_PATH = "/api/v1/admin/analytics";
@@ -79,6 +84,9 @@ class AnalyticsIntegrationTests {
     @Autowired
     private QuizRepository quizRepository;
 
+    @Autowired
+    private LessonRepository lessonRepository;
+
     @Test
     void studentAnalyticsShouldReturnOwnedSummary() throws Exception {
         String studentToken = registerAndLoginStudent(uniqueEmail("student-analytics"));
@@ -102,9 +110,20 @@ class AnalyticsIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.totalLessons").isNumber())
-                .andExpect(jsonPath("$.data.overview.netEarnings").exists())
-                .andExpect(jsonPath("$.data.overview.currencyCode").value(CURRENCY_CODE))
+                .andExpect(jsonPath("$.data.overview.averageQuizScore").isNumber())
+                .andExpect(jsonPath("$.data.overview.netEarnings").doesNotExist())
+                .andExpect(jsonPath("$.data.earningsTrend").doesNotExist())
                 .andExpect(jsonPath("$.data.contentStatusBreakdown").isArray());
+    }
+
+    @Test
+    void pendingTeacherCannotOpenLearnerAnalytics() throws Exception {
+        String teacherToken = registerAndLoginPendingTeacher(uniqueEmail("pending-teacher-analytics"));
+
+        mockMvc.perform(get(TEACHER_ANALYTICS_PATH)
+                .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Only approved teachers can use this teaching feature."));
     }
 
     @Test
@@ -115,10 +134,19 @@ class AnalyticsIntegrationTests {
         String teacherToken = registerAndLoginTeacher(teacherEmail);
         Long studentId = studentProfileRepository.findByUserId(
                 userRepository.findByEmailWithRoles(studentEmail).orElseThrow().getId()).orElseThrow().getId();
+        TeacherProfile quizTeacher = teacherProfileRepository.findByUserId(
+                userRepository.findByEmailWithRoles(teacherEmail).orElseThrow().getId()).orElseThrow();
+        // V5: a quiz always belongs to a lesson (quizzes.lesson_id NOT NULL); a draft lesson is enough here.
+        Lesson lesson = new Lesson();
+        lesson.setTitle("Analytics batch lesson");
+        lesson.setTeacher(quizTeacher);
+        lesson.setLearningType(LearningType.RECORDED);
+        lesson.setContentStatus(ContentStatus.DRAFT);
+        lesson = lessonRepository.save(lesson);
         Quiz quiz = new Quiz();
         quiz.setTitle("Analytics batch boundary");
-        quiz.setTeacher(teacherProfileRepository.findByUserId(
-                userRepository.findByEmailWithRoles(teacherEmail).orElseThrow().getId()).orElseThrow());
+        quiz.setTeacher(quizTeacher);
+        quiz.setLesson(lesson);
         Long quizId = quizRepository.save(quiz).getId();
         LocalDateTime completedBase = LocalDate.now().atTime(12, 0);
         LocalDateTime createdAt = LocalDateTime.now();
@@ -137,7 +165,12 @@ class AnalyticsIntegrationTests {
                 statement.setInt(4, 100);
                 statement.setBoolean(5, index < 505);
                 statement.setTimestamp(6, Timestamp.valueOf(completedBase.plusSeconds(index)));
-                statement.setTimestamp(7, Timestamp.valueOf(completedBase.plusSeconds(index)));
+                // V1 chk_quiz_attempts_completion_state: only submitted attempts have a completion time.
+                if (index < 505) {
+                    statement.setTimestamp(7, Timestamp.valueOf(completedBase.plusSeconds(index)));
+                } else {
+                    statement.setNull(7, java.sql.Types.TIMESTAMP);
+                }
                 statement.setTimestamp(8, Timestamp.valueOf(createdAt));
                 statement.setTimestamp(9, Timestamp.valueOf(createdAt));
             }
@@ -172,7 +205,10 @@ class AnalyticsIntegrationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.overview.totalStudents").isNumber())
                 .andExpect(jsonPath("$.data.overview.totalTeachers").isNumber())
-                .andExpect(jsonPath("$.data.overview.currencyCode").value(CURRENCY_CODE))
+                .andExpect(jsonPath("$.data.overview.publishedContentItems").isNumber())
+                .andExpect(jsonPath("$.data.overview.aiRequests").isNumber())
+                .andExpect(jsonPath("$.data.overview.totalRevenue").doesNotExist())
+                .andExpect(jsonPath("$.data.paymentStatusBreakdown").doesNotExist())
                 .andExpect(jsonPath("$.data.userRegistrationTrend").isArray())
                 .andExpect(jsonPath("$.data.teacherApprovalBreakdown").isArray())
                 .andExpect(jsonPath("$.data.aiStatusBreakdown").isArray());
@@ -193,7 +229,7 @@ class AnalyticsIntegrationTests {
         long baselineStudents = baseline.path("totalStudents").asLong();
         long baselinePendingTeachers = baseline.path("pendingTeacherApprovals").asLong();
 
-        registerAndLoginTeacher(uniqueEmail("teacher-admin-aggregate"));
+        registerAndLoginPendingTeacher(uniqueEmail("teacher-admin-aggregate"));
         registerAndLoginStudent(uniqueEmail("student-admin-aggregate"));
 
         JsonNode afterData = analyticsData(adminToken);
@@ -300,6 +336,26 @@ class AnalyticsIntegrationTests {
                         "bio", "Teacher analytics test user"))))
                 .andExpect(status().isOk());
 
+        // D13: teacher analytics requires an APPROVED teacher; approval itself is covered by
+        // AdminTeacherManagementIntegrationTests, so the status is set directly here.
+        TeacherProfile profile = teacherProfileRepository.findByUserId(
+                userRepository.findByEmailWithRoles(email).orElseThrow().getId()).orElseThrow();
+        profile.setTeacherStatus(TeacherStatus.APPROVED);
+        teacherProfileRepository.save(profile);
+        return loginAndExtractToken(email, USER_PASSWORD);
+    }
+
+    private String registerAndLoginPendingTeacher(String email) throws Exception {
+        mockMvc.perform(post("/api/v1/auth/register/teacher")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "fullName", "Pending Analytics Tester",
+                        "email", email,
+                        "password", USER_PASSWORD,
+                        "confirmPassword", USER_PASSWORD,
+                        "bio", "Pending teacher analytics test user"))))
+                .andExpect(status().isOk());
         return loginAndExtractToken(email, USER_PASSWORD);
     }
 

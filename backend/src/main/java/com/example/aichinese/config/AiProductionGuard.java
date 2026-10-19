@@ -9,9 +9,9 @@ import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 @Component
-public class AiProductionGuard {
+public final class AiProductionGuard {
 
-    private static final Set<String> SUPPORTED_REAL_PROVIDERS = Set.of("deepseek", "openai-compatible");
+    private static final Set<String> SUPPORTED_REAL_PROVIDERS = Set.of("openai", "deepseek", "openai-compatible");
     private static final String PROD_CONTEXT =
             "when AI_ENABLE_REAL_PROVIDER=true and the prod profile is active";
     private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
@@ -66,7 +66,7 @@ public class AiProductionGuard {
 
     private String normalizedProvider() {
         String provider = isBlank(aiProperties.getProvider())
-                ? "deepseek"
+                ? "openai"
                 : aiProperties.getProvider().trim().toLowerCase(Locale.ROOT);
         return "openai_compatible".equals(provider) ? "openai-compatible" : provider;
     }

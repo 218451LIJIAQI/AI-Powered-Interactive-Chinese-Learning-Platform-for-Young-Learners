@@ -13,6 +13,8 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
     @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "quiz.teacher", "quiz.teacher.user" })
     List<QuizQuestion> findByQuizIdOrderBySortOrderAscCreatedAtAsc(Long quizId);
 
+    long countByQuizId(Long quizId);
+
     @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "quiz.teacher", "quiz.teacher.user" })
     Optional<QuizQuestion> findByIdAndQuizTeacherUserId(Long id, Long teacherUserId);
 }

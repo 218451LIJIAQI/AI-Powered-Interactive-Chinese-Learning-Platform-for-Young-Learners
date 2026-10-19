@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -50,7 +49,6 @@ import com.example.aichinese.repository.AiResponseReportRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.NotificationRepository;
-import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UploadedFileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,12 +57,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * End-to-end MockMvc coverage of every learner-facing AI feature
  * (chat tutor, quiz / story / vocabulary / sentence generators,
- * pronunciation and writing feedback, learning recommendation,
- * progress insight) plus the admin AI usage-log and report-review
- * surfaces.
+ * pronunciation and writing feedback) plus the admin AI usage-log and
+ * report-review surfaces; the removed learning-recommendation and
+ * progress-insight endpoints return 404.
  *
  * <p>Pins the safety / privacy boundary: input sanitisation cannot
- * be bypassed, child-facing feedback persists only metadata (no raw
+ * be bypassed, learner feedback persists only metadata (no raw
  * uploads), chat-session lookups by id+userId reject cross-user
  * access, and disabled / mis-configured providers return explicit
  * unavailable responses rather than 500s or fake generated content.</p>
@@ -94,9 +92,6 @@ class AiIntegrationTests {
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private StudentProfileRepository studentProfileRepository;
 
     @Autowired
     private AiUsageLogRepository aiUsageLogRepository;
@@ -375,25 +370,30 @@ class AiIntegrationTests {
                         "questionTypes", List.of("X".repeat(41))))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
-
-        mockMvc.perform(post("/api/v1/ai/learning-recommendation")
-                .with(csrf())
-                .header(AUTHORIZATION, bearer(studentToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json(Map.of(
-                        "weakAreas", List.of(
-                                "tones", "pinyin", "radicals", "listening", "reading",
-                                "writing", "speaking", "numbers", "colors", "animals",
-                                "food", "family", "school", "weather", "time",
-                                "verbs", "adjectives", "measure words", "sentences", "stories",
-                                "extra")))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
-    void learningRecommendationDoesNotDisguiseUnavailableProviderAsPersonalizedAdvice() throws Exception {
-        String studentToken = registerStudentAndLogin(uniqueEmail("ai-rec-unavailable"));
+    void aiRequestsAcceptEveryInterfaceLanguageAndEchoZhCn() throws Exception {
+        String studentToken = registerStudentAndLogin(uniqueEmail("ai-language-student"));
+
+        for (String language : List.of("en", "ms", "zh-CN", "zh")) {
+            String expected = "zh".equals(language) ? "zh-CN" : language;
+            mockMvc.perform(post("/api/v1/ai/chat")
+                    .with(csrf())
+                    .header(AUTHORIZATION, bearer(studentToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json(Map.of(
+                            "message", "How do I introduce myself in Mandarin?",
+                            "languagePreference", language))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.language").value(expected))
+                    .andExpect(jsonPath("$.data.status").value("UNAVAILABLE"));
+        }
+    }
+
+    @Test
+    void learningRecommendationEndpointIsRemoved() throws Exception {
+        String studentToken = registerStudentAndLogin(uniqueEmail("ai-rec-removed"));
 
         mockMvc.perform(post("/api/v1/ai/learning-recommendation")
                 .with(csrf())
@@ -401,18 +401,15 @@ class AiIntegrationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json(Map.of(
                         "currentLevel", "Beginner",
-                        "weakAreas", List.of("tones"),
                         "languagePreference", "en"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("UNAVAILABLE"))
-                .andExpect(jsonPath("$.data.recommendedNextStep")
-                        .value("AI tutor is currently unavailable. Please try again later."))
-                .andExpect(jsonPath("$.data.weakAreaSummary")
-                        .value("AI insight is not available right now, so no personalized recommendation was generated."))
-                .andExpect(jsonPath("$.data.recommendedLessonOrActivity").value(nullValue()))
-                .andExpect(jsonPath("$.data.suggestedPracticeTypes").isEmpty());
+                .andExpect(status().isNotFound());
     }
 
+    /**
+     * Learner AI tools (/api/v1/ai/**) stay student-only. Teachers get unsaved AI drafts through
+     * /api/v1/teachers/ai/** instead (D6; see ContentReviewWorkflowIntegrationTests), which students,
+     * admins and unapproved teachers cannot call.
+     */
     @Test
     void aiEndpointsAreRestrictedToStudents() throws Exception {
         String teacherEmail = uniqueEmail("ai-teacher");
@@ -434,6 +431,18 @@ class AiIntegrationTests {
                 .header(AUTHORIZATION, bearer(adminToken)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
+
+        // Teacher AI drafts: pending teachers, students and admins are all refused.
+        String studentToken = registerStudentAndLogin(uniqueEmail("ai-draft-student"));
+        for (String token : List.of(teacherToken, studentToken, adminToken)) {
+            mockMvc.perform(post("/api/v1/teachers/ai/quiz-draft")
+                    .with(csrf())
+                    .header(AUTHORIZATION, bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json(Map.of("topic", "Greetings"))))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.success").value(false));
+        }
     }
 
     @Test
@@ -680,6 +689,10 @@ class AiIntegrationTests {
                 .header(AUTHORIZATION, bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.data.feedback").value(
+                        "AI audio feedback is not supported by the configured model; your recording is saved for teacher review."))
+                .andExpect(jsonPath("$.data.notice").value(
+                        "Limited AI-assisted feedback for practice only. It is not a score or an official assessment."))
                 .andReturn();
 
         MockMultipartFile imageFile = new MockMultipartFile(
@@ -708,7 +721,7 @@ class AiIntegrationTests {
                 .filter(log -> "PRONUNCIATION_FEEDBACK".equals(log.getFeatureKey()))
                 .findFirst()
                 .orElseThrow();
-        assertThat(latestAudioLog.getErrorSummary()).contains("audio analysis");
+        assertThat(latestAudioLog.getErrorSummary()).contains("audio input");
 
         Path aiFeedbackDir = Path.of("target", "test-uploads", "ai-feedback");
         assertThat(Files.exists(aiFeedbackDir)).isTrue();
@@ -829,27 +842,6 @@ class AiIntegrationTests {
                 .header(AUTHORIZATION, bearer(studentToken)))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.message").value("The file is too large. Please choose a smaller file and try again."));
-    }
-
-    @Test
-    void studentLearningRecommendationStaysWithinOwnDataScope() throws Exception {
-        String firstStudentEmail = uniqueEmail("ai-own-student");
-        String firstStudentToken = registerStudentAndLogin(firstStudentEmail);
-        String secondStudentEmail = uniqueEmail("ai-other-student");
-        registerStudentAndLogin(secondStudentEmail);
-
-        Long otherStudentId = studentProfileRepository.findByUserId(
-                userRepository.findByEmailWithRoles(secondStudentEmail).orElseThrow().getId()).orElseThrow().getId();
-
-        mockMvc.perform(post("/api/v1/ai/learning-recommendation")
-                .with(csrf())
-                .header(AUTHORIZATION, bearer(firstStudentToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(json(Map.of(
-                        "studentId", otherStudentId,
-                        "languagePreference", "en"))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Students can only request learning recommendations for their own account."));
     }
 
     @Test

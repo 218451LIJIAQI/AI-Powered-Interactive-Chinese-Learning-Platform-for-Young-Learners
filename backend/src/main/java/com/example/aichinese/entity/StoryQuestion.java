@@ -34,6 +34,10 @@ public class StoryQuestion extends BaseEntity {
     @Column(name = "options_payload", columnDefinition = "TEXT", nullable = false)
     private String optionsPayload;
 
+    /** 0-based index of the correct option in {@code optionsPayload}; never sent to students before they answer. */
+    @Column(name = "correct_option_index")
+    private Integer correctOptionIndex;
+
     @Column(name = "explanation", length = 1000)
     private String explanation;
 

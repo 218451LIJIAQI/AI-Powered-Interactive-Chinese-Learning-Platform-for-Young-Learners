@@ -4,12 +4,11 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-@JsonPropertyOrder({ "packageId", "packageTitle", "learningType", "accessType" })
+@JsonPropertyOrder({ "packageId", "packageTitle", "learningType" })
 public record LiveClassPackageSummaryResponse(
         Long packageId,
         String packageTitle,
-        String learningType,
-        String accessType) {
+        String learningType) {
 
     public LiveClassPackageSummaryResponse {
         Objects.requireNonNull(packageId, "packageId must not be null");

@@ -64,7 +64,7 @@ class TeacherVerificationIntegrationTests {
     private static final String TEACHER_BIO = "Teacher bio";
     private static final String UPDATED_FULL_NAME = "Updated Teacher";
     private static final String UPDATED_BIO = "Experienced Malaysian Mandarin teacher";
-    private static final String UPDATED_SHORT_INTRODUCTION = "Primary school learning specialist";
+    private static final String UPDATED_SHORT_INTRODUCTION = "University Mandarin tutor";
     private static final String TEACHING_CATEGORY_VOCABULARY = "Vocabulary";
     private static final String TEACHING_CATEGORY_GREETINGS = "Greetings";
     private static final String UPLOAD_AUDIT_ACTION = "TEACHER_VERIFICATION_DOCUMENT_UPLOAD";
@@ -98,6 +98,9 @@ class TeacherVerificationIntegrationTests {
             "The file is too large. Please choose a smaller file and try again.";
     private static final String REJECTION_REASON = "Please provide a clearer qualification document.";
     private static final int MAX_UPLOAD_BYTES_PLUS_ONE = 6 * 1024 * 1024;
+    private static final int MAX_CATEGORY_LENGTH = 60;
+    private static final String TEACHING_CATEGORIES_TOO_LONG_MESSAGE =
+            "Teaching categories must not exceed 500 characters in total.";
 
     @Autowired
     private MockMvc mockMvc;
@@ -155,6 +158,27 @@ class TeacherVerificationIntegrationTests {
         TeacherProfile profile = teacherProfileRepository.findDetailedByUserId(findUserIdByEmail(email)).orElseThrow();
         assertThat(profile.getBio()).isEqualTo(UPDATED_BIO);
         assertThat(profile.getQualificationSummary()).isEqualTo(UPDATED_SHORT_INTRODUCTION);
+    }
+
+    @Test
+    void teacherProfileUpdateRejectsCategoriesLongerThanTheStoredColumn() throws Exception {
+        String email = uniqueEmail("teacher-long-categories");
+        String token = registerAndLoginTeacher(email);
+
+        // 12 x 60 characters joined with ", " is 742 characters; the column holds 500.
+        mockMvc.perform(authenticatedJsonPut(TEACHER_PROFILE_ENDPOINT, token, Map.of(
+                        "fullName", UPDATED_FULL_NAME,
+                        "teachingCategories", categories(12))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(TEACHING_CATEGORIES_TOO_LONG_MESSAGE));
+
+        // 8 x 60 characters joined with ", " is 494 characters and still fits.
+        mockMvc.perform(authenticatedJsonPut(TEACHER_PROFILE_ENDPOINT, token, Map.of(
+                        "fullName", UPDATED_FULL_NAME,
+                        "teachingCategories", categories(8))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.teachingCategories.length()").value(8));
     }
 
     @Test
@@ -401,6 +425,14 @@ class TeacherVerificationIntegrationTests {
 
     private static String teacherDocumentPath(Long documentId) {
         return TEACHER_DOCUMENTS_ENDPOINT + "/" + documentId;
+    }
+
+    private static String[] categories(int count) {
+        String[] categories = new String[count];
+        for (int index = 0; index < count; index++) {
+            categories[index] = String.valueOf((char) ('A' + index)).repeat(MAX_CATEGORY_LENGTH);
+        }
+        return categories;
     }
 
     private String uniqueEmail(String prefix) {

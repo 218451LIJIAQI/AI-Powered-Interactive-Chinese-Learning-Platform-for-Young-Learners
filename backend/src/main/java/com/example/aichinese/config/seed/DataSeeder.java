@@ -1,5 +1,6 @@
 package com.example.aichinese.config.seed;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,6 +29,8 @@ import com.example.aichinese.repository.LearningLevelRepository;
 import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.service.PlatformSettingsService;
+import com.example.aichinese.service.RewardBadge;
 
 @Component
 @Order(0)
@@ -49,66 +52,36 @@ public class DataSeeder implements CommandLineRunner {
             "Writing / Tracing",
             "Daily Conversation",
             "Numbers",
-            "Colours",
-            "Animals",
-            "Family",
-            "School",
+            "Self-introduction",
+            "University Life",
+            "Travel",
+            "Work & Daily Life",
             "Food",
             "Greetings");
-    private static final List<BadgeSeed> BADGES = List.of(
-            new BadgeSeed("First Steps", "Awarded for starting the learning journey.", "badge-first-steps"),
-            new BadgeSeed("Quiz Explorer", "Awarded for completing early quiz practice.", "badge-quiz-explorer"),
-            new BadgeSeed("Daily Spark", "Awarded for building a learning streak.", "badge-daily-spark"));
+    /** Exactly the badges the reward service awards (see {@link RewardBadge}). */
+    private static final List<BadgeSeed> BADGES = Arrays.stream(RewardBadge.values())
+            .map(badge -> new BadgeSeed(badge.badgeName(), badge.description(), badge.iconKey()))
+            .toList();
     private static final List<SettingSeed> SYSTEM_SETTINGS = List.of(
             new SettingSeed(
                     "platform_name",
-                    "AI-Powered Interactive Chinese Learning Platform for Young Learners",
+                    PlatformSettingsService.DEFAULT_PLATFORM_NAME,
                     "Displayed platform name.",
                     false),
             new SettingSeed(
-                    "default_currency",
-                    "MYR",
-                    "Default currency for the Malaysian deployment context.",
+                    PlatformSettingsService.AI_DISCLAIMER_TEXT_KEY,
+                    PlatformSettingsService.DEFAULT_AI_DISCLAIMER_TEXT,
+                    "Shown next to every AI-powered learning feature.",
                     true),
             new SettingSeed(
-                    "platform_commission_rate",
-                    "0.20",
-                    "Editable platform commission rate represented as a decimal.",
-                    true),
-            new SettingSeed(
-                    "ai_disclaimer_text",
-                    "AI-generated content may not always be accurate. Please review before use.",
-                    "Shown on AI-powered learning experiences.",
-                    true),
-            new SettingSeed(
-                    "admin_email_notifications_enabled",
+                    PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY,
                     "true",
-                    "Enable email notifications for admin workflows.",
+                    "Block unsafe words in teacher-authored content.",
                     true),
             new SettingSeed(
-                    "admin_in_app_notifications_enabled",
+                    PlatformSettingsService.AI_SAFETY_CHECK_KEY,
                     "true",
-                    "Enable in-app notifications for admin workflows.",
-                    true),
-            new SettingSeed(
-                    "admin_daily_summary_enabled",
-                    "false",
-                    "Enable daily admin summary delivery.",
-                    true),
-            new SettingSeed(
-                    "strict_content_filtering_enabled",
-                    "true",
-                    "Enable strict content filtering for safety-sensitive flows.",
-                    true),
-            new SettingSeed(
-                    "sensitive_word_filter_enabled",
-                    "true",
-                    "Enable profanity and sensitive word filtering.",
-                    true),
-            new SettingSeed(
-                    "ai_safety_check_enabled",
-                    "true",
-                    "Enable AI safety checks before AI guidance is shown.",
+                    "Screen learner AI requests and AI replies for unsafe content.",
                     true));
 
     private final RoleRepository roleRepository;
@@ -192,13 +165,19 @@ public class DataSeeder implements CommandLineRunner {
 
     private void seedBadges() {
         for (BadgeSeed seed : BADGES) {
-            badgeRepository.findByName(seed.name()).orElseGet(() -> {
-                Badge badge = new Badge();
+            Badge badge = badgeRepository.findByName(seed.name()).orElseGet(Badge::new);
+            boolean changed = badge.getId() == null
+                    || !Objects.equals(badge.getDescription(), seed.description())
+                    || !Objects.equals(badge.getIconKey(), seed.iconKey())
+                    || !badge.isActive();
+            if (changed) {
+                // Keeps the catalogue description (the earning rule) aligned with RewardBadge.
                 badge.setName(seed.name());
                 badge.setDescription(seed.description());
                 badge.setIconKey(seed.iconKey());
-                return badgeRepository.save(badge);
-            });
+                badge.setActive(true);
+                badgeRepository.save(badge);
+            }
         }
     }
 

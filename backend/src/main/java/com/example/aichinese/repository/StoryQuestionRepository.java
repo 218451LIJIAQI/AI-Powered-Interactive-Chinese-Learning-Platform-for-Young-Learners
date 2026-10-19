@@ -1,5 +1,6 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,9 @@ import com.example.aichinese.entity.StoryQuestion;
 public interface StoryQuestionRepository extends JpaRepository<StoryQuestion, Long> {
 
     List<StoryQuestion> findByStoryActivityIdOrderBySortOrderAscCreatedAtAsc(Long storyActivityId);
+
+    /** Questions of several stories in one query; callers group them by story id (list pages). */
+    List<StoryQuestion> findByStoryActivityIdInOrderBySortOrderAscCreatedAtAsc(Collection<Long> storyActivityIds);
 
     @Modifying
     @Transactional

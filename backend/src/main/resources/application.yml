@@ -143,25 +143,29 @@ app:
     recorded-video-directory: ${RECORDED_VIDEO_UPLOAD_DIR:./uploads/recorded-videos}
     max-video-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
   ai:
-    provider: ${AI_PROVIDER:deepseek}
-    api-base-url: ${AI_API_BASE_URL:https://api.deepseek.com}
+    provider: ${AI_PROVIDER:openai}
+    api-base-url: ${AI_API_BASE_URL:https://api.openai.com/v1}
     api-key: ${AI_API_KEY:}
-    model-name: ${AI_MODEL_NAME:deepseek-chat}
+    model-name: ${AI_MODEL_NAME:gpt-5.6-luna}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:1200}
     enable-real-provider: ${AI_ENABLE_REAL_PROVIDER:false}
     rate-limit:
       requests-per-minute: ${AI_REQUESTS_PER_MINUTE:10}
       requests-per-day: ${AI_REQUESTS_PER_DAY:100}
-  payment:
-    success-url: ${PAYMENT_SUCCESS_URL:${FRONTEND_BASE_URL:http://localhost:5174}/payment/success}
-    cancel-url: ${PAYMENT_CANCEL_URL:${FRONTEND_BASE_URL:http://localhost:5174}/payment/cancel}
-    mock-success-enabled: ${PAYMENT_MOCK_SUCCESS_ENABLED:false}
-    provider: ${PAYMENT_PROVIDER:no-op}
-    stripe-api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com}
-    stripe-api-key: ${STRIPE_API_KEY:}
-    stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
   email:
     enabled: ${SMTP_ENABLED:false}
     from: ${SMTP_FROM:}
     password-reset-base-url: ${PASSWORD_RESET_BASE_URL:${FRONTEND_BASE_URL:http://localhost:5174}/reset-password}
+
+---
+# Swagger UI and the OpenAPI JSON are for local development and demonstrations only.
+spring:
+  config:
+    activate:
+      on-profile: prod | production
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

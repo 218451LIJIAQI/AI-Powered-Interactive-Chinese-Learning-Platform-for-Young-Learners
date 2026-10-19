@@ -15,12 +15,6 @@ public enum NotificationType {
 
     REWARD_EARNED,
 
-    PAYMENT_STATUS,
-
-    REFUND_STATUS,
-
-    PAYOUT_STATUS,
-
     LIVE_CLASS_REMINDER,
 
     TEACHER_APPROVAL,
@@ -46,12 +40,7 @@ public enum NotificationType {
                 value,
                 "Notification type is required.",
                 () -> "Invalid notification type. Allowed values are SYSTEM, TEACHER_FEEDBACK, "
-                        + "QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, PAYMENT_STATUS, "
-                        + "REFUND_STATUS, PAYOUT_STATUS, LIVE_CLASS_REMINDER, TEACHER_APPROVAL, "
-                        + "CONTENT_REVIEW, MODERATION_ACTION, AI_REPORT_REVIEW, or ADMIN_TASK.");
-    }
-
-    public static NotificationType fromValueOrSystem(String value) {
-        return tryFrom(value).orElse(SYSTEM);
+                        + "QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, LIVE_CLASS_REMINDER, "
+                        + "TEACHER_APPROVAL, CONTENT_REVIEW, MODERATION_ACTION, AI_REPORT_REVIEW, or ADMIN_TASK.");
     }
 }

@@ -3,6 +3,7 @@ package com.example.aichinese.dto.learning;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder({
@@ -17,6 +18,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "durationMinutes",
         "maxParticipants",
         "enrolledCount",
+        "remainingSeats",
+        "full",
         "enrolled",
         "canEnrol",
         "accessAllowed",
@@ -58,5 +61,24 @@ public record LiveClassResponse(
         if (enrolledCount < 0) {
             throw new IllegalArgumentException("enrolledCount must be non-negative, was " + enrolledCount);
         }
+    }
+
+    /**
+     * Seats still open under the participant limit (FR-LIVE-05), or {@code null}
+     * when the class has no limit. {@code enrolledCount} counts the seats taken.
+     */
+    @JsonProperty("remainingSeats")
+    public Integer remainingSeats() {
+        if (maxParticipants == null) {
+            return null;
+        }
+        return (int) Math.max(0L, maxParticipants - enrolledCount);
+    }
+
+    /** True when a participant limit is set and every seat is taken. */
+    @JsonProperty("full")
+    public boolean full() {
+        Integer remaining = remainingSeats();
+        return remaining != null && remaining == 0;
     }
 }

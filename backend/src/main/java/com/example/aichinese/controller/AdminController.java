@@ -101,21 +101,18 @@ public class AdminController {
 
     @GetMapping("/live-classes")
     public ApiResponse<PageResponse<LiveClassResponse>> getAdminLiveClasses(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
         return ApiResponse.success(
                 "Admin live classes retrieved successfully.",
-                liveClassService.getAdminLiveClasses(currentUser, page, size));
+                liveClassService.getAdminLiveClasses(page, size));
     }
 
     @GetMapping("/live-classes/{id}")
-    public ApiResponse<LiveClassResponse> getAdminLiveClass(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id) {
+    public ApiResponse<LiveClassResponse> getAdminLiveClass(@PathVariable Long id) {
         return ApiResponse.success(
                 "Admin live class retrieved successfully.",
-                liveClassService.getAdminLiveClass(currentUser, id));
+                liveClassService.getAdminLiveClass(id));
     }
 
     @GetMapping("/teachers")
@@ -185,11 +182,12 @@ public class AdminController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "active", required = false) Boolean active,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
         return ApiResponse.success(
                 "Users retrieved successfully.",
-                adminUserManagementService.listUsers(role, keyword, status, page, size));
+                adminUserManagementService.listUsers(role, keyword, status, active, page, size));
     }
 
     @PatchMapping("/users/{id}/status")

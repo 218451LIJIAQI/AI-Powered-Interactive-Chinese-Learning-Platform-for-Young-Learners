@@ -20,6 +20,7 @@ import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
+import com.example.aichinese.entity.enums.LearningStage;
 
 @Component
 public class QuizMapper {
@@ -47,7 +48,9 @@ public class QuizMapper {
                                 optionsByQuestionId.getOrDefault(question.getId(), List.of())))
                         .toList(),
                 quiz.getCreatedAt(),
-                quiz.getUpdatedAt());
+                quiz.getUpdatedAt(),
+                quiz.getRejectionReason(),
+                quiz.getLearningStage());
     }
 
     private TeacherQuizQuestionResponse toTeacherQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
@@ -60,6 +63,7 @@ public class QuizMapper {
                 question.getPoints(),
                 question.getSortOrder(),
                 question.getExplanation(),
+                question.getHint(),
                 mapOptions(options, QuizMapper::toTeacherQuizOption));
     }
 
@@ -82,11 +86,23 @@ public class QuizMapper {
                 questions.stream()
                         .map(question -> toStudentQuizQuestionResponse(
                                 question,
-                                optionsByQuestionId.getOrDefault(question.getId(), List.of())))
-                        .toList());
+                                optionsByQuestionId.getOrDefault(question.getId(), List.of()),
+                                hintsAllowed(quiz)))
+                        .toList(),
+                quiz.getLearningStage(),
+                lesson == null || lesson.getModule() == null ? null : lesson.getModule().getId(),
+                lesson == null || lesson.getModule() == null ? null : lesson.getModule().getTitle());
     }
 
     public StudentQuizQuestionResponse toStudentQuizQuestionResponse(QuizQuestion question, List<QuizOption> options) {
+        Objects.requireNonNull(question, "question");
+        return toStudentQuizQuestionResponse(question, options, hintsAllowed(question.getQuiz()));
+    }
+
+    public StudentQuizQuestionResponse toStudentQuizQuestionResponse(
+            QuizQuestion question,
+            List<QuizOption> options,
+            boolean hintsAllowed) {
         Objects.requireNonNull(question, "question");
         return new StudentQuizQuestionResponse(
                 question.getId(),
@@ -94,7 +110,17 @@ public class QuizMapper {
                 question.getQuestionText(),
                 question.getPoints(),
                 question.getSortOrder(),
-                mapOptions(options, QuizMapper::toStudentQuizOption));
+                mapOptions(options, QuizMapper::toStudentQuizOption),
+                hintsAllowed && hasHint(question));
+    }
+
+    /** D8 / D23: hints are offered for GUIDED, SCAFFOLDED and unstaged quizzes, never for INDEPENDENT ones. */
+    public static boolean hintsAllowed(Quiz quiz) {
+        return quiz == null || quiz.getLearningStage() != LearningStage.INDEPENDENT;
+    }
+
+    public static boolean hasHint(QuizQuestion question) {
+        return question != null && question.getHint() != null && !question.getHint().isBlank();
     }
 
     public StudentQuizSummaryResponse toStudentQuizSummaryResponse(Quiz quiz, int questionCount) {
@@ -108,7 +134,8 @@ public class QuizMapper {
                 quiz.getDescription(),
                 quiz.getTimeLimitMinutes(),
                 quiz.getTotalPoints(),
-                questionCount);
+                questionCount,
+                quiz.getLearningStage());
     }
 
     public Map<Long, List<QuizOption>> groupOptionsByQuestionId(List<QuizOption> options) {

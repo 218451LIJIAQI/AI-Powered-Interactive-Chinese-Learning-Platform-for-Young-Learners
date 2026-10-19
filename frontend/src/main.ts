@@ -5,7 +5,8 @@ import { AUTH_INVALIDATED_EVENT } from './api/http'
 import App from './App.vue'
 import { i18n } from './plugins/i18n'
 import { initObservability } from './plugins/observability'
-import { clearOfflineCaches } from './plugins/pwa'
+// Registers the service worker on load.
+import './plugins/pwa'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'
 import { readPersistedLocale } from './utils/storage'
@@ -28,8 +29,8 @@ function handleAuthInvalidated(): void {
   const activeRoute = router.currentRoute.value
   const shouldRedirectToAuth = Boolean(activeRoute.meta.roles?.length)
 
+  // clearSession() also clears the offline caches.
   auth.clearSession()
-  void clearOfflineCaches()
 
   if (shouldRedirectToAuth) {
     void router.replace({ name: 'auth', query: { redirect: activeRoute.fullPath } })

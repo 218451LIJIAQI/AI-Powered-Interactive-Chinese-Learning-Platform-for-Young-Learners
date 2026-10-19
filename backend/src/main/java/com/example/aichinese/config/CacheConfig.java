@@ -24,22 +24,20 @@ public class CacheConfig {
 
     public static final String ADMIN_PLATFORM_SETTINGS = "adminPlatformSettings";
     public static final String PUBLIC_PLATFORM_SETTINGS = "publicPlatformSettings";
-    public static final String DEFAULT_CURRENCY = "defaultCurrency";
-    public static final String COMMISSION_RATE = "commissionRate";
     public static final String PUBLIC_LEVELS = "publicLevels";
     public static final String PUBLIC_CATEGORIES = "publicCategories";
     public static final String SENSITIVE_WORD_FILTER_ENABLED = "sensitiveWordFilterEnabled";
+    public static final String AI_SAFETY_CHECK_ENABLED = "aiSafetyCheckEnabled";
 
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager(
                 ADMIN_PLATFORM_SETTINGS,
                 PUBLIC_PLATFORM_SETTINGS,
-                DEFAULT_CURRENCY,
-                COMMISSION_RATE,
                 PUBLIC_LEVELS,
                 PUBLIC_CATEGORIES,
-                SENSITIVE_WORD_FILTER_ENABLED);
+                SENSITIVE_WORD_FILTER_ENABLED,
+                AI_SAFETY_CHECK_ENABLED);
         cacheManager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(MAX_CACHE_ENTRIES)
                 .expireAfterWrite(CACHE_TTL)

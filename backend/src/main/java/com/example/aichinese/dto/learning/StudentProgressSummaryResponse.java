@@ -4,6 +4,10 @@ import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+/**
+ * Student progress summary. {@code weakAreas} are the lesson titles of recent wrong quiz answers;
+ * {@code lessons} lists every lesson with progress (newest first) with its mastery indicator (D25).
+ */
 @JsonPropertyOrder({
         "totalLessonsStarted",
         "completedLessons",
@@ -11,7 +15,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "overallCompletionPercent",
         "weakAreas",
         "lastActivitySummary",
-        "recentLessons"
+        "recentLessons",
+        "lessons"
 })
 public record StudentProgressSummaryResponse(
         int totalLessonsStarted,
@@ -20,7 +25,8 @@ public record StudentProgressSummaryResponse(
         int overallCompletionPercent,
         List<String> weakAreas,
         String lastActivitySummary,
-        List<StudentProgressLessonResponse> recentLessons) {
+        List<StudentProgressLessonResponse> recentLessons,
+        List<StudentProgressLessonResponse> lessons) {
 
     public StudentProgressSummaryResponse {
         requireNonNegative(totalLessonsStarted, "totalLessonsStarted");
@@ -30,6 +36,7 @@ public record StudentProgressSummaryResponse(
         weakAreas = weakAreas == null ? List.of() : List.copyOf(weakAreas);
         lastActivitySummary = lastActivitySummary == null ? "" : lastActivitySummary.strip();
         recentLessons = recentLessons == null ? List.of() : List.copyOf(recentLessons);
+        lessons = lessons == null ? List.of() : List.copyOf(lessons);
     }
 
     private static void requireNonNegative(int value, String name) {

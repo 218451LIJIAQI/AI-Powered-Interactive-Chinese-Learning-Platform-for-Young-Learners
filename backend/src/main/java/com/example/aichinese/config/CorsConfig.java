@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -40,11 +41,7 @@ public class CorsConfig {
     private final Environment environment;
 
     public CorsConfig(Environment environment) {
-        this.environment = environment;
-    }
-
-    CorsConfig() {
-        this.environment = null;
+        this.environment = Objects.requireNonNull(environment, "environment");
     }
 
     @Bean
@@ -70,7 +67,7 @@ public class CorsConfig {
     }
 
     private boolean isProductionProfileActive() {
-        return environment != null && environment.acceptsProfiles(PROD_PROFILES);
+        return environment.acceptsProfiles(PROD_PROFILES);
     }
 
     static List<String> defaultLocalDevOrigins() {

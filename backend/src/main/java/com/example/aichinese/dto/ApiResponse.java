@@ -42,10 +42,6 @@ public record ApiResponse<T>(
         return new ApiResponse<>(true, message, data, List.of(), Map.of(), RequestIdHolder.get());
     }
 
-    public static <T> ApiResponse<T> success(String message) {
-        return success(message, null);
-    }
-
     public static <T> ApiResponse<T> failure(String message, List<String> errors) {
         return failure(message, errors, Map.of());
     }
@@ -55,15 +51,6 @@ public record ApiResponse<T>(
             List<String> errors,
             Map<String, List<String>> fieldErrors) {
         return new ApiResponse<>(false, message, null, errors, fieldErrors, RequestIdHolder.get());
-    }
-
-    public static <T> ApiResponse<T> failure(String message, String error) {
-        return failure(message,
-                error == null || error.isBlank() ? List.of() : List.of(error));
-    }
-
-    public static <T> ApiResponse<T> failure(String message) {
-        return failure(message, List.of());
     }
 
     private static List<String> sanitizeErrors(List<String> source) {

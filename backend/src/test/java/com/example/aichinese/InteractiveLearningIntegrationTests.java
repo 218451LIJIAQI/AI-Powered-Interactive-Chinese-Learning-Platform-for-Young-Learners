@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.example.aichinese.support.QuizAnswerTestSupport;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
@@ -38,6 +40,7 @@ import com.example.aichinese.repository.QuizOptionRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.support.ContentReviewTestSupport;
 import com.example.aichinese.support.TestUploadFixtures;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,8 +50,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * lesson read, quiz start / submit / score, wrong-answer surface,
  * progress + XP + streak side-effects, and badge awards.
  *
- * <p>Pins the locked-content gate (paid lessons hidden from students
- * without entitlement), the quiz answer-key boundary (student
+ * <p>Pins the published-content gate (only published lessons and quizzes
+ * reach students; all published content is free), the quiz answer-key boundary (student
  * responses never include the correct answer flag), and the streak
  * deduplication so a single completion can't double-count.</p>
  */
@@ -63,7 +66,6 @@ class InteractiveLearningIntegrationTests {
     private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String ADMIN_PASSWORD = "SuperSecure123!";
     private static final String USER_PASSWORD = "Password123!";
-    private static final String ACCESS_FREE = "FREE";
     private static final String LEARNING_RECORDED = "RECORDED";
     private static final String QUIZ_TITLE = "Tone quiz";
     private static final String QUALIFICATION_DOCUMENT_TYPE = "QUALIFICATION";
@@ -407,7 +409,7 @@ class InteractiveLearningIntegrationTests {
     }
 
     @Test
-    void studentCannotDiscoverOrLoadQuizWhenParentLessonIsArchived() throws Exception {
+    void studentCannotDiscoverOrLoadQuizWhenOwningLessonIsArchived() throws Exception {
         String teacherEmail = uniqueEmail("quiz-archived-teacher");
         approveTeacherProfile(teacherEmail);
         String teacherToken = userToken(teacherEmail);
@@ -543,13 +545,14 @@ class InteractiveLearningIntegrationTests {
                         "levelId", BEGINNER_LEVEL_ID,
                         "categoryId", VOCABULARY_CATEGORY_ID,
                         "learningType", LEARNING_RECORDED,
-                        "accessType", ACCESS_FREE,
-                        "price", 0,
                         "estimatedDurationMinutes", 15,
                         "basicContent", "Practice content")))
                 .andExpect(status().isOk())
                 .andReturn();
-        return extractId(result);
+        Long lessonId = extractId(result);
+        // D4: lessons reach students only after admin approval.
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "LESSON", lessonId);
+        return lessonId;
     }
 
     private Long createQuizWithQuestions(String teacherToken, Long lessonId) throws Exception {
@@ -585,6 +588,7 @@ class InteractiveLearningIntegrationTests {
                                 Map.of("optionText", FALSE, "correctOption", true, "displayOrder", 2)))))
                 .andExpect(status().isOk());
 
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "QUIZ", quizId);
         return quizId;
     }
 
@@ -663,14 +667,19 @@ class InteractiveLearningIntegrationTests {
             Long quizId,
             String studentToken,
             Map<String, ?>... answers) throws Exception {
+        // Copied element by element so the generic varargs array itself never escapes (javac -Xlint:varargs).
+        List<Map<String, ?>> answerList = new ArrayList<>(answers.length);
+        for (Map<String, ?> answer : answers) {
+            answerList.add(answer);
+        }
         return authenticatedJsonPost(
                 "/api/v1/students/quizzes/" + quizId + "/attempts",
                 studentToken,
-                Map.of("answers", List.of(answers)));
+                Map.of("answers", answerList));
     }
 
-    private static Map<String, ?> answer(Long questionId, String answerText) {
-        return Map.of("questionId", questionId, "answerText", answerText);
+    private Map<String, ?> answer(Long questionId, String answerText) {
+        return QuizAnswerTestSupport.optionAnswer(quizOptionRepository, questionId, answerText);
     }
 
     private MockHttpServletRequestBuilder jsonPost(String path, Map<String, ?> payload) throws Exception {

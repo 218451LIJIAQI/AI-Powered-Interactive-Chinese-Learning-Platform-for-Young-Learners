@@ -18,7 +18,7 @@
       compact
     />
 
-    <div v-else-if="props.variant === 'family'" class="course-scene-family">
+    <div v-else-if="props.variant === 'people'" class="course-scene-people">
       <span class="course-scene-person is-left" />
       <span class="course-scene-person is-center" />
       <span class="course-scene-person is-right" />
@@ -45,7 +45,7 @@ import { computed, type StyleValue } from 'vue'
 
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 
-type SceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
+type SceneVariant = 'panda' | 'people' | 'pagoda' | 'travel' | 'general'
 
 interface Props {
   size?: number
@@ -77,7 +77,7 @@ const variantClass = computed(() => `is-${props.variant}`)
 }
 
 .course-scene-thumb span,
-.course-scene-family,
+.course-scene-people,
 .course-scene-travel,
 .course-scene-pagoda-wrap {
   position: absolute;
@@ -90,7 +90,7 @@ const variantClass = computed(() => `is-${props.variant}`)
     linear-gradient(180deg, #9f84ff 0%, #b791ff 50%, #ffd56a 100%);
 }
 
-.course-scene-thumb.is-family {
+.course-scene-thumb.is-people {
   background:
     radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.84), transparent 24%),
     linear-gradient(180deg, #7cc7ff 0%, #b8e5ff 54%, #ffd16a 54%, #f6b54a 100%);
@@ -125,7 +125,7 @@ const variantClass = computed(() => `is-${props.variant}`)
 
 .course-scene-cloud {
   height: 8%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.8);
 }
 
@@ -224,7 +224,7 @@ const variantClass = computed(() => `is-${props.variant}`)
   bottom: 4%;
 }
 
-.course-scene-family {
+.course-scene-people {
   inset: auto 0 0 0;
   height: 70%;
 }
@@ -335,7 +335,7 @@ const variantClass = computed(() => `is-${props.variant}`)
   bottom: 12%;
   width: 10%;
   height: 26%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: linear-gradient(180deg, #7bc152, #4e9d3d);
   box-shadow: 6px 10px 0 -3px rgba(123, 193, 82, 0.92);
 }

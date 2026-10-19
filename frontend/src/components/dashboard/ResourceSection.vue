@@ -34,7 +34,7 @@ const { t } = useI18n({
   messages: {
     en: { resourceSection: resourceSectionMessages.en },
     ms: { resourceSection: resourceSectionMessages.ms },
-    zh: { resourceSection: resourceSectionMessages.zh },
+    'zh-CN': { resourceSection: resourceSectionMessages['zh-CN'] },
   },
 })
 

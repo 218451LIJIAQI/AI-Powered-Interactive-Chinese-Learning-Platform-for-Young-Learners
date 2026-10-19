@@ -24,13 +24,11 @@ import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.UploadedFile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
 import com.example.aichinese.entity.enums.MeetingPlatform;
 import com.example.aichinese.entity.enums.PackageItemType;
-import com.example.aichinese.entity.enums.PurchasableItemType;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
@@ -49,6 +47,9 @@ public class LiveLearningAccessService {
     private static final Set<LiveClassStatus> CANCELLABLE_STATUSES =
             Set.of(LiveClassStatus.SCHEDULED, LiveClassStatus.RESCHEDULED);
     private static final int JOIN_WINDOW_LEAD_MINUTES = 15;
+    /** Enrolments that hold a seat (capacity) and grant join access; CANCELLED/MISSED do not. */
+    public static final Set<LiveClassEnrolmentStatus> ACTIVE_ENROLMENT_STATUSES =
+            Set.of(LiveClassEnrolmentStatus.ENROLLED, LiveClassEnrolmentStatus.ATTENDED);
 
     private final StudentProfileRepository studentProfileRepository;
     private final LessonRepository lessonRepository;
@@ -59,7 +60,6 @@ public class LiveLearningAccessService {
     private final UploadedFileRepository uploadedFileRepository;
     private final PackageItemRepository packageItemRepository;
     private final TeacherContentAccessService teacherContentAccessService;
-    private final EntitlementService entitlementService;
 
     public LiveLearningAccessService(
             StudentProfileRepository studentProfileRepository,
@@ -70,8 +70,7 @@ public class LiveLearningAccessService {
             RecordedLessonVideoRepository recordedLessonVideoRepository,
             UploadedFileRepository uploadedFileRepository,
             PackageItemRepository packageItemRepository,
-            TeacherContentAccessService teacherContentAccessService,
-            EntitlementService entitlementService) {
+            TeacherContentAccessService teacherContentAccessService) {
         this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
@@ -81,7 +80,6 @@ public class LiveLearningAccessService {
         this.uploadedFileRepository = Objects.requireNonNull(uploadedFileRepository, "uploadedFileRepository");
         this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
         this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
-        this.entitlementService = Objects.requireNonNull(entitlementService, "entitlementService");
     }
 
     @Transactional(readOnly = true)
@@ -111,6 +109,7 @@ public class LiveLearningAccessService {
     @Transactional(readOnly = true)
     public Lesson requirePublishedLesson(Long lessonId) {
         return lessonRepository.findByIdAndContentStatus(lessonId, ContentStatus.PUBLISHED)
+                .filter(ContentVisibilityPolicy::isLessonVisible)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Published lesson was not found."));
     }
 
@@ -164,15 +163,14 @@ public class LiveLearningAccessService {
 
     @Transactional(readOnly = true)
     public RecordedLessonVideo requireAccessibleRecordedVideo(SecurityUserDetails currentUser, Long lessonId, Long videoId) {
-        StudentProfile student = requireStudent(currentUser);
-        Lesson lesson = requirePublishedLesson(lessonId);
-        ensureStudentHasLessonAccess(student, lesson);
+        requireStudent(currentUser);
+        requirePublishedLesson(lessonId);
 
         RecordedLessonVideo video = recordedLessonVideoRepository.findByIdAndLessonIdAndActiveTrue(videoId, lessonId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Recorded video was not found."));
 
         if (video.getCoursePackage() != null) {
-            ensureStudentHasPackageAccess(student, video.getCoursePackage());
+            ensurePublishedPackage(video.getCoursePackage());
         }
 
         return video;
@@ -180,15 +178,14 @@ public class LiveLearningAccessService {
 
     @Transactional(readOnly = true)
     public UploadedFile requireAccessibleRecordedFile(SecurityUserDetails currentUser, Long videoId) {
-        StudentProfile student = requireStudent(currentUser);
+        requireStudent(currentUser);
         RecordedLessonVideo video = requireActiveRecordedVideo(videoId);
-        Lesson lesson = requirePublishedLesson(video.getLesson().getId());
-        ensureStudentHasLessonAccess(student, lesson);
+        requirePublishedLesson(video.getLesson().getId());
         if (video.getUploadedFile() == null) {
             throw new ResponseStatusException(NOT_FOUND, "Recorded video file was not found.");
         }
         if (video.getCoursePackage() != null) {
-            ensureStudentHasPackageAccess(student, video.getCoursePackage());
+            ensurePublishedPackage(video.getCoursePackage());
         }
         return uploadedFileRepository.findById(video.getUploadedFile().getId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Recorded video file was not found."));
@@ -200,14 +197,12 @@ public class LiveLearningAccessService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Recorded video was not found."));
     }
 
-    private LiveClassEnrolment requireActiveEnrolment(Long liveClassId, Long studentId) {
-        LiveClassEnrolment enrolment = liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(liveClassId, studentId)
+    /** ENROLLED or ATTENDED enrolment of the student (cancelled rows are kept as history only). */
+    public LiveClassEnrolment requireActiveEnrolment(Long liveClassId, Long studentId) {
+        return liveClassEnrolmentRepository
+                .findFirstByLiveClassIdAndStudentIdAndEnrolmentStatusInOrderByIdDesc(
+                        liveClassId, studentId, ACTIVE_ENROLMENT_STATUSES)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Live class enrolment was not found."));
-        if (enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.ENROLLED
-                && enrolment.getEnrolmentStatus() != LiveClassEnrolmentStatus.ATTENDED) {
-            throw new ResponseStatusException(NOT_FOUND, "Live class enrolment was not found.");
-        }
-        return enrolment;
     }
 
     @Transactional(readOnly = true)
@@ -231,21 +226,25 @@ public class LiveLearningAccessService {
     }
 
     @Transactional(readOnly = true)
-    public void ensureStudentCanEnrol(StudentProfile student, LiveClass liveClass) {
+    public void ensureStudentCanEnrol(LiveClass liveClass) {
         ensureLiveClassVisibleToStudents(liveClass);
-        ensureStudentHasLinkedAccess(student, liveClass);
-        if (liveClass.getMaxParticipants() != null) {
-            long enrolledCount = liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatus(
-                    liveClass.getId(),
-                    LiveClassEnrolmentStatus.ENROLLED);
-            if (enrolledCount >= liveClass.getMaxParticipants()) {
-                throw new ResponseStatusException(BAD_REQUEST, "This live class is already full.");
-            }
+        if (liveClass.getMaxParticipants() != null
+                && countSeatsTaken(liveClass) >= liveClass.getMaxParticipants()) {
+            throw new ResponseStatusException(BAD_REQUEST, "This live class is already full.");
         }
     }
 
+    /** Seats taken under the participant limit: ENROLLED and ATTENDED enrolments (D26). */
     @Transactional(readOnly = true)
-    public void ensureStudentCanJoin(StudentProfile student, LiveClass liveClass) {
+    public long countSeatsTaken(LiveClass liveClass) {
+        return liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatusIn(
+                liveClass.getId(),
+                ACTIVE_ENROLMENT_STATUSES);
+    }
+
+    /** Checks visibility, status and join window, then returns the student's active enrolment. */
+    @Transactional(readOnly = true)
+    public LiveClassEnrolment ensureStudentCanJoin(StudentProfile student, LiveClass liveClass) {
         ensureLiveClassVisibleToStudents(liveClass);
         if (!JOINABLE_STATUSES.contains(liveClass.getLiveClassStatus())) {
             throw new ResponseStatusException(FORBIDDEN, "This live class is not available to join.");
@@ -253,8 +252,7 @@ public class LiveLearningAccessService {
         if (!isJoinWindowOpen(liveClass)) {
             throw new ResponseStatusException(FORBIDDEN, "The live class join window is not open yet.");
         }
-        requireActiveEnrolment(liveClass.getId(), student.getId());
-        ensureStudentHasLinkedAccess(student, liveClass);
+        return requireActiveEnrolment(liveClass.getId(), student.getId());
     }
 
     public boolean isJoinWindowOpen(LiveClass liveClass) {
@@ -270,53 +268,24 @@ public class LiveLearningAccessService {
                 && now.isBefore(liveClass.getScheduledEndAt());
     }
 
-    @Transactional(readOnly = true)
-    public boolean hasStudentLessonAccess(StudentProfile student, Lesson lesson) {
-        if (lesson.getAccessType() != AccessType.PAID) {
-            return true;
-        }
-
-        boolean directLessonAccess = entitlementService.hasAccessToItem(
-                student.getId(),
-                PurchasableItemType.LESSON.name(),
-                lesson.getId());
-        boolean moduleAccess = lesson.getModule() != null
-                && entitlementService.hasAccessToItem(
-                        student.getId(),
-                        PurchasableItemType.MODULE.name(),
-                        lesson.getModule().getId());
-        return directLessonAccess || moduleAccess;
-    }
-
-    @Transactional(readOnly = true)
-    public boolean hasStudentPackageAccess(StudentProfile student, CoursePackage coursePackage) {
-        if (coursePackage.getAccessType() != AccessType.PAID) {
-            return true;
-        }
-
-        return entitlementService.hasAccessToItem(
-                student.getId(),
-                PurchasableItemType.PACKAGE.name(),
-                coursePackage.getId());
-    }
-
-    @Transactional(readOnly = true)
-    public void ensureStudentHasLessonAccess(StudentProfile student, Lesson lesson) {
-        if (lesson.getContentStatus() != ContentStatus.PUBLISHED) {
+    /**
+     * Every published lesson is free for any signed-in student; the gate is the shared
+     * {@link ContentVisibilityPolicy}: PUBLISHED lesson, PUBLISHED module (if any) and an
+     * approved, active teacher.
+     */
+    public void ensurePublishedLesson(Lesson lesson) {
+        if (!ContentVisibilityPolicy.isLessonVisible(lesson)) {
             throw new ResponseStatusException(NOT_FOUND, "Published lesson was not found.");
         }
-        if (!hasStudentLessonAccess(student, lesson)) {
-            throw new ResponseStatusException(FORBIDDEN, "Paid content is locked until payment is completed.");
-        }
     }
 
-    @Transactional(readOnly = true)
-    public void ensureStudentHasPackageAccess(StudentProfile student, CoursePackage coursePackage) {
-        if (coursePackage.getContentStatus() != ContentStatus.PUBLISHED) {
-            throw new ResponseStatusException(NOT_FOUND, "Published package was not found.");
-        }
-        if (!hasStudentPackageAccess(student, coursePackage)) {
-            throw new ResponseStatusException(FORBIDDEN, "Paid content is locked until payment is completed.");
+    /**
+     * Every published course is free for any signed-in student; the gate is a PUBLISHED course
+     * owned by an approved, active teacher ({@link ContentVisibilityPolicy}).
+     */
+    public void ensurePublishedPackage(CoursePackage coursePackage) {
+        if (!ContentVisibilityPolicy.isPackageVisible(coursePackage)) {
+            throw new ResponseStatusException(NOT_FOUND, "Published course was not found.");
         }
     }
 
@@ -387,25 +356,24 @@ public class LiveLearningAccessService {
         return null;
     }
 
+    /** True while the student holds an ENROLLED or ATTENDED (joined) enrolment. */
     public boolean isStudentEnrolled(Long liveClassId, Long studentId) {
-        return liveClassEnrolmentRepository.existsByLiveClassIdAndStudentIdAndEnrolmentStatus(
+        return liveClassEnrolmentRepository.existsByLiveClassIdAndStudentIdAndEnrolmentStatusIn(
                 liveClassId,
                 studentId,
-                LiveClassEnrolmentStatus.ENROLLED);
+                ACTIVE_ENROLMENT_STATUSES);
     }
 
     public Set<Long> findPublishedPackageIdsContainingLesson(Lesson lesson) {
         Set<Long> directPackageIds = packageItemRepository
                 .findByItemTypeAndItemId(PackageItemType.LESSON, lesson.getId()).stream()
-                .filter(item -> item.getCoursePackage() != null
-                        && item.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED)
+                .filter(item -> ContentVisibilityPolicy.isPackageVisible(item.getCoursePackage()))
                 .map(item -> item.getCoursePackage().getId())
                 .collect(Collectors.toSet());
         if (lesson.getModule() != null) {
             packageItemRepository
                     .findByItemTypeAndItemId(PackageItemType.MODULE, lesson.getModule().getId()).stream()
-                    .filter(item -> item.getCoursePackage() != null
-                            && item.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED)
+                    .filter(item -> ContentVisibilityPolicy.isPackageVisible(item.getCoursePackage()))
                     .map(item -> item.getCoursePackage().getId())
                     .forEach(directPackageIds::add);
         }
@@ -431,23 +399,13 @@ public class LiveLearningAccessService {
             throw new ResponseStatusException(FORBIDDEN, "This live class is not available.");
         }
 
-        if (liveClass.getLesson() != null && liveClass.getLesson().getContentStatus() != ContentStatus.PUBLISHED) {
+        if (liveClass.getLesson() != null && !ContentVisibilityPolicy.isLessonVisible(liveClass.getLesson())) {
             throw new ResponseStatusException(NOT_FOUND, "Published lesson was not found.");
         }
 
         if (liveClass.getCoursePackage() != null
-                && liveClass.getCoursePackage().getContentStatus() != ContentStatus.PUBLISHED) {
-            throw new ResponseStatusException(NOT_FOUND, "Published package was not found.");
-        }
-    }
-
-    private void ensureStudentHasLinkedAccess(StudentProfile student, LiveClass liveClass) {
-        if (liveClass.getLesson() != null) {
-            ensureStudentHasLessonAccess(student, liveClass.getLesson());
-        }
-
-        if (liveClass.getCoursePackage() != null) {
-            ensureStudentHasPackageAccess(student, liveClass.getCoursePackage());
+                && !ContentVisibilityPolicy.isPackageVisible(liveClass.getCoursePackage())) {
+            throw new ResponseStatusException(NOT_FOUND, "Published course was not found.");
         }
     }
 

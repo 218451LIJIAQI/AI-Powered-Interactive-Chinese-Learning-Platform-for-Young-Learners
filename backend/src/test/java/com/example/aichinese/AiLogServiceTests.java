@@ -21,14 +21,14 @@ import com.example.aichinese.repository.AiChatMessageRepository;
 import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiFeedbackRecordRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
+import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.service.AiLogService;
 
 /**
  * Unit coverage for {@code AiLogService} — pins the typed sender-role
- * contract for chat messages, the privacy-preserving
- * {@code content_length=N} metadata stored on feedback rows (instead
- * of raw child-facing uploads), and the UTF-8-safe truncation
- * boundary on {@code TINYTEXT} columns.
+ * contract for chat messages and the privacy-preserving
+ * {@code content_length=N} metadata stored on usage-log and feedback rows
+ * (instead of raw prompts, replies or learner uploads).
  */
 class AiLogServiceTests {
 
@@ -68,7 +68,7 @@ class AiLogServiceTests {
                 "deepseek",
                 "deepseek-chat",
                 42,
-                "Child prompt with private learning details",
+                "Adult prompt with private learning details",
                 "Provider answer that should not be retained in usage logs",
                 null,
                 "AiChatSession",
@@ -76,7 +76,7 @@ class AiLogServiceTests {
 
         assertThat(saved.getInputSummary()).isEqualTo("content_length=42");
         assertThat(saved.getOutputSummary()).isEqualTo("content_length=57");
-        assertThat(saved.getInputSummary()).doesNotContain("Child prompt");
+        assertThat(saved.getInputSummary()).doesNotContain("Adult prompt");
         assertThat(saved.getOutputSummary()).doesNotContain("Provider answer");
         verify(aiUsageLogRepository).save(any(AiUsageLog.class));
     }
@@ -96,7 +96,7 @@ class AiLogServiceTests {
                 user,
                 AiFeatureKey.PRONUNCIATION_FEEDBACK,
                 "en",
-                "Target text: hello child learner",
+                "Target text: hello adult learner",
                 "Detailed coaching feedback that should not be retained verbatim",
                 AiRequestStatus.UNAVAILABLE,
                 uploadedFile);
@@ -113,7 +113,8 @@ class AiLogServiceTests {
                 aiUsageLogRepository,
                 mock(AiFeedbackRecordRepository.class),
                 mock(AiChatSessionRepository.class),
-                mock(AiChatMessageRepository.class));
+                mock(AiChatMessageRepository.class),
+                mock(LessonRepository.class));
     }
 
     private static AiLogService aiLogService(AiFeedbackRecordRepository aiFeedbackRecordRepository) {
@@ -121,7 +122,8 @@ class AiLogServiceTests {
                 mock(AiUsageLogRepository.class),
                 aiFeedbackRecordRepository,
                 mock(AiChatSessionRepository.class),
-                mock(AiChatMessageRepository.class));
+                mock(AiChatMessageRepository.class),
+                mock(LessonRepository.class));
     }
 
     private static AiLogService aiLogService(AiChatMessageRepository aiChatMessageRepository) {
@@ -129,7 +131,8 @@ class AiLogServiceTests {
                 mock(AiUsageLogRepository.class),
                 mock(AiFeedbackRecordRepository.class),
                 mock(AiChatSessionRepository.class),
-                aiChatMessageRepository);
+                aiChatMessageRepository,
+                mock(LessonRepository.class));
     }
 
     private static void saveArgument(AiUsageLogRepository repository) {

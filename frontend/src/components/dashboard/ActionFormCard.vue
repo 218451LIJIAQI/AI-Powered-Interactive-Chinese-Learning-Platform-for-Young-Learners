@@ -2,7 +2,7 @@
   <form class="panel form-grid" @submit.prevent="emit('submit')">
     <div class="card-section-head">
       <div class="card-section-title">
-        <div class="media-badge small">
+        <div class="media-badge small" aria-hidden="true">
           <IconGlyph :name="icon" />
         </div>
         <div class="card-section-copy">
@@ -13,9 +13,17 @@
       <slot name="header-end" />
     </div>
     <slot />
-    <button class="btn btn-primary" type="submit" :disabled="submitDisabled">
-      {{ currentSubmitLabel }}
-    </button>
+    <div class="form-actions">
+      <button
+        class="btn"
+        :class="`btn-${submitVariant}`"
+        type="submit"
+        :disabled="submitDisabled"
+        :aria-busy="submitting"
+      >
+        {{ currentSubmitLabel }}
+      </button>
+    </div>
   </form>
 </template>
 
@@ -32,6 +40,8 @@ interface Props {
   submittingLabel?: string
   submitting?: boolean
   disabled?: boolean
+  /** Demote the submit button when a view already has a primary action (one primary per view). */
+  submitVariant?: 'primary' | 'secondary'
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -41,6 +51,7 @@ const props = withDefaults(defineProps<Props>(), {
   submittingLabel: 'Saving...',
   submitting: false,
   disabled: false,
+  submitVariant: 'primary',
 })
 
 const emit = defineEmits<{

@@ -2,7 +2,7 @@
   <article class="panel stack">
     <div class="card-section-head">
       <div class="card-section-title">
-        <div class="media-badge small">
+        <div class="media-badge small" aria-hidden="true">
           <IconGlyph :name="icon" />
         </div>
         <div class="card-section-copy">

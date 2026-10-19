@@ -41,15 +41,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * End-to-end MockMvc coverage of the admin teacher management
- * workflow: application review, verification document review with
- * decision notes, status transitions (PENDING / APPROVED /
- * SUSPENDED), and the resulting audit trail.
- *
- * <p>Verifies "all green or stays pending" — a teacher cannot be
- * approved while any required document is still under review — and
- * that suspending a teacher hides their published content from the
- * public surface without deleting the rows.</p>
+ * End-to-end MockMvc coverage of the admin teacher and user management
+ * workflow: the pending-teacher list, approval (which needs at least one
+ * verification document) and rejection (which needs a reason) with the
+ * resulting review, notification and audit rows, admin-only access,
+ * public visibility of approved teachers only, server-side user search,
+ * account deactivation / reactivation (never of the admin's own account)
+ * and attachment-only download of verification documents.
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
@@ -312,8 +310,21 @@ class AdminTeacherManagementIntegrationTests {
                 .content(json(Map.of(
                         "email", studentEmail,
                         "password", DEFAULT_PASSWORD))))
+                // D12 / FR-AUTH-14: the correct password of a deactivated account gets the distinct message.
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(
+                        "This account is currently unavailable. Please contact the platform administrator."));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "email", studentEmail,
+                        "password", "WrongPassword123!"))))
+                // A wrong password never reveals the account state.
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(jsonPath("$.message").value("Invalid email or password."));
 
         mockMvc.perform(patch("/api/v1/admin/users/" + studentUser.getId() + "/status")
                 .with(csrf())
@@ -333,6 +344,59 @@ class AdminTeacherManagementIntegrationTests {
     }
 
     @Test
+    void adminUserListSupportsServerSideKeywordSearchPagingAndActiveFilter() throws Exception {
+        // FR-ADM-02: any user must be findable, not only the first backend page.
+        String marker = "w5search" + UUID.randomUUID().toString().substring(0, 8);
+        for (int index = 0; index < 12; index++) {
+            registerStudentAndLogin(marker + "-" + index + "@example.com");
+        }
+        String adminToken = adminToken();
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                .param("keyword", marker.toUpperCase())
+                .param("page", "2")
+                .param("size", "5")
+                .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(12))
+                .andExpect(jsonPath("$.data.totalPages").value(3))
+                .andExpect(jsonPath("$.data.page").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(2));
+
+        String lastEmail = marker + "-11@example.com";
+        User target = userRepository.findByEmailWithRoles(lastEmail).orElseThrow();
+        mockMvc.perform(get("/api/v1/admin/users")
+                .param("keyword", lastEmail)
+                .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(1))
+                .andExpect(jsonPath("$.data.items[0].userId").value(target.getId()));
+
+        mockMvc.perform(patch("/api/v1/admin/users/" + target.getId() + "/status")
+                .with(csrf())
+                .header(AUTHORIZATION, bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("active", false))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                .param("keyword", marker)
+                .param("active", "false")
+                .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(1))
+                .andExpect(jsonPath("$.data.items[0].active").value(false));
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                .param("keyword", marker)
+                .param("active", "true")
+                .param("role", "STUDENT")
+                .header(AUTHORIZATION, bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(11));
+    }
+
+    @Test
     void adminShouldNotDeactivateOwnAccount() throws Exception {
         User adminUser = userRepository.findByEmailWithRoles(ADMIN_EMAIL).orElseThrow();
 
@@ -344,6 +408,18 @@ class AdminTeacherManagementIntegrationTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errors[0]").value("You cannot deactivate your own admin account."));
+    }
+
+    @Test
+    void updatingStatusOfUnknownUserReturnsNotFound() throws Exception {
+        mockMvc.perform(patch("/api/v1/admin/users/" + Long.MAX_VALUE + "/status")
+                .with(csrf())
+                .header(AUTHORIZATION, bearer(adminToken()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("active", false))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("User was not found."));
     }
 
     @Test

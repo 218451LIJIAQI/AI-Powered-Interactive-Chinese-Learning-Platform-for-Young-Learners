@@ -19,6 +19,7 @@ import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.UploadedFileRepository;
 import com.example.aichinese.service.storage.StorageProvider;
+import com.example.aichinese.service.storage.StorageReadRequest;
 import com.example.aichinese.service.storage.StorageWriteRequest;
 import com.example.aichinese.service.storage.StoredObject;
 
@@ -71,6 +72,14 @@ public class AiFileStorageService {
                 IMAGE_POLICY,
                 uploadProperties.getAiImageMaxFileSize());
         return storeFile(multipartFile, ownerUser, validated.originalFileName(), validated.extension());
+    }
+
+    /** Streams a stored practice upload (pronunciation audio or handwriting image) after the caller's access check. */
+    public StoredFileDownload loadAsDownload(UploadedFile uploadedFile) {
+        return storageProvider.load(new StorageReadRequest(
+                resolveAiDirectory().toString(),
+                uploadedFile,
+                "Requested practice file could not be found."));
     }
 
     private UploadedFile storeFile(

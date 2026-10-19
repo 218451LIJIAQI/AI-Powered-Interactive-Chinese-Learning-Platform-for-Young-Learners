@@ -39,8 +39,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/v1/auth";
-    private static final String REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
+    private static final String LEGACY_REFRESH_COOKIE_PATH = RefreshCookieWriter.LEGACY_REFRESH_COOKIE_PATH;
+    private static final String REFRESH_COOKIE_PATH = RefreshCookieWriter.REFRESH_COOKIE_PATH;
 
     private final AuthService authService;
     private final PublicAuthRequestLimiter publicAuthRequestLimiter;
@@ -135,7 +135,11 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    public ApiResponse<Void> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request,
+            HttpServletRequest httpRequest) {
+        // Same per-IP limit as forgot-password, in a separate bucket (audit A1 §2.4).
+        publicAuthRequestLimiter.checkResetPasswordAllowed(clientIpResolver.resolve(httpRequest));
         authService.resetPassword(request);
         return ApiResponse.success("Password reset request processed successfully.", null);
     }
@@ -153,19 +157,11 @@ public class AuthController {
     }
 
     private ResponseCookie refreshCookie(String rawToken, Duration maxAge) {
-        return refreshCookieBuilder(rawToken, REFRESH_COOKIE_PATH).maxAge(maxAge).build();
+        return RefreshCookieWriter.refreshCookie(securityProperties, rawToken, maxAge);
     }
 
     private ResponseCookie clearRefreshCookie(String path) {
-        return refreshCookieBuilder("", path).maxAge(0).build();
-    }
-
-    private ResponseCookie.ResponseCookieBuilder refreshCookieBuilder(String value, String path) {
-        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), value)
-                .httpOnly(true)
-                .secure(securityProperties.refreshTokenCookieSecure())
-                .sameSite(securityProperties.refreshTokenSameSite())
-                .path(path);
+        return RefreshCookieWriter.clearRefreshCookie(securityProperties, path);
     }
 
     private void checkRegisterAllowed(HttpServletRequest httpRequest) {

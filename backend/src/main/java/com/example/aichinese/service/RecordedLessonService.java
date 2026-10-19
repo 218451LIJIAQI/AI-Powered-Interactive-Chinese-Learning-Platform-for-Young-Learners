@@ -19,7 +19,6 @@ import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.UploadedFile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
@@ -173,16 +172,13 @@ public class RecordedLessonService {
             Long lessonId,
             int page,
             int size) {
-        var student = liveLearningAccessService.requireStudent(currentUser);
-        var lesson = liveLearningAccessService.requirePublishedLesson(lessonId);
-        liveLearningAccessService.ensureStudentHasLessonAccess(student, lesson);
+        liveLearningAccessService.requireStudent(currentUser);
+        liveLearningAccessService.requirePublishedLesson(lessonId);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<RecordedLessonVideo> videoPage = recordedLessonVideoRepository.findAccessibleByLessonIdForStudent(
                 lessonId,
-                student.getId(),
                 ContentStatus.PUBLISHED,
-                AccessType.PAID,
                 PageRequest.of(safePage, safeSize));
         return mapRecordedVideoPage(videoPage, safePage, safeSize, this::toStudentResponse);
     }

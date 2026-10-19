@@ -64,7 +64,7 @@ describe('ResetPasswordPage token hygiene', () => {
     mocks.route.query = {
       token: rawResetToken,
       tab: accountTab,
-      email: 'parent@example.com',
+      email: 'learner@example.com',
       redirect: '/auth?token=nested-token',
     }
 

@@ -5,7 +5,7 @@ import { normalizeAppRoute } from './routeCompat'
 describe('normalizeAppRoute', () => {
   it.each([
     ['/catalog?level=beginner', '/courses?level=beginner'],
-    ['/student/payments?tab=history', '/student/profile?tab=history'],
+    ['/student/feedback?tab=history', '/student/profile?tab=history'],
     ['/admin/ai-response-reports/42#review', '/admin/moderation#review'],
   ])('rewrites %s to %s', (input, output) => {
     expect(normalizeAppRoute(input)).toBe(output)
@@ -34,6 +34,30 @@ describe('normalizeAppRoute', () => {
       expect(normalizeAppRoute(input)).toBe(input)
     },
   )
+
+  it.each(['/teacher/activities', '/admin/content-review', '/admin/content-review?type=QUIZ&id=7'])(
+    'keeps content governance route %s (notification target paths)',
+    (input) => {
+      expect(normalizeAppRoute(input)).toBe(input)
+    },
+  )
+
+  it.each([
+    '/student/notifications',
+    '/teacher/notifications',
+    '/admin/notifications',
+    '/student/practice-submissions',
+    '/student/account',
+    '/teacher/account',
+    '/admin/account',
+    '/student/progress',
+  ])('keeps W4 notification target / account route %s', (input) => {
+    expect(normalizeAppRoute(input)).toBe(input)
+  })
+
+  it.each(['/responsible-ai', '/privacy#ai-provider', '/terms'])('keeps public information route %s', (input) => {
+    expect(normalizeAppRoute(input)).toBe(input)
+  })
 
   it.each([
     ['  /student/home  ', '/student/home'],

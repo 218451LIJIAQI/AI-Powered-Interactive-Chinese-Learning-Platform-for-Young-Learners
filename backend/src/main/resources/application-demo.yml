@@ -25,9 +25,6 @@ app:
   security:
     jwt:
       secret: DemoProfileJwtSecretForFypLocalRun1234567890AB
-  payment:
-    provider: mock
-    mock-success-enabled: true
   ai:
     enable-real-provider: false
   email:

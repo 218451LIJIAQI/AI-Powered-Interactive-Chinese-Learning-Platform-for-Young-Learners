@@ -1,30 +1,41 @@
 <template>
-  <svg class="mini-chart" :viewBox="viewBox" preserveAspectRatio="none" role="img" :aria-label="ariaLabel">
+  <svg
+    class="mini-chart"
+    :viewBox="viewBox"
+    preserveAspectRatio="none"
+    role="img"
+    :aria-label="ariaLabel"
+    :style="{ color: stroke }"
+  >
+    <!-- The chart stretches to its card (preserveAspectRatio="none"); non-scaling strokes keep line widths even and
+         the points round (each point is a zero-length round-capped segment, not a circle that would stretch). -->
     <path
       :d="backgroundPath"
       fill="none"
-      :stroke="stroke"
+      stroke="currentColor"
       stroke-linecap="round"
       stroke-linejoin="round"
       stroke-width="4"
       opacity="0.12"
+      vector-effect="non-scaling-stroke"
     />
     <polyline
       :points="polylinePoints"
       fill="none"
-      :stroke="stroke"
-      stroke-width="4"
+      stroke="currentColor"
+      stroke-width="3"
       stroke-linecap="round"
       stroke-linejoin="round"
+      vector-effect="non-scaling-stroke"
     />
-    <circle
+    <path
       v-for="point in points"
       :key="point.key"
-      :cx="point.x"
-      :cy="point.y"
-      :r="POINT_RADIUS"
-      :fill="stroke"
-      opacity="0.92"
+      :d="`M${point.x} ${point.y}h0`"
+      stroke="currentColor"
+      :stroke-width="POINT_DIAMETER"
+      stroke-linecap="round"
+      vector-effect="non-scaling-stroke"
     />
   </svg>
 </template>
@@ -48,10 +59,11 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   label: 'Trend chart',
-  stroke: '#6a49ff',
+  /** Any CSS colour, including a token such as var(--color-success). */
+  stroke: 'var(--color-primary-500)',
 })
 
-const POINT_RADIUS = 4.5
+const POINT_DIAMETER = 9
 const SVG_HEIGHT = 160
 const SVG_WIDTH = 320
 const Y_MAX = 50

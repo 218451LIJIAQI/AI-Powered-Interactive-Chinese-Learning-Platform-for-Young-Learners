@@ -1,299 +1,249 @@
 <template>
   <div class="page-stack admin-dashboard-page">
-    <PageHeaderBlock
-      :title="t('adminDashboard.title')"
-      :description="t('adminDashboard.description')"
-      icon="verification"
-    >
-      <template #actions>
-        <div class="admin-dashboard-date-chip">
-          <IconGlyph name="calendar" :size="18" />
-          <span>{{ todayLabel }}</span>
-        </div>
+    <PageHeaderBlock :title="t('adminDashboard.title')" :description="t('adminDashboard.description')" icon="dashboard">
+      <template #meta>
+        <span class="tag">
+          <IconGlyph name="calendar" :size="14" aria-hidden="true" />
+          {{ todayLabel }}
+        </span>
       </template>
     </PageHeaderBlock>
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" />
+    <DataNotice :using-fallback="usingFallback" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="admin-dashboard-kpis">
-        <article v-for="card in statCards" :key="card.label" class="admin-dashboard-kpi">
-          <div class="admin-dashboard-kpi-icon" :class="`is-${card.tone}`">
-            <IconGlyph :name="card.icon" :size="22" />
-          </div>
-          <div class="admin-dashboard-kpi-copy">
-            <small>{{ card.label }}</small>
-            <strong>{{ card.value }}</strong>
-            <span>{{ card.copy }}</span>
-          </div>
-        </article>
+      <section class="admin-kpi-grid">
+        <AdminKpiTile
+          v-for="card in statCards"
+          :key="card.label"
+          :label="card.label"
+          :value="card.value"
+          :hint="card.copy"
+          :icon="card.icon"
+          :tone="card.tone"
+        />
       </section>
 
-      <section class="admin-dashboard-grid">
-        <article class="panel admin-dashboard-panel">
-          <div class="row-between admin-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('adminDashboard.teacherQueue') }}</strong>
+      <section class="admin-grid-2">
+        <div class="admin-stack">
+          <article class="panel admin-panel">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('adminDashboard.teacherQueue') }}</h2>
+              <button class="btn btn-link" type="button" @click="openTeacherVerification">
+                {{ t('adminDashboard.viewAll') }}
+              </button>
             </div>
-            <button class="student-link-button" type="button" @click="openTeacherVerification">
-              {{ t('adminDashboard.viewAll') }}
-            </button>
-          </div>
 
-          <div v-if="teacherQueueItems.length" class="admin-dashboard-list">
-            <article v-for="item in teacherQueueItems" :key="item.teacherId" class="admin-dashboard-row">
-              <PortraitAvatar :size="50" :kind="item.avatarKind" />
-              <div class="admin-dashboard-copy">
-                <strong>{{ item.fullName }}</strong>
-                <span>{{ item.email }}</span>
-                <small>{{ item.appliedLabel }}</small>
-              </div>
-              <StatusPill :label="t('adminDashboard.pending')" tone="warning" />
-            </article>
-          </div>
-          <StatePanel
-            v-else
-            icon="verification"
-            :title="t('adminDashboard.noPendingTeachers')"
-            :message="t('adminDashboard.noPendingTeachersHint')"
-          />
-        </article>
-
-        <article class="panel admin-dashboard-panel">
-          <div class="row-between admin-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('adminDashboard.moderationReports') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openModeration">
-              {{ t('adminDashboard.openQueue') }}
-            </button>
-          </div>
-
-          <div v-if="moderationItems.length" class="admin-dashboard-list">
-            <article v-for="item in moderationItems" :key="item.id" class="admin-dashboard-row">
-              <div class="admin-dashboard-badge" :class="`is-${item.tone}`">
-                <IconGlyph :name="item.icon" :size="16" />
-              </div>
-              <div class="admin-dashboard-copy">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.copy }}</span>
-                <small>{{ item.meta }}</small>
-              </div>
-              <StatusPill :label="item.label" :tone="item.statusTone" />
-            </article>
-          </div>
-          <StatePanel
-            v-else
-            icon="moderation"
-            :title="t('adminDashboard.noModeration')"
-            :message="t('adminDashboard.noModerationHint')"
-          />
-        </article>
-
-        <article class="panel admin-dashboard-panel">
-          <div class="row-between admin-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('adminDashboard.adminNotifications') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openSettings">
-              {{ t('adminDashboard.viewAll') }}
-            </button>
-          </div>
-
-          <div v-if="notifications.length" class="admin-dashboard-list">
-            <NotificationLinkButton
-              v-for="item in notifications.slice(0, 4)"
-              :key="item.id"
-              :notification-id="item.id"
-              :target-path="item.targetPath"
-              fallback-to="/admin/settings"
-              @read="markAdminNotificationRead"
-            >
-              <article class="admin-dashboard-row">
-                <div class="admin-dashboard-dot" :class="{ 'is-unread': item.status !== 'READ' }" />
-                <div class="admin-dashboard-copy">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.message }}</span>
-                  <small>{{ formatDateTime(item.createdAt) }}</small>
+            <ul v-if="teacherQueueItems.length" class="list-divided admin-feed">
+              <li v-for="item in teacherQueueItems" :key="item.teacherId" class="admin-feed-item">
+                <PortraitAvatar :size="40" :name="item.fullName" :tone="item.avatarTone" />
+                <div class="admin-feed-copy">
+                  <span class="admin-feed-title">{{ item.fullName }}</span>
+                  <span class="admin-feed-text">{{ item.email }}</span>
+                  <span class="admin-feed-meta">{{ item.appliedLabel }}</span>
                 </div>
-              </article>
-            </NotificationLinkButton>
-          </div>
-          <StatePanel
-            v-else
-            icon="bell"
-            :title="t('adminDashboard.noNotifications')"
-            :message="t('adminDashboard.noNotificationsHint')"
-          />
-        </article>
+                <div class="admin-feed-aside">
+                  <StatusPill :label="t('adminDashboard.pending')" tone="warning" />
+                </div>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              compact
+              icon="verification"
+              :title="t('adminDashboard.noPendingTeachers')"
+              :message="t('adminDashboard.noPendingTeachersHint')"
+            />
+          </article>
 
-        <article class="panel admin-dashboard-panel admin-dashboard-panel--wide">
-          <div class="row-between admin-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('adminDashboard.analyticsSnapshot') }}</strong>
+          <article class="panel admin-panel">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('adminDashboard.moderationReports') }}</h2>
+              <button class="btn btn-link" type="button" @click="openModeration">
+                {{ t('adminDashboard.openQueue') }}
+              </button>
             </div>
-            <button class="student-link-button" type="button" @click="openAnalytics">
-              {{ t('adminDashboard.openAnalytics') }}
-            </button>
-          </div>
 
-          <div class="admin-dashboard-analytics-grid">
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.totalStudents') }}</small>
-              <strong>{{ formatNumber(analytics.overview.totalStudents) }}</strong>
-              <span>{{ t('adminDashboard.totalStudentsHint') }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.totalTeachers') }}</small>
-              <strong>{{ formatNumber(analytics.overview.totalTeachers) }}</strong>
-              <span>{{ t('adminDashboard.totalTeachersHint') }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.publishedContent') }}</small>
-              <strong>{{ formatNumber(analytics.overview.publishedContentItems) }}</strong>
-              <span>{{ t('adminDashboard.publishedContentHint') }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.aiRequests') }}</small>
-              <strong>{{ formatNumber(analytics.overview.aiRequests) }}</strong>
-              <span>{{ t('adminDashboard.aiRequestsHint') }}</span>
-            </article>
-          </div>
+            <ul v-if="moderationItems.length" class="list-divided admin-feed">
+              <li v-for="item in moderationItems" :key="item.id" class="admin-feed-item">
+                <span class="admin-icon-badge is-sm" :class="`admin-tone-${item.tone}`" aria-hidden="true">
+                  <IconGlyph :name="item.icon" :size="16" />
+                </span>
+                <div class="admin-feed-copy">
+                  <span class="admin-feed-title">{{ item.title }}</span>
+                  <span class="admin-feed-text">{{ item.copy }}</span>
+                  <span class="admin-feed-meta">{{ item.meta }}</span>
+                </div>
+                <div class="admin-feed-aside">
+                  <StatusPill :label="item.label" :tone="item.statusTone" />
+                </div>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              compact
+              icon="moderation"
+              :title="t('adminDashboard.noModeration')"
+              :message="t('adminDashboard.noModerationHint')"
+            />
+          </article>
 
-          <div v-if="registrationTrendRows.length" class="admin-dashboard-breakdown-list">
-            <article v-for="item in registrationTrendRows" :key="item.label" class="admin-dashboard-breakdown-row">
-              <div class="row-between">
-                <strong>{{ item.label }}</strong>
-                <span>{{ formatNumber(item.value) }}</span>
+          <article class="panel admin-panel">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('adminDashboard.analyticsSnapshot') }}</h2>
+              <button class="btn btn-link" type="button" @click="openAnalytics">
+                {{ t('adminDashboard.openAnalytics') }}
+              </button>
+            </div>
+
+            <dl class="admin-stat-tiles admin-stat-tiles--pairs">
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.totalStudents') }}</dt>
+                <dd>{{ formatNumber(analytics.overview.totalStudents) }}</dd>
+                <dd>{{ t('adminDashboard.totalStudentsHint') }}</dd>
               </div>
-              <div class="admin-dashboard-track">
-                <span :style="item.barStyle" />
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.totalTeachers') }}</dt>
+                <dd>{{ formatNumber(analytics.overview.totalTeachers) }}</dd>
+                <dd>{{ t('adminDashboard.totalTeachersHint') }}</dd>
               </div>
-            </article>
-          </div>
-          <p v-else class="admin-dashboard-empty-copy">
-            {{ t('adminDashboard.noRegistrationTrend') }}
-          </p>
-        </article>
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.publishedContent') }}</dt>
+                <dd>{{ formatNumber(analytics.overview.publishedContentItems) }}</dd>
+                <dd>{{ t('adminDashboard.publishedContentHint') }}</dd>
+              </div>
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.aiRequests') }}</dt>
+                <dd>{{ formatNumber(analytics.overview.aiRequests) }}</dd>
+                <dd>{{ t('adminDashboard.aiRequestsHint') }}</dd>
+              </div>
+            </dl>
 
-        <article class="panel admin-dashboard-panel">
-          <div class="row-between admin-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('adminDashboard.financeOverview') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openFinance">
-              {{ t('adminDashboard.openFinance') }}
-            </button>
-          </div>
+            <ul v-if="registrationTrendRows.length" class="admin-breakdown">
+              <li v-for="item in registrationTrendRows" :key="item.label" class="admin-breakdown-item">
+                <div class="admin-breakdown-head">
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ formatNumber(item.value) }}</span>
+                </div>
+                <ProgressBar class="is-sm" :progress="item.barPercent" aria-hidden="true" />
+              </li>
+            </ul>
+            <p v-else class="field-hint">
+              {{ t('adminDashboard.noRegistrationTrend') }}
+            </p>
+          </article>
+        </div>
 
-          <div class="admin-dashboard-finance-grid">
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.totalRevenue') }}</small>
-              <strong>{{
-                formatCurrency(
-                  dashboard.paymentRevenueSummary.totalRevenue,
-                  dashboard.paymentRevenueSummary.currencyCode,
-                )
-              }}</strong>
-              <span>{{
-                t('adminDashboard.paidTransactions', {
-                  count: formatNumber(dashboard.paymentRevenueSummary.paidTransactions),
-                })
-              }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.pendingRefunds') }}</small>
-              <strong>{{ formatNumber(dashboard.pendingRefunds) }}</strong>
-              <span>{{ t('adminDashboard.pendingRefundsHint') }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.pendingPayouts') }}</small>
-              <strong>{{ formatNumber(dashboard.pendingPayouts) }}</strong>
-              <span>{{ t('adminDashboard.pendingPayoutsHint') }}</span>
-            </article>
-          </div>
-        </article>
-
-        <article class="panel admin-dashboard-panel">
-          <div class="row-between admin-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('adminDashboard.auditLogs') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openSettings">
-              {{ t('adminDashboard.viewAll') }}
-            </button>
-          </div>
-
-          <div v-if="auditItems.length" class="admin-dashboard-list">
-            <article v-for="item in auditItems" :key="item.id" class="admin-dashboard-row">
-              <div class="admin-dashboard-badge" :class="`is-${item.tone}`">
+        <div class="admin-stack">
+          <article class="panel admin-panel">
+            <h2 class="card-title">{{ t('adminDashboard.quickActions') }}</h2>
+            <div class="admin-quick-actions">
+              <button
+                v-for="item in quickActions"
+                :key="item.label"
+                class="btn btn-secondary"
+                type="button"
+                @click="openQuickAction(item.to)"
+              >
                 <IconGlyph :name="item.icon" :size="16" />
-              </div>
-              <div class="admin-dashboard-copy">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.actionType }}</span>
-                <small>{{ item.time }}</small>
-              </div>
-            </article>
-          </div>
-          <StatePanel
-            v-else
-            icon="history"
-            :title="t('adminDashboard.noAuditLogs')"
-            :message="t('adminDashboard.noAuditLogsHint')"
-          />
-        </article>
-
-        <article class="panel admin-dashboard-panel">
-          <div class="student-section-heading">
-            <strong>{{ t('adminDashboard.platformHealth') }}</strong>
-          </div>
-
-          <div class="admin-dashboard-health-banner" :class="{ 'is-up': isHealthUp }">
-            <IconGlyph name="status" :size="18" />
-            <div class="stack u-gap-4">
-              <strong>{{ healthStatusLabel }}</strong>
-              <span>{{ t('adminDashboard.checked', { time: healthTimestampLabel }) }}</span>
+                <span>{{ item.label }}</span>
+              </button>
             </div>
-          </div>
+          </article>
 
-          <div class="admin-dashboard-health-grid">
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.backendService') }}</small>
-              <strong>{{ health.service || 'backend' }}</strong>
-              <span>{{ t('adminDashboard.backendServiceHint') }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.auditEntries') }}</small>
-              <strong>{{ formatNumber(analytics.overview.auditLogEntries) }}</strong>
-              <span>{{ t('adminDashboard.auditEntriesHint') }}</span>
-            </article>
-            <article class="admin-dashboard-mini-stat">
-              <small>{{ t('adminDashboard.unreadNotifications') }}</small>
-              <strong>{{ formatNumber(analytics.overview.adminUnreadNotifications) }}</strong>
-              <span>{{ t('adminDashboard.unreadNotificationsHint') }}</span>
-            </article>
-          </div>
-        </article>
+          <article class="panel admin-panel">
+            <h2 class="card-title">{{ t('adminDashboard.platformHealth') }}</h2>
 
-        <article class="panel admin-dashboard-panel">
-          <div class="student-section-heading">
-            <strong>{{ t('adminDashboard.quickActions') }}</strong>
-          </div>
+            <div class="admin-health">
+              <StatusPill :label="healthStatusLabel" :tone="isHealthUp ? 'success' : 'danger'" icon="status" />
+              <span class="type-caption">{{ t('adminDashboard.checked', { time: healthTimestampLabel }) }}</span>
+            </div>
 
-          <div class="admin-dashboard-actions">
-            <button
-              v-for="item in quickActions"
-              :key="item.label"
-              class="admin-dashboard-action"
-              type="button"
-              @click="openQuickAction(item.to)"
-            >
-              <IconGlyph :name="item.icon" :size="18" />
-              <span>{{ item.label }}</span>
-            </button>
-          </div>
-        </article>
+            <dl class="admin-stat-tiles">
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.backendService') }}</dt>
+                <dd>{{ health.service || 'backend' }}</dd>
+                <dd>{{ t('adminDashboard.backendServiceHint') }}</dd>
+              </div>
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.auditEntries') }}</dt>
+                <dd>{{ formatNumber(analytics.overview.auditLogEntries) }}</dd>
+                <dd>{{ t('adminDashboard.auditEntriesHint') }}</dd>
+              </div>
+              <div class="admin-stat-tile">
+                <dt>{{ t('adminDashboard.unreadNotifications') }}</dt>
+                <dd>{{ formatNumber(analytics.overview.adminUnreadNotifications) }}</dd>
+                <dd>{{ t('adminDashboard.unreadNotificationsHint') }}</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article class="panel admin-panel">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('adminDashboard.adminNotifications') }}</h2>
+              <button class="btn btn-link" type="button" @click="openNotifications">
+                {{ t('adminDashboard.viewAll') }}
+              </button>
+            </div>
+
+            <ul v-if="notifications.length" class="list-divided admin-feed">
+              <li v-for="item in notifications.slice(0, 4)" :key="item.id">
+                <NotificationLinkButton
+                  class="admin-feed-link"
+                  :notification-id="item.id"
+                  :target-path="item.targetPath"
+                  fallback-to="/admin/settings"
+                  @read="markAdminNotificationRead"
+                >
+                  <span class="admin-feed-item">
+                    <span class="admin-notification-dot" :class="{ 'is-unread': item.status !== 'READ' }" />
+                    <span class="admin-feed-copy">
+                      <span class="admin-feed-title">{{ item.title }}</span>
+                      <span class="admin-feed-text">{{ item.message }}</span>
+                      <span class="admin-feed-meta">{{ formatDateTime(item.createdAt) }}</span>
+                    </span>
+                  </span>
+                </NotificationLinkButton>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              compact
+              icon="bell"
+              :title="t('adminDashboard.noNotifications')"
+              :message="t('adminDashboard.noNotificationsHint')"
+            />
+          </article>
+
+          <article class="panel admin-panel">
+            <div class="card-header">
+              <h2 class="card-title">{{ t('adminDashboard.auditLogs') }}</h2>
+              <button class="btn btn-link" type="button" @click="openSettings">
+                {{ t('adminDashboard.viewAll') }}
+              </button>
+            </div>
+
+            <ul v-if="auditItems.length" class="list-divided admin-feed">
+              <li v-for="item in auditItems" :key="item.id" class="admin-feed-item">
+                <span class="admin-icon-badge is-sm" :class="`admin-tone-${item.tone}`" aria-hidden="true">
+                  <IconGlyph :name="item.icon" :size="16" />
+                </span>
+                <div class="admin-feed-copy">
+                  <span class="admin-feed-title">{{ item.title }}</span>
+                  <span class="admin-feed-text">{{ item.actionType }}</span>
+                  <span class="admin-feed-meta">{{ item.time }}</span>
+                </div>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              compact
+              icon="history"
+              :title="t('adminDashboard.noAuditLogs')"
+              :message="t('adminDashboard.noAuditLogsHint')"
+            />
+          </article>
+        </div>
       </section>
     </ResourceSection>
   </div>
@@ -305,14 +255,19 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import { adminApi, systemApi } from '@/api/services'
+import AdminKpiTile from '@/components/admin/AdminKpiTile.vue'
+import type { AdminTone } from '@/components/admin/adminTone'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import NotificationLinkButton from '@/components/common/NotificationLinkButton.vue'
+import type { AvatarTone } from '@/components/common/avatarTone'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import { useStatusLabels } from '@/composables/useStatusLabels'
 import { useResource } from '@/composables/useResource'
 import {
   adminAiReports,
@@ -324,7 +279,16 @@ import {
   teacherApplicationsPending,
 } from '@/demo/data'
 import { adminDashboardMessages } from '@/plugins/adminDashboardMessages'
-import { formatCurrency, formatDate, formatDateTime, formatNumber, ratioPercent, toFiniteNumber } from '@/utils/format'
+import {
+  formatDate,
+  formatDateTime,
+  formatNumber,
+  getDisplayLocale,
+  ratioPercent,
+  toFiniteNumber,
+} from '@/utils/format'
+
+const AVATAR_TONES: readonly AvatarTone[] = ['primary', 'info', 'success', 'warning']
 
 const HEALTH_FALLBACK = {
   status: 'UP',
@@ -337,9 +301,10 @@ const { t, locale } = useI18n({
   messages: {
     en: { adminDashboard: adminDashboardMessages.en },
     ms: { adminDashboard: adminDashboardMessages.ms },
-    zh: { adminDashboard: adminDashboardMessages.zh },
+    'zh-CN': { adminDashboard: adminDashboardMessages['zh-CN'] },
   },
 })
+const { statusLabel } = useStatusLabels()
 
 const dashboardResource = useResource(() => adminApi.dashboard(), adminDashboard)
 const analyticsResource = useResource(() => adminApi.analytics(), adminAnalytics)
@@ -364,14 +329,6 @@ const emptyDashboard = {
     totalRequests: 0,
     successfulRequests: 0,
   },
-  paymentRevenueSummary: {
-    totalTransactions: 0,
-    paidTransactions: 0,
-    totalRevenue: 0,
-    currencyCode: 'MYR',
-  },
-  pendingRefunds: 0,
-  pendingPayouts: 0,
   recentAuditLogs: [],
 }
 const emptyAnalytics = {
@@ -382,10 +339,6 @@ const emptyAnalytics = {
     approvedTeachers: 0,
     rejectedTeachers: 0,
     publishedContentItems: 0,
-    totalRevenue: 0,
-    currencyCode: 'MYR',
-    pendingRefunds: 0,
-    pendingPayouts: 0,
     moderationActions: 0,
     auditLogEntries: 0,
     adminUnreadNotifications: 0,
@@ -394,7 +347,6 @@ const emptyAnalytics = {
   userRegistrationTrend: [],
   teacherApprovalBreakdown: [],
   contentStatusBreakdown: [],
-  paymentStatusBreakdown: [],
   aiStatusBreakdown: [],
 }
 const emptyHealth = {
@@ -467,7 +419,7 @@ function markAdminNotificationRead(notificationId: number): void {
 }
 
 const todayLabel = computed(() =>
-  new Intl.DateTimeFormat(locale.value === 'zh' ? 'zh-CN' : locale.value === 'ms' ? 'ms-MY' : 'en-US', {
+  new Intl.DateTimeFormat(getDisplayLocale(locale.value), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -475,7 +427,7 @@ const todayLabel = computed(() =>
   }).format(new Date()),
 )
 
-const statCards = computed(() => [
+const statCards = computed<Array<{ label: string; value: string; copy: string; icon: string; tone: AdminTone }>>(() => [
   {
     label: t('adminDashboard.totalUsers'),
     value: formatNumber(dashboard.value.totalStudents + dashboard.value.totalTeachers),
@@ -484,21 +436,21 @@ const statCards = computed(() => [
       teachers: formatNumber(dashboard.value.totalTeachers),
     }),
     icon: 'users',
-    tone: 'purple',
+    tone: 'primary',
   },
   {
     label: t('adminDashboard.pendingTeacherReviews'),
     value: formatNumber(dashboard.value.pendingTeacherApprovals),
     copy: t('adminDashboard.pendingTeacherReviewsHint'),
     icon: 'verification',
-    tone: 'gold',
+    tone: 'warning',
   },
   {
     label: t('adminDashboard.moderationActions'),
     value: formatNumber(analytics.value.overview.moderationActions),
     copy: t('adminDashboard.moderationActionsHint'),
     icon: 'moderation',
-    tone: 'red',
+    tone: 'danger',
   },
   {
     label: t('adminDashboard.aiRequests'),
@@ -507,19 +459,7 @@ const statCards = computed(() => [
       count: formatNumber(dashboard.value.aiUsageSummary.successfulRequests),
     }),
     icon: 'ai',
-    tone: 'blue',
-  },
-  {
-    label: t('adminDashboard.platformRevenue'),
-    value: formatCurrency(
-      dashboard.value.paymentRevenueSummary.totalRevenue,
-      dashboard.value.paymentRevenueSummary.currencyCode,
-    ),
-    copy: t('adminDashboard.recordedTransactions', {
-      count: formatNumber(dashboard.value.paymentRevenueSummary.totalTransactions),
-    }),
-    icon: 'money',
-    tone: 'mint',
+    tone: 'info',
   },
 ])
 
@@ -529,18 +469,18 @@ const teacherQueueItems = computed(() =>
     fullName: item.fullName,
     email: item.email,
     appliedLabel: formatDate(item.latestSubmissionTime || item.createdAt),
-    avatarKind: (['female', 'male', 'hijab', 'student'] as const)[index % 4],
+    avatarTone: AVATAR_TONES[index % AVATAR_TONES.length],
   })),
 )
 
 const moderationItems = computed(() => {
   const contentItems = moderationRecords.value.slice(0, 2).map((item) => ({
     id: item.id,
-    title: item.actionTaken,
-    copy: `${item.targetType}: ${item.targetTitle}`,
+    title: formatStatus(item.actionTaken),
+    copy: `${formatStatus(item.targetType)}: ${item.targetTitle ?? `#${item.targetId}`}`,
     meta: formatDateTime(item.createdAt),
     label: t('adminDashboard.moderation'),
-    tone: 'orange',
+    tone: 'warning' as AdminTone,
     icon: 'moderation',
     statusTone: 'warning' as const,
   }))
@@ -550,7 +490,7 @@ const moderationItems = computed(() => {
     copy: item.description || formatStatus(item.featureKey),
     meta: formatDateTime(item.createdAt),
     label: formatStatus(item.status),
-    tone: 'purple',
+    tone: 'primary' as AdminTone,
     icon: 'ai',
     statusTone: reportStatusTone(item.status),
   }))
@@ -567,7 +507,7 @@ const registrationTrendRows = computed(() => {
     return {
       label: item.label,
       value,
-      barStyle: { width: `${max > 0 ? Math.max(8, ratioPercent(value, max)) : 0}%` },
+      barPercent: max > 0 ? Math.max(8, ratioPercent(value, max)) : 0,
     }
   })
 })
@@ -576,7 +516,7 @@ const auditItems = computed(() =>
   auditLogs.value.slice(0, 4).map((item) => ({
     id: item.id,
     title: item.description,
-    actionType: formatStatus(item.actionType),
+    actionType: statusLabel('auditAction', item.actionType),
     time: formatDateTime(item.createdAt),
     icon: auditIcon(item.actionType),
     tone: auditTone(item.actionType),
@@ -594,7 +534,7 @@ const quickActions = computed(() => [
   { label: t('adminDashboard.teacherVerification'), icon: 'verification', to: '/admin/teacher-verification' },
   { label: t('adminDashboard.moderationQueue'), icon: 'moderation', to: '/admin/moderation' },
   { label: t('adminDashboard.analytics'), icon: 'analytics', to: '/admin/analytics' },
-  { label: t('adminDashboard.finance'), icon: 'finance', to: '/admin/finance' },
+  { label: t('adminDashboard.settings'), icon: 'settings', to: '/admin/settings' },
 ])
 
 function auditIcon(actionType: string): string {
@@ -604,11 +544,11 @@ function auditIcon(actionType: string): string {
   return 'history'
 }
 
-function auditTone(actionType: string): string {
-  if (actionType.includes('APPROVE')) return 'green'
-  if (actionType.includes('REJECT')) return 'red'
-  if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'purple'
-  return 'blue'
+function auditTone(actionType: string): AdminTone {
+  if (actionType.includes('APPROVE')) return 'success'
+  if (actionType.includes('REJECT')) return 'danger'
+  if (actionType.includes('CREATE') || actionType.includes('UPDATE')) return 'primary'
+  return 'info'
 }
 
 function formatStatus(status: string): string {
@@ -617,6 +557,14 @@ function formatStatus(status: string): string {
     IN_REVIEW: 'statusInReview',
     DISMISSED: 'statusDismissed',
     RESOLVED: 'statusResolved',
+    INCORRECT_CONTENT: 'reasonIncorrectContent',
+    HALLUCINATION: 'reasonHallucination',
+    UNSAFE_CONTENT: 'reasonUnsafeContent',
+    INAPPROPRIATE_CONTENT: 'reasonInappropriateContent',
+    OTHER: 'reasonOther',
+    PACKAGE: 'typeCourse',
+    MODULE: 'typeModule',
+    LESSON: 'typeLesson',
   }
   const normalized = status.trim().toUpperCase()
   const translatedKey = statusKeys[normalized]
@@ -658,8 +606,8 @@ function openAnalytics(): void {
   void router.push('/admin/analytics')
 }
 
-function openFinance(): void {
-  void router.push('/admin/finance')
+function openNotifications(): void {
+  void router.push({ name: 'admin-notifications' })
 }
 
 function openQuickAction(to: string): void {
@@ -677,271 +625,3 @@ function reloadAll(): void {
   void healthResource.reload()
 }
 </script>
-
-<style scoped>
-.admin-dashboard-page {
-  position: relative;
-}
-
-.admin-dashboard-date-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #39486a;
-  font-weight: 700;
-}
-
-.admin-dashboard-kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.admin-dashboard-kpi,
-.admin-dashboard-panel {
-  border-radius: 24px;
-}
-
-.admin-dashboard-kpi {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 18px;
-  border: 1px solid rgba(232, 236, 245, 0.94);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 12px 24px rgba(49, 64, 94, 0.06);
-}
-
-.admin-dashboard-kpi-icon,
-.admin-dashboard-badge {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-}
-
-.admin-dashboard-kpi-icon.is-purple,
-.admin-dashboard-badge.is-purple {
-  background: rgba(125, 88, 255, 0.12);
-  color: #7a56ff;
-}
-
-.admin-dashboard-kpi-icon.is-gold {
-  background: rgba(255, 181, 68, 0.14);
-  color: #ee9618;
-}
-
-.admin-dashboard-kpi-icon.is-red,
-.admin-dashboard-badge.is-red {
-  background: rgba(255, 121, 121, 0.14);
-  color: #e05c52;
-}
-
-.admin-dashboard-kpi-icon.is-blue,
-.admin-dashboard-badge.is-blue {
-  background: rgba(63, 144, 255, 0.12);
-  color: #2f86f6;
-}
-
-.admin-dashboard-kpi-icon.is-mint,
-.admin-dashboard-badge.is-orange {
-  background: rgba(111, 210, 104, 0.12);
-  color: #49a347;
-}
-
-.admin-dashboard-kpi-copy,
-.admin-dashboard-copy,
-.admin-dashboard-mini-stat {
-  display: grid;
-  gap: 4px;
-}
-
-.admin-dashboard-kpi-copy small,
-.admin-dashboard-kpi-copy span,
-.admin-dashboard-copy span,
-.admin-dashboard-copy small,
-.admin-dashboard-mini-stat small,
-.admin-dashboard-mini-stat span,
-.admin-dashboard-empty-copy,
-.admin-dashboard-breakdown-row span,
-.admin-dashboard-health-banner span {
-  color: #72809d;
-}
-
-.admin-dashboard-kpi-copy strong,
-.admin-dashboard-mini-stat strong {
-  font-family: 'Fredoka', sans-serif;
-  line-height: 1;
-}
-
-.admin-dashboard-kpi-copy strong {
-  font-size: 1.8rem;
-}
-
-.admin-dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.admin-dashboard-panel {
-  grid-column: span 4;
-  display: grid;
-  gap: 14px;
-}
-
-.admin-dashboard-panel--wide {
-  grid-column: span 8;
-}
-
-.admin-dashboard-panel-head {
-  align-items: center;
-}
-
-.admin-dashboard-list,
-.admin-dashboard-breakdown-list,
-.admin-dashboard-actions {
-  display: grid;
-  gap: 12px;
-}
-
-.admin-dashboard-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.admin-dashboard-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.admin-dashboard-copy strong,
-.admin-dashboard-breakdown-row strong {
-  color: #344260;
-}
-
-.admin-dashboard-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(183, 190, 209, 0.96);
-}
-
-.admin-dashboard-dot.is-unread {
-  background: #7a56ff;
-}
-
-.admin-dashboard-analytics-grid,
-.admin-dashboard-finance-grid,
-.admin-dashboard-health-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.admin-dashboard-mini-stat {
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(246, 248, 252, 0.96);
-}
-
-.admin-dashboard-mini-stat strong {
-  font-size: 1.6rem;
-}
-
-.admin-dashboard-breakdown-row {
-  display: grid;
-  gap: 8px;
-}
-
-.admin-dashboard-track {
-  height: 8px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(229, 233, 244, 0.96);
-}
-
-.admin-dashboard-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #7a56ff, #9f8cff);
-}
-
-.admin-dashboard-health-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(244, 249, 240, 0.96);
-  color: #339734;
-}
-
-.admin-dashboard-health-banner:not(.is-up) {
-  background: rgba(248, 246, 240, 0.96);
-  color: #9c7a26;
-}
-
-.admin-dashboard-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.admin-dashboard-action {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #334260;
-  font-weight: 700;
-}
-
-@media (max-width: 1500px) {
-  .admin-dashboard-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .admin-dashboard-panel,
-  .admin-dashboard-panel--wide {
-    grid-column: span 6;
-  }
-
-  .admin-dashboard-analytics-grid,
-  .admin-dashboard-finance-grid,
-  .admin-dashboard-health-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 960px) {
-  .admin-dashboard-kpis,
-  .admin-dashboard-grid,
-  .admin-dashboard-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-dashboard-panel,
-  .admin-dashboard-panel--wide {
-    grid-column: auto;
-  }
-
-  .admin-dashboard-row {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

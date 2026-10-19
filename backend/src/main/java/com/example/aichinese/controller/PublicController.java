@@ -82,8 +82,6 @@ public class PublicController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "levelId", required = false) Long levelId,
             @RequestParam(value = "categoryId", required = false) Long categoryId,
-            @Size(max = 40, message = "Access type must not exceed 40 characters.")
-            @RequestParam(value = "accessType", required = false) String accessType,
             @Size(max = 40, message = "Learning type must not exceed 40 characters.")
             @RequestParam(value = "learningType", required = false) String learningType,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
@@ -96,7 +94,6 @@ public class PublicController {
                         keyword,
                         levelId,
                         categoryId,
-                        accessType,
                         learningType,
                         sort,
                         page,

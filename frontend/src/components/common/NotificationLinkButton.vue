@@ -8,9 +8,8 @@
 import { useRouter } from 'vue-router'
 
 import { notificationsApi } from '@/api/services'
+import { NOTIFICATION_READ_EVENT } from '@/utils/notifications'
 import { normalizeAppRoute } from '@/utils/routeCompat'
-
-const NOTIFICATION_READ_EVENT = 'mandarin-spark:notification-read'
 
 interface Props {
   notificationId?: number

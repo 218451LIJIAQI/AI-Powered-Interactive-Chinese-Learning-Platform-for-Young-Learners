@@ -8,12 +8,14 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
+import com.example.aichinese.dto.student.activity.StudentActivityCompletionRequest;
 import com.example.aichinese.dto.student.activity.StudentActivityCompletionResponse;
 import com.example.aichinese.dto.student.activity.StudentActivitySummaryResponse;
 import com.example.aichinese.dto.student.activity.StudentDragDropActivityResponse;
@@ -26,6 +28,7 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.StudentActivityLibraryService;
 import com.example.aichinese.service.StudentActivityLibraryService.ActivityFilter;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
 @Validated
@@ -45,8 +48,6 @@ public class StudentActivityLibraryController {
     public ApiResponse<PageResponse<StudentActivitySummaryResponse>> listLibrary(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -59,7 +60,7 @@ public class StudentActivityLibraryController {
             @RequestParam(value = "type", required = false) String type,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
-        ActivityFilter filter = buildFilter(hskLevel, ageBand, difficulty, topic, tag, keyword, type);
+        ActivityFilter filter = buildFilter(hskLevel, difficulty, topic, tag, keyword, type);
         return ApiResponse.success(
                 "Activity library retrieved successfully.",
                 studentActivityLibraryService.listLibrary(currentUser, filter, page, size));
@@ -95,10 +96,11 @@ public class StudentActivityLibraryController {
     @PostMapping("/matching-games/{id}/complete")
     public ApiResponse<StudentActivityCompletionResponse> completeMatchingGame(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) StudentActivityCompletionRequest request) {
         return ApiResponse.success(
-                "Matching game completion recorded.",
-                studentActivityLibraryService.completeMatchingGame(currentUser, id));
+                "Matching game attempt checked.",
+                studentActivityLibraryService.completeMatchingGame(currentUser, id, request));
     }
 
     @GetMapping("/listening-exercises/{id}")
@@ -113,10 +115,11 @@ public class StudentActivityLibraryController {
     @PostMapping("/listening-exercises/{id}/complete")
     public ApiResponse<StudentActivityCompletionResponse> completeListeningExercise(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) StudentActivityCompletionRequest request) {
         return ApiResponse.success(
-                "Listening exercise completion recorded.",
-                studentActivityLibraryService.completeListeningExercise(currentUser, id));
+                "Listening exercise attempt checked.",
+                studentActivityLibraryService.completeListeningExercise(currentUser, id, request));
     }
 
     @GetMapping("/tracing-exercises/{id}")
@@ -131,10 +134,11 @@ public class StudentActivityLibraryController {
     @PostMapping("/tracing-exercises/{id}/complete")
     public ApiResponse<StudentActivityCompletionResponse> completeTracingExercise(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) StudentActivityCompletionRequest request) {
         return ApiResponse.success(
-                "Tracing exercise completion recorded.",
-                studentActivityLibraryService.completeTracingExercise(currentUser, id));
+                "Tracing exercise attempt checked.",
+                studentActivityLibraryService.completeTracingExercise(currentUser, id, request));
     }
 
     @GetMapping("/drag-drop-activities/{id}")
@@ -149,10 +153,11 @@ public class StudentActivityLibraryController {
     @PostMapping("/drag-drop-activities/{id}/complete")
     public ApiResponse<StudentActivityCompletionResponse> completeDragDropActivity(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) StudentActivityCompletionRequest request) {
         return ApiResponse.success(
-                "Drag-drop activity completion recorded.",
-                studentActivityLibraryService.completeDragDropActivity(currentUser, id));
+                "Drag-drop activity attempt checked.",
+                studentActivityLibraryService.completeDragDropActivity(currentUser, id, request));
     }
 
     @GetMapping("/story-activities/{id}")
@@ -167,15 +172,15 @@ public class StudentActivityLibraryController {
     @PostMapping("/story-activities/{id}/complete")
     public ApiResponse<StudentActivityCompletionResponse> completeStoryActivity(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) StudentActivityCompletionRequest request) {
         return ApiResponse.success(
-                "Story activity completion recorded.",
-                studentActivityLibraryService.completeStoryActivity(currentUser, id));
+                "Story activity attempt checked.",
+                studentActivityLibraryService.completeStoryActivity(currentUser, id, request));
     }
 
     private static ActivityFilter buildFilter(
             Integer hskLevel,
-            String ageBand,
             String difficulty,
             String topic,
             String tag,
@@ -183,7 +188,6 @@ public class StudentActivityLibraryController {
             String type) {
         return ActivityFilter.of(
                 Optional.ofNullable(hskLevel),
-                Optional.ofNullable(ageBand),
                 Optional.ofNullable(difficulty),
                 Optional.ofNullable(topic),
                 Optional.ofNullable(tag),

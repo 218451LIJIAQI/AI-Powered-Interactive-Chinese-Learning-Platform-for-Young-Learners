@@ -1,0 +1,137 @@
+.practice-upload-form {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.practice-upload-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.practice-upload-head h2 {
+  margin: 0 0 var(--space-1);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.practice-upload-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.practice-upload-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+}
+
+.practice-upload-note,
+.practice-upload-disabled,
+.practice-upload-error {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2-5) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.practice-upload-note .icon-glyph,
+.practice-upload-disabled .icon-glyph,
+.practice-upload-error .icon-glyph {
+  margin-top: var(--space-0-5);
+}
+
+.practice-upload-note {
+  border-color: var(--color-info-border);
+  background: var(--color-info-soft);
+  color: var(--color-info-text);
+}
+
+.practice-upload-disabled {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-upload-error {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Fields in a row keep their inputs aligned even when only one of them has a hint. */
+.practice-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.practice-upload-grid .field {
+  align-content: start;
+}
+
+.practice-upload-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+.practice-upload-preview-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.practice-upload-image-preview {
+  max-width: min(100%, 240px);
+  max-height: 200px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  object-fit: contain;
+}
+
+.practice-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 640px) {
+  .practice-upload-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .practice-upload-actions > .btn {
+    flex: 1 1 100%;
+  }
+}

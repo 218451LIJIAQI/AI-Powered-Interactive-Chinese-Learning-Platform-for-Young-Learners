@@ -26,22 +26,17 @@ import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.enums.AccessType;
-import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.ManagedContentType;
 import com.example.aichinese.entity.enums.TeacherStatus;
 
 @Component
 public class ContentManagementMapper {
 
-    private static final String PAID_LOCKED_REASON =
-            "Sign in and enrol to unlock this paid content.";
-
     private static final String LESSON_ID_PREFIX = "LESSON-";
 
     private static final String PACKAGE_ID_PREFIX = "PACKAGE-";
 
-    private static final String LESSON_CTA = "Login to enrol";
+    private static final String LESSON_CTA = "Sign in to start learning";
 
     private static final String PACKAGE_CTA = "Register to start learning";
 
@@ -83,8 +78,6 @@ public class ContentManagementMapper {
                 module.getDescription(),
                 toLevelResponse(module.getLevel()),
                 toCategoryResponse(module.getCategory()),
-                module.getAccessType(),
-                module.getPrice(),
                 module.getCoverImageUrl(),
                 module.getContentStatus(),
                 module.getRejectionReason(),
@@ -108,8 +101,6 @@ public class ContentManagementMapper {
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
                 lesson.getLearningType(),
-                lesson.getAccessType(),
-                lesson.getPrice(),
                 lesson.getEstimatedDurationMinutes(),
                 lesson.getCoverImageUrl(),
                 lesson.getContentStatus(),
@@ -123,10 +114,10 @@ public class ContentManagementMapper {
         if (item == null) {
             return null;
         }
-        CoursePackage parent = item.getCoursePackage();
+        CoursePackage owner = item.getCoursePackage();
         return new PackageItemResponse(
                 item.getId(),
-                parent == null ? null : parent.getId(),
+                owner == null ? null : owner.getId(),
                 item.getItemType(),
                 item.getItemId(),
                 item.getSortOrder(),
@@ -144,8 +135,6 @@ public class ContentManagementMapper {
                 toLevelResponse(coursePackage.getLevel()),
                 toCategoryResponse(coursePackage.getCategory()),
                 coursePackage.getLearningType(),
-                coursePackage.getAccessType(),
-                coursePackage.getPrice(),
                 coursePackage.getCoverImageUrl(),
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
@@ -168,8 +157,6 @@ public class ContentManagementMapper {
                 toLevelResponse(module.getLevel()),
                 toCategoryResponse(module.getCategory()),
                 null,
-                module.getAccessType(),
-                module.getPrice(),
                 module.getContentStatus(),
                 module.getRejectionReason(),
                 module.getCreatedAt(),
@@ -189,8 +176,6 @@ public class ContentManagementMapper {
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
                 lesson.getLearningType(),
-                lesson.getAccessType(),
-                lesson.getPrice(),
                 lesson.getContentStatus(),
                 lesson.getRejectionReason(),
                 lesson.getCreatedAt(),
@@ -210,8 +195,6 @@ public class ContentManagementMapper {
                 toLevelResponse(coursePackage.getLevel()),
                 toCategoryResponse(coursePackage.getCategory()),
                 coursePackage.getLearningType(),
-                coursePackage.getAccessType(),
-                coursePackage.getPrice(),
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
                 coursePackage.getCreatedAt(),
@@ -234,8 +217,6 @@ public class ContentManagementMapper {
                 toLevelResponse(module.getLevel()),
                 toCategoryResponse(module.getCategory()),
                 null,
-                module.getAccessType(),
-                module.getPrice(),
                 module.getCoverImageUrl(),
                 module.getContentStatus(),
                 module.getRejectionReason(),
@@ -261,8 +242,6 @@ public class ContentManagementMapper {
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
                 lesson.getLearningType(),
-                lesson.getAccessType(),
-                lesson.getPrice(),
                 lesson.getCoverImageUrl(),
                 lesson.getContentStatus(),
                 lesson.getRejectionReason(),
@@ -287,8 +266,6 @@ public class ContentManagementMapper {
                 toLevelResponse(coursePackage.getLevel()),
                 toCategoryResponse(coursePackage.getCategory()),
                 coursePackage.getLearningType(),
-                coursePackage.getAccessType(),
-                coursePackage.getPrice(),
                 coursePackage.getCoverImageUrl(),
                 coursePackage.getContentStatus(),
                 coursePackage.getRejectionReason(),
@@ -307,7 +284,7 @@ public class ContentManagementMapper {
                 teacherProfile.getTeacherStatus() == TeacherStatus.APPROVED);
     }
 
-    public PublicCourseSummaryResponse toPublicCourseSummary(Lesson lesson, String currencyCode) {
+    public PublicCourseSummaryResponse toPublicCourseSummary(Lesson lesson) {
         if (lesson == null) {
             return null;
         }
@@ -321,15 +298,11 @@ public class ContentManagementMapper {
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
                 lesson.getLearningType(),
-                lesson.getAccessType(),
-                lesson.getPrice(),
-                currencyCode,
                 lesson.getCoverImageUrl(),
-                lesson.getAccessType() == AccessType.PAID,
                 lesson.getContentStatus());
     }
 
-    public PublicCourseSummaryResponse toPublicCourseSummary(CoursePackage coursePackage, String currencyCode) {
+    public PublicCourseSummaryResponse toPublicCourseSummary(CoursePackage coursePackage) {
         if (coursePackage == null) {
             return null;
         }
@@ -343,19 +316,14 @@ public class ContentManagementMapper {
                 toLevelResponse(coursePackage.getLevel()),
                 toCategoryResponse(coursePackage.getCategory()),
                 coursePackage.getLearningType(),
-                coursePackage.getAccessType(),
-                coursePackage.getPrice(),
-                currencyCode,
                 coursePackage.getCoverImageUrl(),
-                coursePackage.getAccessType() == AccessType.PAID,
-                ContentStatus.PUBLISHED);
+                coursePackage.getContentStatus());
     }
 
-    public PublicCourseDetailResponse toPublicCourseDetail(Lesson lesson, String currencyCode) {
+    public PublicCourseDetailResponse toPublicCourseDetail(Lesson lesson) {
         if (lesson == null) {
             return null;
         }
-        boolean locked = lesson.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
                 LESSON_ID_PREFIX + lesson.getId(),
                 lesson.getId(),
@@ -366,26 +334,20 @@ public class ContentManagementMapper {
                 toLevelResponse(lesson.getLevel()),
                 toCategoryResponse(lesson.getCategory()),
                 lesson.getLearningType(),
-                lesson.getAccessType(),
-                lesson.getPrice(),
-                currencyCode,
                 lesson.getCoverImageUrl(),
-                locked,
                 lesson.getContentStatus(),
-                lesson.getLessonContent(),
+                // D1/D17: public visitors get summaries only, never the full lesson body.
+                null,
                 List.of(),
-                LESSON_CTA,
-                locked ? PAID_LOCKED_REASON : null);
+                LESSON_CTA);
     }
 
     public PublicCourseDetailResponse toPublicCourseDetail(
             CoursePackage coursePackage,
-            List<PackageItem> items,
-            String currencyCode) {
+            List<PackageItem> items) {
         if (coursePackage == null) {
             return null;
         }
-        boolean locked = coursePackage.getAccessType() == AccessType.PAID;
         return new PublicCourseDetailResponse(
                 PACKAGE_ID_PREFIX + coursePackage.getId(),
                 coursePackage.getId(),
@@ -396,16 +358,11 @@ public class ContentManagementMapper {
                 toLevelResponse(coursePackage.getLevel()),
                 toCategoryResponse(coursePackage.getCategory()),
                 coursePackage.getLearningType(),
-                coursePackage.getAccessType(),
-                coursePackage.getPrice(),
-                currencyCode,
                 coursePackage.getCoverImageUrl(),
-                locked,
                 coursePackage.getContentStatus(),
                 null,
                 mapItems(items, this::toPublicCourseItemSummary),
-                PACKAGE_CTA,
-                locked ? PAID_LOCKED_REASON : null);
+                PACKAGE_CTA);
     }
 
     private PublicCourseItemSummaryResponse toPublicCourseItemSummary(PackageItem item) {

@@ -1,6 +1,7 @@
 package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.List;
 import java.util.Locale;
@@ -65,11 +66,19 @@ public class AdminUserManagementService {
         this.refreshTokenService = Objects.requireNonNull(refreshTokenService, "refreshTokenService");
     }
 
+    /**
+     * Server-side search and paging for the admin Users page (FR-ADM-02):
+     * {@code keyword} matches display name or email (case-insensitive),
+     * {@code role} and teacher {@code status} narrow the list, and
+     * {@code active} (when given) keeps only active or only deactivated
+     * accounts. Every user can therefore be found regardless of page.
+     */
     @Transactional(readOnly = true)
     public PageResponse<AdminUserListItemResponse> listUsers(
             String role,
             String keyword,
             String status,
+            Boolean active,
             int page,
             int size) {
         int sanitizedPage = PaginationUtils.sanitizePage(page);
@@ -84,6 +93,7 @@ public class AdminUserManagementService {
                 roleFilter != null ? roleFilter.name() : null,
                 keywordFilter,
                 teacherStatusFilter != null ? teacherStatusFilter.name() : null,
+                active,
                 PageRequest.of(sanitizedPage, sanitizedSize));
         List<Long> pageUserIds = userIdPage.getContent();
 
@@ -133,7 +143,7 @@ public class AdminUserManagementService {
         User adminUser = userRepository.findById(currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Admin user could not be found."));
         User targetUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "User was not found."));
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User was not found."));
         TeacherProfile teacherProfile = teacherProfileRepository.findDetailedByUserId(targetUser.getId()).orElse(null);
         boolean nextActive = Boolean.TRUE.equals(request.active());
 

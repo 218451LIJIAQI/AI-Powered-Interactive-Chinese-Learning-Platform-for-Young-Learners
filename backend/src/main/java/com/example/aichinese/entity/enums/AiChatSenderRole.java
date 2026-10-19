@@ -23,12 +23,4 @@ public enum AiChatSenderRole {
                 "AI chat sender role is required.",
                 () -> "Invalid AI chat sender role. Allowed values are USER or ASSISTANT.");
     }
-
-    public boolean isUser() {
-        return this == USER;
-    }
-
-    public boolean isAssistant() {
-        return this == ASSISTANT;
-    }
 }

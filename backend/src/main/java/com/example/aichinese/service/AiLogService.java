@@ -18,6 +18,8 @@ import com.example.aichinese.repository.AiChatMessageRepository;
 import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiFeedbackRecordRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
+import com.example.aichinese.repository.LessonRepository;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class AiLogService {
@@ -28,16 +30,19 @@ public class AiLogService {
     private final AiFeedbackRecordRepository aiFeedbackRecordRepository;
     private final AiChatSessionRepository aiChatSessionRepository;
     private final AiChatMessageRepository aiChatMessageRepository;
+    private final LessonRepository lessonRepository;
 
     public AiLogService(
             AiUsageLogRepository aiUsageLogRepository,
             AiFeedbackRecordRepository aiFeedbackRecordRepository,
             AiChatSessionRepository aiChatSessionRepository,
-            AiChatMessageRepository aiChatMessageRepository) {
+            AiChatMessageRepository aiChatMessageRepository,
+            LessonRepository lessonRepository) {
         this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
         this.aiFeedbackRecordRepository = Objects.requireNonNull(aiFeedbackRecordRepository, "aiFeedbackRecordRepository");
         this.aiChatSessionRepository = Objects.requireNonNull(aiChatSessionRepository, "aiChatSessionRepository");
         this.aiChatMessageRepository = Objects.requireNonNull(aiChatMessageRepository, "aiChatMessageRepository");
+        this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
     }
 
     @Transactional
@@ -47,7 +52,8 @@ public class AiLogService {
         session.setFeatureKey(featureKey.name());
         session.setSessionTitle(defaultSessionTitle(featureKey));
         session.setLanguagePreference(languagePreference);
-        session.setRelatedLessonId(relatedLessonId);
+        // related_lesson_id is a foreign key (V5): an unknown lesson id is context only and is not stored.
+        session.setRelatedLessonId(relatedLessonId != null && lessonRepository.existsById(relatedLessonId) ? relatedLessonId : null);
         session.setActive(true);
         return aiChatSessionRepository.save(session);
     }
@@ -122,18 +128,7 @@ public class AiLogService {
 
     private static String summarize(String value, int limit) {
         String trimmed = trimToNull(value);
-        if (trimmed == null) {
-            return null;
-        }
-
-        if (trimmed.length() <= limit) {
-            return trimmed;
-        }
-        int end = limit;
-        if (Character.isHighSurrogate(trimmed.charAt(end - 1))) {
-            end--;
-        }
-        return trimmed.substring(0, end);
+        return trimmed == null ? null : TextUtils.safeTruncate(trimmed, limit);
     }
 
     private static String contentMetadata(String value) {

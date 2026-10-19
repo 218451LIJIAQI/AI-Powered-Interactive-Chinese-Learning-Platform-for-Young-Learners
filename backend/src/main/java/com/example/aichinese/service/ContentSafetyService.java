@@ -20,7 +20,7 @@ public class ContentSafetyService {
 
     private static final Logger log = LoggerFactory.getLogger(ContentSafetyService.class);
 
-    private static final String UNSAFE_CONTENT_MESSAGE = "Content contains language that is not suitable for young learners.";
+    private static final String UNSAFE_CONTENT_MESSAGE = "Content contains language that is not suitable for this learning platform.";
     private static final String SEPARATORS = "[\\p{Z}\\p{Punct}\\p{S}_]*";
     private static final String REQUIRED_SEPARATOR = "[\\p{Z}\\p{Punct}\\p{S}_]+";
     private static final List<Pattern> SENSITIVE_PATTERNS = List.of(
@@ -36,7 +36,6 @@ public class ContentSafetyService {
             sensitivePattern("rapist"),
             sensitivePattern("suicide"),
             sensitivePattern("self harm"),
-            sensitivePattern("self-harm"),
             sensitivePattern("kill yourself"),
             sensitivePattern("cocaine"),
             sensitivePattern("heroin"),
@@ -82,23 +81,51 @@ public class ContentSafetyService {
         return sanitized;
     }
 
+    /**
+     * Screens free text that is stored as entered (for example practice-activity fields) with the
+     * same sensitive-word rule used for lessons and quizzes; blank values are ignored.
+     */
+    public void screenText(String... values) {
+        if (values == null) {
+            return;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                requireSafeContent(value);
+            }
+        }
+    }
+
     private void requireSafeContent(String value) {
         if (value == null || !contentSafetySettingsReader.sensitiveWordFilterEnabled()) {
             return;
         }
+        if (containsSensitiveContent(value)) {
+            log.warn("Content safety: sensitive content rejected (length={})", value.length());
+            throw new ResponseStatusException(BAD_REQUEST, UNSAFE_CONTENT_MESSAGE);
+        }
+    }
+
+    /**
+     * Checks the text against the sensitive-word list (English, Bahasa Melayu and Chinese)
+     * regardless of the admin toggles. Callers decide which toggle applies.
+     */
+    public boolean containsSensitiveContent(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
         String normalized = normalize(value);
         for (String sensitiveSubstring : SENSITIVE_SUBSTRINGS) {
             if (normalized.contains(sensitiveSubstring)) {
-                log.warn("Content safety: substring match rejected (length={})", value.length());
-                throw new ResponseStatusException(BAD_REQUEST, UNSAFE_CONTENT_MESSAGE);
+                return true;
             }
         }
         for (Pattern pattern : SENSITIVE_PATTERNS) {
             if (pattern.matcher(normalized).find()) {
-                log.warn("Content safety: pattern match rejected (length={})", value.length());
-                throw new ResponseStatusException(BAD_REQUEST, UNSAFE_CONTENT_MESSAGE);
+                return true;
             }
         }
+        return false;
     }
 
     private static String normalize(String value) {

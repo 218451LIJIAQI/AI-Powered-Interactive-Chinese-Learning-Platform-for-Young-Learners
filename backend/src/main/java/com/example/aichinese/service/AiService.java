@@ -4,19 +4,19 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -28,9 +28,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -43,8 +41,6 @@ import com.example.aichinese.dto.ai.AiAvailabilityResponse;
 import com.example.aichinese.dto.ai.AiChatRequest;
 import com.example.aichinese.dto.ai.AiChatResponse;
 import com.example.aichinese.dto.ai.AiGeneratedQuizQuestionResponse;
-import com.example.aichinese.dto.ai.AiLearningRecommendationRequest;
-import com.example.aichinese.dto.ai.AiLearningRecommendationResponse;
 import com.example.aichinese.dto.ai.AiPronunciationFeedbackResponse;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorResponse;
@@ -60,21 +56,16 @@ import com.example.aichinese.dto.ai.AiWritingFeedbackResponse;
 import com.example.aichinese.entity.AiChatMessage;
 import com.example.aichinese.entity.AiChatSession;
 import com.example.aichinese.entity.AiUsageLog;
-import com.example.aichinese.entity.LessonProgress;
-import com.example.aichinese.entity.QuizAttemptAnswer;
-import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiRequestStatus;
+import com.example.aichinese.entity.enums.PracticeSubmissionType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.AiChatMessageRepository;
 import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
-import com.example.aichinese.repository.LessonProgressRepository;
-import com.example.aichinese.repository.QuizAttemptAnswerRepository;
-import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.ai.AiAvailabilityService;
@@ -83,44 +74,48 @@ import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderPrompt;
 import com.example.aichinese.service.ai.AiProviderResult;
 import com.example.aichinese.service.ai.AiProviderRouter;
+import com.example.aichinese.service.ai.AiSafetyGuard;
 import com.example.aichinese.service.ai.AiUsageLimiter;
 import com.example.aichinese.util.AiInputSanitizer;
+import com.example.aichinese.util.LanguageCodes;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.PersonalDataRedactor;
 import com.example.aichinese.util.TextUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+/**
+ * Learner AI functions in scope of the proposal: chat tutor, vocabulary helper, sentence
+ * practice, quiz generator and story generator, plus prototype-level pronunciation (audio) and
+ * writing (handwriting image) feedback that depends on the provider's capability.
+ *
+ * <p>Data minimisation: no user name, e-mail address or id is ever placed in a prompt; learner
+ * text is sanitised here and redacted of direct identifiers ({@link PersonalDataRedactor}) before
+ * it is stored as chat history and again in {@link AiPromptBuilder} before it is sent.</p>
+ */
 @Service
 public class AiService {
 
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final int CHAT_HISTORY_LIMIT = 20;
-    private static final int LEARNING_CONTEXT_ITEM_LIMIT = 10;
     private static final int MAX_QUIZ_QUESTIONS = 10;
     private static final int MAX_STORY_VOCABULARY_ITEMS = 20;
     private static final int MAX_STORY_COMPREHENSION_QUESTIONS = 10;
-    private static final int MAX_RECOMMENDATION_PRACTICE_TYPES = 10;
-    private static final int MAX_RECOMMENDATION_CONTEXT_ITEMS = 10;
     private static final int MAX_AI_OPTION_ITEMS = 8;
     private static final int DEFAULT_QUIZ_QUESTIONS = 5;
     private static final int MAX_RETAINED_AI_CHAT_RESPONSE_CHARS = 4000;
     private static final int USAGE_LOG_SUMMARY_LIMIT = 500;
-    private static final int RECENT_CONTEXT_ITEM_LIMIT = 3;
-    private static final int WEAK_AREA_LIMIT = 5;
     private static final String RELATED_ENTITY_CHAT_SESSION = "AiChatSession";
-    private static final String RELATED_ENTITY_STUDENT_PROFILE = "StudentProfile";
     private static final String RELATED_ENTITY_UPLOADED_FILE = "UploadedFile";
     private static final String PROVIDER_TIMEOUT_ERROR = "Provider request failed or timed out.";
     private static final String INVALID_JSON_ERROR = "Provider response was not valid JSON.";
+    private static final String IMAGE_READ_ERROR = "Uploaded image could not be read for AI analysis.";
+    private static final String MIME_IMAGE_JPEG = "image/jpeg";
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
 
     private final UserRepository userRepository;
-    private final StudentProfileRepository studentProfileRepository;
-    private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
-    private final LessonProgressRepository lessonProgressRepository;
-    private final StudentLearningAccessService studentLearningAccessService;
     private final AiChatSessionRepository aiChatSessionRepository;
     private final AiChatMessageRepository aiChatMessageRepository;
     private final AiUsageLogRepository aiUsageLogRepository;
@@ -130,16 +125,13 @@ public class AiService {
     private final AiLogService aiLogService;
     private final AiFileStorageService aiFileStorageService;
     private final ObjectMapper objectMapper;
-    private final TransactionTemplate recommendationContextReadTransaction;
     private final MeterRegistry meterRegistry;
     private final AiUsageLimiter aiUsageLimiter;
+    private final AiSafetyGuard aiSafetyGuard;
+    private final PracticeSubmissionService practiceSubmissionService;
 
     public AiService(
             UserRepository userRepository,
-            StudentProfileRepository studentProfileRepository,
-            QuizAttemptAnswerRepository quizAttemptAnswerRepository,
-            LessonProgressRepository lessonProgressRepository,
-            StudentLearningAccessService studentLearningAccessService,
             AiChatSessionRepository aiChatSessionRepository,
             AiChatMessageRepository aiChatMessageRepository,
             AiUsageLogRepository aiUsageLogRepository,
@@ -149,14 +141,11 @@ public class AiService {
             AiLogService aiLogService,
             AiFileStorageService aiFileStorageService,
             ObjectMapper objectMapper,
-            PlatformTransactionManager transactionManager,
             MeterRegistry meterRegistry,
-            AiUsageLimiter aiUsageLimiter) {
+            AiUsageLimiter aiUsageLimiter,
+            AiSafetyGuard aiSafetyGuard,
+            PracticeSubmissionService practiceSubmissionService) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
-        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
-        this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
-        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.aiChatSessionRepository = Objects.requireNonNull(aiChatSessionRepository, "aiChatSessionRepository");
         this.aiChatMessageRepository = Objects.requireNonNull(aiChatMessageRepository, "aiChatMessageRepository");
         this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
@@ -166,18 +155,17 @@ public class AiService {
         this.aiLogService = Objects.requireNonNull(aiLogService, "aiLogService");
         this.aiFileStorageService = Objects.requireNonNull(aiFileStorageService, "aiFileStorageService");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
-        this.recommendationContextReadTransaction = new TransactionTemplate(
-                Objects.requireNonNull(transactionManager, "transactionManager"));
-        this.recommendationContextReadTransaction.setReadOnly(true);
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
         this.aiUsageLimiter = Objects.requireNonNull(aiUsageLimiter, "aiUsageLimiter");
+        this.aiSafetyGuard = Objects.requireNonNull(aiSafetyGuard, "aiSafetyGuard");
+        this.practiceSubmissionService = Objects.requireNonNull(practiceSubmissionService, "practiceSubmissionService");
     }
 
     public AiChatResponse chat(SecurityUserDetails currentUser, AiChatRequest request) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
         String language = resolveLanguage(user, request.languagePreference());
-        String sanitizedUserMessage = AiInputSanitizer.sanitizeLong(request.message());
+        String sanitizedUserMessage = PersonalDataRedactor.redact(AiInputSanitizer.sanitizeLong(request.message()));
         if (sanitizedUserMessage == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Message is required.");
         }
@@ -246,7 +234,8 @@ public class AiService {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
         String language = resolveLanguage(user, request.languagePreference());
-        String sanitizedSentence = requireSanitizedLong(request.sentence(), "Sentence is required.");
+        String sanitizedSentence = PersonalDataRedactor.redact(
+                requireSanitizedLong(request.sentence(), "Sentence is required."));
         AiExecutionResult execution = generateText(
                 user,
                 AiFeatureKey.SENTENCE_PRACTICE,
@@ -270,12 +259,32 @@ public class AiService {
         return parseSentenceResponse(sanitizedSentence, parsed.values(), execution.status().name());
     }
 
+    /** Usage mode of a teacher AI draft (D6): returned to the teacher, never saved as content. */
+    public static final String TEACHER_DRAFT_USAGE_MODE = "TEACHER_DRAFT";
+
     public AiQuizGeneratorResponse quizGenerator(SecurityUserDetails currentUser, AiQuizGeneratorRequest request) {
-        User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
+        return generateQuiz(requireUser(currentUser), request, "TEMPORARY_SELF_PRACTICE");
+    }
+
+    /**
+     * D6: an approved teacher asks for an AI quiz draft. The draft is returned only; nothing is
+     * stored as course content. Usage is logged (role TEACHER) and rate-limited like student calls.
+     */
+    public AiQuizGeneratorResponse teacherQuizDraft(SecurityUserDetails currentUser, AiQuizGeneratorRequest request) {
+        requireRole(currentUser, RoleName.TEACHER, "AI drafts require a teacher account.");
+        return generateQuiz(requireUser(currentUser), request, TEACHER_DRAFT_USAGE_MODE);
+    }
+
+    /** D6: AI story draft for an approved teacher; returned only, never saved automatically. */
+    public AiStoryGeneratorResponse teacherStoryDraft(SecurityUserDetails currentUser, AiStoryGeneratorRequest request) {
+        requireRole(currentUser, RoleName.TEACHER, "AI drafts require a teacher account.");
+        return generateStory(requireUser(currentUser), request, TEACHER_DRAFT_USAGE_MODE);
+    }
+
+    private AiQuizGeneratorResponse generateQuiz(User user, AiQuizGeneratorRequest request, String usageMode) {
         String language = resolveLanguage(user, request.languagePreference());
         String sanitizedTopic = requireSanitizedShort(request.topic(), "Topic is required.");
-        String usageMode = "TEMPORARY_SELF_PRACTICE";
         AiExecutionResult execution = generateText(
                 user,
                 AiFeatureKey.QUIZ_GENERATOR,
@@ -312,11 +321,13 @@ public class AiService {
     }
 
     public AiStoryGeneratorResponse storyGenerator(SecurityUserDetails currentUser, AiStoryGeneratorRequest request) {
-        User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
+        return generateStory(requireUser(currentUser), request, "SELF_PRACTICE");
+    }
+
+    private AiStoryGeneratorResponse generateStory(User user, AiStoryGeneratorRequest request, String usageMode) {
         String language = resolveLanguage(user, request.languagePreference());
         String sanitizedTopic = requireSanitizedShort(request.topic(), "Topic is required.");
-        String usageMode = "SELF_PRACTICE";
         AiExecutionResult execution = generateText(
                 user,
                 AiFeatureKey.STORY_GENERATOR,
@@ -328,55 +339,35 @@ public class AiService {
                 null);
 
         if (execution.status() != AiRequestStatus.SUCCESS) {
-            return fallbackStoryResponse(sanitizedTopic, usageMode, execution.status().name());
+            return fallbackStoryResponse(sanitizedTopic, usageMode, execution.status().name(), execution.userMessage());
         }
 
         ParsedAiJson parsed = parseJsonMap(execution.responseText());
         if (!parsed.valid()) {
-            return fallbackStoryResponse(sanitizedTopic, usageMode, AiRequestStatus.FAILED.name());
+            return fallbackStoryResponse(sanitizedTopic, usageMode, AiRequestStatus.FAILED.name(),
+                    AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE);
         }
-        return parseStoryResponse(request, sanitizedTopic, usageMode, parsed.values(), execution.status().name());
+        return parseStoryResponse(sanitizedTopic, usageMode, parsed.values(), execution.status().name());
     }
 
-    public AiLearningRecommendationResponse learningRecommendation(
-            SecurityUserDetails currentUser,
-            AiLearningRecommendationRequest request) {
-        requireRole(currentUser, RoleName.STUDENT, "AI features require a student account.");
-        LearningRecommendationContext context = Objects.requireNonNull(
-                recommendationContextReadTransaction.execute(status -> prepareLearningRecommendationContext(currentUser, request)),
-                "learning recommendation context");
-
-        AiExecutionResult execution = generateText(
-                context.user(),
-                AiFeatureKey.LEARNING_RECOMMENDATION,
-                context.language(),
-                buildLearningRecommendationPrompt(request, context.summary(), context.language()),
-                true,
-                List.of(),
-                RELATED_ENTITY_STUDENT_PROFILE,
-                context.studentProfileId());
-
-        if (execution.status() != AiRequestStatus.SUCCESS) {
-            return fallbackLearningRecommendation(execution.status().name());
-        }
-
-        ParsedAiJson parsed = parseJsonMap(execution.responseText());
-        if (!parsed.valid()) {
-            return fallbackLearningRecommendation(AiRequestStatus.FAILED.name());
-        }
-        return parseLearningRecommendation(parsed.values(), execution.status().name());
-    }
-
+    /**
+     * Stores the learner's recording for teacher review, optionally linked to a published lesson
+     * ({@code lessonId} may be {@code null}). The configured models do not accept audio, so no
+     * provider call is made and the response states this clearly. Every upload is kept as a practice
+     * submission (D7a) that an approved teacher of the student can review.
+     */
     public AiPronunciationFeedbackResponse pronunciationFeedback(
             SecurityUserDetails currentUser,
             MultipartFile audioFile,
             String targetText,
             String pinyin,
             String tone,
-            String languagePreference) {
+            String languagePreference,
+            Long lessonId) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "Pronunciation feedback requires a student account.");
         String sanitizedTargetText = requireSanitizedShort(targetText, "Target text is required.");
+        Long submissionLessonId = practiceSubmissionService.requireSubmittableLesson(lessonId);
 
         UploadedFile uploadedFile = aiFileStorageService.storePronunciationAudio(audioFile, user);
         String language = resolveLanguage(user, languagePreference);
@@ -402,62 +393,129 @@ public class AiService {
                 null,
                 summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
                 null,
-                "Selected provider does not support audio analysis in this phase.",
+                "Configured model does not support audio input.",
                 RELATED_ENTITY_UPLOADED_FILE,
                 uploadedFile.getId());
 
+        Long submissionId = practiceSubmissionService.recordSubmission(
+                user,
+                PracticeSubmissionType.PRONUNCIATION_AUDIO,
+                uploadedFile,
+                sanitizedTargetText,
+                submissionLessonId,
+                AiRequestStatus.UNAVAILABLE,
+                AiAvailabilityService.PRONUNCIATION_UNAVAILABLE_MESSAGE);
+
         return new AiPronunciationFeedbackResponse(
                 AiAvailabilityService.PRONUNCIATION_UNAVAILABLE_MESSAGE,
-                "Audio analysis is not available in the current provider configuration.",
-                "Tone feedback is not available with the current provider configuration.",
-                "Keep practising slowly and repeat the target phrase clearly.",
-                "You are doing a great job. Keep trying!",
-                AiRequestStatus.UNAVAILABLE.name());
+                "Audio analysis is not available with the configured AI model.",
+                "Tone feedback is not available with the configured AI model.",
+                "Listen to the model audio, repeat the phrase slowly and compare the tones.",
+                "Your teacher can review the saved recording.",
+                AiRequestStatus.UNAVAILABLE.name(),
+                AiAvailabilityService.MEDIA_FEEDBACK_NOTICE,
+                submissionId);
     }
 
+    /**
+     * Stores the learner's handwriting image for teacher review, optionally linked to a published
+     * lesson ({@code lessonId} may be {@code null}), and, when the configured provider accepts image
+     * input (OpenAI Responses API), returns limited AI-assisted practice feedback. The result is never
+     * a score. Every upload is kept as a practice submission (D7a) with the AI feedback status/text,
+     * reviewable by the student's teacher.
+     */
     public AiWritingFeedbackResponse writingFeedback(
             SecurityUserDetails currentUser,
             MultipartFile imageFile,
             String targetCharacter,
-            String languagePreference) {
+            String languagePreference,
+            Long lessonId) {
         User user = requireUser(currentUser);
         requireRole(currentUser, RoleName.STUDENT, "Writing feedback requires a student account.");
         String sanitizedTargetCharacter = requireSanitizedShort(targetCharacter, "Target character is required.");
+        Long submissionLessonId = practiceSubmissionService.requireSubmittableLesson(lessonId);
 
         UploadedFile uploadedFile = aiFileStorageService.storeWritingImage(imageFile, user);
         String language = resolveLanguage(user, languagePreference);
         String inputSummary = "Target character: " + sanitizedTargetCharacter;
+
+        AiAvailabilityResponse availability = aiAvailabilityService.getAvailability();
+        if (!availability.available() || !availability.imageAnalysisAvailable()) {
+            AiWritingFeedbackResponse unavailable =
+                    unavailableWritingFeedback(user, language, inputSummary, uploadedFile, availability);
+            return unavailable.withSubmissionId(recordWritingSubmission(
+                    user, uploadedFile, sanitizedTargetCharacter, submissionLessonId, unavailable));
+        }
+
+        AiProviderPrompt.AiImageInput image = readImage(imageFile);
+        AiExecutionResult execution;
+        if (image == null) {
+            aiLogService.createUsageLog(
+                    user,
+                    primaryRole(user),
+                    AiFeatureKey.WRITING_FEEDBACK,
+                    language,
+                    AiRequestStatus.FAILED,
+                    availability.provider(),
+                    availability.model(),
+                    null,
+                    summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
+                    null,
+                    IMAGE_READ_ERROR,
+                    RELATED_ENTITY_UPLOADED_FILE,
+                    uploadedFile.getId());
+            execution = AiExecutionResult.failed(
+                    availability.provider(),
+                    availability.model(),
+                    AiAvailabilityService.WRITING_UNAVAILABLE_MESSAGE,
+                    IMAGE_READ_ERROR);
+        } else {
+            execution = generateText(
+                    user,
+                    AiFeatureKey.WRITING_FEEDBACK,
+                    language,
+                    buildWritingPrompt(sanitizedTargetCharacter),
+                    true,
+                    List.of(),
+                    RELATED_ENTITY_UPLOADED_FILE,
+                    uploadedFile.getId(),
+                    image);
+        }
+
+        ParsedAiJson parsed = execution.status() == AiRequestStatus.SUCCESS
+                ? parseJsonMap(execution.responseText())
+                : ParsedAiJson.invalid();
+        AiWritingFeedbackResponse response = parsed.valid()
+                ? parseWritingResponse(parsed.values())
+                : failedWritingFeedback(execution);
 
         aiLogService.createFeedbackRecord(
                 user,
                 AiFeatureKey.WRITING_FEEDBACK,
                 language,
                 inputSummary,
-                AiAvailabilityService.WRITING_UNAVAILABLE_MESSAGE,
-                AiRequestStatus.UNAVAILABLE,
+                response.feedback(),
+                AiRequestStatus.fromValue(response.status()),
                 uploadedFile);
+        return response.withSubmissionId(recordWritingSubmission(
+                user, uploadedFile, sanitizedTargetCharacter, submissionLessonId, response));
+    }
 
-        aiLogService.createUsageLog(
-                user,
-                primaryRole(user),
-                AiFeatureKey.WRITING_FEEDBACK,
-                language,
-                AiRequestStatus.UNAVAILABLE,
-                aiAvailabilityService.normalizedProvider(),
-                null,
-                null,
-                summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
-                null,
-                "Selected provider does not support image analysis in this phase.",
-                RELATED_ENTITY_UPLOADED_FILE,
-                uploadedFile.getId());
-
-        return new AiWritingFeedbackResponse(
-                AiAvailabilityService.WRITING_UNAVAILABLE_MESSAGE,
-                "Image analysis is not available in the current provider configuration.",
-                "Try writing the character again slowly and compare it with the example.",
-                "Nice effort. Keep practising one character at a time!",
-                AiRequestStatus.UNAVAILABLE.name());
+    private Long recordWritingSubmission(
+            User user,
+            UploadedFile uploadedFile,
+            String targetCharacter,
+            Long lessonId,
+            AiWritingFeedbackResponse response) {
+        AiRequestStatus status = AiRequestStatus.tryFrom(response.status()).orElse(AiRequestStatus.FAILED);
+        String aiText = status == AiRequestStatus.SUCCESS
+                ? String.join("\n", Stream.of(
+                                response.feedback(), response.clarityComment(), response.improvementTips(), response.encouragement())
+                        .filter(value -> value != null && !value.isBlank())
+                        .toList())
+                : response.feedback();
+        return practiceSubmissionService.recordSubmission(
+                user, PracticeSubmissionType.HANDWRITING_IMAGE, uploadedFile, targetCharacter, lessonId, status, aiText);
     }
 
     @Transactional(readOnly = true)
@@ -506,7 +564,6 @@ public class AiService {
         return new PageResponse<>(items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
-    @Transactional(readOnly = true)
     public AiAvailabilityResponse getAvailability() {
         return aiAvailabilityService.getAvailability();
     }
@@ -520,6 +577,20 @@ public class AiService {
             List<AiProviderPrompt.AiMessage> history,
             String relatedEntityType,
             Long relatedEntityId) {
+        return generateText(user, featureKey, language, userPrompt, expectJson, history,
+                relatedEntityType, relatedEntityId, null);
+    }
+
+    private AiExecutionResult generateText(
+            User user,
+            AiFeatureKey featureKey,
+            String language,
+            String userPrompt,
+            boolean expectJson,
+            List<AiProviderPrompt.AiMessage> history,
+            String relatedEntityType,
+            Long relatedEntityId,
+            AiProviderPrompt.AiImageInput image) {
         String userRole = primaryRole(user);
         String inputSummary = summarize(userPrompt, USAGE_LOG_SUMMARY_LIMIT);
         AiAvailabilityResponse availability = aiAvailabilityService.getAvailability();
@@ -545,8 +616,31 @@ public class AiService {
                     availability.message());
         }
 
+        // Admin "AI safety check": unsafe learner requests never reach the provider or the quota.
+        if (aiSafetyGuard.blocksInput(userPrompt)) {
+            aiLogService.createUsageLog(
+                    user,
+                    userRole,
+                    featureKey,
+                    language,
+                    AiRequestStatus.FAILED,
+                    availability.provider(),
+                    availability.model(),
+                    null,
+                    inputSummary,
+                    null,
+                    AiSafetyGuard.BLOCKED_INPUT_LOG,
+                    relatedEntityType,
+                    relatedEntityId);
+            return AiExecutionResult.failed(
+                    availability.provider(),
+                    availability.model(),
+                    AiSafetyGuard.BLOCKED_INPUT_MESSAGE,
+                    AiSafetyGuard.BLOCKED_INPUT_LOG);
+        }
+
         aiUsageLimiter.checkProviderCallAllowed(user.getId());
-        AiProviderPrompt prompt = aiPromptBuilder.buildPrompt(featureKey, language, userPrompt, expectJson, history);
+        AiProviderPrompt prompt = aiPromptBuilder.buildPrompt(featureKey, language, userPrompt, expectJson, history, image);
         Timer.Sample providerTimer = Timer.start(meterRegistry);
         AiProviderResult result;
         try {
@@ -620,6 +714,28 @@ public class AiService {
                     INVALID_JSON_ERROR);
         }
 
+        if (aiSafetyGuard.blocksOutput(result.text())) {
+            aiLogService.createUsageLog(
+                    user,
+                    userRole,
+                    featureKey,
+                    language,
+                    AiRequestStatus.FAILED,
+                    result.providerName(),
+                    result.modelName(),
+                    result.tokenCount(),
+                    inputSummary,
+                    null,
+                    AiSafetyGuard.BLOCKED_OUTPUT_LOG,
+                    relatedEntityType,
+                    relatedEntityId);
+            return AiExecutionResult.failed(
+                    result.providerName(),
+                    result.modelName(),
+                    AiSafetyGuard.BLOCKED_OUTPUT_MESSAGE,
+                    AiSafetyGuard.BLOCKED_OUTPUT_LOG);
+        }
+
         aiLogService.createUsageLog(
                 user,
                 userRole,
@@ -647,30 +763,22 @@ public class AiService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Authenticated user could not be found."));
     }
 
+    /**
+     * The learner's current interface language (en, ms or zh-CN) wins; the account preference is the
+     * fallback. A legacy "zh" value is mapped to "zh-CN".
+     */
     private String resolveLanguage(User user, String requestedLanguage) {
-        if (requestedLanguage != null && !requestedLanguage.isBlank()) {
-            return normalizeLanguage(requestedLanguage);
+        String requested = LanguageCodes.normalize(requestedLanguage);
+        if (requested != null) {
+            return requested;
         }
-        if (user.getPreferredLanguage() != null && !user.getPreferredLanguage().isBlank()) {
-            return normalizeLanguage(user.getPreferredLanguage());
-        }
-        return "en";
+        String preferred = LanguageCodes.normalize(user.getPreferredLanguage());
+        return preferred != null ? preferred : LanguageCodes.ENGLISH;
     }
 
     private static String normalizeFilterValue(String value) {
         String trimmed = TextUtils.trimToNull(value);
         return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
-    }
-
-    private String normalizeLanguage(String value) {
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
-        if ("ms".equals(normalized) || normalized.startsWith("ms-") || normalized.startsWith("ms_")) {
-            return "ms";
-        }
-        if ("zh".equals(normalized) || normalized.startsWith("zh-") || normalized.startsWith("zh_")) {
-            return "zh";
-        }
-        return "en";
     }
 
     private AiChatSession resolveChatSession(User user, AiChatRequest request) {
@@ -693,17 +801,18 @@ public class AiService {
 
     private String buildChatPrompt(AiChatRequest request, String sanitizedUserMessage) {
         StringBuilder builder = new StringBuilder();
-        builder.append("Help the learner with this message: ")
+        builder.append("Learner message: \"")
                 .append(sanitizedUserMessage)
-                .append(".");
+                .append("\".");
         String sanitizedContext = AiInputSanitizer.sanitizeLong(request.context());
         if (sanitizedContext != null) {
-            builder.append(" Context: ").append(sanitizedContext).append(".");
+            builder.append(" Learning context: ").append(sanitizedContext).append(".");
         }
         if (request.relatedLessonId() != null) {
             builder.append(" Related lesson id: ").append(request.relatedLessonId()).append(".");
         }
-        builder.append(" Keep the answer child-friendly and concise.");
+        builder.append(" Reply as a concise beginner Mandarin tutor in at most about 120 words.")
+                .append(" If the message is not about learning Mandarin, politely decline and suggest a Mandarin-learning question instead.");
         return builder.toString();
     }
 
@@ -714,44 +823,51 @@ public class AiService {
 
     private String buildVocabularyPrompt(AiVocabularyHelperRequest request, String language) {
         String outputLanguage = normalizedPromptLanguage(request.outputLanguage(), language);
-        return "Create a beginner-friendly vocabulary helper in structured JSON for the word \""
+        return "Create a short beginner vocabulary card in JSON for the word or phrase \""
                 + AiInputSanitizer.sanitizeShort(request.word())
                 + "\". Input language: " + AiInputSanitizer.sanitizeShort(request.inputLanguage())
                 + ". Output language preference: " + outputLanguage
                 + ". Learner level: " + defaultLevel(request.learnerLevel())
-                + ". Return keys: chineseWord, pinyin, englishMeaning, bahasaMelayuMeaning, simpleExplanation, exampleSentence, exampleSentencePinyin, exampleSentenceTranslation, imagePromptOrDescription, miniPracticeQuestion, encouragement.";
+                + ". Use an everyday young-adult example (university, work, food, travel or daily life)."
+                + " Return keys: chineseWord, pinyin, englishMeaning, bahasaMelayuMeaning, simpleExplanation, exampleSentence, exampleSentencePinyin, exampleSentenceTranslation, imagePromptOrDescription, miniPracticeQuestion, encouragement.";
     }
 
     private String buildSentencePrompt(AiSentencePracticeRequest request, String language) {
-        return "Check this beginner Chinese learning sentence and return structured JSON: \""
+        return "Check this beginner Mandarin practice sentence and return JSON: \""
                 + AiInputSanitizer.sanitizeLong(request.sentence())
                 + "\". Learner level: " + defaultLevel(request.learnerLevel())
                 + ". Language preference: " + language
-                + ". Return keys: correctedSentence, pinyin, englishMeaning, bahasaMelayuMeaning, improvementExplanation, naturalSentenceVersion, practiceTask, encouragement.";
+                + ". Explain at most two corrections briefly; do not give a grade."
+                + " Return keys: correctedSentence, pinyin, englishMeaning, bahasaMelayuMeaning, improvementExplanation, naturalSentenceVersion, practiceTask, encouragement.";
     }
 
     private String buildQuizPrompt(AiQuizGeneratorRequest request, String language, String usageMode) {
-        String targetRoleContext = sanitizePromptFragment(request.targetRoleContext());
-        return "Generate a child-friendly Chinese learning quiz draft in JSON. Topic: "
+        return "Generate a short beginner Mandarin self-practice quiz in JSON for a young adult learner. Topic: "
                 + AiInputSanitizer.sanitizeShort(request.topic())
-                + ". Level: " + AiInputSanitizer.sanitizeShort(request.level())
+                + ". Level: " + defaultLevel(request.level())
                 + ". Category: " + AiInputSanitizer.sanitizeShort(request.category())
                 + ". Number of questions: " + resolveNumberOfQuestions(request.numberOfQuestions())
                 + ". Question types: " + sanitizedQuestionTypes(request.questionTypes())
-                + (targetRoleContext == null ? "" : ". Target role context: " + targetRoleContext)
                 + ". Usage mode: " + usageMode
                 + ". Language preference: " + language
                 + ". Return keys: title, questions. Each question should include questionText, questionType, options, correctAnswer, explanation, pinyin, translation.";
     }
 
     private String buildStoryPrompt(AiStoryGeneratorRequest request, String language, String usageMode) {
-        return "Generate a short, child-friendly beginner Chinese story in JSON. Topic: "
+        return "Generate a short beginner Mandarin reading passage in JSON about an everyday young-adult situation. Topic: "
                 + AiInputSanitizer.sanitizeShort(request.topic())
                 + ". Level: " + defaultLevel(request.level())
                 + ". Length preference: " + AiInputSanitizer.sanitizeShort(request.lengthPreference())
                 + ". Usage mode: " + usageMode
                 + ". Language preference: " + language
                 + ". Return keys: title, chineseStory, pinyin, englishTranslation, bahasaMelayuTranslation, vocabularyList, comprehensionQuestions, encouragement.";
+    }
+
+    private static String buildWritingPrompt(String targetCharacter) {
+        return "Give short handwriting practice feedback in JSON on the attached photo of the learner writing \""
+                + targetCharacter
+                + "\". Comment only on what is visible. Do not give a score, grade or pass/fail result."
+                + " Return keys: feedback, clarityComment, improvementTips, encouragement.";
     }
 
     private static String pronunciationInputSummary(String targetText, String pinyin, String tone) {
@@ -769,39 +885,88 @@ public class AiService {
         }
     }
 
-    private String buildLearningRecommendationPrompt(AiLearningRecommendationRequest request, String summary, String language) {
-        String recentQuizResults = joinPromptList("Recent quiz results", request.recentQuizResults(), MAX_RECOMMENDATION_CONTEXT_ITEMS);
-        String wrongAnswers = joinPromptList("Wrong answers", request.wrongAnswers(), MAX_RECOMMENDATION_CONTEXT_ITEMS);
-        String weakAreas = joinPromptList("Weak areas", request.weakAreas(), MAX_RECOMMENDATION_CONTEXT_ITEMS);
-        String completedLessons = joinPromptList("Completed lessons", request.completedLessons(), MAX_RECOMMENDATION_CONTEXT_ITEMS);
-        return "Based on this student learning summary, return a short structured learning recommendation in JSON. Summary: "
-                + summary
-                + ". Current level override: " + AiInputSanitizer.sanitizeShort(request.currentLevel())
-                + (recentQuizResults == null ? "" : ". " + recentQuizResults)
-                + (wrongAnswers == null ? "" : ". " + wrongAnswers)
-                + (weakAreas == null ? "" : ". " + weakAreas)
-                + (completedLessons == null ? "" : ". " + completedLessons)
-                + ". Language preference: " + language
-                + ". Return keys: recommendedNextStep, recommendedLessonOrActivity, weakAreaSummary, revisionSuggestion, shortEncouragement, suggestedPracticeTypes.";
-    }
-
-    private StudentProfile resolveCurrentStudentProfile(SecurityUserDetails currentUser) {
-        return studentProfileRepository.findByUserId(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Student profile could not be found."));
-    }
-
-    private LearningRecommendationContext prepareLearningRecommendationContext(
-            SecurityUserDetails currentUser,
-            AiLearningRecommendationRequest request) {
-        User user = requireUser(currentUser);
-        String language = resolveLanguage(user, request.languagePreference());
-        StudentProfile studentProfile = resolveCurrentStudentProfile(currentUser);
-        if (request.studentId() != null && !studentProfile.getId().equals(request.studentId())) {
-            throw new ResponseStatusException(FORBIDDEN, "Students can only request learning recommendations for their own account.");
+    private static AiProviderPrompt.AiImageInput readImage(MultipartFile imageFile) {
+        try {
+            byte[] bytes = imageFile.getBytes();
+            if (bytes.length == 0) {
+                return null;
+            }
+            String mimeType = UploadStorageSupport.normalizeContentType(imageFile.getContentType());
+            if (mimeType == null || mimeType.isBlank() || "image/jpg".equals(mimeType)) {
+                mimeType = MIME_IMAGE_JPEG;
+            }
+            return new AiProviderPrompt.AiImageInput(bytes, mimeType);
+        } catch (IOException | IllegalArgumentException exception) {
+            log.warn("Handwriting image could not be read for AI analysis ({}).", exception.getClass().getSimpleName());
+            return null;
         }
+    }
 
-        String summary = buildStudentContextSummary(studentProfile);
-        return new LearningRecommendationContext(user, studentProfile.getId(), language, summary);
+    private AiWritingFeedbackResponse unavailableWritingFeedback(
+            User user,
+            String language,
+            String inputSummary,
+            UploadedFile uploadedFile,
+            AiAvailabilityResponse availability) {
+        aiLogService.createFeedbackRecord(
+                user,
+                AiFeatureKey.WRITING_FEEDBACK,
+                language,
+                inputSummary,
+                AiAvailabilityService.WRITING_UNAVAILABLE_MESSAGE,
+                AiRequestStatus.UNAVAILABLE,
+                uploadedFile);
+
+        aiLogService.createUsageLog(
+                user,
+                primaryRole(user),
+                AiFeatureKey.WRITING_FEEDBACK,
+                language,
+                AiRequestStatus.UNAVAILABLE,
+                availability.provider(),
+                availability.model(),
+                null,
+                summarize(inputSummary, USAGE_LOG_SUMMARY_LIMIT),
+                null,
+                availability.available()
+                        ? "Configured provider does not support image input."
+                        : availability.message(),
+                RELATED_ENTITY_UPLOADED_FILE,
+                uploadedFile.getId());
+
+        return new AiWritingFeedbackResponse(
+                AiAvailabilityService.WRITING_UNAVAILABLE_MESSAGE,
+                "Image analysis is not available with the current AI configuration.",
+                "Write the character again slowly and compare it with the model character.",
+                "Your teacher can review the saved image.",
+                AiRequestStatus.UNAVAILABLE.name(),
+                AiAvailabilityService.MEDIA_FEEDBACK_NOTICE);
+    }
+
+    private static AiWritingFeedbackResponse failedWritingFeedback(AiExecutionResult execution) {
+        String message = execution.status() == AiRequestStatus.SUCCESS
+                ? AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE
+                : execution.userMessage();
+        return new AiWritingFeedbackResponse(
+                message,
+                null,
+                "Write the character again slowly and compare it with the model character.",
+                "Your teacher can review the saved image.",
+                execution.status() == AiRequestStatus.UNAVAILABLE
+                        ? AiRequestStatus.UNAVAILABLE.name()
+                        : AiRequestStatus.FAILED.name(),
+                AiAvailabilityService.MEDIA_FEEDBACK_NOTICE);
+    }
+
+    private AiWritingFeedbackResponse parseWritingResponse(Map<String, Object> map) {
+        return new AiWritingFeedbackResponse(
+                TextUtils.defaultIfBlank(text(map, "feedback"), "The AI could not describe this image clearly."),
+                text(map, "clarityComment"),
+                TextUtils.defaultIfBlank(text(map, "improvementTips"),
+                        "Write the character again slowly and compare it with the model character."),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Keep practising one character at a time."),
+                AiRequestStatus.SUCCESS.name(),
+                AiAvailabilityService.MEDIA_FEEDBACK_NOTICE);
     }
 
     private void requireRole(SecurityUserDetails currentUser, RoleName roleName, String message) {
@@ -815,82 +980,19 @@ public class AiService {
                 && currentUser.getRoleNames().stream().anyMatch(role -> role.equals(roleName.name()));
     }
 
-    private String buildStudentContextSummary(StudentProfile studentProfile) {
-        List<LessonProgress> accessibleLessons = lessonProgressRepository.findByStudentIdOrderByUpdatedAtDesc(studentProfile.getId()).stream()
-                .filter(progress -> hasCurrentLessonProgressAccess(studentProfile, progress))
-                .toList();
-        List<QuizAttemptAnswer> wrongAnswers = quizAttemptAnswerRepository
-                .findByQuizAttemptStudentIdAndCorrectFalseOrderByCreatedAtDesc(studentProfile.getId()).stream()
-                .filter(answer -> hasCurrentWrongAnswerAccess(studentProfile, answer))
-                .limit(LEARNING_CONTEXT_ITEM_LIMIT)
-                .toList();
-
-        String level = studentProfile.getCurrentLevel() != null ? studentProfile.getCurrentLevel().getName() : "Beginner";
-        int totalPoints = studentProfile.getTotalPoints() == null ? 0 : studentProfile.getTotalPoints();
-        int completion = overallCompletionPercent(accessibleLessons);
-        String weakAreas = String.join(", ", recentQuestionTypes(wrongAnswers, WEAK_AREA_LIMIT));
-
-        return "Student level: " + level
-                + ". Total points: " + totalPoints
-                + ". Completion percent: " + completion
-                + ". Weak areas: " + weakAreas
-                + ". Recent lessons: " + recentLessonTitles(accessibleLessons)
-                + ". Recent wrong answers: " + recentQuestionTypes(wrongAnswers, RECENT_CONTEXT_ITEM_LIMIT) + ".";
-    }
-
-    private static List<String> recentLessonTitles(List<LessonProgress> lessonProgressList) {
-        return lessonProgressList.stream()
-                .map(LessonProgress::getLesson)
-                .filter(Objects::nonNull)
-                .map(lesson -> AiInputSanitizer.sanitizeShort(lesson.getTitle()))
-                .filter(value -> value != null && !value.isBlank())
-                .limit(RECENT_CONTEXT_ITEM_LIMIT)
-                .toList();
-    }
-
-    private static List<String> recentQuestionTypes(List<QuizAttemptAnswer> answers, int limit) {
-        return answers.stream()
-                .map(QuizAttemptAnswer::getQuestion)
-                .filter(Objects::nonNull)
-                .map(question -> AiInputSanitizer.sanitizeShort(question.getQuestionType()))
-                .filter(value -> value != null && !value.isBlank())
-                .distinct()
-                .limit(limit)
-                .toList();
-    }
-
-    private boolean hasCurrentLessonProgressAccess(StudentProfile student, LessonProgress progress) {
-        return progress.getLesson() == null || studentLearningAccessService.hasLessonAccess(student, progress.getLesson());
-    }
-
-    private boolean hasCurrentWrongAnswerAccess(StudentProfile student, QuizAttemptAnswer answer) {
-        return answer.getQuestion() != null
-                && answer.getQuestion().getQuiz() != null
-                && answer.getQuestion().getQuiz().getLesson() != null
-                && studentLearningAccessService.hasLessonAccess(student, answer.getQuestion().getQuiz().getLesson());
-    }
-
-    private int overallCompletionPercent(List<LessonProgress> lessonProgressList) {
-        if (lessonProgressList.isEmpty()) {
-            return 0;
-        }
-        long completedLessons = lessonProgressList.stream().filter(LessonProgress::isCompleted).count();
-        return (int) Math.round(completedLessons * 100.0 / lessonProgressList.size());
-    }
-
     private AiVocabularyHelperResponse unavailableVocabularyResponse(AiExecutionResult execution) {
         return new AiVocabularyHelperResponse(
                 null,
                 null,
                 null,
                 null,
-                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                execution.userMessage(),
                 null,
                 null,
                 null,
                 null,
-                "Try again later with a simple Chinese word or phrase.",
-                "You are doing a great job. Keep learning!",
+                "Try again later with a short Chinese word or phrase.",
+                "You can also check the word with your teacher.",
                 execution.status().name());
     }
 
@@ -901,35 +1003,24 @@ public class AiService {
                 null,
                 null,
                 null,
-                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                execution.userMessage(),
                 originalSentence,
-                "Try writing one short sentence again later.",
-                "Nice try. Keep practising one sentence at a time!",
+                "Try one short sentence again later.",
+                "You can also ask your teacher to check the sentence.",
                 execution.status().name());
     }
 
-    private AiStoryGeneratorResponse fallbackStoryResponse(String topic, String usageMode, String status) {
+    private AiStoryGeneratorResponse fallbackStoryResponse(String topic, String usageMode, String status, String message) {
         return new AiStoryGeneratorResponse(
                 topic,
-                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
+                message,
                 null,
                 null,
                 null,
                 List.of(),
                 List.of(),
-                "Keep reading and try again later.",
+                "Try again later or review a reading activity from your lessons.",
                 usageMode,
-                status);
-    }
-
-    private AiLearningRecommendationResponse fallbackLearningRecommendation(String status) {
-        return new AiLearningRecommendationResponse(
-                AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE,
-                null,
-                "AI insight is not available right now, so no personalized recommendation was generated.",
-                "Please try again later when AI helper is available.",
-                "Keep going. Small steps help you improve every day!",
-                List.of(),
                 status);
     }
 
@@ -953,7 +1044,7 @@ public class AiService {
                 text(map, "exampleSentenceTranslation"),
                 text(map, "imagePromptOrDescription"),
                 text(map, "miniPracticeQuestion"),
-                TextUtils.defaultIfBlank(text(map, "encouragement"), "Great job learning new words!"),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Try using the word in your own sentence."),
                 status);
     }
 
@@ -964,10 +1055,10 @@ public class AiService {
                 text(map, "pinyin"),
                 text(map, "englishMeaning"),
                 text(map, "bahasaMelayuMeaning"),
-                TextUtils.defaultIfBlank(text(map, "improvementExplanation"), "Your sentence is a good try. Keep practising."),
+                TextUtils.defaultIfBlank(text(map, "improvementExplanation"), "No major issue was found in this sentence."),
                 TextUtils.defaultIfBlank(text(map, "naturalSentenceVersion"), originalSentence),
                 TextUtils.defaultIfBlank(text(map, "practiceTask"), "Write one more short sentence about the same topic."),
-                TextUtils.defaultIfBlank(text(map, "encouragement"), "Good effort. Keep practising!"),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Keep practising with short sentences."),
                 status);
     }
 
@@ -1010,7 +1101,6 @@ public class AiService {
     }
 
     private AiStoryGeneratorResponse parseStoryResponse(
-            AiStoryGeneratorRequest request,
             String topic,
             String usageMode,
             Map<String, Object> map,
@@ -1040,24 +1130,8 @@ public class AiService {
                 text(map, "bahasaMelayuTranslation"),
                 vocabularyList,
                 comprehensionQuestions,
-                TextUtils.defaultIfBlank(text(map, "encouragement"), "Great reading practice!"),
+                TextUtils.defaultIfBlank(text(map, "encouragement"), "Read it once more aloud to practise."),
                 usageMode,
-                status);
-    }
-
-    private AiLearningRecommendationResponse parseLearningRecommendation(
-            Map<String, Object> map,
-            String status) {
-        List<String> practiceTypes = boundedStringList(map.get("suggestedPracticeTypes"), MAX_RECOMMENDATION_PRACTICE_TYPES);
-        return new AiLearningRecommendationResponse(
-                TextUtils.defaultIfBlank(text(map, "recommendedNextStep"), "Continue with a short lesson and one revision activity."),
-                TextUtils.defaultIfBlank(text(map, "recommendedLessonOrActivity"), "Vocabulary review"),
-                TextUtils.defaultIfBlank(text(map, "weakAreaSummary"), "Keep reviewing any difficult words slowly."),
-                TextUtils.defaultIfBlank(text(map, "revisionSuggestion"), "Repeat one short activity from your recent lesson."),
-                TextUtils.defaultIfBlank(text(map, "shortEncouragement"), "You are improving with each practice session!"),
-                practiceTypes.isEmpty()
-                        ? List.of("flashcards", "quiz", "story")
-                        : practiceTypes,
                 status);
     }
 
@@ -1100,8 +1174,8 @@ public class AiService {
     }
 
     private String normalizedPromptLanguage(String requestedLanguage, String fallbackLanguage) {
-        String sanitized = sanitizePromptFragment(requestedLanguage);
-        return sanitized == null ? fallbackLanguage : normalizeLanguage(sanitized);
+        String normalized = LanguageCodes.normalize(sanitizePromptFragment(requestedLanguage));
+        return normalized == null ? fallbackLanguage : normalized;
     }
 
     private String sanitizePromptFragment(String value) {
@@ -1122,29 +1196,6 @@ public class AiService {
             throw new ResponseStatusException(BAD_REQUEST, message);
         }
         return sanitized;
-    }
-
-    private String joinPromptList(String label, List<String> values, int maxItems) {
-        if (values == null || values.isEmpty()) {
-            return null;
-        }
-
-        Set<String> sanitized = new LinkedHashSet<>();
-        for (String value : values) {
-            if (sanitized.size() >= maxItems) {
-                break;
-            }
-            String item = sanitizePromptFragment(value);
-            if (item != null && !item.isBlank()) {
-                sanitized.add(item);
-            }
-        }
-
-        if (sanitized.isEmpty()) {
-            return null;
-        }
-
-        return label + ": " + String.join(", ", sanitized);
     }
 
     private int resolveNumberOfQuestions(Integer requested) {
@@ -1183,13 +1234,6 @@ public class AiService {
                 .orElse("USER");
     }
 
-    private record LearningRecommendationContext(
-            User user,
-            Long studentProfileId,
-            String language,
-            String summary) {
-    }
-
     private record ParsedAiJson(boolean valid, Map<String, Object> values) {
 
         private static ParsedAiJson valid(Map<String, Object> values) {
@@ -1214,17 +1258,7 @@ public class AiService {
             return null;
         }
         String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        if (trimmed.length() <= limit) {
-            return trimmed;
-        }
-        int end = limit;
-        if (Character.isHighSurrogate(trimmed.charAt(end - 1))) {
-            end--;
-        }
-        return trimmed.substring(0, end);
+        return trimmed.isEmpty() ? null : TextUtils.safeTruncate(trimmed, limit);
     }
 
     private AdminAiUsageLogResponse toAdminUsageLogResponse(AiUsageLog logRecord) {

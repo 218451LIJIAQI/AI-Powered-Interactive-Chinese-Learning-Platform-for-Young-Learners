@@ -4,8 +4,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminStoryActivityResponse(
         Long id,
@@ -17,7 +17,6 @@ public record AdminStoryActivityResponse(
         String imageUrl,
         ContentStatus status,
         Integer hskLevel,
-        AgeBand ageBand,
         ActivityDifficulty difficulty,
         String topic,
         List<String> tags,
@@ -27,7 +26,9 @@ public record AdminStoryActivityResponse(
         String createdByDisplayName,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        List<AdminStoryQuestionResponse> questions) {
+        List<AdminStoryQuestionResponse> questions,
+        String rejectionReason,
+        LearningStage learningStage) {
 
     public AdminStoryActivityResponse {
         tags = tags == null ? List.of() : List.copyOf(tags);

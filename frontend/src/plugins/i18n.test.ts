@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { i18n } from './i18n'
 import { dashboardMessages } from './dashboardMessages'
 
-const supportedLocales = ['en', 'ms', 'zh'] as const
+const supportedLocales = ['en', 'ms', 'zh-CN'] as const
 
 function sortedNavigationKeys(locale: (typeof supportedLocales)[number]): string[] {
   return Object.keys(i18n.global.messages.value[locale].nav).sort()
@@ -19,9 +19,9 @@ describe('i18n navigation messages', () => {
   })
 
   it('keeps Chinese navigation labels readable instead of mojibake', () => {
-    expect(i18n.global.messages.value.zh.nav.home).toBe('首页')
-    expect(i18n.global.messages.value.zh.nav.teacherVerification).toBe('教师审核')
-    expect(i18n.global.messages.value.zh.nav.activityLibrary).toBe('活动资源库')
+    expect(i18n.global.messages.value['zh-CN'].nav.home).toBe('首页')
+    expect(i18n.global.messages.value['zh-CN'].nav.teacherVerification).toBe('教师审核')
+    expect(i18n.global.messages.value['zh-CN'].nav.activityLibrary).toBe('练习活动库')
   })
 
   it('ships complete shared interface text for every supported locale', () => {

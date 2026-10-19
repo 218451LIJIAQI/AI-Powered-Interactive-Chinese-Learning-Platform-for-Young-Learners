@@ -40,6 +40,8 @@ public class PublicTeacherProfileService {
     public PublicTeacherProfileResponse getApprovedTeacherProfile(Long teacherId) {
         TeacherProfile teacherProfile = teacherProfileRepository
                 .findByIdAndTeacherStatusAndPublicVisibleTrue(teacherId, TeacherStatus.APPROVED)
+                // D13: a deactivated teacher account is hidden from the public catalogue like its content.
+                .filter(ContentVisibilityPolicy::isActiveApprovedTeacher)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Approved teacher profile was not found."));
 
         long courseCount = lessonRepository.countByTeacherIdAndContentStatus(teacherId, ContentStatus.PUBLISHED)

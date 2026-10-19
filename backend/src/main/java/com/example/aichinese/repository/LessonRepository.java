@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
@@ -19,9 +20,6 @@ import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.projection.StatusCountProjection;
 
 public interface LessonRepository extends JpaRepository<Lesson, Long>, JpaSpecificationExecutor<Lesson> {
-
-    @EntityGraph(value = Lesson.GRAPH_DETAIL)
-    List<Lesson> findByTeacherUserIdOrderByUpdatedAtDesc(Long userId);
 
     @EntityGraph(value = Lesson.GRAPH_DETAIL)
     Page<Lesson> findByTeacherUserIdOrderByUpdatedAtDesc(Long userId, Pageable pageable);
@@ -48,14 +46,6 @@ public interface LessonRepository extends JpaRepository<Lesson, Long>, JpaSpecif
 
     long countByTeacherIdAndContentStatus(Long teacherId, ContentStatus contentStatus);
 
-    @EntityGraph(value = Lesson.GRAPH_DETAIL)
-    List<Lesson> findByModuleIdAndContentStatus(Long moduleId, ContentStatus contentStatus);
-
-    @Override
-    @EntityGraph(value = Lesson.GRAPH_DETAIL)
-    @NonNull
-    List<Lesson> findAll(@Nullable Specification<Lesson> specification);
-
     @Override
     @EntityGraph(value = Lesson.GRAPH_DETAIL)
     @NonNull
@@ -64,7 +54,7 @@ public interface LessonRepository extends JpaRepository<Lesson, Long>, JpaSpecif
     long countByTeacherId(Long teacherId);
 
     @Query("select l.contentStatus as status, count(l) as count from Lesson l where l.teacher.id = :teacherId group by l.contentStatus")
-    List<StatusCountProjection> groupByContentStatusForTeacher(Long teacherId);
+    List<StatusCountProjection> groupByContentStatusForTeacher(@Param("teacherId") Long teacherId);
 
     long countByContentStatus(ContentStatus contentStatus);
 

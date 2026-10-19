@@ -28,8 +28,11 @@ import com.example.aichinese.entity.QuizQuestion;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.entity.enums.QuizQuestionType;
+import com.example.aichinese.entity.enums.ReviewContentType;
 import com.example.aichinese.mapper.QuizMapper;
+import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.QuizOptionRepository;
 import com.example.aichinese.repository.QuizQuestionRepository;
@@ -44,11 +47,12 @@ import com.example.aichinese.util.PaginationUtils;
  *
  * <h2>Authoring invariants</h2>
  * <ul>
- *   <li>Every {@link QuizQuestion} of type
- *       {@link QuizQuestionType#MULTIPLE_CHOICE} must have at least
- *       one option flagged {@code isCorrect=true}; the create / update
- *       paths validate this before commit so the student player never
- *       sees an unanswerable question.</li>
+ *   <li>Every option-based {@link QuizQuestion} (see
+ *       {@link QuizQuestionType#isOptionBased()}) must have exactly
+ *       one option flagged {@code correctOption=true}; short-answer
+ *       types need a correct answer text and keep no options. The
+ *       create / update paths validate this before commit so the
+ *       student player never sees an unanswerable question.</li>
  *   <li>Length caps ({@code MAX_QUIZ_*} / {@code MAX_QUESTION_*} /
  *       {@code MAX_OPTION_*} constants below) match the underlying
  *       column widths so a successful service-layer validation
@@ -71,6 +75,7 @@ public class TeacherQuizService {
     private static final int MAX_ANSWER_TEXT_LENGTH = 1000;
     private static final int MAX_OPTION_TEXT_LENGTH = 1000;
     private static final int MAX_EXPLANATION_LENGTH = 2000;
+    private static final int MAX_HINT_LENGTH = 1000;
     private static final int MAX_OPTIONS_PER_QUESTION = 200;
     private static final int DEFAULT_SORT_ORDER = 0;
     private static final String QUIZ_REQUEST_REQUIRED = "Quiz request is required.";
@@ -85,6 +90,7 @@ public class TeacherQuizService {
     private static final String ACTION_QUESTION_CREATE = "TEACHER_QUIZ_QUESTION_CREATE";
     private static final String ACTION_QUESTION_UPDATE = "TEACHER_QUIZ_QUESTION_UPDATE";
     private static final String ACTION_QUESTION_DELETE = "TEACHER_QUIZ_QUESTION_DELETE";
+    private static final ReviewContentType REVIEW_TYPE = ReviewContentType.QUIZ;
 
     private final TeacherContentAccessService teacherContentAccessService;
     private final TeacherLessonService teacherLessonService;
@@ -92,10 +98,11 @@ public class TeacherQuizService {
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizOptionRepository quizOptionRepository;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
     private final QuizMapper quizMapper;
     private final AuditLogService auditLogService;
-    private final StudentLearningAccessService studentLearningAccessService;
     private final ContentSafetyService contentSafetyService;
+    private final ContentReviewService contentReviewService;
 
     public TeacherQuizService(
             TeacherContentAccessService teacherContentAccessService,
@@ -104,20 +111,37 @@ public class TeacherQuizService {
             QuizQuestionRepository quizQuestionRepository,
             QuizOptionRepository quizOptionRepository,
             QuizAttemptRepository quizAttemptRepository,
+            QuizAttemptAnswerRepository quizAttemptAnswerRepository,
             QuizMapper quizMapper,
             AuditLogService auditLogService,
-            StudentLearningAccessService studentLearningAccessService,
-            ContentSafetyService contentSafetyService) {
+            ContentSafetyService contentSafetyService,
+            ContentReviewService contentReviewService) {
         this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
         this.teacherLessonService = Objects.requireNonNull(teacherLessonService, "teacherLessonService");
         this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
         this.quizQuestionRepository = Objects.requireNonNull(quizQuestionRepository, "quizQuestionRepository");
         this.quizOptionRepository = Objects.requireNonNull(quizOptionRepository, "quizOptionRepository");
         this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
+        this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
         this.quizMapper = Objects.requireNonNull(quizMapper, "quizMapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
-        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
+    }
+
+    @Transactional(readOnly = true)
+    public TeacherQuizResponse getQuiz(SecurityUserDetails currentUser, Long quizId) {
+        teacherContentAccessService.requireApprovedTeacher(currentUser);
+        return toTeacherQuizResponse(findOwnedQuiz(currentUser, quizId));
+    }
+
+    /** DRAFT/REJECTED -> SUBMITTED; a quiz needs at least one valid question (FR-QUIZ-01). */
+    @Transactional
+    public TeacherQuizResponse submitQuiz(SecurityUserDetails currentUser, Long quizId) {
+        TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
+        Quiz quiz = findOwnedQuiz(currentUser, quizId);
+        contentReviewService.submitForReview(teacherProfile.getUser(), REVIEW_TYPE, quiz);
+        return toTeacherQuizResponse(quizRepository.save(quiz));
     }
 
     @Transactional(readOnly = true)
@@ -148,7 +172,9 @@ public class TeacherQuizService {
         quiz.setLesson(lesson);
         quiz.setTeacher(teacherProfile);
         applyQuizMetadata(quiz, QuizMetadata.from(request));
-        quiz.setContentStatus(lesson.getContentStatus());
+        // Review workflow (D4): a new quiz is a draft until it has questions and an admin approves it.
+        quiz.setContentStatus(ContentStatus.DRAFT);
+        quiz.setRejectionReason(null);
         quiz.setTotalPoints(0);
 
         Quiz saved = quizRepository.save(quiz);
@@ -164,9 +190,10 @@ public class TeacherQuizService {
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
-        teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
+        requireEditableQuiz(quiz);
 
         applyQuizMetadata(quiz, QuizMetadata.from(request));
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, quiz);
         Quiz saved = quizRepository.save(quiz);
         auditLogService.record(teacherProfile.getUser(), ACTION_QUIZ_UPDATE, AUDIT_TARGET_QUIZ, saved.getId(),
                 "Teacher updated a quiz.");
@@ -177,7 +204,7 @@ public class TeacherQuizService {
     public void deleteQuiz(SecurityUserDetails currentUser, Long quizId) {
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
-        teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
+        requireLessonNotArchived(quiz.getLesson());
         if (quiz.getContentStatus() == ContentStatus.ARCHIVED) {
             return;
         }
@@ -195,12 +222,13 @@ public class TeacherQuizService {
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
-        teacherContentAccessService.validateEditableStatus(quiz.getLesson().getContentStatus(), "Lesson");
+        requireEditableQuiz(quiz);
         ensureQuizQuestionsEditable(quiz.getId());
         QuizQuestion question = new QuizQuestion();
         question.setQuiz(quiz);
         applyQuizQuestion(question, request.questionType(), request.questionText(), request.correctAnswerText(),
-                request.points(), request.displayOrder(), request.options(), request.explanation());
+                request.points(), request.displayOrder(), request.options(), request.explanation(), request.hint());
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, quiz);
         recomputeQuizTotalPoints(quiz);
         auditLogService.record(teacherProfile.getUser(), ACTION_QUESTION_CREATE, AUDIT_TARGET_QUIZ, quiz.getId(),
                 "Teacher added a quiz question.");
@@ -215,10 +243,11 @@ public class TeacherQuizService {
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         QuizQuestion question = findOwnedQuestion(currentUser, questionId);
-        teacherContentAccessService.validateEditableStatus(question.getQuiz().getLesson().getContentStatus(), "Lesson");
+        requireEditableQuiz(question.getQuiz());
         ensureQuizQuestionsEditable(question.getQuiz().getId());
         applyQuizQuestion(question, request.questionType(), request.questionText(), request.correctAnswerText(), request.points(),
-                request.displayOrder(), request.options(), request.explanation());
+                request.displayOrder(), request.options(), request.explanation(), request.hint());
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, question.getQuiz());
         recomputeQuizTotalPoints(question.getQuiz());
         auditLogService.record(teacherProfile.getUser(), ACTION_QUESTION_UPDATE, AUDIT_TARGET_QUESTION, question.getId(),
                 "Teacher updated a quiz question.");
@@ -229,11 +258,12 @@ public class TeacherQuizService {
     public TeacherQuizResponse deleteQuizQuestion(SecurityUserDetails currentUser, Long questionId) {
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         QuizQuestion question = findOwnedQuestion(currentUser, questionId);
-        teacherContentAccessService.validateEditableStatus(question.getQuiz().getLesson().getContentStatus(), "Lesson");
+        requireEditableQuiz(question.getQuiz());
         Quiz quiz = question.getQuiz();
         ensureQuizQuestionsEditable(quiz.getId());
         quizOptionRepository.deleteByQuestionId(question.getId());
         quizQuestionRepository.delete(question);
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, quiz);
         recomputeQuizTotalPoints(quiz);
         auditLogService.record(teacherProfile.getUser(), ACTION_QUESTION_DELETE, AUDIT_TARGET_QUESTION, questionId,
                 "Teacher deleted a quiz question.");
@@ -246,28 +276,18 @@ public class TeacherQuizService {
         Quiz quiz = findOwnedQuiz(currentUser, quizId);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        List<QuizAttempt> accessibleAttempts = quizAttemptRepository.findByQuizIdAndSubmittedTrueOrderByCompletedAtDescCreatedAtDesc(quiz.getId()).stream()
-                .filter(this::hasCurrentAttemptAccess)
-                .toList();
-        int startIndex = PaginationUtils.startIndex(safePage, safeSize, accessibleAttempts.size());
-        int endIndex = PaginationUtils.endIndex(startIndex, safeSize, accessibleAttempts.size());
-        List<TeacherQuizAttemptSummaryResponse> items = accessibleAttempts.subList(startIndex, endIndex).stream()
+        Page<QuizAttempt> attemptPage = quizAttemptRepository.findByQuizIdAndSubmittedTrueOrderByCompletedAtDescCreatedAtDesc(
+                quiz.getId(),
+                PageRequest.of(safePage, safeSize));
+        List<TeacherQuizAttemptSummaryResponse> items = attemptPage.getContent().stream()
                 .map(this::toTeacherQuizAttemptSummaryResponse)
                 .toList();
         return new PageResponse<>(
                 items,
                 safePage,
                 safeSize,
-                accessibleAttempts.size(),
-                PaginationUtils.totalPages(accessibleAttempts.size(), safeSize));
-    }
-
-    private boolean hasCurrentAttemptAccess(QuizAttempt attempt) {
-        Quiz quiz = attempt.getQuiz();
-        Lesson lesson = quiz == null ? null : quiz.getLesson();
-        return attempt.getStudent() == null
-                || lesson == null
-                || studentLearningAccessService.hasLessonAccess(attempt.getStudent(), lesson);
+                attemptPage.getTotalElements(),
+                attemptPage.getTotalPages());
     }
 
     private TeacherQuizAttemptSummaryResponse toTeacherQuizAttemptSummaryResponse(QuizAttempt attempt) {
@@ -280,13 +300,27 @@ public class TeacherQuizService {
                         : "Student",
                 attempt.getScore(),
                 attempt.getMaxScore(),
-                attempt.getCompletedAt());
+                attempt.getCompletedAt(),
+                Objects.requireNonNullElse(LessonMasteryCalculator.attemptPercentage(attempt), 0),
+                quizAttemptAnswerRepository.countByQuizAttemptIdAndHintUsedTrue(attempt.getId()));
     }
 
     private Lesson requireEditableOwnedLesson(SecurityUserDetails currentUser, Long lessonId) {
         Lesson lesson = teacherLessonService.findOwnedLesson(currentUser, lessonId);
-        teacherContentAccessService.validateEditableStatus(lesson.getContentStatus(), "Lesson");
+        requireLessonNotArchived(lesson);
         return lesson;
+    }
+
+    /** Quiz edits follow the quiz's own review status (D24); its lesson must not be archived. */
+    private void requireEditableQuiz(Quiz quiz) {
+        requireLessonNotArchived(quiz.getLesson());
+        contentReviewService.requireTeacherEditable(quiz, REVIEW_TYPE);
+    }
+
+    private static void requireLessonNotArchived(Lesson lesson) {
+        if (lesson == null || lesson.getContentStatus() == ContentStatus.ARCHIVED) {
+            throw new ResponseStatusException(BAD_REQUEST, "Lesson cannot be edited once it has been archived.");
+        }
     }
 
     private Quiz findOwnedQuiz(SecurityUserDetails currentUser, Long quizId) {
@@ -314,6 +348,7 @@ public class TeacherQuizService {
                 request.description(),
                 MAX_QUIZ_DESCRIPTION_LENGTH));
         quiz.setTimeLimitMinutes(request.timeLimitMinutes());
+        quiz.setLearningStage(request.learningStage());
     }
 
     private void applyQuizQuestion(
@@ -324,7 +359,8 @@ public class TeacherQuizService {
             Integer points,
             Integer displayOrder,
             List<QuizOptionRequest> options,
-            String explanation) {
+            String explanation,
+            String hint) {
         QuizQuestionType questionType = QuizQuestionType.fromValue(questionTypeRaw);
         question.setQuestionType(questionType.name());
         question.setQuestionText(contentSafetyService.requireSafeText(questionText, MAX_QUESTION_TEXT_LENGTH, "Question text is required."));
@@ -337,6 +373,8 @@ public class TeacherQuizService {
         }
         question.setSortOrder(Objects.requireNonNullElse(displayOrder, DEFAULT_SORT_ORDER));
         question.setExplanation(contentSafetyService.optionalSafeText(explanation, MAX_EXPLANATION_LENGTH));
+        // D8: optional hint, shown to students only on request (never for INDEPENDENT quizzes).
+        question.setHint(contentSafetyService.optionalSafeText(hint, MAX_HINT_LENGTH));
 
         List<QuizOptionRequest> safeOptions = validateOptions(options);
         boolean optionBased = questionType.isOptionBased();
@@ -423,9 +461,10 @@ public class TeacherQuizService {
 
     private TeacherQuizResponse toTeacherQuizResponse(Quiz quiz) {
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
-        List<QuizOption> options = questions.stream()
-                .flatMap(question -> quizOptionRepository.findByQuestionIdOrderBySortOrderAscCreatedAtAsc(question.getId()).stream())
-                .toList();
+        List<QuizOption> options = questions.isEmpty()
+                ? List.of()
+                : quizOptionRepository.findByQuestionIdInOrderBySortOrderAscCreatedAtAsc(
+                        questions.stream().map(QuizQuestion::getId).toList());
         return quizMapper.toTeacherQuizResponse(
                 quiz,
                 questions,
@@ -435,20 +474,23 @@ public class TeacherQuizService {
     private record QuizMetadata(
             String title,
             String description,
-            Integer timeLimitMinutes) {
+            Integer timeLimitMinutes,
+            LearningStage learningStage) {
 
         private static QuizMetadata from(CreateQuizRequest request) {
             return new QuizMetadata(
                     request.title(),
                     request.description(),
-                    request.timeLimitMinutes());
+                    request.timeLimitMinutes(),
+                    request.learningStage());
         }
 
         private static QuizMetadata from(UpdateQuizRequest request) {
             return new QuizMetadata(
                     request.title(),
                     request.description(),
-                    request.timeLimitMinutes());
+                    request.timeLimitMinutes(),
+                    request.learningStage());
         }
     }
 }

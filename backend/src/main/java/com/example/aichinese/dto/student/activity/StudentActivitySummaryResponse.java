@@ -6,21 +6,21 @@ import java.util.Objects;
 
 import com.example.aichinese.dto.admin.activity.ActivityType;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record StudentActivitySummaryResponse(
         Long id,
         ActivityType type,
         String title,
         Integer hskLevel,
-        AgeBand ageBand,
         ActivityDifficulty difficulty,
         String topic,
         List<String> tags,
         Integer xpReward,
         Integer estimatedSeconds,
         LocalDateTime updatedAt,
-        boolean completed) {
+        boolean completed,
+        LearningStage learningStage) {
 
     public StudentActivitySummaryResponse {
         Objects.requireNonNull(id, "id must not be null");

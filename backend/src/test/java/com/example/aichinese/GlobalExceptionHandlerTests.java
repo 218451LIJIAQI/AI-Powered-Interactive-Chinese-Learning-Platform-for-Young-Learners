@@ -27,6 +27,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.exception.GlobalExceptionHandler;
@@ -52,6 +53,8 @@ class GlobalExceptionHandlerTests {
             "The file is too large. Please choose a smaller file and try again.";
     private static final String VALIDATION_MESSAGE =
             "The information you entered is incomplete or invalid. Please check it and try again.";
+    private static final String TOO_MANY_REQUESTS_MESSAGE =
+            "You are doing that too often. Please wait a moment and try again.";
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
@@ -87,6 +90,18 @@ class GlobalExceptionHandlerTests {
         ApiResponse<Void> body = body(response);
         assertThat(body.message()).isEqualTo("Specific business rule violated.");
         assertThat(body.errors()).containsExactly("Specific business rule violated.");
+    }
+
+    @Test
+    void dailyAiLimitMessageReachesTheLearnerWhileOtherRateLimitsStayGeneric() {
+        ResponseEntity<ApiResponse<Void>> daily = handler.handleResponseStatusException(new ResponseStatusException(
+                HttpStatus.TOO_MANY_REQUESTS, "Daily AI request limit reached. Please try again tomorrow."));
+        ResponseEntity<ApiResponse<Void>> minute = handler.handleResponseStatusException(new ResponseStatusException(
+                HttpStatus.TOO_MANY_REQUESTS, "AI request limit reached. Please wait a minute before trying again."));
+
+        assertThat(daily.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(body(daily).message()).isEqualTo("Daily AI request limit reached. Please try again tomorrow.");
+        assertThat(body(minute).message()).isEqualTo(TOO_MANY_REQUESTS_MESSAGE);
     }
 
     @Test
@@ -170,7 +185,7 @@ class GlobalExceptionHandlerTests {
     @Test
     void optimisticLockingFailureReturnsConflict() {
         ResponseEntity<ApiResponse<Void>> response = handler.handleOptimisticLockingFailureException(
-                new ObjectOptimisticLockingFailureException("PaymentRecord", 10L));
+                new ObjectOptimisticLockingFailureException("LessonProgress", 10L));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         ApiResponse<Void> body = body(response);

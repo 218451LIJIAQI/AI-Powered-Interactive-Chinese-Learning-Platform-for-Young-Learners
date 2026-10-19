@@ -12,7 +12,7 @@ import com.example.aichinese.service.storage.StorageProvider;
  * cannot safely support.
  */
 @Component
-public class DeploymentTopologyGuard {
+public final class DeploymentTopologyGuard {
 
     private final PlatformProperties platformProperties;
     private final StorageProvider storageProvider;

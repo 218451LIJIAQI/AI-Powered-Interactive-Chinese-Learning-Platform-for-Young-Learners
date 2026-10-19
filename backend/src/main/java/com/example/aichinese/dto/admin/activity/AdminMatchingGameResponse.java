@@ -4,15 +4,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminMatchingGameResponse(
         Long id,
         String title,
         ContentStatus status,
         Integer hskLevel,
-        AgeBand ageBand,
         ActivityDifficulty difficulty,
         String topic,
         List<String> tags,
@@ -22,7 +21,9 @@ public record AdminMatchingGameResponse(
         String createdByDisplayName,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        List<AdminMatchingGameItemResponse> items) {
+        List<AdminMatchingGameItemResponse> items,
+        String rejectionReason,
+        LearningStage learningStage) {
 
     public AdminMatchingGameResponse {
         tags = tags == null ? List.of() : List.copyOf(tags);

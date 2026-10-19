@@ -1,209 +1,231 @@
 <template>
   <div class="page-stack teacher-feedback-page">
-    <PageHeaderBlock :title="t('teacherFeedback.title')" :description="t('teacherFeedback.description')" icon="help" />
-
-    <DataNotice
-      :using-fallback="usingFallback"
-      :error="noticeError"
-      :success="actionSuccess"
-      :detail="feedbackNoticeDetail"
+    <PageHeaderBlock
+      :title="t('teacherFeedback.title')"
+      :description="t('teacherFeedback.description')"
+      icon="moderation"
     />
 
-    <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <div class="teacher-feedback-tabs">
+    <DataNotice :using-fallback="usingFallback" :error="actionError" :success="actionSuccess" />
+
+    <!-- D13: feedback and practice review are approved-teacher features; a 403 also shows the locked panel. -->
+    <TeacherApprovalLockPanel
+      v-if="teacherApprovalLocked"
+      :title="teacherApprovalTitle"
+      :message="teacherApprovalMessage"
+    />
+
+    <ResourceSection v-else :loading="pageLoading" :error="pageError" @retry="reloadAll">
+      <div class="tabs teacher-feedback-tabs" role="group" :aria-label="t('teacherFeedback.modeAria')">
         <button
           v-for="tab in feedbackTabs"
           :key="tab"
-          class="teacher-feedback-tab"
+          class="tab-button"
           :class="{ 'is-active': activeTab === tab }"
           type="button"
+          :aria-pressed="activeTab === tab"
           @click="selectTab(tab)"
         >
+          <IconGlyph :name="tab === 'History' ? 'history' : 'pen'" :size="16" aria-hidden="true" />
           {{ tabLabel(tab) }}
         </button>
       </div>
 
       <section class="teacher-feedback-layout">
-        <article class="panel teacher-feedback-queue-card">
-          <div class="row-between teacher-feedback-card-head">
-            <div class="student-section-heading">
-              <strong>{{ queueTitle }}</strong>
-            </div>
-            <div class="row teacher-feedback-queue-actions">
-              <span class="teacher-feedback-queue-count">{{ filteredFeedbackItems.length }}</span>
-              <select
-                v-model="queueFilter"
-                class="select teacher-feedback-filter"
-                :aria-label="t('teacherFeedback.filterAria')"
-              >
+        <aside class="panel teacher-feedback-queue" aria-labelledby="teacher-feedback-queue-title">
+          <div class="card-header">
+            <h2 id="teacher-feedback-queue-title" class="card-title teacher-feedback-queue-title">
+              {{ queueTitle }}
+              <span v-if="isHistoryTab" class="badge">{{ filteredFeedbackItems.length }}</span>
+            </h2>
+          </div>
+
+          <template v-if="isHistoryTab">
+            <div class="field">
+              <label class="sr-only" for="teacher-feedback-filter">{{ t('teacherFeedback.filterAria') }}</label>
+              <select id="teacher-feedback-filter" v-model="queueFilter" class="select">
                 <option value="ALL">{{ t('teacherFeedback.allContexts') }}</option>
                 <option value="QUIZ">{{ t('teacherFeedback.quiz') }}</option>
                 <option value="LESSON">{{ t('teacherFeedback.lesson') }}</option>
                 <option value="GENERAL">{{ t('teacherFeedback.general') }}</option>
               </select>
             </div>
-          </div>
 
-          <div v-if="isHistoryTab && filteredFeedbackItems.length" class="teacher-feedback-queue-list">
-            <button
-              v-for="item in filteredFeedbackItems"
-              :key="item.id"
-              type="button"
-              class="teacher-feedback-queue-item"
-              :class="{ 'is-active': selectedFeedbackId === item.id }"
-              @click="selectFeedback(item.id)"
-            >
-              <PortraitAvatar :size="54" rounded="soft" :kind="item.avatarKind" />
-              <div class="teacher-feedback-queue-copy">
-                <div class="row-between u-align-start">
-                  <div class="stack u-gap-4 u-min-w-0">
-                    <strong>{{ item.studentName }}</strong>
-                    <div class="row u-wrap">
-                      <span class="teacher-feedback-type-pill">{{ item.typeLabel }}</span>
+            <ul v-if="filteredFeedbackItems.length" class="teacher-feedback-list">
+              <li v-for="item in filteredFeedbackItems" :key="item.id">
+                <button
+                  type="button"
+                  class="teacher-feedback-row"
+                  :class="{ 'is-active': selectedFeedbackRecordId === item.id }"
+                  :aria-pressed="selectedFeedbackRecordId === item.id"
+                  @click="selectFeedback(item.id)"
+                >
+                  <PortraitAvatar :size="40" rounded="soft" :name="item.studentName" aria-hidden="true" />
+                  <span class="teacher-feedback-row-copy">
+                    <span class="teacher-feedback-row-head">
+                      <strong>{{ item.studentName }}</strong>
+                      <StatusPill :label="item.priority" :tone="priorityPillTone(item.priorityTone)" />
+                    </span>
+                    <span class="teacher-feedback-row-context">
+                      <span class="chip">{{ item.typeLabel }}</span>
                       <span>{{ item.title }}</span>
-                    </div>
-                  </div>
-                  <span class="teacher-feedback-priority" :class="`is-${item.priorityTone}`">{{ item.priority }}</span>
-                </div>
-                <small>{{ item.createdLabel }}</small>
-              </div>
-            </button>
-          </div>
+                    </span>
+                    <span class="type-caption">{{ item.createdLabel }}</span>
+                  </span>
+                </button>
+              </li>
+            </ul>
 
-          <div v-else-if="isHistoryTab">
             <StatePanel
-              icon="help"
+              v-else
+              compact
+              icon="search"
               :title="t('teacherFeedback.noFeedback')"
               :message="t('teacherFeedback.noFeedbackHint')"
             />
-          </div>
+          </template>
 
           <div v-else class="teacher-feedback-create-help">
-            <p>
-              {{ t('teacherFeedback.createHelp') }}
-            </p>
-            <ul class="teacher-feedback-bullet-list">
+            <p>{{ t('teacherFeedback.createHelp') }}</p>
+            <ol>
               <li>{{ t('teacherFeedback.createStepStudent') }}</li>
               <li>{{ t('teacherFeedback.createStepContext') }}</li>
               <li>{{ t('teacherFeedback.createStepMessage') }}</li>
-            </ul>
+            </ol>
           </div>
 
-          <button class="teacher-footer-link" type="button" @click="toggleTab">
-            <span>{{ tabToggleLabel }}</span>
-            <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
-          </button>
-        </article>
+          <div class="card-footer teacher-feedback-queue-footer">
+            <button class="btn btn-secondary btn-sm" type="button" @click="toggleTab">
+              <IconGlyph :name="isHistoryTab ? 'pen' : 'history'" :size="16" aria-hidden="true" />
+              {{ tabToggleLabel }}
+            </button>
+          </div>
+        </aside>
 
-        <div class="teacher-feedback-main-column">
-          <article class="panel teacher-feedback-detail-card">
+        <div class="teacher-feedback-main">
+          <article class="panel teacher-feedback-detail" aria-labelledby="teacher-feedback-detail-title">
             <template v-if="isHistoryTab && selectedFeedbackItem">
               <div class="teacher-feedback-detail-head">
-                <div class="teacher-feedback-profile">
-                  <PortraitAvatar :size="68" rounded="soft" :kind="selectedFeedbackItem.avatarKind" />
-                  <div class="stack u-gap-4">
-                    <strong>{{ selectedFeedbackItem.studentName }}</strong>
-                    <span>{{ selectedFeedbackItem.studentMeta }}</span>
+                <div class="teacher-feedback-person">
+                  <PortraitAvatar
+                    :size="56"
+                    rounded="soft"
+                    :name="selectedFeedbackItem.studentName"
+                    aria-hidden="true"
+                  />
+                  <div class="teacher-feedback-person-copy">
+                    <h2 id="teacher-feedback-detail-title" class="teacher-feedback-person-name">
+                      {{ selectedFeedbackItem.studentName }}
+                    </h2>
+                    <span class="teacher-feedback-muted">{{ selectedFeedbackItem.studentMeta }}</span>
                   </div>
                 </div>
                 <div class="teacher-feedback-detail-side">
-                  <span>{{ t('teacherFeedback.savedAt', { date: selectedFeedbackItem.createdExact }) }}</span>
-                  <span class="teacher-feedback-priority" :class="`is-${selectedFeedbackItem.priorityTone}`">{{
-                    selectedFeedbackItem.priority
-                  }}</span>
+                  <StatusPill
+                    :label="selectedFeedbackItem.priority"
+                    :tone="priorityPillTone(selectedFeedbackItem.priorityTone)"
+                  />
+                  <span class="type-caption">
+                    {{ t('teacherFeedback.savedAt', { date: selectedFeedbackItem.createdExact }) }}
+                  </span>
                 </div>
               </div>
 
               <div class="teacher-feedback-detail-grid">
-                <article class="teacher-feedback-detail-panel">
-                  <div class="teacher-feedback-detail-copy">
-                    <small>{{ t('teacherFeedback.feedbackType') }}</small>
-                    <strong>{{ selectedFeedbackItem.typeDisplay }}</strong>
-                  </div>
-
-                  <div class="teacher-feedback-separator" />
-
-                  <div class="teacher-feedback-detail-copy">
-                    <small>{{ t('teacherFeedback.context') }}</small>
-                    <strong>{{ selectedFeedbackItem.title }}</strong>
-                    <span>{{ selectedFeedbackItem.contextLine }}</span>
-                  </div>
-
-                  <div class="teacher-feedback-score-row">
-                    <div class="stack u-gap-4">
-                      <small>{{ t('teacherFeedback.latestProgress') }}</small>
-                      <strong class="teacher-feedback-score">{{ selectedFeedbackItem.progressLabel }}</strong>
-                      <span>{{ selectedFeedbackItem.quizAverageLabel }}</span>
+                <section class="teacher-feedback-tile is-tall">
+                  <dl class="teacher-feedback-facts">
+                    <div>
+                      <dt>{{ t('teacherFeedback.feedbackType') }}</dt>
+                      <dd>{{ selectedFeedbackItem.typeDisplay }}</dd>
                     </div>
-                    <div class="teacher-feedback-score-side">
-                      <strong>{{ selectedFeedbackItem.feedbackTypeLabel }}</strong>
-                      <small>{{ t('teacherFeedback.linkedStudent') }}</small>
-                      <span>{{ selectedFeedbackItem.studentName }}</span>
+                    <div>
+                      <dt>{{ t('teacherFeedback.context') }}</dt>
+                      <dd>
+                        {{ selectedFeedbackItem.title }}
+                        <span class="teacher-feedback-muted">{{ selectedFeedbackItem.contextLine }}</span>
+                      </dd>
                     </div>
-                  </div>
-                </article>
+                    <div>
+                      <dt>{{ t('teacherFeedback.latestProgress') }}</dt>
+                      <dd>
+                        <strong class="teacher-feedback-score">{{ selectedFeedbackItem.progressLabel }}</strong>
+                        <span class="teacher-feedback-muted">{{ selectedFeedbackItem.quizAverageLabel }}</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ t('teacherFeedback.linkedStudent') }}</dt>
+                      <dd>
+                        {{ selectedFeedbackItem.studentName }}
+                        <span class="teacher-feedback-muted">{{ selectedFeedbackItem.feedbackTypeLabel }}</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
 
-                <article class="teacher-feedback-detail-panel">
-                  <div class="teacher-feedback-card-head">
-                    <strong>{{ t('teacherFeedback.savedMessage') }}</strong>
-                  </div>
-                  <div class="teacher-feedback-message-box">
-                    <p>{{ selectedFeedbackItem.message }}</p>
-                  </div>
-                  <button class="teacher-footer-link" type="button" @click="prepareEditFromSelected">
-                    <span>{{ t('teacherFeedback.editFeedback') }}</span>
-                    <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
+                <section class="teacher-feedback-tile" aria-labelledby="teacher-feedback-saved-title">
+                  <h3 id="teacher-feedback-saved-title" class="teacher-feedback-tile-title">
+                    {{ t('teacherFeedback.savedMessage') }}
+                  </h3>
+                  <blockquote class="teacher-feedback-quote">{{ selectedFeedbackItem.message }}</blockquote>
+                  <button class="btn btn-secondary btn-sm" type="button" @click="prepareEditFromSelected">
+                    <IconGlyph name="pen" :size="16" aria-hidden="true" />
+                    {{ t('teacherFeedback.editFeedback') }}
                   </button>
-                </article>
+                </section>
 
-                <article class="teacher-feedback-detail-panel">
-                  <div class="row-between teacher-feedback-card-head">
-                    <strong>{{ t('teacherFeedback.snapshot') }}</strong>
-                    <button class="student-link-button" type="button" @click="openStudents">
+                <section class="teacher-feedback-tile" aria-labelledby="teacher-feedback-snapshot-title">
+                  <div class="teacher-feedback-tile-head">
+                    <h3 id="teacher-feedback-snapshot-title" class="teacher-feedback-tile-title">
+                      {{ t('teacherFeedback.snapshot') }}
+                    </h3>
+                    <button class="btn btn-link" type="button" @click="openStudents">
                       {{ t('teacherFeedback.viewStudents') }}
                     </button>
                   </div>
-                  <div class="teacher-feedback-progress-list">
-                    <article
-                      v-for="metric in progressMetrics"
-                      :key="metric.label"
-                      class="teacher-feedback-progress-item"
-                    >
-                      <div class="teacher-feedback-progress-ring" :style="{ '--progress': metric.value }">
-                        <strong>{{ metric.value }}%</strong>
-                      </div>
-                      <div class="teacher-feedback-progress-copy">
-                        <strong>{{ metric.label }}</strong>
-                        <span>{{ metric.caption }}</span>
-                      </div>
-                    </article>
-                  </div>
-                </article>
+                  <ul class="teacher-feedback-snapshot">
+                    <li v-for="metric in progressMetrics" :key="metric.label">
+                      <ProgressRing
+                        :progress="metric.value"
+                        :title="metric.label"
+                        :subtitle="metric.caption"
+                        :tone="metric.tone"
+                        size="sm"
+                      />
+                    </li>
+                  </ul>
+                </section>
               </div>
             </template>
 
             <template v-else>
               <div class="teacher-feedback-detail-head">
-                <div class="teacher-feedback-profile">
-                  <PortraitAvatar :size="68" rounded="soft" :kind="selectedStudentOption?.avatarKind || 'student'" />
-                  <div class="stack u-gap-4">
-                    <strong>{{ selectedStudentOption?.label || t('teacherFeedback.chooseStudent') }}</strong>
-                    <span>{{ selectedStudentOption?.meta || t('teacherFeedback.linkedOnly') }}</span>
+                <div class="teacher-feedback-person">
+                  <PortraitAvatar :size="56" rounded="soft" :name="selectedStudentOption?.label" aria-hidden="true" />
+                  <div class="teacher-feedback-person-copy">
+                    <h2 id="teacher-feedback-detail-title" class="teacher-feedback-person-name">
+                      {{ selectedStudentOption?.label || t('teacherFeedback.chooseStudent') }}
+                    </h2>
+                    <span class="teacher-feedback-muted">
+                      {{ selectedStudentOption?.meta || t('teacherFeedback.linkedOnly') }}
+                    </span>
                   </div>
                 </div>
                 <div class="teacher-feedback-detail-side">
-                  <span>{{ t('teacherFeedback.createRecord') }}</span>
-                  <span class="teacher-feedback-priority is-medium">{{ t('teacherFeedback.draft') }}</span>
+                  <StatusPill :label="t('teacherFeedback.draft')" tone="info" icon="pen" />
+                  <span class="type-caption">{{ t('teacherFeedback.createRecord') }}</span>
                 </div>
               </div>
 
-              <div class="teacher-feedback-create-grid">
+              <div class="form-grid two teacher-feedback-context">
                 <div class="field">
-                  <label for="teacher-feedback-student">{{ t('teacherFeedback.student') }}</label>
+                  <label class="field-label" for="teacher-feedback-student">
+                    {{ t('teacherFeedback.student') }}<span class="required-mark" aria-hidden="true">*</span>
+                  </label>
                   <select
                     id="teacher-feedback-student"
                     v-model.number="commentForm.studentId"
                     class="select"
+                    required
                     :disabled="feedbackFormDisabled"
                   >
                     <option :value="0">{{ t('teacherFeedback.selectStudent') }}</option>
@@ -214,7 +236,7 @@
                 </div>
 
                 <div class="field">
-                  <label for="teacher-feedback-type">{{ t('teacherFeedback.feedbackType') }}</label>
+                  <label class="field-label" for="teacher-feedback-type">{{ t('teacherFeedback.feedbackType') }}</label>
                   <select
                     id="teacher-feedback-type"
                     v-model="commentForm.feedbackType"
@@ -230,7 +252,9 @@
                 </div>
 
                 <div class="field">
-                  <label for="teacher-feedback-lesson">{{ t('teacherFeedback.lessonOptional') }}</label>
+                  <label class="field-label" for="teacher-feedback-lesson">
+                    {{ t('teacherFeedback.lessonOptional') }}
+                  </label>
                   <select
                     id="teacher-feedback-lesson"
                     v-model.number="commentForm.lessonId"
@@ -245,11 +269,12 @@
                 </div>
 
                 <div class="field">
-                  <label for="teacher-feedback-quiz">{{ t('teacherFeedback.quizOptional') }}</label>
+                  <label class="field-label" for="teacher-feedback-quiz">{{ t('teacherFeedback.quizOptional') }}</label>
                   <select
                     id="teacher-feedback-quiz"
                     v-model.number="selectedQuizId"
                     class="select"
+                    :aria-busy="loadingQuizzes"
                     :disabled="feedbackFormDisabled || !commentForm.lessonId || loadingQuizzes"
                   >
                     <option :value="0">{{ quizPlaceholder }}</option>
@@ -259,12 +284,15 @@
                   </select>
                 </div>
 
-                <div class="field">
-                  <label for="teacher-feedback-quiz-attempt">{{ t('teacherFeedback.attemptOptional') }}</label>
+                <div class="field teacher-feedback-context-wide">
+                  <label class="field-label" for="teacher-feedback-quiz-attempt">
+                    {{ t('teacherFeedback.attemptOptional') }}
+                  </label>
                   <select
                     id="teacher-feedback-quiz-attempt"
                     v-model.number="commentForm.quizAttemptId"
                     class="select"
+                    :aria-busy="loadingQuizAttempts"
                     :disabled="feedbackFormDisabled || !selectedQuizId || loadingQuizAttempts"
                   >
                     <option :value="0">
@@ -280,73 +308,76 @@
             </template>
           </article>
 
-          <section class="teacher-feedback-bottom-grid">
-            <article class="panel teacher-feedback-comment-card">
-              <div class="teacher-feedback-card-head">
-                <strong>{{ commentCardTitle }}</strong>
-              </div>
+          <form
+            class="panel teacher-feedback-composer"
+            aria-labelledby="teacher-feedback-composer-title"
+            @submit.prevent="submitFeedback"
+          >
+            <h2 id="teacher-feedback-composer-title" class="card-title">{{ commentCardTitle }}</h2>
 
-              <textarea
-                v-model="commentForm.message"
-                class="textarea teacher-feedback-textarea"
-                :aria-label="t('teacherFeedback.messageAria')"
-                maxlength="2000"
-                :disabled="feedbackFormDisabled"
-              />
-
-              <div class="teacher-feedback-toolbar">
-                <span>{{ t('teacherFeedback.plainText') }}</span>
-                <span>{{ t('teacherFeedback.childFriendly') }}</span>
-                <small>{{ commentLength }}/2000</small>
-              </div>
-            </article>
-
-            <article class="panel teacher-feedback-draft-card">
-              <div class="row-between teacher-feedback-card-head">
-                <div>
-                  <strong>{{ t('teacherFeedback.draftGuidance') }}</strong>
-                  <p>{{ t('teacherFeedback.draftHint') }}</p>
+            <div class="teacher-feedback-composer-grid">
+              <div class="field teacher-feedback-message">
+                <label class="field-label" for="teacher-feedback-message">
+                  {{ t('teacherFeedback.messageAria') }}<span class="required-mark" aria-hidden="true">*</span>
+                </label>
+                <textarea
+                  id="teacher-feedback-message"
+                  v-model="commentForm.message"
+                  class="textarea teacher-feedback-textarea"
+                  required
+                  :maxlength="PRACTICE_FEEDBACK_MAX_LENGTH"
+                  :aria-invalid="Boolean(feedbackMessageError) || undefined"
+                  :aria-describedby="feedbackDescribedBy"
+                  :disabled="feedbackFormDisabled"
+                />
+                <div class="teacher-feedback-field-foot">
+                  <p id="teacher-feedback-message-hint" class="field-hint">
+                    {{ t('teacherFeedback.practiceLengthHint') }} · {{ t('teacherFeedback.plainText') }} ·
+                    {{ t('teacherFeedback.learnerFriendly') }}
+                  </p>
+                  <span class="field-hint teacher-feedback-counter">
+                    {{ commentLength }}/{{ PRACTICE_FEEDBACK_MAX_LENGTH }}
+                  </span>
                 </div>
+                <p v-if="feedbackMessageError" id="teacher-feedback-message-error" class="field-error" role="alert">
+                  {{ feedbackMessageError }}
+                </p>
+              </div>
+
+              <section class="teacher-feedback-guidance" aria-labelledby="teacher-feedback-guidance-title">
+                <div class="teacher-feedback-tile-head">
+                  <h3 id="teacher-feedback-guidance-title" class="teacher-feedback-tile-title">
+                    <IconGlyph name="hint" :size="16" aria-hidden="true" />
+                    {{ t('teacherFeedback.draftGuidance') }}
+                  </h3>
+                  <button
+                    class="btn btn-link"
+                    type="button"
+                    :disabled="feedbackFormDisabled"
+                    @click="regenerateSuggestion"
+                  >
+                    <IconGlyph name="refresh" :size="14" aria-hidden="true" />
+                    {{ t('teacherFeedback.regenerate') }}
+                  </button>
+                </div>
+                <p class="teacher-feedback-muted">{{ t('teacherFeedback.draftHint') }}</p>
+                <blockquote class="teacher-feedback-quote" aria-live="polite">{{ draftGuidance }}</blockquote>
                 <button
-                  class="student-link-button"
+                  class="btn btn-secondary btn-sm"
                   type="button"
                   :disabled="feedbackFormDisabled"
-                  @click="regenerateSuggestion"
+                  @click="useSuggestedDraft"
                 >
-                  {{ t('teacherFeedback.regenerate') }}
+                  {{ t('teacherFeedback.useGuidance') }}
                 </button>
-              </div>
+              </section>
+            </div>
 
-              <div class="teacher-feedback-draft-box">
-                <p>{{ draftGuidance }}</p>
-              </div>
-
-              <button
-                class="teacher-outline-button teacher-feedback-use-draft"
-                type="button"
-                :disabled="feedbackFormDisabled"
-                @click="useSuggestedDraft"
-              >
-                {{ t('teacherFeedback.useGuidance') }}
-              </button>
-            </article>
-
-            <article class="panel teacher-feedback-actions-card">
-              <div class="teacher-feedback-card-head">
-                <strong>{{ t('teacherFeedback.actions') }}</strong>
-              </div>
-
-              <div class="teacher-feedback-actions-stack">
+            <div class="card-footer teacher-feedback-actions">
+              <p class="teacher-feedback-actions-note">{{ t('teacherFeedback.savedEditable') }}</p>
+              <div class="teacher-feedback-actions-buttons" role="group" :aria-label="t('teacherFeedback.actions')">
                 <button
-                  class="btn btn-primary btn-block"
-                  type="button"
-                  :disabled="feedbackReadOnly || submittingCreate || submittingUpdate"
-                  @click="submitFeedback"
-                >
-                  {{ submitFeedbackLabel }}
-                </button>
-                <button
-                  class="teacher-outline-button teacher-feedback-action-alt"
+                  class="btn btn-ghost"
                   type="button"
                   :disabled="feedbackFormDisabled"
                   @click="prepareRetryMessage"
@@ -354,27 +385,38 @@
                   {{ t('teacherFeedback.retryNote') }}
                 </button>
                 <button
-                  class="teacher-feedback-action-success"
+                  class="btn btn-secondary"
                   type="button"
                   :disabled="feedbackFormDisabled"
                   @click="openCreateForSelectedStudent"
                 >
                   {{ t('teacherFeedback.createNew') }}
                 </button>
+                <button
+                  class="btn btn-primary"
+                  type="submit"
+                  :aria-busy="submittingCreate || submittingUpdate"
+                  :disabled="feedbackReadOnly || submittingCreate || submittingUpdate"
+                >
+                  {{ submitFeedbackLabel }}
+                </button>
               </div>
-
-              <small class="teacher-feedback-actions-note">
-                {{ t('teacherFeedback.savedEditable') }}
-              </small>
-            </article>
-          </section>
+            </div>
+          </form>
         </div>
       </section>
 
-      <div class="teacher-feedback-tip">
-        <span>{{ t('teacherFeedback.tip') }}</span>
+      <TeacherPracticeReviewSection
+        :locked="teacherApprovalLocked"
+        @forbidden="markApprovalLocked"
+        @reviewed="onPracticeReviewed"
+      />
+
+      <p class="teacher-feedback-tip">
+        <IconGlyph name="hint" :size="16" aria-hidden="true" />
+        <strong>{{ t('teacherFeedback.tip') }}</strong>
         <span>{{ t('teacherFeedback.tipCopy') }}</span>
-      </div>
+      </p>
     </ResourceSection>
   </div>
 </template>
@@ -388,10 +430,15 @@ import { teacherApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import ProgressRing from '@/components/common/ProgressRing.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import TeacherApprovalLockPanel from '@/components/teacher/TeacherApprovalLockPanel.vue'
+import TeacherPracticeReviewSection from '@/components/teacher/TeacherPracticeReviewSection.vue'
 import { useResource } from '@/composables/useResource'
+import { useStatusLabels } from '@/composables/useStatusLabels'
 import { useTeacherAccess } from '@/composables/useTeacherAccess'
 import {
   teacherFeedback,
@@ -410,24 +457,28 @@ import type {
 } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDateTime, formatPercent } from '@/utils/format'
-import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
+import {
+  PRACTICE_FEEDBACK_MAX_LENGTH,
+  PRACTICE_FEEDBACK_MIN_LENGTH,
+  validatePracticeFeedbackMessage,
+} from '@/utils/teacherPracticeReview'
 
 const router = useRouter()
 const { t } = useI18n({
   messages: {
     en: { teacherFeedback: teacherFeedbackMessages.en },
     ms: { teacherFeedback: teacherFeedbackMessages.ms },
-    zh: { teacherFeedback: teacherFeedbackMessages.zh },
+    'zh-CN': { teacherFeedback: teacherFeedbackMessages['zh-CN'] },
   },
 })
-const { teacherApprovalLocked, teacherApprovalMessage } = useTeacherAccess()
+const { statusLabel } = useStatusLabels()
+const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage, guardTeacherRequest, markApprovalLocked } =
+  useTeacherAccess()
 
 type QueueFilter = 'ALL' | 'QUIZ' | 'LESSON' | 'GENERAL'
 type FeedbackTab = 'History' | 'Create'
-type AvatarKind = 'student' | 'male' | 'female' | 'hijab'
 
 interface StudentOption extends TeacherStudentSummaryResponse {
-  avatarKind: AvatarKind
   label: string
   meta: string
 }
@@ -447,7 +498,6 @@ interface FeedbackQueueItem {
   createdExact: string
   priority: string
   priorityTone: 'high' | 'medium' | 'low'
-  avatarKind: AvatarKind
   lessonId?: number | null
   quizAttemptId?: number | null
   progressLabel: string
@@ -456,22 +506,22 @@ interface FeedbackQueueItem {
 }
 
 const feedbackResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.feedbackList()),
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.feedbackList())),
   teacherFeedback,
 )
 const studentsResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.students()),
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.students())),
   teacherStudentSummaries,
 )
 const lessonsResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.lessons()),
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.lessons())),
   teacherLessons,
 )
 
 const feedbackTabs: FeedbackTab[] = ['History', 'Create']
 const activeTab = ref<FeedbackTab>('History')
 const queueFilter = ref<QueueFilter>('ALL')
-const selectedFeedbackId = ref<number>(0)
+const selectedFeedbackRecordId = ref<number>(0)
 const selectedQuizId = ref<number>(0)
 const draftSeed = ref(0)
 const loadingQuizzes = ref(false)
@@ -480,8 +530,13 @@ const submittingCreate = ref(false)
 const submittingUpdate = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
+/** Message validation problems are also shown under the textarea (the page notice can be far away). */
+const feedbackMessageError = ref<string | null>(null)
 const quizzes = ref<TeacherQuizResponse[]>([])
 const quizAttempts = ref<TeacherQuizAttemptSummaryResponse[]>([])
+// Request counters: when the lesson or quiz changes again, a slower earlier response is ignored.
+let quizzesRequest = 0
+let quizAttemptsRequest = 0
 
 const feedback = computed<TeacherFeedbackResponse[]>(
   () => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? teacherFeedback : []),
@@ -490,13 +545,12 @@ const lessons = computed<LessonResponse[]>(
   () => lessonsResource.data.value ?? (lessonsResource.usingFallback.value ? teacherLessons : []),
 )
 const studentOptions = computed<StudentOption[]>(() =>
-  (studentsResource.data.value ?? []).map((item: TeacherStudentSummaryResponse, index: number) => ({
+  (studentsResource.data.value ?? []).map((item: TeacherStudentSummaryResponse) => ({
     ...item,
     progressPercent: clampPercent(item.progressPercent),
     quizAveragePercent: item.quizAveragePercent == null ? null : clampPercent(item.quizAveragePercent),
-    avatarKind: (['student', 'male', 'female', 'hijab'] as const)[index % 4],
     label: item.displayName?.trim() || item.fullName,
-    meta: `${item.currentLevel?.trim() || t('teacherFeedback.levelNotSet')} • ${item.email}`,
+    meta: item.currentLevel?.trim() || t('teacherFeedback.levelNotSet'),
   })),
 )
 const lessonOptions = computed<LessonResponse[]>(() =>
@@ -512,17 +566,17 @@ const quizAttemptOptions = computed<TeacherQuizAttemptSummaryResponse[]>(() =>
 const pageLoading = computed(
   () => feedbackResource.loading.value || studentsResource.loading.value || lessonsResource.loading.value,
 )
-const pageError = computed(
-  () => feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value,
+const pageError = computed(() =>
+  teacherApprovalLocked.value
+    ? null
+    : feedbackResource.error.value || studentsResource.error.value || lessonsResource.error.value,
 )
-const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(
   () =>
     feedbackResource.usingFallback.value || studentsResource.usingFallback.value || lessonsResource.usingFallback.value,
 )
 const feedbackReadOnly = computed(() => teacherApprovalLocked.value || usingFallback.value)
 const feedbackFormDisabled = computed(() => feedbackReadOnly.value || submittingCreate.value || submittingUpdate.value)
-const feedbackNoticeDetail = computed(() => (teacherApprovalLocked.value ? teacherApprovalMessage.value : null))
 const isHistoryTab = computed(() => activeTab.value === 'History')
 const queueTitle = computed(() =>
   isHistoryTab.value ? t('teacherFeedback.feedbackHistory') : t('teacherFeedback.createFeedback'),
@@ -556,7 +610,7 @@ const commentForm = reactive({
 })
 
 const feedbackItems = computed<FeedbackQueueItem[]>(() =>
-  feedback.value.map((item: TeacherFeedbackResponse, index: number) => {
+  feedback.value.map((item: TeacherFeedbackResponse) => {
     const linkedStudent = studentOptions.value.find((student: StudentOption) => student.studentId === item.studentId)
     const category = feedbackCategory(item)
     const quizAverage =
@@ -580,9 +634,8 @@ const feedbackItems = computed<FeedbackQueueItem[]>(() =>
       feedbackTypeLabel: feedbackTypeLabel(item.feedbackType),
       createdLabel: formatDateTime(item.createdAt),
       createdExact: formatDateTime(item.createdAt),
-      priority: feedbackPriorityLabel(index),
-      priorityTone: feedbackPriorityTone(index),
-      avatarKind: linkedStudent?.avatarKind || (['student', 'male', 'female', 'hijab'] as const)[index % 4],
+      priority: feedbackPriorityLabel(linkedStudent),
+      priorityTone: feedbackPriorityTone(linkedStudent),
       lessonId: item.lessonId,
       quizAttemptId: item.quizAttemptId,
       progressLabel: progress,
@@ -600,12 +653,12 @@ const filteredFeedbackItems = computed(() =>
 
 const selectedFeedbackItem = computed<FeedbackQueueItem | null>(
   () =>
-    filteredFeedbackItems.value.find((item: FeedbackQueueItem) => item.id === selectedFeedbackId.value) ??
+    filteredFeedbackItems.value.find((item: FeedbackQueueItem) => item.id === selectedFeedbackRecordId.value) ??
     filteredFeedbackItems.value[0] ??
     null,
 )
 const selectedExistingFeedback = computed<TeacherFeedbackResponse | null>(
-  () => feedback.value.find((item: TeacherFeedbackResponse) => item.id === selectedFeedbackId.value) ?? null,
+  () => feedback.value.find((item: TeacherFeedbackResponse) => item.id === selectedFeedbackRecordId.value) ?? null,
 )
 const isEditingExistingFeedback = computed(
   () => activeTab.value === 'History' && selectedExistingFeedback.value != null,
@@ -627,6 +680,7 @@ const progressMetrics = computed(() => {
       label: t('teacherFeedback.overallProgress'),
       value: clampPercent(student.progressPercent),
       caption: t('teacherFeedback.linkedLessonProgress'),
+      tone: 'primary' as const,
     },
     {
       label: t('teacherFeedback.quizAverageLabel'),
@@ -635,11 +689,14 @@ const progressMetrics = computed(() => {
         student.quizAveragePercent == null
           ? t('teacherFeedback.noQuizAttempts')
           : t('teacherFeedback.submittedAttempts'),
+      tone: 'primary' as const,
     },
     {
       label: t('teacherFeedback.riskSignal'),
       value: student.atRisk ? 100 : 0,
       caption: student.atRisk ? t('teacherFeedback.followupRecommended') : t('teacherFeedback.noRisk'),
+      // An at-risk learner is a caution signal, not progress.
+      tone: student.atRisk ? ('warning' as const) : ('primary' as const),
     },
   ]
 })
@@ -665,12 +722,17 @@ const draftGuidance = computed(() => {
 })
 
 const commentLength = computed(() => commentForm.message.length)
+const feedbackDescribedBy = computed(() =>
+  feedbackMessageError.value
+    ? 'teacher-feedback-message-error teacher-feedback-message-hint'
+    : 'teacher-feedback-message-hint',
+)
 
 watch(
   filteredFeedbackItems,
   (items: FeedbackQueueItem[]) => {
-    if (!items.some((item: FeedbackQueueItem) => item.id === selectedFeedbackId.value)) {
-      selectedFeedbackId.value = items[0]?.id ?? 0
+    if (!items.some((item: FeedbackQueueItem) => item.id === selectedFeedbackRecordId.value)) {
+      selectedFeedbackRecordId.value = items[0]?.id ?? 0
     }
   },
   { immediate: true, deep: true },
@@ -698,6 +760,10 @@ watch(
     selectedQuizId.value = 0
     commentForm.quizAttemptId = 0
     if (!lessonId) {
+      quizzesRequest++
+      quizAttemptsRequest++
+      loadingQuizzes.value = false
+      loadingQuizAttempts.value = false
       quizzes.value = []
       quizAttempts.value = []
       return
@@ -713,6 +779,8 @@ watch(
     if (tab !== 'Create') return
     commentForm.quizAttemptId = 0
     if (!quizId) {
+      quizAttemptsRequest++
+      loadingQuizAttempts.value = false
       quizAttempts.value = []
       return
     }
@@ -760,10 +828,9 @@ function feedbackCategoryDisplay(category: FeedbackQueueItem['category']): strin
   return t('teacherFeedback.generalFeedbackTitle')
 }
 
-function feedbackPriorityLabel(index: number): string {
-  if (index === 0) return t('teacherFeedback.recent')
-  if (index === 1) return t('teacherFeedback.followup')
-  return t('teacherFeedback.saved')
+// Priority reflects real roster data only: follow-up when the linked student is flagged at risk.
+function feedbackPriorityLabel(student: StudentOption | undefined): string {
+  return student?.atRisk ? t('teacherFeedback.followup') : t('teacherFeedback.saved')
 }
 
 function tabLabel(tab: FeedbackTab): string {
@@ -771,58 +838,65 @@ function tabLabel(tab: FeedbackTab): string {
 }
 
 function feedbackTypeLabel(type: string | null | undefined): string {
-  const keys: Record<string, string> = {
-    GENERAL: 'typeGeneral',
-    PROGRESS: 'typeProgress',
-    ENCOURAGING: 'typeEncouraging',
-    CORRECTIVE: 'typeCorrective',
-    QUIZ: 'typeQuiz',
-    LESSON: 'typeLesson',
-    WEAK_AREA: 'typeWeakArea',
-  }
-  const key = type ? keys[type.toUpperCase()] : 'typeGeneral'
-  return key ? t(`teacherFeedback.${key}`) : formatTeacherFeedbackType(type)
+  return statusLabel('feedbackType', type?.trim() ? type.trim().toUpperCase() : 'GENERAL')
 }
 
-function feedbackPriorityTone(index: number): FeedbackQueueItem['priorityTone'] {
-  if (index === 0) return 'high'
-  if (index === 1) return 'medium'
-  return 'low'
+function onPracticeReviewed(): void {
+  // The review is also stored as a teacher feedback record, so refresh the history list.
+  void feedbackResource.reload()
+}
+
+function priorityPillTone(tone: FeedbackQueueItem['priorityTone']): 'warning' | 'info' | 'success' {
+  if (tone === 'high') return 'warning'
+  if (tone === 'medium') return 'info'
+  return 'success'
+}
+
+function feedbackPriorityTone(student: StudentOption | undefined): FeedbackQueueItem['priorityTone'] {
+  return student?.atRisk ? 'high' : 'low'
 }
 
 async function loadQuizzesForLesson(lessonId: number): Promise<void> {
+  const request = ++quizzesRequest
   if (teacherApprovalLocked.value) {
     quizzes.value = []
+    loadingQuizzes.value = false
     return
   }
 
   loadingQuizzes.value = true
   try {
-    quizzes.value = usingFallback.value
+    const items = usingFallback.value
       ? teacherQuizzes.filter((item: TeacherQuizResponse) => item.lessonId === lessonId)
       : await teacherApi.lessonQuizzes(lessonId)
+    if (request === quizzesRequest) quizzes.value = items
   } catch (reason) {
+    if (request !== quizzesRequest) return
     quizzes.value = []
     actionError.value = resolveApiError(reason, t('teacherFeedback.loadQuizzesError'))
   } finally {
-    loadingQuizzes.value = false
+    if (request === quizzesRequest) loadingQuizzes.value = false
   }
 }
 
 async function loadQuizAttempts(quizId: number): Promise<void> {
+  const request = ++quizAttemptsRequest
   if (teacherApprovalLocked.value) {
     quizAttempts.value = []
+    loadingQuizAttempts.value = false
     return
   }
 
   loadingQuizAttempts.value = true
   try {
-    quizAttempts.value = usingFallback.value ? teacherQuizAttempts : await teacherApi.quizAttempts(quizId)
+    const items = usingFallback.value ? teacherQuizAttempts : await teacherApi.quizAttempts(quizId)
+    if (request === quizAttemptsRequest) quizAttempts.value = items
   } catch (reason) {
+    if (request !== quizAttemptsRequest) return
     quizAttempts.value = []
     actionError.value = resolveApiError(reason, t('teacherFeedback.loadAttemptsError'))
   } finally {
-    loadingQuizAttempts.value = false
+    if (request === quizAttemptsRequest) loadingQuizAttempts.value = false
   }
 }
 
@@ -844,7 +918,7 @@ function selectTab(tab: FeedbackTab): void {
 }
 
 function selectFeedback(id: number): void {
-  selectedFeedbackId.value = id
+  selectedFeedbackRecordId.value = id
   activeTab.value = 'History'
   syncCommentFormFromExisting()
 }
@@ -903,6 +977,7 @@ async function submitFeedback(): Promise<void> {
   if (submittingCreate.value || submittingUpdate.value) return
   actionError.value = null
   actionSuccess.value = null
+  feedbackMessageError.value = null
 
   if (feedbackReadOnly.value) {
     actionError.value = teacherApprovalLocked.value
@@ -911,18 +986,32 @@ async function submitFeedback(): Promise<void> {
     return
   }
 
-  if (!commentForm.message.trim()) {
-    actionError.value = t('teacherFeedback.messageRequired')
-    return
+  // Same 5..2000 character rule as the backend feedback request.
+  switch (validatePracticeFeedbackMessage(commentForm.message)) {
+    case 'required':
+      actionError.value = t('teacherFeedback.messageRequired')
+      feedbackMessageError.value = actionError.value
+      return
+    case 'tooShort':
+      actionError.value = t('teacherFeedback.practiceErrorTooShort', { min: PRACTICE_FEEDBACK_MIN_LENGTH })
+      feedbackMessageError.value = actionError.value
+      return
+    case 'tooLong':
+      actionError.value = t('teacherFeedback.practiceErrorTooLong', { max: PRACTICE_FEEDBACK_MAX_LENGTH })
+      feedbackMessageError.value = actionError.value
+      return
   }
 
   if (selectedExistingFeedback.value && activeTab.value === 'History') {
     submittingUpdate.value = true
+    const feedbackId = selectedExistingFeedback.value.id
     try {
-      await teacherApi.updateFeedback(selectedExistingFeedback.value.id, {
-        feedbackType: commentForm.feedbackType,
-        message: commentForm.message.trim(),
-      })
+      await guardTeacherRequest(() =>
+        teacherApi.updateFeedback(feedbackId, {
+          feedbackType: commentForm.feedbackType,
+          message: commentForm.message.trim(),
+        }),
+      )
       await feedbackResource.reload()
       syncCommentFormFromExisting()
       actionSuccess.value = t('teacherFeedback.updated')
@@ -941,13 +1030,15 @@ async function submitFeedback(): Promise<void> {
 
   submittingCreate.value = true
   try {
-    await teacherApi.createFeedback({
-      studentId: commentForm.studentId,
-      lessonId: commentForm.lessonId || undefined,
-      quizAttemptId: commentForm.quizAttemptId || undefined,
-      feedbackType: commentForm.feedbackType,
-      message: commentForm.message.trim(),
-    })
+    await guardTeacherRequest(() =>
+      teacherApi.createFeedback({
+        studentId: commentForm.studentId,
+        lessonId: commentForm.lessonId || undefined,
+        quizAttemptId: commentForm.quizAttemptId || undefined,
+        feedbackType: commentForm.feedbackType,
+        message: commentForm.message.trim(),
+      }),
+    )
     await feedbackResource.reload()
     activeTab.value = 'History'
     actionSuccess.value = t('teacherFeedback.sent')
@@ -969,390 +1060,407 @@ function reloadAll(): void {
 </script>
 
 <style scoped>
-.teacher-feedback-page {
-  position: relative;
-}
-
-.teacher-feedback-tabs {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding-left: 6px;
-}
-
-.teacher-feedback-tab {
-  min-height: 38px;
-  padding: 6px 4px 12px;
-  border: 0;
-  background: transparent;
-  color: #697693;
-  font-size: 1.08rem;
-  font-weight: 700;
-}
-
-.teacher-feedback-tab.is-active {
-  color: var(--primary);
-  border-bottom: 3px solid var(--primary);
-}
-
 .teacher-feedback-layout {
   display: grid;
-  grid-template-columns: 356px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--grid-gap);
   align-items: start;
 }
 
-.teacher-feedback-main-column {
+.teacher-feedback-main {
   display: grid;
-  gap: 18px;
+  gap: var(--grid-gap);
+  min-width: 0;
 }
 
-.teacher-feedback-queue-card,
-.teacher-feedback-detail-card,
-.teacher-feedback-comment-card,
-.teacher-feedback-draft-card,
-.teacher-feedback-actions-card {
-  border-radius: 28px;
+.teacher-feedback-muted {
+  display: block;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
 }
 
-.teacher-feedback-card-head {
+/* Queue ------------------------------------------------------------------ */
+.teacher-feedback-queue {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
   display: grid;
-  gap: 8px;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
-.teacher-feedback-card-head p {
-  margin: 0;
-  color: #68748f;
-  line-height: 1.55;
-}
-
-.teacher-feedback-queue-actions {
+.teacher-feedback-queue-title {
+  display: inline-flex;
   align-items: center;
+  gap: var(--space-2);
 }
 
-.teacher-feedback-queue-count {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+.teacher-feedback-list {
   display: grid;
-  place-items: center;
-  background: rgba(125, 88, 255, 0.12);
-  color: var(--primary);
-  font-weight: 800;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.teacher-feedback-filter {
-  min-width: 136px;
-}
-
-.teacher-feedback-queue-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.teacher-feedback-queue-item {
-  width: 100%;
+.teacher-feedback-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 13px 14px;
-  border-radius: 20px;
-  border: 1px solid rgba(236, 239, 247, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: var(--text);
+  gap: var(--space-3);
+  align-items: start;
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  color: var(--text-primary);
   text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
 }
 
-.teacher-feedback-queue-item.is-active {
-  border-color: rgba(127, 97, 255, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(127, 97, 255, 0.14);
-  background: linear-gradient(135deg, rgba(249, 246, 255, 0.98), rgba(255, 255, 255, 0.98));
+.teacher-feedback-row:hover {
+  border-color: var(--border-interactive);
 }
 
-.teacher-feedback-queue-copy {
+.teacher-feedback-row.is-active {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
+  box-shadow: inset 3px 0 0 var(--color-primary-500);
+}
+
+.teacher-feedback-row-copy {
   display: grid;
-  gap: 6px;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.teacher-feedback-queue-copy span,
-.teacher-feedback-queue-copy small {
-  color: #737f9b;
-}
-
-.teacher-feedback-type-pill {
-  display: inline-flex;
+.teacher-feedback-row-head,
+.teacher-feedback-row-context {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(124, 88, 255, 0.12);
-  color: var(--primary);
-  font-size: 0.76rem;
-  font-weight: 700;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
 }
 
-.teacher-feedback-priority {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 92px;
-  padding: 7px 10px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 800;
+.teacher-feedback-row-context {
+  justify-content: flex-start;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
 }
 
-.teacher-feedback-priority.is-high {
-  color: #ff5449;
-  background: rgba(255, 113, 113, 0.14);
+.teacher-feedback-create-help {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
 }
 
-.teacher-feedback-priority.is-medium {
-  color: #ea9a1d;
-  background: rgba(255, 182, 75, 0.14);
+.teacher-feedback-create-help p,
+.teacher-feedback-create-help ol {
+  margin: 0;
 }
 
-.teacher-feedback-priority.is-low {
-  color: #57af4d;
-  background: rgba(109, 206, 100, 0.14);
+.teacher-feedback-create-help ol {
+  display: grid;
+  gap: var(--space-1-5);
+  padding-left: var(--space-5);
+}
+
+.teacher-feedback-queue-footer {
+  justify-content: flex-start;
+}
+
+/* Detail ------------------------------------------------------------------ */
+.teacher-feedback-detail {
+  display: grid;
+  gap: var(--section-gap);
+  min-width: 0;
 }
 
 .teacher-feedback-detail-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--space-3) var(--space-4);
 }
 
-.teacher-feedback-profile {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
+.teacher-feedback-person {
+  display: flex;
   align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
-.teacher-feedback-profile span,
-.teacher-feedback-detail-side span,
-.teacher-feedback-detail-copy small,
-.teacher-feedback-detail-copy span,
-.teacher-feedback-score-row small,
-.teacher-feedback-score-row span,
-.teacher-feedback-progress-copy span,
-.teacher-feedback-create-help p {
-  color: #6f7b97;
+.teacher-feedback-person-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teacher-feedback-person-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
 }
 
 .teacher-feedback-detail-side {
   display: grid;
   justify-items: end;
-  gap: 10px;
+  gap: var(--space-1-5);
 }
 
 .teacher-feedback-detail-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.teacher-feedback-create-grid {
-  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--space-3);
 }
 
-.teacher-feedback-detail-panel {
+.teacher-feedback-tile.is-tall {
+  grid-row: span 2;
+}
+
+.teacher-feedback-tile {
   display: grid;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 20px;
-  border: 1px solid rgba(234, 237, 246, 0.96);
-  background: rgba(255, 255, 255, 0.98);
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
 }
 
-.teacher-feedback-detail-copy {
+.teacher-feedback-tile-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.teacher-feedback-tile-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.teacher-feedback-facts {
   display: grid;
-  gap: 5px;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
 }
 
-.teacher-feedback-separator {
-  height: 1px;
-  background: rgba(236, 239, 247, 0.96);
+.teacher-feedback-facts dt {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
 }
 
-.teacher-feedback-score-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: end;
+.teacher-feedback-facts dd {
+  margin: var(--space-0-5) 0 0;
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
 }
 
 .teacher-feedback-score {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.35rem;
-  color: #7255ff;
-  line-height: 1;
+  display: block;
+  color: var(--color-primary-600);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
 }
 
-.teacher-feedback-score-side {
-  display: grid;
-  justify-items: end;
-  gap: 4px;
-}
-
-.teacher-feedback-message-box,
-.teacher-feedback-create-help {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(247, 249, 253, 0.96);
-}
-
-.teacher-feedback-message-box p,
-.teacher-feedback-draft-box p {
+.teacher-feedback-quote {
+  width: 100%;
   margin: 0;
-  color: #5d6984;
-  line-height: 1.6;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-primary-300);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+  overflow-wrap: anywhere;
 }
 
-.teacher-feedback-progress-list {
+.teacher-feedback-snapshot {
   display: grid;
-  gap: 14px;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.teacher-feedback-progress-item {
+.teacher-feedback-context {
+  align-items: start;
+}
+
+.teacher-feedback-context .field {
+  align-content: start;
+}
+
+.teacher-feedback-context-wide {
+  grid-column: 1 / -1;
+}
+
+/* Composer ---------------------------------------------------------------- */
+.teacher-feedback-composer {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
+  gap: var(--section-gap);
+  min-width: 0;
 }
 
-.teacher-feedback-progress-ring {
-  --progress: 68;
-  width: 66px;
-  height: 66px;
-  border-radius: 50%;
+.teacher-feedback-composer-grid {
   display: grid;
-  place-items: center;
-  background:
-    radial-gradient(circle closest-side, white 67%, transparent 68% 100%),
-    conic-gradient(#785bff calc(var(--progress) * 1%), rgba(229, 233, 244, 0.96) 0);
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
+  gap: var(--space-5);
+  align-items: start;
 }
 
-.teacher-feedback-progress-ring strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1rem;
-  color: #6f52ff;
-}
-
-.teacher-feedback-progress-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.teacher-feedback-bottom-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.84fr) 276px;
-  gap: 18px;
-}
-
-.teacher-feedback-comment-card,
-.teacher-feedback-draft-card,
-.teacher-feedback-actions-card {
-  display: grid;
-  gap: 14px;
+.teacher-feedback-message {
+  align-content: start;
 }
 
 .teacher-feedback-textarea {
-  min-height: 160px;
+  min-height: 180px;
 }
 
-.teacher-feedback-toolbar {
+.teacher-feedback-field-foot {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  color: #697490;
-  padding-top: 8px;
-  border-top: 1px solid rgba(236, 239, 247, 0.96);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
-.teacher-feedback-toolbar small {
-  margin-left: auto;
+.teacher-feedback-counter {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
-.teacher-feedback-draft-card {
-  background: linear-gradient(135deg, rgba(246, 242, 255, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.teacher-feedback-draft-box {
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(232, 236, 247, 0.96);
-}
-
-.teacher-feedback-use-draft {
-  justify-self: stretch;
-}
-
-.teacher-feedback-actions-stack {
+.teacher-feedback-guidance {
   display: grid;
-  gap: 10px;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-primary-100);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-50);
 }
 
-.teacher-feedback-action-alt {
-  color: #ef9824;
+.teacher-feedback-guidance .teacher-feedback-muted {
+  margin: 0;
+  font-size: var(--font-size-sm);
 }
 
-.teacher-feedback-action-success {
-  width: 100%;
-  min-height: 48px;
-  border-radius: 16px;
-  border: 1px solid rgba(108, 204, 97, 0.18);
-  background: rgba(111, 209, 101, 0.1);
-  color: #48a045;
-  font-weight: 800;
+.teacher-feedback-guidance .teacher-feedback-quote {
+  background: var(--surface-card);
 }
 
-.teacher-feedback-actions-note,
-.teacher-feedback-create-help li {
-  color: #7d89a5;
-  line-height: 1.5;
+.teacher-feedback-actions {
+  justify-content: space-between;
 }
 
-.teacher-feedback-bullet-list {
-  margin: 12px 0 0;
-  padding-left: 18px;
+.teacher-feedback-actions-note {
+  flex: 1 1 260px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.teacher-feedback-actions-buttons {
+  display: flex;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .teacher-feedback-tip {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  color: #6b7694;
-  font-weight: 600;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  text-align: center;
 }
 
-@media (max-width: 1480px) {
-  .teacher-feedback-layout,
-  .teacher-feedback-detail-grid,
-  .teacher-feedback-bottom-grid {
-    grid-template-columns: 1fr;
+.teacher-feedback-tip strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 1200px) {
+  .teacher-feedback-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-feedback-queue {
+    position: static;
+  }
+
+  .teacher-feedback-list {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 }
 
-@media (max-width: 760px) {
-  .teacher-feedback-tabs {
-    gap: 16px;
-    flex-wrap: wrap;
+@media (max-width: 900px) {
+  .teacher-feedback-composer-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
+}
 
-  .teacher-feedback-score-row,
-  .teacher-feedback-create-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .teacher-feedback-detail-side {
     justify-items: start;
+  }
+
+  .teacher-feedback-actions-buttons {
+    display: grid;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .teacher-feedback-actions-buttons > .btn {
+    width: 100%;
+  }
+
+  .teacher-feedback-actions-buttons > .btn-primary {
+    order: -1;
+  }
+
+  .teacher-feedback-context-wide {
+    grid-column: auto;
+  }
+
+  .teacher-feedback-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-feedback-tile.is-tall {
+    grid-row: auto;
   }
 }
 </style>

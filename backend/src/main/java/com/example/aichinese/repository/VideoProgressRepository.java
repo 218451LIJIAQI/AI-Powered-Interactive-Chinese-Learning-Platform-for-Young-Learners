@@ -1,5 +1,6 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,20 +28,13 @@ public interface VideoProgressRepository extends JpaRepository<VideoProgress, Lo
             @Param("studentId") Long studentId,
             @Param("recordedVideoId") Long recordedVideoId);
 
-    @EntityGraph(attributePaths = { "student", "student.user", "lesson", "recordedVideo" })
-    List<VideoProgress> findByStudentIdOrderByLastWatchedAtDesc(Long studentId);
-
     @Query("""
             select progress.id as id, lesson.id as lessonId,
-                   lesson.accessType as lessonAccessType, module.id as moduleId,
-                   coursePackage.id as packageId, coursePackage.accessType as packageAccessType,
                    progress.completed as completed, progress.lastWatchedAt as lastWatchedAt,
                    progress.updatedAt as updatedAt
             from VideoProgress progress
             join progress.lesson lesson
-            left join lesson.module module
             join progress.recordedVideo video
-            left join video.coursePackage coursePackage
             where progress.student.id = :studentId and progress.id > :afterId
             order by progress.id asc
             """)
@@ -49,4 +43,6 @@ public interface VideoProgressRepository extends JpaRepository<VideoProgress, Lo
 
     @EntityGraph(attributePaths = { "student", "student.user", "lesson", "recordedVideo" })
     List<VideoProgress> findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(Long teacherUserId, Long lessonId);
+
+    long countByStudentIdAndRecordedVideoIdInAndCompletedTrue(Long studentId, Collection<Long> recordedVideoIds);
 }

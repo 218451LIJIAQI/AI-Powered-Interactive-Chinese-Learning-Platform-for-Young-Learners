@@ -14,7 +14,7 @@ class SensitiveDataRedactorTests {
 
     private static final String TEXT_REDACTED = "[REDACTED]";
     private static final String MAP_REDACTED = SensitiveDataRedactor.FILTERED;
-    private static final String EMAIL = "parent@example.com";
+    private static final String EMAIL = "learner@example.com";
     private static final String STANDALONE_EMAIL = "standalone@example.com";
     private static final String ACCESS_TOKEN = "access-token";
     private static final String PASSWORD = "Secret123";

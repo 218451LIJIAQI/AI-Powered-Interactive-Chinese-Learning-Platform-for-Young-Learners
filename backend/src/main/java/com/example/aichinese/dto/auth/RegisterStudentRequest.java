@@ -2,6 +2,7 @@ package com.example.aichinese.dto.auth;
 
 import java.util.Locale;
 
+import com.example.aichinese.util.LanguageCodes;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -26,7 +27,7 @@ public record RegisterStudentRequest(
         @NotBlank(message = "Confirm password is required")
         @Size(max = 72, message = "Confirm password must be at most 72 characters")
         String confirmPassword,
-        @Pattern(regexp = "^(en|ms|zh)?$", message = "Preferred language must be one of en, ms, or zh")
+        @Pattern(regexp = "^(en|ms|zh-CN)?$", message = "Preferred language must be one of en, ms, or zh-CN")
         String preferredLanguage) {
 
     public RegisterStudentRequest {
@@ -37,7 +38,10 @@ public record RegisterStudentRequest(
             email = email.strip();
         }
         if (preferredLanguage != null) {
-            preferredLanguage = preferredLanguage.strip().toLowerCase(Locale.ROOT);
+            // Accepts en / ms / zh-CN (and the legacy "zh"); unknown values are kept so validation rejects them.
+            String stripped = preferredLanguage.strip();
+            String normalized = LanguageCodes.normalize(stripped);
+            preferredLanguage = normalized != null ? normalized : stripped.toLowerCase(Locale.ROOT);
         }
     }
 

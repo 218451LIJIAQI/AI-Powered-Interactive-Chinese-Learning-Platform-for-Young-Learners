@@ -5,7 +5,7 @@ import { legalMessages } from './legalMessages'
 describe('legal page translations', () => {
   it('covers the same sections in all supported languages', () => {
     const englishSections = Object.keys(legalMessages.en).sort()
-    for (const locale of ['ms', 'zh'] as const) {
+    for (const locale of ['ms', 'zh-CN'] as const) {
       expect(Object.keys(legalMessages[locale]).sort()).toEqual(englishSections)
       expect(legalMessages[locale].back.trim()).not.toBe('')
 

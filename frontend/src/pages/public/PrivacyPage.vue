@@ -1,49 +1,42 @@
 <template>
-  <section class="public-page legal-page">
-    <button class="btn btn-ghost legal-back-button" type="button" @click="goBack">{{ t('legal.back') }}</button>
-
-    <article class="hero-card light legal-hero">
-      <span class="legal-eyebrow">MandarinSpark</span>
-      <h1>{{ t('legal.privacy.title') }}</h1>
-      <p>{{ t('legal.privacy.intro') }}</p>
-    </article>
-
-    <section class="legal-grid">
-      <article v-for="section in sections" :key="section.key" class="panel legal-card">
-        <h2>{{ section.title }}</h2>
-        <p>{{ section.copy }}</p>
-      </article>
-    </section>
-  </section>
+  <LegalDocument
+    eyebrow="MandarinSpark"
+    :title="t('legal.privacy.title')"
+    :intro="t('legal.privacy.intro')"
+    :back-label="t('legal.back')"
+    :toc-label="t('legal.onThisPage')"
+    :sections="sections"
+  >
+    <template #lead>
+      <p class="legal-official-title" data-testid="official-title">{{ t('legal.officialTitle') }}</p>
+    </template>
+    <template #links>
+      <RouterLink class="btn btn-link" :to="{ name: 'responsible-ai' }">{{ t('legal.responsibleAiLink') }}</RouterLink>
+    </template>
+  </LegalDocument>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
+import LegalDocument from '@/components/public/LegalDocument.vue'
 import { legalMessages } from '@/plugins/legalMessages'
 
-const router = useRouter()
 const { t } = useI18n({
   messages: {
     en: { legal: legalMessages.en },
     ms: { legal: legalMessages.ms },
-    zh: { legal: legalMessages.zh },
+    'zh-CN': { legal: legalMessages['zh-CN'] },
   },
 })
 
-function goBack(): void {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    void router.push('/')
-  }
-}
-
 const sections = computed(() =>
-  (['data', 'safety', 'ai', 'files', 'choices'] as const).map((key) => ({
-    key,
+  (
+    ['data', 'purpose', 'ai', 'minimisation', 'files', 'retention', 'rights', 'law', 'contact', 'thirdParties'] as const
+  ).map((key) => ({
+    id: key === 'ai' ? 'ai-provider' : `privacy-${key}`,
     title: t(`legal.privacy.${key}Title`),
     copy: t(`legal.privacy.${key}Copy`),
   })),

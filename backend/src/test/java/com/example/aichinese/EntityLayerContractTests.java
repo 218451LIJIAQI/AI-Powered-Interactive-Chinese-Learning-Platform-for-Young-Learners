@@ -64,9 +64,12 @@ class EntityLayerContractTests {
 
     @Test
     void entitySourcesUseSafeLombokShapeOnly() throws IOException {
-        List<String> violations = concreteEntitySources()
-                .flatMap(source -> sourceContractViolations(source).stream())
-                .toList();
+        List<String> violations;
+        try (Stream<Path> sources = concreteEntitySources()) {
+            violations = sources
+                    .flatMap(source -> sourceContractViolations(source).stream())
+                    .toList();
+        }
 
         assertThat(violations)
                 .as("Entity sources must keep Lombok from generating equality/toString over lazy associations")

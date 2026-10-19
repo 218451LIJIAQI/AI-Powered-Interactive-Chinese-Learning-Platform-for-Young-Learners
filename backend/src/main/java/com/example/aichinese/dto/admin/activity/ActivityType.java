@@ -64,10 +64,6 @@ public enum ActivityType {
         return Optional.ofNullable(LOOKUP.get(normalised));
     }
 
-    public String slug() {
-        return name().toLowerCase(Locale.ROOT).replace('_', '-');
-    }
-
     private static String normalise(String value) {
         String stripped = value.strip();
         if (stripped.isEmpty()) {

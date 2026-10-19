@@ -2,8 +2,11 @@ package com.example.aichinese.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,8 +18,11 @@ import com.example.aichinese.dto.learning.BadgeSummaryResponse;
 import com.example.aichinese.dto.learning.DailyStreakResponse;
 import com.example.aichinese.dto.learning.PointsTransactionResponse;
 import com.example.aichinese.dto.learning.RewardSummaryResponse;
+import com.example.aichinese.dto.learning.StudentLessonProgressResponse;
 import com.example.aichinese.dto.learning.StudentProgressLessonResponse;
 import com.example.aichinese.dto.learning.StudentProgressSummaryResponse;
+import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LessonMastery;
 import com.example.aichinese.entity.Badge;
 import com.example.aichinese.entity.DailyStreak;
 import com.example.aichinese.entity.Lesson;
@@ -25,6 +31,7 @@ import com.example.aichinese.entity.PointsTransaction;
 import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.QuizAttemptAnswer;
+import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentBadge;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.StudentQuizProgress;
@@ -35,11 +42,20 @@ import com.example.aichinese.repository.PointsTransactionRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.QuizRepository;
+import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.repository.StudentBadgeRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.StudentQuizProgressRepository;
+import com.example.aichinese.repository.VideoProgressRepository;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Lesson progress, mastery (D25), rewards and streaks.
+ *
+ * <p>Lesson completion: a lesson with published quizzes completes when every published quiz has
+ * been submitted; a lesson without quizzes completes when its content was viewed and all of its
+ * active recorded videos are completed. Archived, draft or in-review quizzes never count.</p>
+ */
 @Service
 public class StudentLearningProgressService {
 
@@ -47,12 +63,13 @@ public class StudentLearningProgressService {
     private static final int QUIZ_BONUS_POINTS = 10;
     private static final int LESSON_COMPLETION_POINTS = 25;
     private static final int HIGH_QUIZ_SCORE_PERCENT = 80;
-    private static final int POINT_STARTER_THRESHOLD = 50;
-    private static final int STREAK_EXPLORER_DAYS = 3;
-    private static final int POINTS_PER_LEVEL = 100;
+    private static final int POINT_STARTER_THRESHOLD = RewardRules.POINT_STARTER_THRESHOLD;
+    private static final int STREAK_EXPLORER_DAYS = RewardRules.STREAK_EXPLORER_DAYS;
     private static final int RECENT_ACTIVITY_LIMIT = 10;
     private static final int RECENT_REWARD_LIMIT = 10;
     private static final int WEAK_AREA_LIMIT = 5;
+    /** Lesson titles read per query; more pages are read only when blank or duplicate titles were skipped. */
+    private static final int WEAK_AREA_TITLE_BATCH = 20;
 
     private static final String SOURCE_QUIZ_COMPLETION = "QUIZ_COMPLETION";
     private static final String SOURCE_QUIZ_BONUS = "QUIZ_BONUS";
@@ -68,7 +85,8 @@ public class StudentLearningProgressService {
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
-    private final StudentLearningAccessService studentLearningAccessService;
+    private final RecordedLessonVideoRepository recordedLessonVideoRepository;
+    private final VideoProgressRepository videoProgressRepository;
 
     public StudentLearningProgressService(
             StudentQuizProgressRepository studentQuizProgressRepository,
@@ -81,7 +99,8 @@ public class StudentLearningProgressService {
             QuizRepository quizRepository,
             QuizAttemptRepository quizAttemptRepository,
             QuizAttemptAnswerRepository quizAttemptAnswerRepository,
-            StudentLearningAccessService studentLearningAccessService) {
+            RecordedLessonVideoRepository recordedLessonVideoRepository,
+            VideoProgressRepository videoProgressRepository) {
         this.studentQuizProgressRepository = Objects.requireNonNull(studentQuizProgressRepository, "studentQuizProgressRepository");
         this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository, "lessonProgressRepository");
         this.pointsTransactionRepository = Objects.requireNonNull(pointsTransactionRepository, "pointsTransactionRepository");
@@ -92,13 +111,14 @@ public class StudentLearningProgressService {
         this.quizRepository = Objects.requireNonNull(quizRepository, "quizRepository");
         this.quizAttemptRepository = Objects.requireNonNull(quizAttemptRepository, "quizAttemptRepository");
         this.quizAttemptAnswerRepository = Objects.requireNonNull(quizAttemptAnswerRepository, "quizAttemptAnswerRepository");
-        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
+        this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
+        this.videoProgressRepository = Objects.requireNonNull(videoProgressRepository, "videoProgressRepository");
     }
 
     @Transactional
     public CompletionOutcome completeQuiz(StudentProfile student, Quiz quiz, int percentageScore) {
         StudentProfile lockedStudent = lockStudent(student);
-        boolean firstCompletion = recordQuizCompletion(
+        recordQuizCompletion(
                 lockedStudent,
                 quiz,
                 "Submitted quiz: " + quiz.getTitle());
@@ -118,12 +138,42 @@ public class StudentLearningProgressService {
                     quiz.getId(),
                     QUIZ_BONUS_POINTS,
                     "Achieved a high quiz score");
-            awardBadgeIfNeeded(lockedStudent, "Quiz Star", "Scored at least 80% in a quiz.", "quiz-star");
+            awardBadgeIfNeeded(lockedStudent, RewardBadge.QUIZ_STAR);
         }
 
-        int lessonCompletionPercent = updateLessonProgress(lockedStudent, quiz.getLesson());
+        updateLessonProgress(lockedStudent, quiz.getLesson(), false);
         student.setTotalPoints(lockedStudent.getTotalPoints());
-        return new CompletionOutcome(firstCompletion, earnedPoints, totalPoints(lockedStudent), lessonCompletionPercent);
+        return new CompletionOutcome(earnedPoints, totalPoints(lockedStudent));
+    }
+
+    /**
+     * Records that the student viewed the lesson content (lesson page shown) and recomputes the
+     * lesson progress; lessons without quizzes may complete here.
+     */
+    @Transactional
+    public StudentLessonProgressResponse recordLessonContentViewed(StudentProfile student, Lesson lesson) {
+        StudentProfile lockedStudent = lockStudent(student);
+        LessonProgress progress = updateLessonProgress(lockedStudent, lesson, true);
+        student.setTotalPoints(lockedStudent.getTotalPoints());
+        Integer bestQuizPercentage = bestQuizPercentageForLesson(student, lesson);
+        return new StudentLessonProgressResponse(
+                lesson.getId(),
+                count(progress.getCompletionPercent()),
+                progress.isCompleted(),
+                LessonMasteryCalculator.mastery(progress, bestQuizPercentage).name(),
+                bestQuizPercentage,
+                progress.getContentViewedAt() != null);
+    }
+
+    /** A recorded video of the lesson was completed: recompute lesson progress (completion rule above). */
+    @Transactional
+    public void recordLessonVideoCompleted(StudentProfile student, Lesson lesson) {
+        if (lesson == null) {
+            return;
+        }
+        StudentProfile lockedStudent = lockStudent(student);
+        updateLessonProgress(lockedStudent, lesson, false);
+        student.setTotalPoints(lockedStudent.getTotalPoints());
     }
 
     @Transactional
@@ -150,27 +200,35 @@ public class StudentLearningProgressService {
                 .existsByStudentIdAndSourceTypeAndSourceId(student.getId(), sourceType, sourceId);
     }
 
+    /** Current progress and mastery of one lesson for the lesson page. */
     @Transactional(readOnly = true)
-    public int lessonCompletionPercent(StudentProfile student, Lesson lesson) {
-        return lessonProgressRepository.findByStudentIdAndLessonId(student.getId(), lesson.getId())
-                .map(progress -> Objects.requireNonNullElse(progress.getCompletionPercent(), 0))
-                .orElse(0);
+    public LessonProgressSnapshot lessonSnapshot(StudentProfile student, Lesson lesson) {
+        LessonProgress progress = lessonProgressRepository.findByStudentIdAndLessonId(student.getId(), lesson.getId())
+                .orElse(null);
+        Integer bestQuizPercentage = bestQuizPercentageForLesson(student, lesson);
+        return new LessonProgressSnapshot(
+                progress == null ? 0 : count(progress.getCompletionPercent()),
+                progress != null && progress.isCompleted(),
+                progress != null && progress.getContentViewedAt() != null,
+                LessonMasteryCalculator.mastery(progress, bestQuizPercentage),
+                bestQuizPercentage);
     }
 
     @Transactional(readOnly = true)
     public StudentProgressSummaryResponse getProgressSummary(StudentProfile student) {
         List<LessonProgress> accessibleLessonProgress = lessonProgressRepository
                 .findByStudentIdOrderByUpdatedAtDesc(student.getId()).stream()
-                .filter(progress -> hasCurrentLessonProgressAccess(student, progress))
+                .filter(progress -> progress.getLesson() != null)
                 .toList();
+        List<QuizAttempt> attempts = quizAttemptRepository.findByStudentIdOrderByCompletedAtDescCreatedAtDesc(student.getId());
+        Map<Long, Integer> bestQuizByLesson = LessonMasteryCalculator.bestQuizPercentageByLesson(attempts);
         int startedLessons = accessibleLessonProgress.size();
         int completedLessons = (int) accessibleLessonProgress.stream().filter(LessonProgress::isCompleted).count();
-        int quizAverage = averageAccessibleQuizPercentage(student);
+        int quizAverage = averageQuizPercentage(attempts);
 
         List<String> weakAreas = extractWeakAreas(student);
-        List<StudentProgressLessonResponse> recentLessons = accessibleLessonProgress.stream()
-                .limit(RECENT_ACTIVITY_LIMIT)
-                .map(StudentLearningProgressService::toStudentProgressLessonResponse)
+        List<StudentProgressLessonResponse> lessons = accessibleLessonProgress.stream()
+                .map(progress -> toStudentProgressLessonResponse(progress, bestQuizByLesson.get(progress.getLesson().getId())))
                 .toList();
 
         return new StudentProgressSummaryResponse(
@@ -180,7 +238,8 @@ public class StudentLearningProgressService {
                 overallCompletionPercent(accessibleLessonProgress),
                 weakAreas,
                 latestAccessibleActivitySummary(accessibleLessonProgress),
-                recentLessons);
+                lessons.stream().limit(RECENT_ACTIVITY_LIMIT).toList(),
+                lessons);
     }
 
     @Transactional(readOnly = true)
@@ -195,8 +254,8 @@ public class StudentLearningProgressService {
                 .toList();
 
         int totalPoints = totalPoints(student);
-        int currentLevelNumber = Math.max(1, totalPoints / POINTS_PER_LEVEL + 1);
-        int progressToNextLevelPercent = totalPoints % POINTS_PER_LEVEL;
+        int currentLevelNumber = RewardRules.levelFor(totalPoints);
+        int progressToNextLevelPercent = RewardRules.progressToNextLevelPercent(totalPoints);
 
         return new RewardSummaryResponse(
                 totalPoints,
@@ -243,14 +302,13 @@ public class StudentLearningProgressService {
         return studentProfileRepository.findLockedById(student.getId()).orElse(student);
     }
 
-    private boolean recordQuizCompletion(
+    private void recordQuizCompletion(
             StudentProfile student,
             Quiz quiz,
             String summary) {
         StudentQuizProgress progress = studentQuizProgressRepository
                 .findByStudentIdAndQuizId(student.getId(), quiz.getId())
                 .orElseGet(StudentQuizProgress::new);
-        boolean firstCompletion = !progress.isCompleted();
         LocalDateTime now = LocalDateTime.now();
 
         if (progress.getId() == null) {
@@ -268,7 +326,6 @@ public class StudentLearningProgressService {
             progress.setCompletedAt(now);
         }
         studentQuizProgressRepository.save(progress);
-        return firstCompletion;
     }
 
     private void touchDailyStreak(StudentProfile student) {
@@ -282,7 +339,7 @@ public class StudentLearningProgressService {
             streak.setBestStreak(1);
             streak.setLastLearningDate(today);
             dailyStreakRepository.save(streak);
-            awardBadgeIfNeeded(student, "First Steps", "Completed a learning activity for the first time.", "first-steps");
+            awardBadgeIfNeeded(student, RewardBadge.FIRST_STEPS);
             return;
         }
 
@@ -291,12 +348,7 @@ public class StudentLearningProgressService {
             return;
         }
 
-        int currentStreak = count(streak.getCurrentStreak());
-        if (lastDate != null && lastDate.plusDays(1).equals(today)) {
-            streak.setCurrentStreak(currentStreak + 1);
-        } else {
-            streak.setCurrentStreak(1);
-        }
+        streak.setCurrentStreak(RewardRules.nextStreak(lastDate, count(streak.getCurrentStreak()), today));
 
         streak.setBestStreak(Math.max(
                 count(streak.getBestStreak()),
@@ -305,33 +357,30 @@ public class StudentLearningProgressService {
         dailyStreakRepository.save(streak);
 
         if (streak.getCurrentStreak() >= STREAK_EXPLORER_DAYS) {
-            awardBadgeIfNeeded(student, "Streak Explorer", "Reached a three-day learning streak.", "streak-explorer");
+            awardBadgeIfNeeded(student, RewardBadge.STREAK_EXPLORER);
         }
     }
 
-    private int updateLessonProgress(StudentProfile student, Lesson lesson) {
-        int totalActivities = (int) quizRepository.countByLessonId(lesson.getId());
-        long completedActivities = studentQuizProgressRepository.findByStudentIdAndLessonIdOrderByUpdatedAtDesc(
-                student.getId(),
-                lesson.getId()).stream()
-                .filter(StudentQuizProgress::isCompleted)
-                .count();
-
-        int percent = totalActivities == 0 ? 0 : round(completedActivities * 100.0 / totalActivities);
-        boolean completed = totalActivities > 0 && completedActivities >= totalActivities;
-
+    private LessonProgress updateLessonProgress(StudentProfile student, Lesson lesson, boolean contentViewedNow) {
         LessonProgress lessonProgress = lessonProgressRepository.findLockedByStudentIdAndLessonId(student.getId(), lesson.getId())
                 .orElseGet(LessonProgress::new);
-        boolean firstLessonCompletion = !lessonProgress.isCompleted() && completed;
-
         if (lessonProgress.getId() == null) {
             lessonProgress.setStudent(student);
             lessonProgress.setLesson(lesson);
         }
-        lessonProgress.setCompletionPercent(percent);
+        LocalDateTime now = LocalDateTime.now();
+        if (contentViewedNow && lessonProgress.getContentViewedAt() == null) {
+            lessonProgress.setContentViewedAt(now);
+        }
+
+        LessonCompletion completionState = computeLessonCompletion(student, lesson, lessonProgress.getContentViewedAt() != null);
+        // Completion is sticky: once a lesson was completed it stays completed (learner progress is kept, D24).
+        boolean firstLessonCompletion = !lessonProgress.isCompleted() && completionState.completed();
+        boolean completed = lessonProgress.isCompleted() || completionState.completed();
+        lessonProgress.setCompletionPercent(completed ? 100 : completionState.percent());
         lessonProgress.setCompleted(completed);
-        lessonProgress.setLastAccessedAt(LocalDateTime.now());
-        lessonProgressRepository.save(lessonProgress);
+        lessonProgress.setLastAccessedAt(now);
+        LessonProgress saved = lessonProgressRepository.save(lessonProgress);
 
         if (firstLessonCompletion) {
             awardPointsIfFirst(
@@ -340,10 +389,43 @@ public class StudentLearningProgressService {
                     lesson.getId(),
                     LESSON_COMPLETION_POINTS,
                     "Completed a lesson");
-            awardBadgeIfNeeded(student, "Lesson Finisher", "Completed a lesson successfully.", "lesson-finisher");
+            awardBadgeIfNeeded(student, RewardBadge.LESSON_FINISHER);
+        }
+        return saved;
+    }
+
+    private LessonCompletion computeLessonCompletion(StudentProfile student, Lesson lesson, boolean contentViewed) {
+        // Only quizzes students can actually take count (archived, draft or in-review quizzes never block completion).
+        int publishedQuizzes = (int) quizRepository.countByLessonIdAndContentStatus(lesson.getId(), ContentStatus.PUBLISHED);
+        if (publishedQuizzes > 0) {
+            long completedQuizzes = studentQuizProgressRepository.findByStudentIdAndLessonIdOrderByUpdatedAtDesc(
+                    student.getId(),
+                    lesson.getId()).stream()
+                    .filter(StudentQuizProgress::isCompleted)
+                    .filter(progress -> progress.getQuiz() == null
+                            || progress.getQuiz().getContentStatus() == ContentStatus.PUBLISHED)
+                    .count();
+            int percent = round(Math.min(completedQuizzes, publishedQuizzes) * 100.0 / publishedQuizzes);
+            return new LessonCompletion(percent, completedQuizzes >= publishedQuizzes);
         }
 
-        return percent;
+        List<Long> videoIds = recordedLessonVideoRepository.findActiveRelatedToLesson(lesson.getId()).stream()
+                .filter(video -> video.getCoursePackage() == null
+                        || ContentVisibilityPolicy.isPackageVisible(video.getCoursePackage()))
+                .map(RecordedLessonVideo::getId)
+                .toList();
+        long completedVideos = videoIds.isEmpty()
+                ? 0
+                : videoProgressRepository.countByStudentIdAndRecordedVideoIdInAndCompletedTrue(student.getId(), videoIds);
+        int total = 1 + videoIds.size();
+        long done = (contentViewed ? 1 : 0) + Math.min(completedVideos, videoIds.size());
+        return new LessonCompletion(round(done * 100.0 / total), done >= total);
+    }
+
+    private Integer bestQuizPercentageForLesson(StudentProfile student, Lesson lesson) {
+        List<QuizAttempt> lessonAttempts =
+                quizAttemptRepository.findByStudentIdAndQuizLessonId(student.getId(), lesson.getId());
+        return LessonMasteryCalculator.bestQuizPercentageByLesson(lessonAttempts).get(lesson.getId());
     }
 
     private int awardPointsIfFirst(StudentProfile student, String sourceType, Long sourceId, int points, String reason) {
@@ -361,18 +443,20 @@ public class StudentLearningProgressService {
 
         student.setTotalPoints(totalPoints(student) + points);
         if (totalPoints(student) >= POINT_STARTER_THRESHOLD) {
-            awardBadgeIfNeeded(student, "Point Starter", "Collected at least 50 learning points.", "point-starter");
+            awardBadgeIfNeeded(student, RewardBadge.POINT_STARTER);
         }
         return points;
     }
 
-    private void awardBadgeIfNeeded(StudentProfile student, String name, String description, String iconKey) {
-        Badge badge = badgeRepository.findByName(name)
+    private void awardBadgeIfNeeded(StudentProfile student, RewardBadge rewardBadge) {
+        // The badge row is seeded by DataSeeder (and V6 for existing databases); creating it here
+        // is only a fallback so an award never fails on a database that was seeded differently.
+        Badge badge = badgeRepository.findByName(rewardBadge.badgeName())
                 .orElseGet(() -> {
                     Badge created = new Badge();
-                    created.setName(name);
-                    created.setDescription(description);
-                    created.setIconKey(iconKey);
+                    created.setName(rewardBadge.badgeName());
+                    created.setDescription(rewardBadge.description());
+                    created.setIconKey(rewardBadge.iconKey());
                     created.setActive(true);
                     return badgeRepository.save(created);
                 });
@@ -396,14 +480,19 @@ public class StudentLearningProgressService {
         return value == null ? 0 : value;
     }
 
-    private static StudentProgressLessonResponse toStudentProgressLessonResponse(LessonProgress progress) {
+    private static StudentProgressLessonResponse toStudentProgressLessonResponse(
+            LessonProgress progress,
+            Integer bestQuizPercentage) {
         Lesson lesson = progress.getLesson();
+        LessonMastery mastery = LessonMasteryCalculator.mastery(progress, bestQuizPercentage);
         return new StudentProgressLessonResponse(
                 lesson.getId(),
                 lesson.getTitle(),
                 count(progress.getCompletionPercent()),
                 progress.isCompleted(),
-                progress.getLastAccessedAt());
+                progress.getLastAccessedAt(),
+                mastery.name(),
+                bestQuizPercentage);
     }
 
     private static BadgeSummaryResponse toBadgeSummaryResponse(StudentBadge badge) {
@@ -437,24 +526,10 @@ public class StudentLearningProgressService {
         return (int) Math.round(value);
     }
 
-    private boolean hasCurrentLessonProgressAccess(StudentProfile student, LessonProgress progress) {
-        return progress.getLesson() != null && studentLearningAccessService.hasLessonAccess(student, progress.getLesson());
-    }
-
-    private boolean hasCurrentQuizAttemptAccess(StudentProfile student, QuizAttempt attempt) {
-        Quiz quiz = attempt.getQuiz();
-        Lesson lesson = quiz == null ? null : quiz.getLesson();
-        return lesson == null || studentLearningAccessService.hasLessonAccess(student, lesson);
-    }
-
-    private int averageAccessibleQuizPercentage(StudentProfile student) {
-        List<Integer> percentages = quizAttemptRepository.findByStudentIdOrderByCompletedAtDescCreatedAtDesc(student.getId()).stream()
-                .filter(attempt -> hasCurrentQuizAttemptAccess(student, attempt))
-                .filter(attempt -> attempt.isSubmitted()
-                        && attempt.getScore() != null
-                        && attempt.getMaxScore() != null
-                        && attempt.getMaxScore() > 0)
-                .map(attempt -> round(attempt.getScore() * 100.0 / attempt.getMaxScore()))
+    private static int averageQuizPercentage(List<QuizAttempt> attempts) {
+        List<Integer> percentages = attempts.stream()
+                .map(LessonMasteryCalculator::attemptPercentage)
+                .filter(Objects::nonNull)
                 .toList();
         if (percentages.isEmpty()) {
             return 0;
@@ -477,29 +552,58 @@ public class StudentLearningProgressService {
                 .orElse(null);
     }
 
+    /** Weak areas = lesson titles (topics) of the student's most recent wrong quiz answers. */
     private List<String> extractWeakAreas(StudentProfile student) {
-        return quizAttemptAnswerRepository.findByQuizAttemptStudentIdAndCorrectFalseOrderByCreatedAtDesc(student.getId()).stream()
-                .filter(answer -> hasCurrentWrongAnswerAccess(student, answer))
-                .map(answer -> answer.getQuestion() == null ? null : answer.getQuestion().getQuestionType())
-                .filter(value -> value != null && !value.isBlank())
-                .distinct()
-                .limit(WEAK_AREA_LIMIT)
-                .toList();
+        Set<String> topics = new LinkedHashSet<>();
+        List<String> titles;
+        int page = 0;
+        do {
+            titles = quizAttemptAnswerRepository.findRecentWrongAnswerLessonTitles(
+                    student.getId(), PageRequest.of(page++, WEAK_AREA_TITLE_BATCH));
+            for (String title : titles) {
+                String topic = weakAreaTopic(title);
+                if (topic != null) {
+                    topics.add(topic);
+                }
+                if (topics.size() >= WEAK_AREA_LIMIT) {
+                    return List.copyOf(topics);
+                }
+            }
+        } while (titles.size() == WEAK_AREA_TITLE_BATCH);
+        return List.copyOf(topics);
     }
 
-    private boolean hasCurrentWrongAnswerAccess(StudentProfile student, QuizAttemptAnswer answer) {
-        if (answer.getQuestion() == null || answer.getQuestion().getQuiz() == null) {
-            return false;
+    /** Topic label of a wrong answer: the title of the lesson the quiz belongs to. */
+    static String weakAreaTopic(QuizAttemptAnswer answer) {
+        if (answer == null || answer.getQuestion() == null || answer.getQuestion().getQuiz() == null) {
+            return null;
         }
         Lesson lesson = answer.getQuestion().getQuiz().getLesson();
-        return lesson != null && studentLearningAccessService.hasLessonAccess(student, lesson);
+        return lesson == null ? null : weakAreaTopic(lesson.getTitle());
+    }
+
+    private static String weakAreaTopic(String lessonTitle) {
+        if (lessonTitle == null || lessonTitle.isBlank()) {
+            return null;
+        }
+        return lessonTitle.strip();
+    }
+
+    private record LessonCompletion(int percent, boolean completed) {
+    }
+
+    /** Progress and mastery of one lesson. */
+    public record LessonProgressSnapshot(
+            int completionPercent,
+            boolean completed,
+            boolean contentViewed,
+            LessonMastery mastery,
+            Integer bestQuizPercentage) {
     }
 
     public record CompletionOutcome(
-            boolean firstCompletion,
             int earnedPoints,
-            int totalPoints,
-            int lessonCompletionPercent) {
+            int totalPoints) {
     }
 
     public record PlatformActivityOutcome(

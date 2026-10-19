@@ -41,11 +41,24 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
     @Query("select lc from LiveClass lc where lc.id = :id")
     Optional<LiveClass> findLockedById(@Param("id") Long id);
 
+    /**
+     * A teacher's classes for the teacher's list: classes that have not ended yet first (soonest
+     * start first), then the classes that have ended (newest first).
+     */
     @EntityGraph(value = LiveClass.GRAPH_DETAIL)
-    List<LiveClass> findByTeacherUserIdOrderByScheduledStartAtAsc(Long teacherUserId);
-
-    @EntityGraph(value = LiveClass.GRAPH_DETAIL)
-    Page<LiveClass> findByTeacherUserIdOrderByScheduledStartAtAsc(Long teacherUserId, Pageable pageable);
+    @Query(value = """
+            select lc from LiveClass lc
+            where lc.teacher.user.id = :teacherUserId
+            order by case when lc.scheduledEndAt >= :now then 0 else 1 end asc,
+                     case when lc.scheduledEndAt >= :now then lc.scheduledStartAt end asc,
+                     lc.scheduledStartAt desc,
+                     lc.id asc
+            """,
+            countQuery = "select count(lc) from LiveClass lc where lc.teacher.user.id = :teacherUserId")
+    Page<LiveClass> findTeacherClassesUpcomingFirst(
+            @Param("teacherUserId") Long teacherUserId,
+            @Param("now") LocalDateTime now,
+            Pageable pageable);
 
     @EntityGraph(value = LiveClass.GRAPH_DETAIL)
     Page<LiveClass> findAllByOrderByScheduledStartAtAsc(Pageable pageable);
@@ -80,19 +93,31 @@ public interface LiveClassRepository extends JpaRepository<LiveClass, Long> {
     @Query(value = """
             select lc from LiveClass lc
             left join lc.lesson l
+            left join l.module m
             left join lc.coursePackage p
+            join lc.teacher t
+            join t.user tu
             where (l is not null or p is not null)
               and (l is null or l.contentStatus = :published)
+              and (m is null or m.contentStatus = :published)
               and (p is null or p.contentStatus = :published)
+              and t.teacherStatus = com.example.aichinese.entity.enums.TeacherStatus.APPROVED
+              and tu.active = true
               and lc.liveClassStatus in :visibleStatuses
             order by lc.scheduledStartAt asc
             """, countQuery = """
             select count(lc) from LiveClass lc
             left join lc.lesson l
+            left join l.module m
             left join lc.coursePackage p
+            join lc.teacher t
+            join t.user tu
             where (l is not null or p is not null)
               and (l is null or l.contentStatus = :published)
+              and (m is null or m.contentStatus = :published)
               and (p is null or p.contentStatus = :published)
+              and t.teacherStatus = com.example.aichinese.entity.enums.TeacherStatus.APPROVED
+              and tu.active = true
               and lc.liveClassStatus in :visibleStatuses
             """)
     Page<LiveClass> findStudentVisibleClasses(

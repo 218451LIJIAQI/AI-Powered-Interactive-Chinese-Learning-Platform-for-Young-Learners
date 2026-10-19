@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,9 +19,9 @@ import com.example.aichinese.dto.content.UpdateLessonRequest;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
+import com.example.aichinese.entity.enums.ReviewContentType;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.security.SecurityUserDetails;
@@ -37,24 +36,28 @@ public class TeacherLessonService {
     private static final String ACTION_CREATE = "TEACHER_LESSON_CREATE";
     private static final String ACTION_UPDATE = "TEACHER_LESSON_UPDATE";
     private static final String ACTION_ARCHIVE = "TEACHER_LESSON_ARCHIVE";
+    private static final ReviewContentType REVIEW_TYPE = ReviewContentType.LESSON;
 
     private final LessonRepository lessonRepository;
     private final TeacherModuleService teacherModuleService;
     private final TeacherContentAccessService teacherContentAccessService;
     private final ContentManagementMapper contentManagementMapper;
     private final AuditLogService auditLogService;
+    private final ContentReviewService contentReviewService;
 
     public TeacherLessonService(
             LessonRepository lessonRepository,
             TeacherModuleService teacherModuleService,
             TeacherContentAccessService teacherContentAccessService,
             ContentManagementMapper contentManagementMapper,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentReviewService contentReviewService) {
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
         this.teacherModuleService = Objects.requireNonNull(teacherModuleService, "teacherModuleService");
         this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
     }
 
     @Transactional(readOnly = true)
@@ -83,11 +86,11 @@ public class TeacherLessonService {
             throw new ResponseStatusException(BAD_REQUEST, LESSON_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
-        teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
         Lesson lesson = new Lesson();
         attachLessonMetadata(currentUser, teacherProfile, lesson, LessonMetadata.from(request));
-        lesson.setContentStatus(ContentStatus.PUBLISHED);
+        // Review workflow (D4): new lessons are drafts until an admin approves them.
+        lesson.setContentStatus(ContentStatus.DRAFT);
         lesson.setRejectionReason(null);
 
         Lesson saved = lessonRepository.save(lesson);
@@ -96,7 +99,7 @@ public class TeacherLessonService {
                 ACTION_CREATE,
                 AUDIT_TARGET_LESSON,
                 saved.getId(),
-                "Teacher created and published a lesson.");
+                "Teacher created a lesson draft.");
         return toLessonResponse(saved);
     }
 
@@ -107,10 +110,10 @@ public class TeacherLessonService {
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         Lesson lesson = findOwnedLesson(currentUser, lessonId);
-        teacherContentAccessService.validateEditableStatus(lesson.getContentStatus(), "Lesson");
-        teacherContentAccessService.validatePrice(request.accessType(), request.price());
+        contentReviewService.requireTeacherEditable(lesson, REVIEW_TYPE);
 
         attachLessonMetadata(currentUser, teacherProfile, lesson, LessonMetadata.from(request));
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, lesson);
 
         Lesson saved = lessonRepository.save(lesson);
         auditLogService.record(
@@ -118,8 +121,16 @@ public class TeacherLessonService {
                 ACTION_UPDATE,
                 AUDIT_TARGET_LESSON,
                 saved.getId(),
-                "Teacher updated a lesson draft.");
+                "Teacher updated a lesson.");
         return toLessonResponse(saved);
+    }
+
+    @Transactional
+    public LessonResponse submitLesson(SecurityUserDetails currentUser, Long lessonId) {
+        TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
+        Lesson lesson = findOwnedLesson(currentUser, lessonId);
+        contentReviewService.submitForReview(teacherProfile.getUser(), REVIEW_TYPE, lesson);
+        return toLessonResponse(lessonRepository.save(lesson));
     }
 
     @Transactional
@@ -159,8 +170,6 @@ public class TeacherLessonService {
                 request.title(),
                 request.description(),
                 request.basicContent(),
-                request.accessType(),
-                request.price(),
                 request.learningType(),
                 request.estimatedDurationMinutes(),
                 request.coverImageUrl());
@@ -189,8 +198,6 @@ public class TeacherLessonService {
             Long levelId,
             Long categoryId,
             LearningType learningType,
-            AccessType accessType,
-            BigDecimal price,
             Integer estimatedDurationMinutes,
             String basicContent,
             String coverImageUrl) {
@@ -203,8 +210,6 @@ public class TeacherLessonService {
                     request.levelId(),
                     request.categoryId(),
                     request.learningType(),
-                    request.accessType(),
-                    request.price(),
                     request.estimatedDurationMinutes(),
                     request.basicContent(),
                     request.coverImageUrl());
@@ -218,8 +223,6 @@ public class TeacherLessonService {
                     request.levelId(),
                     request.categoryId(),
                     request.learningType(),
-                    request.accessType(),
-                    request.price(),
                     request.estimatedDurationMinutes(),
                     request.basicContent(),
                     request.coverImageUrl());

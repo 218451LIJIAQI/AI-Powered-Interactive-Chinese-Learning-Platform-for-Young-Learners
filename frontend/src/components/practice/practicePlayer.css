@@ -1,0 +1,143 @@
+/* Shared (scoped via \3c style scoped src>) building blocks of the student practice activity players. */
+.practice-player {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  text-align: left;
+}
+
+.practice-instructions {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--line-height-normal);
+}
+
+.practice-section-title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+/* Answer choice: rest, hover, selected (border, tint and a check badge), focus (global ring) and disabled. */
+.practice-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--tap-target-min);
+  padding: var(--space-2-5) var(--space-3-5);
+  border: var(--border-width-thick) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.practice-choice:hover:not([disabled]) {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
+}
+
+.practice-choice[aria-pressed='true'] {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+  box-shadow: var(--shadow-xs);
+}
+
+.practice-choice[aria-pressed='true']::after {
+  content: '\2713';
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  border-radius: var(--radius-round);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.practice-choice[disabled] {
+  border-color: var(--border-subtle);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+
+.practice-choice[disabled][aria-pressed='true'] {
+  border-color: var(--color-primary-200);
+}
+
+.practice-submit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2-5) var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.practice-progress {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-note {
+  margin: 0;
+  padding: var(--space-2-5) var(--space-3);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-info-soft);
+  color: var(--color-info-text);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.practice-note.is-warning {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.practice-link {
+  color: var(--text-link);
+  font-weight: var(--font-weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.practice-link:hover {
+  color: var(--text-link-hover);
+}
+
+.practice-cjk {
+  font-size: var(--font-size-xl);
+}
+
+.practice-pinyin {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 640px) {
+  .practice-submit-row > .btn {
+    width: 100%;
+  }
+}

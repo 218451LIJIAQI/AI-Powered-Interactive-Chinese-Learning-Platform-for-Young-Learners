@@ -1,9 +1,6 @@
 package com.example.aichinese.dto;
 
 import java.util.List;
-import java.util.Objects;
-
-import org.springframework.data.domain.Page;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -23,17 +20,8 @@ public record PageResponse<T>(
         totalPages = computeTotalPages(totalItems, size);
     }
 
-    public static <T> PageResponse<T> of(Page<T> page, int requestedPage, int requestedSize) {
-        Objects.requireNonNull(page, "page");
-        return of(page.getContent(), requestedPage, requestedSize, page.getTotalElements());
-    }
-
     public static <T> PageResponse<T> of(List<T> items, int page, int size, long totalItems) {
         return new PageResponse<>(items, page, size, totalItems, 0);
-    }
-
-    public static <T> PageResponse<T> empty(int page, int size) {
-        return of(List.of(), page, size, 0L);
     }
 
     private static int computeTotalPages(long totalItems, int size) {

@@ -8,7 +8,6 @@ import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -17,6 +16,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminStoryActivityRequest(
         @NotBlank(message = "Title is required.")
@@ -46,8 +46,6 @@ public record AdminStoryActivityRequest(
         @Max(value = 6, message = "HSK level must be between 1 and 6.")
         Integer hskLevel,
 
-        AgeBand ageBand,
-
         ActivityDifficulty difficulty,
 
         @Size(max = 100, message = "Topic must not exceed 100 characters.")
@@ -69,7 +67,8 @@ public record AdminStoryActivityRequest(
 
         @Valid
         @Size(max = 50, message = "A story activity cannot contain more than 50 questions.")
-        List<@NotNull(message = "Story question must not be null.") AdminStoryQuestionRequest> questions) {
+        List<@NotNull(message = "Story question must not be null.") AdminStoryQuestionRequest> questions,
+        LearningStage learningStage) {
 
     public AdminStoryActivityRequest {
         title = strip(title);

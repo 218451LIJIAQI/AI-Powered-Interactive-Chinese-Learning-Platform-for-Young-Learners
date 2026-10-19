@@ -1,6 +1,7 @@
 package com.example.aichinese.repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -13,12 +14,24 @@ import org.springframework.data.repository.query.Param;
 import com.example.aichinese.entity.LiveClassEnrolment;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
-import com.example.aichinese.entity.enums.AccessType;
 
 public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnrolment, Long> {
 
+    /**
+     * The current (ENROLLED or ATTENDED) enrolment of a student in a class. Cancelled rows are kept as
+     * history, so a student may own several rows per class but at most one active one
+     * (uk_live_class_enrolments_active_student).
+     */
     @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user" })
-    Optional<LiveClassEnrolment> findByLiveClassIdAndStudentId(Long liveClassId, Long studentId);
+    Optional<LiveClassEnrolment> findFirstByLiveClassIdAndStudentIdAndEnrolmentStatusInOrderByIdDesc(
+            Long liveClassId,
+            Long studentId,
+            Collection<LiveClassEnrolmentStatus> statuses);
+
+    boolean existsByStudentIdAndLiveClassTeacherUserIdAndEnrolmentStatusNot(
+            Long studentId,
+            Long teacherUserId,
+            LiveClassEnrolmentStatus excludedStatus);
 
     @EntityGraph(attributePaths = { "liveClass", "liveClass.teacher", "liveClass.teacher.user", "student", "student.user" })
     List<LiveClassEnrolment> findByLiveClassIdOrderByEnrolledAtAsc(Long liveClassId);
@@ -54,45 +67,12 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
     @Query("""
             select count(enrolment) from LiveClassEnrolment enrolment
             join enrolment.liveClass liveClass
-            left join liveClass.lesson lesson
-            left join lesson.module module
-            left join liveClass.coursePackage coursePackage
             where liveClass.teacher.id = :teacherId
               and enrolment.enrolmentStatus <> :cancelledStatus
-              and (
-                  lesson is null
-                  or lesson.accessType <> :paidAccessType
-                  or exists (
-                      select lessonEntitlement.id from PaymentEntitlement lessonEntitlement
-                      where lessonEntitlement.student.id = enrolment.student.id
-                        and lessonEntitlement.active = true
-                        and lessonEntitlement.itemType = 'LESSON'
-                        and lessonEntitlement.itemId = lesson.id
-                  )
-                  or exists (
-                      select moduleEntitlement.id from PaymentEntitlement moduleEntitlement
-                      where moduleEntitlement.student.id = enrolment.student.id
-                        and moduleEntitlement.active = true
-                        and moduleEntitlement.itemType = 'MODULE'
-                        and moduleEntitlement.itemId = module.id
-                  )
-              )
-              and (
-                  coursePackage is null
-                  or coursePackage.accessType <> :paidAccessType
-                  or exists (
-                      select packageEntitlement.id from PaymentEntitlement packageEntitlement
-                      where packageEntitlement.student.id = enrolment.student.id
-                        and packageEntitlement.active = true
-                        and packageEntitlement.itemType = 'PACKAGE'
-                        and packageEntitlement.itemId = coursePackage.id
-                  )
-              )
             """)
-    long countAccessibleByTeacherId(
+    long countActiveByTeacherId(
             @Param("teacherId") Long teacherId,
-            @Param("cancelledStatus") LiveClassEnrolmentStatus cancelledStatus,
-            @Param("paidAccessType") AccessType paidAccessType);
+            @Param("cancelledStatus") LiveClassEnrolmentStatus cancelledStatus);
 
     @EntityGraph(attributePaths = {
             "liveClass",
@@ -106,10 +86,12 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
 
     long countByLiveClassIdAndEnrolmentStatus(Long liveClassId, LiveClassEnrolmentStatus enrolmentStatus);
 
-    boolean existsByLiveClassIdAndStudentIdAndEnrolmentStatus(
+    long countByLiveClassIdAndEnrolmentStatusIn(Long liveClassId, Collection<LiveClassEnrolmentStatus> statuses);
+
+    boolean existsByLiveClassIdAndStudentIdAndEnrolmentStatusIn(
             Long liveClassId,
             Long studentId,
-            LiveClassEnrolmentStatus enrolmentStatus);
+            Collection<LiveClassEnrolmentStatus> statuses);
 
     boolean existsByStudentIdAndLiveClassTeacherUserId(Long studentId, Long teacherUserId);
 
@@ -117,17 +99,4 @@ public interface LiveClassEnrolmentRepository extends JpaRepository<LiveClassEnr
             Long studentId,
             Long lessonId,
             Long teacherUserId);
-
-    @EntityGraph(attributePaths = {
-            "liveClass",
-            "liveClass.teacher",
-            "liveClass.teacher.user",
-            "liveClass.lesson",
-            "liveClass.coursePackage",
-            "student",
-            "student.user"
-    })
-    List<LiveClassEnrolment> findByLiveClassTeacherIdAndEnrolmentStatusNot(
-            Long teacherId,
-            LiveClassEnrolmentStatus excludedStatus);
 }

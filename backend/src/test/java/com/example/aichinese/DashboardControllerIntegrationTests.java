@@ -43,7 +43,6 @@ class DashboardControllerIntegrationTests {
     private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String ADMIN_PASSWORD = "SuperSecure123!";
     private static final String USER_PASSWORD = "Password123!";
-    private static final String CURRENCY_MYR = "MYR";
     private static final String NO_STORE = "no-store";
     private static final String TEACHER_STATUS_PENDING = "PENDING";
 
@@ -78,7 +77,8 @@ class DashboardControllerIntegrationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.teacherStatus").value(TEACHER_STATUS_PENDING))
                 .andExpect(jsonPath("$.data.totalLessons").isNumber())
-                .andExpect(jsonPath("$.data.earningsSummary.currencyCode").value(CURRENCY_MYR));
+                .andExpect(jsonPath("$.data.averageQuizScore").isNumber())
+                .andExpect(jsonPath("$.data.earningsSummary").doesNotExist());
     }
 
     @Test
@@ -92,7 +92,10 @@ class DashboardControllerIntegrationTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.totalStudents").isNumber())
                 .andExpect(jsonPath("$.data.totalTeachers").isNumber())
-                .andExpect(jsonPath("$.data.paymentRevenueSummary.currencyCode").value(CURRENCY_MYR));
+                .andExpect(jsonPath("$.data.aiUsageSummary.totalRequests").isNumber())
+                .andExpect(jsonPath("$.data.paymentRevenueSummary").doesNotExist())
+                .andExpect(jsonPath("$.data.pendingRefunds").doesNotExist())
+                .andExpect(jsonPath("$.data.pendingPayouts").doesNotExist());
     }
 
     @Test

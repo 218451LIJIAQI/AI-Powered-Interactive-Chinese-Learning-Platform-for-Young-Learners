@@ -44,8 +44,12 @@ public class StudentProfile extends BaseEntity {
     @Column(name = "country", length = 100)
     private String country;
 
+    /**
+     * Optional institution (university, college or workplace) entered by the learner. Stored in the
+     * legacy {@code school_name} column, which is kept to avoid a destructive schema change.
+     */
     @Column(name = "school_name", length = 150)
-    private String schoolName;
+    private String institution;
 
     @Column(name = "avatar_url", length = 255)
     private String avatarUrl;

@@ -18,11 +18,8 @@ import type {
   AdminFlashcardResponse,
   AdminListeningExerciseResponse,
   AdminMatchingGameResponse,
-  AdminPayoutRequestResponse,
-  AdminPaymentRecordResponse,
   AdminPlatformSettingsResponse,
   AdminPlatformSettingsUpdateRequest,
-  AdminRefundRequestResponse,
   AdminStoryActivityResponse,
   AdminDashboardResponse,
   AdminStudentListItemResponse,
@@ -30,12 +27,10 @@ import type {
   AdminTeacherListItemResponse,
   AdminTracingExerciseResponse,
   AdminUserListItemResponse,
-  AccessType,
   ActivityDifficulty,
-  AgeBand,
   AiAvailabilityResponse,
   AiChatResponse,
-  AiLearningRecommendationResponse,
+  AiFeatureKey,
   AiPronunciationFeedbackResponse,
   AiQuizGeneratorResponse,
   AiResponseReportReason,
@@ -45,13 +40,13 @@ import type {
   AiVocabularyHelperResponse,
   AiWritingFeedbackResponse,
   ApiResponse,
+  AppLanguage,
   AuditLogResponse,
   AuthResponse,
   BadgeSummaryResponse,
   BulkOperationResponse,
-  CartResponse,
-  CheckoutResponse,
-  CommissionSettingResponse,
+  ContentReviewDetailResponse,
+  ContentReviewItemResponse,
   ContentSubmissionDetailResponse,
   ContentSubmissionResponse,
   ContentStatus,
@@ -61,6 +56,7 @@ import type {
   HealthStatusResponse,
   LearningCategory,
   LearningLevel,
+  LearningStage,
   LearningType,
   LessonResponse,
   LessonVideoProgressSummaryResponse,
@@ -78,6 +74,7 @@ import type {
   QuizQuestionType,
   RecordedLessonVideoResponse,
   RegistrationResponse,
+  ReviewContentType,
   RewardSummaryResponse,
   StudentActivityCompletionResponse,
   StudentActivitySummaryResponse,
@@ -87,8 +84,6 @@ import type {
   StudentLessonPlayerResponse,
   StudentListeningExerciseResponse,
   StudentMatchingGameResponse,
-  StudentPaymentRecordResponse,
-  StudentRefundRequestResponse,
   StudentProgressSummaryResponse,
   StudentQuizResponse,
   StudentQuizSummaryResponse,
@@ -97,11 +92,8 @@ import type {
   StudentTracingExerciseResponse,
   TeacherAnalyticsResponse,
   TeacherDashboardResponse,
-  TeacherEarningResponse,
-  TeacherEarningSummaryResponse,
   TeacherFeedbackResponse,
   TeacherProfileResponse,
-  TeacherPayoutRequestResponse,
   TeacherQuizAttemptSummaryResponse,
   TeacherQuizResponse,
   TeacherStudentSummaryResponse,
@@ -111,7 +103,23 @@ import type {
   LearningModuleResponse,
   ModerationRecordResponse,
   StudentAiResponseReportResponse,
+  DragDropCompletionRequest,
+  ListeningCompletionRequest,
+  MatchingCompletionRequest,
+  NotificationStatus,
+  PracticeReviewStatus,
+  PracticeSubmissionResponse,
+  PracticeSubmissionType,
+  QuizAnswerSubmission,
+  QuizHintResponse,
+  StoryCompletionRequest,
+  StudentLessonProgressResponse,
+  TeacherFeedbackType,
+  TracingCompletionRequest,
 } from '@/types/api'
+import { apiClientMessage } from '@/plugins/apiClientMessages'
+import type { AdminUserQueryParams } from '@/utils/adminUserDirectory'
+import { normalizeAppLanguage } from '@/utils/locale'
 
 const AI_CHAT_STREAM_PATH = '/ai/chat/stream'
 const AI_STREAM_CONNECT_TIMEOUT_MS = 30_000
@@ -133,23 +141,48 @@ const SSE_EVENT_ERROR = 'error'
 const SSE_EVENT_PREFIX = 'event:'
 const SSE_LINE_PATTERN = /\r?\n/
 
+/* Client-side fallback messages are localised (EN / MS / zh-CN) in plugins/apiClientMessages.ts. */
 const API_ENVELOPE_ERROR_MESSAGES = {
-  rejected: 'The request was not accepted by the server.',
-  unexpectedFormat: 'The server returned an unexpected response format.',
-  missingData: 'The server response did not include the expected data payload.',
-} as const
+  get rejected() {
+    return apiClientMessage('rejected')
+  },
+  get unexpectedFormat() {
+    return apiClientMessage('unexpectedFormat')
+  },
+  get missingData() {
+    return apiClientMessage('missingData')
+  },
+}
 
 const AI_STREAM_ERROR_MESSAGES = {
-  fallback: 'Unable to get an AI chat response.',
-  incomplete: 'The AI stream ended before the final response arrived.',
-  malformedComplete: 'The AI stream returned a malformed final response.',
-  missingBody: 'The server did not open an AI stream.',
-  rateLimited: 'You are doing that too often. Please wait a moment and try again.',
-  serverTrouble: 'The learning service is having trouble right now. Please try again shortly.',
-  signInAgain: 'Please sign in again to continue.',
-  stopped: 'The AI stream stopped unexpectedly.',
-  timeout: 'The AI stream took too long to respond. Please try again.',
-} as const
+  get fallback() {
+    return apiClientMessage('streamFallback')
+  },
+  get incomplete() {
+    return apiClientMessage('streamIncomplete')
+  },
+  get malformedComplete() {
+    return apiClientMessage('streamMalformedComplete')
+  },
+  get missingBody() {
+    return apiClientMessage('streamMissingBody')
+  },
+  get rateLimited() {
+    return apiClientMessage('streamRateLimited')
+  },
+  get serverTrouble() {
+    return apiClientMessage('streamServerTrouble')
+  },
+  get signInAgain() {
+    return apiClientMessage('streamSignInAgain')
+  },
+  get stopped() {
+    return apiClientMessage('streamStopped')
+  },
+  get timeout() {
+    return apiClientMessage('streamTimeout')
+  },
+}
 
 type FieldErrors = Record<string, string[]>
 
@@ -167,6 +200,8 @@ type ApiEnvelopeErrorResponse = {
 type AiStreamHandlers = {
   onDelta?: (chunk: string) => void
   onComplete?: (payload: AiChatResponse) => void
+  /** Cancels the request and stops reading the stream; the call then rejects with a DOMException named `AbortError`. */
+  signal?: AbortSignal
 }
 
 type DownloadResult = {
@@ -181,6 +216,14 @@ type ModerationAction = 'hide' | 'unpublish' | 'archive' | 'request-revision' | 
 type ModerationPayload = { targetType: string; targetId: number; reason: string }
 type QueryParams = Record<string, unknown>
 type StudentQueryParams = Record<string, string | number | undefined>
+
+/** Backend page-size ceiling (PaginationUtils.DEFAULT_MAX_PAGE_SIZE); larger sizes are clamped by the server. */
+const MAX_PAGE_SIZE = 100
+const STUDENT_LIVE_CLASS_PAGE_SIZE = MAX_PAGE_SIZE
+const STUDENT_LIVE_CLASS_MAX_PAGES = 20
+
+/** Teacher lists are shown without paging, so ask for the largest page instead of the server default of 20. */
+const maxPageConfig = () => ({ params: { size: MAX_PAGE_SIZE } })
 
 const MODERATION_ACTION_ENDPOINTS = {
   archive: '/admin/moderation/archive',
@@ -310,15 +353,31 @@ function parseSseCompletePayload(data: string): AiChatResponse {
   }
 }
 
+function streamAbortError(): DOMException {
+  return new DOMException('The AI chat stream was cancelled.', 'AbortError')
+}
+
 async function readSseStream(response: Response, handlers: AiStreamHandlers): Promise<AiChatResponse> {
   if (!response.body) {
     throw new ApiEnvelopeError(AI_STREAM_ERROR_MESSAGES.missingBody)
   }
 
+  const { signal } = handlers
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let finalPayload: AiChatResponse | null = null
+
+  // Cancelling the reader settles a pending read() and closes the connection.
+  const cancelRead = () => {
+    void reader.cancel().catch(() => undefined)
+  }
+  const throwIfAborted = () => {
+    if (!signal?.aborted) return
+    cancelRead()
+    throw streamAbortError()
+  }
+  signal?.addEventListener('abort', cancelRead, { once: true })
 
   const processEvent = (rawEvent: string) => {
     if (!rawEvent.trim()) return
@@ -336,7 +395,9 @@ async function readSseStream(response: Response, handlers: AiStreamHandlers): Pr
 
   try {
     while (true) {
+      throwIfAborted()
       const { value, done } = await reader.read()
+      throwIfAborted()
       buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
       const events = buffer.split(SSE_DELIMITER_PATTERN)
       buffer = events.pop() ?? ''
@@ -346,6 +407,7 @@ async function readSseStream(response: Response, handlers: AiStreamHandlers): Pr
       if (done) break
     }
   } finally {
+    signal?.removeEventListener('abort', cancelRead)
     reader.releaseLock()
   }
 
@@ -371,9 +433,20 @@ function aiStreamHeaders(): Headers {
   return headers
 }
 
-async function sendAiChatStreamRequest(payload: AiChatPayload): Promise<Response> {
+async function sendAiChatStreamRequest(payload: AiChatPayload, signal?: AbortSignal): Promise<Response> {
+  if (signal?.aborted) {
+    throw streamAbortError()
+  }
+
+  // One controller serves both the connect timeout and the caller's signal.
   const abortController = new AbortController()
-  const timeoutId = globalThis.setTimeout(() => abortController.abort(), AI_STREAM_CONNECT_TIMEOUT_MS)
+  let timedOut = false
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true
+    abortController.abort()
+  }, AI_STREAM_CONNECT_TIMEOUT_MS)
+  const abortFromCaller = () => abortController.abort()
+  signal?.addEventListener('abort', abortFromCaller, { once: true })
 
   try {
     return await fetch(apiUrl(AI_CHAT_STREAM_PATH), {
@@ -384,18 +457,23 @@ async function sendAiChatStreamRequest(payload: AiChatPayload): Promise<Response
       body: JSON.stringify(payload),
     })
   } catch (error) {
-    if (abortController.signal.aborted) {
+    if (signal?.aborted) {
+      throw streamAbortError()
+    }
+
+    if (timedOut) {
       throw new ApiEnvelopeError(AI_STREAM_ERROR_MESSAGES.timeout)
     }
 
     throw error
   } finally {
     globalThis.clearTimeout(timeoutId)
+    signal?.removeEventListener('abort', abortFromCaller)
   }
 }
 
 async function postSseChat(payload: AiChatPayload, handlers: AiStreamHandlers = {}): Promise<AiChatResponse> {
-  let response = await sendAiChatStreamRequest(payload)
+  let response = await sendAiChatStreamRequest(payload, handlers.signal)
   if (response.status === 401) {
     const refreshedToken = await refreshAccessToken()
     if (!refreshedToken) {
@@ -403,7 +481,7 @@ async function postSseChat(payload: AiChatPayload, handlers: AiStreamHandlers = 
       throw await sseHttpError(response)
     }
 
-    response = await sendAiChatStreamRequest(payload)
+    response = await sendAiChatStreamRequest(payload, handlers.signal)
     if (response.status === 401) {
       invalidateAuthSession()
     }
@@ -456,7 +534,6 @@ interface PublicCourseFilters {
   keyword?: string
   levelId?: number
   categoryId?: number
-  accessType?: string
   learningType?: string
   sort?: string
   page?: number
@@ -465,7 +542,7 @@ interface PublicCourseFilters {
 
 interface AiChatPayload {
   message: string
-  languagePreference?: string
+  languagePreference?: AppLanguage
   sessionId?: number
   context?: string
   relatedLessonId?: number
@@ -476,8 +553,6 @@ export interface TeacherModulePayload {
   description?: string | null
   levelId: number
   categoryId: number
-  accessType: AccessType
-  price?: number | null
   coverImageUrl?: string | null
 }
 
@@ -488,8 +563,6 @@ export interface TeacherLessonPayload {
   levelId: number
   categoryId: number
   learningType: LearningType
-  accessType: AccessType
-  price?: number | null
   estimatedDurationMinutes?: number | null
   basicContent?: string | null
   coverImageUrl?: string | null
@@ -501,8 +574,6 @@ export interface TeacherPackagePayload {
   levelId: number
   categoryId: number
   learningType: LearningType
-  accessType: AccessType
-  price?: number | null
   coverImageUrl?: string | null
 }
 
@@ -524,6 +595,7 @@ export interface TeacherQuizPayload {
   title: string
   description?: string | null
   timeLimitMinutes?: number | null
+  learningStage?: LearningStage | null
 }
 
 export interface TeacherQuizOptionPayload {
@@ -540,6 +612,43 @@ export interface TeacherQuizQuestionPayload {
   displayOrder?: number | null
   options?: TeacherQuizOptionPayload[] | null
   explanation?: string | null
+  /** Optional hint (<= 1000 chars, D8); hidden from students on INDEPENDENT quizzes. */
+  hint?: string | null
+}
+
+export interface NotificationQuery {
+  /** Omit for all notifications. */
+  status?: NotificationStatus
+  page?: number
+  size?: number
+}
+
+export interface UpdateProfilePayload {
+  displayName: string
+  preferredLanguage: AppLanguage
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string
+  newPassword: string
+  confirmPassword: string
+}
+
+export interface PracticeSubmissionQuery {
+  type?: PracticeSubmissionType
+  page?: number
+  size?: number
+}
+
+export interface ReviewPracticeSubmissionQuery extends PracticeSubmissionQuery {
+  /** Teacher default SUBMITTED, admin default ALL. */
+  reviewStatus?: PracticeReviewStatus | 'ALL'
+}
+
+export interface PracticeSubmissionFeedbackPayload {
+  feedbackType?: TeacherFeedbackType
+  /** 5..2000 characters. */
+  message: string
 }
 
 interface ReviewAiReportPayload {
@@ -552,10 +661,54 @@ interface AdminActivityFilters {
   status?: ContentStatus | ''
   keyword?: string
   topic?: string
-  ageBand?: AgeBand | ''
   difficulty?: ActivityDifficulty | ''
   page?: number
   size?: number
+}
+
+export interface TeacherActivityFilters {
+  type?: AdminActivityType
+  status?: ContentStatus
+  keyword?: string
+  page?: number
+  size?: number
+}
+
+/** Server-side audit-log filters (D16). `from` / `to` are inclusive `yyyy-MM-dd` dates. */
+export interface AuditLogQuery {
+  actionType?: string
+  targetType?: string
+  actor?: string
+  actorId?: number
+  from?: string
+  to?: string
+  page?: number
+  size?: number
+}
+
+export interface ContentReviewQuery {
+  /** Defaults to SUBMITTED on the server; `ALL` lists every status. */
+  status?: ContentStatus | 'ALL'
+  type?: ReviewContentType
+  keyword?: string
+  page?: number
+  size?: number
+}
+
+export interface TeacherAiQuizDraftPayload {
+  topic: string
+  level?: string
+  category?: string
+  numberOfQuestions?: number
+  questionTypes?: string[]
+  languagePreference?: AppLanguage
+}
+
+export interface TeacherAiStoryDraftPayload {
+  topic: string
+  level?: string
+  languagePreference?: AppLanguage
+  lengthPreference?: string
 }
 
 export interface AdminMatchingGameItemPayload {
@@ -580,6 +733,8 @@ export interface AdminStoryQuestionPayload {
   optionsPayload: string
   explanation?: string | null
   sortOrder?: number | null
+  /** 0-based index of the correct option; nullable while drafting. */
+  correctOptionIndex?: number | null
 }
 
 export interface AdminFlashcardPayload {
@@ -594,23 +749,23 @@ export interface AdminFlashcardPayload {
   sortOrder?: number | null
   extraPayload?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags?: string[] | null
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
 }
 
 export interface AdminMatchingGamePayload {
   title: string
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags?: string[] | null
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   items: AdminMatchingGameItemPayload[]
 }
 
@@ -619,12 +774,12 @@ export interface AdminListeningExercisePayload {
   audioUrl?: string | null
   questionPayload?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags?: string[] | null
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
 }
 
 export interface AdminTracingExercisePayload {
@@ -635,24 +790,24 @@ export interface AdminTracingExercisePayload {
   meaning?: string | null
   instructions?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags?: string[] | null
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
 }
 
 export interface AdminDragDropActivityPayload {
   title: string
   instructions?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags?: string[] | null
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   items: AdminDragDropItemPayload[]
 }
 
@@ -664,13 +819,107 @@ export interface AdminStoryActivityPayload {
   translation?: string | null
   imageUrl?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags?: string[] | null
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   questions: AdminStoryQuestionPayload[]
+}
+
+/** Request body per practice-activity type (shared by the admin library and teacher-authored activities, D5). */
+export interface ActivityPayloadByType {
+  FLASHCARD: AdminFlashcardPayload
+  MATCHING_GAME: AdminMatchingGamePayload
+  LISTENING_EXERCISE: AdminListeningExercisePayload
+  TRACING_EXERCISE: AdminTracingExercisePayload
+  DRAG_DROP_ACTIVITY: AdminDragDropActivityPayload
+  STORY_ACTIVITY: AdminStoryActivityPayload
+}
+
+/** Response body per practice-activity type. */
+export interface ActivityResponseByType {
+  FLASHCARD: AdminFlashcardResponse
+  MATCHING_GAME: AdminMatchingGameResponse
+  LISTENING_EXERCISE: AdminListeningExerciseResponse
+  TRACING_EXERCISE: AdminTracingExerciseResponse
+  DRAG_DROP_ACTIVITY: AdminDragDropActivityResponse
+  STORY_ACTIVITY: AdminStoryActivityResponse
+}
+
+/** URL segment used by `/admin/activities/{slug}` and `/teachers/activities/{slug}`. */
+const ACTIVITY_TYPE_SLUGS = {
+  FLASHCARD: 'flashcards',
+  MATCHING_GAME: 'matching-games',
+  LISTENING_EXERCISE: 'listening-exercises',
+  TRACING_EXERCISE: 'tracing-exercises',
+  DRAG_DROP_ACTIVITY: 'drag-drop-activities',
+  STORY_ACTIVITY: 'story-activities',
+} as const satisfies Record<AdminActivityType, string>
+
+/** Typed CRUD client for one practice-activity collection root (admin library or the teacher's own activities). */
+export interface ActivityGateway {
+  detail<T extends AdminActivityType>(type: T, id: number): Promise<ActivityResponseByType[T]>
+  create<T extends AdminActivityType>(type: T, payload: ActivityPayloadByType[T]): Promise<ActivityResponseByType[T]>
+  update<T extends AdminActivityType>(
+    type: T,
+    id: number,
+    payload: ActivityPayloadByType[T],
+  ): Promise<ActivityResponseByType[T]>
+  remove(type: AdminActivityType, id: number): Promise<void>
+}
+
+export interface TeacherActivityGateway extends ActivityGateway {
+  list<T extends AdminActivityType>(
+    type: T,
+    params?: { status?: ContentStatus; page?: number; size?: number; sort?: string },
+  ): Promise<PageResponse<ActivityResponseByType[T]>>
+  submit<T extends AdminActivityType>(type: T, id: number): Promise<ActivityResponseByType[T]>
+}
+
+function createActivityGateway(basePath: string): ActivityGateway {
+  const path = (type: AdminActivityType, id?: number) =>
+    id === undefined ? `${basePath}/${ACTIVITY_TYPE_SLUGS[type]}` : `${basePath}/${ACTIVITY_TYPE_SLUGS[type]}/${id}`
+
+  return {
+    detail<T extends AdminActivityType>(type: T, id: number) {
+      return unwrap<ActivityResponseByType[T]>(http.get(path(type, id)))
+    },
+    create<T extends AdminActivityType>(type: T, payload: ActivityPayloadByType[T]) {
+      return unwrap<ActivityResponseByType[T]>(http.post(path(type), payload))
+    },
+    update<T extends AdminActivityType>(type: T, id: number, payload: ActivityPayloadByType[T]) {
+      return unwrap<ActivityResponseByType[T]>(http.put(path(type, id), payload))
+    },
+    remove(type: AdminActivityType, id: number) {
+      return unwrap<void>(http.delete(path(type, id)))
+    },
+  }
+}
+
+const ADMIN_ACTIVITIES_PATH = '/admin/activities'
+const TEACHER_ACTIVITIES_PATH = '/teachers/activities'
+
+/** Admin practice-activity library (full management of every activity). */
+export const adminActivityGateway: ActivityGateway = createActivityGateway(ADMIN_ACTIVITIES_PATH)
+
+/** Teacher-authored practice activities: own items only, created as DRAFT and submitted for admin review (D5). */
+export const teacherActivityGateway: TeacherActivityGateway = {
+  ...createActivityGateway(TEACHER_ACTIVITIES_PATH),
+  list<T extends AdminActivityType>(
+    type: T,
+    params: { status?: ContentStatus; page?: number; size?: number; sort?: string } = {},
+  ) {
+    return unwrap<PageResponse<ActivityResponseByType[T]>>(
+      http.get(`${TEACHER_ACTIVITIES_PATH}/${ACTIVITY_TYPE_SLUGS[type]}`, { params }),
+    )
+  },
+  submit<T extends AdminActivityType>(type: T, id: number) {
+    return unwrap<ActivityResponseByType[T]>(
+      http.post(`${TEACHER_ACTIVITIES_PATH}/${ACTIVITY_TYPE_SLUGS[type]}/${id}/submit`),
+    )
+  },
 }
 
 export const authApi = {
@@ -685,7 +934,7 @@ export const authApi = {
     email: string
     password: string
     confirmPassword: string
-    preferredLanguage?: string
+    preferredLanguage?: AppLanguage
   }) {
     return unwrap<RegistrationResponse>(http.post('/auth/register/student', payload))
   },
@@ -698,8 +947,11 @@ export const authApi = {
   }) {
     return unwrap<RegistrationResponse>(http.post('/auth/register/teacher', payload))
   },
-  me() {
-    return unwrap<CurrentUserResponse>(http.get('/auth/me'))
+  async me() {
+    const user = await unwrap<CurrentUserResponse>(http.get('/auth/me'))
+    // Old accounts may still carry the legacy Chinese code; the client only uses en | ms | zh-CN.
+    const preferredLanguage = normalizeAppLanguage(user.preferredLanguage)
+    return preferredLanguage && preferredLanguage !== user.preferredLanguage ? { ...user, preferredLanguage } : user
   },
   logout() {
     return unwrap<void>(http.post('/auth/logout'))
@@ -709,6 +961,19 @@ export const authApi = {
   },
   resetPassword(payload: { token: string; password: string; confirmPassword: string }) {
     return unwrap<void>(http.post('/auth/reset-password', payload))
+  },
+}
+
+/** Account management for every signed-in role (D12). */
+export const accountApi = {
+  async updateProfile(payload: UpdateProfilePayload) {
+    const user = await unwrap<CurrentUserResponse>(http.put('/users/me/profile', payload))
+    const preferredLanguage = normalizeAppLanguage(user.preferredLanguage)
+    return preferredLanguage && preferredLanguage !== user.preferredLanguage ? { ...user, preferredLanguage } : user
+  },
+  /** Returns a fresh access token; the server revokes every other session and sets a new refresh cookie. */
+  changePassword(payload: ChangePasswordPayload) {
+    return unwrap<AuthResponse>(http.post('/users/me/password', payload))
   },
 }
 
@@ -726,13 +991,17 @@ export const publicApi = {
     return unwrap<PageResponse<PublicCourseSummary>>(http.get('/public/courses', { params: filters }))
   },
   getCourseDetail(id: string) {
-    return unwrap<PublicCourseDetail>(http.get(`/public/courses/${id}`))
+    return unwrap<PublicCourseDetail>(http.get(`/public/courses/${encodeURIComponent(id)}`))
   },
 }
 
 export const notificationsApi = {
   list(params: QueryParams = {}) {
     return unwrapPageItems<NotificationResponse>(http.get('/notifications', { params }))
+  },
+  /** Paged list for the notifications page; `status` filters UNREAD / READ (omit for all). */
+  page(query: NotificationQuery = {}) {
+    return unwrap<PageResponse<NotificationResponse>>(http.get('/notifications', { params: query }))
   },
   unreadCount() {
     return unwrap<NotificationUnreadCountResponse>(http.get('/notifications/unread-count'))
@@ -773,8 +1042,23 @@ export const studentApi = {
   lessonPlayer(lessonId: number) {
     return unwrap<StudentLessonPlayerResponse>(http.get(`/students/lessons/${lessonId}`))
   },
-  liveClasses() {
-    return unwrapPageItems<LiveClassResponse>(http.get('/students/live-classes'))
+  /** Records that the lesson content was shown (part of lesson completion for lessons without quizzes). */
+  markLessonViewed(lessonId: number) {
+    return unwrap<StudentLessonProgressResponse>(http.post(`/students/lessons/${lessonId}/viewed`))
+  },
+  /** One page of the upcoming published live classes the learner can see, ordered by start time. */
+  liveClassesPage(params: { page?: number; size?: number } = {}) {
+    return unwrap<PageResponse<LiveClassResponse>>(http.get('/students/live-classes', { params }))
+  },
+  /** Every upcoming published live class (FR-LIVE-05): walks all pages at the maximum page size. */
+  async liveClasses() {
+    const items: LiveClassResponse[] = []
+    for (let page = 0; page < STUDENT_LIVE_CLASS_MAX_PAGES; page += 1) {
+      const response = await studentApi.liveClassesPage({ page, size: STUDENT_LIVE_CLASS_PAGE_SIZE })
+      items.push(...(response?.items ?? []))
+      if (!response || page + 1 >= (response.totalPages ?? 0)) break
+    }
+    return items
   },
   joinLiveClass(id: number) {
     return unwrap<{ liveClassId: number; title: string; meetingPlatform: string; meetingLink: string }>(
@@ -805,17 +1089,27 @@ export const studentApi = {
   quiz(quizId: number) {
     return unwrap<StudentQuizResponse>(http.get(`/students/quizzes/${quizId}`))
   },
-  submitQuiz(
-    quizId: number,
-    answers: Array<{
-      questionId: number
-      answerText: string
-    }>,
-  ) {
+  /** Option types send optionId, FILL_BLANK / REARRANGE_SENTENCE send answerText (see utils/quizAnswers.ts). */
+  submitQuiz(quizId: number, answers: QuizAnswerSubmission[]) {
     return unwrap<QuizAttemptResultResponse>(http.post(`/students/quizzes/${quizId}/attempts`, { answers }))
   },
-  wrongAnswers() {
-    return unwrapPageItems<WrongAnswerResponse>(http.get('/students/wrong-answers'))
+  quizHint(quizId: number, questionId: number) {
+    return unwrap<QuizHintResponse>(http.get(`/students/quizzes/${quizId}/questions/${questionId}/hint`))
+  },
+  wrongAnswers(params: StudentQueryParams = {}) {
+    return unwrapPageItems<WrongAnswerResponse>(http.get('/students/wrong-answers', { params }))
+  },
+  practiceSubmissions(query: PracticeSubmissionQuery = {}) {
+    return unwrap<PageResponse<PracticeSubmissionResponse>>(
+      http.get('/students/practice-submissions', { params: query }),
+    )
+  },
+  practiceSubmission(id: number) {
+    return unwrap<PracticeSubmissionResponse>(http.get(`/students/practice-submissions/${id}`))
+  },
+  /** Authorised file stream fetched with the bearer token as a Blob. */
+  practiceSubmissionFile(id: number) {
+    return unwrapDownload(http.get(`/students/practice-submissions/${id}/file`, { responseType: 'blob' }))
   },
   feedback() {
     return unwrapPageItems<StudentTeacherFeedbackResponse>(http.get('/students/feedback'))
@@ -832,69 +1126,43 @@ export const studentApi = {
   matchingGame(id: number) {
     return unwrap<StudentMatchingGameResponse>(http.get(`/students/activities/matching-games/${id}`))
   },
-  completeMatchingGame(id: number) {
-    return unwrap<StudentActivityCompletionResponse>(http.post(`/students/activities/matching-games/${id}/complete`))
+  completeMatchingGame(id: number, body: MatchingCompletionRequest) {
+    return unwrap<StudentActivityCompletionResponse>(
+      http.post(`/students/activities/matching-games/${id}/complete`, body),
+    )
   },
   listeningExercise(id: number) {
     return unwrap<StudentListeningExerciseResponse>(http.get(`/students/activities/listening-exercises/${id}`))
   },
-  completeListeningExercise(id: number) {
+  completeListeningExercise(id: number, body: ListeningCompletionRequest) {
     return unwrap<StudentActivityCompletionResponse>(
-      http.post(`/students/activities/listening-exercises/${id}/complete`),
+      http.post(`/students/activities/listening-exercises/${id}/complete`, body),
     )
   },
   tracingExercise(id: number) {
     return unwrap<StudentTracingExerciseResponse>(http.get(`/students/activities/tracing-exercises/${id}`))
   },
-  completeTracingExercise(id: number) {
-    return unwrap<StudentActivityCompletionResponse>(http.post(`/students/activities/tracing-exercises/${id}/complete`))
+  /** Tracing is practice only and never graded; the server records completion for strokeCount >= 1. */
+  completeTracingExercise(id: number, body: TracingCompletionRequest) {
+    return unwrap<StudentActivityCompletionResponse>(
+      http.post(`/students/activities/tracing-exercises/${id}/complete`, body),
+    )
   },
   dragDropActivity(id: number) {
     return unwrap<StudentDragDropActivityResponse>(http.get(`/students/activities/drag-drop-activities/${id}`))
   },
-  completeDragDropActivity(id: number) {
+  completeDragDropActivity(id: number, body: DragDropCompletionRequest) {
     return unwrap<StudentActivityCompletionResponse>(
-      http.post(`/students/activities/drag-drop-activities/${id}/complete`),
+      http.post(`/students/activities/drag-drop-activities/${id}/complete`, body),
     )
   },
   storyActivity(id: number) {
     return unwrap<StudentStoryActivityResponse>(http.get(`/students/activities/story-activities/${id}`))
   },
-  completeStoryActivity(id: number) {
-    return unwrap<StudentActivityCompletionResponse>(http.post(`/students/activities/story-activities/${id}/complete`))
-  },
-  cart() {
-    return unwrap<CartResponse>(http.get('/students/cart'))
-  },
-  addCartItem(payload: { itemType: string; itemId: number; featureKey?: string }) {
-    return unwrap<CartResponse>(http.post('/students/cart/items', payload))
-  },
-  removeCartItem(cartItemId: number) {
-    return unwrap<CartResponse>(http.delete(`/students/cart/items/${cartItemId}`))
-  },
-  clearCart() {
-    return unwrap<CartResponse>(http.delete('/students/cart/clear'))
-  },
-  checkoutCart() {
-    return unwrap<CheckoutResponse>(http.post('/students/checkout/cart'))
-  },
-  buyNow(payload: { itemType: string; itemId: number; featureKey?: string }) {
-    return unwrap<CheckoutResponse>(http.post('/students/checkout/buy-now', payload))
-  },
-  payments(params: QueryParams = {}) {
-    return unwrapPageItems<StudentPaymentRecordResponse>(http.get('/students/payments', { params }))
-  },
-  refunds(params: QueryParams = {}) {
-    return unwrapPageItems<StudentRefundRequestResponse>(http.get('/students/refund-requests', { params }))
-  },
-  createRefund(payload: { orderId: number; reason: string }) {
-    return unwrap<StudentRefundRequestResponse>(http.post('/students/refund-requests', payload))
-  },
-}
-
-export const paymentApi = {
-  status(paymentId: number) {
-    return unwrap<StudentPaymentRecordResponse>(http.get(`/payments/status/${paymentId}`))
+  completeStoryActivity(id: number, body: StoryCompletionRequest) {
+    return unwrap<StudentActivityCompletionResponse>(
+      http.post(`/students/activities/story-activities/${id}/complete`, body),
+    )
   },
 }
 
@@ -906,16 +1174,21 @@ export const aiApi = {
   vocabularyHelper(payload: {
     word: string
     inputLanguage?: string
-    outputLanguage?: string
+    outputLanguage?: AppLanguage
     learnerLevel?: string
-    languagePreference?: string
+    languagePreference?: AppLanguage
   }) {
     return unwrap<AiVocabularyHelperResponse>(http.post('/ai/vocabulary-helper', payload))
   },
-  sentencePractice(payload: { sentence: string; learnerLevel?: string; languagePreference?: string }) {
+  sentencePractice(payload: { sentence: string; learnerLevel?: string; languagePreference?: AppLanguage }) {
     return unwrap<AiSentencePracticeResponse>(http.post('/ai/sentence-practice', payload))
   },
-  storyGenerator(payload: { topic: string; level?: string; languagePreference?: string; lengthPreference?: string }) {
+  storyGenerator(payload: {
+    topic: string
+    level?: string
+    languagePreference?: AppLanguage
+    lengthPreference?: string
+  }) {
     return unwrap<AiStoryGeneratorResponse>(http.post('/ai/story-generator', payload))
   },
   quizGenerator(payload: {
@@ -924,21 +1197,9 @@ export const aiApi = {
     category?: string
     numberOfQuestions?: number
     questionTypes?: string[]
-    targetRoleContext?: string
-    languagePreference?: string
+    languagePreference?: AppLanguage
   }) {
     return unwrap<AiQuizGeneratorResponse>(http.post('/ai/quiz-generator', payload))
-  },
-  learningRecommendation(payload: {
-    studentId?: number
-    currentLevel?: string
-    recentQuizResults?: string[]
-    wrongAnswers?: string[]
-    weakAreas?: string[]
-    completedLessons?: string[]
-    languagePreference?: string
-  }) {
-    return unwrap<AiLearningRecommendationResponse>(http.post('/ai/learning-recommendation', payload))
   },
   pronunciationFeedback(formData: FormData) {
     return unwrap<AiPronunciationFeedbackResponse>(http.post('/ai/pronunciation-feedback', formData))
@@ -953,7 +1214,7 @@ export const aiApi = {
     aiUsageLogId?: number
     chatSessionId?: number
     chatMessageId?: number
-    featureKey: string
+    featureKey: AiFeatureKey
     reasonCategory: AiResponseReportReason
     description?: string
     promptSnapshot?: string
@@ -994,7 +1255,7 @@ export const teacherApi = {
     return unwrap<TeacherVerificationStatusResponse>(http.post('/teachers/resubmit-verification'))
   },
   modules() {
-    return unwrapPageItems<LearningModuleResponse>(http.get('/teachers/modules'))
+    return unwrapPageItems<LearningModuleResponse>(http.get('/teachers/modules', maxPageConfig()))
   },
   createModule(payload: TeacherModulePayload) {
     return unwrap<LearningModuleResponse>(http.post('/teachers/modules', payload))
@@ -1006,7 +1267,7 @@ export const teacherApi = {
     return unwrap<LearningModuleResponse>(http.patch(`/teachers/modules/${id}/archive`))
   },
   lessons() {
-    return unwrapPageItems<LessonResponse>(http.get('/teachers/lessons'))
+    return unwrapPageItems<LessonResponse>(http.get('/teachers/lessons', maxPageConfig()))
   },
   createLesson(payload: TeacherLessonPayload) {
     return unwrap<LessonResponse>(http.post('/teachers/lessons', payload))
@@ -1018,7 +1279,7 @@ export const teacherApi = {
     return unwrap<LessonResponse>(http.patch(`/teachers/lessons/${id}/archive`))
   },
   packages() {
-    return unwrapPageItems<CoursePackageResponse>(http.get('/teachers/packages'))
+    return unwrapPageItems<CoursePackageResponse>(http.get('/teachers/packages', maxPageConfig()))
   },
   createPackage(payload: TeacherPackagePayload) {
     return unwrap<CoursePackageResponse>(http.post('/teachers/packages', payload))
@@ -1036,7 +1297,7 @@ export const teacherApi = {
     return unwrap<CoursePackageResponse>(http.delete(`/teachers/packages/${packageId}/items/${itemId}`))
   },
   liveClasses() {
-    return unwrapPageItems<LiveClassResponse>(http.get('/teachers/live-classes'))
+    return unwrapPageItems<LiveClassResponse>(http.get('/teachers/live-classes', maxPageConfig()))
   },
   createLiveClass(payload: TeacherLiveClassPayload) {
     return unwrap<LiveClassResponse>(http.post('/teachers/live-classes', payload))
@@ -1048,10 +1309,14 @@ export const teacherApi = {
     return unwrap<LiveClassResponse>(http.patch(`/teachers/live-classes/${id}/cancel`))
   },
   enrolments(id: number) {
-    return unwrapPageItems<LiveClassEnrolmentResponse>(http.get(`/teachers/live-classes/${id}/enrolments`))
+    return unwrapPageItems<LiveClassEnrolmentResponse>(
+      http.get(`/teachers/live-classes/${id}/enrolments`, maxPageConfig()),
+    )
   },
   recordedVideos(lessonId: number) {
-    return unwrapPageItems<RecordedLessonVideoResponse>(http.get(`/teachers/lessons/${lessonId}/recorded-videos`))
+    return unwrapPageItems<RecordedLessonVideoResponse>(
+      http.get(`/teachers/lessons/${lessonId}/recorded-videos`, maxPageConfig()),
+    )
   },
   createRecordedVideo(lessonId: number, formData: FormData) {
     return unwrap<RecordedLessonVideoResponse>(http.post(`/teachers/lessons/${lessonId}/recorded-videos`, formData))
@@ -1067,10 +1332,12 @@ export const teacherApi = {
     )
   },
   lessonVideoProgress(lessonId: number) {
-    return unwrapPageItems<LessonVideoProgressSummaryResponse>(http.get(`/teachers/lessons/${lessonId}/video-progress`))
+    return unwrapPageItems<LessonVideoProgressSummaryResponse>(
+      http.get(`/teachers/lessons/${lessonId}/video-progress`, maxPageConfig()),
+    )
   },
   lessonQuizzes(lessonId: number) {
-    return unwrapPageItems<TeacherQuizResponse>(http.get(`/teachers/lessons/${lessonId}/quizzes`))
+    return unwrapPageItems<TeacherQuizResponse>(http.get(`/teachers/lessons/${lessonId}/quizzes`, maxPageConfig()))
   },
   createQuiz(lessonId: number, payload: TeacherQuizPayload) {
     return unwrap<TeacherQuizResponse>(http.post(`/teachers/lessons/${lessonId}/quizzes`, payload))
@@ -1091,37 +1358,73 @@ export const teacherApi = {
     return unwrap<TeacherQuizResponse>(http.delete(`/teachers/quiz-questions/${questionId}`))
   },
   quizAttempts(quizId: number) {
-    return unwrapPageItems<TeacherQuizAttemptSummaryResponse>(http.get(`/teachers/quizzes/${quizId}/attempts`))
+    return unwrapPageItems<TeacherQuizAttemptSummaryResponse>(
+      http.get(`/teachers/quizzes/${quizId}/attempts`, maxPageConfig()),
+    )
   },
   feedbackList() {
-    return unwrapPageItems<TeacherFeedbackResponse>(http.get('/teachers/feedback'))
+    return unwrapPageItems<TeacherFeedbackResponse>(http.get('/teachers/feedback', maxPageConfig()))
   },
   students() {
-    return unwrapPageItems<TeacherStudentSummaryResponse>(http.get('/teachers/students'))
+    return unwrapPageItems<TeacherStudentSummaryResponse>(http.get('/teachers/students', maxPageConfig()))
   },
   createFeedback(payload: {
     studentId: number
     lessonId?: number
     quizAttemptId?: number
+    practiceSubmissionId?: number
     feedbackType?: string
     message: string
   }) {
     return unwrap<TeacherFeedbackResponse>(http.post('/teachers/feedback', payload))
   },
+  /* Practice submissions of learners on the teacher's roster (D7). */
+  practiceSubmissions(query: ReviewPracticeSubmissionQuery = {}) {
+    return unwrap<PageResponse<PracticeSubmissionResponse>>(
+      http.get('/teachers/practice-submissions', { params: query }),
+    )
+  },
+  practiceSubmission(id: number) {
+    return unwrap<PracticeSubmissionResponse>(http.get(`/teachers/practice-submissions/${id}`))
+  },
+  practiceSubmissionFile(id: number) {
+    return unwrapDownload(http.get(`/teachers/practice-submissions/${id}/file`, { responseType: 'blob' }))
+  },
+  reviewPracticeSubmission(id: number, payload: PracticeSubmissionFeedbackPayload) {
+    return unwrap<PracticeSubmissionResponse>(http.post(`/teachers/practice-submissions/${id}/feedback`, payload))
+  },
   updateFeedback(id: number, payload: { feedbackType?: string; message: string }) {
     return unwrap<TeacherFeedbackResponse>(http.put(`/teachers/feedback/${id}`, payload))
   },
-  earnings(params: QueryParams = {}) {
-    return unwrapPageItems<TeacherEarningResponse>(http.get('/teachers/earnings', { params }))
+  /* Review workflow (D4): submit DRAFT/REJECTED content for admin review. */
+  submitPackage(id: number) {
+    return unwrap<CoursePackageResponse>(http.post(`/teachers/packages/${id}/submit`))
   },
-  earningsSummary() {
-    return unwrap<TeacherEarningSummaryResponse>(http.get('/teachers/earnings/summary'))
+  submitModule(id: number) {
+    return unwrap<LearningModuleResponse>(http.post(`/teachers/modules/${id}/submit`))
   },
-  payouts(params: QueryParams = {}) {
-    return unwrapPageItems<TeacherPayoutRequestResponse>(http.get('/teachers/payout-requests', { params }))
+  submitLesson(id: number) {
+    return unwrap<LessonResponse>(http.post(`/teachers/lessons/${id}/submit`))
   },
-  createPayoutRequest(payload: { amount: number; requestedNote?: string }) {
-    return unwrap<TeacherPayoutRequestResponse>(http.post('/teachers/payout-requests', payload))
+  submitQuiz(quizId: number) {
+    return unwrap<TeacherQuizResponse>(http.post(`/teachers/quizzes/${quizId}/submit`))
+  },
+  quiz(quizId: number) {
+    return unwrap<TeacherQuizResponse>(http.get(`/teachers/quizzes/${quizId}`))
+  },
+  /* Teacher-authored practice activities (D5); per-type CRUD lives in teacherActivityGateway. */
+  activities(params: TeacherActivityFilters = {}) {
+    return unwrap<PageResponse<AdminActivitySummaryResponse>>(http.get('/teachers/activities', { params }))
+  },
+  /* AI-assisted drafts (D6): nothing is saved; the teacher edits and saves through the normal flow. */
+  aiAvailability() {
+    return unwrap<AiAvailabilityResponse>(http.get('/teachers/ai/availability'))
+  },
+  aiQuizDraft(payload: TeacherAiQuizDraftPayload) {
+    return unwrap<AiQuizGeneratorResponse>(http.post('/teachers/ai/quiz-draft', payload))
+  },
+  aiStoryDraft(payload: TeacherAiStoryDraftPayload) {
+    return unwrap<AiStoryGeneratorResponse>(http.post('/teachers/ai/story-draft', payload))
   },
 }
 
@@ -1135,7 +1438,8 @@ export const adminApi = {
   liveClasses() {
     return unwrapPageItems<LiveClassResponse>(http.get('/admin/live-classes'))
   },
-  users(params: QueryParams = {}) {
+  /** Server-side user search: keyword (name/e-mail), role, teacher status, active, 0-based page and size (max 100). */
+  users(params: Partial<AdminUserQueryParams> = {}) {
     return unwrap<PageResponse<AdminUserListItemResponse>>(http.get('/admin/users', { params }))
   },
   updateUserStatus(id: number, payload: { active: boolean }) {
@@ -1168,111 +1472,41 @@ export const adminApi = {
   aiUsageLogs(params: QueryParams = {}) {
     return unwrap<PageResponse<AdminAiUsageLogResponse>>(http.get('/admin/ai/usage-logs', { params }))
   },
-  flashcard(id: number) {
-    return unwrap<AdminFlashcardResponse>(http.get(`/admin/activities/flashcards/${id}`))
-  },
-  createFlashcard(payload: AdminFlashcardPayload) {
-    return unwrap<AdminFlashcardResponse>(http.post('/admin/activities/flashcards', payload))
-  },
-  updateFlashcard(id: number, payload: AdminFlashcardPayload) {
-    return unwrap<AdminFlashcardResponse>(http.put(`/admin/activities/flashcards/${id}`, payload))
-  },
   updateFlashcardStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminFlashcardResponse>(http.patch(`/admin/activities/flashcards/${id}/status`, { status }))
   },
-  deleteFlashcard(id: number) {
-    return unwrap<void>(http.delete(`/admin/activities/flashcards/${id}`))
-  },
-  matchingGame(id: number) {
-    return unwrap<AdminMatchingGameResponse>(http.get(`/admin/activities/matching-games/${id}`))
-  },
-  createMatchingGame(payload: AdminMatchingGamePayload) {
-    return unwrap<AdminMatchingGameResponse>(http.post('/admin/activities/matching-games', payload))
-  },
-  updateMatchingGame(id: number, payload: AdminMatchingGamePayload) {
-    return unwrap<AdminMatchingGameResponse>(http.put(`/admin/activities/matching-games/${id}`, payload))
-  },
   updateMatchingGameStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminMatchingGameResponse>(http.patch(`/admin/activities/matching-games/${id}/status`, { status }))
-  },
-  deleteMatchingGame(id: number) {
-    return unwrap<void>(http.delete(`/admin/activities/matching-games/${id}`))
-  },
-  listeningExercise(id: number) {
-    return unwrap<AdminListeningExerciseResponse>(http.get(`/admin/activities/listening-exercises/${id}`))
-  },
-  createListeningExercise(payload: AdminListeningExercisePayload) {
-    return unwrap<AdminListeningExerciseResponse>(http.post('/admin/activities/listening-exercises', payload))
-  },
-  updateListeningExercise(id: number, payload: AdminListeningExercisePayload) {
-    return unwrap<AdminListeningExerciseResponse>(http.put(`/admin/activities/listening-exercises/${id}`, payload))
   },
   updateListeningExerciseStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminListeningExerciseResponse>(
       http.patch(`/admin/activities/listening-exercises/${id}/status`, { status }),
     )
   },
-  deleteListeningExercise(id: number) {
-    return unwrap<void>(http.delete(`/admin/activities/listening-exercises/${id}`))
-  },
-  tracingExercise(id: number) {
-    return unwrap<AdminTracingExerciseResponse>(http.get(`/admin/activities/tracing-exercises/${id}`))
-  },
-  createTracingExercise(payload: AdminTracingExercisePayload) {
-    return unwrap<AdminTracingExerciseResponse>(http.post('/admin/activities/tracing-exercises', payload))
-  },
-  updateTracingExercise(id: number, payload: AdminTracingExercisePayload) {
-    return unwrap<AdminTracingExerciseResponse>(http.put(`/admin/activities/tracing-exercises/${id}`, payload))
-  },
   updateTracingExerciseStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminTracingExerciseResponse>(
       http.patch(`/admin/activities/tracing-exercises/${id}/status`, { status }),
     )
-  },
-  deleteTracingExercise(id: number) {
-    return unwrap<void>(http.delete(`/admin/activities/tracing-exercises/${id}`))
-  },
-  dragDropActivity(id: number) {
-    return unwrap<AdminDragDropActivityResponse>(http.get(`/admin/activities/drag-drop-activities/${id}`))
-  },
-  createDragDropActivity(payload: AdminDragDropActivityPayload) {
-    return unwrap<AdminDragDropActivityResponse>(http.post('/admin/activities/drag-drop-activities', payload))
-  },
-  updateDragDropActivity(id: number, payload: AdminDragDropActivityPayload) {
-    return unwrap<AdminDragDropActivityResponse>(http.put(`/admin/activities/drag-drop-activities/${id}`, payload))
   },
   updateDragDropActivityStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminDragDropActivityResponse>(
       http.patch(`/admin/activities/drag-drop-activities/${id}/status`, { status }),
     )
   },
-  deleteDragDropActivity(id: number) {
-    return unwrap<void>(http.delete(`/admin/activities/drag-drop-activities/${id}`))
-  },
-  storyActivity(id: number) {
-    return unwrap<AdminStoryActivityResponse>(http.get(`/admin/activities/story-activities/${id}`))
-  },
-  createStoryActivity(payload: AdminStoryActivityPayload) {
-    return unwrap<AdminStoryActivityResponse>(http.post('/admin/activities/story-activities', payload))
-  },
-  updateStoryActivity(id: number, payload: AdminStoryActivityPayload) {
-    return unwrap<AdminStoryActivityResponse>(http.put(`/admin/activities/story-activities/${id}`, payload))
-  },
   updateStoryActivityStatus(id: number, status: ContentPublicationStatus) {
     return unwrap<AdminStoryActivityResponse>(http.patch(`/admin/activities/story-activities/${id}/status`, { status }))
-  },
-  deleteStoryActivity(id: number) {
-    return unwrap<void>(http.delete(`/admin/activities/story-activities/${id}`))
   },
   content(params: QueryParams = {}) {
     return unwrap<PageResponse<ContentSubmissionResponse>>(http.get('/admin/content/submissions', { params }))
   },
   contentDetail(contentType: string, id: number) {
-    return unwrap<ContentSubmissionDetailResponse>(http.get(`/admin/content/submissions/${contentType}/${id}`))
+    return unwrap<ContentSubmissionDetailResponse>(
+      http.get(`/admin/content/submissions/${encodeURIComponent(contentType)}/${id}`),
+    )
   },
   archiveContent(contentType: string, id: number, note?: string) {
     return unwrap<ContentSubmissionDetailResponse>(
-      http.patch(`/admin/content/${contentType}/${id}/archive`, note ? { note } : {}),
+      http.patch(`/admin/content/${encodeURIComponent(contentType)}/${id}/archive`, note ? { note } : {}),
     )
   },
   moderationRecords(params: QueryParams = {}) {
@@ -1295,38 +1529,43 @@ export const adminApi = {
   auditLogs(params: QueryParams = {}) {
     return unwrapPageItems<AuditLogResponse>(http.get('/admin/audit-logs', { params }))
   },
-  payments(params: QueryParams = {}) {
-    return unwrapPageItems<AdminPaymentRecordResponse>(http.get('/admin/payments', { params }))
+  auditLogPage(query: AuditLogQuery = {}) {
+    return unwrap<PageResponse<AuditLogResponse>>(http.get('/admin/audit-logs', { params: query }))
   },
-  refunds(params: QueryParams = {}) {
-    return unwrapPageItems<AdminRefundRequestResponse>(http.get('/admin/refund-requests', { params }))
+  /* Content review queue (D4): approve / reject (reason required) / archive / restore. */
+  contentReviewQueue(query: ContentReviewQuery = {}) {
+    return unwrap<PageResponse<ContentReviewItemResponse>>(http.get('/admin/content-review', { params: query }))
   },
-  approveRefund(id: number) {
-    return unwrap<AdminRefundRequestResponse>(http.post(`/admin/refund-requests/${id}/approve`))
+  contentReviewDetail(type: ReviewContentType, id: number) {
+    return unwrap<ContentReviewDetailResponse>(http.get(`/admin/content-review/${type}/${id}`))
   },
-  rejectRefund(id: number, payload: { reason: string }) {
-    return unwrap<AdminRefundRequestResponse>(http.post(`/admin/refund-requests/${id}/reject`, payload))
+  approveContent(type: ReviewContentType, id: number, note?: string) {
+    return unwrap<ContentReviewItemResponse>(
+      http.post(`/admin/content-review/${type}/${id}/approve`, note ? { note } : {}),
+    )
   },
-  markRefunded(id: number) {
-    return unwrap<AdminRefundRequestResponse>(http.post(`/admin/refund-requests/${id}/mark-refunded`))
+  rejectContent(type: ReviewContentType, id: number, reason: string) {
+    return unwrap<ContentReviewItemResponse>(http.post(`/admin/content-review/${type}/${id}/reject`, { reason }))
   },
-  payouts(params: QueryParams = {}) {
-    return unwrapPageItems<AdminPayoutRequestResponse>(http.get('/admin/payout-requests', { params }))
+  archiveReviewedContent(type: ReviewContentType, id: number, note?: string) {
+    return unwrap<ContentReviewItemResponse>(
+      http.post(`/admin/content-review/${type}/${id}/archive`, note ? { note } : {}),
+    )
   },
-  approvePayout(id: number) {
-    return unwrap<AdminPayoutRequestResponse>(http.post(`/admin/payout-requests/${id}/approve`))
+  restoreContent(type: ReviewContentType, id: number, note?: string) {
+    return unwrap<ContentReviewItemResponse>(
+      http.post(`/admin/content-review/${type}/${id}/restore`, note ? { note } : {}),
+    )
   },
-  rejectPayout(id: number, payload: { reason: string }) {
-    return unwrap<AdminPayoutRequestResponse>(http.post(`/admin/payout-requests/${id}/reject`, payload))
+  /* Practice submissions (read-only moderation view). */
+  practiceSubmissions(query: ReviewPracticeSubmissionQuery = {}) {
+    return unwrap<PageResponse<PracticeSubmissionResponse>>(http.get('/admin/practice-submissions', { params: query }))
   },
-  markPayoutPaid(id: number) {
-    return unwrap<AdminPayoutRequestResponse>(http.post(`/admin/payout-requests/${id}/mark-paid`))
+  practiceSubmission(id: number) {
+    return unwrap<PracticeSubmissionResponse>(http.get(`/admin/practice-submissions/${id}`))
   },
-  commissionSetting() {
-    return unwrap<CommissionSettingResponse>(http.get('/admin/system-settings/commission'))
-  },
-  updateCommissionSetting(payload: { commissionRate: number }) {
-    return unwrap<CommissionSettingResponse>(http.put('/admin/system-settings/commission', payload))
+  practiceSubmissionFile(id: number) {
+    return unwrapDownload(http.get(`/admin/practice-submissions/${id}/file`, { responseType: 'blob' }))
   },
   platformSettings() {
     return unwrap<AdminPlatformSettingsResponse>(http.get('/admin/system-settings/platform'))

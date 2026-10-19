@@ -1,352 +1,327 @@
 <template>
   <div class="page-stack admin-verification-page">
-    <section class="admin-verification-header">
-      <PageHeaderBlock
-        :title="t('adminTeacherVerification.title')"
-        :description="t('adminTeacherVerification.description')"
-        icon="verification"
-      />
-
-      <div class="admin-verification-toolbar">
-        <label class="admin-verification-search">
-          <IconGlyph name="search" :size="16" />
-          <input
-            v-model="searchTerm"
-            class="admin-verification-search-input"
-            :placeholder="t('adminTeacherVerification.search')"
-          />
-        </label>
-
-        <button class="teacher-outline-button admin-verification-tool-button" type="button" @click="cycleSortMode">
-          {{ t('adminTeacherVerification.sort', { mode: sortModeLabel }) }}
-        </button>
-
-        <div class="teacher-outline-button admin-verification-tool-button is-date" role="status" aria-live="polite">
-          <IconGlyph name="calendar" :size="16" />
+    <PageHeaderBlock
+      :title="t('adminTeacherVerification.title')"
+      :description="t('adminTeacherVerification.description')"
+      icon="verification"
+    >
+      <template #meta>
+        <span class="tag">
+          <IconGlyph name="calendar" :size="14" aria-hidden="true" />
           {{ todayLabel }}
-        </div>
-      </div>
-    </section>
+        </span>
+      </template>
+    </PageHeaderBlock>
 
     <DataNotice :using-fallback="pendingResource.usingFallback.value" :error="noticeError" :success="actionSuccess" />
 
-    <section class="admin-verification-stats">
-      <article v-for="card in statCards" :key="card.label" class="admin-verification-stat">
-        <div class="admin-verification-stat-icon" :class="`is-${card.tone}`">
-          <IconGlyph :name="card.icon" :size="22" />
-        </div>
-        <div class="stack u-gap-4">
-          <span class="admin-verification-stat-label">{{ card.label }}</span>
-          <strong class="admin-verification-stat-value">{{ card.value }}</strong>
-          <span class="admin-verification-stat-copy">{{ card.copy }}</span>
-        </div>
-      </article>
-    </section>
-
-    <section class="admin-verification-layout">
-      <article class="panel admin-verification-list-panel">
-        <div class="admin-verification-list-head">
-          <div class="student-section-heading">
-            <strong>{{
-              t('adminTeacherVerification.pendingApplications', { count: filteredApplicants.length })
-            }}</strong>
-          </div>
-        </div>
-
-        <div v-if="pagedApplicants.length" class="admin-verification-list">
-          <button
-            v-for="item in pagedApplicants"
-            :key="item.teacherId"
-            type="button"
-            class="admin-verification-row"
-            :class="{ 'is-active': item.teacherId === selectedTeacherId }"
-            @click="selectTeacher(item.teacherId)"
-          >
-            <PortraitAvatar :size="58" :kind="item.avatarKind" />
-            <div class="admin-verification-row-copy">
-              <strong>{{ item.fullName }}</strong>
-              <span>{{ item.email }}</span>
-              <small>{{ item.summary }}</small>
-            </div>
-            <div class="admin-verification-row-side">
-              <span>{{ item.appliedLabel }}</span>
-              <small>{{ item.documentCountLabel }}</small>
-            </div>
-          </button>
-        </div>
-        <StatePanel
-          v-else
-          icon="verification"
-          :title="t('adminTeacherVerification.noPending')"
-          :message="t('adminTeacherVerification.noPendingHint')"
+    <ResourceSection class="page-stack" :loading="queueLoading" :error="queueError" @retry="reloadQueue">
+      <section class="admin-kpi-grid">
+        <AdminKpiTile
+          v-for="card in statCards"
+          :key="card.label"
+          :label="card.label"
+          :value="card.value"
+          :hint="card.copy"
+          :icon="card.icon"
+          :tone="card.tone"
         />
+      </section>
 
-        <div v-if="totalPages > 1" class="admin-verification-pagination">
-          <div class="row admin-verification-pagination-pages">
-            <button
-              v-for="page in totalPages"
-              :key="page"
-              class="admin-verification-page-button"
-              :class="{ 'is-active': currentPage === page }"
-              type="button"
-              @click="goToPage(page)"
-            >
-              {{ page }}
+      <section class="admin-split admin-split--even">
+        <article class="panel admin-panel">
+          <h2 class="card-title">
+            {{ t('adminTeacherVerification.pendingApplications', { count: filteredApplicants.length }) }}
+          </h2>
+
+          <div class="admin-toolbar">
+            <div class="field admin-toolbar-search">
+              <label for="admin-verification-search">{{ t('adminTeacherVerification.searchLabel') }}</label>
+              <div class="input-with-icon">
+                <IconGlyph class="input-icon" name="search" :size="16" />
+                <input
+                  id="admin-verification-search"
+                  v-model="searchTerm"
+                  class="input"
+                  type="search"
+                  :placeholder="t('adminTeacherVerification.search')"
+                />
+              </div>
+            </div>
+            <button class="btn btn-secondary" type="button" @click="cycleSortMode">
+              <IconGlyph name="filter" :size="16" />
+              <span>{{ t('adminTeacherVerification.sort', { mode: sortModeLabel }) }}</span>
             </button>
           </div>
-          <span>{{
-            t('adminTeacherVerification.showing', { shown: paginationCountLabel, total: filteredApplicants.length })
-          }}</span>
-        </div>
-      </article>
 
-      <article class="panel admin-verification-detail-panel">
-        <template v-if="selectedApplicant">
-          <div class="admin-verification-detail-top">
-            <div class="admin-verification-detail-profile">
-              <PortraitAvatar :size="76" :kind="selectedApplicant.avatarKind" />
-              <div class="stack u-gap-6">
-                <h2>{{ selectedApplicant.fullName }}</h2>
-                <span>{{ selectedApplicant.email }}</span>
-                <small>{{ t('adminTeacherVerification.submittedAt', { date: selectedApplicant.appliedLabel }) }}</small>
+          <ul v-if="pagedApplicants.length" class="admin-queue">
+            <li v-for="item in pagedApplicants" :key="item.teacherId">
+              <button
+                type="button"
+                class="admin-queue-item"
+                :class="{ 'is-selected': item.teacherId === selectedTeacherId }"
+                :aria-pressed="item.teacherId === selectedTeacherId"
+                @click="selectTeacher(item.teacherId)"
+              >
+                <PortraitAvatar :size="40" :name="item.fullName" :tone="item.avatarTone" />
+                <span class="admin-queue-copy">
+                  <strong>{{ item.fullName }}</strong>
+                  <span class="admin-feed-text">{{ item.email }}</span>
+                  <span class="admin-feed-meta">{{ item.summary }}</span>
+                </span>
+                <span class="admin-queue-aside">
+                  <span class="admin-feed-meta">{{ item.appliedLabel }}</span>
+                  <span class="tag">{{ item.documentCountLabel }}</span>
+                </span>
+              </button>
+            </li>
+          </ul>
+          <StatePanel
+            v-else
+            compact
+            icon="verification"
+            :title="t('adminTeacherVerification.noPending')"
+            :message="t('adminTeacherVerification.noPendingHint')"
+          />
+
+          <PaginationBar
+            v-if="totalPages > 1"
+            :info="
+              t('adminTeacherVerification.showing', { shown: paginationCountLabel, total: filteredApplicants.length })
+            "
+            :page-count="totalPages"
+            :current-page="currentPage"
+            :page-label="(page) => t('adminTeacherVerification.pageAria', { page })"
+            @select="goToPage"
+          />
+        </article>
+
+        <article class="panel admin-panel">
+          <template v-if="selectedApplicant">
+            <div class="admin-profile">
+              <PortraitAvatar :size="56" :name="selectedApplicant.fullName" :tone="selectedApplicant.avatarTone" />
+              <div class="admin-profile-copy">
+                <h2 class="admin-profile-name">{{ selectedApplicant.fullName }}</h2>
+                <span class="admin-profile-meta">{{ selectedApplicant.email }}</span>
+                <span class="admin-feed-meta">
+                  {{ t('adminTeacherVerification.submittedAt', { date: selectedApplicant.appliedLabel }) }}
+                </span>
+              </div>
+              <div class="admin-queue-aside">
+                <StatusPill :label="t('adminTeacherVerification.pending')" tone="warning" />
+                <span class="admin-feed-meta">{{ selectedApplicant.documentCountLabel }}</span>
               </div>
             </div>
 
-            <div class="admin-verification-detail-top-side">
-              <StatusPill :label="t('adminTeacherVerification.pending')" tone="warning" />
-              <small>{{ selectedApplicant.documentCountLabel }}</small>
+            <div class="tabs tabs--underline" role="tablist" :aria-label="t('adminTeacherVerification.detailTabsAria')">
+              <button
+                v-for="tab in detailTabs"
+                :id="`admin-verification-tab-${tab.value}`"
+                :key="tab.value"
+                class="tab-button"
+                type="button"
+                role="tab"
+                :aria-selected="activeDetailTab === tab.value"
+                aria-controls="admin-verification-tabpanel"
+                :tabindex="activeDetailTab === tab.value ? 0 : -1"
+                @click="showDetailTab(tab.value)"
+                @keydown.right.prevent="moveDetailTab(1)"
+                @keydown.left.prevent="moveDetailTab(-1)"
+              >
+                {{ tab.label }}
+              </button>
             </div>
-          </div>
 
-          <div class="tabs admin-review-tabs">
-            <button
-              class="tab-button"
-              type="button"
-              :class="{ 'is-active': activeDetailTab === 'overview' }"
-              @click="showDetailTab('overview')"
+            <div
+              id="admin-verification-tabpanel"
+              class="admin-verification-tabpanel"
+              role="tabpanel"
+              :aria-labelledby="`admin-verification-tab-${activeDetailTab}`"
             >
-              {{ t('adminTeacherVerification.overview') }}
-            </button>
-            <button
-              class="tab-button"
-              type="button"
-              :class="{ 'is-active': activeDetailTab === 'documents' }"
-              @click="showDetailTab('documents')"
-            >
-              {{ t('adminTeacherVerification.documents') }}
-            </button>
-            <button
-              class="tab-button"
-              type="button"
-              :class="{ 'is-active': activeDetailTab === 'notes' }"
-              @click="showDetailTab('notes')"
-            >
-              {{ t('adminTeacherVerification.decision') }}
-            </button>
-          </div>
-
-          <template v-if="activeDetailTab === 'overview'">
-            <div class="admin-verification-detail-grid">
-              <section class="panel admin-verification-info-card">
-                <div class="admin-verification-section-head">
-                  <strong>{{ t('adminTeacherVerification.applicationSummary') }}</strong>
-                </div>
-
-                <div class="admin-verification-basic-info">
-                  <div>
-                    <span>{{ t('adminTeacherVerification.teacherId') }}</span
-                    ><strong>#{{ selectedApplicant.teacherId }}</strong>
-                  </div>
-                  <div>
-                    <span>{{ t('adminTeacherVerification.userId') }}</span
-                    ><strong>#{{ selectedApplicant.userId }}</strong>
-                  </div>
-                  <div>
-                    <span>{{ t('adminTeacherVerification.status') }}</span
-                    ><strong>{{ formatStatus(selectedApplicant.teacherStatus) }}</strong>
-                  </div>
-                  <div>
-                    <span>{{ t('adminTeacherVerification.submitted') }}</span
-                    ><strong>{{ selectedApplicant.appliedLabel }}</strong>
-                  </div>
-                  <div>
-                    <span>{{ t('adminTeacherVerification.teachingCategories') }}</span
-                    ><strong>{{ selectedApplicant.categoriesLabel }}</strong>
-                  </div>
-                  <div class="admin-verification-block-row">
+              <template v-if="activeDetailTab === 'overview'">
+                <section class="admin-verification-section">
+                  <h3 class="card-title">{{ t('adminTeacherVerification.applicationSummary') }}</h3>
+                  <dl class="kv-list">
+                    <dt>{{ t('adminTeacherVerification.teacherId') }}</dt>
+                    <dd>#{{ selectedApplicant.teacherId }}</dd>
+                    <dt>{{ t('adminTeacherVerification.userId') }}</dt>
+                    <dd>#{{ selectedApplicant.userId }}</dd>
+                    <dt>{{ t('adminTeacherVerification.status') }}</dt>
+                    <dd>{{ formatStatus(selectedApplicant.teacherStatus) }}</dd>
+                    <dt>{{ t('adminTeacherVerification.submitted') }}</dt>
+                    <dd>{{ selectedApplicant.appliedLabel }}</dd>
+                    <dt>{{ t('adminTeacherVerification.teachingCategories') }}</dt>
+                    <dd>{{ selectedApplicant.categoriesLabel }}</dd>
+                  </dl>
+                  <div class="admin-note-block">
                     <span>{{ t('adminTeacherVerification.shortIntroduction') }}</span>
-                    <div class="stack u-gap-4">
-                      <strong>{{ selectedApplicant.shortIntroductionLabel }}</strong>
-                      <small>{{ selectedApplicant.bioLabel }}</small>
-                    </div>
+                    <p>{{ selectedApplicant.shortIntroductionLabel }}</p>
+                    <p>{{ selectedApplicant.bioLabel }}</p>
                   </div>
-                </div>
+                </section>
+
+                <section class="admin-verification-section">
+                  <h3 class="card-title">{{ t('adminTeacherVerification.reviewHistory') }}</h3>
+                  <ul v-if="reviewHistory.length" class="list-divided admin-feed">
+                    <li v-for="entry in reviewHistory" :key="entry.id" class="admin-feed-item">
+                      <div class="admin-feed-copy">
+                        <span class="admin-feed-title">{{ entry.title }}</span>
+                        <span class="admin-feed-text">{{ entry.copy }}</span>
+                        <span class="admin-feed-meta">{{ entry.time }}</span>
+                      </div>
+                    </li>
+                  </ul>
+                  <p v-else class="field-hint">{{ t('adminTeacherVerification.noHistory') }}</p>
+                </section>
+
+                <section class="admin-verification-section">
+                  <h3 class="card-title">{{ t('adminTeacherVerification.recentAudit') }}</h3>
+                  <ul v-if="auditTrail.length" class="list-divided admin-feed">
+                    <li v-for="entry in auditTrail" :key="entry.title + entry.time" class="admin-feed-item">
+                      <div class="admin-feed-copy">
+                        <span class="admin-feed-title">{{ entry.title }}</span>
+                        <span class="admin-feed-text">{{ entry.copy }}</span>
+                        <span class="admin-feed-meta">{{ entry.time }}</span>
+                      </div>
+                    </li>
+                  </ul>
+                  <p v-else class="field-hint">{{ t('adminTeacherVerification.noAudit') }}</p>
+                </section>
+              </template>
+
+              <section v-else-if="activeDetailTab === 'documents'" class="admin-verification-section">
+                <h3 class="card-title">{{ t('adminTeacherVerification.verificationDocuments') }}</h3>
+                <ul v-if="reviewDocuments.length" class="list-divided admin-feed">
+                  <li v-for="document in reviewDocuments" :key="document.id" class="admin-feed-item">
+                    <span class="admin-icon-badge is-sm admin-tone-info" aria-hidden="true">
+                      <IconGlyph name="file" :size="16" />
+                    </span>
+                    <div class="admin-feed-copy">
+                      <span class="admin-feed-title">{{ document.title }}</span>
+                      <span class="admin-feed-text">{{ document.fileName }}</span>
+                      <span class="admin-feed-meta">{{ document.meta }}</span>
+                    </div>
+                    <div class="admin-feed-aside">
+                      <StatusPill :label="document.status" :tone="document.tone" />
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        type="button"
+                        :disabled="detailUsingFallback || downloadingDocumentId === document.id"
+                        :aria-busy="downloadingDocumentId === document.id"
+                        @click="downloadTeacherDocument(document.id, document.fileName)"
+                      >
+                        <IconGlyph name="download" :size="14" />
+                        <span>{{ getDocumentDownloadLabel(document.id) }}</span>
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+                <StatePanel
+                  v-else
+                  compact
+                  icon="file"
+                  :title="t('adminTeacherVerification.noDocuments')"
+                  :message="t('adminTeacherVerification.noDocumentsHint')"
+                />
               </section>
 
-              <section class="panel admin-verification-doc-card">
-                <div class="admin-verification-section-head">
-                  <strong>{{ t('adminTeacherVerification.reviewHistory') }}</strong>
+              <section v-else class="admin-verification-section">
+                <h3 class="card-title">{{ t('adminTeacherVerification.decisionNotes') }}</h3>
+                <div class="admin-note-block">
+                  <span>{{ t('adminTeacherVerification.currentRejection') }}</span>
+                  <p>{{ selectedApplicant.rejectionReasonLabel }}</p>
                 </div>
 
-                <div v-if="reviewHistory.length" class="admin-verification-audit-list">
-                  <article v-for="entry in reviewHistory" :key="entry.id" class="admin-verification-audit-item">
-                    <span class="admin-verification-audit-dot" />
-                    <div class="stack u-gap-4">
-                      <strong>{{ entry.title }}</strong>
-                      <span>{{ entry.copy }}</span>
-                      <small>{{ entry.time }}</small>
-                    </div>
-                  </article>
-                </div>
-                <p v-else class="admin-verification-empty-copy">{{ t('adminTeacherVerification.noHistory') }}</p>
-
-                <div class="admin-verification-section-head admin-verification-audit-head">
-                  <strong>{{ t('adminTeacherVerification.recentAudit') }}</strong>
+                <div class="field">
+                  <label for="admin-verification-approval-note">{{ t('adminTeacherVerification.approvalNote') }}</label>
+                  <textarea
+                    id="admin-verification-approval-note"
+                    v-model="approvalNote"
+                    class="textarea"
+                    maxlength="1000"
+                    :placeholder="t('adminTeacherVerification.approvalPlaceholder')"
+                    :disabled="verificationDecisionReadOnly"
+                  />
                 </div>
 
-                <div v-if="auditTrail.length" class="admin-verification-audit-list">
-                  <article
-                    v-for="entry in auditTrail"
-                    :key="entry.title + entry.time"
-                    class="admin-verification-audit-item"
-                  >
-                    <span class="admin-verification-audit-dot" />
-                    <div class="stack u-gap-4">
-                      <strong>{{ entry.title }}</strong>
-                      <span>{{ entry.copy }}</span>
-                      <small>{{ entry.time }}</small>
-                    </div>
-                  </article>
+                <div class="field">
+                  <label for="admin-verification-rejection-reason">
+                    {{ t('adminTeacherVerification.rejectionReason') }}
+                  </label>
+                  <textarea
+                    id="admin-verification-rejection-reason"
+                    v-model="rejectionReason"
+                    class="textarea"
+                    maxlength="1000"
+                    aria-describedby="admin-verification-rejection-hint"
+                    :placeholder="t('adminTeacherVerification.rejectionPlaceholder')"
+                    :disabled="verificationDecisionReadOnly"
+                  />
+                  <p id="admin-verification-rejection-hint" class="field-hint">
+                    {{ t('adminTeacherVerification.rejectionRequired') }}
+                  </p>
                 </div>
-                <p v-else class="admin-verification-empty-copy">{{ t('adminTeacherVerification.noAudit') }}</p>
               </section>
+            </div>
+
+            <div class="card-footer">
+              <button
+                v-if="activeDetailTab !== 'notes'"
+                class="btn btn-ghost"
+                type="button"
+                @click="showDetailTab('notes')"
+              >
+                {{ t('adminTeacherVerification.openDecision') }}
+              </button>
+              <button
+                class="btn btn-danger"
+                type="button"
+                :disabled="!canDecide"
+                :aria-busy="submittingReject"
+                @click="rejectTeacher"
+              >
+                {{ rejectButtonLabel }}
+              </button>
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="!canDecide"
+                :aria-busy="submittingApprove"
+                @click="approveTeacher"
+              >
+                {{ approveButtonLabel }}
+              </button>
             </div>
           </template>
 
-          <section
-            v-else-if="activeDetailTab === 'documents'"
-            class="panel admin-verification-doc-card admin-verification-doc-card--solo"
-          >
-            <div class="admin-verification-section-head">
-              <strong>{{ t('adminTeacherVerification.verificationDocuments') }}</strong>
-            </div>
-
-            <div v-if="reviewDocuments.length" class="admin-verification-document-list">
-              <article v-for="document in reviewDocuments" :key="document.id" class="admin-verification-document-row">
-                <div class="row">
-                  <span class="admin-verification-document-icon">
-                    <IconGlyph name="file" :size="16" />
-                  </span>
-                  <div class="stack u-gap-3">
-                    <strong>{{ document.title }}</strong>
-                    <span>{{ document.fileName }}</span>
-                    <small>{{ document.meta }}</small>
-                  </div>
-                </div>
-                <div class="stack u-gap-8 admin-verification-document-actions">
-                  <StatusPill :label="document.status" :tone="document.tone" />
-                  <button
-                    class="teacher-outline-button"
-                    type="button"
-                    :disabled="detailUsingFallback || downloadingDocumentId === document.id"
-                    @click="downloadTeacherDocument(document.id, document.fileName)"
-                  >
-                    {{ getDocumentDownloadLabel(document.id) }}
-                  </button>
-                </div>
-              </article>
-            </div>
-            <StatePanel
-              v-else
-              icon="file"
-              :title="t('adminTeacherVerification.noDocuments')"
-              :message="t('adminTeacherVerification.noDocumentsHint')"
-            />
-          </section>
-
-          <section v-else class="panel admin-verification-notes-card">
-            <div class="admin-verification-section-head">
-              <strong>{{ t('adminTeacherVerification.decisionNotes') }}</strong>
-            </div>
-
-            <div class="stack u-gap-14">
-              <article class="admin-verification-note-preview">
-                <strong>{{ t('adminTeacherVerification.currentRejection') }}</strong>
-                <p>{{ selectedApplicant.rejectionReasonLabel }}</p>
-              </article>
-
-              <div class="field">
-                <label for="admin-verification-approval-note">{{ t('adminTeacherVerification.approvalNote') }}</label>
-                <textarea
-                  id="admin-verification-approval-note"
-                  v-model="approvalNote"
-                  class="textarea"
-                  maxlength="1000"
-                  :placeholder="t('adminTeacherVerification.approvalPlaceholder')"
-                  :disabled="verificationDecisionReadOnly"
-                />
-              </div>
-
-              <div class="field">
-                <label for="admin-verification-rejection-reason">{{
-                  t('adminTeacherVerification.rejectionReason')
-                }}</label>
-                <textarea
-                  id="admin-verification-rejection-reason"
-                  v-model="rejectionReason"
-                  class="textarea"
-                  maxlength="1000"
-                  :placeholder="t('adminTeacherVerification.rejectionPlaceholder')"
-                  :disabled="verificationDecisionReadOnly"
-                />
-              </div>
-            </div>
-          </section>
-
-          <div class="admin-verification-footer-actions">
-            <button class="btn btn-secondary" type="button" @click="showDetailTab('notes')">
-              {{ t('adminTeacherVerification.openDecision') }}
-            </button>
-            <button
-              class="btn btn-danger"
-              type="button"
-              :disabled="verificationReadOnly || submittingReject"
-              @click="rejectTeacher"
-            >
-              {{ rejectButtonLabel }}
-            </button>
-            <button
-              class="btn btn-primary"
-              type="button"
-              :disabled="verificationReadOnly || submittingApprove"
-              @click="approveTeacher"
-            >
-              {{ approveButtonLabel }}
-            </button>
-          </div>
-        </template>
-
-        <StatePanel
-          v-else
-          icon="verification"
-          :title="t('adminTeacherVerification.chooseTeacher')"
-          :message="t('adminTeacherVerification.chooseTeacherHint')"
-        />
-      </article>
-    </section>
+          <StatePanel
+            v-else
+            compact
+            icon="verification"
+            :title="t('adminTeacherVerification.chooseTeacher')"
+            :message="t('adminTeacherVerification.chooseTeacherHint')"
+          />
+        </article>
+      </section>
+    </ResourceSection>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { adminApi } from '@/api/services'
+import AdminKpiTile from '@/components/admin/AdminKpiTile.vue'
+import type { AdminTone } from '@/components/admin/adminTone'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
+import PaginationBar from '@/components/common/PaginationBar.vue'
+import type { AvatarTone } from '@/components/common/avatarTone'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
+import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminTeacherDetail, adminTeachers, teacherApplicationsPending } from '@/demo/data'
@@ -354,35 +329,70 @@ import { adminTeacherVerificationMessages } from '@/plugins/adminTeacherVerifica
 import type { AdminTeacherDetailResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
-import { formatDate, formatDateTime, formatNumber, getDisplayLocale } from '@/utils/format'
+import { formatDate, formatDateTime, formatNumber, getDisplayLocale, toFiniteNumber } from '@/utils/format'
+import { canDecideVerification, nextSelectedTeacherId } from '@/utils/teacherVerification'
 
 const { t, locale } = useI18n({
   messages: {
     en: { adminTeacherVerification: adminTeacherVerificationMessages.en },
     ms: { adminTeacherVerification: adminTeacherVerificationMessages.ms },
-    zh: { adminTeacherVerification: adminTeacherVerificationMessages.zh },
+    'zh-CN': { adminTeacherVerification: adminTeacherVerificationMessages['zh-CN'] },
   },
 })
 
-const pendingResource = useResource(() => adminApi.pendingTeachers(), teacherApplicationsPending)
-const teachersResource = useResource(() => adminApi.teachers(), adminTeachers)
+/** The queue is searched, sorted and paged client-side, so load the largest page the API serves (100). */
+const PENDING_QUEUE_SIZE = 100
+
+const pendingResource = useResource(
+  () => adminApi.pendingTeachers({ size: PENDING_QUEUE_SIZE }),
+  teacherApplicationsPending,
+)
+/** Exact approved / rejected totals from the server (`totalItems`), not a count over one page of teachers. */
+function teacherStatusCountResource(status: 'APPROVED' | 'REJECTED') {
+  return useResource(
+    () => adminApi.teachers({ status, size: 1 }),
+    () => {
+      const items = adminTeachers.items.filter((item) => item.teacherStatus === status)
+      return { ...adminTeachers, items, totalItems: items.length, totalPages: 1 }
+    },
+  )
+}
+const approvedTeachersResource = teacherStatusCountResource('APPROVED')
+const rejectedTeachersResource = teacherStatusCountResource('REJECTED')
+// A5 #2: the detail always belongs to the selected applicant (no hard-coded demo id).
 const detailResource = useResource(
-  () => adminApi.teacherDetail(adminTeacherDetail.teacherId),
+  () => adminApi.teacherDetail(selectedTeacherId.value),
+  // Preview: replaced by the selected applicant's preview detail in selectTeacher().
   adminTeacherDetail,
   false,
 )
+const detailLoading = ref(false)
 
-const pageError = computed(
-  () => pendingResource.error.value || teachersResource.error.value || detailResource.error.value,
+const queueLoading = computed(
+  () =>
+    pendingResource.loading.value || approvedTeachersResource.loading.value || rejectedTeachersResource.loading.value,
+)
+const queueError = computed(
+  () => pendingResource.error.value || approvedTeachersResource.error.value || rejectedTeachersResource.error.value,
 )
 const detailUsingFallback = computed(() => detailResource.usingFallback.value)
 const verificationReadOnly = computed(
   () =>
-    pendingResource.usingFallback.value || teachersResource.usingFallback.value || detailResource.usingFallback.value,
+    pendingResource.usingFallback.value ||
+    approvedTeachersResource.usingFallback.value ||
+    rejectedTeachersResource.usingFallback.value ||
+    detailResource.usingFallback.value,
 )
-const verificationDecisionReadOnly = computed(
-  () => verificationReadOnly.value || submittingApprove.value || submittingReject.value,
+const canDecide = computed(() =>
+  canDecideVerification({
+    selectedTeacherId: selectedTeacherId.value,
+    loadedDetailTeacherId: detailResource.data.value?.teacherId ?? null,
+    detailLoading: detailLoading.value,
+    readOnly: verificationReadOnly.value,
+    submitting: submittingApprove.value || submittingReject.value,
+  }),
 )
+const verificationDecisionReadOnly = computed(() => !canDecide.value)
 
 const approvalNote = ref('')
 const rejectionReason = ref('')
@@ -390,17 +400,17 @@ const submittingApprove = ref(false)
 const submittingReject = ref(false)
 const downloadingDocumentId = ref<number | null>(null)
 const actionError = ref<string | null>(null)
+const actionSuccess = ref<string | null>(null)
 const selectedTeacherId = ref(0)
 const searchTerm = ref('')
 const currentPage = ref(1)
 const pageSize = 5
 
 type ApplicantTone = 'success' | 'warning'
-type AvatarKind = 'female' | 'male' | 'hijab' | 'student'
 type DetailTab = 'overview' | 'documents' | 'notes'
 type SortMode = 'newest' | 'name'
 
-const avatarKinds = ['female', 'male', 'hijab', 'student'] as const
+const avatarTones: readonly AvatarTone[] = ['primary', 'info', 'success', 'warning']
 const activeDetailTab = ref<DetailTab>('overview')
 const sortMode = ref<SortMode>('newest')
 
@@ -435,7 +445,7 @@ interface ApplicantSummary {
   shortIntroductionLabel: string
   bioLabel: string
   rejectionReasonLabel: string
-  avatarKind: AvatarKind
+  avatarTone: AvatarTone
 }
 
 const pendingApplicants = computed<ApplicantSummary[]>(() =>
@@ -456,7 +466,7 @@ const pendingApplicants = computed<ApplicantSummary[]>(() =>
     shortIntroductionLabel: item.bioSummary?.trim() || t('adminTeacherVerification.noIntroduction'),
     bioLabel: t('adminTeacherVerification.openFullProfile'),
     rejectionReasonLabel: t('adminTeacherVerification.noRejection'),
-    avatarKind: avatarKinds[index % avatarKinds.length],
+    avatarTone: avatarTones[index % avatarTones.length],
   })),
 )
 
@@ -492,8 +502,14 @@ watch(
 watch(
   filteredApplicants,
   (items) => {
-    if (!items.some((item) => item.teacherId === selectedTeacherId.value)) {
-      selectedTeacherId.value = items[0]?.teacherId ?? 0
+    const nextId = nextSelectedTeacherId(
+      items.map((item) => item.teacherId),
+      selectedTeacherId.value,
+    )
+    const detailId = detailResource.data.value?.teacherId ?? null
+    if (nextId !== selectedTeacherId.value || (nextId > 0 && detailId !== nextId && !detailLoading.value)) {
+      // Load the auto-selected applicant's documents and history before any decision is possible.
+      void selectTeacher(nextId)
     }
   },
   { immediate: true, deep: true },
@@ -541,7 +557,7 @@ const reviewDocuments = computed<ApplicantDocument[]>(() =>
       ? t('adminTeacherVerification.currentVersion')
       : t('adminTeacherVerification.olderVersion'),
     tone: document.currentVersion ? 'success' : 'warning',
-    meta: `${document.contentType} • ${formatNumber(document.fileSize)} bytes • ${formatDateTime(document.submittedAt)}`,
+    meta: `${document.contentType} • ${formatByteSize(document.fileSize)} • ${formatDateTime(document.submittedAt)}`,
   })),
 )
 
@@ -563,38 +579,34 @@ const auditTrail = computed<ApplicantAudit[]>(() =>
   })),
 )
 
-const statCards = computed(() => [
+const statCards = computed<Array<{ label: string; value: string; copy: string; icon: string; tone: AdminTone }>>(() => [
   {
     label: t('adminTeacherVerification.pendingReview'),
     value: formatNumber(filteredApplicants.value.length),
     copy: t('adminTeacherVerification.pendingQueue'),
     icon: 'verification',
-    tone: 'gold',
+    tone: 'warning',
   },
   {
     label: t('adminTeacherVerification.approvedTeachers'),
-    value: formatNumber(
-      (teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'APPROVED').length,
-    ),
+    value: formatNumber(approvedTeachersResource.data.value?.totalItems ?? 0),
     copy: t('adminTeacherVerification.teacherCount'),
     icon: 'status',
-    tone: 'green',
+    tone: 'success',
   },
   {
     label: t('adminTeacherVerification.rejectedTeachers'),
-    value: formatNumber(
-      (teachersResource.data.value?.items ?? []).filter((item) => item.teacherStatus === 'REJECTED').length,
-    ),
+    value: formatNumber(rejectedTeachersResource.data.value?.totalItems ?? 0),
     copy: t('adminTeacherVerification.teacherCount'),
     icon: 'close',
-    tone: 'red',
+    tone: 'danger',
   },
   {
     label: t('adminTeacherVerification.documentsQueue'),
     value: formatNumber(filteredApplicants.value.reduce((sum, item) => sum + item.documentCount, 0)),
     copy: t('adminTeacherVerification.pendingDocumentCount'),
     icon: 'file',
-    tone: 'purple',
+    tone: 'primary',
   },
 ])
 
@@ -609,7 +621,8 @@ const todayLabel = computed(() =>
 const sortModeLabel = computed(() =>
   sortMode.value === 'newest' ? t('adminTeacherVerification.newestFirst') : t('adminTeacherVerification.alphabetical'),
 )
-const noticeError = computed(() => actionError.value || pageError.value)
+// Queue load errors are shown (with a retry) by the ResourceSection, so only detail and action errors reach the notice.
+const noticeError = computed(() => actionError.value || detailResource.error.value)
 const approveButtonLabel = computed(() =>
   submittingApprove.value ? t('adminTeacherVerification.approving') : t('adminTeacherVerification.approve'),
 )
@@ -625,7 +638,6 @@ const paginationCountLabel = computed(() => {
   const end = Math.min(filteredApplicants.value.length, currentPage.value * pageSize)
   return `${start}-${end}`
 })
-const actionSuccess = ref<string | null>(null)
 
 function cycleSortMode(): void {
   sortMode.value = sortMode.value === 'newest' ? 'name' : 'newest'
@@ -635,8 +647,23 @@ function goToPage(page: number): void {
   currentPage.value = page
 }
 
+const detailTabs = computed<Array<{ value: DetailTab; label: string }>>(() => [
+  { value: 'overview', label: t('adminTeacherVerification.overview') },
+  { value: 'documents', label: t('adminTeacherVerification.documents') },
+  { value: 'notes', label: t('adminTeacherVerification.decision') },
+])
+
 function showDetailTab(tab: DetailTab): void {
   activeDetailTab.value = tab
+}
+
+/** Arrow-key navigation between the detail tabs (WAI-ARIA tabs pattern): select the neighbour and focus it. */
+function moveDetailTab(step: 1 | -1): void {
+  const tabs = detailTabs.value
+  const index = tabs.findIndex((tab) => tab.value === activeDetailTab.value)
+  const next = tabs[(index + step + tabs.length) % tabs.length].value
+  showDetailTab(next)
+  void nextTick(() => document.getElementById(`admin-verification-tab-${next}`)?.focus())
 }
 
 function getDocumentDownloadLabel(documentId: number): string {
@@ -661,6 +688,12 @@ function previewTeacherDetail(id: number): AdminTeacherDetailResponse | null {
   }
 }
 
+function reloadQueue(): void {
+  void pendingResource.reload()
+  void approvedTeachersResource.reload()
+  void rejectedTeachersResource.reload()
+}
+
 async function selectTeacher(id: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
@@ -669,17 +702,23 @@ async function selectTeacher(id: number): Promise<void> {
   rejectionReason.value = ''
   selectedTeacherId.value = id
   activeDetailTab.value = 'overview'
+  detailResource.data.value = null
+  if (!id) return
 
   if (verificationReadOnly.value) {
     detailResource.data.value = previewTeacherDetail(id)
     return
   }
 
+  detailLoading.value = true
   try {
-    detailResource.data.value = await adminApi.teacherDetail(id)
+    const detail = await adminApi.teacherDetail(id)
+    if (selectedTeacherId.value === id) detailResource.data.value = detail
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('adminTeacherVerification.loadDetailError'))
     detailResource.data.value = null
+  } finally {
+    detailLoading.value = false
   }
 }
 
@@ -722,7 +761,7 @@ async function approveTeacher(): Promise<void> {
   try {
     await adminApi.approveTeacher(selectedApplicant.value.teacherId, approvalNote.value.trim() || undefined)
     await pendingResource.reload()
-    await teachersResource.reload()
+    await Promise.all([approvedTeachersResource.reload(), rejectedTeachersResource.reload()])
     detailResource.data.value = null
     approvalNote.value = ''
     rejectionReason.value = ''
@@ -749,6 +788,16 @@ async function rejectTeacher(): Promise<void> {
     actionError.value = t('adminTeacherVerification.rejectionRequired')
     return
   }
+  if (
+    !window.confirm(
+      t('adminTeacherVerification.confirmReject', {
+        name: selectedApplicant.value.fullName,
+        reason: normalizedReason,
+      }),
+    )
+  ) {
+    return
+  }
 
   actionError.value = null
   actionSuccess.value = null
@@ -757,7 +806,7 @@ async function rejectTeacher(): Promise<void> {
   try {
     await adminApi.rejectTeacher(selectedApplicant.value.teacherId, normalizedReason)
     await pendingResource.reload()
-    await teachersResource.reload()
+    await Promise.all([approvedTeachersResource.reload(), rejectedTeachersResource.reload()])
     detailResource.data.value = null
     approvalNote.value = ''
     rejectionReason.value = ''
@@ -767,6 +816,15 @@ async function rejectTeacher(): Promise<void> {
   } finally {
     submittingReject.value = false
   }
+}
+
+/** Localised "1,234 bytes" / "1,234 bait" / "1,234字节" without a hand-written unit string. */
+function formatByteSize(size: number): string {
+  return new Intl.NumberFormat(getDisplayLocale(locale.value), {
+    style: 'unit',
+    unit: 'byte',
+    unitDisplay: 'long',
+  }).format(toFiniteNumber(size))
 }
 
 function formatStatus(status: string): string {
@@ -786,393 +844,15 @@ function formatStatus(status: string): string {
 </script>
 
 <style scoped>
-.admin-verification-page {
-  position: relative;
-}
-
-.admin-verification-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.admin-verification-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.admin-verification-tool-button {
-  min-height: 44px;
-  border-radius: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.admin-verification-tool-button.is-date {
-  min-width: 190px;
-}
-
-.admin-verification-search {
-  min-width: 260px;
-  min-height: 44px;
-  padding: 0 14px;
+.admin-verification-tabpanel {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  border-radius: 16px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #8a95b0;
-}
-
-.admin-verification-search-input {
-  min-height: 36px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-}
-
-.admin-verification-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.admin-verification-stat,
-.admin-verification-list-panel,
-.admin-verification-detail-panel,
-.admin-verification-info-card,
-.admin-verification-doc-card,
-.admin-verification-notes-card {
-  border-radius: 24px;
-}
-
-.admin-verification-stat {
-  min-height: 112px;
-  padding: 20px 18px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border: 1px solid rgba(232, 236, 245, 0.94);
-  box-shadow: 0 12px 24px rgba(49, 64, 94, 0.06);
-  background: rgba(255, 255, 255, 0.98);
-}
-
-.admin-verification-stat-icon {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-}
-
-.admin-verification-stat-icon.is-gold {
-  background: rgba(255, 181, 68, 0.14);
-  color: #ee9618;
-}
-
-.admin-verification-stat-icon.is-green {
-  background: rgba(111, 210, 104, 0.12);
-  color: #4aa746;
-}
-
-.admin-verification-stat-icon.is-red {
-  background: rgba(255, 121, 121, 0.14);
-  color: #e05c52;
-}
-
-.admin-verification-stat-icon.is-purple {
-  background: rgba(125, 88, 255, 0.12);
-  color: #7a56ff;
-}
-
-.admin-verification-stat-label,
-.admin-verification-stat-copy,
-.admin-verification-row-copy span,
-.admin-verification-row-copy small,
-.admin-verification-row-side span,
-.admin-verification-row-side small,
-.admin-verification-basic-info span,
-.admin-verification-document-row span,
-.admin-verification-document-row small,
-.admin-verification-audit-item span,
-.admin-verification-audit-item small,
-.admin-verification-note-preview p,
-.admin-verification-pagination span,
-.admin-verification-empty-copy {
-  color: #72809d;
-}
-
-.admin-verification-stat-value {
-  font-size: 1.9rem;
-  line-height: 1;
-}
-
-.admin-verification-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.admin-verification-list-head,
-.admin-verification-section-head,
-.admin-verification-detail-top,
-.admin-verification-detail-profile,
-.admin-verification-detail-top-side {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.admin-verification-detail-profile {
+  gap: var(--space-6);
   min-width: 0;
-  justify-content: flex-start;
 }
 
-.admin-verification-detail-top-side {
+.admin-verification-section {
+  display: grid;
+  gap: var(--space-3);
   min-width: 0;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.admin-verification-detail-profile .stack {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.admin-verification-list,
-.admin-verification-document-list,
-.admin-verification-audit-list {
-  display: grid;
-  gap: 12px;
-}
-
-.admin-verification-row {
-  width: 100%;
-  padding: 14px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  border-radius: 18px;
-  border: 1px solid rgba(234, 238, 247, 0.96);
-  background: rgba(255, 255, 255, 0.96);
-  color: var(--text);
-  text-align: left;
-}
-
-.admin-verification-row.is-active {
-  border-color: rgba(125, 88, 255, 0.3);
-  box-shadow: 0 10px 20px rgba(106, 73, 255, 0.06);
-}
-
-.admin-verification-row-copy,
-.admin-verification-row-side {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.admin-verification-row-copy strong,
-.admin-verification-row-copy span,
-.admin-verification-row-copy small {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.admin-verification-row-side {
-  justify-items: end;
-}
-
-.admin-verification-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-top: 8px;
-}
-
-.admin-verification-pagination-pages {
-  gap: 8px;
-}
-
-.admin-verification-page-button {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  border: 1px solid rgba(228, 232, 244, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #7d89a4;
-  font-weight: 700;
-}
-
-.admin-verification-page-button.is-active {
-  background: linear-gradient(135deg, #7d58ff, #6d49f8);
-  color: white;
-  border-color: transparent;
-}
-
-.admin-verification-detail-panel,
-.admin-verification-info-card,
-.admin-verification-doc-card,
-.admin-verification-notes-card {
-  display: grid;
-  gap: 16px;
-}
-
-.admin-verification-detail-top h2 {
-  margin: 0;
-  font-size: 1.8rem;
-  line-height: 1;
-}
-
-.admin-verification-detail-top h2,
-.admin-verification-detail-top span,
-.admin-verification-detail-top small {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.admin-verification-detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
-  gap: 16px;
-}
-
-.admin-verification-basic-info {
-  display: grid;
-  gap: 12px;
-}
-
-.admin-verification-basic-info div {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.admin-verification-block-row {
-  align-items: flex-start;
-}
-
-.admin-verification-document-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.admin-verification-document-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.admin-verification-document-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(125, 88, 255, 0.12);
-  color: #7a56ff;
-}
-
-.admin-verification-document-actions {
-  align-items: flex-end;
-}
-
-.admin-verification-audit-head {
-  padding-top: 8px;
-  border-top: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.admin-verification-audit-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.admin-verification-audit-dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: #7a56ff;
-}
-
-.admin-verification-doc-card--solo {
-  min-height: 320px;
-}
-
-.admin-verification-note-preview {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(246, 248, 252, 0.96);
-}
-
-.admin-verification-footer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 1480px) {
-  .admin-verification-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-verification-layout,
-  .admin-verification-detail-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 1100px) {
-  .admin-verification-header {
-    display: grid;
-  }
-
-  .admin-verification-row,
-  .admin-verification-pagination {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-verification-row {
-    justify-items: start;
-  }
-
-  .admin-verification-row-side,
-  .admin-verification-detail-top-side {
-    justify-items: start;
-    align-items: flex-start;
-  }
-
-  .admin-verification-detail-top,
-  .admin-verification-detail-profile {
-    display: grid;
-    grid-template-columns: 1fr;
-    justify-items: start;
-  }
-
-  .admin-verification-document-row {
-    align-items: flex-start;
-  }
-
-  .admin-verification-document-actions {
-    align-items: flex-start;
-  }
 }
 </style>

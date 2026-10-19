@@ -9,6 +9,7 @@ public enum ManagedContentType {
 
     LESSON,
 
+    /** A free, teacher-curated course (stored as a CoursePackage). */
     PACKAGE;
 
     private static final Map<String, ManagedContentType> LOOKUP =

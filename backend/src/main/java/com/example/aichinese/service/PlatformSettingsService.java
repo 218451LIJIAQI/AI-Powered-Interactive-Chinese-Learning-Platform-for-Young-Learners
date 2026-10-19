@@ -22,6 +22,17 @@ import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.TextUtils;
 
+/**
+ * Platform settings that take effect at runtime (decisions D16/D27):
+ * <ul>
+ *   <li>{@code platform_name} &ndash; read-only display name;</li>
+ *   <li>{@code ai_disclaimer_text} &ndash; shown next to every AI feature;</li>
+ *   <li>{@code sensitive_word_filter_enabled} &ndash; enforced by {@link ContentSafetyService} for teacher content;</li>
+ *   <li>{@code ai_safety_check_enabled} &ndash; enforced by {@code AiSafetyGuard} for learner AI requests and replies.</li>
+ * </ul>
+ * Earlier cosmetic toggles (admin e-mail / in-app notifications, daily summary, strict content
+ * filtering) were never enforced and were removed (V3 migration deletes their rows).
+ */
 @Service
 public class PlatformSettingsService {
 
@@ -29,15 +40,13 @@ public class PlatformSettingsService {
 
     public static final String PLATFORM_NAME_KEY = "platform_name";
     public static final String AI_DISCLAIMER_TEXT_KEY = "ai_disclaimer_text";
-    public static final String EMAIL_NOTIFICATIONS_KEY = "admin_email_notifications_enabled";
-    public static final String IN_APP_NOTIFICATIONS_KEY = "admin_in_app_notifications_enabled";
-    public static final String DAILY_SUMMARY_KEY = "admin_daily_summary_enabled";
-    public static final String STRICT_CONTENT_FILTERING_KEY = "strict_content_filtering_enabled";
     public static final String SENSITIVE_WORD_FILTER_KEY = "sensitive_word_filter_enabled";
     public static final String AI_SAFETY_CHECK_KEY = "ai_safety_check_enabled";
 
-    private static final String DEFAULT_PLATFORM_NAME = "AI-Powered Interactive Chinese Learning Platform for Young Learners";
-    private static final String DEFAULT_AI_DISCLAIMER_TEXT = "AI-generated content may not always be accurate. Please review before use.";
+    public static final String DEFAULT_PLATFORM_NAME =
+            "AI-Powered Interactive Chinese Learning Platform for Young Adults in Malaysia";
+    public static final String DEFAULT_AI_DISCLAIMER_TEXT =
+            "AI responses may contain errors and do not replace your teacher.";
 
     private final SystemSettingRepository systemSettingRepository;
     private final AuditLogService auditLogService;
@@ -55,10 +64,6 @@ public class PlatformSettingsService {
         return new AdminPlatformSettingsResponse(
                 stringSetting(PLATFORM_NAME_KEY),
                 stringSetting(AI_DISCLAIMER_TEXT_KEY),
-                booleanSetting(EMAIL_NOTIFICATIONS_KEY),
-                booleanSetting(IN_APP_NOTIFICATIONS_KEY),
-                booleanSetting(DAILY_SUMMARY_KEY),
-                booleanSetting(STRICT_CONTENT_FILTERING_KEY),
                 booleanSetting(SENSITIVE_WORD_FILTER_KEY),
                 booleanSetting(AI_SAFETY_CHECK_KEY));
     }
@@ -69,7 +74,6 @@ public class PlatformSettingsService {
         return new PublicPlatformSettingsResponse(
                 stringSetting(PLATFORM_NAME_KEY),
                 stringSetting(AI_DISCLAIMER_TEXT_KEY),
-                booleanSetting(STRICT_CONTENT_FILTERING_KEY),
                 booleanSetting(SENSITIVE_WORD_FILTER_KEY),
                 booleanSetting(AI_SAFETY_CHECK_KEY));
     }
@@ -78,7 +82,8 @@ public class PlatformSettingsService {
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheConfig.ADMIN_PLATFORM_SETTINGS, allEntries = true),
             @CacheEvict(cacheNames = CacheConfig.PUBLIC_PLATFORM_SETTINGS, allEntries = true),
-            @CacheEvict(cacheNames = CacheConfig.SENSITIVE_WORD_FILTER_ENABLED, allEntries = true)
+            @CacheEvict(cacheNames = CacheConfig.SENSITIVE_WORD_FILTER_ENABLED, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.AI_SAFETY_CHECK_ENABLED, allEntries = true)
     })
     public AdminPlatformSettingsResponse updateAdminPlatformSettings(
             SecurityUserDetails currentUser,
@@ -93,10 +98,6 @@ public class PlatformSettingsService {
         }
 
         upsertSetting(AI_DISCLAIMER_TEXT_KEY, normalizedDisclaimerText);
-        upsertSetting(EMAIL_NOTIFICATIONS_KEY, Boolean.toString(request.emailNotifications()));
-        upsertSetting(IN_APP_NOTIFICATIONS_KEY, Boolean.toString(request.inAppNotifications()));
-        upsertSetting(DAILY_SUMMARY_KEY, Boolean.toString(request.dailySummary()));
-        upsertSetting(STRICT_CONTENT_FILTERING_KEY, Boolean.toString(request.strictContentFiltering()));
         upsertSetting(SENSITIVE_WORD_FILTER_KEY, Boolean.toString(request.sensitiveWordFilter()));
         upsertSetting(AI_SAFETY_CHECK_KEY, Boolean.toString(request.aiSafetyCheck()));
 
@@ -106,15 +107,11 @@ public class PlatformSettingsService {
                 "ADMIN_PLATFORM_SETTINGS_UPDATED",
                 "SYSTEM_SETTING",
                 null,
-                "Admin updated platform AI, notification, and safety settings.");
+                "Admin updated the AI disclaimer, sensitive-word filter and AI safety check settings.");
 
         return new AdminPlatformSettingsResponse(
                 platformName,
                 normalizedDisclaimerText,
-                request.emailNotifications(),
-                request.inAppNotifications(),
-                request.dailySummary(),
-                request.strictContentFiltering(),
                 request.sensitiveWordFilter(),
                 request.aiSafetyCheck());
     }
@@ -140,7 +137,6 @@ public class PlatformSettingsService {
         return systemSettingRepository.findBySettingKey(key)
                 .map(SystemSetting::getSettingValue)
                 .map(TextUtils::trimToNull)
-                .filter(Objects::nonNull)
                 .orElseGet(() -> definitionFor(key).defaultValue());
     }
 
@@ -156,31 +152,15 @@ public class PlatformSettingsService {
                     false);
             case AI_DISCLAIMER_TEXT_KEY -> new SettingDefinition(
                     DEFAULT_AI_DISCLAIMER_TEXT,
-                    "Shown on AI-powered learning experiences.",
-                    true);
-            case EMAIL_NOTIFICATIONS_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable email notifications for admin workflows.",
-                    true);
-            case IN_APP_NOTIFICATIONS_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable in-app notifications for admin workflows.",
-                    true);
-            case DAILY_SUMMARY_KEY -> new SettingDefinition(
-                    "false",
-                    "Enable daily admin summary delivery.",
-                    true);
-            case STRICT_CONTENT_FILTERING_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable strict content filtering for safety-sensitive flows.",
+                    "Shown next to every AI-powered learning feature.",
                     true);
             case SENSITIVE_WORD_FILTER_KEY -> new SettingDefinition(
                     "true",
-                    "Enable profanity and sensitive word filtering.",
+                    "Block unsafe words in teacher-authored content.",
                     true);
             case AI_SAFETY_CHECK_KEY -> new SettingDefinition(
                     "true",
-                    "Enable AI safety checks before AI guidance is shown.",
+                    "Screen learner AI requests and AI replies for unsafe content.",
                     true);
             default -> throw new IllegalArgumentException("Unsupported system setting key: " + key);
         };

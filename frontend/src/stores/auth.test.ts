@@ -268,3 +268,42 @@ describe('auth store token storage', () => {
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
   })
 })
+
+describe('auth store account management (D12)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mocks.setAccessToken.mockClear()
+    mocks.appEnv.useDemoData = false
+    mocks.appEnv.enablePreviewMode = false
+  })
+
+  it('replaces the in-memory access token after a password change', () => {
+    const auth = useAuthStore()
+    auth.token = 'old-access-token'
+    auth.currentUser = studentUser
+
+    auth.replaceAccessToken('new-access-token')
+
+    expect(auth.token).toBe('new-access-token')
+    expect(mocks.setAccessToken).toHaveBeenLastCalledWith('new-access-token')
+    expect(auth.currentUser).toEqual(studentUser)
+  })
+
+  it('ignores a token replacement without a signed-in session', () => {
+    const auth = useAuthStore()
+    auth.replaceAccessToken('new-access-token')
+    expect(auth.token).toBeNull()
+    expect(mocks.setAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('applies a profile update to the current user and switches the interface language', () => {
+    const auth = useAuthStore()
+    auth.token = 'access-token'
+    auth.currentUser = studentUser
+
+    auth.applyProfileUpdate({ ...studentUser, fullName: 'Aina Rahman', preferredLanguage: 'ms' })
+
+    expect(auth.currentUser?.fullName).toBe('Aina Rahman')
+    expect(document.documentElement.lang).toBe('ms')
+  })
+})

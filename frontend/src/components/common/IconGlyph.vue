@@ -4,8 +4,8 @@
 
 <script setup lang="ts">
 import {
+  Archive,
   BadgeHelp,
-  Banknote,
   BarChart3,
   Bell,
   BookMarked,
@@ -28,14 +28,29 @@ import {
   Ellipsis,
   FileBadge,
   FileText,
+  Flag,
   Flame,
   Funnel,
   Gift,
   Globe2,
   GraduationCap,
-  HandCoins,
   History,
   Home,
+  Image as ImageIcon,
+  Eraser,
+  KeyRound,
+  Info,
+  Lightbulb,
+  LogOut,
+  Menu,
+  Mic,
+  PenLine,
+  Plus,
+  RotateCcw,
+  Square,
+  Upload,
+  UserCog,
+  Volume2,
   House,
   Languages,
   LayoutDashboard,
@@ -53,13 +68,12 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Sword,
+  Trash2,
   TriangleAlert,
   Trophy,
   UserCheck,
   UserRound,
   Users,
-  WalletCards,
   X,
   Zap,
 } from '@lucide/vue'
@@ -88,8 +102,6 @@ const iconMap: Readonly<Record<string, Component>> = {
   moderation: MessageSquareText,
   analytics: ChartNoAxesCombined,
   settings: Settings,
-  finance: WalletCards,
-  earnings: HandCoins,
   search: Search,
   bell: Bell,
   streak: Flame,
@@ -100,7 +112,6 @@ const iconMap: Readonly<Record<string, Component>> = {
   verified: UserCheck,
   help: CircleHelp,
   file: FileText,
-  money: Banknote,
   chart: BarChart3,
   admin: BriefcaseBusiness,
   trophy: Trophy,
@@ -109,7 +120,8 @@ const iconMap: Readonly<Record<string, Component>> = {
   globe: Globe2,
   announcement: Megaphone,
   status: CheckCircle2,
-  moderationFlag: Sword,
+  moderationFlag: Flag,
+  flag: Flag,
   clip: ClipboardList,
   hero: Home,
   progress: ChartColumnBig,
@@ -130,6 +142,23 @@ const iconMap: Readonly<Record<string, Component>> = {
   alert: TriangleAlert,
   close: X,
   flash: Zap,
+  mic: Mic,
+  stop: Square,
+  upload: Upload,
+  image: ImageIcon,
+  pen: PenLine,
+  eraser: Eraser,
+  hint: Lightbulb,
+  retry: RotateCcw,
+  account: UserCog,
+  key: KeyRound,
+  audio: Volume2,
+  menu: Menu,
+  logout: LogOut,
+  info: Info,
+  plus: Plus,
+  archive: Archive,
+  trash: Trash2,
 } as const
 
 interface Props {
@@ -160,7 +189,8 @@ const resolved = computed<Component>(() => {
 </script>
 
 <style scoped>
-.icon-glyph {
+/* Zero-specificity defaults so layout rules can hide or resize icons without fighting scoped styles. */
+:where(.icon-glyph) {
   display: block;
   flex: 0 0 auto;
 }

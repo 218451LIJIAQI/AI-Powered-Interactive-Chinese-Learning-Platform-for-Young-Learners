@@ -1,9 +1,7 @@
 package com.example.aichinese.entity;
 
-import java.math.BigDecimal;
-
 import com.example.aichinese.entity.base.BaseEntity;
-import com.example.aichinese.entity.enums.AccessType;
+import com.example.aichinese.entity.base.ReviewableContent;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 
@@ -31,7 +29,8 @@ import lombok.Setter;
 @Table(name = "lessons", indexes = {
         @Index(name = "idx_lessons_module_id", columnList = "module_id"),
         @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
-        @Index(name = "idx_lessons_status", columnList = "content_status")
+        @Index(name = "idx_lessons_status", columnList = "content_status"),
+        @Index(name = "idx_lessons_status_updated", columnList = "content_status,updated_at")
 })
 @NamedEntityGraph(
         name = Lesson.GRAPH_DETAIL,
@@ -46,7 +45,7 @@ import lombok.Setter;
                 attributeNodes = @NamedAttributeNode("user")
         )
 )
-public class Lesson extends BaseEntity {
+public class Lesson extends BaseEntity implements ReviewableContent {
 
     public static final String GRAPH_DETAIL = "Lesson.detail";
 
@@ -54,8 +53,8 @@ public class Lesson extends BaseEntity {
     @JoinColumn(name = "module_id")
     private LearningModule module;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "teacher_id", nullable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -81,15 +80,8 @@ public class Lesson extends BaseEntity {
     private ContentStatus contentStatus = ContentStatus.DRAFT;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "access_type", nullable = false, length = 20)
-    private AccessType accessType = AccessType.FREE;
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "learning_type", nullable = false, length = 20)
     private LearningType learningType = LearningType.RECORDED;
-
-    @Column(name = "price", precision = 10, scale = 2)
-    private BigDecimal price;
 
     @Column(name = "cover_image_url", length = 255)
     private String coverImageUrl;

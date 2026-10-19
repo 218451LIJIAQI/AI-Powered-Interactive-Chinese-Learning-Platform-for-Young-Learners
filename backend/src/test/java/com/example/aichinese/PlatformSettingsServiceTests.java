@@ -24,19 +24,19 @@ import com.example.aichinese.service.PlatformSettingsService;
 /**
  * Unit coverage for {@code PlatformSettingsService} - pins the
  * default values applied when system-setting rows are missing
- * (platform name, AI disclaimer, notification toggles, content
- * filtering switches) and the admin / public response shape split.
+ * (platform name, AI disclaimer, sensitive-word filter and AI safety
+ * check; the unenforced toggles were removed) and the admin / public response shape split.
  */
 class PlatformSettingsServiceTests {
 
     private static final String DEFAULT_PLATFORM_NAME =
-            "AI-Powered Interactive Chinese Learning Platform for Young Learners";
+            "AI-Powered Interactive Chinese Learning Platform for Young Adults in Malaysia";
     private static final String DEFAULT_AI_DISCLAIMER =
-            "AI-generated content may not always be accurate. Please review before use.";
+            "AI responses may contain errors and do not replace your teacher.";
     private static final String UPDATED_AI_DISCLAIMER = "Teacher guidance is still important.";
     private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String PASSWORD_HASH = "password-hash";
-    private static final int UPDATED_SETTINGS_COUNT = 7;
+    private static final int UPDATED_SETTINGS_COUNT = 3;
 
     @Test
     void getAdminPlatformSettingsFallsBackWhenSettingRowsAreMissing() {
@@ -47,10 +47,6 @@ class PlatformSettingsServiceTests {
 
         assertThat(response.platformName()).isEqualTo(DEFAULT_PLATFORM_NAME);
         assertThat(response.aiDisclaimerText()).isEqualTo(DEFAULT_AI_DISCLAIMER);
-        assertThat(response.emailNotifications()).isTrue();
-        assertThat(response.inAppNotifications()).isTrue();
-        assertThat(response.dailySummary()).isFalse();
-        assertThat(response.strictContentFiltering()).isTrue();
         assertThat(response.sensitiveWordFilter()).isTrue();
         assertThat(response.aiSafetyCheck()).isTrue();
     }
@@ -66,19 +62,11 @@ class PlatformSettingsServiceTests {
                 currentUser(),
                 new AdminPlatformSettingsUpdateRequest(
                         UPDATED_AI_DISCLAIMER,
-                        false,
-                        true,
-                        true,
-                        false,
                         true,
                         false));
 
         assertThat(response.platformName()).isEqualTo(DEFAULT_PLATFORM_NAME);
         assertThat(response.aiDisclaimerText()).isEqualTo(UPDATED_AI_DISCLAIMER);
-        assertThat(response.emailNotifications()).isFalse();
-        assertThat(response.inAppNotifications()).isTrue();
-        assertThat(response.dailySummary()).isTrue();
-        assertThat(response.strictContentFiltering()).isFalse();
         assertThat(response.sensitiveWordFilter()).isTrue();
         assertThat(response.aiSafetyCheck()).isFalse();
         verify(repository, times(UPDATED_SETTINGS_COUNT)).save(any(SystemSetting.class));

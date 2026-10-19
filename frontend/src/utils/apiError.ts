@@ -1,3 +1,6 @@
+import { documentLanguage } from '@/utils/locale'
+import { localizeServerMessage } from '@/utils/serverMessages'
+
 type ApiErrorPayload = {
   response?: {
     status?: number
@@ -34,7 +37,7 @@ const localizedMessages = {
     network: 'Perkhidmatan pembelajaran tidak dapat dicapai. Semak sambungan anda dan cuba lagi.',
     requestFailed: 'Permintaan gagal',
   },
-  zh: {
+  'zh-CN': {
     fallback: '无法完成该请求，请重试。',
     unauthorized: '请重新登录后继续。',
     forbidden: '你无权执行此操作。',
@@ -46,10 +49,7 @@ const localizedMessages = {
 } as const
 
 function currentMessages(): (typeof localizedMessages)[keyof typeof localizedMessages] {
-  const language = typeof document === 'undefined' ? 'en' : document.documentElement.lang.toLowerCase()
-  if (language.startsWith('zh')) return localizedMessages.zh
-  if (language.startsWith('ms')) return localizedMessages.ms
-  return localizedMessages.en
+  return localizedMessages[documentLanguage()]
 }
 
 export function defaultRequestError(): string {
@@ -76,8 +76,10 @@ export function resolveApiError(reason: unknown, fallback?: string): string {
   const serverMessage = cleanServerMessage(payload?.response?.data?.message)
   const serverError = cleanServerMessage(payload?.response?.data?.errors?.[0])
 
-  if (serverMessage) return serverMessage
-  if (serverError) return serverError
+  // FR-I18N-05: known backend messages are shown in the interface language; others stay as sent.
+  const locale = documentLanguage()
+  if (serverMessage) return localizeServerMessage(serverMessage, locale)
+  if (serverError) return localizeServerMessage(serverError, locale)
 
   const status = payload?.response?.status
   if (status === 401) return messages.unauthorized
@@ -98,4 +100,9 @@ export function resolveApiError(reason: unknown, fallback?: string): string {
 
 export function isUnauthorizedApiError(reason: unknown): boolean {
   return (reason as ApiErrorPayload | null)?.response?.status === 401
+}
+
+/** True for HTTP 403, e.g. a pending or rejected teacher calling an approved-only teaching endpoint (D13). */
+export function isForbiddenApiError(reason: unknown): boolean {
+  return (reason as ApiErrorPayload | null)?.response?.status === 403
 }

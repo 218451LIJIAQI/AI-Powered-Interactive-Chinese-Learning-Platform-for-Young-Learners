@@ -26,7 +26,7 @@ package com.example.aichinese.util;
  * <h2>Wire-format contract</h2>
  * <p>The {@value #HEADER_NAME} header is the canonical name on both the
  * inbound and outbound sides — the front-end, reverse proxies, and
- * outbound HTTP clients (Stripe, OpenAI-compatible AI providers) all
+ * outbound HTTP clients (OpenAI / OpenAI-compatible AI providers) all
  * agree on this spelling so an id can be threaded end-to-end through a
  * full request fan-out.</p>
  */

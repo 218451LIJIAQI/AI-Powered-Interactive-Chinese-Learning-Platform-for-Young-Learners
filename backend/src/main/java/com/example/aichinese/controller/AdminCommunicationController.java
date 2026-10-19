@@ -1,7 +1,9 @@
 package com.example.aichinese.controller;
 
+import java.time.LocalDate;
 import java.util.Objects;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -159,11 +161,16 @@ public class AdminCommunicationController {
             @RequestParam(value = "targetType", required = false) String targetType,
             @Size(max = 200, message = "Actor must not exceed 200 characters.")
             @RequestParam(value = "actor", required = false) String actor,
+            @RequestParam(value = "actorId", required = false) Long actorId,
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
         return ApiResponse.success(
                 "Audit logs retrieved successfully.",
-                auditLogService.getAuditLogs(actionType, targetType, actor, page, size));
+                auditLogService.getAuditLogs(actionType, targetType, actor, actorId, from, to, page, size));
     }
 
     @GetMapping("/audit-logs/{id}")

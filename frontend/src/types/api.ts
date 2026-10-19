@@ -1,12 +1,29 @@
 /* Frontend mirror of backend REST API request and response contracts. */
-export type AppLanguage = 'en' | 'ms' | 'zh'
+/** BCP-47 interface languages (D18). Old accounts may still return a legacy Chinese code; see utils/locale.ts. */
+export type AppLanguage = 'en' | 'ms' | 'zh-CN'
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
-type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
-export type AccessType = 'FREE' | 'PAID'
+export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 export type LearningType = 'LIVE' | 'RECORDED' | 'HYBRID'
-export type AgeBand = 'KINDERGARTEN' | 'LOWER_PRIMARY' | 'UPPER_PRIMARY' | 'ALL_AGES'
 export type ActivityDifficulty = 'EASY' | 'MEDIUM' | 'HARD'
+/**
+ * Review workflow states (D4, D14, D24): DRAFT -> SUBMITTED -> PUBLISHED | REJECTED, PUBLISHED -> ARCHIVED -> PUBLISHED.
+ * `APPROVED` only exists for database compatibility; the backend never assigns it and the UI treats it as ARCHIVED.
+ */
 export type ContentStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PUBLISHED' | 'ARCHIVED'
+/** Optional scaffolding stage of a quiz or practice activity (D23). */
+export type LearningStage = 'GUIDED' | 'SCAFFOLDED' | 'INDEPENDENT'
+/** Content types handled by the admin review queue (`/admin/content-review/{type}/{id}`). PACKAGE is the "Course". */
+export type ReviewContentType =
+  | 'PACKAGE'
+  | 'MODULE'
+  | 'LESSON'
+  | 'QUIZ'
+  | 'FLASHCARD'
+  | 'MATCHING_GAME'
+  | 'LISTENING_EXERCISE'
+  | 'TRACING_EXERCISE'
+  | 'DRAG_DROP_ACTIVITY'
+  | 'STORY_ACTIVITY'
 export type LiveClassStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED'
 type AiResponseReportStatus = 'PENDING_REVIEW' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED'
 export type AiResponseReportReviewStatus = Exclude<AiResponseReportStatus, 'PENDING_REVIEW'>
@@ -14,8 +31,34 @@ export type AiResponseReportReason =
   | 'INCORRECT_CONTENT'
   | 'HALLUCINATION'
   | 'UNSAFE_CONTENT'
-  | 'AGE_INAPPROPRIATE'
+  | 'INAPPROPRIATE_CONTENT'
   | 'OTHER'
+export type AiFeatureKey =
+  | 'CHAT_TUTOR'
+  | 'VOCABULARY_HELPER'
+  | 'SENTENCE_PRACTICE'
+  | 'QUIZ_GENERATOR'
+  | 'STORY_GENERATOR'
+  | 'PRONUNCIATION_FEEDBACK'
+  | 'WRITING_FEEDBACK'
+type AiFeedbackStatus = 'SUCCESS' | 'FAILED' | 'UNAVAILABLE'
+/** Lesson mastery indicator (D25): MASTERED = lesson completed and best quiz percentage >= 80 %. */
+export type LessonMastery = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'MASTERED'
+export type NotificationStatus = 'UNREAD' | 'READ'
+export type TeacherFeedbackType =
+  | 'GENERAL'
+  | 'QUIZ'
+  | 'LESSON'
+  | 'ENCOURAGING'
+  | 'CORRECTIVE'
+  | 'PROGRESS'
+  | 'WEAK_AREA'
+/** Why a learner appears in the teacher's "Needs support" list (quiz average < 60 % / inactive for 14 days). */
+export type StudentSupportReason = 'LOW_QUIZ_SCORE' | 'INACTIVE'
+/** Practice submissions (D7 / D7a). */
+export type PracticeSubmissionType = 'PRONUNCIATION_AUDIO' | 'HANDWRITING_IMAGE'
+type PracticeAiFeedbackStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'FAILED'
+export type PracticeReviewStatus = 'SUBMITTED' | 'REVIEWED'
 export type ManagedContentType = 'LESSON' | 'MODULE' | 'PACKAGE'
 export type PackageItemType = 'MODULE' | 'LESSON'
 export type TeacherVerificationDocumentType = 'CERTIFICATE' | 'QUALIFICATION' | 'IDENTITY' | 'OTHER'
@@ -106,7 +149,8 @@ export interface RegistrationResponse {
   id: number
   fullName: string
   email: string
-  preferredLanguage?: AppLanguage | null
+  /** en | ms | zh-CN; legacy accounts may return the old Chinese code (normalise with normalizeAppLanguage). */
+  preferredLanguage?: string | null
   roles: UserRole[]
   teacherStatus?: TeacherStatus | null
 }
@@ -115,13 +159,16 @@ export interface CurrentUserResponse {
   id: number
   fullName: string
   email: string
-  preferredLanguage?: AppLanguage | null
+  /** en | ms | zh-CN; legacy accounts may return the old Chinese code (normalise with normalizeAppLanguage). */
+  preferredLanguage?: string | null
   roles: UserRole[]
   studentProfile?: {
     id: number
     displayName: string
-    currentLevel: string
+    currentLevel?: string | null
     totalPoints: number
+    /** Optional institution (stored in the legacy school_name column). */
+    institution?: string | null
   } | null
   teacherProfile?: {
     id: number
@@ -141,11 +188,7 @@ export interface PublicCourseSummary {
   level: LearningLevel
   category: LearningCategory
   learningType: LearningType
-  accessType: AccessType
-  price: number
-  currencyCode: string
   coverImageUrl?: string | null
-  locked: boolean
   status: ContentStatus
 }
 
@@ -166,16 +209,11 @@ export interface PublicCourseDetail {
   level: LearningLevel
   category: LearningCategory
   learningType: LearningType
-  accessType: AccessType
-  price: number
-  currencyCode: string
   coverImageUrl?: string | null
-  locked: boolean
   status: ContentStatus
   basicContent?: string | null
   packageItems: PublicCourseItemSummary[]
   callToAction?: string | null
-  lockedMessage?: string | null
 }
 
 export interface NotificationResponse {
@@ -183,7 +221,7 @@ export interface NotificationResponse {
   title: string
   message: string
   type: string
-  status: string
+  status: NotificationStatus
   targetType?: string | null
   targetId?: number | null
   targetPath?: string | null
@@ -238,12 +276,14 @@ export interface StudentDashboardResponse {
   recommendedNextStep?: string | null
 }
 
-interface StudentProgressLessonResponse {
+export interface StudentProgressLessonResponse {
   lessonId: number
   lessonTitle: string
   completionPercent: number
   completed: boolean
   lastAccessedAt?: string | null
+  mastery: LessonMastery
+  bestQuizPercentage?: number | null
 }
 
 export interface StudentProgressSummaryResponse {
@@ -251,9 +291,22 @@ export interface StudentProgressSummaryResponse {
   completedLessons: number
   quizAverage: number
   overallCompletionPercent: number
+  /** Lesson titles of recent wrong answers. */
   weakAreas: string[]
   lastActivitySummary?: string | null
   recentLessons: StudentProgressLessonResponse[]
+  /** Every lesson with progress, newest first. */
+  lessons: StudentProgressLessonResponse[]
+}
+
+/** `POST /students/lessons/{lessonId}/viewed`. */
+export interface StudentLessonProgressResponse {
+  lessonId: number
+  completionPercent: number
+  completed: boolean
+  mastery: LessonMastery
+  bestQuizPercentage?: number | null
+  contentViewed: boolean
 }
 
 export interface DailyStreakResponse {
@@ -298,14 +351,12 @@ interface LiveClassLessonSummaryResponse {
   lessonId: number
   lessonTitle: string
   learningType: string
-  accessType: string
 }
 
 interface LiveClassPackageSummaryResponse {
   packageId: number
   packageTitle: string
   learningType: string
-  accessType: string
 }
 
 export interface LiveClassResponse {
@@ -319,7 +370,12 @@ export interface LiveClassResponse {
   timeZone: string
   durationMinutes?: number | null
   maxParticipants?: number | null
+  /** Seats taken (ENROLLED + ATTENDED for students). */
   enrolledCount: number
+  /** Seats still open under maxParticipants; null/absent when the class has no limit (FR-LIVE-05). */
+  remainingSeats?: number | null
+  /** True when a limit is set and every seat is taken. */
+  full?: boolean
   enrolled: boolean
   canEnrol: boolean
   accessAllowed: boolean
@@ -357,14 +413,26 @@ export interface StudentLessonPlayerResponse {
   estimatedDurationMinutes?: number | null
   completionPercent: number
   completed: boolean
-  locked: boolean
   learningType: string
   liveClasses: LiveClassResponse[]
   recordedVideos: RecordedLessonVideoResponse[]
+  contentViewed: boolean
+  mastery: LessonMastery
+  bestQuizPercentage?: number | null
+  /** Published quizzes of the lesson in stage order. */
+  quizzes: StudentQuizSummaryResponse[]
+  /** Optional lesson cover image (FR-CONT-05); render only http(s) URLs. */
+  coverImageUrl?: string | null
+  /** Where the lesson sits (FR-LRN-02): its module and the first published course listing it. */
+  moduleId?: number | null
+  moduleTitle?: string | null
+  courseId?: number | null
+  courseTitle?: string | null
 }
 
 export interface VideoProgressResponse {
-  id: number
+  /** null before the first save (the server returns a zero record). */
+  id: number | null
   lessonId: number
   recordedVideoId: number
   watchedSeconds: number
@@ -372,7 +440,8 @@ export interface VideoProgressResponse {
   progressPercentage: number
   completed: boolean
   lastWatchedAt?: string | null
-  updatedAt: string
+  /** null on the zero record returned before the first save. */
+  updatedAt?: string | null
 }
 
 export interface StudentActivitySummaryResponse {
@@ -380,27 +449,61 @@ export interface StudentActivitySummaryResponse {
   type: string
   title: string
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   updatedAt: string
   completed: boolean
+}
+
+/** One graded item of a completion attempt; `key` identifies the item (left item id, question index, ...). */
+export interface StudentActivityItemResult {
+  key: string
+  correct: boolean
+  /** Story explanations, returned only when the attempt passed. */
+  explanation?: string | null
 }
 
 export interface StudentActivityCompletionResponse {
   activityId: number
   type: string
+  passed: boolean
+  correctCount: number
+  totalCount: number
   earnedPoints: number
   totalPoints: number
   firstCompletion: boolean
+  results: StudentActivityItemResult[]
+}
+
+/* Completion request bodies (`POST /students/activities/{slug}/{id}/complete`). Flashcards send no body. */
+export interface MatchingCompletionRequest {
+  matches: Array<{ leftItemId: number; rightText: string }>
+}
+
+export interface DragDropCompletionRequest {
+  placements: Array<{ itemId: number; zone: string }>
+}
+
+export type ListeningCompletionRequest =
+  | { answers: Array<{ questionIndex: number; answerText: string }> }
+  | { responseText: string }
+
+export interface TracingCompletionRequest {
+  strokeCount: number
+}
+
+export interface StoryCompletionRequest {
+  answers: Array<{ questionId: number; optionIndex: number }>
 }
 
 export interface StudentFlashcardResponse {
   id: number
-  title: string
+  /** Optional on flashcards (nullable column). */
+  title?: string | null
   frontText: string
   backText: string
   pinyin?: string | null
@@ -411,76 +514,91 @@ export interface StudentFlashcardResponse {
   sortOrder?: number | null
   extraPayload?: string | null
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   completed: boolean
 }
 
-interface StudentMatchingGameItemResponse {
+export interface StudentMatchingLeftItemResponse {
   id: number
-  leftText: string
-  rightText: string
-  leftImageUrl?: string | null
-  rightImageUrl?: string | null
+  text: string
   pinyin?: string | null
+  imageUrl?: string | null
   sortOrder?: number | null
+}
+
+/** Right-hand options are shuffled on every request and carry no ids or pair links. */
+export interface StudentMatchingRightOptionResponse {
+  text: string
+  imageUrl?: string | null
 }
 
 export interface StudentMatchingGameResponse {
   id: number
   title: string
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   completed: boolean
-  items: StudentMatchingGameItemResponse[]
+  leftItems: StudentMatchingLeftItemResponse[]
+  rightOptions: StudentMatchingRightOptionResponse[]
+}
+
+export interface StudentListeningQuestionResponse {
+  index: number
+  questionText: string
+  /** Empty = the learner types the answer. */
+  options: string[]
 }
 
 export interface StudentListeningExerciseResponse {
   id: number
   title: string
-  audioUrl?: string | null
-  questionPayload?: string | null
+  audioUrl: string | null
+  prompt: string | null
+  questions: StudentListeningQuestionResponse[]
+  /** True when the item has no answer key (legacy free-text prompt). */
+  freeResponse: boolean
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   completed: boolean
 }
 
 export interface StudentTracingExerciseResponse {
   id: number
   title: string
-  worksheetUrl?: string | null
-  targetCharacter: string
+  worksheetUrl: string | null
+  targetCharacter: string | null
   pinyin?: string | null
   meaning?: string | null
   instructions?: string | null
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   completed: boolean
 }
 
-interface StudentDragDropItemResponse {
+/** Shuffled, without the target zone (the answer key is never sent before an attempt). */
+export interface StudentDragDropItemResponse {
   id: number
   dragText: string
-  targetZone: string
   pinyin?: string | null
   imageUrl?: string | null
   sortOrder?: number | null
@@ -491,21 +609,23 @@ export interface StudentDragDropActivityResponse {
   title: string
   instructions?: string | null
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   completed: boolean
   items: StudentDragDropItemResponse[]
+  /** Distinct zones in alphabetical order. */
+  zones: string[]
 }
 
-interface StudentStoryQuestionResponse {
+/** Story questions carry no explanation or correct flag before answering. */
+export interface StudentStoryQuestionResponse {
   id: number
   questionText: string
-  optionsPayload: string
-  explanation?: string | null
+  options: Array<{ index: number; text: string }>
   sortOrder?: number | null
 }
 
@@ -518,12 +638,12 @@ export interface StudentStoryActivityResponse {
   translation?: string | null
   imageUrl?: string | null
   hskLevel?: number | null
-  ageBand?: string | null
   difficulty?: string | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   completed: boolean
   questions: StudentStoryQuestionResponse[]
 }
@@ -533,13 +653,14 @@ export interface AdminActivitySummaryResponse {
   type: AdminActivityType
   title: string
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -571,6 +692,8 @@ interface AdminStoryQuestionResponse {
   optionsPayload: string
   explanation?: string | null
   sortOrder?: number | null
+  /** 0-based index of the correct option (null when not set yet). */
+  correctOptionIndex?: number | null
 }
 
 export interface AdminFlashcardResponse {
@@ -586,13 +709,14 @@ export interface AdminFlashcardResponse {
   sortOrder?: number | null
   extraPayload?: string | null
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -603,13 +727,14 @@ export interface AdminMatchingGameResponse {
   id: number
   title: string
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -623,13 +748,14 @@ export interface AdminListeningExerciseResponse {
   audioUrl?: string | null
   questionPayload?: string | null
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -645,13 +771,14 @@ export interface AdminTracingExerciseResponse {
   meaning?: string | null
   instructions?: string | null
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -663,13 +790,14 @@ export interface AdminDragDropActivityResponse {
   title: string
   instructions?: string | null
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -686,13 +814,14 @@ export interface AdminStoryActivityResponse {
   translation?: string | null
   imageUrl?: string | null
   status: ContentStatus
+  rejectionReason?: string | null
   hskLevel?: number | null
-  ageBand?: AgeBand | null
   difficulty?: ActivityDifficulty | null
   topic?: string | null
   tags: string[]
   xpReward?: number | null
   estimatedSeconds?: number | null
+  learningStage?: LearningStage | null
   createdByUserId?: number | null
   createdByDisplayName?: string | null
   createdAt: string
@@ -706,13 +835,29 @@ interface QuizOptionResponse {
   displayOrder: number
 }
 
-interface StudentQuizQuestionResponse {
+export interface StudentQuizQuestionResponse {
   id: number
   questionType: QuizQuestionType
   questionText: string
   points: number
   displayOrder: number
   options: QuizOptionResponse[]
+  /** A teacher hint exists (always false on INDEPENDENT quizzes); the text is fetched on request. */
+  hintAvailable: boolean
+}
+
+/** `GET /students/quizzes/{quizId}/questions/{questionId}/hint`. */
+export interface QuizHintResponse {
+  questionId: number
+  hint: string
+}
+
+/** One answer of `POST /students/quizzes/{quizId}/attempts`: optionId for option types, answerText for text types. */
+export interface QuizAnswerSubmission {
+  questionId: number
+  optionId?: number
+  answerText?: string
+  hintUsed?: boolean
 }
 
 export interface StudentQuizResponse {
@@ -723,7 +868,11 @@ export interface StudentQuizResponse {
   description?: string | null
   timeLimitMinutes?: number | null
   totalPoints: number
+  learningStage?: LearningStage | null
   questions: StudentQuizQuestionResponse[]
+  /** Module of the quiz's lesson (FR-LRN-02 breadcrumb). */
+  moduleId?: number | null
+  moduleTitle?: string | null
 }
 
 export interface StudentQuizSummaryResponse {
@@ -735,9 +884,10 @@ export interface StudentQuizSummaryResponse {
   timeLimitMinutes?: number | null
   totalPoints: number
   questionCount: number
+  learningStage?: LearningStage | null
 }
 
-interface QuizAttemptResultQuestionResponse {
+export interface QuizAttemptResultQuestionResponse {
   questionId: number
   questionType: string
   questionText: string
@@ -746,6 +896,10 @@ interface QuizAttemptResultQuestionResponse {
   correct: boolean
   points?: number | null
   explanation?: string | null
+  selectedOptionId?: number | null
+  correctOptionId?: number | null
+  hintUsed: boolean
+  options: QuizOptionResponse[]
 }
 
 export interface QuizAttemptResultResponse {
@@ -754,6 +908,9 @@ export interface QuizAttemptResultResponse {
   quizTitle: string
   score: number
   maxScore: number
+  /** 0..100 */
+  percentage: number
+  learningStage?: LearningStage | null
   totalQuestions: number
   correctCount: number
   wrongCount: number
@@ -768,6 +925,9 @@ export interface QuizAttemptResultResponse {
 export interface WrongAnswerResponse {
   attemptId: number
   questionId: number
+  quizId?: number | null
+  lessonId?: number | null
+  lessonTitle?: string | null
   quizTitle: string
   questionText: string
   questionType: string
@@ -783,13 +943,6 @@ export interface TeacherDashboardResponse {
   totalLessons: number
   totalStudents: number
   averageQuizScore: number
-  earningsSummary: {
-    grossAmount: number
-    netAmount: number
-    availableBalance: number
-    pendingBalance: number
-    currencyCode: string
-  }
   recentQuizResults: Array<{
     attemptId: number
     quizTitle: string
@@ -827,14 +980,10 @@ export interface TeacherAnalyticsResponse {
     submittedContentItems: number
     totalActiveStudents: number
     averageQuizScore: number
-    netEarnings: number
-    availableBalance: number
-    currencyCode: string
     upcomingLiveClasses: number
     totalLiveEnrolments: number
   }
   quizScoreTrend: AnalyticsTrendPoint[]
-  earningsTrend: AnalyticsTrendPoint[]
   contentStatusBreakdown: AnalyticsBreakdownItem[]
 }
 
@@ -880,17 +1029,30 @@ export interface TeacherProfileResponse {
   updatedAt: string
 }
 
+export interface TeacherStudentLessonMasteryResponse {
+  lessonId: number
+  lessonTitle: string
+  completionPercent: number
+  mastery: LessonMastery
+  bestQuizPercentage?: number | null
+}
+
 export interface TeacherStudentSummaryResponse {
   studentId: number
   userId: number
   fullName: string
-  email: string
   displayName?: string | null
   currentLevel?: string | null
   progressPercent: number
   quizAveragePercent?: number | null
   atRisk: boolean
+  /** Same value as atRisk; driven only by supportReasons (feedback never flags a learner). */
+  needsSupport: boolean
+  supportReasons: StudentSupportReason[]
+  /** Lesson titles of wrong answers on this teacher's quizzes. */
   weakAreas: string[]
+  /** The teacher's lessons only. */
+  lessonMastery: TeacherStudentLessonMasteryResponse[]
   latestFeedbackType?: string | null
   latestFeedbackAt?: string | null
   latestActivityAt?: string | null
@@ -903,8 +1065,6 @@ export interface LearningModuleResponse {
   description?: string | null
   level: LearningLevel
   category: LearningCategory
-  accessType: AccessType
-  price: number
   coverImageUrl?: string | null
   contentStatus: ContentStatus
   rejectionReason?: string | null
@@ -923,8 +1083,6 @@ export interface LessonResponse {
   level: LearningLevel
   category: LearningCategory
   learningType: LearningType
-  accessType: AccessType
-  price: number
   estimatedDurationMinutes?: number | null
   coverImageUrl?: string | null
   contentStatus: ContentStatus
@@ -941,8 +1099,6 @@ export interface CoursePackageResponse {
   level: LearningLevel
   category: LearningCategory
   learningType: LearningType
-  accessType: AccessType
-  price: number
   coverImageUrl?: string | null
   contentStatus: ContentStatus
   rejectionReason?: string | null
@@ -967,6 +1123,8 @@ export interface TeacherQuizQuestionResponse {
   points: number
   displayOrder: number
   explanation?: string | null
+  /** Optional teacher hint (D8); never shown to students on INDEPENDENT quizzes. */
+  hint?: string | null
   options: TeacherQuizOptionResponse[]
 }
 
@@ -977,6 +1135,8 @@ export interface TeacherQuizResponse {
   title: string
   description?: string | null
   contentStatus: ContentStatus
+  rejectionReason?: string | null
+  learningStage?: LearningStage | null
   timeLimitMinutes?: number | null
   totalPoints: number
   questions: TeacherQuizQuestionResponse[]
@@ -990,6 +1150,8 @@ export interface TeacherQuizAttemptSummaryResponse {
   studentName: string
   score: number
   maxScore: number
+  percentage: number
+  hintsUsed: number
   submittedAt: string
 }
 
@@ -998,7 +1160,6 @@ export interface LiveClassEnrolmentResponse {
   liveClassId: number
   studentId: number
   studentName: string
-  studentEmail: string
   enrolmentStatus: string
   enrolledAt: string
   cancelledAt?: string | null
@@ -1008,7 +1169,6 @@ export interface LiveClassEnrolmentResponse {
 export interface LessonVideoProgressSummaryResponse {
   studentId: number
   studentName: string
-  studentEmail: string
   recordedVideoId: number
   recordedVideoTitle: string
   progressPercentage: number
@@ -1028,6 +1188,7 @@ export interface TeacherFeedbackResponse {
   lessonTitle?: string | null
   quizAttemptId?: number | null
   quizTitle?: string | null
+  practiceSubmissionId?: number | null
   feedbackType?: string | null
   message: string
   createdAt: string
@@ -1041,46 +1202,42 @@ export interface StudentTeacherFeedbackResponse {
   lessonTitle?: string | null
   quizAttemptId?: number | null
   quizTitle?: string | null
+  practiceSubmissionId?: number | null
   feedbackType?: string | null
   message: string
   createdAt: string
   updatedAt: string
 }
 
-export interface TeacherEarningSummaryResponse {
-  grossAmount: number
-  totalNetAmount: number
-  availableBalance: number
-  pendingBalance: number
-  currencyCode: string
-}
-
-export interface TeacherEarningResponse {
+interface PracticeSubmissionFeedbackResponse {
   id: number
-  orderItemId?: number | null
-  itemTitle: string
-  grossAmount: number
-  commissionAmount: number
-  netAmount: number
-  currencyCode: string
-  earningStatus: string
-  createdAt: string
-}
-
-export interface TeacherPayoutRequestResponse {
-  id: number
-  amount: number
-  currencyCode: string
-  requestedNote?: string | null
-  decisionReason?: string | null
-  payoutStatus: string
-  createdAt: string
-}
-
-export interface AdminPayoutRequestResponse extends TeacherPayoutRequestResponse {
-  teacherId: number
   teacherName: string
-  teacherEmail: string
+  feedbackType: string
+  message: string
+  createdAt: string
+}
+
+/** Stored pronunciation / handwriting upload (D7a). AI feedback is "AI-assisted, not a score". */
+export interface PracticeSubmissionResponse {
+  id: number
+  submissionType: PracticeSubmissionType
+  studentId: number
+  studentName: string
+  lessonId: number | null
+  lessonTitle: string | null
+  targetText: string | null
+  aiFeedbackStatus: PracticeAiFeedbackStatus
+  aiFeedbackText: string | null
+  aiNotice: string
+  reviewStatus: PracticeReviewStatus
+  submittedAt: string
+  reviewedAt: string | null
+  fileName: string
+  contentType: string
+  fileSize: number
+  /** Role-specific authorised stream path; fetch it with the bearer token (never put tokens in URLs). */
+  fileUrl: string
+  teacherFeedback: PracticeSubmissionFeedbackResponse[]
 }
 
 export interface AdminDashboardResponse {
@@ -1103,14 +1260,6 @@ export interface AdminDashboardResponse {
     totalRequests: number
     successfulRequests: number
   }
-  paymentRevenueSummary: {
-    totalTransactions: number
-    paidTransactions: number
-    totalRevenue: number
-    currencyCode: string
-  }
-  pendingRefunds: number
-  pendingPayouts: number
   recentAuditLogs: Array<{
     auditLogId: number
     actionType: string
@@ -1128,10 +1277,6 @@ export interface AdminAnalyticsResponse {
     approvedTeachers: number
     rejectedTeachers: number
     publishedContentItems: number
-    totalRevenue: number
-    currencyCode: string
-    pendingRefunds: number
-    pendingPayouts: number
     moderationActions: number
     auditLogEntries: number
     adminUnreadNotifications: number
@@ -1140,7 +1285,6 @@ export interface AdminAnalyticsResponse {
   userRegistrationTrend: AnalyticsTrendPoint[]
   teacherApprovalBreakdown: AnalyticsBreakdownItem[]
   contentStatusBreakdown: AnalyticsBreakdownItem[]
-  paymentStatusBreakdown: AnalyticsBreakdownItem[]
   aiStatusBreakdown: AnalyticsBreakdownItem[]
 }
 
@@ -1199,7 +1343,8 @@ export interface AdminStudentListItemResponse {
   userId: number
   fullName: string
   email: string
-  preferredLanguage?: AppLanguage | null
+  /** en | ms | zh-CN; legacy accounts may return the old Chinese code (normalise with normalizeAppLanguage). */
+  preferredLanguage?: string | null
   createdAt: string
 }
 
@@ -1212,8 +1357,6 @@ export interface ContentSubmissionResponse {
   level: LearningLevel
   category: LearningCategory
   learningType?: LearningType | null
-  accessType: AccessType
-  price: number
   contentStatus: ContentStatus
   rejectionReason?: string | null
   createdAt: string
@@ -1232,8 +1375,6 @@ export interface ContentSubmissionDetailResponse {
   level: LearningLevel
   category: LearningCategory
   learningType?: LearningType | null
-  accessType: AccessType
-  price: number
   coverImageUrl?: string | null
   contentStatus: ContentStatus
   rejectionReason?: string | null
@@ -1242,11 +1383,45 @@ export interface ContentSubmissionDetailResponse {
   updatedAt: string
 }
 
+/** One row of the admin content review queue (`GET /admin/content-review`). */
+export interface ContentReviewItemResponse {
+  type: ReviewContentType
+  id: number
+  title: string
+  contentStatus: ContentStatus
+  rejectionReason?: string | null
+  learningStage?: LearningStage | null
+  ownerUserId?: number | null
+  ownerName?: string | null
+  ownerTeacherStatus?: TeacherStatus | null
+  /** Lesson title for a QUIZ, module title for a LESSON. */
+  parentTitle?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Type-specific reviewer detail: course/module/lesson body, quiz with answers, or the activity record. */
+type ContentReviewDetail =
+  | ContentSubmissionDetailResponse
+  | TeacherQuizResponse
+  | AdminFlashcardResponse
+  | AdminMatchingGameResponse
+  | AdminListeningExerciseResponse
+  | AdminTracingExerciseResponse
+  | AdminDragDropActivityResponse
+  | AdminStoryActivityResponse
+
+export interface ContentReviewDetailResponse {
+  item: ContentReviewItemResponse
+  detail: ContentReviewDetail
+}
+
 export interface ModerationRecordResponse {
   id: number
   targetType: string
   targetId: number
-  targetTitle: string
+  /** null on records created before the title snapshot was stored. */
+  targetTitle?: string | null
   actionTaken: string
   note?: string | null
   adminUserId: number
@@ -1290,7 +1465,8 @@ export interface AiChatResponse {
 }
 
 export interface AiVocabularyHelperResponse {
-  chineseWord: string
+  /** null when the AI is unavailable or its reply could not be parsed. */
+  chineseWord?: string | null
   pinyin?: string | null
   englishMeaning?: string | null
   bahasaMelayuMeaning?: string | null
@@ -1318,16 +1494,16 @@ export interface AiSentencePracticeResponse {
 }
 
 interface AiStoryVocabularyItemResponse {
-  chineseWord: string
+  chineseWord?: string | null
   pinyin?: string | null
   englishMeaning?: string | null
   bahasaMelayuMeaning?: string | null
 }
 
 interface AiStoryComprehensionQuestionResponse {
-  question: string
+  question?: string | null
   options: string[]
-  answer: string
+  answer?: string | null
   explanation?: string | null
 }
 
@@ -1364,23 +1540,16 @@ export interface AiQuizGeneratorResponse {
   status: string
 }
 
-export interface AiLearningRecommendationResponse {
-  recommendedNextStep?: string | null
-  recommendedLessonOrActivity?: string | null
-  weakAreaSummary?: string | null
-  revisionSuggestion?: string | null
-  shortEncouragement?: string | null
-  suggestedPracticeTypes: string[]
-  status: string
-}
-
 export interface AiPronunciationFeedbackResponse {
   feedback?: string | null
   pronunciationComment?: string | null
   toneComment?: string | null
   improvementTips?: string | null
   encouragement?: string | null
-  status: string
+  status: AiFeedbackStatus | string
+  notice?: string | null
+  /** Stored practice submission created by the upload (D7a). */
+  submissionId?: number | null
 }
 
 export interface AiWritingFeedbackResponse {
@@ -1388,7 +1557,9 @@ export interface AiWritingFeedbackResponse {
   clarityComment?: string | null
   improvementTips?: string | null
   encouragement?: string | null
-  status: string
+  status: AiFeedbackStatus | string
+  notice?: string | null
+  submissionId?: number | null
 }
 
 export interface StudentAiResponseReportResponse {
@@ -1436,102 +1607,15 @@ export interface AdminAiUsageLogResponse {
   createdAt: string
 }
 
-export interface CartItemResponse {
-  cartItemId: number
-  itemType: ManagedContentType
-  itemId: number
-  title: string
-  unitPrice: number
-  currencyCode: string
-  quantity: number
-  subtotal: number
-  teacherOwned: boolean
-}
-
-export interface CartResponse {
-  cartId: number
-  items: CartItemResponse[]
-  totalAmount: number
-  currencyCode: string
-  empty: boolean
-}
-
-export interface CheckoutResponse {
-  orderId: number
-  orderNumber: string
-  paymentId: number
-  paymentStatus: string
-  totalAmount: number
-  currencyCode: string
-  checkoutUrl?: string | null
-  providerName: string
-  providerStatus?: string | null
-  paymentAvailable: boolean
-  message?: string | null
-  items: CartItemResponse[]
-}
-
-export interface StudentPaymentRecordResponse {
-  paymentId: number
-  orderId: number
-  orderNumber: string
-  providerName: string
-  amount: number
-  currencyCode: string
-  paymentStatus: string
-  paymentMethod?: string | null
-  providerStatus?: string | null
-  paidAt?: string | null
-  createdAt: string
-  items: CartItemResponse[]
-}
-
-export interface AdminPaymentRecordResponse extends StudentPaymentRecordResponse {
-  studentId: number
-  studentName: string
-  studentEmail: string
-}
-
-export interface StudentRefundRequestResponse {
-  id: number
-  orderId: number
-  orderNumber: string
-  amount: number
-  reason: string
-  decisionReason?: string | null
-  refundStatus: string
-  createdAt: string
-}
-
-export interface AdminRefundRequestResponse extends StudentRefundRequestResponse {
-  studentId: number
-  studentName: string
-  studentEmail: string
-}
-
-export interface CommissionSettingResponse {
-  commissionRate: number
-  settingKey: string
-  description: string
-}
-
 export interface AdminPlatformSettingsResponse {
   platformName: string
   aiDisclaimerText: string
-  emailNotifications: boolean
-  inAppNotifications: boolean
-  dailySummary: boolean
-  strictContentFiltering: boolean
   sensitiveWordFilter: boolean
   aiSafetyCheck: boolean
 }
 
 export interface AdminPlatformSettingsUpdateRequest {
   aiDisclaimerText: string
-  emailNotifications: boolean
-  inAppNotifications: boolean
-  dailySummary: boolean
-  strictContentFiltering: boolean
   sensitiveWordFilter: boolean
   aiSafetyCheck: boolean
 }
@@ -1539,7 +1623,6 @@ export interface AdminPlatformSettingsUpdateRequest {
 export interface PublicPlatformSettingsResponse {
   platformName: string
   aiDisclaimerText: string
-  strictContentFiltering: boolean
   sensitiveWordFilter: boolean
   aiSafetyCheck: boolean
 }

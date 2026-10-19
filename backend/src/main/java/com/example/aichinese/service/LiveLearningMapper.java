@@ -63,7 +63,6 @@ public class LiveLearningMapper {
                 enrolment.getLiveClass().getId(),
                 enrolment.getStudent().getId(),
                 studentDisplayName(enrolment.getStudent()),
-                studentEmail(enrolment.getStudent()),
                 enrolment.getEnrolmentStatus() == null ? null : enrolment.getEnrolmentStatus().name(),
                 enrolment.getEnrolledAt(),
                 enrolment.getCancelledAt(),
@@ -147,8 +146,7 @@ public class LiveLearningMapper {
         return new LiveClassLessonSummaryResponse(
                 lesson.getId(),
                 lesson.getTitle(),
-                lesson.getLearningType() == null ? null : lesson.getLearningType().name(),
-                lesson.getAccessType() == null ? null : lesson.getAccessType().name());
+                lesson.getLearningType() == null ? null : lesson.getLearningType().name());
     }
 
     private static LiveClassPackageSummaryResponse packageSummary(CoursePackage coursePackage) {
@@ -160,18 +158,11 @@ public class LiveLearningMapper {
                 coursePackage.getTitle(),
                 coursePackage.getLearningType() == null
                         ? null
-                        : coursePackage.getLearningType().name(),
-                coursePackage.getAccessType() == null
-                        ? null
-                        : coursePackage.getAccessType().name());
+                        : coursePackage.getLearningType().name());
     }
 
     private static String studentDisplayName(StudentProfile student) {
         return student.getUser() == null ? student.getDisplayName() : student.getUser().getDisplayName();
-    }
-
-    private static String studentEmail(StudentProfile student) {
-        return student.getUser() == null ? null : student.getUser().getEmail();
     }
 
     private static Long requirePersistedId(VideoProgress progress, String message) {

@@ -22,11 +22,19 @@ public record AiAvailabilityResponse(
         boolean audioAnalysisAvailable,
         boolean imageAnalysisAvailable) {
 
-    public static final String STATUS_AVAILABLE = "AVAILABLE";
+    private static final String STATUS_AVAILABLE = "AVAILABLE";
 
-    public static final String STATUS_UNAVAILABLE = "UNAVAILABLE";
+    private static final String STATUS_UNAVAILABLE = "UNAVAILABLE";
 
-    public static AiAvailabilityResponse textGenerationAvailable(String provider, String model, String message) {
+    /**
+     * Text generation is available; image analysis (handwriting feedback) is available only when the
+     * configured provider accepts image input. Audio analysis is never available with the configured models.
+     */
+    public static AiAvailabilityResponse available(
+            String provider,
+            String model,
+            String message,
+            boolean imageAnalysisAvailable) {
         return new AiAvailabilityResponse(
                 true,
                 provider,
@@ -35,7 +43,7 @@ public record AiAvailabilityResponse(
                 message,
                 true,
                 false,
-                false);
+                imageAnalysisAvailable);
     }
 
     public static AiAvailabilityResponse unavailable(String provider, String model, String message) {

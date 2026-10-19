@@ -10,10 +10,10 @@ public class AiProperties {
     private static final int MIN_OUTPUT_TOKENS = 1;
     private static final int MAX_OUTPUT_TOKENS = 4000;
 
-    private String provider = "deepseek";
-    private String apiBaseUrl = "https://api.deepseek.com";
+    private String provider = "openai";
+    private String apiBaseUrl = "https://api.openai.com/v1";
     private String apiKey;
-    private String modelName = "deepseek-chat";
+    private String modelName = "gpt-5.6-luna";
     private int timeoutSeconds = 30;
     private int maxOutputTokens = 1200;
     private boolean enableRealProvider;

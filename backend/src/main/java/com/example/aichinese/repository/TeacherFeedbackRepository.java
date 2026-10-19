@@ -1,5 +1,6 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,4 +27,7 @@ public interface TeacherFeedbackRepository extends JpaRepository<TeacherFeedback
 
     @EntityGraph(value = TeacherFeedback.GRAPH_DETAIL)
     Optional<TeacherFeedback> findByIdAndStudentUserId(Long id, Long studentUserId);
+
+    @EntityGraph(attributePaths = { "teacher", "teacher.user", "practiceSubmission" })
+    List<TeacherFeedback> findByPracticeSubmissionIdInOrderByCreatedAtAsc(Collection<Long> practiceSubmissionIds);
 }

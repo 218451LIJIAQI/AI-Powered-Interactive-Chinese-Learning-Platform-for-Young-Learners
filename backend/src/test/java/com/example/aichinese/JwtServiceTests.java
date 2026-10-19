@@ -114,6 +114,35 @@ class JwtServiceTests {
                 .hasMessageContaining("no id");
     }
 
+    @Test
+    void shouldRejectTokenAfterAShortTimeToLiveHasExpired() throws InterruptedException {
+        // Proposal Table 6.2 "JWT expiry": a token issued with a 1 ms TTL is rejected once it expired
+        // (JWT expiry has second precision, so wait just over a second).
+        String email = "short-ttl@example.com";
+        JwtService shortLived = new JwtService(new SecurityProperties(TEST_SECRET, 1L));
+        String token = shortLived.generateToken(buildUser(email));
+
+        Thread.sleep(1_100L);
+
+        assertThat(shortLived.isTokenValid(token, email, 0L)).isFalse();
+    }
+
+    @Test
+    void shouldRejectTokenWhoseExpiryIsInThePast() {
+        SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
+        Date past = new Date(System.currentTimeMillis() - 60_000L);
+        String expired = Jwts.builder()
+                .subject(VALIDATION_EMAIL)
+                .claims(Map.of("userId", TEST_USER_ID, "sessionVersion", 0L))
+                .id(UUID.randomUUID().toString())
+                .issuedAt(new Date(past.getTime() - 60_000L))
+                .expiration(past)
+                .signWith(key)
+                .compact();
+
+        assertThat(jwtService().isTokenValid(expired, VALIDATION_EMAIL, 0L)).isFalse();
+    }
+
     private static JwtService jwtService() {
         return jwtService(TEST_SECRET);
     }

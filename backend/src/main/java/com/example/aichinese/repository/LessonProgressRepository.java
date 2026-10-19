@@ -30,12 +30,10 @@ public interface LessonProgressRepository extends JpaRepository<LessonProgress, 
 
     @Query("""
             select progress.id as id, lesson.id as lessonId,
-                   lesson.accessType as lessonAccessType, module.id as moduleId,
                    lesson.learningType as learningType, progress.completed as completed,
                    progress.lastAccessedAt as lastAccessedAt, progress.updatedAt as updatedAt
             from LessonProgress progress
             join progress.lesson lesson
-            left join lesson.module module
             where progress.student.id = :studentId and progress.id > :afterId
             order by progress.id asc
             """)

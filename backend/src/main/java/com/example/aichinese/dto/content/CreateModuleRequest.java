@@ -3,13 +3,8 @@ package com.example.aichinese.dto.content;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
-import java.math.BigDecimal;
-
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.example.aichinese.entity.enums.AccessType;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -20,8 +15,6 @@ import jakarta.validation.constraints.Size;
         "description",
         "levelId",
         "categoryId",
-        "accessType",
-        "price",
         "coverImageUrl"
 })
 public record CreateModuleRequest(
@@ -37,13 +30,6 @@ public record CreateModuleRequest(
         @NotNull(message = "Category is required.")
         @Positive(message = "Category id must be positive.")
         Long categoryId,
-        @NotNull(message = "Access type is required.")
-        AccessType accessType,
-        @DecimalMin(value = "0.0", inclusive = true, message = "Price must be greater than or equal to 0.")
-        @Digits(integer = ContentDtoConstants.PRICE_INTEGER_DIGITS,
-                fraction = ContentDtoConstants.PRICE_FRACTION_DIGITS,
-                message = "Price must fit within 8 integer digits and 2 decimal places.")
-        BigDecimal price,
         @Size(max = ContentDtoConstants.COVER_IMAGE_URL_MAX_LENGTH,
                 message = "Cover image reference must not exceed 255 characters.")
         String coverImageUrl) {

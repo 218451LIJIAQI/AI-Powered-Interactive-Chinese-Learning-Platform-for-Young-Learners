@@ -25,9 +25,11 @@ import com.example.aichinese.dto.learning.JoinLiveClassResponse;
 import com.example.aichinese.dto.learning.LiveClassResponse;
 import com.example.aichinese.dto.learning.PointsTransactionResponse;
 import com.example.aichinese.dto.learning.QuizAttemptResultResponse;
+import com.example.aichinese.dto.learning.QuizHintResponse;
 import com.example.aichinese.dto.learning.RecordedLessonVideoResponse;
 import com.example.aichinese.dto.learning.RewardSummaryResponse;
 import com.example.aichinese.dto.learning.StudentLessonPlayerResponse;
+import com.example.aichinese.dto.learning.StudentLessonProgressResponse;
 import com.example.aichinese.dto.learning.StudentProgressSummaryResponse;
 import com.example.aichinese.dto.learning.StudentQuizResponse;
 import com.example.aichinese.dto.learning.StudentQuizSummaryResponse;
@@ -95,6 +97,25 @@ public class StudentController {
         return ApiResponse.success(
                 "Lesson player retrieved successfully.",
                 studentLearningService.getLessonPlayer(currentUser, lessonId));
+    }
+
+    @PostMapping("/lessons/{lessonId}/viewed")
+    public ApiResponse<StudentLessonProgressResponse> markLessonViewed(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long lessonId) {
+        return ApiResponse.success(
+                "Lesson progress updated successfully.",
+                studentLearningService.markLessonContentViewed(currentUser, lessonId));
+    }
+
+    @GetMapping("/quizzes/{quizId}/questions/{questionId}/hint")
+    public ApiResponse<QuizHintResponse> getQuestionHint(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long quizId,
+            @PathVariable Long questionId) {
+        return ApiResponse.success(
+                "Hint retrieved successfully.",
+                studentLearningService.getQuestionHint(currentUser, quizId, questionId));
     }
 
     @GetMapping("/live-classes")

@@ -4,8 +4,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 
 public record AdminDragDropActivityResponse(
         Long id,
@@ -13,7 +13,6 @@ public record AdminDragDropActivityResponse(
         String instructions,
         ContentStatus status,
         Integer hskLevel,
-        AgeBand ageBand,
         ActivityDifficulty difficulty,
         String topic,
         List<String> tags,
@@ -23,7 +22,9 @@ public record AdminDragDropActivityResponse(
         String createdByDisplayName,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        List<AdminDragDropItemResponse> items) {
+        List<AdminDragDropItemResponse> items,
+        String rejectionReason,
+        LearningStage learningStage) {
 
     public AdminDragDropActivityResponse {
         tags = tags == null ? List.of() : List.copyOf(tags);

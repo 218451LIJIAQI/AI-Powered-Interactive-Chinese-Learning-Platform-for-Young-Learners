@@ -36,7 +36,7 @@ function chatPayload(overrides: Partial<ChatStreamPayload> = {}): ChatStreamPayl
     sessionId: 7,
     userMessage: CHAT_MESSAGE,
     aiResponse: 'ni hao',
-    language: 'zh',
+    language: 'zh-CN',
     createdAt: CREATED_AT,
     status: 'SUCCESS',
     ...overrides,
@@ -234,5 +234,56 @@ describe('aiApi.chatStream', () => {
     mockFetchResponse(sseResponse('event: delta\ndata: partial\n\n'))
 
     await streamErrorExpectation(INCOMPLETE_STREAM_MESSAGE)
+  })
+
+  it('does not send the request when the caller signal is already aborted', async () => {
+    window.fetch = vi.fn()
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(aiApi.chatStream(chatRequest(), { signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(window.fetch).not.toHaveBeenCalled()
+  })
+
+  it('cancels a pending connection with the caller signal instead of reporting a timeout', async () => {
+    window.fetch = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        }),
+    )
+    const controller = new AbortController()
+
+    const request = aiApi.chatStream(chatRequest(), { signal: controller.signal })
+    controller.abort()
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('stops reading the stream when the caller aborts after the first delta', async () => {
+    const encoder = new TextEncoder()
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        streamController.enqueue(encoder.encode('event: delta\ndata: ni\n\n'))
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    mockFetchResponse(new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
+    const controller = new AbortController()
+    const onComplete = vi.fn()
+    const onDelta = vi.fn(() => controller.abort())
+
+    await expect(
+      aiApi.chatStream(chatRequest(), { onDelta, onComplete, signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(onDelta).toHaveBeenCalledWith('ni')
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(cancelled).toBe(true)
   })
 })

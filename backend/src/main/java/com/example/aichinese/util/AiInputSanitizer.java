@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  * <p>This class is purposefully conservative: it normalises, caps and
  * strips, but does <i>not</i> escape — the result is still plain text the
  * downstream prompt builders can interpolate. JSON output formatting,
- * structured parsing and the per-feature fallback path remain the primary
+ * structured parsing and the per-feature fallback path remain the main
  * line of defence (see {@code AiService.fallback*} methods); this
  * sanitiser only removes the most obvious abuse vectors.</p>
  *
@@ -145,11 +145,13 @@ public final class AiInputSanitizer {
         if (stripped == null) {
             return null;
         }
-        String withoutControlTokens = CHAT_CONTROL_TOKEN.matcher(stripped).replaceAll("");
-        String withoutControlChars = CONTROL_CHARS.matcher(withoutControlTokens).replaceAll("");
+        // Characters are removed before tokens so that a control or invisible character placed
+        // inside a sentinel (for example a U+200B zero-width space) cannot hide it from the token pass.
+        String withoutControlChars = CONTROL_CHARS.matcher(stripped).replaceAll("");
         String withoutInvisible = INVISIBLE_CHARS.matcher(withoutControlChars).replaceAll("");
+        String withoutControlTokens = stripChatControlTokens(withoutInvisible);
         // Strip again to drop whitespace left behind by token / char removal.
-        String collapsed = TextUtils.trimToNull(withoutInvisible);
+        String collapsed = TextUtils.trimToNull(withoutControlTokens);
         if (collapsed == null) {
             return null;
         }
@@ -157,6 +159,21 @@ public final class AiInputSanitizer {
             collapsed = TextUtils.safeTruncate(collapsed, maxLength);
         }
         return collapsed;
+    }
+
+    /**
+     * Removes sentinel tokens until none remain, so a nested payload such as
+     * {@code "<|im_<|im_end|>start|>"} cannot reassemble a token after a single pass.
+     * Terminates because every pass that changes the text makes it shorter.
+     */
+    private static String stripChatControlTokens(String value) {
+        String current = value;
+        String previous;
+        do {
+            previous = current;
+            current = CHAT_CONTROL_TOKEN.matcher(previous).replaceAll("");
+        } while (!current.equals(previous));
+        return current;
     }
 
     /**

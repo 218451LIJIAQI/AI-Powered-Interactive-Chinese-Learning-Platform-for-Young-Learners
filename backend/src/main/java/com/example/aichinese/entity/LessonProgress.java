@@ -47,6 +47,10 @@ public class LessonProgress extends BaseEntity {
     @Column(name = "completed", nullable = false)
     private boolean completed;
 
+    /** When the student first viewed the lesson content (lessons without quizzes complete from content + videos). */
+    @Column(name = "content_viewed_at")
+    private LocalDateTime contentViewedAt;
+
     @Column(name = "last_accessed_at")
     private LocalDateTime lastAccessedAt;
 }

@@ -19,7 +19,6 @@ import jakarta.validation.constraints.Size;
         "category",
         "numberOfQuestions",
         "questionTypes",
-        "targetRoleContext",
         "languagePreference"
 })
 public record AiQuizGeneratorRequest(
@@ -35,8 +34,6 @@ public record AiQuizGeneratorRequest(
         Integer numberOfQuestions,
         @Size(max = 10, message = "Question types must not exceed 10 items.")
         List<@Size(max = 40, message = "Question type must not exceed 40 characters.") String> questionTypes,
-        @Size(max = 20, message = "Target role context must not exceed 20 characters.")
-        String targetRoleContext,
         @Size(max = 20, message = "Language preference must not exceed 20 characters.")
         String languagePreference) {
 
@@ -45,7 +42,6 @@ public record AiQuizGeneratorRequest(
         level = stripToNull(level);
         category = stripToNull(category);
         questionTypes = strippedStringListOrNull(questionTypes);
-        targetRoleContext = stripToNull(targetRoleContext);
         languagePreference = stripToNull(languagePreference);
     }
 }

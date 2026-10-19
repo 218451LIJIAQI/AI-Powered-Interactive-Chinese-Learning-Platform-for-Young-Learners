@@ -1,6 +1,18 @@
 <template>
   <header class="dashboard-topbar">
     <div class="topbar-leading">
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon topbar-menu-button"
+        aria-controls="app-sidebar"
+        :aria-expanded="navOpen"
+        :aria-label="t('dashboard.openNavigation')"
+        @click="emit('toggle-navigation')"
+      >
+        <IconGlyph name="menu" :size="22" />
+      </button>
+      <AppBrand compact class="topbar-brand" />
+
       <div class="topbar-context">
         <div class="topbar-role-badge" :class="`is-${roleTone}`">
           <IconGlyph :name="roleIcon" :size="16" />
@@ -12,55 +24,101 @@
           <span>{{ contextSubtitle }}</span>
         </div>
 
-        <div v-if="showDateChip" class="topbar-date-chip hidden-mobile">
+        <div v-if="showDateChip" class="topbar-date-chip">
           <IconGlyph name="calendar" :size="16" class="topbar-date-icon" />
           <span>{{ dateLabel }}</span>
-          <IconGlyph name="chevronDown" :size="14" class="topbar-date-caret" />
         </div>
       </div>
     </div>
 
     <div class="topbar-actions">
-      <LanguageSwitcher size="compact" />
+      <LanguageSwitcher size="compact" class="topbar-language" />
 
-      <div v-if="showStreak" class="topbar-stat hidden-mobile">
+      <div v-if="showStreak" class="topbar-stat">
         <span class="topbar-stat-fire"><IconGlyph name="streak" :size="18" /></span>
-        <div class="stack topbar-stat-copy">
+        <div class="topbar-stat-copy">
           <strong>{{ streakCount }}</strong>
-          <span class="muted">{{ t('dashboard.dayStreak') }}</span>
+          <span>{{ t('dashboard.dayStreak') }}</span>
         </div>
       </div>
 
       <RouterLink
         v-if="showNotifications"
         :to="notificationPath"
-        class="topbar-icon-button hidden-mobile"
+        class="topbar-icon-button"
         :aria-label="notificationAriaLabel"
+        data-testid="topbar-notifications"
       >
-        <IconGlyph name="bell" :size="18" class="topbar-icon-glyph" />
+        <IconGlyph name="bell" :size="20" class="topbar-icon-glyph" />
         <span v-if="notificationCount" class="topbar-notification-badge" aria-hidden="true">{{
-          notificationCount
+          notificationBadgeLabel
         }}</span>
       </RouterLink>
 
-      <button
-        v-if="showSessionAction"
-        class="topbar-signout"
-        type="button"
-        :disabled="signingOut"
-        :aria-busy="signingOut"
-        @click="handleSignOut"
-      >
-        {{ signOutLabel }}
-      </button>
+      <div v-if="showUserMenu" ref="userMenuRef" class="topbar-user-menu">
+        <button
+          type="button"
+          class="topbar-user"
+          aria-haspopup="menu"
+          aria-controls="topbar-user-dropdown"
+          :aria-expanded="userMenuOpen"
+          @click="toggleUserMenu"
+        >
+          <PortraitAvatar class="topbar-user-portrait" :size="36" :name="displayName" />
+          <span class="topbar-user-copy">
+            <strong class="topbar-user-name">{{ displayName }}</strong>
+            <span class="topbar-user-role">{{ profileLabel }}</span>
+          </span>
+          <IconGlyph name="chevronDown" :size="16" class="topbar-user-caret" />
+        </button>
 
-      <RouterLink :to="profilePath" class="topbar-user">
-        <PortraitAvatar class="topbar-user-portrait" :size="52" :kind="userPortraitKind" />
-        <div class="topbar-user-copy">
+        <div
+          v-show="userMenuOpen"
+          id="topbar-user-dropdown"
+          ref="userDropdownRef"
+          class="menu topbar-user-dropdown"
+          role="menu"
+          :aria-label="t('dashboard.accountMenu')"
+          @keydown="handleMenuKeydown"
+        >
+          <RouterLink :to="profilePath" class="menu-item" role="menuitem" @click="closeUserMenu">
+            <IconGlyph name="profile" :size="18" />
+            <span>{{ globalT('nav.profile') }}</span>
+          </RouterLink>
+          <RouterLink
+            v-if="showAccountLink"
+            :to="accountPath"
+            class="menu-item"
+            role="menuitem"
+            data-testid="topbar-account"
+            @click="closeUserMenu"
+          >
+            <IconGlyph name="account" :size="18" />
+            <span>{{ globalT('nav.account') }}</span>
+          </RouterLink>
+          <template v-if="showSessionAction">
+            <div class="menu-divider" role="separator" />
+            <button
+              type="button"
+              class="menu-item is-danger"
+              role="menuitem"
+              :disabled="signingOut"
+              :aria-busy="signingOut"
+              @click="handleSignOut"
+            >
+              <IconGlyph name="logout" :size="18" />
+              <span>{{ signOutLabel }}</span>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <RouterLink v-else :to="profilePath" class="topbar-user">
+        <PortraitAvatar class="topbar-user-portrait" :size="36" />
+        <span class="topbar-user-copy">
           <strong class="topbar-user-name">{{ displayName }}</strong>
           <span class="topbar-user-role">{{ profileLabel }}</span>
-        </div>
-        <IconGlyph name="chevronDown" :size="14" class="topbar-user-caret" />
+        </span>
       </RouterLink>
     </div>
   </header>
@@ -75,10 +133,16 @@ import { notificationsApi, studentApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import AppBrand from '@/components/layout/AppBrand.vue'
 import { useResource } from '@/composables/useResource'
+import { adminNotifications, studentNotifications, teacherNotifications } from '@/demo/data'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/api'
 import { dashboardMessages } from '@/plugins/dashboardMessages'
+import { getDisplayLocale } from '@/utils/format'
+import { NOTIFICATION_READ_EVENT } from '@/utils/notifications'
+
+import { useOverlayFocus } from './useOverlayFocus'
 
 interface RoleTopbarCopy {
   readonly tone: string
@@ -105,7 +169,7 @@ const ROLE_TOPBAR_COPY: Record<UserRole, RoleTopbarCopy> = {
     label: 'dashboard.teacherWorkspace',
     icon: 'classes',
     profileLabel: 'dashboard.teachingProfile',
-    defaultDisplayName: 'Li Wei',
+    defaultDisplayName: 'dashboard.teacherName',
     contextTitle: 'dashboard.teacherContext',
     contextSubtitle: 'dashboard.teacherSubtitle',
   },
@@ -130,26 +194,42 @@ const GUEST_TOPBAR_COPY = {
   contextSubtitle: 'dashboard.guestSubtitle',
 } as const
 
+interface Props {
+  /** Whether the off-canvas navigation (below 900px) is open; drives the menu button's aria-expanded. */
+  navOpen?: boolean
+}
+
+withDefaults(defineProps<Props>(), { navOpen: false })
+
+const emit = defineEmits<{
+  'toggle-navigation': []
+}>()
+
 const EMPTY_STREAK = { currentStreak: 0, bestStreak: 0, lastLearningDate: null } as const
-const NOTIFICATION_READ_EVENT = 'mandarin-spark:notification-read'
 
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
+const { t: globalT } = useI18n({ useScope: 'global' })
 const { t, locale } = useI18n({
   messages: {
     en: { dashboard: dashboardMessages.en },
     ms: { dashboard: dashboardMessages.ms },
-    zh: { dashboard: dashboardMessages.zh },
+    'zh-CN': { dashboard: dashboardMessages['zh-CN'] },
   },
 })
 
 const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
 const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
 const activeRoleCopy = computed(() => ROLE_TOPBAR_COPY[role.value])
+const PREVIEW_NOTIFICATIONS = {
+  STUDENT: studentNotifications,
+  TEACHER: teacherNotifications,
+  ADMIN: adminNotifications,
+} as const
 const unreadResource = useResource(
   () => (showNotifications.value ? notificationsApi.unreadCount() : Promise.resolve({ unreadCount: 0 })),
-  { unreadCount: 0 },
+  () => ({ unreadCount: PREVIEW_NOTIFICATIONS[role.value].filter((item) => item.status === 'UNREAD').length }),
   false,
 )
 const streakResource = useResource(
@@ -181,10 +261,6 @@ const displayName = computed(() => {
   return auth.displayName || t(activeRoleCopy.value.defaultDisplayName)
 })
 
-const userPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() =>
-  isGuestCatalog.value || role.value === 'STUDENT' ? 'student' : 'female',
-)
-
 const profilePath = computed(() => {
   if (isGuestCatalog.value) return '/auth'
 
@@ -197,9 +273,13 @@ const profilePath = computed(() => {
       return '/student/profile'
   }
 })
-const notificationPath = computed(() =>
-  role.value === 'ADMIN' ? '/admin/settings?section=support' : profilePath.value,
+const rolePathPrefix = computed(() =>
+  role.value === 'TEACHER' ? '/teacher' : role.value === 'ADMIN' ? '/admin' : '/student',
 )
+// D20: the bell opens the role's notifications page; the badge shows the server unread count.
+const notificationPath = computed(() => `${rolePathPrefix.value}/notifications`)
+const accountPath = computed(() => `${rolePathPrefix.value}/account`)
+
 const profileLabel = computed(() =>
   t(isGuestCatalog.value ? GUEST_TOPBAR_COPY.profileLabel : activeRoleCopy.value.profileLabel),
 )
@@ -217,20 +297,14 @@ const contextSubtitle = computed(() =>
   t(isGuestCatalog.value ? GUEST_TOPBAR_COPY.contextSubtitle : activeRoleCopy.value.contextSubtitle),
 )
 
-const isDashboardHome = computed(() => route.path.endsWith('/dashboard'))
-const showNotifications = computed(() => {
-  if (isGuestCatalog.value) return false
-  if (!auth.isAuthenticated) return false
-  if (auth.isPreviewSession) return false
-  if (role.value === 'ADMIN') return !isDashboardHome.value
-  if (role.value === 'TEACHER') return !route.path.includes('/teacher/content')
-  return !route.path.includes('/student/learn')
-})
+const hasWorkspaceSession = computed(() => auth.isAuthenticated || auth.isPreviewSession)
+const showNotifications = computed(() => !isGuestCatalog.value && hasWorkspaceSession.value)
+const showAccountLink = computed(() => !isGuestCatalog.value && hasWorkspaceSession.value)
 const showStreak = computed(() => role.value === 'STUDENT' && !isGuestCatalog.value && streakCount.value > 0)
 const showDateChip = computed<boolean>(() => role.value === 'TEACHER' && route.path.includes('/teacher/classes'))
 
 const dateLabel = computed<string>(() =>
-  new Intl.DateTimeFormat({ en: 'en-US', ms: 'ms-MY', zh: 'zh-CN' }[locale.value] ?? 'en-US', {
+  new Intl.DateTimeFormat(getDisplayLocale(locale.value), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -241,12 +315,54 @@ const dateLabel = computed<string>(() =>
 const notificationCount = computed<number>(() =>
   showNotifications.value ? (unreadResource.data.value?.unreadCount ?? 0) : 0,
 )
+const notificationBadgeLabel = computed<string>(() =>
+  notificationCount.value > 99 ? '99+' : String(notificationCount.value),
+)
 const notificationAriaLabel = computed<string>(() =>
   notificationCount.value > 0
     ? t('dashboard.unreadNotifications', { count: notificationCount.value })
     : t('dashboard.notifications'),
 )
 const showSessionAction = computed<boolean>(() => auth.isAuthenticated && !isGuestCatalog.value)
+const showUserMenu = computed<boolean>(() => !isGuestCatalog.value)
+
+const userMenuOpen = ref<boolean>(false)
+const userMenuRef = ref<HTMLElement | null>(null)
+const userDropdownRef = ref<HTMLElement | null>(null)
+
+const { focusables: menuItems } = useOverlayFocus({
+  active: userMenuOpen,
+  container: userDropdownRef,
+  onClose: closeUserMenu,
+})
+
+function toggleUserMenu(): void {
+  userMenuOpen.value = !userMenuOpen.value
+}
+
+function closeUserMenu(): void {
+  userMenuOpen.value = false
+}
+
+function handleMenuKeydown(event: KeyboardEvent): void {
+  const items = menuItems()
+  if (!items.length) return
+  const index = items.indexOf(document.activeElement as HTMLElement)
+  let next: HTMLElement | undefined
+  if (event.key === 'ArrowDown') next = items[(index + 1) % items.length]
+  else if (event.key === 'ArrowUp') next = items[(index - 1 + items.length) % items.length]
+  else if (event.key === 'Home') next = items[0]
+  else if (event.key === 'End') next = items[items.length - 1]
+  else if (event.key === 'Tab') closeUserMenu()
+  if (next) {
+    event.preventDefault()
+    next.focus()
+  }
+}
+
+function handleDocumentPointer(event: PointerEvent): void {
+  if (userMenuOpen.value && !userMenuRef.value?.contains(event.target as Node)) closeUserMenu()
+}
 const signingOut = ref<boolean>(false)
 const signOutLabel = computed<string>(() => (signingOut.value ? t('dashboard.signingOut') : t('dashboard.signOut')))
 
@@ -272,6 +388,7 @@ async function handleSignOut(): Promise<void> {
 onMounted(() => {
   refreshUnreadCount()
   window.addEventListener(NOTIFICATION_READ_EVENT, refreshUnreadCount)
+  document.addEventListener('pointerdown', handleDocumentPointer)
 })
 
 watch(showNotifications, (visible) => {
@@ -280,7 +397,13 @@ watch(showNotifications, (visible) => {
   }
 })
 
+watch(
+  () => route.fullPath,
+  () => closeUserMenu(),
+)
+
 onBeforeUnmount(() => {
   window.removeEventListener(NOTIFICATION_READ_EVENT, refreshUnreadCount)
+  document.removeEventListener('pointerdown', handleDocumentPointer)
 })
 </script>

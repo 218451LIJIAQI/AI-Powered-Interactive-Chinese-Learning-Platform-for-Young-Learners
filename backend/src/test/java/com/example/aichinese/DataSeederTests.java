@@ -60,6 +60,14 @@ class DataSeederTests {
         assertThat(learningLevelRepository.count()).isEqualTo(EXPECTED_LEVEL_COUNT);
         assertThat(learningCategoryRepository.count()).isEqualTo(EXPECTED_CATEGORY_COUNT);
         assertThat(badgeRepository.count()).isGreaterThanOrEqualTo(MIN_BADGE_COUNT);
+        // Seeded badges are exactly the badges the reward service awards (no never-awarded badges).
+        assertThat(badgeRepository.findAll())
+                .extracting(com.example.aichinese.entity.Badge::getName)
+                .containsExactlyInAnyOrder(java.util.Arrays.stream(com.example.aichinese.service.RewardBadge.values())
+                        .map(com.example.aichinese.service.RewardBadge::badgeName)
+                        .toArray(String[]::new));
+        assertThat(badgeRepository.findAll())
+                .allSatisfy(badge -> assertThat(badge.getDescription()).startsWith("Earned "));
         assertThat(systemSettingRepository.count()).isGreaterThanOrEqualTo(MIN_SYSTEM_SETTING_COUNT);
         assertThat(userRepository.count()).isZero();
     }

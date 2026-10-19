@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -27,18 +26,24 @@ import com.example.aichinese.dto.learning.DailyStreakResponse;
 import com.example.aichinese.dto.learning.LiveClassResponse;
 import com.example.aichinese.dto.learning.PointsTransactionResponse;
 import com.example.aichinese.dto.learning.QuizAttemptResultQuestionResponse;
+import com.example.aichinese.dto.learning.QuizHintResponse;
+import com.example.aichinese.dto.learning.QuizOptionResponse;
 import com.example.aichinese.dto.learning.QuizAttemptResultResponse;
 import com.example.aichinese.dto.learning.QuizSubmissionAnswerRequest;
 import com.example.aichinese.dto.learning.RecordedLessonVideoResponse;
 import com.example.aichinese.dto.learning.RewardSummaryResponse;
 import com.example.aichinese.dto.learning.StudentLessonPlayerResponse;
+import com.example.aichinese.dto.learning.StudentLessonProgressResponse;
 import com.example.aichinese.dto.learning.StudentProgressSummaryResponse;
 import com.example.aichinese.dto.learning.StudentQuizResponse;
 import com.example.aichinese.dto.learning.StudentQuizSummaryResponse;
 import com.example.aichinese.dto.learning.SubmitQuizAttemptRequest;
 import com.example.aichinese.dto.learning.WrongAnswerResponse;
+import com.example.aichinese.entity.CoursePackage;
+import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LiveClass;
+import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizAttempt;
 import com.example.aichinese.entity.QuizAttemptAnswer;
@@ -46,14 +51,16 @@ import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.StudentProfile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
+import com.example.aichinese.entity.enums.PackageItemType;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
+import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.mapper.QuizMapper;
 import com.example.aichinese.repository.LiveClassEnrolmentRepository;
 import com.example.aichinese.repository.LiveClassRepository;
+import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
 import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.QuizOptionRepository;
@@ -62,7 +69,6 @@ import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
-import com.example.aichinese.util.TextUtils;
 
 @Service
 public class StudentLearningService {
@@ -70,9 +76,11 @@ public class StudentLearningService {
     private static final int QUIZ_PASS_PERCENT = 60;
     private static final int COMPLETE_PERCENT = 100;
     private static final String QUIZ_ATTEMPT_NOT_FOUND = "Quiz attempt was not found.";
-    private static final String PAID_CONTENT_LOCKED = "Paid content is locked until payment is completed.";
+    private static final String QUIZ_ATTEMPT_UNAVAILABLE = "This quiz attempt is no longer available because its lesson is not published.";
     private static final String RECORDED_VIDEO_STREAM_PATH = "/api/v1/students/recorded-videos/";
     private static final String RECORDED_VIDEO_STREAM_SUFFIX = "/stream";
+    private static final String HINTS_NOT_AVAILABLE = "Hints are not available for independent practice.";
+    private static final int LESSON_QUIZ_LIMIT = 50;
 
     private final StudentLearningAccessService studentLearningAccessService;
     private final StudentLearningProgressService studentLearningProgressService;
@@ -87,6 +95,7 @@ public class StudentLearningService {
     private final QuizMapper quizMapper;
     private final LiveLearningAccessService liveLearningAccessService;
     private final LiveLearningMapper liveLearningMapper;
+    private final PackageItemRepository packageItemRepository;
 
     public StudentLearningService(
             StudentLearningAccessService studentLearningAccessService,
@@ -101,7 +110,9 @@ public class StudentLearningService {
             RecordedLessonVideoRepository recordedLessonVideoRepository,
             QuizMapper quizMapper,
             LiveLearningAccessService liveLearningAccessService,
-            LiveLearningMapper liveLearningMapper) {
+            LiveLearningMapper liveLearningMapper,
+            PackageItemRepository packageItemRepository) {
+        this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.studentLearningProgressService = Objects.requireNonNull(studentLearningProgressService, "studentLearningProgressService");
         this.quizQuestionRepository = Objects.requireNonNull(quizQuestionRepository, "quizQuestionRepository");
@@ -121,8 +132,11 @@ public class StudentLearningService {
     public StudentLessonPlayerResponse getLessonPlayer(SecurityUserDetails currentUser, Long lessonId) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Lesson lesson = studentLearningAccessService.requirePublishedLesson(lessonId);
-        studentLearningAccessService.ensureLessonAccess(student, lesson);
-        int completionPercent = studentLearningProgressService.lessonCompletionPercent(student, lesson);
+        StudentLearningProgressService.LessonProgressSnapshot snapshot =
+                studentLearningProgressService.lessonSnapshot(student, lesson);
+        LearningModule module = lesson.getModule();
+        CoursePackage course = findVisibleCourse(lesson, module);
+        Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
 
         return new StudentLessonPlayerResponse(
                 lesson.getId(),
@@ -130,12 +144,82 @@ public class StudentLearningService {
                 lesson.getSummary(),
                 lesson.getLessonContent(),
                 lesson.getEstimatedDurationMinutes(),
-                completionPercent,
-                completionPercent >= COMPLETE_PERCENT,
-                false,
+                snapshot.completionPercent(),
+                snapshot.completed() || snapshot.completionPercent() >= COMPLETE_PERCENT,
                 lesson.getLearningType() == null ? null : lesson.getLearningType().name(),
-                buildLessonLiveClasses(student, lesson),
-                buildRecordedVideos(student, lesson));
+                buildLessonLiveClasses(student, lesson, relatedPackageIds),
+                buildRecordedVideos(lesson, relatedPackageIds),
+                buildLessonQuizzes(lesson),
+                snapshot.contentViewed(),
+                snapshot.mastery().name(),
+                snapshot.bestQuizPercentage(),
+                lesson.getCoverImageUrl(),
+                module == null ? null : module.getId(),
+                module == null ? null : module.getTitle(),
+                course == null ? null : course.getId(),
+                course == null ? null : course.getTitle());
+    }
+
+    /**
+     * FR-LRN-02: the first published course that lists this lesson directly or through its module,
+     * so the lesson page can show "Course / Module / Lesson". Null when the lesson is in no course.
+     */
+    private CoursePackage findVisibleCourse(Lesson lesson, LearningModule module) {
+        List<PackageItem> items = new ArrayList<>(
+                packageItemRepository.findByItemTypeAndItemId(PackageItemType.LESSON, lesson.getId()));
+        if (module != null) {
+            items.addAll(packageItemRepository.findByItemTypeAndItemId(PackageItemType.MODULE, module.getId()));
+        }
+        return items.stream()
+                .map(PackageItem::getCoursePackage)
+                .filter(Objects::nonNull)
+                .filter(ContentVisibilityPolicy::isPackageVisible)
+                .min(Comparator.comparing(CoursePackage::getId))
+                .orElse(null);
+    }
+
+    /**
+     * The student opened the lesson page and the content was shown: recorded for lesson
+     * completion (lessons without quizzes complete from content + recorded videos, D25).
+     */
+    @Transactional
+    public StudentLessonProgressResponse markLessonContentViewed(SecurityUserDetails currentUser, Long lessonId) {
+        StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
+        Lesson lesson = studentLearningAccessService.requirePublishedLesson(lessonId);
+        return studentLearningProgressService.recordLessonContentViewed(student, lesson);
+    }
+
+    /** Reveals one question's teacher-authored hint on request (D8); never for INDEPENDENT quizzes. */
+    @Transactional(readOnly = true)
+    public QuizHintResponse getQuestionHint(SecurityUserDetails currentUser, Long quizId, Long questionId) {
+        studentLearningAccessService.requireStudent(currentUser);
+        Quiz quiz = studentLearningAccessService.requirePublishedQuiz(quizId);
+        QuizQuestion question = quizQuestionRepository.findById(questionId)
+                .filter(candidate -> candidate.getQuiz() != null && Objects.equals(candidate.getQuiz().getId(), quiz.getId()))
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quiz question was not found."));
+        if (!QuizMapper.hintsAllowed(quiz)) {
+            throw new ResponseStatusException(FORBIDDEN, HINTS_NOT_AVAILABLE);
+        }
+        if (!QuizMapper.hasHint(question)) {
+            throw new ResponseStatusException(NOT_FOUND, "This question has no hint.");
+        }
+        return new QuizHintResponse(question.getId(), question.getHint().strip());
+    }
+
+    private List<StudentQuizSummaryResponse> buildLessonQuizzes(Lesson lesson) {
+        return quizRepository.findVisibleForStudent(
+                        lesson.getId(),
+                        ContentStatus.PUBLISHED,
+                        ContentStatus.PUBLISHED,
+                        TeacherStatus.APPROVED,
+                        PageRequest.of(0, LESSON_QUIZ_LIMIT))
+                .getContent().stream()
+                .map(quiz -> quizMapper.toStudentQuizSummaryResponse(quiz, questionCount(quiz)))
+                .toList();
+    }
+
+    private int questionCount(Quiz quiz) {
+        return Math.toIntExact(quizQuestionRepository.countByQuizId(quiz.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -144,36 +228,30 @@ public class StudentLearningService {
             Long lessonId,
             int page,
             int size) {
-        StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
+        studentLearningAccessService.requireStudent(currentUser);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        Page<Quiz> quizPage = quizRepository.findAccessiblePublishedForStudent(
-                student.getId(),
+        Page<Quiz> quizPage = quizRepository.findVisibleForStudent(
                 lessonId,
                 ContentStatus.PUBLISHED,
                 ContentStatus.PUBLISHED,
+                TeacherStatus.APPROVED,
                 PageRequest.of(safePage, safeSize));
         List<StudentQuizSummaryResponse> items = quizPage.getContent().stream()
-                .map(quiz -> quizMapper.toStudentQuizSummaryResponse(
-                        quiz,
-                        quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId()).size()))
+                .map(quiz -> quizMapper.toStudentQuizSummaryResponse(quiz, questionCount(quiz)))
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, quizPage.getTotalElements(), quizPage.getTotalPages());
     }
 
     @Transactional(readOnly = true)
     public StudentQuizResponse getQuiz(SecurityUserDetails currentUser, Long quizId) {
-        StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
+        studentLearningAccessService.requireStudent(currentUser);
         Quiz quiz = studentLearningAccessService.requirePublishedQuiz(quizId);
-        studentLearningAccessService.ensureLessonAccess(student, quiz.getLesson());
         List<QuizQuestion> questions = quizQuestionRepository.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
-        List<QuizOption> options = questions.stream()
-                .flatMap(question -> quizOptionRepository.findByQuestionIdOrderBySortOrderAscCreatedAtAsc(question.getId()).stream())
-                .toList();
         return quizMapper.toStudentQuizResponse(
                 quiz,
                 questions,
-                quizMapper.groupOptionsByQuestionId(options));
+                loadOptions(questions));
     }
 
     @Transactional
@@ -183,7 +261,6 @@ public class StudentLearningService {
             SubmitQuizAttemptRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Quiz quiz = studentLearningAccessService.requirePublishedQuiz(quizId);
-        studentLearningAccessService.ensureLessonAccess(student, quiz.getLesson());
         if (request == null) {
             throw new ResponseStatusException(BAD_REQUEST, "Quiz submission request is required.");
         }
@@ -197,6 +274,18 @@ public class StudentLearningService {
 
         Map<Long, QuizSubmissionAnswerRequest> answerByQuestionId =
                 validateAndIndexAnswers(request.answers(), questions);
+        Map<Long, List<QuizOption>> optionsByQuestionId = loadOptions(questions);
+        boolean hintsAllowed = QuizMapper.hintsAllowed(quiz);
+
+        // T32: every answer is validated before anything is written, so a rejected submission
+        // leaves no partial attempt, answers, points or progress (the transaction also rolls back).
+        for (QuizQuestion question : questions) {
+            QuizSubmissionAnswerRequest answerRequest = answerByQuestionId.get(question.getId());
+            if (answerRequest == null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Every quiz question requires an answer.");
+            }
+            QuizScoring.validate(question, optionsByQuestionId.getOrDefault(question.getId(), List.of()), answerRequest);
+        }
 
         int score = 0;
         int maxScore = 0;
@@ -209,13 +298,10 @@ public class StudentLearningService {
             int questionPoints = points(question);
             maxScore += questionPoints;
             QuizSubmissionAnswerRequest answerRequest = answerByQuestionId.get(question.getId());
-            if (answerRequest == null) {
-                throw new ResponseStatusException(BAD_REQUEST, "Every quiz question requires an answer.");
-            }
-
-            String submittedAnswer = normalizeAnswerText(answerRequest.answerText());
-            boolean correct = isCorrectAnswer(question, answerRequest.answerText());
-            if (correct) {
+            List<QuizOption> options = optionsByQuestionId.getOrDefault(question.getId(), List.of());
+            QuizScoring.ScoredAnswer scored = QuizScoring.score(question, options, answerRequest);
+            boolean hintUsed = hintsAllowed && QuizMapper.hasHint(question) && answerRequest.hintRevealed();
+            if (scored.correct()) {
                 score += questionPoints;
                 correctCount++;
             }
@@ -223,26 +309,21 @@ public class StudentLearningService {
             QuizAttemptAnswer attemptAnswer = new QuizAttemptAnswer();
             attemptAnswer.setQuizAttempt(savedAttempt);
             attemptAnswer.setQuestion(question);
-            attemptAnswer.setAnswerText(submittedAnswer);
-            attemptAnswer.setCorrect(correct);
+            attemptAnswer.setAnswerText(scored.studentAnswerText());
+            attemptAnswer.setSelectedOption(scored.selectedOption());
+            attemptAnswer.setCorrect(scored.correct());
+            attemptAnswer.setHintUsed(hintUsed);
             quizAttemptAnswerRepository.save(attemptAnswer);
 
-            answerResults.add(new QuizAttemptResultQuestionResponse(
-                    question.getId(),
-                    question.getQuestionType(),
-                    question.getQuestionText(),
-                    submittedAnswer,
-                    question.getCorrectAnswerText(),
-                    correct,
-                    question.getPoints(),
-                    question.getExplanation()));
+            answerResults.add(toResultQuestion(question, options, scored.studentAnswerText(),
+                    scored.selectedOption(), scored.correct(), hintUsed));
         }
 
         savedAttempt.setScore(score);
         savedAttempt.setMaxScore(maxScore);
         quizAttemptRepository.save(savedAttempt);
 
-        int percentage = percentageScore(score, maxScore);
+        int percentage = QuizScoring.percentage(score, maxScore);
         StudentLearningProgressService.CompletionOutcome completionOutcome =
                 studentLearningProgressService.completeQuiz(student, quiz, percentage);
 
@@ -267,11 +348,20 @@ public class StudentLearningService {
         if (!Objects.equals(attempt.getStudent().getId(), student.getId())) {
             throw new ResponseStatusException(FORBIDDEN, "You do not have access to this quiz attempt.");
         }
-        ensureQuizAttemptStillAccessible(student, attempt);
+        ensureQuizAttemptStillAccessible(attempt);
         List<QuizAttemptAnswer> answers = quizAttemptAnswerRepository
                 .findByQuizAttemptIdOrderByCreatedAtAsc(attempt.getId());
+        Map<Long, List<QuizOption>> optionsByQuestionId = loadOptions(answers.stream()
+                .map(QuizAttemptAnswer::getQuestion)
+                .toList());
         List<QuizAttemptResultQuestionResponse> answerResponses = answers.stream()
-                .map(StudentLearningService::toQuizAttemptResultQuestionResponse)
+                .map(answer -> toResultQuestion(
+                        answer.getQuestion(),
+                        optionsByQuestionId.getOrDefault(answer.getQuestion().getId(), List.of()),
+                        Objects.requireNonNullElse(answer.getAnswerText(), ""),
+                        answer.getSelectedOption(),
+                        answer.isCorrect(),
+                        answer.isHintUsed()))
                 .toList();
 
         int correctCount = (int) answers.stream().filter(QuizAttemptAnswer::isCorrect).count();
@@ -299,10 +389,13 @@ public class StudentLearningService {
                 student.getId(),
                 ContentStatus.PUBLISHED,
                 ContentStatus.ARCHIVED,
-                AccessType.FREE,
                 PageRequest.of(safePage, safeSize));
+        Map<Long, List<QuizOption>> optionsByQuestionId = loadOptions(wrongAnswerPage.getContent().stream()
+                .map(QuizAttemptAnswer::getQuestion)
+                .filter(QuizScoring::isOptionBased)
+                .toList());
         List<WrongAnswerResponse> items = wrongAnswerPage.getContent().stream()
-                .map(StudentLearningService::toWrongAnswerResponse)
+                .map(answer -> toWrongAnswerResponse(answer, optionsByQuestionId))
                 .toList();
         return new PageResponse<>(items, safePage, safeSize, wrongAnswerPage.getTotalElements(), wrongAnswerPage.getTotalPages());
     }
@@ -310,9 +403,12 @@ public class StudentLearningService {
     @Transactional(readOnly = true)
     public List<WrongAnswerResponse> getWrongAnswersForAttempt(SecurityUserDetails currentUser, Long attemptId) {
         QuizAttemptResultResponse attempt = getQuizAttempt(currentUser, attemptId);
+        Lesson lesson = quizAttemptRepository.findByIdAndStudentUserId(attemptId, currentUser.getUserId())
+                .map(found -> found.getQuiz().getLesson())
+                .orElse(null);
         return attempt.answers().stream()
                 .filter(answer -> !answer.correct())
-                .map(answer -> toWrongAnswerResponse(attempt, answer))
+                .map(answer -> toWrongAnswerResponse(attempt, answer, lesson))
                 .toList();
     }
 
@@ -346,25 +442,25 @@ public class StudentLearningService {
         return studentLearningProgressService.getStreak(student);
     }
 
-    private void ensureQuizAttemptStillAccessible(StudentProfile student, QuizAttempt attempt) {
-        if (!isQuizAttemptStillAccessible(student, attempt)) {
-            throw new ResponseStatusException(FORBIDDEN, PAID_CONTENT_LOCKED);
+    private void ensureQuizAttemptStillAccessible(QuizAttempt attempt) {
+        if (!isQuizAttemptStillAccessible(attempt)) {
+            throw new ResponseStatusException(FORBIDDEN, QUIZ_ATTEMPT_UNAVAILABLE);
         }
     }
 
-    private boolean isQuizAttemptStillAccessible(StudentProfile student, QuizAttempt attempt) {
+    private static boolean isQuizAttemptStillAccessible(QuizAttempt attempt) {
         Quiz quiz = attempt == null ? null : attempt.getQuiz();
         Lesson lesson = quiz == null ? null : quiz.getLesson();
         if (lesson == null) {
             return false;
         }
-        return lesson.getContentStatus() == ContentStatus.PUBLISHED
-                && studentLearningAccessService.hasLessonAccess(student, lesson);
+        return lesson.getContentStatus() == ContentStatus.PUBLISHED;
     }
 
-    private List<LiveClassResponse> buildLessonLiveClasses(StudentProfile student, Lesson lesson) {
-        Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
-
+    private List<LiveClassResponse> buildLessonLiveClasses(
+            StudentProfile student,
+            Lesson lesson,
+            Set<Long> relatedPackageIds) {
         return liveClassRepository.findRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
                 .filter(liveClass -> liveClass.getLiveClassStatus() != LiveClassStatus.CANCELLED
                         && liveClass.getLiveClassStatus() != LiveClassStatus.COMPLETED)
@@ -373,7 +469,7 @@ public class StudentLearningService {
                             liveClass.getId(),
                             LiveClassEnrolmentStatus.ENROLLED);
                     boolean enrolled = liveLearningAccessService.isStudentEnrolled(liveClass.getId(), student.getId());
-                    boolean accessAllowed = hasLiveClassAccess(student, liveClass);
+                    boolean accessAllowed = hasLiveClassAccess(liveClass);
                     boolean canEnrol = !enrolled && accessAllowed;
                     boolean canJoin = enrolled && accessAllowed
                             && liveLearningAccessService.isJoinWindowOpen(liveClass);
@@ -391,11 +487,9 @@ public class StudentLearningService {
                 .toList();
     }
 
-    private List<RecordedLessonVideoResponse> buildRecordedVideos(StudentProfile student, Lesson lesson) {
-        Set<Long> relatedPackageIds = liveLearningAccessService.findPublishedPackageIdsContainingLesson(lesson);
-
+    private List<RecordedLessonVideoResponse> buildRecordedVideos(Lesson lesson, Set<Long> relatedPackageIds) {
         return recordedLessonVideoRepository.findActiveRelatedToLessonOrPackages(lesson.getId(), relatedPackageIds).stream()
-                .filter(video -> canAccessVideo(student, video))
+                .filter(video -> canAccessVideo(video))
                 .map(video -> liveLearningMapper.toRecordedVideoResponse(
                         video,
                         studentRecordedVideoStreamUrl(video),
@@ -405,13 +499,13 @@ public class StudentLearningService {
                 .toList();
     }
 
-    private boolean hasLiveClassAccess(StudentProfile student, LiveClass liveClass) {
+    private boolean hasLiveClassAccess(LiveClass liveClass) {
         try {
             if (liveClass.getLesson() != null) {
-                liveLearningAccessService.ensureStudentHasLessonAccess(student, liveClass.getLesson());
+                liveLearningAccessService.ensurePublishedLesson(liveClass.getLesson());
             }
             if (liveClass.getCoursePackage() != null) {
-                liveLearningAccessService.ensureStudentHasPackageAccess(student, liveClass.getCoursePackage());
+                liveLearningAccessService.ensurePublishedPackage(liveClass.getCoursePackage());
             }
             return true;
         } catch (ResponseStatusException exception) {
@@ -419,11 +513,11 @@ public class StudentLearningService {
         }
     }
 
-    private boolean canAccessVideo(StudentProfile student, RecordedLessonVideo video) {
+    private boolean canAccessVideo(RecordedLessonVideo video) {
         try {
-            liveLearningAccessService.ensureStudentHasLessonAccess(student, video.getLesson());
+            liveLearningAccessService.ensurePublishedLesson(video.getLesson());
             if (video.getCoursePackage() != null) {
-                liveLearningAccessService.ensureStudentHasPackageAccess(student, video.getCoursePackage());
+                liveLearningAccessService.ensurePublishedPackage(video.getCoursePackage());
             }
             return true;
         } catch (ResponseStatusException exception) {
@@ -431,8 +525,43 @@ public class StudentLearningService {
         }
     }
 
-    private static boolean isCorrectAnswer(QuizQuestion question, String answerText) {
-        return normalize(answerText).equals(normalize(question.getCorrectAnswerText()));
+    /** Options of all the given questions in one query, grouped by question id in display order. */
+    private Map<Long, List<QuizOption>> loadOptions(List<QuizQuestion> questions) {
+        List<Long> questionIds = questions.stream()
+                .filter(Objects::nonNull)
+                .map(QuizQuestion::getId)
+                .distinct()
+                .toList();
+        if (questionIds.isEmpty()) {
+            return Map.of();
+        }
+        return quizMapper.groupOptionsByQuestionId(
+                quizOptionRepository.findByQuestionIdInOrderBySortOrderAscCreatedAtAsc(questionIds));
+    }
+
+    private static QuizAttemptResultQuestionResponse toResultQuestion(
+            QuizQuestion question,
+            List<QuizOption> options,
+            String studentAnswer,
+            QuizOption selectedOption,
+            boolean correct,
+            boolean hintUsed) {
+        QuizOption correctOption = QuizScoring.isOptionBased(question) ? QuizScoring.correctOption(options) : null;
+        return new QuizAttemptResultQuestionResponse(
+                question.getId(),
+                question.getQuestionType(),
+                question.getQuestionText(),
+                Objects.requireNonNullElse(studentAnswer, ""),
+                correctOption != null ? correctOption.getOptionText() : question.getCorrectAnswerText(),
+                correct,
+                question.getPoints(),
+                question.getExplanation(),
+                selectedOption == null ? null : selectedOption.getId(),
+                correctOption == null ? null : correctOption.getId(),
+                hintUsed,
+                options.stream()
+                        .map(option -> new QuizOptionResponse(option.getId(), option.getOptionText(), option.getSortOrder()))
+                        .toList());
     }
 
     private static Map<Long, QuizSubmissionAnswerRequest> validateAndIndexAnswers(
@@ -477,7 +606,7 @@ public class StudentLearningService {
             int earnedPoints,
             int totalPoints,
             List<QuizAttemptResultQuestionResponse> answerResponses) {
-        int percentage = percentageScore(score, maxScore);
+        int percentage = QuizScoring.percentage(score, maxScore);
         return new QuizAttemptResultResponse(
                 attempt.getId(),
                 attempt.getQuiz().getId(),
@@ -492,12 +621,15 @@ public class StudentLearningService {
                 percentage >= QUIZ_PASS_PERCENT,
                 attempt.getStartedAt(),
                 attempt.getCompletedAt(),
-                answerResponses);
+                answerResponses,
+                percentage,
+                attempt.getQuiz().getLearningStage());
     }
 
     private static WrongAnswerResponse toWrongAnswerResponse(
             QuizAttemptResultResponse attempt,
-            QuizAttemptResultQuestionResponse answer) {
+            QuizAttemptResultQuestionResponse answer,
+            Lesson lesson) {
         return new WrongAnswerResponse(
                 attempt.attemptId(),
                 answer.questionId(),
@@ -507,39 +639,40 @@ public class StudentLearningService {
                 answer.studentAnswer(),
                 answer.correctAnswer(),
                 answer.explanation(),
-                attempt.submittedAt());
+                attempt.submittedAt(),
+                attempt.quizId(),
+                lesson == null ? null : lesson.getId(),
+                lesson == null ? null : lesson.getTitle());
     }
 
-    private static QuizAttemptResultQuestionResponse toQuizAttemptResultQuestionResponse(QuizAttemptAnswer answer) {
-        QuizQuestion question = answer.getQuestion();
-        return new QuizAttemptResultQuestionResponse(
-                question.getId(),
-                question.getQuestionType(),
-                question.getQuestionText(),
-                answer.getAnswerText(),
-                question.getCorrectAnswerText(),
-                answer.isCorrect(),
-                question.getPoints(),
-                question.getExplanation());
-    }
-
-    private static WrongAnswerResponse toWrongAnswerResponse(QuizAttemptAnswer answer) {
+    private static WrongAnswerResponse toWrongAnswerResponse(
+            QuizAttemptAnswer answer,
+            Map<Long, List<QuizOption>> optionsByQuestionId) {
         QuizAttempt attempt = answer.getQuizAttempt();
         QuizQuestion question = answer.getQuestion();
+        Quiz quiz = question.getQuiz();
+        Lesson lesson = quiz.getLesson();
+        String correctAnswer = question.getCorrectAnswerText();
+        if (QuizScoring.isOptionBased(question)) {
+            QuizOption correctOption = QuizScoring.correctOption(
+                    optionsByQuestionId.getOrDefault(question.getId(), List.of()));
+            if (correctOption != null) {
+                correctAnswer = correctOption.getOptionText();
+            }
+        }
         return new WrongAnswerResponse(
                 attempt.getId(),
                 question.getId(),
-                question.getQuiz().getTitle(),
+                quiz.getTitle(),
                 question.getQuestionText(),
                 question.getQuestionType(),
-                answer.getAnswerText(),
-                question.getCorrectAnswerText(),
+                Objects.requireNonNullElse(answer.getAnswerText(), ""),
+                correctAnswer,
                 question.getExplanation(),
-                attempt.getCompletedAt());
-    }
-
-    private static int percentageScore(int score, int maxScore) {
-        return maxScore == 0 ? 0 : (int) Math.round(score * 100.0 / maxScore);
+                attempt.getCompletedAt(),
+                quiz.getId(),
+                lesson == null ? null : lesson.getId(),
+                lesson == null ? null : lesson.getTitle());
     }
 
     private static int points(QuizQuestion question) {
@@ -558,13 +691,5 @@ public class StudentLearningService {
 
     private static String externalVideoUrl(RecordedLessonVideo video) {
         return video.getSourceType() == RecordedVideoSourceType.EXTERNAL_URL ? video.getExternalVideoUrl() : null;
-    }
-
-    private static String normalize(String value) {
-        return normalizeAnswerText(value).toLowerCase(Locale.ROOT);
-    }
-
-    private static String normalizeAnswerText(String value) {
-        return Objects.requireNonNullElse(TextUtils.trimToNull(value), "");
     }
 }

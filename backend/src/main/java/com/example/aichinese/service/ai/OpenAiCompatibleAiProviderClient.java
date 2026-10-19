@@ -34,6 +34,7 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
     private static final String ROLE_SYSTEM = "system";
     private static final String ROLE_USER = "user";
     private static final double DEFAULT_TEMPERATURE = 0.7;
+    static final String IMAGE_INPUT_UNSUPPORTED = "Image input is not supported by the configured provider.";
     private static final BigInteger INTEGER_MAX_VALUE = BigInteger.valueOf(Integer.MAX_VALUE);
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_RESPONSE_TYPE =
             new ParameterizedTypeReference<>() {
@@ -60,6 +61,10 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
 
         String providerName = AiProviderSupport.normalizeProvider(aiProperties.getProvider());
         String modelName = TextUtils.trimToNull(aiProperties.getModelName());
+        if (prompt.hasImage()) {
+            // Chat Completions-compatible providers are configured for text only in this prototype.
+            return AiProviderResult.failure(providerName, modelName, IMAGE_INPUT_UNSUPPORTED);
+        }
         if (modelName == null) {
             return AiProviderResult.failure(providerName, null, "AI model name is missing.");
         }
@@ -188,14 +193,6 @@ public class OpenAiCompatibleAiProviderClient implements AiProviderClient {
             return null;
         }
         Object totalTokens = usageMap.get("total_tokens");
-        if (totalTokens instanceof Integer integer) {
-            return integer >= 0 ? integer : null;
-        }
-        if (totalTokens instanceof Long longValue) {
-            return longValue >= 0 && longValue <= Integer.MAX_VALUE
-                    ? Math.toIntExact(longValue)
-                    : null;
-        }
         if (totalTokens instanceof BigInteger bigInteger) {
             return toNonNegativeInt(bigInteger);
         }

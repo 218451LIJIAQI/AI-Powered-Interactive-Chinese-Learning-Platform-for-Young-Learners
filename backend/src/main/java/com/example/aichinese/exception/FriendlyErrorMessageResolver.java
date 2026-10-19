@@ -16,12 +16,17 @@ public final class FriendlyErrorMessageResolver {
 
     private static final List<String> ROLE_MISMATCH_HINTS = List.of(
             "only approved teachers can create or submit learning content",
-            "only approved teachers can use the teacher assistant",
-            "students can only request learning recommendations for their own account",
-            "students can only request progress insight for their own account",
-            "teacher assistant requires a teacher or admin account",
+            "only approved teachers can use this teaching feature",
             "pronunciation feedback requires a student account",
             "writing feedback requires a student account");
+
+    /** Specific, user-actionable W4 messages that must reach the learner verbatim. */
+    private static final List<String> EXPLICIT_PASSTHROUGH_HINTS = List.of(
+            "account is currently unavailable",
+            "hints are not available for independent practice",
+            "current password is incorrect",
+            "new password must be different",
+            "daily ai request limit reached");
 
     private static final List<String> RATE_LIMIT_HINTS = List.of(
             "too many requests",
@@ -42,13 +47,9 @@ public final class FriendlyErrorMessageResolver {
             "bad credentials");
 
     private static final List<String> OPERATION_FAILED_HINTS = List.of(
-            "already in your cart",
             "already enrolled",
             "already archived",
             "already full",
-            "cart is empty",
-            "free items do not need",
-            "locked until payment is completed",
             "not available to join",
             "cannot receive requester replies",
             "resubmit verification");
@@ -134,7 +135,7 @@ public final class FriendlyErrorMessageResolver {
             return status >= 500 ? serverUnavailableMessage() : operationFailedMessage();
         }
 
-        if (containsAny(normalized, ROLE_MISMATCH_HINTS)) {
+        if (containsAny(normalized, ROLE_MISMATCH_HINTS) || containsAny(normalized, EXPLICIT_PASSTHROUGH_HINTS)) {
             return passthrough(rawMessage);
         }
         if (containsAny(normalized, RATE_LIMIT_HINTS)) {

@@ -4,9 +4,9 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.time.DateTimeException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.zone.ZoneRulesException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -51,8 +51,7 @@ public class LiveClassService {
     private static final String LIVE_CLASS_AUDIT_TARGET_TYPE = "LiveClass";
     private static final String STUDENT_CLASSES_PATH = "/student/classes";
     private static final String TEACHER_CLASSES_PATH = "/teacher/classes";
-    private static final Set<LiveClassStatus> TERMINAL_STATUSES =
-            Set.of(LiveClassStatus.COMPLETED, LiveClassStatus.CANCELLED);
+    private static final Set<LiveClassStatus> TERMINAL_STATUSES = LiveClassStatus.TERMINAL;
 
     private final LiveClassRepository liveClassRepository;
     private final LiveClassEnrolmentRepository liveClassEnrolmentRepository;
@@ -183,8 +182,9 @@ public class LiveClassService {
         liveLearningAccessService.requireApprovedTeacher(currentUser);
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
-        Page<LiveClass> liveClassPage = liveClassRepository.findByTeacherUserIdOrderByScheduledStartAtAsc(
+        Page<LiveClass> liveClassPage = liveClassRepository.findTeacherClassesUpcomingFirst(
                 currentUser.getUserId(),
+                LocalDateTime.now(),
                 PageRequest.of(safePage, safeSize));
         return mapLiveClassPage(liveClassPage, safePage, safeSize, this::toTeacherResponse);
     }
@@ -244,14 +244,15 @@ public class LiveClassService {
     public LiveClassResponse enrol(SecurityUserDetails currentUser, Long liveClassId) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
         LiveClass liveClass = liveLearningAccessService.requireLockedLiveClass(liveClassId);
-        liveLearningAccessService.ensureStudentCanEnrol(student, liveClass);
+        liveLearningAccessService.ensureStudentCanEnrol(liveClass);
 
-        LiveClassEnrolment enrolment = liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(liveClassId, student.getId())
-                .orElseGet(LiveClassEnrolment::new);
-        if (enrolment.getId() != null && enrolment.getEnrolmentStatus() == LiveClassEnrolmentStatus.ENROLLED) {
+        if (liveLearningAccessService.isStudentEnrolled(liveClassId, student.getId())) {
             throw new ResponseStatusException(BAD_REQUEST, "You are already enrolled in this live class.");
         }
 
+        // D26: a re-enrolment after cancellation is a new row; the cancelled one stays as history.
+        // uk_live_class_enrolments_active_student still blocks two active rows for the same student.
+        LiveClassEnrolment enrolment = new LiveClassEnrolment();
         enrolment.setLiveClass(liveClass);
         enrolment.setStudent(student);
         enrolment.setEnrolledAt(LocalDateTime.now());
@@ -310,11 +311,27 @@ public class LiveClassService {
         return toStudentResponse(enrolment.getLiveClass(), student);
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Returns the meeting link inside the joining window and records attendance (D26): the first
+     * join turns the ENROLLED enrolment into ATTENDED with {@code attendedAt}.
+     */
+    @Transactional
     public JoinLiveClassResponse join(SecurityUserDetails currentUser, Long liveClassId) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
         LiveClass liveClass = liveLearningAccessService.requireLiveClass(liveClassId);
-        liveLearningAccessService.ensureStudentCanJoin(student, liveClass);
+        LiveClassEnrolment enrolment = liveLearningAccessService.ensureStudentCanJoin(student, liveClass);
+        if (enrolment.getEnrolmentStatus() == LiveClassEnrolmentStatus.ENROLLED) {
+            enrolment.setEnrolmentStatus(LiveClassEnrolmentStatus.ATTENDED);
+            enrolment.setAttendedAt(LocalDateTime.now());
+            liveClassEnrolmentRepository.save(enrolment);
+            auditLogService.safeRecord(
+                    student.getUser(),
+                    "STUDENT_LIVE_CLASS_ATTENDED",
+                    LIVE_CLASS_AUDIT_TARGET_TYPE,
+                    liveClassId,
+                    "Student joined a live class (attendance recorded).",
+                    null);
+        }
 
         return new JoinLiveClassResponse(
                 liveClass.getId(),
@@ -324,7 +341,7 @@ public class LiveClassService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<LiveClassResponse> getAdminLiveClasses(SecurityUserDetails currentUser, int page, int size) {
+    public PageResponse<LiveClassResponse> getAdminLiveClasses(int page, int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<LiveClass> liveClassPage = liveClassRepository.findAllByOrderByScheduledStartAtAsc(PageRequest.of(safePage, safeSize));
@@ -332,7 +349,7 @@ public class LiveClassService {
     }
 
     @Transactional(readOnly = true)
-    public LiveClassResponse getAdminLiveClass(SecurityUserDetails currentUser, Long liveClassId) {
+    public LiveClassResponse getAdminLiveClass(Long liveClassId) {
         return toAdminResponse(liveLearningAccessService.requireLiveClass(liveClassId));
     }
 
@@ -431,7 +448,7 @@ public class LiveClassService {
         }
         try {
             return ZoneId.of(timeZone.strip()).getId();
-        } catch (ZoneRulesException exception) {
+        } catch (DateTimeException exception) {
             throw new ResponseStatusException(BAD_REQUEST, "Time zone must be a valid IANA time zone.");
         }
     }
@@ -439,9 +456,9 @@ public class LiveClassService {
     private boolean isStudentVisibleClass(LiveClass liveClass) {
         boolean hasLinkedContent = liveClass.getLesson() != null || liveClass.getCoursePackage() != null;
         boolean lessonVisible = liveClass.getLesson() == null
-                || liveClass.getLesson().getContentStatus() == ContentStatus.PUBLISHED;
+                || ContentVisibilityPolicy.isLessonVisible(liveClass.getLesson());
         boolean packageVisible = liveClass.getCoursePackage() == null
-                || liveClass.getCoursePackage().getContentStatus() == ContentStatus.PUBLISHED;
+                || ContentVisibilityPolicy.isPackageVisible(liveClass.getCoursePackage());
         return hasLinkedContent && lessonVisible && packageVisible
                 && STUDENT_VISIBLE_STATUSES.contains(liveClass.getLiveClassStatus());
     }
@@ -474,11 +491,15 @@ public class LiveClassService {
     }
 
     private LiveClassResponse toStudentResponse(LiveClass liveClass, StudentProfile student) {
-        long enrolledCount = countCurrentEnrolledStudents(liveClass);
+        // FR-LIVE-05: seats taken use the same rule as the enrolment capacity check
+        // (ENROLLED + ATTENDED), so a full class never offers "Enrol".
+        boolean accessAllowed = hasAccess(liveClass);
+        long enrolledCount = accessAllowed ? liveLearningAccessService.countSeatsTaken(liveClass) : 0L;
         boolean enrolled = liveLearningAccessService.isStudentEnrolled(liveClass.getId(), student.getId());
-        boolean accessAllowed = hasAccess(student, liveClass);
+        boolean hasSeat = liveClass.getMaxParticipants() == null || enrolledCount < liveClass.getMaxParticipants();
         boolean canEnrol = !enrolled
                 && accessAllowed
+                && hasSeat
                 && STUDENT_VISIBLE_STATUSES.contains(liveClass.getLiveClassStatus());
         boolean canJoin = enrolled
                 && accessAllowed
@@ -486,42 +507,37 @@ public class LiveClassService {
         return liveLearningMapper.toLiveClassResponse(liveClass, enrolledCount, enrolled, canEnrol, accessAllowed, canJoin, false);
     }
 
-    private boolean hasAccess(StudentProfile student, LiveClass liveClass) {
+    /**
+     * A live class linked to published content is open to every signed-in
+     * student; it is only unavailable while its lesson or course is not published.
+     */
+    private static boolean hasAccess(LiveClass liveClass) {
         Lesson lesson = liveClass.getLesson();
-        if (lesson != null) {
-            if (lesson.getContentStatus() != ContentStatus.PUBLISHED) {
-                return false;
-            }
-            if (!liveLearningAccessService.hasStudentLessonAccess(student, lesson)) {
-                return false;
-            }
+        if (lesson != null && !ContentVisibilityPolicy.isLessonVisible(lesson)) {
+            return false;
         }
-
         CoursePackage coursePackage = liveClass.getCoursePackage();
-        if (coursePackage != null) {
-            if (coursePackage.getContentStatus() != ContentStatus.PUBLISHED) {
-                return false;
-            }
-            if (!liveLearningAccessService.hasStudentPackageAccess(student, coursePackage)) {
-                return false;
-            }
-        }
-
-        return true;
+        return coursePackage == null || ContentVisibilityPolicy.isPackageVisible(coursePackage);
     }
 
+    /**
+     * ENROLLED students of a class whose linked content is still visible. Every enrolment of the class
+     * shares the same access rule, so a COUNT query replaces loading each enrolment row per listed class.
+     */
     private long countCurrentEnrolledStudents(LiveClass liveClass) {
-        return liveClassEnrolmentRepository.findByLiveClassIdOrderByEnrolledAtAsc(liveClass.getId()).stream()
-                .filter(enrolment -> enrolment.getEnrolmentStatus() == LiveClassEnrolmentStatus.ENROLLED)
-                .filter(this::hasCurrentEnrolmentAccess)
-                .count();
+        if (!hasAccess(liveClass)) {
+            return 0L;
+        }
+        return liveClassEnrolmentRepository.countByLiveClassIdAndEnrolmentStatus(
+                liveClass.getId(),
+                LiveClassEnrolmentStatus.ENROLLED);
     }
 
     private boolean hasCurrentEnrolmentAccess(LiveClassEnrolment enrolment) {
         if (enrolment.getStudent() == null || enrolment.getLiveClass() == null) {
             return false;
         }
-        return hasAccess(enrolment.getStudent(), enrolment.getLiveClass());
+        return hasAccess(enrolment.getLiveClass());
     }
 
     private void notifyEnrolledStudents(LiveClass liveClass, String title, String message, String targetPath) {

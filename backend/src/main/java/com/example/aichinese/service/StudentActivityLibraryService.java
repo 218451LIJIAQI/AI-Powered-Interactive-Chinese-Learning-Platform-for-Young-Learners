@@ -6,18 +6,21 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Service;
@@ -26,15 +29,19 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.admin.activity.ActivityType;
+import com.example.aichinese.dto.student.activity.StudentActivityCompletionRequest;
 import com.example.aichinese.dto.student.activity.StudentActivityCompletionResponse;
 import com.example.aichinese.dto.student.activity.StudentActivitySummaryResponse;
 import com.example.aichinese.dto.student.activity.StudentDragDropActivityResponse;
 import com.example.aichinese.dto.student.activity.StudentDragDropItemResponse;
 import com.example.aichinese.dto.student.activity.StudentFlashcardResponse;
 import com.example.aichinese.dto.student.activity.StudentListeningExerciseResponse;
+import com.example.aichinese.dto.student.activity.StudentListeningQuestionResponse;
 import com.example.aichinese.dto.student.activity.StudentMatchingGameItemResponse;
 import com.example.aichinese.dto.student.activity.StudentMatchingGameResponse;
+import com.example.aichinese.dto.student.activity.StudentMatchingOptionResponse;
 import com.example.aichinese.dto.student.activity.StudentStoryActivityResponse;
+import com.example.aichinese.dto.student.activity.StudentStoryOptionResponse;
 import com.example.aichinese.dto.student.activity.StudentStoryQuestionResponse;
 import com.example.aichinese.dto.student.activity.StudentTracingExerciseResponse;
 import com.example.aichinese.entity.DragDropActivity;
@@ -43,13 +50,14 @@ import com.example.aichinese.entity.Flashcard;
 import com.example.aichinese.entity.ListeningExercise;
 import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.MatchingGameItem;
+import com.example.aichinese.entity.base.PracticeActivityContent;
 import com.example.aichinese.entity.StoryActivity;
 import com.example.aichinese.entity.StoryQuestion;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.repository.DragDropActivityRepository;
 import com.example.aichinese.repository.DragDropItemRepository;
 import com.example.aichinese.repository.FlashcardRepository;
@@ -77,7 +85,9 @@ public class StudentActivityLibraryService {
     private static final String SOURCE_DRAG_DROP_ACTIVITY = "PLATFORM_DRAG_DROP_ACTIVITY";
     private static final String SOURCE_STORY_ACTIVITY = "PLATFORM_STORY_ACTIVITY";
     private static final String UNTITLED_LABEL = "(untitled)";
-    private static final int AGE_BAND_MAX_LENGTH = 40;
+    /** Result key of a legacy free-response listening item. */
+    private static final String FREE_RESPONSE_KEY = "response";
+    private static final String ANSWERS_REQUIRED_MESSAGE = "Submit your answers to complete this activity.";
     private static final int DIFFICULTY_MAX_LENGTH = 40;
     private static final int TOPIC_MAX_LENGTH = 200;
     private static final int TAG_MAX_LENGTH = 100;
@@ -90,7 +100,8 @@ public class StudentActivityLibraryService {
     private static final Comparator<LocalDateTime> NEWEST_TIMESTAMP_FIRST =
             Comparator.nullsLast(Comparator.reverseOrder());
     private static final Comparator<ActivityFeedItem> ACTIVITY_FEED_ORDER =
-            Comparator.comparing(ActivityFeedItem::updatedAt, NEWEST_TIMESTAMP_FIRST)
+            Comparator.comparing((ActivityFeedItem item) -> item.summary().learningStage(), LearningStage.STUDENT_ORDER)
+                    .thenComparing(ActivityFeedItem::updatedAt, NEWEST_TIMESTAMP_FIRST)
                     .thenComparing(ActivityFeedItem::createdAt, NEWEST_TIMESTAMP_FIRST)
                     .thenComparing(item -> item.summary().type().name())
                     .thenComparing(item -> item.summary().id(), Comparator.nullsLast(Comparator.reverseOrder()));
@@ -107,6 +118,7 @@ public class StudentActivityLibraryService {
     private final StudentLearningAccessService studentLearningAccessService;
     private final StudentLearningProgressService studentLearningProgressService;
     private final PointsTransactionRepository pointsTransactionRepository;
+    private final ContentVisibilityPolicy contentVisibilityPolicy;
 
     public StudentActivityLibraryService(
             FlashcardRepository flashcardRepository,
@@ -120,7 +132,8 @@ public class StudentActivityLibraryService {
             StoryQuestionRepository storyQuestionRepository,
             StudentLearningAccessService studentLearningAccessService,
             StudentLearningProgressService studentLearningProgressService,
-            PointsTransactionRepository pointsTransactionRepository) {
+            PointsTransactionRepository pointsTransactionRepository,
+            ContentVisibilityPolicy contentVisibilityPolicy) {
         this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
         this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
         this.matchingGameItemRepository = Objects.requireNonNull(matchingGameItemRepository, "matchingGameItemRepository");
@@ -133,6 +146,7 @@ public class StudentActivityLibraryService {
         this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
         this.studentLearningProgressService = Objects.requireNonNull(studentLearningProgressService, "studentLearningProgressService");
         this.pointsTransactionRepository = Objects.requireNonNull(pointsTransactionRepository, "pointsTransactionRepository");
+        this.contentVisibilityPolicy = Objects.requireNonNull(contentVisibilityPolicy, "contentVisibilityPolicy");
     }
 
     @Transactional(readOnly = true)
@@ -145,7 +159,7 @@ public class StudentActivityLibraryService {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         int perTypeLimit = mergedPageFetchLimit(safePage, safeSize);
-        Pageable slice = PageRequest.of(0, perTypeLimit, Sort.by(Sort.Order.desc("updatedAt")));
+        Pageable slice = PageRequest.of(0, perTypeLimit);
 
         List<ActivityFeedItem> merged = new ArrayList<>();
         long totalItems = 0;
@@ -201,124 +215,169 @@ public class StudentActivityLibraryService {
                 entity.getSortOrder(),
                 entity.getExtraPayload(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
-                isCompleted(student, SOURCE_FLASHCARD, id));
+                isCompleted(student, SOURCE_FLASHCARD, id),
+                entity.getLearningStage());
     }
 
+    /** Flashcards stay review-to-complete: no answers are needed. */
     @Transactional
     public StudentActivityCompletionResponse completeFlashcard(SecurityUserDetails currentUser, Long id) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         Flashcard entity = requirePublishedFlashcard(id);
-        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
+        return awardIfPassed(
                 student,
-                SOURCE_FLASHCARD,
                 entity.getId(),
+                ActivityType.FLASHCARD,
+                SOURCE_FLASHCARD,
                 xpReward(entity.getXpReward()),
-                completionMessage("flashcard", preferredTitle(entity.getTitle(), entity.getFrontText())));
-        return completionResponse(entity.getId(), ActivityType.FLASHCARD, outcome);
+                completionMessage("flashcard", preferredTitle(entity.getTitle(), entity.getFrontText())),
+                List.of(new StudentActivityCompletionResponse.ItemResult("card", true, null)));
     }
 
     private Flashcard requirePublishedFlashcard(Long id) {
         Flashcard entity = flashcardRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Flashcard not found."));
-        ensurePublished(entity.getContentStatus(), "Flashcard");
+        ensurePublished(entity, "Flashcard");
         return entity;
     }
 
+    /** Left items in authoring order and the right options shuffled, never linked to their items. */
     @Transactional(readOnly = true)
     public StudentMatchingGameResponse getMatchingGame(SecurityUserDetails currentUser, Long id) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         MatchingGame entity = requirePublishedMatchingGame(id);
-        List<StudentMatchingGameItemResponse> items = matchingGameItemRepository
-                .findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(id).stream()
-                .map(StudentActivityLibraryService::toStudentMatchingGameItemResponse)
+        List<MatchingGameItem> items = matchingGameItemRepository.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(id);
+        List<StudentMatchingGameItemResponse> leftItems = items.stream()
+                .map(item -> new StudentMatchingGameItemResponse(
+                        item.getId(),
+                        item.getLeftText(),
+                        item.getPinyin(),
+                        item.getLeftImageUrl(),
+                        item.getSortOrder()))
                 .toList();
+        List<StudentMatchingOptionResponse> rightOptions = new ArrayList<>(items.stream()
+                .map(item -> new StudentMatchingOptionResponse(item.getRightText(), item.getRightImageUrl()))
+                .toList());
+        Collections.shuffle(rightOptions, ThreadLocalRandom.current());
         return new StudentMatchingGameResponse(
                 entity.getId(),
                 entity.getTitle(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 isCompleted(student, SOURCE_MATCHING_GAME, id),
-                items);
+                leftItems,
+                rightOptions,
+                entity.getLearningStage());
     }
 
+    /** Every left item must be paired with its own right text; XP only when all pairs are correct. */
     @Transactional
-    public StudentActivityCompletionResponse completeMatchingGame(SecurityUserDetails currentUser, Long id) {
+    public StudentActivityCompletionResponse completeMatchingGame(
+            SecurityUserDetails currentUser,
+            Long id,
+            StudentActivityCompletionRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         MatchingGame entity = requirePublishedMatchingGame(id);
-        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
-                student,
-                SOURCE_MATCHING_GAME,
-                entity.getId(),
-                xpReward(entity.getXpReward()),
-                completionMessage("matching game", entity.getTitle()));
-        return completionResponse(entity.getId(), ActivityType.MATCHING_GAME, outcome);
+        StudentActivityCompletionRequest answers = requireAnswers(request);
+        Map<Long, String> chosen = new LinkedHashMap<>();
+        answers.matches().forEach(match -> chosen.putIfAbsent(match.leftItemId(), match.rightText()));
+        List<StudentActivityCompletionResponse.ItemResult> results = matchingGameItemRepository
+                .findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(id).stream()
+                .map(item -> new StudentActivityCompletionResponse.ItemResult(
+                        String.valueOf(item.getId()),
+                        ActivityAnswerKeys.answerMatches(item.getRightText(), chosen.get(item.getId())),
+                        null))
+                .toList();
+        return awardIfPassed(student, entity.getId(), ActivityType.MATCHING_GAME, SOURCE_MATCHING_GAME,
+                xpReward(entity.getXpReward()), completionMessage("matching game", entity.getTitle()), results);
     }
 
     private MatchingGame requirePublishedMatchingGame(Long id) {
         MatchingGame entity = matchingGameRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Matching game not found."));
-        ensurePublished(entity.getContentStatus(), "Matching game");
+        ensurePublished(entity, "Matching game");
         return entity;
     }
 
-    private static StudentMatchingGameItemResponse toStudentMatchingGameItemResponse(MatchingGameItem item) {
-        return new StudentMatchingGameItemResponse(
-                item.getId(),
-                item.getLeftText(),
-                item.getRightText(),
-                item.getLeftImageUrl(),
-                item.getRightImageUrl(),
-                item.getPinyin(),
-                item.getSortOrder());
-    }
-
+    /** The stored payload is parsed server side; answers never leave the server. */
     @Transactional(readOnly = true)
     public StudentListeningExerciseResponse getListeningExercise(SecurityUserDetails currentUser, Long id) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         ListeningExercise entity = requirePublishedListeningExercise(id);
+        ActivityAnswerKeys.ListeningKey key = ActivityAnswerKeys.parseListening(entity.getQuestionPayload());
+        List<StudentListeningQuestionResponse> questions = new ArrayList<>();
+        for (int index = 0; index < key.questions().size(); index++) {
+            ActivityAnswerKeys.ListeningQuestion question = key.questions().get(index);
+            questions.add(new StudentListeningQuestionResponse(index, question.question(), question.options()));
+        }
         return new StudentListeningExerciseResponse(
                 entity.getId(),
                 entity.getTitle(),
-                entity.getAudioUrl(),
-                entity.getQuestionPayload(),
+                TextUtils.trimToNull(entity.getAudioUrl()),
+                key.prompt(),
+                questions,
+                !key.structured(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
-                isCompleted(student, SOURCE_LISTENING_EXERCISE, id));
+                isCompleted(student, SOURCE_LISTENING_EXERCISE, id),
+                entity.getLearningStage());
     }
 
+    /**
+     * Structured items: every question must be answered correctly (a question without an answer key
+     * accepts any non-empty reply). Legacy free-response items need a non-empty response.
+     */
     @Transactional
-    public StudentActivityCompletionResponse completeListeningExercise(SecurityUserDetails currentUser, Long id) {
+    public StudentActivityCompletionResponse completeListeningExercise(
+            SecurityUserDetails currentUser,
+            Long id,
+            StudentActivityCompletionRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         ListeningExercise entity = requirePublishedListeningExercise(id);
-        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
-                student,
-                SOURCE_LISTENING_EXERCISE,
-                entity.getId(),
-                xpReward(entity.getXpReward()),
-                completionMessage("listening exercise", entity.getTitle()));
-        return completionResponse(entity.getId(), ActivityType.LISTENING_EXERCISE, outcome);
+        StudentActivityCompletionRequest answers = requireAnswers(request);
+        ActivityAnswerKeys.ListeningKey key = ActivityAnswerKeys.parseListening(entity.getQuestionPayload());
+        List<StudentActivityCompletionResponse.ItemResult> results = new ArrayList<>();
+        if (key.structured()) {
+            Map<Integer, String> given = new LinkedHashMap<>();
+            answers.answers().stream()
+                    .filter(answer -> answer.questionIndex() != null)
+                    .forEach(answer -> given.putIfAbsent(answer.questionIndex(), answer.answerText()));
+            for (int index = 0; index < key.questions().size(); index++) {
+                ActivityAnswerKeys.ListeningQuestion question = key.questions().get(index);
+                String reply = given.get(index);
+                boolean correct = question.answer() == null
+                        ? TextUtils.trimToNull(reply) != null
+                        : ActivityAnswerKeys.answerMatches(question.answer(), reply);
+                results.add(new StudentActivityCompletionResponse.ItemResult(String.valueOf(index), correct, null));
+            }
+        } else {
+            String reply = answers.responseText() != null
+                    ? answers.responseText()
+                    : answers.answers().stream().map(StudentActivityCompletionRequest.Answer::answerText)
+                            .filter(Objects::nonNull).findFirst().orElse(null);
+            results.add(new StudentActivityCompletionResponse.ItemResult(FREE_RESPONSE_KEY, TextUtils.trimToNull(reply) != null, null));
+        }
+        return awardIfPassed(student, entity.getId(), ActivityType.LISTENING_EXERCISE, SOURCE_LISTENING_EXERCISE,
+                xpReward(entity.getXpReward()), completionMessage("listening exercise", entity.getTitle()), results);
     }
 
     private ListeningExercise requirePublishedListeningExercise(Long id) {
         ListeningExercise entity = listeningExerciseRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Listening exercise not found."));
-        ensurePublished(entity.getContentStatus(), "Listening exercise");
+        ensurePublished(entity, "Listening exercise");
         return entity;
     }
 
@@ -329,81 +388,102 @@ public class StudentActivityLibraryService {
         return new StudentTracingExerciseResponse(
                 entity.getId(),
                 entity.getTitle(),
-                entity.getWorksheetUrl(),
-                entity.getTargetCharacter(),
+                TextUtils.trimToNull(entity.getWorksheetUrl()),
+                TextUtils.trimToNull(entity.getTargetCharacter()),
                 entity.getPinyin(),
                 entity.getMeaning(),
                 entity.getInstructions(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
-                isCompleted(student, SOURCE_TRACING_EXERCISE, id));
+                isCompleted(student, SOURCE_TRACING_EXERCISE, id),
+                entity.getLearningStage());
     }
 
+    /** Tracing is practice only (never graded): completion needs at least one drawn stroke. */
     @Transactional
-    public StudentActivityCompletionResponse completeTracingExercise(SecurityUserDetails currentUser, Long id) {
+    public StudentActivityCompletionResponse completeTracingExercise(
+            SecurityUserDetails currentUser,
+            Long id,
+            StudentActivityCompletionRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         TracingExercise entity = requirePublishedTracingExercise(id);
-        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
-                student,
-                SOURCE_TRACING_EXERCISE,
-                entity.getId(),
-                xpReward(entity.getXpReward()),
-                completionMessage("tracing exercise", entity.getTitle()));
-        return completionResponse(entity.getId(), ActivityType.TRACING_EXERCISE, outcome);
+        StudentActivityCompletionRequest answers = requireAnswers(request);
+        boolean practised = answers.strokeCount() != null && answers.strokeCount() >= 1;
+        return awardIfPassed(student, entity.getId(), ActivityType.TRACING_EXERCISE, SOURCE_TRACING_EXERCISE,
+                xpReward(entity.getXpReward()), completionMessage("tracing exercise", entity.getTitle()),
+                List.of(new StudentActivityCompletionResponse.ItemResult("strokes", practised, null)));
     }
 
     private TracingExercise requirePublishedTracingExercise(Long id) {
         TracingExercise entity = tracingExerciseRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Tracing exercise not found."));
-        ensurePublished(entity.getContentStatus(), "Tracing exercise");
+        ensurePublished(entity, "Tracing exercise");
         return entity;
     }
 
+    /** Items shuffled and the distinct zones in alphabetical order; the item-to-zone key stays on the server. */
     @Transactional(readOnly = true)
     public StudentDragDropActivityResponse getDragDropActivity(SecurityUserDetails currentUser, Long id) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         DragDropActivity entity = requirePublishedDragDropActivity(id);
-        List<StudentDragDropItemResponse> items = dragDropItemRepository
-                .findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(id).stream()
+        List<DragDropItem> items = dragDropItemRepository.findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(id);
+        List<StudentDragDropItemResponse> itemResponses = new ArrayList<>(items.stream()
                 .map(StudentActivityLibraryService::toStudentDragDropItemResponse)
+                .toList());
+        Collections.shuffle(itemResponses, ThreadLocalRandom.current());
+        List<String> zones = items.stream()
+                .map(DragDropItem::getTargetZone)
+                .map(TextUtils::trimToNull)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
         return new StudentDragDropActivityResponse(
                 entity.getId(),
                 entity.getTitle(),
                 entity.getInstructions(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 isCompleted(student, SOURCE_DRAG_DROP_ACTIVITY, id),
-                items);
+                itemResponses,
+                zones,
+                entity.getLearningStage());
     }
 
+    /** Every item must be placed in its target zone; XP only when all placements are correct. */
     @Transactional
-    public StudentActivityCompletionResponse completeDragDropActivity(SecurityUserDetails currentUser, Long id) {
+    public StudentActivityCompletionResponse completeDragDropActivity(
+            SecurityUserDetails currentUser,
+            Long id,
+            StudentActivityCompletionRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         DragDropActivity entity = requirePublishedDragDropActivity(id);
-        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
-                student,
-                SOURCE_DRAG_DROP_ACTIVITY,
-                entity.getId(),
-                xpReward(entity.getXpReward()),
-                completionMessage("drag-drop activity", entity.getTitle()));
-        return completionResponse(entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, outcome);
+        StudentActivityCompletionRequest answers = requireAnswers(request);
+        Map<Long, String> chosen = new LinkedHashMap<>();
+        answers.placements().forEach(placement -> chosen.putIfAbsent(placement.itemId(), placement.zone()));
+        List<StudentActivityCompletionResponse.ItemResult> results = dragDropItemRepository
+                .findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(id).stream()
+                .map(item -> new StudentActivityCompletionResponse.ItemResult(
+                        String.valueOf(item.getId()),
+                        ActivityAnswerKeys.answerMatches(item.getTargetZone(), chosen.get(item.getId())),
+                        null))
+                .toList();
+        return awardIfPassed(student, entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, SOURCE_DRAG_DROP_ACTIVITY,
+                xpReward(entity.getXpReward()), completionMessage("drag-drop activity", entity.getTitle()), results);
     }
 
     private DragDropActivity requirePublishedDragDropActivity(Long id) {
         DragDropActivity entity = dragDropActivityRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Drag-drop activity not found."));
-        ensurePublished(entity.getContentStatus(), "Drag-drop activity");
+        ensurePublished(entity, "Drag-drop activity");
         return entity;
     }
 
@@ -411,7 +491,6 @@ public class StudentActivityLibraryService {
         return new StudentDragDropItemResponse(
                 item.getId(),
                 item.getDragText(),
-                item.getTargetZone(),
                 item.getPinyin(),
                 item.getImageUrl(),
                 item.getSortOrder());
@@ -434,47 +513,75 @@ public class StudentActivityLibraryService {
                 entity.getTranslation(),
                 entity.getImageUrl(),
                 entity.getHskLevel(),
-                entity.getAgeBand(),
                 entity.getDifficulty(),
                 entity.getTopic(),
                 splitTags(entity.getTags()),
                 entity.getXpReward(),
                 entity.getEstimatedSeconds(),
                 isCompleted(student, SOURCE_STORY_ACTIVITY, id),
-                questions);
+                questions,
+                entity.getLearningStage());
     }
 
+    /**
+     * Every question must be answered with its correct option (a question without an answer key
+     * accepts any listed option). Explanations are returned only when the attempt passed.
+     */
     @Transactional
-    public StudentActivityCompletionResponse completeStoryActivity(SecurityUserDetails currentUser, Long id) {
+    public StudentActivityCompletionResponse completeStoryActivity(
+            SecurityUserDetails currentUser,
+            Long id,
+            StudentActivityCompletionRequest request) {
         StudentProfile student = studentLearningAccessService.requireStudent(currentUser);
         StoryActivity entity = requirePublishedStoryActivity(id);
-        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
-                student,
-                SOURCE_STORY_ACTIVITY,
-                entity.getId(),
-                xpReward(entity.getXpReward()),
-                completionMessage("story activity", entity.getTitle()));
-        return completionResponse(entity.getId(), ActivityType.STORY_ACTIVITY, outcome);
+        StudentActivityCompletionRequest answers = requireAnswers(request);
+        Map<Long, Integer> chosen = new LinkedHashMap<>();
+        answers.answers().stream()
+                .filter(answer -> answer.questionId() != null)
+                .forEach(answer -> chosen.putIfAbsent(answer.questionId(), answer.optionIndex()));
+        List<StoryQuestion> questions = storyQuestionRepository.findByStoryActivityIdOrderBySortOrderAscCreatedAtAsc(id);
+        List<StudentActivityCompletionResponse.ItemResult> graded = new ArrayList<>();
+        for (StoryQuestion question : questions) {
+            List<ActivityAnswerKeys.StoryOption> options = ActivityAnswerKeys.parseStoryOptions(question.getOptionsPayload());
+            Integer correctIndex = ActivityAnswerKeys.storyCorrectIndex(question, options);
+            Integer optionIndex = chosen.get(question.getId());
+            boolean answered = optionIndex != null && optionIndex >= 0 && optionIndex < options.size();
+            boolean correct = answered && (correctIndex == null || correctIndex.equals(optionIndex));
+            graded.add(new StudentActivityCompletionResponse.ItemResult(String.valueOf(question.getId()), correct, null));
+        }
+        boolean passed = !graded.isEmpty() && graded.stream().allMatch(StudentActivityCompletionResponse.ItemResult::correct);
+        List<StudentActivityCompletionResponse.ItemResult> results = passed
+                ? questions.stream()
+                        .map(question -> new StudentActivityCompletionResponse.ItemResult(
+                                String.valueOf(question.getId()), true, question.getExplanation()))
+                        .toList()
+                : graded;
+        return awardIfPassed(student, entity.getId(), ActivityType.STORY_ACTIVITY, SOURCE_STORY_ACTIVITY,
+                xpReward(entity.getXpReward()), completionMessage("story activity", entity.getTitle()), results);
     }
 
     private StoryActivity requirePublishedStoryActivity(Long id) {
         StoryActivity entity = storyActivityRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Story activity not found."));
-        ensurePublished(entity.getContentStatus(), "Story activity");
+        ensurePublished(entity, "Story activity");
         return entity;
     }
 
     private static StudentStoryQuestionResponse toStudentStoryQuestionResponse(StoryQuestion question) {
+        List<ActivityAnswerKeys.StoryOption> options = ActivityAnswerKeys.parseStoryOptions(question.getOptionsPayload());
+        List<StudentStoryOptionResponse> optionResponses = new ArrayList<>(options.size());
+        for (int index = 0; index < options.size(); index++) {
+            optionResponses.add(new StudentStoryOptionResponse(index, options.get(index).text()));
+        }
         return new StudentStoryQuestionResponse(
                 question.getId(),
                 question.getQuestionText(),
-                question.getOptionsPayload(),
-                question.getExplanation(),
+                optionResponses,
                 question.getSortOrder());
     }
 
-    private static void ensurePublished(ContentStatus status, String label) {
-        if (status != ContentStatus.PUBLISHED) {
+    private void ensurePublished(PracticeActivityContent activity, String label) {
+        if (!contentVisibilityPolicy.isActivityVisible(activity)) {
             throw new ResponseStatusException(NOT_FOUND, label + " is not available.");
         }
     }
@@ -483,20 +590,48 @@ public class StudentActivityLibraryService {
         return studentLearningProgressService.isPlatformActivityCompleted(student, sourceType, sourceId);
     }
 
-    private static int xpReward(Integer xpReward) {
-        return xpReward == null ? 0 : xpReward;
+    private static StudentActivityCompletionRequest requireAnswers(StudentActivityCompletionRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(BAD_REQUEST, ANSWERS_REQUIRED_MESSAGE);
+        }
+        return request;
     }
 
-    private static StudentActivityCompletionResponse completionResponse(
-            Long id,
+    /**
+     * Records the completion (XP + streak, first completion only for XP) only when every item is
+     * correct/complete; a failed attempt changes nothing and reports per-item correctness.
+     */
+    private StudentActivityCompletionResponse awardIfPassed(
+            StudentProfile student,
+            Long activityId,
             ActivityType type,
-            PlatformActivityOutcome outcome) {
+            String sourceType,
+            int xpReward,
+            String reason,
+            List<StudentActivityCompletionResponse.ItemResult> results) {
+        int correctCount = (int) results.stream().filter(StudentActivityCompletionResponse.ItemResult::correct).count();
+        boolean passed = !results.isEmpty() && correctCount == results.size();
+        if (!passed) {
+            return new StudentActivityCompletionResponse(
+                    activityId, type, false, correctCount, results.size(), 0,
+                    student.getTotalPoints() == null ? 0 : student.getTotalPoints(), false, results);
+        }
+        PlatformActivityOutcome outcome = studentLearningProgressService.completePlatformActivity(
+                student, sourceType, activityId, xpReward, reason);
         return new StudentActivityCompletionResponse(
-                id,
+                activityId,
                 type,
+                true,
+                correctCount,
+                results.size(),
                 outcome.earnedPoints(),
                 outcome.totalPoints(),
-                outcome.firstCompletion());
+                outcome.firstCompletion(),
+                results);
+    }
+
+    private static int xpReward(Integer xpReward) {
+        return xpReward == null ? 0 : xpReward;
     }
 
     private static String completionMessage(String activityLabel, String title) {
@@ -559,10 +694,11 @@ public class StudentActivityLibraryService {
 
         return pageItems.stream()
                 .map(item -> new StudentActivitySummaryResponse(
-                        item.id(), item.type(), item.title(), item.hskLevel(), item.ageBand(),
+                        item.id(), item.type(), item.title(), item.hskLevel(),
                         item.difficulty(), item.topic(), item.tags(), item.xpReward(),
                         item.estimatedSeconds(), item.updatedAt(),
-                        completed.contains(new CompletionKey("PLATFORM_" + item.type().name(), item.id()))))
+                        completed.contains(new CompletionKey("PLATFORM_" + item.type().name(), item.id())),
+                        item.learningStage()))
                 .toList();
     }
 
@@ -573,55 +709,55 @@ public class StudentActivityLibraryService {
         return activityFeedItem(
                 entity.getId(), ActivityType.FLASHCARD,
                 preferredTitle(entity.getTitle(), entity.getFrontText()),
-                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                false);
+                entity.getLearningStage());
     }
 
     private ActivityFeedItem toMatchingGameFeedItem(MatchingGame entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.MATCHING_GAME, entity.getTitle(),
-                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                false);
+                entity.getLearningStage());
     }
 
     private ActivityFeedItem toListeningExerciseFeedItem(ListeningExercise entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.LISTENING_EXERCISE, entity.getTitle(),
-                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                false);
+                entity.getLearningStage());
     }
 
     private ActivityFeedItem toTracingExerciseFeedItem(TracingExercise entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.TRACING_EXERCISE, entity.getTitle(),
-                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                false);
+                entity.getLearningStage());
     }
 
     private ActivityFeedItem toDragDropActivityFeedItem(DragDropActivity entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.DRAG_DROP_ACTIVITY, entity.getTitle(),
-                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                false);
+                entity.getLearningStage());
     }
 
     private ActivityFeedItem toStoryActivityFeedItem(StoryActivity entity) {
         return activityFeedItem(
                 entity.getId(), ActivityType.STORY_ACTIVITY, entity.getTitle(),
-                entity.getHskLevel(), entity.getAgeBand(), entity.getDifficulty(), entity.getTopic(),
+                entity.getHskLevel(), entity.getDifficulty(), entity.getTopic(),
                 entity.getTags(), entity.getXpReward(), entity.getEstimatedSeconds(),
                 entity.getCreatedAt(), entity.getUpdatedAt(),
-                false);
+                entity.getLearningStage());
     }
 
     private static ActivityFeedItem activityFeedItem(
@@ -629,7 +765,6 @@ public class StudentActivityLibraryService {
             ActivityType type,
             String title,
             Integer hskLevel,
-            AgeBand ageBand,
             ActivityDifficulty difficulty,
             String topic,
             String tagsCsv,
@@ -637,10 +772,11 @@ public class StudentActivityLibraryService {
             Integer estimatedSeconds,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
-            boolean completed) {
+            LearningStage learningStage) {
+        // `completed` is filled in afterwards, for the returned page only (withCompletionStatus).
         StudentActivitySummaryResponse summary = new StudentActivitySummaryResponse(
-                id, type, preferredTitle(title, null), hskLevel, ageBand, difficulty,
-                topic, splitTags(tagsCsv), xpReward, estimatedSeconds, updatedAt, completed);
+                id, type, preferredTitle(title, null), hskLevel, difficulty,
+                topic, splitTags(tagsCsv), xpReward, estimatedSeconds, updatedAt, false, learningStage);
         return new ActivityFeedItem(summary, createdAt, updatedAt);
     }
 
@@ -654,14 +790,22 @@ public class StudentActivityLibraryService {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("contentStatus"), ContentStatus.PUBLISHED));
+            predicates.add(ContentVisibilityPolicy.activityAuthorVisible(root.get("createdByUser"), query, cb));
+            if (query != null && !Long.class.equals(query.getResultType()) && !long.class.equals(query.getResultType())) {
+                // Guided first, then scaffolded, then independent, then unset; newest within a stage.
+                query.orderBy(
+                        cb.asc(cb.selectCase()
+                                .when(cb.equal(root.get("learningStage"), LearningStage.GUIDED), 0)
+                                .when(cb.equal(root.get("learningStage"), LearningStage.SCAFFOLDED), 1)
+                                .when(cb.equal(root.get("learningStage"), LearningStage.INDEPENDENT), 2)
+                                .otherwise(3)),
+                        cb.desc(root.get("updatedAt")));
+            }
             if (filter == null) {
                 return cb.and(predicates.toArray(Predicate[]::new));
             }
             if (filter.hskLevel() != null) {
                 predicates.add(cb.equal(root.get("hskLevel"), filter.hskLevel()));
-            }
-            if (filter.ageBand() != null) {
-                predicates.add(cb.equal(root.get("ageBand"), filter.ageBand()));
             }
             if (filter.difficulty() != null) {
                 predicates.add(cb.equal(root.get("difficulty"), filter.difficulty()));
@@ -689,7 +833,6 @@ public class StudentActivityLibraryService {
 
     public record ActivityFilter(
             Integer hskLevel,
-            AgeBand ageBand,
             ActivityDifficulty difficulty,
             String topic,
             String tag,
@@ -698,7 +841,6 @@ public class StudentActivityLibraryService {
 
         public static ActivityFilter of(
                 Optional<Integer> hskLevel,
-                Optional<String> ageBand,
                 Optional<String> difficulty,
                 Optional<String> topic,
                 Optional<String> tag,
@@ -706,9 +848,6 @@ public class StudentActivityLibraryService {
                 Optional<String> type) {
             return new ActivityFilter(
                     hskLevel.orElse(null),
-                    ageBand.map(value -> requireMaxLength(value, AGE_BAND_MAX_LENGTH, "ageBand"))
-                            .map(ActivityFilter::parseAgeBand)
-                            .orElse(null),
                     difficulty.map(value -> requireMaxLength(value, DIFFICULTY_MAX_LENGTH, "difficulty"))
                             .map(ActivityFilter::parseDifficulty)
                             .orElse(null),
@@ -726,11 +865,6 @@ public class StudentActivityLibraryService {
                 throw new ResponseStatusException(BAD_REQUEST, fieldName + " is too long.");
             }
             return normalized;
-        }
-
-        private static AgeBand parseAgeBand(String raw) {
-            return AgeBand.tryFrom(raw)
-                    .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown ageBand: " + raw));
         }
 
         private static ActivityDifficulty parseDifficulty(String raw) {

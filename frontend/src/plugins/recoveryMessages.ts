@@ -138,7 +138,7 @@ export const recoveryMessages = {
       error: 'Kata laluan tidak dapat ditetapkan semula. Minta pautan baharu dan cuba lagi.',
     },
   },
-  zh: {
+  'zh-CN': {
     forgot: {
       eyebrow: '找回账号',
       heroStart: '安全地找回',
@@ -175,7 +175,7 @@ export const recoveryMessages = {
       eyebrow: '密码帮助',
       heroStart: '安全地回到',
       heroHighlight: '中文学习之旅。',
-      heroCopy: '设置新密码，保护您的课程、奖励和学习进度。',
+      heroCopy: '设置新密码，保护您的课时、奖励和学习进度。',
       safetyTitle: '安全找回账号',
       safetyCopy: '请使用邮件中的重置令牌，切勿向任何人透露。',
       title: '重置密码',

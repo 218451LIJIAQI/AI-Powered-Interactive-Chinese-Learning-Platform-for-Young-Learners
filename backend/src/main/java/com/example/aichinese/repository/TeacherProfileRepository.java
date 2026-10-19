@@ -10,14 +10,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.TeacherStatus;
-
-import jakarta.persistence.LockModeType;
 
 public interface TeacherProfileRepository
         extends JpaRepository<TeacherProfile, Long>, JpaSpecificationExecutor<TeacherProfile> {
@@ -26,11 +21,6 @@ public interface TeacherProfileRepository
 
     @EntityGraph(attributePaths = { "user" })
     Optional<TeacherProfile> findDetailedByUserId(Long userId);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = { "user" })
-    @Query("select tp from TeacherProfile tp where tp.user.id = :userId")
-    Optional<TeacherProfile> findLockedByUserId(@Param("userId") Long userId);
 
     @EntityGraph(attributePaths = { "user" })
     Optional<TeacherProfile> findDetailedById(Long id);

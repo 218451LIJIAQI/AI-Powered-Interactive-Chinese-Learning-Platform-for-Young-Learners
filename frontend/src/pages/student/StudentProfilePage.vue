@@ -1,14 +1,14 @@
 <template>
   <div class="page-stack student-profile-page">
-    <section class="student-profile-header">
-      <span class="student-profile-kicker">{{ t('studentProfile.kicker') }}</span>
-      <h1>{{ t('studentProfile.hello', { name: displayName }) }}</h1>
-      <p>{{ t('studentProfile.intro') }}</p>
-    </section>
+    <PageHeaderBlock
+      :title="t('studentProfile.hello', { name: displayName })"
+      :description="t('studentProfile.intro')"
+      icon="profile"
+    />
 
     <DataNotice
       :using-fallback="usingFallback"
-      :error="noticeError"
+      :error="actionError"
       :success="actionSuccess"
       :fallback-title="t('studentProfile.previewTitle')"
       :fallback-message="t('studentProfile.previewMessage')"
@@ -17,163 +17,159 @@
     />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="student-profile-layout">
+      <div class="student-profile-layout">
         <div class="student-profile-main">
-          <article class="student-profile-hero">
+          <article class="hero-card student-profile-hero">
             <div class="student-profile-identity">
-              <PortraitAvatar :size="120" kind="student" accent="#ffb54a" />
+              <PortraitAvatar :size="96" :name="profile.fullName" tone="accent" />
               <div class="student-profile-identity-copy">
-                <span class="student-profile-identity-eyebrow">{{ t('studentProfile.snapshot') }}</span>
+                <span class="student-profile-eyebrow">{{ t('studentProfile.snapshot') }}</span>
                 <h2>{{ displayName }}</h2>
                 <span class="student-profile-role">{{ currentLevelTitle }}</span>
-                <small>{{ profileEmailLabel }}</small>
-                <div class="student-profile-member-chip">{{ accountModeLabel }}</div>
+                <span class="student-profile-email">{{ profileEmailLabel }}</span>
+                <span class="student-profile-mode">{{ accountModeLabel }}</span>
               </div>
             </div>
 
-            <div class="student-profile-hero-stats">
-              <article class="student-profile-stat-card">
-                <small>{{ t('studentProfile.level') }}</small>
+            <ul class="student-profile-stats">
+              <li class="student-profile-stat">
+                <span>{{ t('studentProfile.level') }}</span>
                 <strong>{{ currentLevelNumber }}</strong>
-                <span>{{
+                <small>{{
                   t('studentProfile.nextLevel', { progress: formatPercent(rewards.progressToNextLevelPercent) })
-                }}</span>
-              </article>
-              <article class="student-profile-stat-card">
-                <small>{{ t('studentProfile.streak') }}</small>
+                }}</small>
+              </li>
+              <li class="student-profile-stat">
+                <span>{{ t('studentProfile.streak') }}</span>
                 <strong>{{ currentStreakCount }}</strong>
-                <span>{{ streakDateLabel }}</span>
-              </article>
-              <article class="student-profile-stat-card">
-                <small>{{ t('studentProfile.overallProgress') }}</small>
+                <small>{{ streakDateLabel }}</small>
+              </li>
+              <li class="student-profile-stat">
+                <span>{{ t('studentProfile.overallProgress') }}</span>
                 <strong>{{ formatPercent(overallProgressPercent) }}</strong>
-                <span>{{ t('studentProfile.completedLessons', { count: completedLessonCount }) }}</span>
-              </article>
-              <article class="student-profile-stat-card">
-                <small>{{ t('studentProfile.quizAverage') }}</small>
+                <small>{{ t('studentProfile.completedLessons', { count: completedLessonCount }) }}</small>
+              </li>
+              <li class="student-profile-stat">
+                <span>{{ t('studentProfile.quizAverage') }}</span>
                 <strong>{{ formatPercent(progress.quizAverage) }}</strong>
-                <span>{{ lastActivitySummaryLabel }}</span>
-              </article>
-            </div>
+                <small>{{ lastActivitySummaryLabel }}</small>
+              </li>
+            </ul>
           </article>
 
           <div class="student-profile-grid">
-            <article class="panel student-profile-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('studentProfile.recentBadges') }}</strong>
-                </div>
-                <button type="button" class="student-link-button" @click="openRewards">
+            <section class="panel student-profile-card" :aria-labelledby="`${baseId}-badges`">
+              <div class="card-header">
+                <h2 :id="`${baseId}-badges`" class="card-title">{{ t('studentProfile.recentBadges') }}</h2>
+                <button type="button" class="btn btn-link" @click="openRewards">
                   {{ t('studentProfile.viewRewards') }}
                 </button>
               </div>
 
-              <div v-if="badgeCards.length" class="student-profile-badge-grid">
-                <article v-for="badge in badgeCards" :key="badge.id" class="student-profile-badge-item">
-                  <div class="student-profile-badge-icon">{{ badge.initials }}</div>
-                  <strong>{{ badge.title }}</strong>
-                  <span>{{ badge.subtitle }}</span>
-                </article>
-              </div>
+              <ul v-if="badgeCards.length" class="student-profile-list">
+                <li v-for="badge in badgeCards" :key="badge.id" class="student-profile-row has-icon">
+                  <span class="student-profile-badge-icon" aria-hidden="true">{{ badge.initials }}</span>
+                  <div class="student-profile-row-copy">
+                    <strong>{{ badge.title }}</strong>
+                    <span>{{ badge.subtitle }}</span>
+                  </div>
+                </li>
+              </ul>
               <StatePanel
                 v-else
                 icon="rewards"
                 :title="t('studentProfile.noBadges')"
                 :message="t('studentProfile.noBadgesHint')"
+                compact
               />
-            </article>
+            </section>
 
-            <article class="panel student-profile-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('studentProfile.recentPoints') }}</strong>
-                </div>
-                <button type="button" class="student-link-button" @click="openRewards">
+            <section class="panel student-profile-card" :aria-labelledby="`${baseId}-points`">
+              <div class="card-header">
+                <h2 :id="`${baseId}-points`" class="card-title">{{ t('studentProfile.recentPoints') }}</h2>
+                <button type="button" class="btn btn-link" @click="openRewards">
                   {{ t('studentProfile.openRewards') }}
                 </button>
               </div>
 
-              <div v-if="pointsFeed.length" class="student-profile-list">
-                <article v-for="item in pointsFeed" :key="item.id" class="student-profile-list-row">
-                  <div class="student-profile-list-copy">
+              <ul v-if="pointsFeed.length" class="student-profile-list">
+                <li v-for="item in pointsFeed" :key="item.id" class="student-profile-row">
+                  <div class="student-profile-row-copy">
                     <strong>{{ item.title }}</strong>
                     <span>{{ item.subtitle }}</span>
                     <small>{{ item.time }}</small>
                   </div>
-                  <strong class="student-profile-list-value">{{ item.value }}</strong>
-                </article>
-              </div>
+                  <strong class="student-profile-value is-positive">{{ item.value }}</strong>
+                </li>
+              </ul>
               <StatePanel
                 v-else
                 icon="rewards"
                 :title="t('studentProfile.noPoints')"
                 :message="t('studentProfile.noPointsHint')"
+                compact
               />
-            </article>
+            </section>
 
-            <article class="panel student-profile-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('studentProfile.recentLessons') }}</strong>
-                </div>
-                <button type="button" class="student-link-button" @click="openLearn">
+            <section class="panel student-profile-card" :aria-labelledby="`${baseId}-lessons`">
+              <div class="card-header">
+                <h2 :id="`${baseId}-lessons`" class="card-title">{{ t('studentProfile.recentLessons') }}</h2>
+                <button type="button" class="btn btn-link" @click="openLearn">
                   {{ t('studentProfile.openLearn') }}
                 </button>
               </div>
 
-              <div v-if="recentLessons.length" class="student-profile-list">
-                <article v-for="lesson in recentLessons" :key="lesson.lessonId" class="student-profile-list-row">
-                  <div class="student-profile-list-copy">
+              <ul v-if="recentLessons.length" class="student-profile-list">
+                <li v-for="lesson in recentLessons" :key="lesson.lessonId" class="student-profile-row">
+                  <div class="student-profile-row-copy">
                     <strong>{{ lesson.lessonTitle }}</strong>
                     <span>{{ lesson.statusLabel }}</span>
                     <small>{{ lesson.lastAccessedLabel }}</small>
                   </div>
-                  <strong class="student-profile-list-value">{{ lesson.progressLabel }}</strong>
-                </article>
-              </div>
+                  <strong class="student-profile-value">{{ lesson.progressLabel }}</strong>
+                </li>
+              </ul>
               <StatePanel
                 v-else
                 icon="learn"
                 :title="t('studentProfile.noLessons')"
                 :message="t('studentProfile.noLessonsHint')"
+                compact
               />
-            </article>
+            </section>
 
-            <article class="panel student-profile-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('studentProfile.feedback') }}</strong>
-                </div>
-                <button type="button" class="student-link-button" @click="openPractice">
+            <section class="panel student-profile-card" :aria-labelledby="`${baseId}-feedback`">
+              <div class="card-header">
+                <h2 :id="`${baseId}-feedback`" class="card-title">{{ t('studentProfile.feedback') }}</h2>
+                <button type="button" class="btn btn-link" @click="openPractice">
                   {{ t('studentProfile.openPractice') }}
                 </button>
               </div>
 
-              <div v-if="feedback.length" class="student-profile-feedback-list">
-                <article v-for="item in feedback.slice(0, 4)" :key="item.id" class="student-profile-feedback-item">
-                  <div class="student-profile-feedback-copy">
+              <ul v-if="feedback.length" class="student-profile-list">
+                <li v-for="item in feedback.slice(0, 4)" :key="item.id" class="student-profile-feedback">
+                  <div class="student-profile-feedback-head">
                     <strong>{{ feedbackTitle(item) }}</strong>
-                    <p>{{ item.message }}</p>
-                    <span>{{ item.teacherName }} - {{ feedbackTypeLabel(item) }}</span>
+                    <small>{{ formatDateTime(item.createdAt) }}</small>
                   </div>
-                  <small>{{ formatDateTime(item.createdAt) }}</small>
-                </article>
-              </div>
+                  <p>{{ item.message }}</p>
+                  <span>{{ item.teacherName }} - {{ feedbackTypeLabel(item) }}</span>
+                </li>
+              </ul>
               <StatePanel
                 v-else
                 icon="help"
                 :title="t('studentProfile.noFeedback')"
                 :message="t('studentProfile.noFeedbackHint')"
+                compact
               />
-            </article>
+            </section>
           </div>
         </div>
 
         <aside class="student-profile-side">
-          <article class="panel student-profile-card">
-            <div class="student-section-heading">
-              <strong>{{ t('studentProfile.learningSnapshot') }}</strong>
-            </div>
+          <section class="panel student-profile-card" :aria-labelledby="`${baseId}-snapshot`">
+            <h2 :id="`${baseId}-snapshot`" class="card-title">{{ t('studentProfile.learningSnapshot') }}</h2>
 
             <ProgressRing
               :progress="overallProgressPercent"
@@ -181,57 +177,69 @@
               :subtitle="t('studentProfile.studentProgress')"
             />
 
-            <div class="student-profile-side-stats">
+            <dl class="student-profile-side-stats">
               <div>
-                <small>{{ t('studentProfile.lessonsStarted') }}</small>
-                <strong>{{ startedLessonCount }}</strong>
+                <dt>{{ t('studentProfile.lessonsStarted') }}</dt>
+                <dd>{{ startedLessonCount }}</dd>
               </div>
               <div>
-                <small>{{ t('studentProfile.activitiesLoaded') }}</small>
-                <strong>{{ activities.items.length }}</strong>
+                <dt>{{ t('studentProfile.activitiesLoaded') }}</dt>
+                <dd>{{ activities.items.length }}</dd>
               </div>
               <div>
-                <small>{{ t('studentProfile.weakAreas') }}</small>
-                <strong>{{ progress.weakAreas.length }}</strong>
+                <dt>{{ t('studentProfile.weakAreas') }}</dt>
+                <dd>{{ progress.weakAreas.length }}</dd>
+              </div>
+            </dl>
+            <RouterLink class="btn btn-link student-profile-card-link" to="/student/progress">
+              {{ t('studentProfile.viewProgress') }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </RouterLink>
+          </section>
+
+          <section class="panel student-profile-card" :aria-labelledby="`${baseId}-notifications`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-notifications`" class="card-title">{{ t('studentProfile.notifications') }}</h2>
+              <div class="student-profile-card-actions">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  :disabled="markingNotificationsRead || !hasUnreadNotifications"
+                  :aria-busy="markingNotificationsRead"
+                  @click="markAllNotificationsRead"
+                >
+                  {{ markAllNotificationsLabel }}
+                </button>
+                <RouterLink
+                  class="btn btn-link"
+                  to="/student/notifications"
+                  data-testid="profile-notifications-view-all"
+                >
+                  {{ t('studentProfile.viewAllNotifications') }}
+                </RouterLink>
               </div>
             </div>
-          </article>
 
-          <article class="panel student-profile-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <strong>{{ t('studentProfile.notifications') }}</strong>
-              </div>
-              <button
-                type="button"
-                class="student-link-button"
-                :disabled="markingNotificationsRead || !hasUnreadNotifications"
-                @click="markAllNotificationsRead"
-              >
-                {{ markAllNotificationsLabel }}
-              </button>
-            </div>
-
-            <div v-if="notifications.length" class="student-profile-list">
+            <div v-if="notifications.length" class="student-profile-notification-list">
               <NotificationLinkButton
                 v-for="item in notifications"
                 :key="item.id"
                 :notification-id="item.id"
                 :target-path="item.targetPath"
-                fallback-to="/student/profile"
+                fallback-to="/student/notifications"
                 @read="markStudentNotificationRead"
               >
-                <article class="student-profile-list-row">
-                  <div class="student-profile-list-copy">
+                <span class="student-profile-row">
+                  <span class="student-profile-row-copy">
                     <strong>{{ item.title }}</strong>
                     <span>{{ item.message }}</span>
                     <small>{{ formatDateTime(item.createdAt) }}</small>
-                  </div>
+                  </span>
                   <StatusPill
                     :label="notificationStatusLabel(item.status)"
                     :tone="notificationStatusTone(item.status)"
                   />
-                </article>
+                </span>
               </NotificationLinkButton>
             </div>
             <StatePanel
@@ -239,185 +247,120 @@
               icon="bell"
               :title="t('studentProfile.noNotifications')"
               :message="t('studentProfile.noNotificationsHint')"
+              compact
             />
-          </article>
+          </section>
 
-          <article class="panel student-profile-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <strong>{{ t('studentProfile.activityLibrary') }}</strong>
-              </div>
-              <button type="button" class="student-link-button" @click="openPractice">
+          <section class="panel student-profile-card" :aria-labelledby="`${baseId}-activities`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-activities`" class="card-title">{{ t('studentProfile.activityLibrary') }}</h2>
+              <button type="button" class="btn btn-link" @click="openPractice">
                 {{ t('studentProfile.openPractice') }}
               </button>
             </div>
 
-            <div v-if="activityRows.length" class="student-profile-list">
-              <article v-for="item in activityRows" :key="item.id" class="student-profile-list-row">
-                <div class="student-profile-list-copy">
+            <ul v-if="activityRows.length" class="student-profile-list">
+              <li v-for="item in activityRows" :key="item.id" class="student-profile-row">
+                <div class="student-profile-row-copy">
                   <strong>{{ item.title }}</strong>
-                  <span>{{ item.type }}</span>
+                  <span class="student-profile-row-meta">
+                    <span>{{ item.type }}</span>
+                    <LearningStageTag :stage="item.learningStage" />
+                  </span>
                   <small>{{ item.tags }}</small>
                 </div>
-                <strong class="student-profile-list-value">{{ item.status }}</strong>
-              </article>
-            </div>
+                <span class="tag">{{ item.status }}</span>
+              </li>
+            </ul>
             <StatePanel
               v-else
               icon="practice"
               :title="t('studentProfile.noActivities')"
               :message="t('studentProfile.noActivitiesHint')"
+              compact
             />
-          </article>
+          </section>
 
-          <article class="panel student-profile-card">
-            <div class="student-section-heading">
-              <strong>{{ t('studentProfile.accountContext') }}</strong>
+          <section class="panel student-profile-card" :aria-labelledby="`${baseId}-account`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-account`" class="card-title">{{ t('studentProfile.accountContext') }}</h2>
             </div>
 
-            <div class="student-profile-settings-list">
-              <article class="student-profile-setting-row">
-                <span>{{ t('studentProfile.preferredLanguage') }}</span>
-                <small>{{ preferredLanguageLabel }}</small>
-              </article>
-              <article class="student-profile-setting-row">
-                <span>{{ t('studentProfile.aiRoute') }}</span>
-                <small>{{ t('studentProfile.aiRouteHint') }}</small>
-              </article>
-              <article class="student-profile-setting-row">
-                <span>{{ t('studentProfile.email') }}</span>
-                <small>{{ profileAccountEmailLabel }}</small>
-              </article>
-            </div>
-          </article>
+            <dl class="kv-list student-profile-settings">
+              <dt>{{ t('studentProfile.preferredLanguage') }}</dt>
+              <dd>{{ preferredLanguageLabel }}</dd>
+              <template v-if="institutionLabel">
+                <dt>{{ t('studentProfile.institution') }}</dt>
+                <dd>{{ institutionLabel }}</dd>
+              </template>
+              <dt>{{ t('studentProfile.aiRoute') }}</dt>
+              <dd>{{ t('studentProfile.aiRouteHint') }}</dd>
+              <dt>{{ t('studentProfile.email') }}</dt>
+              <dd>{{ profileAccountEmailLabel }}</dd>
+            </dl>
 
-          <article class="panel student-profile-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <strong>{{ t('studentProfile.paymentsRefunds') }}</strong>
-              </div>
+            <div class="card-footer">
+              <RouterLink class="btn btn-secondary btn-sm" to="/student/account" data-testid="profile-account-link">
+                <IconGlyph name="account" :size="16" />
+                {{ t('studentProfile.editAccount') }}
+              </RouterLink>
             </div>
-
-            <div v-if="payments.length" class="student-profile-payment-list">
-              <article
-                v-for="payment in payments.slice(0, 4)"
-                :key="payment.paymentId"
-                class="student-profile-payment-item"
-              >
-                <div>
-                  <strong>{{ payment.orderNumber }}</strong>
-                  <span>{{ payment.providerName }} - {{ financeStatusLabel(payment.paymentStatus) }}</span>
-                </div>
-                <strong>{{ formatCurrency(payment.amount, payment.currencyCode) }}</strong>
-              </article>
-            </div>
-            <StatePanel
-              v-else
-              icon="finance"
-              :title="t('studentProfile.noPayments')"
-              :message="t('studentProfile.noPaymentsHint')"
-            />
-
-            <div v-if="refunds.length" class="student-profile-refund-list">
-              <article v-for="refund in refunds.slice(0, 3)" :key="refund.id" class="student-profile-refund-item">
-                <div>
-                  <strong>{{ refund.orderNumber }}</strong>
-                  <span>{{ refund.reason }}</span>
-                </div>
-                <StatusPill :label="financeStatusLabel(refund.refundStatus)" tone="warning" />
-              </article>
-            </div>
-
-            <ActionFormCard
-              :title="t('studentProfile.requestRefund')"
-              :subtitle="t('studentProfile.requestRefundHint')"
-              icon="finance"
-              :submit-label="t('studentProfile.submitRefund')"
-              :submitting-label="t('studentProfile.submitting')"
-              :submitting="submittingRefund"
-              :disabled="refundFormDisabled"
-              @submit="submitRefund"
-            >
-              <div class="field">
-                <label for="student-refund-order">{{ t('studentProfile.order') }}</label>
-                <select
-                  id="student-refund-order"
-                  v-model.number="refundForm.orderId"
-                  class="select"
-                  :disabled="refundFormDisabled || !refundablePayments.length"
-                >
-                  <option :value="0">
-                    {{ refundOrderPlaceholder }}
-                  </option>
-                  <option v-for="payment in refundablePayments" :key="payment.paymentId" :value="payment.orderId">
-                    {{ payment.orderNumber }} · {{ formatCurrency(payment.amount, payment.currencyCode) }} ·
-                    {{ payment.providerName }}
-                  </option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="student-refund-reason">{{ t('studentProfile.reason') }}</label>
-                <textarea
-                  id="student-refund-reason"
-                  v-model="refundForm.reason"
-                  class="textarea"
-                  maxlength="1000"
-                  :placeholder="t('studentProfile.reasonPlaceholder')"
-                  :disabled="refundFormDisabled"
-                />
-              </div>
-            </ActionFormCard>
-          </article>
+          </section>
         </aside>
-      </section>
+      </div>
     </ResourceSection>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 import { authApi, notificationsApi, studentApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import NotificationLinkButton from '@/components/common/NotificationLinkButton.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import ProgressRing from '@/components/common/ProgressRing.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import ActionFormCard from '@/components/dashboard/ActionFormCard.vue'
+import LearningStageTag from '@/components/content/LearningStageTag.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
+import { useStatusLabels } from '@/composables/useStatusLabels'
 import {
   activityLibrary,
   studentFeedbackList,
-  studentPayments,
   studentProgress as studentProgressDemo,
-  studentRefunds,
   studentRewards,
 } from '@/demo/data'
 import { demoUsers } from '@/demo/users'
+import { statusLabelKey, type StatusLabelGroup } from '@/plugins/statusLabelMessages'
 import { studentProfileMessages } from '@/plugins/studentProfileMessages'
+import type { AppLanguage } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import {
   clampPercent,
-  formatCurrency,
   formatDate,
   formatDateTime,
   formatPercent,
   nonNegativeInteger,
   toFiniteNumber,
 } from '@/utils/format'
-import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
+import { sortByLearningStage } from '@/utils/learningStage'
+import { normalizeAppLanguage } from '@/utils/locale'
+import { announceNotificationsRead, markNotificationRead } from '@/utils/notifications'
 
 const { t } = useI18n({
   messages: {
     en: { studentProfile: studentProfileMessages.en },
     ms: { studentProfile: studentProfileMessages.ms },
-    zh: { studentProfile: studentProfileMessages.zh },
+    'zh-CN': { studentProfile: studentProfileMessages['zh-CN'] },
   },
 })
+const { statusLabel } = useStatusLabels()
 
 type NotificationStatusTone = 'info' | 'warning'
 type FeedbackSummary = {
@@ -427,11 +370,10 @@ type FeedbackSummary = {
 }
 
 const router = useRouter()
+const baseId = useId()
 
 const profileResource = useResource(() => authApi.me(), demoUsers.STUDENT)
 const feedbackResource = useResource(() => studentApi.feedback(), studentFeedbackList)
-const paymentsResource = useResource(() => studentApi.payments(), studentPayments)
-const refundsResource = useResource(() => studentApi.refunds(), studentRefunds)
 const rewardsResource = useResource(() => studentApi.rewards(), studentRewards)
 const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
 const activitiesResource = useResource(() => studentApi.activityLibrary({ size: 20 }), activityLibrary)
@@ -439,7 +381,7 @@ const notificationsResource = useResource(() => notificationsApi.list({ size: 6 
 
 const emptyProfile = {
   id: 0,
-  fullName: 'Student',
+  fullName: '',
   email: '',
   preferredLanguage: 'en',
   roles: ['STUDENT'],
@@ -478,17 +420,9 @@ const emptyActivities = {
 const profile = computed(
   () => profileResource.data.value ?? (profileResource.usingFallback.value ? demoUsers.STUDENT : emptyProfile),
 )
-const feedback = computed(() =>
-  (feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? studentFeedbackList : [])).map((item) => ({
-    ...item,
-    feedbackType: formatTeacherFeedbackType(item.feedbackType),
-  })),
-)
-const payments = computed(
-  () => paymentsResource.data.value ?? (paymentsResource.usingFallback.value ? studentPayments : []),
-)
-const refunds = computed(
-  () => refundsResource.data.value ?? (refundsResource.usingFallback.value ? studentRefunds : []),
+// Keep the raw feedbackType so feedbackTypeLabel() can translate it (formatting it first broke the lookup).
+const feedback = computed(
+  () => feedbackResource.data.value ?? (feedbackResource.usingFallback.value ? studentFeedbackList : []),
 )
 const rewards = computed(
   () => rewardsResource.data.value ?? (rewardsResource.usingFallback.value ? studentRewards : emptyRewards),
@@ -505,8 +439,6 @@ const usingFallback = computed(
   () =>
     profileResource.usingFallback.value ||
     feedbackResource.usingFallback.value ||
-    paymentsResource.usingFallback.value ||
-    refundsResource.usingFallback.value ||
     rewardsResource.usingFallback.value ||
     progressResource.usingFallback.value ||
     activitiesResource.usingFallback.value ||
@@ -516,8 +448,6 @@ const pageLoading = computed(
   () =>
     profileResource.loading.value ||
     feedbackResource.loading.value ||
-    paymentsResource.loading.value ||
-    refundsResource.loading.value ||
     rewardsResource.loading.value ||
     progressResource.loading.value ||
     activitiesResource.loading.value ||
@@ -527,16 +457,13 @@ const pageError = computed(
   () =>
     profileResource.error.value ||
     feedbackResource.error.value ||
-    paymentsResource.error.value ||
-    refundsResource.error.value ||
     rewardsResource.error.value ||
     progressResource.error.value ||
     activitiesResource.error.value ||
     notificationsResource.error.value,
 )
-const noticeError = computed(() => actionError.value || pageError.value)
 const profileNoticeDetail = computed(() => {
-  if (noticeError.value) {
+  if (actionError.value) {
     return t('studentProfile.errorSnapshot')
   }
 
@@ -575,33 +502,21 @@ const streakDateLabel = computed(() =>
     ? t('studentProfile.lastActive', { date: formatDate(rewards.value.streak.lastLearningDate) })
     : t('studentProfile.noLearningDate'),
 )
+/** Language names are shown in their own language so every learner can recognise them. */
+const languageNames: Record<AppLanguage, string> = {
+  en: 'English',
+  ms: 'Bahasa Melayu',
+  'zh-CN': '简体中文',
+}
 const preferredLanguageLabel = computed(() => {
-  const value = profile.value.preferredLanguage || 'en'
-  if (value === 'ms') return 'Bahasa Melayu'
-  if (value === 'zh') return t('studentProfile.chinese')
-  return t('studentProfile.english')
+  const language = normalizeAppLanguage(profile.value.preferredLanguage)
+  return language ? languageNames[language] : t('studentProfile.languageNotSet')
 })
+const institutionLabel = computed(() => profile.value.studentProfile?.institution?.trim() || '')
 const hasUnreadNotifications = computed(() => notifications.value.some((item) => item.status !== 'READ'))
 const markAllNotificationsLabel = computed(() =>
   markingNotificationsRead.value ? t('studentProfile.marking') : t('studentProfile.markAllRead'),
 )
-const activeRefundOrderIds = computed(
-  () =>
-    new Set(
-      refunds.value
-        .filter((item) => item.refundStatus === 'PENDING' || item.refundStatus === 'APPROVED')
-        .map((item) => item.orderId),
-    ),
-)
-const refundablePayments = computed(() =>
-  payments.value.filter((item) => item.paymentStatus === 'PAID' && !activeRefundOrderIds.value.has(item.orderId)),
-)
-const refundOrderPlaceholder = computed(() =>
-  refundablePayments.value.length ? t('studentProfile.selectOrder') : t('studentProfile.noRefundableOrder'),
-)
-const refundReadOnly = computed(() => paymentsResource.usingFallback.value || refundsResource.usingFallback.value)
-const refundFormDisabled = computed(() => refundReadOnly.value || submittingRefund.value)
-
 const badgeCards = computed(() =>
   rewards.value.badges.slice(0, 4).map((badge) => ({
     id: badge.badgeId,
@@ -622,7 +537,7 @@ const pointsFeed = computed(() =>
   rewards.value.recentPoints.slice(0, 4).map((item) => ({
     id: item.id,
     title: item.reason,
-    subtitle: item.sourceType,
+    subtitle: knownStatusLabel('pointsSource', item.sourceType, item.sourceType),
     time: formatDateTime(item.createdAt),
     value: signedIntegerLabel(item.pointsDelta),
   })),
@@ -649,32 +564,21 @@ const recentLessons = computed(() =>
 )
 
 const activityRows = computed(() =>
-  activities.value.items.slice(0, 4).map((item) => ({
-    id: item.id,
-    title: item.title,
-    type: item.type.replaceAll('_', ' '),
-    tags: item.tags.length ? item.tags.join(', ') : t('studentProfile.noTags'),
-    status: item.completed ? t('studentProfile.done') : t('studentProfile.open'),
-  })),
+  sortByLearningStage(activities.value.items)
+    .slice(0, 4)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      learningStage: item.learningStage ?? null,
+      type: knownStatusLabel('activityType', item.type, item.type.replaceAll('_', ' ')),
+      tags: item.tags.length ? item.tags.join(', ') : t('studentProfile.noTags'),
+      status: item.completed ? t('studentProfile.done') : t('studentProfile.open'),
+    })),
 )
 
-const refundForm = reactive({
-  orderId: 0,
-  reason: '',
-})
-const submittingRefund = ref(false)
 const markingNotificationsRead = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
-
-watch(
-  refundablePayments,
-  (items) => {
-    if (items.some((item) => item.orderId === refundForm.orderId)) return
-    refundForm.orderId = items[0]?.orderId ?? 0
-  },
-  { immediate: true },
-)
 
 function openRewards(): void {
   void router.push('/student/rewards')
@@ -692,36 +596,18 @@ function feedbackTitle(item: FeedbackSummary): string {
   return item.lessonTitle || item.quizTitle || t('studentProfile.feedback')
 }
 
+/** Shared translated feedback-type labels (A5 #15); a missing type is shown as General. */
 function feedbackTypeLabel(item: FeedbackSummary): string {
-  if (!item.feedbackType) return t('studentProfile.feedbackGeneral')
-  const keys: Record<string, string> = {
-    GENERAL: 'feedbackGeneral',
-    QUIZ: 'feedbackQuiz',
-    LESSON: 'feedbackLesson',
-    ENCOURAGING: 'feedbackEncouraging',
-    CORRECTIVE: 'feedbackCorrective',
-    PROGRESS: 'feedbackProgress',
-    WEAK_AREA: 'feedbackWeakArea',
-  }
-  const key = keys[item.feedbackType.toUpperCase()]
-  return key ? t(`studentProfile.${key}`) : formatTeacherFeedbackType(item.feedbackType)
+  return statusLabel('feedbackType', item.feedbackType?.trim() || 'GENERAL')
+}
+
+/** Translated label for a known enum value; unknown values keep their previous display (`fallback`). */
+function knownStatusLabel(group: StatusLabelGroup, value: string, fallback: string): string {
+  return statusLabelKey(group, value) ? statusLabel(group, value) : fallback
 }
 
 function notificationStatusLabel(status: string): string {
   return status === 'READ' ? t('studentProfile.read') : t('studentProfile.unread')
-}
-
-function financeStatusLabel(status: string): string {
-  const keys: Record<string, string> = {
-    PENDING: 'statusPending',
-    APPROVED: 'statusApproved',
-    REJECTED: 'statusRejected',
-    REFUNDED: 'statusRefunded',
-    PAID: 'statusPaid',
-    FAILED: 'statusFailed',
-  }
-  const key = keys[status]
-  return key ? t(`studentProfile.${key}`) : status
 }
 
 function notificationStatusTone(status: string): NotificationStatusTone {
@@ -729,9 +615,7 @@ function notificationStatusTone(status: string): NotificationStatusTone {
 }
 
 function markStudentNotificationRead(notificationId: number): void {
-  notificationsResource.data.value = notifications.value.map((item) =>
-    item.id === notificationId ? { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() } : item,
-  )
+  notificationsResource.data.value = markNotificationRead(notifications.value, notificationId)
 }
 
 async function markAllNotificationsRead(): Promise<void> {
@@ -750,7 +634,7 @@ async function markAllNotificationsRead(): Promise<void> {
     notificationsResource.data.value = notifications.value.map((item) =>
       item.status === 'READ' ? item : { ...item, status: 'READ', readAt: item.readAt ?? new Date().toISOString() },
     )
-    window.dispatchEvent(new CustomEvent('mandarin-spark:notification-read', { detail: { all: true } }))
+    announceNotificationsRead()
     actionSuccess.value =
       result.updatedCount > 0
         ? t('studentProfile.markedCount', { count: result.updatedCount })
@@ -762,42 +646,6 @@ async function markAllNotificationsRead(): Promise<void> {
   }
 }
 
-async function submitRefund(): Promise<void> {
-  if (submittingRefund.value) return
-  if (refundReadOnly.value) {
-    actionError.value = t('studentProfile.previewRefund')
-    actionSuccess.value = null
-    return
-  }
-
-  if (refundForm.orderId <= 0) {
-    actionError.value = t('studentProfile.noOrder')
-    actionSuccess.value = null
-    return
-  }
-
-  if (!refundForm.reason.trim()) {
-    actionError.value = t('studentProfile.reasonRequired')
-    actionSuccess.value = null
-    return
-  }
-
-  actionError.value = null
-  actionSuccess.value = null
-  submittingRefund.value = true
-  try {
-    await studentApi.createRefund({ orderId: refundForm.orderId, reason: refundForm.reason.trim() })
-    await refundsResource.reload()
-    refundForm.reason = ''
-    refundForm.orderId = refundablePayments.value.find((item) => item.orderId !== refundForm.orderId)?.orderId ?? 0
-    actionSuccess.value = t('studentProfile.refundSubmitted')
-  } catch (reason) {
-    actionError.value = resolveApiError(reason, t('studentProfile.refundError'))
-  } finally {
-    submittingRefund.value = false
-  }
-}
-
 function signedIntegerLabel(value: number): string {
   const rounded = Math.round(toFiniteNumber(value))
   return rounded > 0 ? `+${rounded}` : String(rounded)
@@ -806,8 +654,6 @@ function signedIntegerLabel(value: number): string {
 function reloadAll(): void {
   void profileResource.reload()
   void feedbackResource.reload()
-  void paymentsResource.reload()
-  void refundsResource.reload()
   void rewardsResource.reload()
   void progressResource.reload()
   void activitiesResource.reload()
@@ -816,309 +662,369 @@ function reloadAll(): void {
 </script>
 
 <style scoped>
-.student-profile-header h1,
-.student-profile-header p {
-  margin: 0;
-}
-
-.student-profile-kicker {
-  width: fit-content;
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 13px;
-  border-radius: 999px;
-  background: rgba(111, 76, 255, 0.09);
-  color: var(--primary);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.student-profile-header h1 {
-  font-family: 'Fredoka', sans-serif;
-  font-size: clamp(2.5rem, 3.5vw, 3.8rem);
-  line-height: 1.04;
-}
-
-.student-profile-header p {
-  margin-top: 10px;
-  color: var(--text-soft);
-  font-size: 1.02rem;
+.student-profile-page {
+  display: grid;
+  gap: var(--page-gap);
 }
 
 .student-profile-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.42fr) 380px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: var(--page-gap);
+  align-items: start;
 }
 
 .student-profile-main,
 .student-profile-side {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  display: grid;
+  gap: var(--page-gap);
+  align-content: start;
+  align-items: start;
+  min-width: 0;
 }
 
-.student-profile-hero,
-.student-profile-card {
-  border-radius: 24px;
+.student-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--grid-gap);
 }
 
+/* Hero --------------------------------------------------------------------- */
 .student-profile-hero {
   display: grid;
-  gap: 18px;
-  padding: 24px;
-  background: linear-gradient(135deg, #b89cff 0%, #8f69ff 45%, #855ef6 100%);
-  box-shadow: 0 24px 48px rgba(136, 105, 255, 0.16);
+  gap: var(--space-6);
 }
 
 .student-profile-identity {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 18px;
+  display: flex;
   align-items: center;
-  color: white;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.student-profile-identity-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.student-profile-eyebrow {
+  color: var(--text-on-primary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
 }
 
 .student-profile-identity-copy h2 {
   margin: 0;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.3rem;
-}
-
-.student-profile-identity-eyebrow {
-  width: fit-content;
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.94);
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  color: var(--text-on-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
 }
 
 .student-profile-role {
-  display: inline-flex;
+  padding: var(--space-0-5) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-on-brand);
+  color: var(--text-on-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.student-profile-email {
+  color: var(--text-on-primary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.student-profile-mode {
+  padding: var(--space-0-5) var(--space-2-5);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-500);
+  color: var(--text-on-accent);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.student-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.student-profile-stat {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-white-a24);
+  border-radius: var(--radius-lg);
+  background: var(--surface-on-brand);
+}
+
+.student-profile-stat > span {
+  color: var(--text-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.student-profile-stat strong {
+  color: var(--text-on-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.student-profile-stat small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-on-primary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Cards and lists ---------------------------------------------------------- */
+.student-profile-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.student-profile-card .card-header {
   align-items: center;
-  margin-top: 8px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(109, 71, 255, 0.34);
-  font-weight: 700;
+  flex-wrap: wrap;
 }
 
-.student-profile-identity-copy small {
-  display: block;
-  margin-top: 12px;
-  color: rgba(255, 255, 255, 0.84);
+.student-profile-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-.student-profile-member-chip {
-  width: fit-content;
-  margin-top: 16px;
-  padding: 9px 14px;
-  border-radius: 14px;
-  background: rgba(255, 246, 223, 0.96);
-  color: #cb7b13;
-  font-weight: 700;
-}
-
-.student-profile-hero-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.student-profile-stat-card {
-  min-height: 120px;
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.98);
-  display: grid;
-  gap: 8px;
-}
-
-.student-profile-stat-card small,
-.student-profile-stat-card span {
-  color: var(--text-soft);
-}
-
-.student-profile-stat-card strong,
-.student-profile-side-stats strong,
-.student-profile-list-value {
-  font-family: 'Fredoka', sans-serif;
-}
-
-.student-profile-stat-card strong {
-  font-size: 1.9rem;
-  line-height: 1;
-}
-
-.student-profile-grid,
-.student-profile-side-stats {
-  display: grid;
-  gap: 18px;
-}
-
-.student-profile-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.student-profile-badge-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 14px;
-}
-
-.student-profile-badge-item,
-.student-profile-list-copy {
-  display: grid;
-  gap: 6px;
-}
-
-.student-profile-badge-item {
-  text-align: center;
-}
-
-.student-profile-badge-item span,
-.student-profile-list-copy span,
-.student-profile-list-copy small,
-.student-profile-feedback-copy span,
-.student-profile-feedback-item small,
-.student-profile-setting-row small,
-.student-profile-payment-item span,
-.student-profile-refund-item span {
-  color: var(--text-soft);
-}
-
-.student-profile-badge-icon {
-  width: 72px;
-  height: 72px;
-  margin: 0 auto;
-  border-radius: 20px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg, #8f69ff, #6946e8);
-  color: white;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.6rem;
+.student-profile-card-link {
+  justify-self: start;
 }
 
 .student-profile-list,
-.student-profile-feedback-list,
-.student-profile-payment-list,
-.student-profile-refund-list,
-.student-profile-settings-list {
+.student-profile-notification-list {
   display: grid;
-  gap: 12px;
-  margin-top: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.student-profile-list-row,
-.student-profile-payment-item,
-.student-profile-refund-item {
+.student-profile-list > li {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.student-profile-list > li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.student-profile-list > li:last-child {
+  padding-bottom: 0;
+}
+
+.student-profile-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
   align-items: center;
+  gap: var(--space-3);
 }
 
-.student-profile-list-value {
-  font-size: 1.05rem;
+.student-profile-row.has-icon {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
-.student-profile-feedback-item {
+.student-profile-row-copy {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 16px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
+  gap: var(--space-0-5);
+  min-width: 0;
 }
 
-.student-profile-feedback-item:last-child {
-  border-bottom: 0;
+.student-profile-row-copy strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
 }
 
-.student-profile-feedback-copy p {
-  margin: 6px 0 0;
-  color: var(--text-soft);
-  line-height: 1.6;
+.student-profile-row-copy > span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.student-profile-row-copy small {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.student-profile-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.student-profile-value {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.student-profile-value.is-positive {
+  color: var(--color-success-text);
+}
+
+.student-profile-badge-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.student-profile-feedback {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.student-profile-feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.student-profile-feedback-head strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.student-profile-feedback-head small,
+.student-profile-feedback > span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.student-profile-feedback p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+/* Notification rows are buttons that open the related page. */
+.student-profile-notification-list > .notification-link-button {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.student-profile-notification-list > .notification-link-button + .notification-link-button {
+  margin-top: var(--space-1);
+}
+
+.student-profile-notification-list > .notification-link-button:hover {
+  background: var(--surface-hover);
 }
 
 .student-profile-side-stats {
+  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(232, 236, 247, 0.96);
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
-.student-profile-side-stats small {
-  display: block;
-  color: var(--text-soft);
+.student-profile-side-stats div {
+  display: grid;
+  align-content: space-between;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.student-profile-side-stats strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 1.7rem;
+.student-profile-side-stats dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
 }
 
-.student-profile-setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.student-profile-side-stats dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
 }
 
-@media (max-width: 1420px) {
+.student-profile-settings dt,
+.student-profile-settings dd {
+  font-size: var(--font-size-sm);
+}
+
+.student-profile-card .card-footer {
+  justify-content: flex-start;
+}
+
+@media (max-width: 1200px) {
   .student-profile-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-profile-side {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   }
 }
 
-@media (max-width: 1180px) {
-  .student-profile-hero-stats,
-  .student-profile-grid,
-  .student-profile-badge-grid,
-  .student-profile-side-stats {
+@media (max-width: 640px) {
+  .student-profile-identity {
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .student-profile-identity-copy h2 {
+    font-size: var(--font-size-3xl);
+  }
+
+  .student-profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (max-width: 760px) {
-  .student-profile-header {
-    display: grid;
-    gap: 10px;
+  .student-profile-settings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1) 0;
   }
 
-  .student-profile-identity,
-  .student-profile-hero-stats,
-  .student-profile-grid,
-  .student-profile-badge-grid,
-  .student-profile-side-stats,
-  .student-profile-list-row,
-  .student-profile-feedback-item,
-  .student-profile-payment-item,
-  .student-profile-refund-item {
-    grid-template-columns: 1fr;
-  }
-
-  .student-profile-hero,
-  .student-profile-card {
-    border-radius: 22px;
-  }
-
-  .student-profile-stat-card {
-    min-height: 0;
-  }
-
-  .student-profile-feedback-item {
-    gap: 8px;
+  .student-profile-settings dd {
+    margin-bottom: var(--space-2);
+    text-align: left;
   }
 }
 </style>

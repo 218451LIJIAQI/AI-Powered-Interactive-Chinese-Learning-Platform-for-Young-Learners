@@ -17,8 +17,9 @@ export default defineConfig({
       manifest: {
         name: 'MandarinSpark Chinese Learning',
         short_name: 'MandarinSpark',
-        description: 'AI-powered interactive Chinese learning for young learners.',
-        theme_color: '#f97316',
+        description:
+          'AI-Powered Interactive Chinese Learning Platform for Young Adults in Malaysia: Mandarin for young adult beginners.',
+        theme_color: '#6f4cff',
         background_color: '#fff7ed',
         display: 'standalone',
         start_url: '/',

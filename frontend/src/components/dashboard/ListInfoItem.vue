@@ -1,7 +1,7 @@
 <template>
   <article class="list-item">
     <div class="list-info-main">
-      <div class="media-badge small">
+      <div class="media-badge small" aria-hidden="true">
         <IconGlyph :name="icon" />
       </div>
       <div class="list-info-copy">

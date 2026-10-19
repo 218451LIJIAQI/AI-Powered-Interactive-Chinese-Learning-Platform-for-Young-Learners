@@ -2,11 +2,12 @@ import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRe
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  accountApi,
+  adminActivityGateway,
   aiApi,
   adminApi,
   authApi,
   notificationsApi,
-  paymentApi,
   publicApi,
   studentApi,
   systemApi,
@@ -193,15 +194,17 @@ describe('REST API wrappers', () => {
     await expect(systemApi.health()).rejects.toMatchObject({ response: { status: BAD_REQUEST_STATUS } })
   })
 
-  it('maps auth, public, notification, system, student, payment, teacher, and admin endpoints', async () => {
+  it('maps auth, public, notification, system, student, teacher, and admin endpoints', async () => {
     const calls = installCaptureAdapter({ items: [{ id: 1 }] })
 
     await authApi.login(loginPayload())
     await publicApi.listCourses({ keyword: 'pinyin', page: 1 })
     await notificationsApi.markAllRead()
     await systemApi.health()
-    await studentApi.submitQuiz(9, [{ questionId: 3, answerText: 'ni hao' }])
-    await paymentApi.status(12)
+    await studentApi.submitQuiz(9, [
+      { questionId: 3, answerText: 'ni hao' },
+      { questionId: 4, optionId: 12, hintUsed: true },
+    ])
     await teacherApi.archiveRecordedVideo(2, 5)
     await adminApi.approveTeacher(7, 'Looks good')
 
@@ -213,9 +216,13 @@ describe('REST API wrappers', () => {
       {
         method: 'POST',
         url: '/students/quizzes/9/attempts',
-        data: { answers: [{ questionId: 3, answerText: 'ni hao' }] },
+        data: {
+          answers: [
+            { questionId: 3, answerText: 'ni hao' },
+            { questionId: 4, optionId: 12, hintUsed: true },
+          ],
+        },
       },
-      { method: 'GET', url: '/payments/status/12' },
       { method: 'PATCH', url: '/teachers/lessons/2/recorded-videos/5/archive' },
       { method: 'POST', url: '/admin/teachers/7/approve', data: { note: 'Looks good' } },
     ])
@@ -248,16 +255,49 @@ describe('REST API wrappers', () => {
     expect(calls).toEqual([
       { method: 'GET', url: '/notifications', params: { status: 'UNREAD' } },
       { method: 'GET', url: '/students/rewards/badges' },
-      { method: 'GET', url: '/teachers/live-classes' },
+      { method: 'GET', url: '/teachers/live-classes', params: { size: 100 } },
       { method: 'GET', url: '/admin/moderation-records', params: { status: 'OPEN' } },
     ])
   })
 
-  it('maps AI, student commerce, teacher content, and admin moderation commands', async () => {
+  it('encodes string path parameters so they cannot change the request path', async () => {
+    const calls = installCaptureAdapter()
+
+    await publicApi.getCourseDetail('../admin?x=1#y')
+    await adminApi.contentDetail('lesson/x', 10)
+    await adminApi.archiveContent('lesson?y', 10)
+
+    expect(calls.map((call) => call.url)).toEqual([
+      '/public/courses/..%2Fadmin%3Fx%3D1%23y',
+      '/admin/content/submissions/lesson%2Fx/10',
+      '/admin/content/lesson%3Fy/10/archive',
+    ])
+  })
+
+  it('asks for the largest page on teacher lists that are shown without paging', async () => {
+    const calls = installCaptureAdapter({ items: LIST_ITEMS })
+
+    await teacherApi.modules()
+    await teacherApi.lessons()
+    await teacherApi.packages()
+    await teacherApi.liveClasses()
+    await teacherApi.enrolments(6)
+    await teacherApi.recordedVideos(7)
+    await teacherApi.lessonVideoProgress(7)
+    await teacherApi.lessonQuizzes(7)
+    await teacherApi.quizAttempts(9)
+    await teacherApi.feedbackList()
+    await teacherApi.students()
+
+    expect(calls).toHaveLength(11)
+    expect(calls.every((call) => call.method === 'GET')).toBe(true)
+    expect(calls.map((call) => call.params)).toEqual(Array.from({ length: 11 }, () => ({ size: 100 })))
+  })
+
+  it('maps AI, teacher course content, and admin moderation commands', async () => {
     const calls = installCaptureAdapter(DEFAULT_PAGE_RESPONSE)
 
     await aiApi.quizGenerator({ topic: 'tones', numberOfQuestions: 3 })
-    await studentApi.buyNow({ itemType: 'LESSON', itemId: 42, featureKey: 'recording' })
     await teacherApi.addPackageItem(6, { itemType: 'LESSON', itemId: 9, displayOrder: 2 })
     await adminApi.moderationAction('request-revision', {
       targetType: 'LESSON',
@@ -268,11 +308,6 @@ describe('REST API wrappers', () => {
 
     expect(calls).toEqual([
       { method: 'POST', url: '/ai/quiz-generator', data: { topic: 'tones', numberOfQuestions: 3 } },
-      {
-        method: 'POST',
-        url: '/students/checkout/buy-now',
-        data: { itemType: 'LESSON', itemId: 42, featureKey: 'recording' },
-      },
       {
         method: 'POST',
         url: '/teachers/packages/6/items',
@@ -454,7 +489,7 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'student matching complete',
-        run: () => studentApi.completeMatchingGame(11),
+        run: () => studentApi.completeMatchingGame(11, { matches: [{ leftItemId: 1, rightText: 'hello' }] }),
         method: 'POST',
         url: '/students/activities/matching-games/11/complete',
       },
@@ -466,7 +501,7 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'student listening complete',
-        run: () => studentApi.completeListeningExercise(12),
+        run: () => studentApi.completeListeningExercise(12, { responseText: 'ni hao' }),
         method: 'POST',
         url: '/students/activities/listening-exercises/12/complete',
       },
@@ -478,7 +513,7 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'student tracing complete',
-        run: () => studentApi.completeTracingExercise(13),
+        run: () => studentApi.completeTracingExercise(13, { strokeCount: 4 }),
         method: 'POST',
         url: '/students/activities/tracing-exercises/13/complete',
       },
@@ -490,7 +525,7 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'student drag drop complete',
-        run: () => studentApi.completeDragDropActivity(14),
+        run: () => studentApi.completeDragDropActivity(14, { placements: [{ itemId: 2, zone: 'Food' }] }),
         method: 'POST',
         url: '/students/activities/drag-drop-activities/14/complete',
       },
@@ -502,47 +537,9 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'student story complete',
-        run: () => studentApi.completeStoryActivity(15),
+        run: () => studentApi.completeStoryActivity(15, { answers: [{ questionId: 3, optionIndex: 0 }] }),
         method: 'POST',
         url: '/students/activities/story-activities/15/complete',
-      },
-      { name: 'student cart', run: () => studentApi.cart(), method: 'GET', url: '/students/cart' },
-      {
-        name: 'student add cart item',
-        run: () => studentApi.addCartItem({ itemType: 'LESSON', itemId: 6 }),
-        method: 'POST',
-        url: '/students/cart/items',
-      },
-      {
-        name: 'student remove cart item',
-        run: () => studentApi.removeCartItem(16),
-        method: 'DELETE',
-        url: '/students/cart/items/16',
-      },
-      { name: 'student clear cart', run: () => studentApi.clearCart(), method: 'DELETE', url: '/students/cart/clear' },
-      {
-        name: 'student checkout cart',
-        run: () => studentApi.checkoutCart(),
-        method: 'POST',
-        url: '/students/checkout/cart',
-      },
-      {
-        name: 'student payments',
-        run: () => studentApi.payments({ page: 0 }),
-        method: 'GET',
-        url: '/students/payments',
-      },
-      {
-        name: 'student refunds',
-        run: () => studentApi.refunds({ page: 0 }),
-        method: 'GET',
-        url: '/students/refund-requests',
-      },
-      {
-        name: 'student create refund',
-        run: () => studentApi.createRefund({ orderId: 4, reason: 'duplicate' }),
-        method: 'POST',
-        url: '/students/refund-requests',
       },
       { name: 'AI availability', run: () => aiApi.availability(), method: 'GET', url: '/ai/availability' },
       {
@@ -564,12 +561,6 @@ describe('REST API wrappers', () => {
         url: '/ai/story-generator',
       },
       {
-        name: 'AI recommendation',
-        run: () => aiApi.learningRecommendation({ currentLevel: 'Beginner' }),
-        method: 'POST',
-        url: '/ai/learning-recommendation',
-      },
-      {
         name: 'AI pronunciation',
         run: () => aiApi.pronunciationFeedback(formData),
         method: 'POST',
@@ -579,7 +570,8 @@ describe('REST API wrappers', () => {
       { name: 'AI reports', run: () => aiApi.reports({ status: 'OPEN' }), method: 'GET', url: '/ai/reports' },
       {
         name: 'AI report response',
-        run: () => aiApi.reportResponse({ featureKey: 'CHAT', reasonCategory: 'OTHER', description: 'wrong tone' }),
+        run: () =>
+          aiApi.reportResponse({ featureKey: 'CHAT_TUTOR', reasonCategory: 'OTHER', description: 'wrong tone' }),
         method: 'POST',
         url: '/ai/reports',
       },
@@ -588,14 +580,13 @@ describe('REST API wrappers', () => {
     await expectWrapperMappings(cases)
   })
 
-  it('maps teacher wrapper contracts across dashboard, content, class, feedback, and payout domains', async () => {
+  it('maps teacher wrapper contracts across dashboard, content, class, and feedback domains', async () => {
     const formData = new FormData()
     const modulePayload: TeacherModulePayload = {
       title: 'Basics',
       description: 'Intro',
       levelId: 1,
       categoryId: 2,
-      accessType: 'FREE',
     }
     const lessonPayload: TeacherLessonPayload = {
       title: 'Greetings',
@@ -605,15 +596,13 @@ describe('REST API wrappers', () => {
       levelId: 1,
       categoryId: 2,
       learningType: 'RECORDED',
-      accessType: 'FREE',
     }
     const packagePayload: TeacherPackagePayload = {
       title: 'Starter',
-      description: 'Starter package',
+      description: 'Starter course',
       levelId: 1,
       categoryId: 2,
       learningType: 'HYBRID',
-      accessType: 'FREE',
     }
     const liveClassPayload: TeacherLiveClassPayload = {
       title: 'Tone practice',
@@ -838,36 +827,12 @@ describe('REST API wrappers', () => {
         method: 'PUT',
         url: '/teachers/feedback/11',
       },
-      {
-        name: 'teacher earnings',
-        run: () => teacherApi.earnings({ page: 0 }),
-        method: 'GET',
-        url: '/teachers/earnings',
-      },
-      {
-        name: 'teacher earnings summary',
-        run: () => teacherApi.earningsSummary(),
-        method: 'GET',
-        url: '/teachers/earnings/summary',
-      },
-      {
-        name: 'teacher payouts',
-        run: () => teacherApi.payouts({ status: 'PENDING' }),
-        method: 'GET',
-        url: '/teachers/payout-requests',
-      },
-      {
-        name: 'teacher create payout',
-        run: () => teacherApi.createPayoutRequest({ amount: 25 }),
-        method: 'POST',
-        url: '/teachers/payout-requests',
-      },
     ]
 
     await expectWrapperMappings(cases)
   })
 
-  it('maps admin wrapper contracts across moderation, activity, finance, and settings domains', async () => {
+  it('maps admin wrapper contracts across moderation, activity, and settings domains', async () => {
     const flashcardPayload: AdminFlashcardPayload = {
       title: 'Hello',
       frontText: '你好',
@@ -898,11 +863,7 @@ describe('REST API wrappers', () => {
       questions: [],
     }
     const platformPayload: AdminPlatformSettingsUpdateRequest = {
-      aiDisclaimerText: 'AI can make mistakes.',
-      emailNotifications: true,
-      inAppNotifications: true,
-      dailySummary: false,
-      strictContentFiltering: true,
+      aiDisclaimerText: 'AI responses may contain errors and do not replace your teacher.',
       sensitiveWordFilter: true,
       aiSafetyCheck: true,
     }
@@ -946,19 +907,19 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin flashcard',
-        run: () => adminApi.flashcard(4),
+        run: () => adminActivityGateway.detail('FLASHCARD', 4),
         method: 'GET',
         url: '/admin/activities/flashcards/4',
       },
       {
         name: 'admin create flashcard',
-        run: () => adminApi.createFlashcard(flashcardPayload),
+        run: () => adminActivityGateway.create('FLASHCARD', flashcardPayload),
         method: 'POST',
         url: '/admin/activities/flashcards',
       },
       {
         name: 'admin update flashcard',
-        run: () => adminApi.updateFlashcard(4, flashcardPayload),
+        run: () => adminActivityGateway.update('FLASHCARD', 4, flashcardPayload),
         method: 'PUT',
         url: '/admin/activities/flashcards/4',
       },
@@ -970,25 +931,25 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin delete flashcard',
-        run: () => adminApi.deleteFlashcard(4),
+        run: () => adminActivityGateway.remove('FLASHCARD', 4),
         method: 'DELETE',
         url: '/admin/activities/flashcards/4',
       },
       {
         name: 'admin matching game',
-        run: () => adminApi.matchingGame(5),
+        run: () => adminActivityGateway.detail('MATCHING_GAME', 5),
         method: 'GET',
         url: '/admin/activities/matching-games/5',
       },
       {
         name: 'admin create matching',
-        run: () => adminApi.createMatchingGame(matchingPayload),
+        run: () => adminActivityGateway.create('MATCHING_GAME', matchingPayload),
         method: 'POST',
         url: '/admin/activities/matching-games',
       },
       {
         name: 'admin update matching',
-        run: () => adminApi.updateMatchingGame(5, matchingPayload),
+        run: () => adminActivityGateway.update('MATCHING_GAME', 5, matchingPayload),
         method: 'PUT',
         url: '/admin/activities/matching-games/5',
       },
@@ -1000,25 +961,25 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin delete matching',
-        run: () => adminApi.deleteMatchingGame(5),
+        run: () => adminActivityGateway.remove('MATCHING_GAME', 5),
         method: 'DELETE',
         url: '/admin/activities/matching-games/5',
       },
       {
         name: 'admin listening',
-        run: () => adminApi.listeningExercise(6),
+        run: () => adminActivityGateway.detail('LISTENING_EXERCISE', 6),
         method: 'GET',
         url: '/admin/activities/listening-exercises/6',
       },
       {
         name: 'admin create listening',
-        run: () => adminApi.createListeningExercise(listeningPayload),
+        run: () => adminActivityGateway.create('LISTENING_EXERCISE', listeningPayload),
         method: 'POST',
         url: '/admin/activities/listening-exercises',
       },
       {
         name: 'admin update listening',
-        run: () => adminApi.updateListeningExercise(6, listeningPayload),
+        run: () => adminActivityGateway.update('LISTENING_EXERCISE', 6, listeningPayload),
         method: 'PUT',
         url: '/admin/activities/listening-exercises/6',
       },
@@ -1030,25 +991,25 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin delete listening',
-        run: () => adminApi.deleteListeningExercise(6),
+        run: () => adminActivityGateway.remove('LISTENING_EXERCISE', 6),
         method: 'DELETE',
         url: '/admin/activities/listening-exercises/6',
       },
       {
         name: 'admin tracing',
-        run: () => adminApi.tracingExercise(7),
+        run: () => adminActivityGateway.detail('TRACING_EXERCISE', 7),
         method: 'GET',
         url: '/admin/activities/tracing-exercises/7',
       },
       {
         name: 'admin create tracing',
-        run: () => adminApi.createTracingExercise(tracingPayload),
+        run: () => adminActivityGateway.create('TRACING_EXERCISE', tracingPayload),
         method: 'POST',
         url: '/admin/activities/tracing-exercises',
       },
       {
         name: 'admin update tracing',
-        run: () => adminApi.updateTracingExercise(7, tracingPayload),
+        run: () => adminActivityGateway.update('TRACING_EXERCISE', 7, tracingPayload),
         method: 'PUT',
         url: '/admin/activities/tracing-exercises/7',
       },
@@ -1060,25 +1021,25 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin delete tracing',
-        run: () => adminApi.deleteTracingExercise(7),
+        run: () => adminActivityGateway.remove('TRACING_EXERCISE', 7),
         method: 'DELETE',
         url: '/admin/activities/tracing-exercises/7',
       },
       {
         name: 'admin drag drop',
-        run: () => adminApi.dragDropActivity(8),
+        run: () => adminActivityGateway.detail('DRAG_DROP_ACTIVITY', 8),
         method: 'GET',
         url: '/admin/activities/drag-drop-activities/8',
       },
       {
         name: 'admin create drag drop',
-        run: () => adminApi.createDragDropActivity(dragDropPayload),
+        run: () => adminActivityGateway.create('DRAG_DROP_ACTIVITY', dragDropPayload),
         method: 'POST',
         url: '/admin/activities/drag-drop-activities',
       },
       {
         name: 'admin update drag drop',
-        run: () => adminApi.updateDragDropActivity(8, dragDropPayload),
+        run: () => adminActivityGateway.update('DRAG_DROP_ACTIVITY', 8, dragDropPayload),
         method: 'PUT',
         url: '/admin/activities/drag-drop-activities/8',
       },
@@ -1090,25 +1051,25 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin delete drag drop',
-        run: () => adminApi.deleteDragDropActivity(8),
+        run: () => adminActivityGateway.remove('DRAG_DROP_ACTIVITY', 8),
         method: 'DELETE',
         url: '/admin/activities/drag-drop-activities/8',
       },
       {
         name: 'admin story',
-        run: () => adminApi.storyActivity(9),
+        run: () => adminActivityGateway.detail('STORY_ACTIVITY', 9),
         method: 'GET',
         url: '/admin/activities/story-activities/9',
       },
       {
         name: 'admin create story',
-        run: () => adminApi.createStoryActivity(storyPayload),
+        run: () => adminActivityGateway.create('STORY_ACTIVITY', storyPayload),
         method: 'POST',
         url: '/admin/activities/story-activities',
       },
       {
         name: 'admin update story',
-        run: () => adminApi.updateStoryActivity(9, storyPayload),
+        run: () => adminActivityGateway.update('STORY_ACTIVITY', 9, storyPayload),
         method: 'PUT',
         url: '/admin/activities/story-activities/9',
       },
@@ -1120,7 +1081,7 @@ describe('REST API wrappers', () => {
       },
       {
         name: 'admin delete story',
-        run: () => adminApi.deleteStoryActivity(9),
+        run: () => adminActivityGateway.remove('STORY_ACTIVITY', 9),
         method: 'DELETE',
         url: '/admin/activities/story-activities/9',
       },
@@ -1155,62 +1116,6 @@ describe('REST API wrappers', () => {
         url: '/admin/notifications',
       },
       { name: 'admin audit logs', run: () => adminApi.auditLogs({ page: 0 }), method: 'GET', url: '/admin/audit-logs' },
-      { name: 'admin payments', run: () => adminApi.payments({ page: 0 }), method: 'GET', url: '/admin/payments' },
-      {
-        name: 'admin refunds',
-        run: () => adminApi.refunds({ status: 'REQUESTED' }),
-        method: 'GET',
-        url: '/admin/refund-requests',
-      },
-      {
-        name: 'admin approve refund',
-        run: () => adminApi.approveRefund(11),
-        method: 'POST',
-        url: '/admin/refund-requests/11/approve',
-      },
-      {
-        name: 'admin reject refund',
-        run: () => adminApi.rejectRefund(11, { reason: 'outside policy' }),
-        method: 'POST',
-        url: '/admin/refund-requests/11/reject',
-      },
-      {
-        name: 'admin mark refunded',
-        run: () => adminApi.markRefunded(11),
-        method: 'POST',
-        url: '/admin/refund-requests/11/mark-refunded',
-      },
-      { name: 'admin payouts', run: () => adminApi.payouts({ page: 0 }), method: 'GET', url: '/admin/payout-requests' },
-      {
-        name: 'admin approve payout',
-        run: () => adminApi.approvePayout(12),
-        method: 'POST',
-        url: '/admin/payout-requests/12/approve',
-      },
-      {
-        name: 'admin reject payout',
-        run: () => adminApi.rejectPayout(12, { reason: 'missing info' }),
-        method: 'POST',
-        url: '/admin/payout-requests/12/reject',
-      },
-      {
-        name: 'admin mark payout paid',
-        run: () => adminApi.markPayoutPaid(12),
-        method: 'POST',
-        url: '/admin/payout-requests/12/mark-paid',
-      },
-      {
-        name: 'admin commission setting',
-        run: () => adminApi.commissionSetting(),
-        method: 'GET',
-        url: '/admin/system-settings/commission',
-      },
-      {
-        name: 'admin update commission',
-        run: () => adminApi.updateCommissionSetting({ commissionRate: 0.2 }),
-        method: 'PUT',
-        url: '/admin/system-settings/commission',
-      },
       {
         name: 'admin platform settings',
         run: () => adminApi.platformSettings(),
@@ -1226,5 +1131,98 @@ describe('REST API wrappers', () => {
     ]
 
     await expectWrapperMappings(cases)
+  })
+})
+
+describe('W4 REST API wrappers', () => {
+  afterEach(() => {
+    http.defaults.adapter = originalAdapter
+  })
+
+  it('maps account management, notification paging, hints, lesson views and practice submissions', async () => {
+    const calls = installCaptureAdapter({ items: [], page: 0, size: 10, totalItems: 0, totalPages: 0 })
+
+    await accountApi.updateProfile({ displayName: 'Aina', preferredLanguage: 'ms' })
+    await accountApi.changePassword({
+      currentPassword: PASSWORD,
+      newPassword: 'NewPassword123!',
+      confirmPassword: 'NewPassword123!',
+    })
+    await notificationsApi.page({ status: 'READ', page: 1, size: 10 })
+    await studentApi.quizHint(9, 3)
+    await studentApi.markLessonViewed(5)
+    await studentApi.wrongAnswers({ page: 0, size: 20 })
+    await studentApi.practiceSubmissions({ type: 'PRONUNCIATION_AUDIO', page: 0 })
+    await studentApi.practiceSubmission(21)
+    await teacherApi.practiceSubmissions({ reviewStatus: 'SUBMITTED', page: 0 })
+    await teacherApi.practiceSubmission(21)
+    await teacherApi.reviewPracticeSubmission(21, { feedbackType: 'CORRECTIVE', message: 'Watch the third tone.' })
+    await teacherApi.createFeedback({ studentId: 4, practiceSubmissionId: 21, message: 'Good effort.' })
+    await adminApi.practiceSubmissions({ reviewStatus: 'ALL' })
+    await adminApi.practiceSubmission(21)
+
+    expect(calls).toEqual([
+      { method: 'PUT', url: '/users/me/profile', data: { displayName: 'Aina', preferredLanguage: 'ms' } },
+      {
+        method: 'POST',
+        url: '/users/me/password',
+        data: { currentPassword: PASSWORD, newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' },
+      },
+      { method: 'GET', url: '/notifications', params: { status: 'READ', page: 1, size: 10 } },
+      { method: 'GET', url: '/students/quizzes/9/questions/3/hint' },
+      { method: 'POST', url: '/students/lessons/5/viewed' },
+      { method: 'GET', url: '/students/wrong-answers', params: { page: 0, size: 20 } },
+      { method: 'GET', url: '/students/practice-submissions', params: { type: 'PRONUNCIATION_AUDIO', page: 0 } },
+      { method: 'GET', url: '/students/practice-submissions/21' },
+      { method: 'GET', url: '/teachers/practice-submissions', params: { reviewStatus: 'SUBMITTED', page: 0 } },
+      { method: 'GET', url: '/teachers/practice-submissions/21' },
+      {
+        method: 'POST',
+        url: '/teachers/practice-submissions/21/feedback',
+        data: { feedbackType: 'CORRECTIVE', message: 'Watch the third tone.' },
+      },
+      {
+        method: 'POST',
+        url: '/teachers/feedback',
+        data: { studentId: 4, practiceSubmissionId: 21, message: 'Good effort.' },
+      },
+      { method: 'GET', url: '/admin/practice-submissions', params: { reviewStatus: 'ALL' } },
+      { method: 'GET', url: '/admin/practice-submissions/21' },
+    ])
+  })
+
+  it('sends the activity completion bodies from the contract (flashcards send no body)', async () => {
+    const calls = installCaptureAdapter({ passed: true, results: [] })
+
+    await studentApi.completeFlashcard(10)
+    await studentApi.completeListeningExercise(12, { answers: [{ questionIndex: 0, answerText: '你好' }] })
+
+    expect(calls).toEqual([
+      { method: 'POST', url: '/students/activities/flashcards/10/complete' },
+      {
+        method: 'POST',
+        url: '/students/activities/listening-exercises/12/complete',
+        data: { answers: [{ questionIndex: 0, answerText: '你好' }] },
+      },
+    ])
+  })
+
+  it('loads practice-submission files as authorised blobs for students, teachers and admins', async () => {
+    const blob = new Blob(['audio'], { type: 'audio/webm' })
+    const urls: Array<{ url: string; responseType: unknown; params: unknown }> = []
+    http.defaults.adapter = (async (config) => {
+      urls.push({ url: config.url ?? '', responseType: config.responseType, params: config.params })
+      return downloadResponse(config, blob)
+    }) satisfies AxiosAdapter
+
+    await expect(studentApi.practiceSubmissionFile(21)).resolves.toMatchObject({ blob })
+    await expect(teacherApi.practiceSubmissionFile(21)).resolves.toMatchObject({ blob })
+    await expect(adminApi.practiceSubmissionFile(21)).resolves.toMatchObject({ blob })
+
+    expect(urls).toEqual([
+      { url: '/students/practice-submissions/21/file', responseType: 'blob', params: undefined },
+      { url: '/teachers/practice-submissions/21/file', responseType: 'blob', params: undefined },
+      { url: '/admin/practice-submissions/21/file', responseType: 'blob', params: undefined },
+    ])
   })
 })

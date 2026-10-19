@@ -1,9 +1,7 @@
 package com.example.aichinese.entity;
 
-import java.math.BigDecimal;
-
 import com.example.aichinese.entity.base.BaseEntity;
-import com.example.aichinese.entity.enums.AccessType;
+import com.example.aichinese.entity.base.ReviewableContent;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 
@@ -29,7 +27,8 @@ import lombok.Setter;
 @Entity
 @Table(name = "course_packages", indexes = {
         @Index(name = "idx_course_packages_teacher_id", columnList = "teacher_id"),
-        @Index(name = "idx_course_packages_status", columnList = "content_status")
+        @Index(name = "idx_course_packages_status", columnList = "content_status"),
+        @Index(name = "idx_course_packages_status_updated", columnList = "content_status,updated_at")
 })
 @NamedEntityGraph(
         name = CoursePackage.GRAPH_DETAIL,
@@ -43,12 +42,12 @@ import lombok.Setter;
                 attributeNodes = @NamedAttributeNode("user")
         )
 )
-public class CoursePackage extends BaseEntity {
+public class CoursePackage extends BaseEntity implements ReviewableContent {
 
     public static final String GRAPH_DETAIL = "CoursePackage.detail";
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "teacher_id", nullable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -66,19 +65,12 @@ public class CoursePackage extends BaseEntity {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "access_type", nullable = false, length = 20)
-    private AccessType accessType = AccessType.FREE;
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "content_status", nullable = false, length = 30)
     private ContentStatus contentStatus = ContentStatus.DRAFT;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "learning_type", nullable = false, length = 20)
     private LearningType learningType = LearningType.HYBRID;
-
-    @Column(name = "price", precision = 10, scale = 2)
-    private BigDecimal price;
 
     @Column(name = "cover_image_url", length = 255)
     private String coverImageUrl;

@@ -65,8 +65,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *   <li>Reset tokens are single-use, 60-minute TTL, only the hash is
  *       stored.</li>
  *   <li>{@code /me} carries {@code Cache-Control: no-store}.</li>
- *   <li>Teacher accounts start PENDING and cannot log in until
- *       approved.</li>
+ *   <li>Teacher accounts start PENDING; they can sign in and the
+ *       login response carries {@code teacherStatus}.</li>
  *   <li>Logout bumps the {@code sessionVersion} so existing JWTs are
  *       revoked instantly.</li>
  * </ul>
@@ -120,6 +120,9 @@ class AuthControllerIntegrationTests {
 
     @Autowired
     private PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
@@ -783,6 +786,43 @@ class AuthControllerIntegrationTests {
                         "confirmPassword", "AnotherNew789!"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void shouldRejectExpiredPasswordResetTokenAndKeepTheOldPassword() throws Exception {
+        // FR-AUTH-15: a reset link past its expiry time cannot change the password.
+        String email = uniqueEmail("reset-expired");
+        registerStudent(email, USER_PASSWORD);
+        String rawResetToken = issueResetToken(email);
+
+        User user = userByEmail(email);
+        PasswordResetToken token = activePasswordResetTokenFor(user);
+        // expires_at is not updatable through JPA, so age the token directly in the table.
+        int aged = jdbcTemplate.update(
+                "update password_reset_tokens set expires_at = ? where id = ?",
+                LocalDateTime.now().minusMinutes(1),
+                token.getId());
+        assertThat(aged).isEqualTo(1);
+
+        mockMvc.perform(post(RESET_PASSWORD_PATH)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "token", rawResetToken,
+                        "password", "NewPassword456!",
+                        "confirmPassword", "NewPassword456!"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        assertThat(passwordResetTokenRepository.findById(token.getId()).orElseThrow().getUsedAt()).isNull();
+        assertThat(loginAndExtractToken(email, USER_PASSWORD)).isNotBlank();
+        mockMvc.perform(post(LOGIN_PATH)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of(
+                        "email", email,
+                        "password", "NewPassword456!"))))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -8,11 +8,17 @@ import com.example.aichinese.util.TextUtils;
 
 final class AiProviderSupport {
 
-    static final String DEFAULT_PROVIDER = "deepseek";
+    /** OpenAI Responses API (GPT-5.6 Luna), the provider named in the project proposal. */
+    static final String OPENAI = "openai";
+
+    static final String DEFAULT_PROVIDER = OPENAI;
+
+    /** Alternative Chat Completions-compatible providers kept behind the same configurable service. */
+    static final String DEEPSEEK = "deepseek";
 
     static final String OPENAI_COMPATIBLE = "openai-compatible";
 
-    static final Set<String> SUPPORTED_PROVIDERS = Set.of(DEFAULT_PROVIDER, OPENAI_COMPATIBLE);
+    static final Set<String> SUPPORTED_PROVIDERS = Set.of(OPENAI, DEEPSEEK, OPENAI_COMPATIBLE);
 
     private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1");
 

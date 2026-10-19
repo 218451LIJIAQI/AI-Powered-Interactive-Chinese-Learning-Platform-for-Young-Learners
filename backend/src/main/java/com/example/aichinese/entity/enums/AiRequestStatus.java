@@ -25,16 +25,4 @@ public enum AiRequestStatus {
                 "AI request status is required.",
                 () -> "Invalid AI request status. Allowed values are SUCCESS, FAILED, or UNAVAILABLE.");
     }
-
-    public boolean isSuccess() {
-        return this == SUCCESS;
-    }
-
-    public boolean isFailure() {
-        return this != SUCCESS;
-    }
-
-    public boolean isUnavailable() {
-        return this == UNAVAILABLE;
-    }
 }

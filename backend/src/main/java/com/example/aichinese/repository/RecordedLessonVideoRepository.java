@@ -13,7 +13,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.lang.Nullable;
 
 import com.example.aichinese.entity.RecordedLessonVideo;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 
 public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLessonVideo, Long> {
@@ -65,33 +64,19 @@ public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLes
     @Query(value = """
             select distinct v from RecordedLessonVideo v
             left join v.coursePackage p
-            left join PaymentEntitlement e
-              on e.student.id = :studentId
-             and e.itemType = 'PACKAGE'
-             and e.itemId = p.id
-             and e.active = true
             where v.active = true
               and v.lesson.id = :lessonId
               and (p is null or p.contentStatus = :published)
-              and (p is null or p.accessType <> :paid or e.id is not null)
             order by v.sortOrder asc, v.createdAt asc
             """, countQuery = """
             select count(distinct v.id) from RecordedLessonVideo v
             left join v.coursePackage p
-            left join PaymentEntitlement e
-              on e.student.id = :studentId
-             and e.itemType = 'PACKAGE'
-             and e.itemId = p.id
-             and e.active = true
             where v.active = true
               and v.lesson.id = :lessonId
               and (p is null or p.contentStatus = :published)
-              and (p is null or p.accessType <> :paid or e.id is not null)
             """)
     Page<RecordedLessonVideo> findAccessibleByLessonIdForStudent(
             @Param("lessonId") Long lessonId,
-            @Param("studentId") Long studentId,
             @Param("published") ContentStatus published,
-            @Param("paid") AccessType paid,
             Pageable pageable);
 }

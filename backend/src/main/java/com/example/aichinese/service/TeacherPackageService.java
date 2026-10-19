@@ -3,7 +3,6 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -23,10 +22,10 @@ import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.PackageItem;
 import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.PackageItemType;
+import com.example.aichinese.entity.enums.ReviewContentType;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.PackageItemRepository;
@@ -34,18 +33,16 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.PaginationUtils;
 
 /**
- * Teacher-side CRUD for {@link CoursePackage}s — the bundling unit
- * that students purchase to unlock multiple modules / lessons in one
- * transaction.
+ * Teacher-side CRUD for {@link CoursePackage}s, shown to users as a free
+ * "Course": a teacher-curated, ordered grouping of modules / lessons that
+ * appears in the public catalogue. Courses are free: every published course
+ * is available to any signed-in student.
  *
- * <p>A package is composed of {@link PackageItem}s referencing either
+ * <p>A course is composed of {@link PackageItem}s referencing either
  * {@link LearningModule}s or individual {@link Lesson}s. Both kinds
  * of items must be owned by the same teacher; the ownership and
  * status checks delegate to {@link TeacherModuleService} /
- * {@link TeacherLessonService} so the rules live in one place. Pricing
- * inputs flow through {@link TeacherContentAccessService}'s
- * {@code BigDecimal} validation so currency arithmetic never crosses
- * boundaries.</p>
+ * {@link TeacherLessonService} so the rules live in one place.</p>
  */
 @Service
 public class TeacherPackageService {
@@ -61,6 +58,7 @@ public class TeacherPackageService {
     private static final String ACTION_ITEM_ADD = "TEACHER_PACKAGE_ITEM_ADD";
     private static final String ACTION_ITEM_REMOVE = "TEACHER_PACKAGE_ITEM_REMOVE";
     private static final int DEFAULT_PACKAGE_ITEM_SORT_ORDER = 0;
+    private static final ReviewContentType REVIEW_TYPE = ReviewContentType.PACKAGE;
 
     private final CoursePackageRepository coursePackageRepository;
     private final PackageItemRepository packageItemRepository;
@@ -69,6 +67,7 @@ public class TeacherPackageService {
     private final TeacherContentAccessService teacherContentAccessService;
     private final ContentManagementMapper contentManagementMapper;
     private final AuditLogService auditLogService;
+    private final ContentReviewService contentReviewService;
 
     public TeacherPackageService(
             CoursePackageRepository coursePackageRepository,
@@ -77,7 +76,8 @@ public class TeacherPackageService {
             TeacherLessonService teacherLessonService,
             TeacherContentAccessService teacherContentAccessService,
             ContentManagementMapper contentManagementMapper,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentReviewService contentReviewService) {
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
         this.packageItemRepository = Objects.requireNonNull(packageItemRepository, "packageItemRepository");
         this.teacherModuleService = Objects.requireNonNull(teacherModuleService, "teacherModuleService");
@@ -85,6 +85,7 @@ public class TeacherPackageService {
         this.teacherContentAccessService = Objects.requireNonNull(teacherContentAccessService, "teacherContentAccessService");
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
     }
 
     @Transactional(readOnly = true)
@@ -113,13 +114,11 @@ public class TeacherPackageService {
             throw new ResponseStatusException(BAD_REQUEST, PACKAGE_REQUEST_REQUIRED);
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
-        teacherContentAccessService.validatePrice(request.accessType(), request.price());
 
         CoursePackage coursePackage = new CoursePackage();
         attachPackageMetadata(coursePackage, teacherProfile, PackageMetadata.from(request));
-        // No admin review flow: teacher-created packages are immediately
-        // available in the public course catalogue.
-        coursePackage.setContentStatus(ContentStatus.PUBLISHED);
+        // Review workflow (D4): new courses are drafts until an admin approves them.
+        coursePackage.setContentStatus(ContentStatus.DRAFT);
         coursePackage.setRejectionReason(null);
 
         CoursePackage saved = coursePackageRepository.save(coursePackage);
@@ -128,7 +127,7 @@ public class TeacherPackageService {
                 ACTION_CREATE,
                 AUDIT_TARGET_PACKAGE,
                 saved.getId(),
-                "Teacher created and published a course package.");
+                "Teacher created a course draft.");
         return toCoursePackageResponse(saved);
     }
 
@@ -142,10 +141,10 @@ public class TeacherPackageService {
         }
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
-        teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
-        teacherContentAccessService.validatePrice(request.accessType(), request.price());
+        contentReviewService.requireTeacherEditable(coursePackage, REVIEW_TYPE);
 
         attachPackageMetadata(coursePackage, teacherProfile, PackageMetadata.from(request));
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, coursePackage);
 
         CoursePackage saved = coursePackageRepository.save(coursePackage);
         auditLogService.record(
@@ -153,8 +152,16 @@ public class TeacherPackageService {
                 ACTION_UPDATE,
                 AUDIT_TARGET_PACKAGE,
                 saved.getId(),
-                "Teacher updated a course package draft.");
+                "Teacher updated a course.");
         return toCoursePackageResponse(saved);
+    }
+
+    @Transactional
+    public CoursePackageResponse submitPackage(SecurityUserDetails currentUser, Long packageId) {
+        TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
+        CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
+        contentReviewService.submitForReview(teacherProfile.getUser(), REVIEW_TYPE, coursePackage);
+        return toCoursePackageResponse(coursePackageRepository.save(coursePackage));
     }
 
     @Transactional
@@ -182,7 +189,7 @@ public class TeacherPackageService {
         validatePackageItemRequest(request);
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
-        teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
+        contentReviewService.requireTeacherEditable(coursePackage, REVIEW_TYPE);
         if (packageItemRepository.existsByCoursePackageIdAndItemTypeAndItemId(
                 coursePackage.getId(),
                 request.itemType(),
@@ -191,6 +198,8 @@ public class TeacherPackageService {
         }
 
         packageItemRepository.save(newPackageItem(currentUser, coursePackage, request));
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, coursePackage);
+        coursePackageRepository.save(coursePackage);
 
         auditLogService.record(
                 teacherProfile.getUser(),
@@ -205,7 +214,7 @@ public class TeacherPackageService {
     public CoursePackageResponse removePackageItem(SecurityUserDetails currentUser, Long packageId, Long itemId) {
         TeacherProfile teacherProfile = teacherContentAccessService.requireApprovedTeacher(currentUser);
         CoursePackage coursePackage = findOwnedPackage(currentUser, packageId);
-        teacherContentAccessService.validateEditableStatus(coursePackage.getContentStatus(), "Package");
+        contentReviewService.requireTeacherEditable(coursePackage, REVIEW_TYPE);
 
         PackageItem item = packageItemRepository.findByIdAndCoursePackageTeacherUserId(itemId, currentUser.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, PACKAGE_ITEM_NOT_FOUND));
@@ -215,6 +224,8 @@ public class TeacherPackageService {
         }
 
         packageItemRepository.delete(item);
+        contentReviewService.recordTeacherEdit(teacherProfile.getUser(), REVIEW_TYPE, coursePackage);
+        coursePackageRepository.save(coursePackage);
         auditLogService.record(
                 teacherProfile.getUser(),
                 ACTION_ITEM_REMOVE,
@@ -240,8 +251,6 @@ public class TeacherPackageService {
                 teacherContentAccessService.requireCategory(request.categoryId()),
                 request.title(),
                 request.description(),
-                request.accessType(),
-                request.price(),
                 request.learningType(),
                 request.coverImageUrl());
     }
@@ -301,8 +310,6 @@ public class TeacherPackageService {
             Long levelId,
             Long categoryId,
             LearningType learningType,
-            AccessType accessType,
-            BigDecimal price,
             String coverImageUrl) {
 
         private static PackageMetadata from(CreateCoursePackageRequest request) {
@@ -312,8 +319,6 @@ public class TeacherPackageService {
                     request.levelId(),
                     request.categoryId(),
                     request.learningType(),
-                    request.accessType(),
-                    request.price(),
                     request.coverImageUrl());
         }
 
@@ -324,8 +329,6 @@ public class TeacherPackageService {
                     request.levelId(),
                     request.categoryId(),
                     request.learningType(),
-                    request.accessType(),
-                    request.price(),
                     request.coverImageUrl());
         }
     }

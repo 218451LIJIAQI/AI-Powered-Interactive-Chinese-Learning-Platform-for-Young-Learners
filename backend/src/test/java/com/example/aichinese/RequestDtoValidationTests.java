@@ -3,7 +3,6 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,16 +18,12 @@ import com.example.aichinese.dto.admin.activity.AdminFlashcardRequest;
 import com.example.aichinese.dto.admin.activity.AdminStoryActivityRequest;
 import com.example.aichinese.dto.admin.activity.ActivityType;
 import com.example.aichinese.dto.ai.AiChatRequest;
-import com.example.aichinese.dto.ai.AiLearningRecommendationRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiSentencePracticeRequest;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
 import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
 import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
 import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
-import com.example.aichinese.dto.commerce.CartItemRequest;
-import com.example.aichinese.dto.commerce.CheckoutSessionRequest;
-import com.example.aichinese.dto.commerce.CheckoutSessionRequest.CheckoutSource;
 import com.example.aichinese.dto.communication.CreateTeacherFeedbackRequest;
 import com.example.aichinese.dto.content.ContentApprovalRequest;
 import com.example.aichinese.dto.content.CreateLessonRequest;
@@ -45,8 +40,6 @@ import com.example.aichinese.dto.learning.UpdateQuizQuestionRequest;
 import com.example.aichinese.dto.learning.UpdateQuizRequest;
 import com.example.aichinese.dto.system.AdminPlatformSettingsUpdateRequest;
 import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
-import com.example.aichinese.entity.enums.AccessType;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
 import com.example.aichinese.entity.enums.LearningType;
 
@@ -70,7 +63,7 @@ class RequestDtoValidationTests {
     private static final String MULTIPLE_CHOICE = "MULTIPLE_CHOICE";
     private static final String QUESTION_PROMPT = "Choose the correct answer.";
     private static final String UNSAFE_MEETING_LINK = "javascript:alert(1)";
-    private static final int TOO_MANY_CHILDREN = 201;
+    private static final int TOO_MANY_ITEMS = 201;
 
     @AfterAll
     static void closeValidatorFactory() {
@@ -86,8 +79,6 @@ class RequestDtoValidationTests {
                 0L,
                 -3L,
                 LearningType.RECORDED,
-                AccessType.PAID,
-                BigDecimal.TEN,
                 10,
                 "Content",
                 null);
@@ -113,17 +104,16 @@ class RequestDtoValidationTests {
     }
 
     @Test
-    void commerceAndFeedbackShortFieldsAreBounded() {
-        CartItemRequest cartItemRequest = new CartItemRequest("X".repeat(31), -1L, "Y".repeat(101));
+    void feedbackShortFieldsAreBounded() {
         CreateTeacherFeedbackRequest feedbackRequest = new CreateTeacherFeedbackRequest(
                 0L,
                 -1L,
                 -2L,
+                -3L,
                 "Z".repeat(31),
                 "Useful feedback message");
 
-        assertViolationPathsContain(cartItemRequest, "itemType", "itemId", "featureKey");
-        assertViolationPathsContain(feedbackRequest, "studentId", "lessonId", "quizAttemptId", "feedbackType");
+        assertViolationPathsContain(feedbackRequest, "studentId", "lessonId", "quizAttemptId", "practiceSubmissionId", "feedbackType");
     }
 
     @Test
@@ -154,11 +144,11 @@ class RequestDtoValidationTests {
     }
 
     @Test
-    void quizAggregateRequestsRejectUnboundedChildCollections() {
-        List<QuizSubmissionAnswerRequest> answers = IntStream.rangeClosed(1, TOO_MANY_CHILDREN)
+    void quizAggregateRequestsRejectUnboundedNestedCollections() {
+        List<QuizSubmissionAnswerRequest> answers = IntStream.rangeClosed(1, TOO_MANY_ITEMS)
                 .mapToObj(index -> new QuizSubmissionAnswerRequest((long) index, "answer"))
                 .toList();
-        List<QuizOptionRequest> options = IntStream.rangeClosed(1, TOO_MANY_CHILDREN)
+        List<QuizOptionRequest> options = IntStream.rangeClosed(1, TOO_MANY_ITEMS)
                 .mapToObj(index -> new QuizOptionRequest("Option " + index, index == 1, index))
                 .toList();
 
@@ -170,6 +160,7 @@ class RequestDtoValidationTests {
                 5,
                 0,
                 options,
+                null,
                 null);
         UpdateQuizQuestionRequest updateQuestionRequest = new UpdateQuizQuestionRequest(
                 MULTIPLE_CHOICE,
@@ -178,6 +169,7 @@ class RequestDtoValidationTests {
                 5,
                 0,
                 options,
+                null,
                 null);
 
         assertViolationPathsContain(attemptRequest, "answers");
@@ -194,14 +186,13 @@ class RequestDtoValidationTests {
                 1L,
                 1L,
                 LearningType.RECORDED,
-                AccessType.FREE,
-                BigDecimal.ZERO,
                 10,
                 "  Lesson body  ",
                 IDEOGRAPHIC_SPACE);
         ContentApprovalRequest approvalRequest = new ContentApprovalRequest(ideographicWrapped("Needs review"));
         CreateTeacherFeedbackRequest feedbackRequest = new CreateTeacherFeedbackRequest(
                 1L,
+                null,
                 null,
                 null,
                 ideographicWrapped("quiz"),
@@ -255,11 +246,12 @@ class RequestDtoValidationTests {
                 10);
         UpdateLiveClassStatusRequest liveClassStatusRequest =
                 new UpdateLiveClassStatusRequest(ideographicWrapped("ONGOING"));
-        CreateQuizRequest createQuizRequest = new CreateQuizRequest(ideographicWrapped("Quiz 1"), IDEOGRAPHIC_SPACE, 0);
+        CreateQuizRequest createQuizRequest = new CreateQuizRequest(ideographicWrapped("Quiz 1"), IDEOGRAPHIC_SPACE, 0, null);
         UpdateQuizRequest updateQuizRequest = new UpdateQuizRequest(
                 ideographicWrapped("Quiz 2"),
                 ideographicWrapped("Updated"),
-                5);
+                5,
+                null);
         QuizOptionRequest optionRequest = new QuizOptionRequest(ideographicWrapped("Option A"), true, 0);
         QuizSubmissionAnswerRequest quizAnswerRequest =
                 new QuizSubmissionAnswerRequest(1L, ideographicWrapped("Answer A"));
@@ -273,10 +265,6 @@ class RequestDtoValidationTests {
                 0);
         AdminPlatformSettingsUpdateRequest settingsRequest = new AdminPlatformSettingsUpdateRequest(
                 ideographicWrapped("AI can make mistakes"),
-                true,
-                true,
-                false,
-                true,
                 true,
                 true);
 
@@ -337,12 +325,12 @@ class RequestDtoValidationTests {
                 0,
                 null,
                 1,
-                AgeBand.LOWER_PRIMARY,
                 ActivityDifficulty.EASY,
                 "  greetings  ",
                 tags,
                 10,
-                30);
+                30,
+                null);
         tags.add("late mutation");
 
         assertThat(flashcardRequest.title()).isNull();
@@ -359,7 +347,6 @@ class RequestDtoValidationTests {
                 null,
                 3,
                 questionTypes,
-                null,
                 " en ");
         questionTypes.add("TRUE_FALSE");
 
@@ -367,21 +354,6 @@ class RequestDtoValidationTests {
         assertThat(quizGeneratorRequest.level()).isEqualTo("beginner");
         assertThat(quizGeneratorRequest.questionTypes()).containsExactly(MULTIPLE_CHOICE);
         assertListIsImmutable(quizGeneratorRequest.questionTypes());
-
-        List<String> recentQuizResults = mutableList("  Quiz 1: 80%  ");
-        AiLearningRecommendationRequest recommendationRequest = new AiLearningRecommendationRequest(
-                1L,
-                " HSK 1 ",
-                recentQuizResults,
-                null,
-                null,
-                null,
-                " zh ");
-        recentQuizResults.add("Quiz 2: 90%");
-
-        assertThat(recommendationRequest.currentLevel()).isEqualTo("HSK 1");
-        assertThat(recommendationRequest.languagePreference()).isEqualTo("zh");
-        assertThat(recommendationRequest.recentQuizResults()).containsExactly("Quiz 1: 80%");
 
         List<String> teachingCategories = mutableList("  HSK 1  ", "  ");
         UpdateTeacherProfileRequest teacherProfileRequest = new UpdateTeacherProfileRequest(
@@ -400,7 +372,7 @@ class RequestDtoValidationTests {
     }
 
     @Test
-    void aggregateRequestsRejectNullChildElementsThroughBeanValidation() {
+    void aggregateRequestsRejectNullNestedElementsThroughBeanValidation() {
         SubmitQuizAttemptRequest attemptRequest = new SubmitQuizAttemptRequest(nullElementList());
         CreateQuizQuestionRequest createQuestionRequest = new CreateQuizQuestionRequest(
                 MULTIPLE_CHOICE,
@@ -409,6 +381,7 @@ class RequestDtoValidationTests {
                 5,
                 0,
                 nullElementList(),
+                null,
                 null);
         UpdateQuizQuestionRequest updateQuestionRequest = new UpdateQuizQuestionRequest(
                 MULTIPLE_CHOICE,
@@ -417,10 +390,8 @@ class RequestDtoValidationTests {
                 5,
                 0,
                 nullElementList(),
+                null,
                 null);
-        CheckoutSessionRequest checkoutRequest = new CheckoutSessionRequest(
-                nullElementList(),
-                CheckoutSource.CART);
         AdminDragDropActivityRequest dragDropRequest = new AdminDragDropActivityRequest(
                 "Drag",
                 null,
@@ -430,8 +401,8 @@ class RequestDtoValidationTests {
                 null,
                 null,
                 null,
-                null,
-                nullElementList());
+                nullElementList(),
+                null);
         AdminStoryActivityRequest storyRequest = new AdminStoryActivityRequest(
                 "Story",
                 null,
@@ -445,13 +416,12 @@ class RequestDtoValidationTests {
                 null,
                 null,
                 null,
-                null,
-                nullElementList());
+                nullElementList(),
+                null);
 
         assertViolationPathStartsWith(attemptRequest, "answers");
         assertViolationPathStartsWith(createQuestionRequest, "options");
         assertViolationPathStartsWith(updateQuestionRequest, "options");
-        assertViolationPathStartsWith(checkoutRequest, "items");
         assertViolationPathStartsWith(dragDropRequest, "items");
         assertViolationPathStartsWith(storyRequest, "questions");
     }

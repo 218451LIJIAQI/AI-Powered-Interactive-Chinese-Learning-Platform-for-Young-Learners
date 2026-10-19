@@ -77,7 +77,7 @@ const pandaStyle = computed<StyleValue>(() => ({
   bottom: 4%;
   width: 60%;
   height: 10%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(64, 73, 120, 0.12);
   transform: translateX(-50%);
 }
@@ -235,7 +235,7 @@ const pandaStyle = computed<StyleValue>(() => ({
   top: 24%;
   width: 8%;
   height: 52%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--panda-accent);
 }
 

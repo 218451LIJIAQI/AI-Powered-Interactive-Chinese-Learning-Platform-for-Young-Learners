@@ -120,6 +120,21 @@ class UploadStorageSupportTests {
                 .hasMessageContaining(INVALID_FILE_NAME_MESSAGE);
     }
 
+    @Test
+    void extractSafeOriginalFileNameRejectsNamesLongerThanTheStoredColumn() {
+        String longestStorableName = "a".repeat(251) + ".pdf";
+
+        assertThat(UploadStorageSupport.extractSafeOriginalFileName(longestStorableName, INVALID_FILE_NAME_MESSAGE))
+                .isEqualTo(longestStorableName);
+        assertThatThrownBy(() -> UploadStorageSupport.extractSafeOriginalFileName(
+                "a" + longestStorableName,
+                INVALID_FILE_NAME_MESSAGE))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(exception.getReason()).isEqualTo(INVALID_FILE_NAME_MESSAGE);
+                });
+    }
+
     private void assertNotFoundWhenLoading(UploadedFile uploadedFile) {
         assertThatThrownBy(() -> UploadStorageSupport.loadManagedFile(
                 tempDir.toString(),

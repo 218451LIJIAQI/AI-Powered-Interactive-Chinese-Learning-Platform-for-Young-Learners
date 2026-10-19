@@ -23,8 +23,7 @@ public class SensitiveResponseHeadersConfig implements WebMvcConfigurer {
             "/api/v1/teachers",
             "/api/v1/teachers/**",
             "/api/v1/admin",
-            "/api/v1/admin/**",
-            "/api/v1/payments/**"
+            "/api/v1/admin/**"
     };
     private static final String CACHEABLE_AI_AVAILABILITY = "/api/v1/ai/availability";
 

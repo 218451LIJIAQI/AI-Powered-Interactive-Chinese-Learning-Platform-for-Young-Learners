@@ -19,8 +19,8 @@ class LocalStorageProviderTests {
 
     private static final String SENSITIVE_DIRECTORY = "sensitive-server-root";
     private static final String STORED_FILE_NAME = "stored.pdf";
-    private static final String CHILD_FILE_NAME = "child.txt";
-    private static final String CHILD_FILE_CONTENT = "keeps the directory non-empty";
+    private static final String NESTED_FILE_NAME = "nested.txt";
+    private static final String NESTED_FILE_CONTENT = "keeps the directory non-empty";
     private static final String SAFE_ROLLBACK_LOG =
             "Failed to delete stored object during upload rollback for name " + STORED_FILE_NAME;
 
@@ -33,7 +33,7 @@ class LocalStorageProviderTests {
     void deleteQuietlyDoesNotExposeAbsolutePathWhenCleanupFails(CapturedOutput output) throws Exception {
         Path managedDirectory = tempDir.resolve(SENSITIVE_DIRECTORY).resolve(STORED_FILE_NAME);
         Files.createDirectories(managedDirectory);
-        Files.writeString(managedDirectory.resolve(CHILD_FILE_NAME), CHILD_FILE_CONTENT);
+        Files.writeString(managedDirectory.resolve(NESTED_FILE_NAME), NESTED_FILE_CONTENT);
 
         storageProvider.deleteQuietly(new StoredObject(managedDirectory));
 
@@ -42,7 +42,7 @@ class LocalStorageProviderTests {
                 .contains("Exception")
                 .doesNotContain(tempDir.toString())
                 .doesNotContain(SENSITIVE_DIRECTORY)
-                .doesNotContain(CHILD_FILE_NAME)
+                .doesNotContain(NESTED_FILE_NAME)
                 .doesNotContain("at com.example.aichinese");
     }
 }

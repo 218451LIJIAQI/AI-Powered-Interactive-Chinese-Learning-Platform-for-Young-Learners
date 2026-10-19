@@ -6,165 +6,243 @@
       icon="moderation"
     />
 
-    <DataNotice :using-fallback="moderationResource.usingFallback.value" :error="pageError" :success="actionSuccess" />
+    <DataNotice
+      :using-fallback="moderationResource.usingFallback.value"
+      :error="actionError"
+      :success="actionSuccess"
+    />
 
-    <section class="admin-ops-hero admin-ops-hero--moderation">
-      <div>
-        <span class="admin-ops-kicker">{{ t('adminModeration.safetyReview') }}</span>
-        <h2>{{ t('adminModeration.heroTitle') }}</h2>
-        <p>{{ t('adminModeration.heroHint') }}</p>
-      </div>
-      <div class="admin-ops-stat-grid">
-        <article v-for="stat in moderationStats" :key="stat.label">
-          <span><IconGlyph :name="stat.icon" :size="20" /></span>
-          <strong>{{ stat.value }}</strong>
-          <small>{{ stat.label }}</small>
-        </article>
-      </div>
-    </section>
-
-    <section class="two-col admin-moderation-layout">
-      <InfoCard :title="t('adminModeration.records')" :subtitle="t('adminModeration.recordsHint')" icon="moderation">
-        <div class="list">
-          <ListInfoItem
-            v-for="item in moderationRecords"
-            :key="item.id"
-            :title="item.targetTitle"
-            :description="item.note || item.actionTaken"
-            icon="moderation"
-          >
-            <template #meta>
-              <span class="tag">{{ item.targetType }}</span>
-              <span class="tag">{{ formatStatus(item.actionTaken) }}</span>
-            </template>
-            <template #aside>
-              <span class="muted">{{ formatDateTime(item.createdAt) }}</span>
-            </template>
-          </ListInfoItem>
+    <ResourceSection class="page-stack" :loading="pageLoading" :error="loadError" @retry="reloadAll">
+      <section class="admin-stack" aria-labelledby="admin-moderation-summary-title">
+        <div class="admin-section-head">
+          <h2 id="admin-moderation-summary-title" class="section-title">{{ t('adminModeration.safetyReview') }}</h2>
+          <p class="section-description">{{ t('adminModeration.heroHint') }}</p>
         </div>
-      </InfoCard>
-
-      <ActionFormCard
-        :title="t('adminModeration.reports')"
-        :subtitle="t('adminModeration.reportsHint')"
-        icon="ai"
-        :submit-label="t('adminModeration.saveReview')"
-        :submitting-label="t('adminModeration.saving')"
-        :submitting="submittingReview"
-        :disabled="reviewDisabled"
-        @submit="reviewAiReport"
-      >
-        <template #header-end>
-          <StatusPill
-            v-if="selectedReport"
-            :label="formatStatus(selectedReport.status)"
-            :tone="reportStatusTone(selectedReport.status)"
-          />
-        </template>
-
-        <div class="field">
-          <label for="admin-moderation-report">{{ t('adminModeration.report') }}</label>
-          <select
-            id="admin-moderation-report"
-            v-model.number="selectedReportId"
-            class="select"
-            :disabled="!aiReports.length"
-          >
-            <option v-for="item in aiReports" :key="item.id" :value="item.id">
-              {{ formatFeatureKey(item.featureKey) }} - {{ formatReportReason(item.reasonCategory) }}
-            </option>
-          </select>
-        </div>
-
-        <div v-if="selectedReport" class="admin-report-detail">
-          <div class="admin-report-summary-grid">
-            <div>
-              <span>{{ t('adminModeration.student') }}</span>
-              <strong>{{ selectedReport.studentName || t('adminModeration.unknownLearner') }}</strong>
-              <small>{{ selectedReport.studentEmail || t('adminModeration.noEmail') }}</small>
-            </div>
-            <div>
-              <span>{{ t('adminModeration.feature') }}</span>
-              <strong>{{ formatFeatureKey(selectedReport.featureKey) }}</strong>
-              <small v-if="selectedReport.aiUsageLogId">{{
-                t('adminModeration.usageLog', { id: selectedReport.aiUsageLogId })
-              }}</small>
-            </div>
-            <div>
-              <span>{{ t('adminModeration.reason') }}</span>
-              <strong>{{ formatReportReason(selectedReport.reasonCategory) }}</strong>
-              <small>{{ t('adminModeration.reported', { date: formatDateTime(selectedReport.createdAt) }) }}</small>
-            </div>
-            <div>
-              <span>{{ t('adminModeration.chatEvidence') }}</span>
-              <strong>{{ chatEvidenceLabel(selectedReport) }}</strong>
-              <small>{{ reviewerLabel(selectedReport) }}</small>
-            </div>
-          </div>
-
-          <div v-if="selectedReport.description" class="admin-report-copy-card">
-            <span>{{ t('adminModeration.studentNote') }}</span>
-            <p>{{ selectedReport.description }}</p>
-          </div>
-
-          <div class="admin-report-evidence-grid">
-            <article class="admin-report-copy-card">
-              <span>{{ t('adminModeration.promptEvidence') }}</span>
-              <p>{{ selectedReport.promptSnapshot || t('adminModeration.noPrompt') }}</p>
-            </article>
-            <article class="admin-report-copy-card">
-              <span>{{ t('adminModeration.responseEvidence') }}</span>
-              <p>{{ selectedReport.aiResponseSnapshot || t('adminModeration.noResponse') }}</p>
-            </article>
-          </div>
-        </div>
-
-        <p v-if="reviewDisabledReason" class="admin-report-notice">
-          {{ reviewDisabledReason }}
-        </p>
-
-        <div class="field">
-          <label for="admin-moderation-status">{{ t('adminModeration.reviewStatus') }}</label>
-          <select id="admin-moderation-status" v-model="reviewForm.status" class="select" :disabled="reviewDisabled">
-            <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="admin-moderation-reviewer-note">{{ t('adminModeration.reviewerNote') }}</label>
-          <textarea
-            id="admin-moderation-reviewer-note"
-            v-model="reviewForm.reviewerNote"
-            class="textarea"
-            maxlength="1000"
-            :disabled="reviewDisabled"
+        <div class="admin-kpi-grid admin-kpi-grid--3">
+          <AdminKpiTile
+            v-for="stat in moderationStats"
+            :key="stat.label"
+            :label="stat.label"
+            :value="stat.value"
+            :icon="stat.icon"
+            :tone="stat.tone"
           />
         </div>
-        <div class="list">
-          <ListInfoItem
-            v-for="item in aiReports"
-            :key="item.id"
-            :title="formatReportReason(item.reasonCategory)"
-            :description="item.description || formatFeatureKey(item.featureKey)"
+      </section>
+
+      <section class="admin-split admin-split--even">
+        <article class="panel admin-panel">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">{{ t('adminModeration.reports') }}</h2>
+              <p class="card-subtitle">{{ t('adminModeration.reportsHint') }}</p>
+            </div>
+          </div>
+
+          <ul v-if="aiReports.length" class="admin-queue">
+            <li v-for="item in aiReports" :key="item.id">
+              <button
+                type="button"
+                class="admin-queue-item"
+                :class="{ 'is-selected': selectedReportId === item.id }"
+                :aria-pressed="selectedReportId === item.id"
+                @click="selectedReportId = item.id"
+              >
+                <span class="admin-icon-badge is-sm admin-tone-primary" aria-hidden="true">
+                  <IconGlyph name="ai" :size="16" />
+                </span>
+                <span class="admin-queue-copy">
+                  <span class="admin-queue-title">
+                    <strong>{{ formatReportReason(item.reasonCategory) }}</strong>
+                    <StatusPill :label="formatStatus(item.status)" :tone="reportStatusTone(item.status)" />
+                  </span>
+                  <span class="admin-feed-text">{{ item.description || formatFeatureKey(item.featureKey) }}</span>
+                  <span class="admin-meta-row">
+                    <span class="tag">{{ formatFeatureKey(item.featureKey) }}</span>
+                    <span class="tag">{{ item.studentName || t('adminModeration.unknownLearner') }}</span>
+                  </span>
+                </span>
+              </button>
+            </li>
+          </ul>
+          <StatePanel
+            v-else
+            compact
             icon="ai"
-          >
-            <template #meta>
-              <span class="tag">{{ formatFeatureKey(item.featureKey) }}</span>
-              <span class="tag">{{ item.studentName || t('adminModeration.unknownLearner') }}</span>
-            </template>
-            <template #aside>
-              <div class="admin-report-list-aside">
-                <StatusPill :label="formatStatus(item.status)" :tone="reportStatusTone(item.status)" />
-                <button class="student-link-button" type="button" @click="selectedReportId = item.id">
-                  {{ selectedReportId === item.id ? t('adminModeration.selected') : t('adminModeration.review') }}
-                </button>
+            :title="t('adminModeration.noReportsTitle')"
+            :message="t('adminModeration.noReport')"
+          />
+        </article>
+
+        <form class="panel admin-panel" @submit.prevent="reviewAiReport">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">{{ t('adminModeration.reviewTitle') }}</h2>
+              <p v-if="selectedReport" class="card-subtitle">
+                {{ formatFeatureKey(selectedReport.featureKey) }} ·
+                {{ formatReportReason(selectedReport.reasonCategory) }}
+              </p>
+            </div>
+            <StatusPill
+              v-if="selectedReport"
+              :label="formatStatus(selectedReport.status)"
+              :tone="reportStatusTone(selectedReport.status)"
+            />
+          </div>
+
+          <template v-if="selectedReport">
+            <dl class="admin-moderation-summary">
+              <div class="admin-note-block">
+                <dt>{{ t('adminModeration.student') }}</dt>
+                <dd>
+                  <strong>{{ selectedReport.studentName || t('adminModeration.unknownLearner') }}</strong>
+                </dd>
+                <dd>{{ selectedReport.studentEmail || t('adminModeration.noEmail') }}</dd>
               </div>
-            </template>
-          </ListInfoItem>
+              <div class="admin-note-block">
+                <dt>{{ t('adminModeration.feature') }}</dt>
+                <dd>
+                  <strong>{{ formatFeatureKey(selectedReport.featureKey) }}</strong>
+                </dd>
+                <dd v-if="selectedReport.aiUsageLogId">
+                  {{ t('adminModeration.usageLog', { id: selectedReport.aiUsageLogId }) }}
+                </dd>
+              </div>
+              <div class="admin-note-block">
+                <dt>{{ t('adminModeration.reason') }}</dt>
+                <dd>
+                  <strong>{{ formatReportReason(selectedReport.reasonCategory) }}</strong>
+                </dd>
+                <dd>
+                  {{ t('adminModeration.reported', { date: formatDateTime(selectedReport.createdAt) }) }}
+                </dd>
+              </div>
+              <div class="admin-note-block">
+                <dt>{{ t('adminModeration.chatEvidence') }}</dt>
+                <dd>
+                  <strong>{{ chatEvidenceLabel(selectedReport) }}</strong>
+                </dd>
+                <dd>{{ reviewerLabel(selectedReport) }}</dd>
+              </div>
+            </dl>
+
+            <div v-if="selectedReport.description" class="admin-note-block">
+              <span>{{ t('adminModeration.studentNote') }}</span>
+              <p>{{ selectedReport.description }}</p>
+            </div>
+
+            <div class="admin-moderation-evidence">
+              <div class="admin-note-block">
+                <span>{{ t('adminModeration.promptEvidence') }}</span>
+                <p>{{ selectedReport.promptSnapshot || t('adminModeration.noPrompt') }}</p>
+              </div>
+              <div class="admin-note-block">
+                <span>{{ t('adminModeration.responseEvidence') }}</span>
+                <p>{{ selectedReport.aiResponseSnapshot || t('adminModeration.noResponse') }}</p>
+              </div>
+            </div>
+          </template>
+
+          <p v-if="reviewDisabledReason" id="admin-moderation-disabled-reason" class="field-hint">
+            {{ reviewDisabledReason }}
+          </p>
+
+          <div class="field">
+            <label for="admin-moderation-status">{{ t('adminModeration.reviewStatus') }}</label>
+            <select
+              id="admin-moderation-status"
+              v-model="reviewForm.status"
+              class="select"
+              :disabled="reviewDisabled"
+              :aria-describedby="reviewDisabledReason ? 'admin-moderation-disabled-reason' : undefined"
+            >
+              <option v-for="option in reviewStatusOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="admin-moderation-reviewer-note">
+              {{ t('adminModeration.reviewerNote') }}<span class="required-mark" aria-hidden="true">*</span>
+            </label>
+            <textarea
+              id="admin-moderation-reviewer-note"
+              v-model="reviewForm.reviewerNote"
+              class="textarea"
+              maxlength="1000"
+              required
+              :disabled="reviewDisabled"
+              :aria-describedby="reviewDisabledReason ? 'admin-moderation-disabled-reason' : undefined"
+            />
+          </div>
+
+          <div class="form-actions">
+            <button
+              class="btn btn-primary"
+              type="submit"
+              :disabled="reviewDisabled || submittingReview"
+              :aria-busy="submittingReview"
+            >
+              {{ submittingReview ? t('adminModeration.saving') : t('adminModeration.saveReview') }}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <article class="panel admin-panel">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">{{ t('adminModeration.records') }}</h2>
+            <p class="card-subtitle">{{ t('adminModeration.recordsHint') }}</p>
+          </div>
         </div>
-      </ActionFormCard>
-    </section>
+
+        <div
+          v-if="moderationRecords.length"
+          class="data-table-wrap admin-table-wrap"
+          role="region"
+          :aria-label="t('adminModeration.records')"
+          tabindex="0"
+        >
+          <table class="data-table admin-table admin-table-static">
+            <thead>
+              <tr>
+                <th scope="col">{{ t('adminModeration.recordContent') }}</th>
+                <th scope="col">{{ t('adminModeration.recordType') }}</th>
+                <th scope="col">{{ t('adminModeration.recordAction') }}</th>
+                <th scope="col" class="col-numeric">{{ t('adminModeration.recordDate') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in moderationRecords" :key="item.id">
+                <td>
+                  <div class="admin-table-cell-copy">
+                    <strong>{{ item.targetTitle ?? `${formatTargetType(item.targetType)} #${item.targetId}` }}</strong>
+                    <span>{{ item.note || formatStatus(item.actionTaken) }}</span>
+                  </div>
+                </td>
+                <td :data-label="t('adminModeration.recordType')">
+                  <span class="tag">{{ formatTargetType(item.targetType) }}</span>
+                </td>
+                <td :data-label="t('adminModeration.recordAction')">
+                  <span class="tag">{{ formatStatus(item.actionTaken) }}</span>
+                </td>
+                <td class="col-numeric admin-table-nowrap" :data-label="t('adminModeration.recordDate')">
+                  {{ formatDateTime(item.createdAt) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <StatePanel
+          v-else
+          compact
+          icon="moderation"
+          :title="t('adminModeration.noRecordsTitle')"
+          :message="t('adminModeration.noRecordsHint')"
+        />
+      </article>
+    </ResourceSection>
   </div>
 </template>
 
@@ -173,13 +251,19 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { adminApi } from '@/api/services'
-import type { AdminAiResponseReportResponse, AiResponseReportReviewStatus } from '@/types/api'
+import type {
+  AdminAiResponseReportResponse,
+  AiFeatureKey,
+  AiResponseReportReason,
+  AiResponseReportReviewStatus,
+} from '@/types/api'
+import AdminKpiTile from '@/components/admin/AdminKpiTile.vue'
+import type { AdminTone } from '@/components/admin/adminTone'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import ActionFormCard from '@/components/dashboard/ActionFormCard.vue'
-import InfoCard from '@/components/dashboard/InfoCard.vue'
-import ListInfoItem from '@/components/dashboard/ListInfoItem.vue'
+import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import { adminAiReports, adminModerationRecords } from '@/demo/data'
@@ -191,7 +275,7 @@ const { t } = useI18n({
   messages: {
     en: { adminModeration: adminModerationMessages.en },
     ms: { adminModeration: adminModerationMessages.ms },
-    zh: { adminModeration: adminModerationMessages.zh },
+    'zh-CN': { adminModeration: adminModerationMessages['zh-CN'] },
   },
 })
 
@@ -228,7 +312,8 @@ const reviewStatusOptions = computed<Array<{ value: AiResponseReportReviewStatus
 const submittingReview = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
-const pageError = computed(() => actionError.value || moderationResource.error.value || aiReportsResource.error.value)
+const pageLoading = computed(() => moderationResource.loading.value || aiReportsResource.loading.value)
+const loadError = computed(() => moderationResource.error.value || aiReportsResource.error.value)
 
 const openReportCount = computed(
   () => aiReports.value.filter((item) => item.status === 'PENDING_REVIEW' || item.status === 'IN_REVIEW').length,
@@ -250,10 +335,20 @@ const reviewDisabledReason = computed(() => {
   return null
 })
 
-const moderationStats = computed(() => [
-  { icon: 'shield', label: t('adminModeration.records'), value: String(moderationRecords.value.length) },
-  { icon: 'ai', label: t('adminModeration.openReports'), value: String(openReportCount.value) },
-  { icon: 'history', label: t('adminModeration.pendingReview'), value: String(pendingReviewCount.value) },
+const moderationStats = computed<Array<{ icon: string; label: string; value: string; tone: AdminTone }>>(() => [
+  {
+    icon: 'shield',
+    label: t('adminModeration.records'),
+    value: String(moderationRecords.value.length),
+    tone: 'primary',
+  },
+  { icon: 'ai', label: t('adminModeration.openReports'), value: String(openReportCount.value), tone: 'info' },
+  {
+    icon: 'history',
+    label: t('adminModeration.pendingReview'),
+    value: String(pendingReviewCount.value),
+    tone: 'warning',
+  },
 ])
 
 watch(
@@ -280,6 +375,11 @@ watch(
   },
   { immediate: true },
 )
+
+function reloadAll(): void {
+  void moderationResource.reload()
+  void aiReportsResource.reload()
+}
 
 async function reviewAiReport(): Promise<void> {
   if (submittingReview.value) return
@@ -331,15 +431,17 @@ function formatStatus(status: string): string {
     IN_REVIEW: 'inReview',
     RESOLVED: 'resolved',
     DISMISSED: 'dismissed',
-    HIDE: 'hidden',
-    HIDDEN: 'hidden',
-    UNPUBLISH: 'unpublished',
-    UNPUBLISHED: 'unpublished',
+    // D14: hide / unpublish / archive all leave the content ARCHIVED; request revision leaves it REJECTED.
+    HIDE: 'archived',
+    HIDDEN: 'archived',
+    UNPUBLISH: 'archived',
+    UNPUBLISHED: 'archived',
     ARCHIVE: 'archived',
     ARCHIVED: 'archived',
     RESTORE: 'restored',
     RESTORED: 'restored',
     REQUEST_REVISION: 'revisionRequested',
+    REJECTED: 'revisionRequested',
   }
   const key = keys[status.toUpperCase()]
   if (key) return t(`adminModeration.${key}`)
@@ -349,27 +451,41 @@ function formatStatus(status: string): string {
     .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
 }
 
-function formatFeatureKey(featureKey: string): string {
+function formatTargetType(targetType: string): string {
   const keys: Record<string, string> = {
-    AI_CHAT: 'aiChat',
-    CHAT_TUTOR: 'chatTutor',
-    WRITING_FEEDBACK: 'writingFeedback',
-    PRONUNCIATION: 'pronunciation',
+    PACKAGE: 'typeCourse',
+    MODULE: 'typeModule',
+    LESSON: 'typeLesson',
   }
-  const key = keys[featureKey.toUpperCase()]
+  const key = keys[targetType.toUpperCase()]
+  if (key) return t(`adminModeration.${key}`)
+  return formatStatus(targetType)
+}
+
+function formatFeatureKey(featureKey: string): string {
+  const keys: Record<AiFeatureKey, string> = {
+    CHAT_TUTOR: 'chatTutor',
+    VOCABULARY_HELPER: 'vocabularyHelper',
+    SENTENCE_PRACTICE: 'sentencePractice',
+    QUIZ_GENERATOR: 'quizGenerator',
+    STORY_GENERATOR: 'storyGenerator',
+    PRONUNCIATION_FEEDBACK: 'pronunciationFeedback',
+    WRITING_FEEDBACK: 'writingFeedback',
+  }
+  const key = (keys as Record<string, string | undefined>)[featureKey.toUpperCase()]
   if (key) return t(`adminModeration.${key}`)
   return formatStatus(featureKey)
 }
 
 function formatReportReason(reason: string): string {
-  const keys: Record<string, string> = {
-    INAPPROPRIATE_CONTENT: 'inappropriate',
-    UNSAFE_RESPONSE: 'unsafe',
-    INACCURATE_RESPONSE: 'inaccurate',
+  const keys: Record<AiResponseReportReason, string> = {
     INCORRECT_CONTENT: 'incorrect',
+    HALLUCINATION: 'hallucination',
+    UNSAFE_CONTENT: 'unsafe',
+    INAPPROPRIATE_CONTENT: 'inappropriate',
     OTHER: 'other',
   }
-  const key = keys[reason.toUpperCase()]
+  const key = (keys as Record<string, string | undefined>)[reason.toUpperCase()]
   if (key) return t(`adminModeration.${key}`)
   return formatStatus(reason)
 }
@@ -415,73 +531,18 @@ function reviewerLabel(report: AdminAiResponseReportResponse): string {
 </script>
 
 <style scoped>
-.admin-moderation-layout {
-  align-items: start;
-}
-
-.admin-report-detail,
-.admin-report-evidence-grid,
-.admin-report-summary-grid {
+.admin-moderation-summary,
+.admin-moderation-evidence {
   display: grid;
-  gap: 12px;
-}
-
-.admin-report-summary-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.admin-report-summary-grid > div,
-.admin-report-copy-card {
-  padding: 14px 16px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  border-radius: 18px;
-  background: rgba(248, 250, 255, 0.92);
-}
-
-.admin-report-summary-grid span,
-.admin-report-copy-card span,
-.admin-report-summary-grid small,
-.admin-report-notice {
-  color: #72809d;
-}
-
-.admin-report-summary-grid strong,
-.admin-report-copy-card p {
-  color: #344260;
-}
-
-.admin-report-summary-grid strong,
-.admin-report-summary-grid small,
-.admin-report-copy-card span {
-  display: block;
-}
-
-.admin-report-copy-card p {
-  margin: 8px 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.55;
-}
-
-.admin-report-evidence-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.admin-report-notice {
+  gap: var(--space-3);
   margin: 0;
-  font-weight: 600;
 }
 
-.admin-report-list-aside {
-  display: grid;
-  justify-items: end;
-  gap: 8px;
-}
-
-@media (max-width: 960px) {
-  .admin-report-summary-grid,
-  .admin-report-evidence-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .admin-moderation-summary,
+  .admin-moderation-evidence {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

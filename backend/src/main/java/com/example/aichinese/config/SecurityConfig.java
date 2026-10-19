@@ -35,7 +35,6 @@ import jakarta.servlet.DispatcherType;
         UploadProperties.class,
         PlatformProperties.class,
         AiProperties.class,
-        PaymentProperties.class,
         EmailProperties.class
 })
 public class SecurityConfig {
@@ -114,12 +113,16 @@ public class SecurityConfig {
                         .requestMatchers(HEALTH_ENDPOINTS).permitAll()
                         .requestMatchers(API_DOC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_POST_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/stripe").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/notifications/**").authenticated()
+                        // Account management (profile, change password) for every signed-in role (D12).
+                        .requestMatchers("/api/v1/users/me/**").authenticated()
+                        // Learner AI tools stay student-only; approved teachers get unsaved AI drafts
+                        // under /api/v1/teachers/ai/** (D6), covered by the TEACHER rule below plus the
+                        // ApprovedTeacherInterceptor status guard (D13).
                         .requestMatchers("/api/v1/ai/**").hasRole("STUDENT")
-                        .requestMatchers("/api/v1/payments/**").hasRole("STUDENT")
+                        .requestMatchers("/api/v1/teachers/ai/**").hasRole("TEACHER")
                         .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/teachers/**").hasRole("TEACHER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

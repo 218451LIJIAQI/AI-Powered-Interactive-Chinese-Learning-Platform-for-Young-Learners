@@ -1,6 +1,5 @@
 package com.example.aichinese.dto.dashboard;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -18,9 +17,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "totalGames",
         "recentUserActivity",
         "aiUsageSummary",
-        "paymentRevenueSummary",
-        "pendingRefunds",
-        "pendingPayouts",
         "recentAuditLogs"
 })
 public record AdminDashboardResponse(
@@ -34,15 +30,10 @@ public record AdminDashboardResponse(
         long totalGames,
         List<RecentUserActivity> recentUserActivity,
         AiUsageSummary aiUsageSummary,
-        PaymentRevenueSummary paymentRevenueSummary,
-        long pendingRefunds,
-        long pendingPayouts,
         List<RecentAuditLogSummary> recentAuditLogs) {
 
     public AdminDashboardResponse {
         Objects.requireNonNull(aiUsageSummary, "aiUsageSummary must not be null");
-        Objects.requireNonNull(paymentRevenueSummary,
-                "paymentRevenueSummary must not be null");
         recentUserActivity = copyRequired(recentUserActivity, "recentUserActivity");
         recentAuditLogs = copyRequired(recentAuditLogs, "recentAuditLogs");
     }
@@ -71,20 +62,6 @@ public record AdminDashboardResponse(
     public record AiUsageSummary(
             long totalRequests,
             long successfulRequests) {
-    }
-
-    @JsonPropertyOrder({ "totalTransactions", "paidTransactions", "totalRevenue", "currencyCode" })
-    public record PaymentRevenueSummary(
-            long totalTransactions,
-            long paidTransactions,
-            BigDecimal totalRevenue,
-            String currencyCode) {
-
-        public PaymentRevenueSummary {
-            if (totalRevenue == null) {
-                totalRevenue = BigDecimal.ZERO;
-            }
-        }
     }
 
     @JsonPropertyOrder({

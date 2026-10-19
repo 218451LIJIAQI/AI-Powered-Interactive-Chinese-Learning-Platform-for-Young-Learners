@@ -5,21 +5,21 @@
       :description="t('teacherDashboard.description')"
       icon="dashboard"
     >
-      <template #actions>
+      <template #meta>
         <StatusPill :label="teacherStatusLabel" :tone="teacherStatusTone" />
       </template>
     </PageHeaderBlock>
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" :detail="teacherNoticeDetail" />
+    <DataNotice :using-fallback="usingFallback" :detail="teacherNoticeDetail" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="teacher-dashboard-summary">
+      <section class="teacher-dashboard-summary" :aria-label="t('teacherDashboard.title')">
         <article v-for="card in statCards" :key="card.label" class="teacher-dashboard-stat-card">
-          <div class="teacher-dashboard-stat-icon" :class="`is-${card.tone}`">
-            <IconGlyph :name="card.icon" :size="22" />
+          <div class="teacher-dashboard-stat-icon" :class="`is-${card.tone}`" aria-hidden="true">
+            <IconGlyph :name="card.icon" :size="20" />
           </div>
           <div class="teacher-dashboard-stat-copy">
-            <small>{{ card.label }}</small>
+            <span class="teacher-dashboard-stat-label">{{ card.label }}</span>
             <strong>{{ card.value }}</strong>
             <span>{{ card.copy }}</span>
           </div>
@@ -27,61 +27,55 @@
       </section>
 
       <section class="teacher-dashboard-grid">
-        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--wide">
-          <div class="row-between teacher-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherDashboard.contentSnapshot') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openContent">
+        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--content">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('teacherDashboard.contentSnapshot') }}</h2>
+            <button class="btn btn-link" type="button" @click="openContent">
               {{ t('teacherDashboard.manageContent') }}
             </button>
           </div>
 
-          <div class="teacher-dashboard-content-top">
+          <div class="teacher-dashboard-mini-grid">
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.modules') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.modules') }}</span>
               <strong>{{ analytics.overview.totalModules }}</strong>
               <span>{{ t('teacherDashboard.modulesHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.lessons') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.lessons') }}</span>
               <strong>{{ analytics.overview.totalLessons }}</strong>
               <span>{{ t('teacherDashboard.lessonsHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.packages') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.packages') }}</span>
               <strong>{{ analytics.overview.totalPackages }}</strong>
               <span>{{ t('teacherDashboard.packagesHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.submittedItems') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.submittedItems') }}</span>
               <strong>{{ analytics.overview.submittedContentItems }}</strong>
               <span>{{ t('teacherDashboard.submittedHint') }}</span>
             </article>
           </div>
 
           <div v-if="contentBreakdownRows.length" class="teacher-dashboard-breakdown-list">
-            <article v-for="item in contentBreakdownRows" :key="item.label" class="teacher-dashboard-breakdown-row">
-              <div class="row-between">
+            <div v-for="item in contentBreakdownRows" :key="item.label" class="teacher-dashboard-breakdown-row">
+              <div class="teacher-dashboard-breakdown-head">
                 <strong>{{ item.label }}</strong>
                 <span>{{ item.displayValue }}</span>
               </div>
-              <div class="teacher-dashboard-breakdown-track">
-                <span :class="`is-${item.tone}`" :style="{ width: `${item.percentage}%` }" />
-              </div>
-            </article>
+              <ProgressBar :progress="item.percentage" :tone="item.tone" :label="item.label" />
+            </div>
           </div>
           <p v-else class="teacher-dashboard-empty-copy">
             {{ t('teacherDashboard.noContentBreakdown') }}
           </p>
         </article>
 
-        <article class="panel teacher-dashboard-panel">
-          <div class="row-between teacher-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherDashboard.upcomingClasses') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" :disabled="teacherApprovalLocked" @click="openClasses">
+        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--classes">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('teacherDashboard.upcomingClasses') }}</h2>
+            <button class="btn btn-link" type="button" :disabled="teacherApprovalLocked" @click="openClasses">
               {{ t('teacherDashboard.openCalendar') }}
             </button>
           </div>
@@ -91,9 +85,10 @@
             icon="classes"
             :title="teacherApprovalTitle"
             :message="teacherApprovalMessage"
+            compact
           />
-          <div v-else-if="upcomingClasses.length" class="teacher-dashboard-list">
-            <article v-for="item in upcomingClasses" :key="item.id" class="teacher-dashboard-class-row">
+          <ul v-else-if="upcomingClasses.length" class="teacher-dashboard-list teacher-dashboard-list--classes">
+            <li v-for="item in upcomingClasses" :key="item.id" class="teacher-dashboard-class-row">
               <div class="teacher-dashboard-class-time">
                 <strong>{{ formatDate(item.startTime, { month: 'short', day: 'numeric' }) }}</strong>
                 <span>{{ timeRange(item.startTime, item.endTime) }}</span>
@@ -102,29 +97,31 @@
                 <strong>{{ item.title }}</strong>
                 <span>{{ classContextLabel(item) }}</span>
               </div>
-              <StatusPill :label="formatStatus(item.liveClassStatus)" :tone="classJoinTone(item.canJoin)" />
-            </article>
-          </div>
+              <StatusPill
+                :label="liveClassStatusLabel(effectiveLiveClassStatus(item))"
+                :tone="classJoinTone(item.canJoin)"
+              />
+            </li>
+          </ul>
           <StatePanel
             v-else
             icon="classes"
             :title="t('teacherDashboard.noUpcomingClasses')"
             :message="t('teacherDashboard.noUpcomingClassesHint')"
+            compact
           />
         </article>
 
-        <article class="panel teacher-dashboard-panel">
-          <div class="row-between teacher-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherDashboard.recentQuizResults') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openStudents">
+        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--half">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('teacherDashboard.recentQuizResults') }}</h2>
+            <button class="btn btn-link" type="button" @click="openStudents">
               {{ t('teacherDashboard.openStudents') }}
             </button>
           </div>
 
-          <div v-if="dashboard.recentQuizResults.length" class="teacher-dashboard-list">
-            <article
+          <ul v-if="dashboard.recentQuizResults.length" class="teacher-dashboard-list">
+            <li
               v-for="item in dashboard.recentQuizResults.slice(0, 4)"
               :key="item.attemptId"
               class="teacher-dashboard-activity-row"
@@ -135,22 +132,21 @@
                 <small>{{ formatDateTime(item.completedAt) }}</small>
               </div>
               <strong class="teacher-dashboard-score">{{ scoreLabel(item.score, item.maxScore) }}</strong>
-            </article>
-          </div>
+            </li>
+          </ul>
           <StatePanel
             v-else
             icon="quiz"
             :title="t('teacherDashboard.noQuizAttempts')"
             :message="t('teacherDashboard.noQuizAttemptsHint')"
+            compact
           />
         </article>
 
-        <article class="panel teacher-dashboard-panel">
-          <div class="row-between teacher-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherDashboard.recentNotifications') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openProfile">
+        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--half">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('teacherDashboard.recentNotifications') }}</h2>
+            <button class="btn btn-link" type="button" @click="openProfile">
               {{ t('teacherDashboard.openProfile') }}
             </button>
           </div>
@@ -159,19 +155,24 @@
             <NotificationLinkButton
               v-for="item in dashboard.recentNotifications.slice(0, 4)"
               :key="item.notificationId"
+              class="teacher-dashboard-notification"
               :notification-id="item.notificationId"
               :target-path="item.targetPath"
               fallback-to="/teacher/profile"
               @read="markTeacherNotificationRead"
             >
-              <article class="teacher-dashboard-notification-row">
-                <div class="teacher-dashboard-notification-dot" :class="{ 'is-unread': item.status !== 'READ' }" />
-                <div class="teacher-dashboard-activity-copy">
+              <span class="teacher-dashboard-notification-row">
+                <span
+                  class="teacher-dashboard-notification-dot"
+                  :class="{ 'is-unread': item.status !== 'READ' }"
+                  aria-hidden="true"
+                />
+                <span class="teacher-dashboard-activity-copy">
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.message }}</span>
                   <small>{{ formatDateTime(item.createdAt) }}</small>
-                </div>
-              </article>
+                </span>
+              </span>
             </NotificationLinkButton>
           </div>
           <StatePanel
@@ -179,63 +180,50 @@
             icon="bell"
             :title="t('teacherDashboard.noNotifications')"
             :message="t('teacherDashboard.noNotificationsHint')"
+            compact
           />
         </article>
 
-        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--wide">
-          <div class="row-between teacher-dashboard-panel-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherDashboard.teachingOperations') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openStudents">
+        <article class="panel teacher-dashboard-panel teacher-dashboard-panel--full">
+          <div class="card-header">
+            <h2 class="card-title">{{ t('teacherDashboard.teachingOperations') }}</h2>
+            <button class="btn btn-link" type="button" @click="openStudents">
               {{ t('teacherDashboard.openLearners') }}
             </button>
           </div>
 
-          <div class="teacher-dashboard-operations-grid">
+          <div class="teacher-dashboard-mini-grid">
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.teacher') }}</small>
-              <strong>{{ teacherName }}</strong>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.teacher') }}</span>
+              <strong class="teacher-dashboard-mini-name">{{ teacherName }}</strong>
               <span>{{ teacherStatusLabel }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.activeStudents') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.activeStudents') }}</span>
               <strong>{{ analytics.overview.totalActiveStudents }}</strong>
               <span>{{ t('teacherDashboard.activeStudentsHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.liveEnrolments') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.liveEnrolments') }}</span>
               <strong>{{ analytics.overview.totalLiveEnrolments }}</strong>
               <span>{{ t('teacherDashboard.liveEnrolmentsHint') }}</span>
             </article>
             <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.averageQuizScore') }}</small>
+              <span class="teacher-dashboard-stat-label">{{ t('teacherDashboard.averageQuizScore') }}</span>
               <strong>{{ formatPercent(analytics.overview.averageQuizScore) }}</strong>
               <span>{{ t('teacherDashboard.averageQuizHint') }}</span>
             </article>
-            <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.availableBalance') }}</small>
-              <strong>{{
-                formatCurrency(analytics.overview.availableBalance, analytics.overview.currencyCode)
-              }}</strong>
-              <span>{{ t('teacherDashboard.availableBalanceHint') }}</span>
-            </article>
-            <article class="teacher-dashboard-mini-stat">
-              <small>{{ t('teacherDashboard.netEarnings') }}</small>
-              <strong>{{ formatCurrency(analytics.overview.netEarnings, analytics.overview.currencyCode) }}</strong>
-              <span>{{ t('teacherDashboard.netEarningsHint') }}</span>
-            </article>
           </div>
 
-          <div class="teacher-dashboard-actions">
+          <div class="card-footer teacher-dashboard-actions">
             <button
               v-for="item in quickActions"
               :key="item.label"
-              class="teacher-dashboard-action"
+              class="btn btn-secondary"
               type="button"
               @click="item.action"
             >
-              <IconGlyph :name="item.icon" :size="18" />
+              <IconGlyph :name="item.icon" :size="16" />
               <span>{{ item.label }}</span>
             </button>
           </div>
@@ -252,6 +240,7 @@ import { useI18n } from 'vue-i18n'
 
 import { teacherApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import ProgressBar from '@/components/common/ProgressBar.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import NotificationLinkButton from '@/components/common/NotificationLinkButton.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
@@ -260,28 +249,32 @@ import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import { useTeacherAccess } from '@/composables/useTeacherAccess'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
+import { useStatusLabels } from '@/composables/useStatusLabels'
 import { teacherAnalytics, teacherDashboard, teacherLiveClasses } from '@/demo/data'
+import { humanizeEnumValue } from '@/plugins/statusLabelMessages'
 import { teacherDashboardMessages } from '@/plugins/teacherDashboardMessages'
 import type { AnalyticsBreakdownItem, LiveClassResponse, TeacherDashboardResponse } from '@/types/api'
 import {
-  formatCurrency,
   formatDate,
   formatDateTime,
   formatNumber,
   formatPercent,
+  getDisplayLocale,
   ratioPercent,
   toFiniteNumber,
 } from '@/utils/format'
+import { effectiveLiveClassStatus, isTerminalLiveClass, sortLiveClassesByStart } from '@/utils/liveClassActions'
 
 const router = useRouter()
 const { t, locale } = useI18n({
   messages: {
     en: { teacherDashboard: teacherDashboardMessages.en },
     ms: { teacherDashboard: teacherDashboardMessages.ms },
-    zh: { teacherDashboard: teacherDashboardMessages.zh },
+    'zh-CN': { teacherDashboard: teacherDashboardMessages['zh-CN'] },
   },
 })
 const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage } = useTeacherAccess()
+const { statusLabel } = useStatusLabels()
 
 const dashboardResource = useResource(() => teacherApi.dashboard(), teacherDashboard)
 const analyticsResource = useResource(() => teacherApi.analytics(), teacherAnalytics)
@@ -291,18 +284,11 @@ const liveClassesResource = useResource(
 )
 
 const emptyDashboard: TeacherDashboardResponse = {
-  fullName: 'Teacher',
+  fullName: '',
   teacherStatus: 'PENDING',
   totalLessons: 0,
   totalStudents: 0,
   averageQuizScore: 0,
-  earningsSummary: {
-    grossAmount: 0,
-    netAmount: 0,
-    availableBalance: 0,
-    pendingBalance: 0,
-    currencyCode: 'MYR',
-  },
   recentQuizResults: [],
   recentNotifications: [],
 }
@@ -315,14 +301,10 @@ const emptyAnalytics = {
     submittedContentItems: 0,
     totalActiveStudents: 0,
     averageQuizScore: 0,
-    netEarnings: 0,
-    availableBalance: 0,
-    currencyCode: 'MYR',
     upcomingLiveClasses: 0,
     totalLiveEnrolments: 0,
   },
   quizScoreTrend: [],
-  earningsTrend: [],
   contentStatusBreakdown: [],
 }
 
@@ -360,7 +342,9 @@ function markTeacherNotificationRead(notificationId: number) {
 }
 
 const teacherName = computed(() => dashboard.value.fullName || t('teacherDashboard.teacher'))
-const teacherStatusLabel = computed(() => formatStatus(dashboard.value.teacherStatus))
+const teacherStatusLabel = computed(() =>
+  statusLabel('teacherStatus', dashboard.value.teacherStatus?.trim().toUpperCase(), t('teacherDashboard.unknown')),
+)
 const teacherStatusTone = computed(() => (dashboard.value.teacherStatus === 'APPROVED' ? 'success' : 'warning'))
 
 const statCards = computed(() => [
@@ -396,28 +380,11 @@ const statCards = computed(() => [
     icon: 'quiz',
     tone: 'green',
   },
-  {
-    label: t('teacherDashboard.availableBalance'),
-    value: formatCurrency(
-      dashboard.value.earningsSummary.availableBalance,
-      dashboard.value.earningsSummary.currencyCode,
-    ),
-    copy: t('teacherDashboard.pendingBalance', {
-      amount: formatCurrency(
-        dashboard.value.earningsSummary.pendingBalance,
-        dashboard.value.earningsSummary.currencyCode,
-      ),
-    }),
-    icon: 'earnings',
-    tone: 'mint',
-  },
 ])
 
+// Cancelled and completed classes are not upcoming.
 const upcomingClasses = computed(() =>
-  [...liveClasses.value]
-    .filter((item) => item.liveClassStatus !== 'CANCELLED')
-    .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime())
-    .slice(0, 4),
+  sortLiveClassesByStart(liveClasses.value.filter((item) => !isTerminalLiveClass(item))).slice(0, 4),
 )
 
 const contentBreakdownRows = computed(() => withPercentages(analytics.value.contentStatusBreakdown))
@@ -431,13 +398,13 @@ const quickActions = computed(() => [
 
 function withPercentages(items: AnalyticsBreakdownItem[]) {
   const total = items.reduce((sum, item) => sum + Math.max(0, toFiniteNumber(item.value)), 0)
-  const tones = ['purple', 'green', 'orange', 'blue'] as const
+  const tones = ['primary', 'success', 'warning', 'info'] as const
 
   return items.map((item, index) => {
     const value = Math.max(0, toFiniteNumber(item.value))
     const percentage = ratioPercent(value, total)
     return {
-      label: formatStatus(item.label),
+      label: contentStatusLabel(item.label),
       displayValue: `${formatNumber(value)} (${percentage}%)`,
       percentage,
       tone: tones[index % tones.length],
@@ -445,28 +412,26 @@ function withPercentages(items: AnalyticsBreakdownItem[]) {
   })
 }
 
-function formatStatus(status: string | null | undefined): string {
-  if (!status) return t('teacherDashboard.unknown')
+/** Content review states of the analytics breakdown (labels may arrive as "PUBLISHED" or "Published"). */
+function contentStatusLabel(status: string | null | undefined): string {
+  if (!status?.trim()) return t('teacherDashboard.unknown')
   const statusKeys: Record<string, string> = {
-    APPROVED: 'statusApproved',
-    PENDING: 'statusPending',
-    REJECTED: 'statusRejected',
     PUBLISHED: 'statusPublished',
     SUBMITTED: 'statusSubmitted',
     DRAFT: 'statusDraft',
+    REJECTED: 'statusRejected',
     ARCHIVED: 'statusArchived',
-    SCHEDULED: 'statusScheduled',
-    LIVE: 'statusLive',
-    COMPLETED: 'statusCompleted',
-    CANCELLED: 'statusCancelled',
   }
-  const normalized = status.trim().toUpperCase()
-  const translatedKey = statusKeys[normalized]
+  const translatedKey = statusKeys[status.trim().toUpperCase().replace(/\s+/g, '_')]
   if (translatedKey) return t(`teacherDashboard.${translatedKey}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+  return humanizeEnumValue(status)
+}
+
+// W4: teacher approval and live-class states use the shared status labels.
+function liveClassStatusLabel(status: string | null | undefined): string {
+  const normalized = (status ?? '').trim().toUpperCase()
+  if (!normalized) return t('teacherDashboard.unknown')
+  return statusLabel('liveClass', normalized === 'LIVE' || normalized === 'IN_PROGRESS' ? 'ONGOING' : normalized)
 }
 
 function scoreLabel(score: number, maxScore: number): string {
@@ -490,8 +455,7 @@ function classJoinTone(canJoin: boolean): 'success' | 'warning' {
 }
 
 function timeRange(startTime: string, endTime: string): string {
-  const localeCode = locale.value === 'zh' ? 'zh-CN' : locale.value === 'ms' ? 'ms-MY' : 'en-US'
-  const formatter = new Intl.DateTimeFormat(localeCode, {
+  const formatter = new Intl.DateTimeFormat(getDisplayLocale(locale.value), {
     hour: 'numeric',
     minute: '2-digit',
   })
@@ -527,282 +491,299 @@ function reloadAll(): void {
 </script>
 
 <style scoped>
-.teacher-dashboard-page {
-  position: relative;
-}
-
 .teacher-dashboard-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.teacher-dashboard-stat-card,
-.teacher-dashboard-panel {
-  border-radius: 24px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--grid-gap);
 }
 
 .teacher-dashboard-stat-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 18px;
-  border: 1px solid rgba(232, 236, 247, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 12px 24px rgba(70, 84, 118, 0.06);
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
 }
 
 .teacher-dashboard-stat-icon {
-  width: 52px;
-  height: 52px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  border-radius: var(--radius-md);
 }
 
 .teacher-dashboard-stat-icon.is-purple {
-  background: rgba(124, 88, 255, 0.12);
-  color: #7556ff;
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
 }
 
 .teacher-dashboard-stat-icon.is-blue {
-  background: rgba(63, 144, 255, 0.12);
-  color: #2f86f6;
+  background: var(--color-info-soft);
+  color: var(--color-info-text);
 }
 
 .teacher-dashboard-stat-icon.is-orange {
-  background: rgba(255, 181, 68, 0.14);
-  color: #ee9618;
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
 }
 
 .teacher-dashboard-stat-icon.is-green {
-  background: rgba(111, 210, 104, 0.12);
-  color: #48aa43;
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
 }
 
-.teacher-dashboard-stat-icon.is-mint {
-  background: rgba(88, 196, 132, 0.14);
-  color: #3f9867;
-}
-
-.teacher-dashboard-stat-copy {
+.teacher-dashboard-stat-copy,
+.teacher-dashboard-mini-stat,
+.teacher-dashboard-activity-copy,
+.teacher-dashboard-class-time,
+.teacher-dashboard-class-copy {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.teacher-dashboard-stat-copy small,
-.teacher-dashboard-stat-copy span,
-.teacher-dashboard-empty-copy,
-.teacher-dashboard-class-time span,
-.teacher-dashboard-class-copy span,
-.teacher-dashboard-activity-copy span,
-.teacher-dashboard-activity-copy small,
-.teacher-dashboard-notification-row small,
-.teacher-dashboard-mini-stat small,
-.teacher-dashboard-mini-stat span,
-.teacher-dashboard-breakdown-row span {
-  color: #6f7b97;
+.teacher-dashboard-stat-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
 }
 
 .teacher-dashboard-stat-copy strong,
 .teacher-dashboard-mini-stat strong,
 .teacher-dashboard-score {
-  font-family: 'Fredoka', sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
 }
 
 .teacher-dashboard-stat-copy strong {
-  font-size: 1.9rem;
-  line-height: 1;
+  font-size: var(--font-size-3xl);
 }
 
+.teacher-dashboard-stat-copy > span:last-child,
+.teacher-dashboard-mini-stat > span:last-child,
+.teacher-dashboard-empty-copy,
+.teacher-dashboard-class-time span,
+.teacher-dashboard-class-copy span,
+.teacher-dashboard-activity-copy span,
+.teacher-dashboard-activity-copy small,
+.teacher-dashboard-breakdown-head span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.teacher-dashboard-activity-copy small {
+  font-size: var(--font-size-xs);
+}
+
+/* 12-column grid: content (7) + classes (5), two halves, then the operations strip. */
 .teacher-dashboard-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--grid-gap);
+  align-items: start;
 }
 
 .teacher-dashboard-panel {
-  grid-column: span 4;
   display: grid;
-  gap: 14px;
+  gap: var(--section-gap);
+  grid-column: span 6;
+  min-width: 0;
 }
 
-.teacher-dashboard-panel--wide {
-  grid-column: span 8;
+.teacher-dashboard-panel--content {
+  grid-column: span 7;
 }
 
-.teacher-dashboard-panel-head {
+.teacher-dashboard-panel--classes {
+  grid-column: span 5;
+}
+
+.teacher-dashboard-panel--full {
+  grid-column: 1 / -1;
+}
+
+.teacher-dashboard-panel > .card-header {
   align-items: center;
 }
 
-.teacher-dashboard-content-top,
-.teacher-dashboard-operations-grid {
+.teacher-dashboard-mini-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: var(--space-3);
 }
 
 .teacher-dashboard-mini-stat {
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(246, 248, 252, 0.96);
+  align-content: start;
+  padding: var(--space-3) var(--space-3-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
 }
 
 .teacher-dashboard-mini-stat strong {
-  font-size: 1.7rem;
-  line-height: 1;
+  font-size: var(--font-size-2xl);
 }
 
-.teacher-dashboard-breakdown-list,
-.teacher-dashboard-list {
+.teacher-dashboard-mini-stat .teacher-dashboard-mini-name {
+  font-size: var(--font-size-xl);
+  overflow-wrap: anywhere;
+}
+
+.teacher-dashboard-breakdown-list {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .teacher-dashboard-breakdown-row {
   display: grid;
-  gap: 8px;
+  gap: var(--space-1-5);
 }
 
-.teacher-dashboard-breakdown-track {
-  height: 8px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(229, 233, 244, 0.96);
+.teacher-dashboard-breakdown-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--font-size-md);
 }
 
-.teacher-dashboard-breakdown-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
+.teacher-dashboard-empty-copy {
+  margin: 0;
 }
 
-.teacher-dashboard-breakdown-track span.is-purple {
-  background: linear-gradient(90deg, #7d58ff, #9c87ff);
-}
-
-.teacher-dashboard-breakdown-track span.is-green {
-  background: linear-gradient(90deg, #63c454, #8edb72);
-}
-
-.teacher-dashboard-breakdown-track span.is-orange {
-  background: linear-gradient(90deg, #ffb12c, #ffd061);
-}
-
-.teacher-dashboard-breakdown-track span.is-blue {
-  background: linear-gradient(90deg, #3990ff, #67b4ff);
+.teacher-dashboard-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .teacher-dashboard-class-row,
 .teacher-dashboard-activity-row,
-.teacher-dashboard-notification-row {
-  display: grid;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
+.teacher-dashboard-notification {
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.teacher-dashboard-list > :first-child {
+  padding-top: 0;
+}
+
+.teacher-dashboard-list > :last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* Rows share one column grid (subgrid) so times, titles and pills line up across rows. */
+.teacher-dashboard-list--classes {
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  column-gap: var(--space-4);
 }
 
 .teacher-dashboard-class-row {
-  grid-template-columns: 108px minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.teacher-dashboard-activity-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.teacher-dashboard-notification-row {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-}
-
-.teacher-dashboard-class-row:last-child,
-.teacher-dashboard-activity-row:last-child,
-.teacher-dashboard-notification-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.teacher-dashboard-class-time,
-.teacher-dashboard-class-copy,
-.teacher-dashboard-activity-copy {
   display: grid;
-  gap: 4px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
 }
 
 .teacher-dashboard-class-time strong,
 .teacher-dashboard-score {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
+}
+
+.teacher-dashboard-class-time strong {
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-dashboard-class-copy strong,
+.teacher-dashboard-activity-copy strong {
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.teacher-dashboard-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.teacher-dashboard-notification {
+  border-radius: var(--radius-sm);
+}
+
+.teacher-dashboard-notification:hover .teacher-dashboard-activity-copy strong {
+  color: var(--text-link);
+}
+
+.teacher-dashboard-notification-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
 }
 
 .teacher-dashboard-notification-dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: rgba(180, 187, 206, 0.96);
+  width: var(--space-2-5);
+  height: var(--space-2-5);
+  margin-top: var(--space-1-5);
+  border-radius: var(--radius-round);
+  background: var(--color-ink-300);
 }
 
 .teacher-dashboard-notification-dot.is-unread {
-  background: #7d58ff;
+  background: var(--color-primary-500);
 }
 
 .teacher-dashboard-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  justify-content: flex-start;
 }
 
-.teacher-dashboard-action {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #344260;
-  font-weight: 700;
-}
-
-@media (max-width: 1500px) {
+@media (max-width: 1200px) {
   .teacher-dashboard-summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .teacher-dashboard-panel,
-  .teacher-dashboard-panel--wide {
-    grid-column: span 6;
-  }
-
-  .teacher-dashboard-content-top,
-  .teacher-dashboard-operations-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .teacher-dashboard-panel--content,
+  .teacher-dashboard-panel--classes {
+    grid-column: 1 / -1;
+  }
 }
 
-@media (max-width: 960px) {
-  .teacher-dashboard-summary,
-  .teacher-dashboard-grid,
-  .teacher-dashboard-content-top,
-  .teacher-dashboard-operations-grid,
-  .teacher-dashboard-actions {
-    grid-template-columns: 1fr;
+@media (max-width: 900px) {
+  .teacher-dashboard-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .teacher-dashboard-stat-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-3-5);
   }
 
-  .teacher-dashboard-panel,
-  .teacher-dashboard-panel--wide {
-    grid-column: auto;
+  .teacher-dashboard-stat-copy strong {
+    font-size: var(--font-size-2xl);
   }
 
-  .teacher-dashboard-class-row,
-  .teacher-dashboard-activity-row {
-    grid-template-columns: 1fr;
+  .teacher-dashboard-list--classes {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .teacher-dashboard-class-copy {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
 </style>

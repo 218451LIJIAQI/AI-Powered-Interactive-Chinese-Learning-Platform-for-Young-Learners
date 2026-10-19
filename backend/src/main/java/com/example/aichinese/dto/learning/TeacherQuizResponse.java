@@ -6,6 +6,7 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearningStage;
 
 @JsonPropertyOrder({
         "id",
@@ -31,7 +32,9 @@ public record TeacherQuizResponse(
         Integer totalPoints,
         List<TeacherQuizQuestionResponse> questions,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt) {
+        LocalDateTime updatedAt,
+        String rejectionReason,
+        LearningStage learningStage) {
 
     public TeacherQuizResponse {
         Objects.requireNonNull(id, "id must not be null");

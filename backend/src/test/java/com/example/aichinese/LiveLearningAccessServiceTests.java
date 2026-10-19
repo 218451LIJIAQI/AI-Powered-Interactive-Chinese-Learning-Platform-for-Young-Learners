@@ -2,6 +2,8 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -11,13 +13,20 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.aichinese.entity.CoursePackage;
+import com.example.aichinese.entity.LearningModule;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.LiveClassEnrolment;
+import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.UploadedFile;
+import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LiveClassEnrolmentStatus;
 import com.example.aichinese.entity.enums.LiveClassStatus;
 import com.example.aichinese.entity.enums.MeetingPlatform;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
+import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.LiveClassEnrolmentRepository;
@@ -26,7 +35,6 @@ import com.example.aichinese.repository.PackageItemRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UploadedFileRepository;
-import com.example.aichinese.service.EntitlementService;
 import com.example.aichinese.service.LiveLearningAccessService;
 import com.example.aichinese.service.TeacherContentAccessService;
 
@@ -56,8 +64,62 @@ class LiveLearningAccessServiceTests {
             mock(RecordedLessonVideoRepository.class),
             mock(UploadedFileRepository.class),
             mock(PackageItemRepository.class),
-            mock(TeacherContentAccessService.class),
-            mock(EntitlementService.class));
+            mock(TeacherContentAccessService.class));
+
+    @Test
+    void publishedLessonsAndCoursesNeedNoPurchaseButUnpublishedOnesAreHidden() {
+        TeacherProfile approvedTeacher = teacher(TeacherStatus.APPROVED, true);
+        Lesson publishedLesson = new Lesson();
+        publishedLesson.setContentStatus(ContentStatus.PUBLISHED);
+        publishedLesson.setTeacher(approvedTeacher);
+        CoursePackage publishedCourse = new CoursePackage();
+        publishedCourse.setContentStatus(ContentStatus.PUBLISHED);
+        publishedCourse.setTeacher(approvedTeacher);
+
+        service.ensurePublishedLesson(publishedLesson);
+        service.ensurePublishedPackage(publishedCourse);
+
+        // D4/D13: a draft module, a rejected teacher or a deactivated teacher hides the lesson.
+        LearningModule draftModule = new LearningModule();
+        draftModule.setContentStatus(ContentStatus.SUBMITTED);
+        Lesson lessonInDraftModule = new Lesson();
+        lessonInDraftModule.setContentStatus(ContentStatus.PUBLISHED);
+        lessonInDraftModule.setTeacher(approvedTeacher);
+        lessonInDraftModule.setModule(draftModule);
+        Lesson rejectedTeacherLesson = new Lesson();
+        rejectedTeacherLesson.setContentStatus(ContentStatus.PUBLISHED);
+        rejectedTeacherLesson.setTeacher(teacher(TeacherStatus.REJECTED, true));
+        CoursePackage inactiveTeacherCourse = new CoursePackage();
+        inactiveTeacherCourse.setContentStatus(ContentStatus.PUBLISHED);
+        inactiveTeacherCourse.setTeacher(teacher(TeacherStatus.APPROVED, false));
+        assertThatThrownBy(() -> service.ensurePublishedLesson(lessonInDraftModule))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> service.ensurePublishedLesson(rejectedTeacherLesson))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> service.ensurePublishedPackage(inactiveTeacherCourse))
+                .isInstanceOf(ResponseStatusException.class);
+
+        Lesson archivedLesson = new Lesson();
+        archivedLesson.setContentStatus(ContentStatus.ARCHIVED);
+        CoursePackage draftCourse = new CoursePackage();
+        draftCourse.setContentStatus(ContentStatus.DRAFT);
+
+        assertThatThrownBy(() -> service.ensurePublishedLesson(archivedLesson))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Published lesson was not found.");
+        assertThatThrownBy(() -> service.ensurePublishedPackage(draftCourse))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Published course was not found.");
+    }
+
+    private static TeacherProfile teacher(TeacherStatus status, boolean active) {
+        User user = new User();
+        user.setActive(active);
+        TeacherProfile profile = new TeacherProfile();
+        profile.setUser(user);
+        profile.setTeacherStatus(status);
+        return profile;
+    }
 
     @Test
     void validateMeetingLinkReturnsCanonicalSafeHttpUrl() {
@@ -197,7 +259,8 @@ class LiveLearningAccessServiceTests {
     }
 
     private void stubEnrolment(Long liveClassId, LiveClassEnrolment enrolment) {
-        when(liveClassEnrolmentRepository.findByLiveClassIdAndStudentId(liveClassId, STUDENT_ID))
+        when(liveClassEnrolmentRepository.findFirstByLiveClassIdAndStudentIdAndEnrolmentStatusInOrderByIdDesc(
+                eq(liveClassId), eq(STUDENT_ID), any()))
                 .thenReturn(Optional.of(enrolment));
     }
 

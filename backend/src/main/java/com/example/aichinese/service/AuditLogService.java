@@ -1,7 +1,10 @@
 package com.example.aichinese.service;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -106,12 +109,27 @@ public class AuditLogService {
         }
     }
 
+    /**
+     * Server-side audit-log search (D16, FR-ADM-12): action type, target type, actor email
+     * (substring) or actor id, and an inclusive date range, newest first with pagination.
+     */
     @Transactional(readOnly = true)
-    public PageResponse<AuditLogResponse> getAuditLogs(String actionType, String targetType, String actor, int page, int size) {
+    public PageResponse<AuditLogResponse> getAuditLogs(
+            String actionType,
+            String targetType,
+            String actor,
+            Long actorId,
+            LocalDate from,
+            LocalDate to,
+            int page,
+            int size) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new ResponseStatusException(BAD_REQUEST, "The from date must be on or before the to date.");
+        }
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         Page<AuditLog> auditPage = auditLogRepository.findAll(
-                auditLogSpecification(actionType, targetType, actor),
+                auditLogSpecification(actionType, targetType, actor, actorId, from, to),
                 newestPageable(safePage, safeSize));
         return new PageResponse<>(
                 auditPage.getContent().stream()
@@ -144,7 +162,13 @@ public class AuditLogService {
         return truncate(normalized, MAX_AUDIT_DESCRIPTION_LENGTH);
     }
 
-    private Specification<AuditLog> auditLogSpecification(String actionType, String targetType, String actor) {
+    private Specification<AuditLog> auditLogSpecification(
+            String actionType,
+            String targetType,
+            String actor,
+            Long actorId,
+            LocalDate from,
+            LocalDate to) {
         String normalizedActionType = normalizeFilter(actionType);
         String normalizedTargetType = normalizeFilter(targetType);
         String normalizedActor = normalizeFilter(actor);
@@ -158,6 +182,15 @@ public class AuditLogService {
             }
             if (normalizedActor != null) {
                 predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("actorEmail")), "%" + normalizedActor + "%"));
+            }
+            if (actorId != null) {
+                predicates.add(criteriaBuilder.equal(root.get("actorUser").get("id"), actorId));
+            }
+            if (from != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.<LocalDateTime>get("createdAt"), from.atStartOfDay()));
+            }
+            if (to != null) {
+                predicates.add(criteriaBuilder.lessThan(root.<LocalDateTime>get("createdAt"), to.plusDays(1).atStartOfDay()));
             }
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
         };

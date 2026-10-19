@@ -5,14 +5,16 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-@JsonPropertyOrder({ "id", "questionType", "questionText", "points", "displayOrder", "options" })
+/** Quiz question for taking: no answer key and no hint text; {@code hintAvailable} says a hint can be requested (D8). */
+@JsonPropertyOrder({ "id", "questionType", "questionText", "points", "displayOrder", "options", "hintAvailable" })
 public record StudentQuizQuestionResponse(
         Long id,
         String questionType,
         String questionText,
         Integer points,
         Integer displayOrder,
-        List<QuizOptionResponse> options) {
+        List<QuizOptionResponse> options,
+        boolean hintAvailable) {
 
     public StudentQuizQuestionResponse {
         Objects.requireNonNull(id, "id must not be null");

@@ -33,6 +33,7 @@ import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.support.ContentReviewTestSupport;
 import com.example.aichinese.support.TestUploadFixtures;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +46,7 @@ import com.fasterxml.jackson.databind.node.MissingNode;
  * progress.
  *
  * <p>Pins the URL-leak defence (meeting URL only released within the
- * join window for enrolled students with valid entitlement) and the
+ * join window for enrolled students; every published lesson is free) and the
  * heartbeat-based video progress upsert contract.</p>
  */
 @SpringBootTest(properties = {
@@ -59,8 +60,6 @@ class LiveRecordedLearningIntegrationTests {
     private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String ADMIN_PASSWORD = "SuperSecure123!";
     private static final String USER_PASSWORD = "Password123!";
-    private static final String ACCESS_FREE = "FREE";
-    private static final String ACCESS_PAID = "PAID";
     private static final String LEARNING_HYBRID = "HYBRID";
     private static final String LEARNING_RECORDED = "RECORDED";
     private static final String PLATFORM_GOOGLE_MEET = "GOOGLE_MEET";
@@ -207,6 +206,23 @@ class LiveRecordedLearningIntegrationTests {
                         "status", STATUS_ONGOING)))
                 .andExpect(status().isBadRequest());
 
+        // A malformed zone id (not just an unknown region) must be a 400, not an unhandled DateTimeException.
+        mockMvc.perform(authenticatedJsonPost(
+                "/api/v1/teachers/live-classes",
+                teacherToken,
+                Map.of(
+                        "title", "Invalid Time Zone",
+                        "description", "Malformed zone id",
+                        "lessonId", lessonId,
+                        "startTime", start.toString(),
+                        "endTime", end.toString(),
+                        "timeZone", "Not a zone!",
+                        "meetingLink", "https://meet.google.com/invalid-zone",
+                        "meetingPlatform", PLATFORM_GOOGLE_MEET,
+                        "status", STATUS_SCHEDULED)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
         MvcResult createResult = mockMvc.perform(authenticatedJsonPost(
                 "/api/v1/teachers/live-classes",
                 teacherToken,
@@ -318,16 +334,81 @@ class LiveRecordedLearningIntegrationTests {
     }
 
     @Test
-    void studentLiveClassListingHandlesPaidAndFreeClassesWithoutFailing() throws Exception {
+    void enrolmentBeyondMaxParticipantsIsRejectedAndFullClassOffersNoEnrol() throws Exception {
+        // FR-LIVE-05 participant limit: two seats, the third student is refused.
+        String teacherEmail = uniqueEmail("capacity-teacher");
+        approveTeacherProfile(teacherEmail);
+        String teacherToken = userToken(teacherEmail);
+        Long lessonId = createPublishedLesson(teacherToken, "Capacity Lesson");
+        LocalDateTime start = LocalDateTime.now().plusDays(2);
+
+        MvcResult createResult = mockMvc.perform(authenticatedJsonPost(
+                "/api/v1/teachers/live-classes",
+                teacherToken,
+                Map.of(
+                        "title", "Two Seat Live Class",
+                        "description", "Capacity coverage",
+                        "lessonId", lessonId,
+                        "startTime", start.toString(),
+                        "endTime", start.plusMinutes(DEFAULT_LIVE_CLASS_MINUTES).toString(),
+                        "meetingLink", "https://zoom.us/j/987654321",
+                        "meetingPlatform", PLATFORM_ZOOM,
+                        "status", STATUS_SCHEDULED,
+                        "maxParticipants", 2)))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long liveClassId = extractDataId(createResult);
+
+        String firstToken = registerStudentAndLogin(uniqueEmail("capacity-first"));
+        String secondToken = registerStudentAndLogin(uniqueEmail("capacity-second"));
+        String thirdToken = registerStudentAndLogin(uniqueEmail("capacity-third"));
+
+        mockMvc.perform(authenticatedGet("/api/v1/students/live-classes/" + liveClassId, thirdToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.maxParticipants").value(2))
+                .andExpect(jsonPath("$.data.remainingSeats").value(2))
+                .andExpect(jsonPath("$.data.full").value(false))
+                .andExpect(jsonPath("$.data.canEnrol").value(true));
+
+        mockMvc.perform(authenticatedPost("/api/v1/students/live-classes/" + liveClassId + "/enrol", firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.remainingSeats").value(1));
+        mockMvc.perform(authenticatedPost("/api/v1/students/live-classes/" + liveClassId + "/enrol", secondToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.remainingSeats").value(0))
+                .andExpect(jsonPath("$.data.full").value(true));
+
+        mockMvc.perform(authenticatedGet("/api/v1/students/live-classes/" + liveClassId, thirdToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enrolled").value(false))
+                .andExpect(jsonPath("$.data.full").value(true))
+                .andExpect(jsonPath("$.data.canEnrol").value(false));
+
+        mockMvc.perform(authenticatedPost("/api/v1/students/live-classes/" + liveClassId + "/enrol", thirdToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        // A cancelled seat is released and can be taken by the waiting student.
+        mockMvc.perform(authenticatedPost("/api/v1/students/live-classes/" + liveClassId + "/cancel-enrolment", firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enrolled").value(false));
+        mockMvc.perform(authenticatedPost("/api/v1/students/live-classes/" + liveClassId + "/enrol", thirdToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enrolled").value(true))
+                .andExpect(jsonPath("$.data.remainingSeats").value(0));
+    }
+
+    @Test
+    void studentLiveClassListingOffersEveryPublishedLessonClassWithoutPurchase() throws Exception {
         String teacherEmail = uniqueEmail("listing-teacher");
         approveTeacherProfile(teacherEmail);
         String teacherToken = userToken(teacherEmail);
         Long freeLessonId = createPublishedLesson(teacherToken, "Free Listing Lesson");
-        Long paidLessonId = createPublishedPaidLesson(teacherToken, "Paid Listing Lesson");
+        Long secondLessonId = createPublishedLesson(teacherToken, "Second Listing Lesson");
         String studentToken = registerStudentAndLogin(uniqueEmail("listing-student"));
 
         LocalDateTime freeStart = LocalDateTime.now().plusDays(4);
-        LocalDateTime paidStart = LocalDateTime.now().plusDays(5);
+        LocalDateTime secondStart = LocalDateTime.now().plusDays(5);
 
         mockMvc.perform(authenticatedJsonPost(
                 "/api/v1/teachers/live-classes",
@@ -347,12 +428,12 @@ class LiveRecordedLearningIntegrationTests {
                 "/api/v1/teachers/live-classes",
                 teacherToken,
                 Map.of(
-                        "title", "Paid Listing Live Class",
-                        "description", "Visible but locked paid live class",
-                        "lessonId", paidLessonId,
-                        "startTime", paidStart.toString(),
-                        "endTime", paidStart.plusMinutes(DEFAULT_LIVE_CLASS_MINUTES).toString(),
-                        "meetingLink", "https://zoom.us/j/paid-listing",
+                        "title", "Second Listing Live Class",
+                        "description", "Second visible live class",
+                        "lessonId", secondLessonId,
+                        "startTime", secondStart.toString(),
+                        "endTime", secondStart.plusMinutes(DEFAULT_LIVE_CLASS_MINUTES).toString(),
+                        "meetingLink", "https://zoom.us/j/second-listing",
                         "meetingPlatform", PLATFORM_ZOOM,
                         "status", STATUS_SCHEDULED)))
                 .andExpect(status().isOk());
@@ -364,17 +445,17 @@ class LiveRecordedLearningIntegrationTests {
 
         JsonNode classes = responseItems(listingResult);
         JsonNode freeClass = findLiveClassByTitle(classes, "Free Listing Live Class");
-        JsonNode paidClass = findLiveClassByTitle(classes, "Paid Listing Live Class");
+        JsonNode secondClass = findLiveClassByTitle(classes, "Second Listing Live Class");
 
         assertThat(freeClass.isMissingNode()).isFalse();
         assertThat(freeClass.path("accessAllowed").asBoolean()).isTrue();
         assertThat(freeClass.path("canEnrol").asBoolean()).isTrue();
         assertThat(freeClass.path("meetingLink").isNull()).isTrue();
 
-        assertThat(paidClass.isMissingNode()).isFalse();
-        assertThat(paidClass.path("accessAllowed").asBoolean()).isFalse();
-        assertThat(paidClass.path("canEnrol").asBoolean()).isFalse();
-        assertThat(paidClass.path("meetingLink").isNull()).isTrue();
+        assertThat(secondClass.isMissingNode()).isFalse();
+        assertThat(secondClass.path("accessAllowed").asBoolean()).isTrue();
+        assertThat(secondClass.path("canEnrol").asBoolean()).isTrue();
+        assertThat(secondClass.path("meetingLink").isNull()).isTrue();
     }
 
     @Test
@@ -461,6 +542,20 @@ class LiveRecordedLearningIntegrationTests {
 
         mockMvc.perform(authenticatedPost("/api/v1/students/video-progress/" + videoId + "/complete", studentToken))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.progressPercentage").value(COMPLETED_PROGRESS_PERCENTAGE))
+                .andExpect(jsonPath("$.data.completed").value(true));
+
+        // Re-opening a completed video (the player sends an early-position heartbeat) keeps it completed.
+        mockMvc.perform(authenticatedJsonPost(
+                "/api/v1/students/video-progress/" + videoId,
+                studentToken,
+                Map.of(
+                        "watchedSeconds", 12,
+                        "totalSeconds", DEFAULT_VIDEO_DURATION_SECONDS,
+                        "progressPercentage", 10,
+                        "completed", false)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.watchedSeconds").value(12))
                 .andExpect(jsonPath("$.data.progressPercentage").value(COMPLETED_PROGRESS_PERCENTAGE))
                 .andExpect(jsonPath("$.data.completed").value(true));
 
@@ -580,7 +675,7 @@ class LiveRecordedLearningIntegrationTests {
         approveTeacherProfile(teacherEmail);
         String teacherToken = userToken(teacherEmail);
         Long lessonId = createPublishedLesson(teacherToken, "Recorded Package Lesson");
-        Long unrelatedPackageId = createPackage(teacherToken, "Unrelated Package", ACCESS_FREE, 0);
+        Long unrelatedPackageId = createPackage(teacherToken, "Unrelated Package");
 
         mockMvc.perform(externalRecordedVideoMultipart(
                 lessonId,
@@ -599,7 +694,7 @@ class LiveRecordedLearningIntegrationTests {
         String teacherToken = userToken(teacherEmail);
         Long moduleId = createModule(teacherToken, "Recorded Module");
         Long lessonId = createPublishedLessonInModule(teacherToken, moduleId, "Recorded Module Lesson");
-        Long packageId = createPackage(teacherToken, "Module Package", ACCESS_FREE, 0);
+        Long packageId = createPackage(teacherToken, "Module Package");
         addPackageItem(teacherToken, packageId, ITEM_TYPE_MODULE, moduleId);
 
         mockMvc.perform(externalRecordedVideoMultipart(
@@ -673,34 +768,15 @@ class LiveRecordedLearningIntegrationTests {
                         "levelId", BEGINNER_LEVEL_ID,
                         "categoryId", VOCABULARY_CATEGORY_ID,
                         "learningType", LEARNING_HYBRID,
-                        "accessType", ACCESS_FREE,
-                        "price", 0,
                         "estimatedDurationMinutes", DEFAULT_DURATION_MINUTES,
                         "basicContent", "Hybrid lesson content")))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return extractDataId(lessonResult);
-    }
-
-    private Long createPublishedPaidLesson(String teacherToken, String title) throws Exception {
-        MvcResult lessonResult = mockMvc.perform(authenticatedJsonPost(
-                "/api/v1/teachers/lessons",
-                teacherToken,
-                Map.of(
-                        "title", title,
-                        "description", "Phase 10 paid lesson",
-                        "levelId", BEGINNER_LEVEL_ID,
-                        "categoryId", VOCABULARY_CATEGORY_ID,
-                        "learningType", LEARNING_HYBRID,
-                        "accessType", ACCESS_PAID,
-                        "price", 19.90,
-                        "estimatedDurationMinutes", DEFAULT_DURATION_MINUTES,
-                        "basicContent", "Paid hybrid lesson content")))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        return extractDataId(lessonResult);
+        Long lessonId = extractDataId(lessonResult);
+        // D4: published means submitted by the teacher and approved by an admin.
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "LESSON", lessonId);
+        return lessonId;
     }
 
     private Long createModule(String teacherToken, String title) throws Exception {
@@ -711,13 +787,13 @@ class LiveRecordedLearningIntegrationTests {
                         "title", title,
                         "description", "Phase 10 module",
                         "levelId", BEGINNER_LEVEL_ID,
-                        "categoryId", VOCABULARY_CATEGORY_ID,
-                        "accessType", ACCESS_FREE,
-                        "price", 0)))
+                        "categoryId", VOCABULARY_CATEGORY_ID)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return extractDataId(moduleResult);
+        Long moduleId = extractDataId(moduleResult);
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "MODULE", moduleId);
+        return moduleId;
     }
 
     private Long createPublishedLessonInModule(String teacherToken, Long moduleId, String title) throws Exception {
@@ -731,17 +807,17 @@ class LiveRecordedLearningIntegrationTests {
                         "levelId", BEGINNER_LEVEL_ID,
                         "categoryId", VOCABULARY_CATEGORY_ID,
                         "learningType", LEARNING_HYBRID,
-                        "accessType", ACCESS_FREE,
-                        "price", 0,
                         "estimatedDurationMinutes", DEFAULT_DURATION_MINUTES,
                         "basicContent", "Hybrid module lesson content")))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        return extractDataId(lessonResult);
+        Long lessonId = extractDataId(lessonResult);
+        ContentReviewTestSupport.publish(mockMvc, teacherToken, adminToken(), "LESSON", lessonId);
+        return lessonId;
     }
 
-    private Long createPackage(String teacherToken, String title, String accessType, double price) throws Exception {
+    private Long createPackage(String teacherToken, String title) throws Exception {
         MvcResult result = mockMvc.perform(authenticatedJsonPost(
                 "/api/v1/teachers/packages",
                 teacherToken,
@@ -750,9 +826,7 @@ class LiveRecordedLearningIntegrationTests {
                         "description", "Phase 10 package",
                         "levelId", BEGINNER_LEVEL_ID,
                         "categoryId", VOCABULARY_CATEGORY_ID,
-                        "learningType", LEARNING_RECORDED,
-                        "accessType", accessType,
-                        "price", price)))
+                        "learningType", LEARNING_RECORDED)))
                 .andExpect(status().isOk())
                 .andReturn();
 

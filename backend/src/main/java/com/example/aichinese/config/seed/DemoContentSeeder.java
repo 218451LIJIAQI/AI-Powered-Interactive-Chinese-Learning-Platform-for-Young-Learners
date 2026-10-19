@@ -1,6 +1,5 @@
 package com.example.aichinese.config.seed;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -24,7 +23,6 @@ import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.PackageItemType;
@@ -111,23 +109,21 @@ public class DemoContentSeeder implements CommandLineRunner {
         module.setLevel(beginner);
         module.setCategory(greetings);
         module.setTitle("Beginner Mandarin Foundations");
-        module.setDescription("A friendly first path through greetings, numbers, and family words.");
+        module.setDescription("A first path for adult beginners: self-introduction, numbers and ordering food on campus.");
         module.setContentStatus(ContentStatus.PUBLISHED);
-        module.setAccessType(AccessType.FREE);
-        module.setPrice(BigDecimal.ZERO);
         module = learningModuleRepository.save(module);
 
         Lesson greetingsLesson = createLesson(module, teacher, beginner, greetings,
-                "Hello and Introductions", "Learn to greet a friend and introduce yourself.",
-                "你好 (nǐ hǎo) means hello. 我叫… (wǒ jiào…) means my name is… Try greeting a friend and saying your name.",
+                "Hello and Self-introduction", "Greet a classmate and introduce yourself, your course and your university.",
+                "你好 (nǐ hǎo) means hello. 我叫… (wǒ jiào…) means my name is… 我是大学生 (wǒ shì dàxuéshēng) means I am a university student. Introduce yourself in three short sentences.",
                 12);
         Lesson numbersLesson = createLesson(module, teacher, beginner, category("Numbers"),
-                "Count from One to Ten", "Practice Mandarin numbers with short spoken examples.",
-                "一 (yī), 二 (èr), 三 (sān), 四 (sì), 五 (wǔ), 六 (liù), 七 (qī), 八 (bā), 九 (jiǔ), 十 (shí). Count ten objects around you.",
+                "Numbers, Prices and Phone Talk", "Use the numbers one to ten for prices, times and room numbers.",
+                "一 (yī), 二 (èr), 三 (sān), 四 (sì), 五 (wǔ), 六 (liù), 七 (qī), 八 (bā), 九 (jiǔ), 十 (shí). 多少钱？(duōshao qián?) means how much is it? Practise saying a price and a room number.",
                 15);
-        Lesson familyLesson = createLesson(module, teacher, beginner, category("Family"),
-                "Family Words", "Say the names of family members in Mandarin.",
-                "妈妈 (māma) is mother. 爸爸 (bàba) is father. 家 (jiā) means family or home. Describe your family using these words.",
+        Lesson foodLesson = createLesson(module, teacher, beginner, category("Food"),
+                "Ordering Food and Drinks", "Order a meal and a drink at a campus café or hawker stall.",
+                "我要… (wǒ yào…) means I would like… 一杯咖啡 (yì bēi kāfēi) is a cup of coffee. 米饭 (mǐfàn) is rice. 谢谢 (xièxie) means thank you. Role-play ordering lunch with a friend.",
                 14);
 
         CoursePackage coursePackage = new CoursePackage();
@@ -137,13 +133,11 @@ public class DemoContentSeeder implements CommandLineRunner {
         coursePackage.setTitle("Beginner Mandarin Starter Path");
         coursePackage.setDescription("Three short lessons for a confident start in Mandarin.");
         coursePackage.setContentStatus(ContentStatus.PUBLISHED);
-        coursePackage.setAccessType(AccessType.FREE);
         coursePackage.setLearningType(LearningType.RECORDED);
-        coursePackage.setPrice(BigDecimal.ZERO);
         coursePackage = coursePackageRepository.save(coursePackage);
 
         int order = 1;
-        for (Lesson lesson : List.of(greetingsLesson, numbersLesson, familyLesson)) {
+        for (Lesson lesson : List.of(greetingsLesson, numbersLesson, foodLesson)) {
             PackageItem item = new PackageItem();
             item.setCoursePackage(coursePackage);
             item.setItemType(PackageItemType.LESSON);
@@ -168,9 +162,9 @@ public class DemoContentSeeder implements CommandLineRunner {
         TeacherProfile profile = new TeacherProfile();
         profile.setUser(user);
         profile.setTeacherStatus(TeacherStatus.APPROVED);
-        profile.setBio("A supportive teacher introducing children to everyday Mandarin.");
+        profile.setBio("A Mandarin tutor helping university students and young professionals build everyday communication skills.");
         profile.setQualificationSummary("Demo educator for the local learning experience.");
-        profile.setTeachingCategories("Greetings, Numbers, Family");
+        profile.setTeachingCategories("Greetings, Numbers, Food");
         profile.setVerifiedAt(LocalDateTime.now());
         profile.setPublicVisible(true);
         return teacherProfileRepository.save(profile);
@@ -218,9 +212,7 @@ public class DemoContentSeeder implements CommandLineRunner {
         lesson.setSummary(summary);
         lesson.setLessonContent(content);
         lesson.setContentStatus(ContentStatus.PUBLISHED);
-        lesson.setAccessType(AccessType.FREE);
         lesson.setLearningType(LearningType.RECORDED);
-        lesson.setPrice(BigDecimal.ZERO);
         lesson.setEstimatedDurationMinutes(durationMinutes);
         return lessonRepository.save(lesson);
     }

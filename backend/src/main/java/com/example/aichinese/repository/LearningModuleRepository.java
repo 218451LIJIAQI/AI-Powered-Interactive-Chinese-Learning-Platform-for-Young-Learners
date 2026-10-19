@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
@@ -18,9 +19,6 @@ import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.repository.projection.StatusCountProjection;
 
 public interface LearningModuleRepository extends JpaRepository<LearningModule, Long>, JpaSpecificationExecutor<LearningModule> {
-
-    @EntityGraph(value = LearningModule.GRAPH_DETAIL)
-    List<LearningModule> findByTeacherUserIdOrderByUpdatedAtDesc(Long userId);
 
     @EntityGraph(value = LearningModule.GRAPH_DETAIL)
     Page<LearningModule> findByTeacherUserIdOrderByUpdatedAtDesc(Long userId, Pageable pageable);
@@ -33,14 +31,6 @@ public interface LearningModuleRepository extends JpaRepository<LearningModule, 
     @NonNull
     Optional<LearningModule> findById(@NonNull Long id);
 
-    @EntityGraph(value = LearningModule.GRAPH_DETAIL)
-    Optional<LearningModule> findByIdAndContentStatus(Long id, ContentStatus contentStatus);
-
-    @Override
-    @EntityGraph(value = LearningModule.GRAPH_DETAIL)
-    @NonNull
-    List<LearningModule> findAll(@Nullable Specification<LearningModule> specification);
-
     @Override
     @EntityGraph(value = LearningModule.GRAPH_DETAIL)
     @NonNull
@@ -51,7 +41,7 @@ public interface LearningModuleRepository extends JpaRepository<LearningModule, 
     long countByTeacherId(Long teacherId);
 
     @Query("select m.contentStatus as status, count(m) as count from LearningModule m where m.teacher.id = :teacherId group by m.contentStatus")
-    List<StatusCountProjection> groupByContentStatusForTeacher(Long teacherId);
+    List<StatusCountProjection> groupByContentStatusForTeacher(@Param("teacherId") Long teacherId);
 
     @Query("select m.contentStatus as status, count(m) as count from LearningModule m group by m.contentStatus")
     List<StatusCountProjection> groupByContentStatus();

@@ -33,17 +33,24 @@ public record CurrentUserResponse(
         roles = normalizeRoles(roles);
     }
 
-    @JsonPropertyOrder({ "id", "displayName", "currentLevel", "totalPoints" })
+    /** {@code institution} is optional (university, college or workplace). */
+    @JsonPropertyOrder({ "id", "displayName", "currentLevel", "totalPoints", "institution" })
     public record StudentProfileSummary(
             Long id,
             String displayName,
             String currentLevel,
-            Integer totalPoints) {
+            Integer totalPoints,
+            String institution) {
 
         public StudentProfileSummary {
             Objects.requireNonNull(id, "id must not be null");
             displayName = normalizeOptionalText(displayName);
             currentLevel = normalizeOptionalText(currentLevel);
+            institution = normalizeOptionalText(institution);
+        }
+
+        public StudentProfileSummary(Long id, String displayName, String currentLevel, Integer totalPoints) {
+            this(id, displayName, currentLevel, totalPoints, null);
         }
     }
 

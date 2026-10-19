@@ -34,8 +34,4 @@ public enum TeacherFeedbackType {
                 () -> "Invalid teacher feedback type. Allowed values are GENERAL, QUIZ, LESSON, "
                         + "ENCOURAGING, CORRECTIVE, PROGRESS, or WEAK_AREA.");
     }
-
-    public static TeacherFeedbackType fromValueOrGeneral(String value) {
-        return tryFrom(value).orElse(GENERAL);
-    }
 }

@@ -11,7 +11,7 @@ public enum RoleName {
 
     ADMIN;
 
-    public static final String AUTHORITY_PREFIX = "ROLE_";
+    private static final String AUTHORITY_PREFIX = "ROLE_";
 
     private static final Map<String, RoleName> LOOKUP = EnumLookups.indexByName(RoleName.class);
 

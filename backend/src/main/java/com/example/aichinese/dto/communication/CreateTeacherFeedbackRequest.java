@@ -18,6 +18,8 @@ public record CreateTeacherFeedbackRequest(
 
         @Positive(message = "Quiz attempt id must be positive.")
         Long quizAttemptId,
+        @Positive(message = "Practice submission id must be positive.")
+        Long practiceSubmissionId,
 
         @Size(max = MAX_FEEDBACK_TYPE_LENGTH, message = "Feedback type must be 30 characters or fewer.")
         String feedbackType,

@@ -1,13 +1,16 @@
 <template>
   <div class="page-stack teacher-classes-page">
-    <PageHeaderBlock
-      :title="t('teacherClasses.title')"
-      :description="t('teacherClasses.description')"
-      icon="classes"
-      :eyebrow="t('teacherClasses.eyebrow')"
-    >
+    <PageHeaderBlock :title="t('teacherClasses.title')" :description="t('teacherClasses.description')" icon="classes">
       <template #actions>
-        <button class="teacher-sample-link" type="button" :disabled="teacherApprovalLocked" @click="toggleComposer">
+        <button
+          class="btn btn-primary"
+          type="button"
+          aria-controls="teacher-classes-composer"
+          :aria-expanded="showComposer"
+          :disabled="teacherApprovalLocked"
+          @click="toggleComposer"
+        >
+          <IconGlyph :name="teacherApprovalLocked ? 'safe' : 'calendar'" :size="18" aria-hidden="true" />
           {{ composerToggleLabel }}
         </button>
       </template>
@@ -15,7 +18,7 @@
 
     <DataNotice
       :using-fallback="usingFallback"
-      :error="noticeError"
+      :error="actionError"
       :success="actionSuccess"
       :fallback-title="t('teacherClasses.previewTitle')"
       :fallback-message="t('teacherClasses.previewMessage')"
@@ -24,121 +27,138 @@
     />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="teacher-classes-upcoming panel">
-        <div class="row-between teacher-classes-section-head">
-          <div class="student-section-heading">
-            <strong>{{ t('teacherClasses.upcoming') }}</strong>
-          </div>
-          <div class="row teacher-classes-header-actions">
-            <span class="teacher-classes-date-pill">{{ currentDateLabel }}</span>
+      <section class="panel teacher-classes-upcoming" aria-labelledby="teacher-classes-upcoming-title">
+        <div class="section-header">
+          <h2 id="teacher-classes-upcoming-title" class="section-title">{{ t('teacherClasses.upcoming') }}</h2>
+          <span class="tag teacher-classes-date">
+            <IconGlyph name="calendar" :size="14" aria-hidden="true" />
+            {{ currentDateLabel }}
+          </span>
+        </div>
+
+        <TeacherApprovalLockPanel
+          v-if="teacherApprovalLocked"
+          :title="t('teacherClasses.verificationPending')"
+          :message="t('teacherClasses.verificationRequired')"
+        />
+        <StatePanel
+          v-else-if="!liveClassCards.length"
+          compact
+          icon="classes"
+          :title="t('teacherClasses.noLiveClasses')"
+          :message="t('teacherClasses.noLiveClassesHint')"
+        >
+          <template #actions>
+            <button class="btn btn-secondary" type="button" @click="createNewClass">
+              {{ t('teacherClasses.scheduleClass') }}
+            </button>
+          </template>
+        </StatePanel>
+        <ul v-else class="teacher-live-list">
+          <li
+            v-for="item in liveClassCards"
+            :key="item.id"
+            class="teacher-live-item"
+            :class="{ 'is-selected': item.selected }"
+          >
+            <p class="teacher-live-when">
+              <span class="teacher-live-day">{{ item.dayLabel }}</span>
+              <strong class="teacher-live-time">{{ item.timeLabel }}</strong>
+            </p>
+
+            <div class="teacher-live-main">
+              <span class="teacher-class-tile" :class="`is-${item.art}`" aria-hidden="true">
+                <IconGlyph name="classes" :size="22" />
+              </span>
+              <div class="teacher-live-copy">
+                <div class="teacher-live-title-row">
+                  <h3 :id="`teacher-live-title-${item.id}`" class="teacher-live-title">{{ item.title }}</h3>
+                  <StatusPill :label="item.classCode" :tone="item.statusTone" />
+                </div>
+                <p class="teacher-live-topic">{{ item.topic }}</p>
+                <ul class="teacher-live-meta">
+                  <li>
+                    <IconGlyph name="students" :size="16" aria-hidden="true" />
+                    {{ item.studentLabel }}
+                  </li>
+                  <li>
+                    <IconGlyph name="live" :size="16" aria-hidden="true" />
+                    {{ item.platform }} · {{ item.platformMeta }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="teacher-live-actions" role="group" :aria-labelledby="`teacher-live-title-${item.id}`">
+              <button class="btn btn-secondary btn-sm" type="button" @click="openMeeting(item.meetingLink)">
+                <IconGlyph name="live" :size="16" aria-hidden="true" />
+                {{ t('teacherClasses.openMeeting') }}
+              </button>
+              <button
+                class="btn btn-ghost btn-sm"
+                type="button"
+                :aria-pressed="item.selected"
+                @click="selectClass(item.id)"
+              >
+                <IconGlyph name="pen" :size="16" aria-hidden="true" />
+                {{ item.editLabel }}
+              </button>
+              <button class="btn btn-ghost btn-sm" type="button" @click="loadEnrolments(item.id)">
+                <IconGlyph name="students" :size="16" aria-hidden="true" />
+                {{ t('teacherClasses.viewRoster') }}
+              </button>
+              <button
+                class="btn btn-ghost btn-sm btn-icon"
+                type="button"
+                :aria-label="t('teacherClasses.detailsAria')"
+                :data-tooltip="t('teacherClasses.details')"
+                @click="selectClass(item.id)"
+              >
+                <IconGlyph name="more" :size="18" aria-hidden="true" />
+              </button>
+            </div>
+          </li>
+        </ul>
+
+        <DataNotice :info="t('teacherClasses.externalSupport')" :info-title="t('teacherClasses.needHelp')">
+          <template #actions>
             <button
-              class="student-link-button teacher-classes-head-link"
+              class="btn btn-secondary btn-sm"
               type="button"
               :disabled="teacherApprovalLocked"
               @click="openComposer"
             >
               {{ t('teacherClasses.openScheduler') }}
             </button>
-          </div>
-        </div>
-
-        <div v-if="teacherApprovalLocked" class="teacher-classes-empty">
-          {{ t('teacherClasses.verificationRequired') }}
-        </div>
-        <div v-else-if="!liveClassCards.length" class="teacher-classes-empty">
-          {{ t('teacherClasses.noLiveClasses') }}
-        </div>
-        <div v-else class="teacher-classes-live-list">
-          <article
-            v-for="item in liveClassCards"
-            :key="item.id"
-            class="teacher-classes-live-item"
-            :class="`is-${item.tone}`"
-          >
-            <div class="teacher-classes-live-time">
-              <small>{{ item.dayLabel }}</small>
-              <strong>{{ item.timeLabel }}</strong>
-            </div>
-
-            <div class="teacher-classes-live-media">
-              <div class="teacher-classes-live-thumb" :class="`is-${item.art}`">
-                <IconGlyph name="classes" :size="24" />
-              </div>
-              <div class="teacher-classes-live-copy">
-                <div class="row u-wrap">
-                  <strong>{{ item.title }}</strong>
-                  <span class="teacher-classes-chip">{{ item.classCode }}</span>
-                </div>
-                <span>{{ item.topic }}</span>
-                <small>{{ item.studentLabel }}</small>
-              </div>
-            </div>
-
-            <div class="teacher-classes-live-platform">
-              <span class="teacher-classes-platform-icon" :class="`is-${item.platformTone}`">
-                <IconGlyph name="live" :size="18" />
-              </span>
-              <div class="stack u-gap-2">
-                <strong>{{ item.platform }}</strong>
-                <span>{{ item.platformMeta }}</span>
-              </div>
-            </div>
-
-            <div class="teacher-classes-live-actions">
-              <div class="teacher-classes-live-actions-main">
-                <button class="btn btn-primary" type="button" @click="openMeeting(item.meetingLink)">
-                  {{ t('teacherClasses.openMeeting') }}
-                </button>
-                <button class="teacher-outline-button" type="button" @click="selectClass(item.id)">
-                  {{ item.editLabel }}
-                </button>
-                <button class="teacher-outline-button" type="button" @click="loadEnrolments(item.id)">
-                  {{ t('teacherClasses.viewRoster') }}
-                </button>
-              </div>
-              <button
-                class="teacher-classes-live-more"
-                type="button"
-                :aria-label="t('teacherClasses.detailsAria')"
-                @click="selectClass(item.id)"
-              >
-                {{ t('teacherClasses.details') }}
-              </button>
-            </div>
-          </article>
-        </div>
-
-        <div class="teacher-classes-support-strip">
-          <div class="row">
-            <span class="teacher-classes-support-icon"><IconGlyph name="help" :size="14" /></span>
-            <span>
-              {{ t('teacherClasses.externalSupport') }}
-            </span>
-          </div>
-          <div class="row teacher-classes-support-actions">
-            <span>{{ t('teacherClasses.needHelp') }}</span>
-            <button class="teacher-guide-button" type="button" :disabled="teacherApprovalLocked" @click="openComposer">
-              {{ t('teacherClasses.openScheduler') }}
-            </button>
-          </div>
-        </div>
+          </template>
+        </DataNotice>
       </section>
 
-      <section v-if="showComposer" class="teacher-classes-composer-grid">
-        <article class="panel teacher-classes-editor-card">
-          <div class="row-between teacher-classes-section-head">
-            <div class="student-section-heading">
-              <strong>{{ composerTitle }}</strong>
+      <section class="teacher-classes-detail" :class="{ 'is-composing': showComposer }">
+        <article
+          v-if="showComposer"
+          id="teacher-classes-composer"
+          class="panel teacher-classes-composer"
+          aria-labelledby="teacher-classes-composer-title"
+        >
+          <div class="card-header">
+            <div>
+              <h2 id="teacher-classes-composer-title" class="card-title">{{ composerTitle }}</h2>
+              <p class="card-subtitle">{{ t('teacherClasses.requiredNote') }}</p>
             </div>
-            <button v-if="selectedLiveClass" class="student-link-button" type="button" @click="resetComposer">
+            <button v-if="selectedLiveClass" class="btn btn-ghost btn-sm" type="button" @click="resetComposer">
+              <IconGlyph name="plus" :size="14" />
               {{ t('teacherClasses.newClass') }}
             </button>
           </div>
 
           <form class="teacher-classes-form" @submit.prevent="submitClass">
-            <div class="form-grid two">
+            <fieldset class="form-section">
+              <legend class="form-section-title">{{ t('teacherClasses.composerDetails') }}</legend>
               <div class="field">
-                <label for="teacher-class-title">{{ t('teacherClasses.classTitle') }}</label>
+                <label class="field-label" for="teacher-class-title">
+                  {{ t('teacherClasses.classTitle') }}<span class="required-mark" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="teacher-class-title"
                   v-model="classForm.title"
@@ -148,321 +168,390 @@
                   :disabled="classComposerDisabled"
                 />
               </div>
-              <div class="field">
-                <label for="teacher-class-platform">{{ t('teacherClasses.meetingPlatform') }}</label>
-                <select
-                  id="teacher-class-platform"
-                  v-model="classForm.meetingPlatform"
-                  class="select"
-                  :disabled="classComposerDisabled"
-                >
-                  <option value="ZOOM">Zoom</option>
-                  <option value="GOOGLE_MEET">Google Meet</option>
-                  <option value="MICROSOFT_TEAMS">Microsoft Teams</option>
-                  <option value="OTHER">{{ t('teacherClasses.other') }}</option>
-                </select>
-              </div>
-            </div>
 
-            <div class="field">
-              <label for="teacher-class-description">{{ t('teacherClasses.topicDescription') }}</label>
-              <textarea
-                id="teacher-class-description"
-                v-model="classForm.description"
-                class="textarea"
-                maxlength="1000"
-                :disabled="classComposerDisabled"
-              />
-            </div>
-
-            <div class="form-grid two">
               <div class="field">
-                <label for="teacher-class-lesson">{{ t('teacherClasses.lesson') }}</label>
-                <select
-                  id="teacher-class-lesson"
-                  v-model.number="classForm.lessonId"
-                  class="select"
-                  :disabled="classComposerDisabled"
-                >
-                  <option :value="0">{{ t('teacherClasses.noLesson') }}</option>
-                  <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">
-                    {{ lesson.title }}
-                  </option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="teacher-class-package">{{ t('teacherClasses.package') }}</label>
-                <select
-                  id="teacher-class-package"
-                  v-model.number="classForm.packageId"
-                  class="select"
-                  :disabled="classComposerDisabled"
-                >
-                  <option :value="0">{{ t('teacherClasses.noPackage') }}</option>
-                  <option v-for="coursePackage in packageOptions" :key="coursePackage.id" :value="coursePackage.id">
-                    {{ coursePackage.title }}
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-grid two">
-              <div class="field">
-                <label for="teacher-class-start-time">{{ t('teacherClasses.startTime') }}</label>
-                <input
-                  id="teacher-class-start-time"
-                  v-model="classForm.startTime"
-                  class="input"
-                  type="datetime-local"
-                  required
+                <label class="field-label" for="teacher-class-description">
+                  {{ t('teacherClasses.topicDescription') }}
+                </label>
+                <textarea
+                  id="teacher-class-description"
+                  v-model="classForm.description"
+                  class="textarea teacher-classes-textarea"
+                  maxlength="1000"
                   :disabled="classComposerDisabled"
                 />
               </div>
-              <div class="field">
-                <label for="teacher-class-end-time">{{ t('teacherClasses.endTime') }}</label>
-                <input
-                  id="teacher-class-end-time"
-                  v-model="classForm.endTime"
-                  class="input"
-                  type="datetime-local"
-                  required
-                  :disabled="classComposerDisabled"
-                />
-              </div>
-            </div>
 
-            <div class="form-grid two">
+              <div class="form-grid two">
+                <div class="field">
+                  <label class="field-label" for="teacher-class-lesson">{{ t('teacherClasses.lesson') }}</label>
+                  <select
+                    id="teacher-class-lesson"
+                    v-model.number="classForm.lessonId"
+                    class="select"
+                    aria-describedby="teacher-class-context-hint"
+                    :disabled="classComposerDisabled"
+                  >
+                    <option :value="0">{{ t('teacherClasses.noLesson') }}</option>
+                    <option v-for="lesson in lessonOptions" :key="lesson.id" :value="lesson.id">
+                      {{ lesson.title }}
+                    </option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="teacher-class-package">{{ t('teacherClasses.package') }}</label>
+                  <select
+                    id="teacher-class-package"
+                    v-model.number="classForm.packageId"
+                    class="select"
+                    aria-describedby="teacher-class-context-hint"
+                    :disabled="classComposerDisabled"
+                  >
+                    <option :value="0">{{ t('teacherClasses.noPackage') }}</option>
+                    <option v-for="coursePackage in packageOptions" :key="coursePackage.id" :value="coursePackage.id">
+                      {{ coursePackage.title }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <p id="teacher-class-context-hint" class="field-hint">{{ t('teacherClasses.formNote') }}</p>
+            </fieldset>
+
+            <fieldset class="form-section">
+              <legend class="form-section-title">{{ t('teacherClasses.composerSchedule') }}</legend>
+              <div class="form-grid two">
+                <div class="field">
+                  <label class="field-label" for="teacher-class-start-time">
+                    {{ t('teacherClasses.startTime') }}<span class="required-mark" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="teacher-class-start-time"
+                    v-model="classForm.startTime"
+                    class="input"
+                    type="datetime-local"
+                    required
+                    aria-describedby="teacher-class-time-hint"
+                    :disabled="classComposerDisabled"
+                  />
+                </div>
+                <div class="field">
+                  <label class="field-label" for="teacher-class-end-time">
+                    {{ t('teacherClasses.endTime') }}<span class="required-mark" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="teacher-class-end-time"
+                    v-model="classForm.endTime"
+                    class="input"
+                    type="datetime-local"
+                    required
+                    aria-describedby="teacher-class-time-hint"
+                    :disabled="classComposerDisabled"
+                  />
+                </div>
+              </div>
+              <p id="teacher-class-time-hint" class="field-hint">{{ t('teacherClasses.timeZoneHint') }}</p>
+            </fieldset>
+
+            <fieldset class="form-section">
+              <legend class="form-section-title">{{ t('teacherClasses.composerMeeting') }}</legend>
+              <div class="form-grid two">
+                <div class="field">
+                  <label class="field-label" for="teacher-class-platform">
+                    {{ t('teacherClasses.meetingPlatform') }}
+                  </label>
+                  <select
+                    id="teacher-class-platform"
+                    v-model="classForm.meetingPlatform"
+                    class="select"
+                    :disabled="classComposerDisabled"
+                  >
+                    <option v-for="platform in MEETING_PLATFORMS" :key="platform" :value="platform">
+                      {{ statusLabel('platform', platform) }}
+                    </option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label" for="teacher-class-max-participants">
+                    {{ t('teacherClasses.maxParticipants') }}
+                  </label>
+                  <input
+                    id="teacher-class-max-participants"
+                    v-model.number="classForm.maxParticipants"
+                    class="input"
+                    type="number"
+                    min="1"
+                    inputmode="numeric"
+                    aria-describedby="teacher-class-capacity-hint"
+                    :disabled="classComposerDisabled"
+                  />
+                  <p id="teacher-class-capacity-hint" class="field-hint">{{ t('teacherClasses.capacityHint') }}</p>
+                </div>
+              </div>
               <div class="field">
-                <label for="teacher-class-meeting-link">{{ t('teacherClasses.meetingLink') }}</label>
+                <label class="field-label" for="teacher-class-meeting-link">
+                  {{ t('teacherClasses.meetingLink') }}<span class="required-mark" aria-hidden="true">*</span>
+                </label>
                 <input
                   id="teacher-class-meeting-link"
                   v-model="classForm.meetingLink"
                   class="input"
                   type="url"
+                  inputmode="url"
+                  maxlength="500"
                   required
+                  placeholder="https://"
+                  aria-describedby="teacher-class-link-hint"
                   :disabled="classComposerDisabled"
                 />
+                <p id="teacher-class-link-hint" class="field-hint">{{ t('teacherClasses.meetingLinkHint') }}</p>
               </div>
-              <div class="field">
-                <label for="teacher-class-max-participants">{{ t('teacherClasses.maxParticipants') }}</label>
-                <input
-                  id="teacher-class-max-participants"
-                  v-model.number="classForm.maxParticipants"
-                  class="input"
-                  type="number"
-                  min="1"
-                  :disabled="classComposerDisabled"
-                />
-              </div>
-            </div>
+            </fieldset>
 
-            <div class="teacher-classes-form-footer">
-              <div class="teacher-classes-form-note">
-                {{ t('teacherClasses.formNote') }}
-              </div>
-              <div class="row u-justify-end u-wrap">
+            <p v-if="actionError" class="inline-feedback is-error teacher-classes-form-error" role="alert">
+              <IconGlyph name="alert" :size="16" aria-hidden="true" />
+              {{ actionError }}
+            </p>
+
+            <div
+              v-if="confirmingCancel && selectedLiveClass"
+              class="teacher-classes-confirm"
+              role="group"
+              aria-labelledby="teacher-classes-confirm-title"
+            >
+              <p id="teacher-classes-confirm-title" class="teacher-classes-confirm-copy">
+                <IconGlyph name="alert" :size="18" aria-hidden="true" />
+                {{ t('teacherClasses.confirmCancelTitle', { title: selectedLiveClass.title }) }}
+              </p>
+              <div class="teacher-classes-confirm-actions">
+                <button class="btn btn-ghost btn-sm" type="button" @click="confirmingCancel = false">
+                  {{ t('teacherClasses.keepClass') }}
+                </button>
                 <button
-                  v-if="selectedLiveClass"
-                  class="teacher-outline-button"
+                  class="btn btn-danger btn-sm"
                   type="button"
+                  :aria-busy="submittingCancel"
                   :disabled="classesReadOnly || submittingCancel"
                   @click="cancelSelectedClass"
                 >
                   {{ cancelClassButtonLabel }}
                 </button>
-                <button
-                  class="btn btn-primary"
-                  type="submit"
-                  :disabled="classesReadOnly || submittingCreate || submittingUpdate"
-                >
-                  {{ submitClassButtonLabel }}
-                </button>
               </div>
+            </div>
+
+            <div class="form-actions">
+              <button
+                v-if="selectedLiveClass && !confirmingCancel"
+                class="btn btn-danger-soft"
+                type="button"
+                :disabled="classesReadOnly || submittingCancel"
+                @click="confirmingCancel = true"
+              >
+                {{ t('teacherClasses.cancelClass') }}
+              </button>
+              <button
+                class="btn btn-primary"
+                type="submit"
+                :aria-busy="submittingCreate || submittingUpdate"
+                :disabled="classesReadOnly || submittingCreate || submittingUpdate"
+              >
+                {{ submitClassButtonLabel }}
+              </button>
             </div>
           </form>
         </article>
 
-        <article class="panel teacher-classes-roster-card">
-          <div class="row-between teacher-classes-section-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherClasses.selectedRoster') }}</strong>
+        <div class="teacher-classes-detail-side">
+          <article class="panel teacher-classes-card" aria-labelledby="teacher-classes-roster-title">
+            <div class="card-header">
+              <div class="teacher-classes-card-heading">
+                <h2 id="teacher-classes-roster-title" class="card-title">{{ t('teacherClasses.selectedRoster') }}</h2>
+                <p v-if="selectedLiveClass" class="card-subtitle">{{ selectedLiveClass.title }}</p>
+              </div>
+              <span class="chip">{{ t('teacherClasses.learners', { count: enrolments.length }) }}</span>
             </div>
-            <span class="teacher-classes-roster-count">{{
-              t('teacherClasses.learners', { count: enrolments.length })
-            }}</span>
-          </div>
 
-          <div class="teacher-classes-roster-list">
-            <article v-for="student in enrolments" :key="student.id" class="teacher-classes-roster-item">
-              <PortraitAvatar :size="52" rounded="soft" kind="student" />
-              <div class="teacher-classes-roster-copy">
-                <strong>{{ student.studentName }}</strong>
-                <span>{{ student.studentEmail }}</span>
-                <small>{{ formatDate(student.enrolledAt) }}</small>
+            <ul v-if="enrolments.length" class="list-divided teacher-roster-list">
+              <li v-for="student in enrolments" :key="student.id" class="teacher-roster-item">
+                <PortraitAvatar :size="40" rounded="soft" :name="student.studentName" aria-hidden="true" />
+                <div class="teacher-roster-copy">
+                  <strong>{{ student.studentName }}</strong>
+                  <span class="type-caption">{{ formatDate(student.enrolledAt) }}</span>
+                </div>
+                <StatusPill
+                  :label="enrolmentStatusLabel(student.enrolmentStatus)"
+                  :tone="enrolmentTone(student.enrolmentStatus)"
+                />
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              compact
+              icon="students"
+              :title="t('teacherClasses.rosterEmptyTitle')"
+              :message="t('teacherClasses.emptyRoster')"
+            />
+          </article>
+
+          <article class="panel teacher-classes-card" aria-labelledby="teacher-classes-attendance-title">
+            <div class="card-header">
+              <div class="teacher-classes-card-heading">
+                <h2 id="teacher-classes-attendance-title" class="card-title">{{ t('teacherClasses.attendance') }}</h2>
+                <p class="card-subtitle">{{ t('teacherClasses.selectedClass') }}</p>
               </div>
-              <StatusPill :label="formatStatus(student.enrolmentStatus)" tone="info" />
-            </article>
-
-            <div v-if="!enrolments.length" class="teacher-classes-empty">
-              {{ t('teacherClasses.emptyRoster') }}
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section class="teacher-classes-dashboard-grid">
-        <article class="panel teacher-classes-library-card">
-          <div class="row-between teacher-classes-section-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherClasses.library') }}</strong>
-            </div>
-            <button class="student-link-button" type="button" @click="openContent">
-              {{ t('teacherClasses.viewAll') }}
-            </button>
-          </div>
-
-          <div class="teacher-classes-library-list">
-            <article v-for="item in recordingCards" :key="item.id" class="teacher-classes-library-item">
-              <div class="teacher-classes-library-thumb" :class="`is-${item.art}`">
-                <IconGlyph name="play" :size="24" />
-              </div>
-              <div class="teacher-classes-library-copy">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.meta }}</span>
-              </div>
-              <div class="teacher-classes-library-side">
-                <strong>{{ item.lengthLabel }}</strong>
-                <button class="teacher-play-button" type="button" @click="openContent">
-                  {{ t('teacherClasses.open') }}
-                </button>
-              </div>
-            </article>
-          </div>
-
-          <button class="teacher-footer-cta" type="button" @click="openContent">
-            <span>{{ t('teacherClasses.browseRecordings') }}</span>
-            <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
-          </button>
-        </article>
-
-        <div class="teacher-classes-center-column">
-          <article class="panel teacher-classes-attendance-card">
-            <div class="row-between teacher-classes-section-head">
-              <div class="student-section-heading teacher-classes-title-with-note">
-                <strong>{{ t('teacherClasses.attendance') }}</strong>
-                <small class="teacher-classes-head-note">{{ t('teacherClasses.selectedClass') }}</small>
-              </div>
-              <button class="student-link-button" type="button" @click="loadEnrolments(primaryClass.id)">
+              <button
+                class="btn btn-link"
+                type="button"
+                :disabled="!focusClass"
+                @click="focusClass && loadEnrolments(focusClass.id)"
+              >
                 {{ t('teacherClasses.viewDetails') }}
               </button>
             </div>
 
-            <div class="teacher-classes-attendance-wrap">
-              <div class="teacher-classes-attendance-ring">
-                <div class="teacher-classes-attendance-inner">
+            <div class="teacher-classes-attendance">
+              <div
+                class="teacher-classes-attendance-ring"
+                role="img"
+                :aria-label="`${t('teacherClasses.checkedIn')}: ${attendanceRate}% (${presentCount} / ${totalRosterCount})`"
+              >
+                <div class="teacher-classes-attendance-inner" aria-hidden="true">
                   <small>{{ t('teacherClasses.checkedIn') }}</small>
                   <strong>{{ attendanceRate }}%</strong>
                   <span>{{ presentCount }} / {{ totalRosterCount }}</span>
                 </div>
               </div>
 
-              <div class="teacher-classes-attendance-legend">
-                <div v-for="item in attendanceLegend" :key="item.label" class="teacher-classes-attendance-row">
-                  <span class="teacher-classes-attendance-dot" :class="`is-${item.tone}`" />
+              <ul class="teacher-classes-attendance-legend">
+                <li v-for="item in attendanceLegend" :key="item.label" class="teacher-classes-attendance-row">
+                  <span class="teacher-classes-attendance-dot" :class="`is-${item.tone}`" aria-hidden="true" />
                   <span>{{ item.label }}</span>
                   <strong>{{ item.count }} ({{ item.percent }}%)</strong>
-                </div>
-              </div>
-            </div>
-          </article>
-
-          <article class="panel teacher-classes-reminders-card">
-            <div class="row-between teacher-classes-section-head">
-              <div class="student-section-heading">
-                <strong>{{ t('teacherClasses.followups') }}</strong>
-              </div>
-              <button class="student-link-button" type="button" @click="openStudents">
-                {{ t('teacherClasses.openStudents') }}
-              </button>
-            </div>
-
-            <div class="teacher-classes-reminder-list">
-              <article v-for="item in reminderCards" :key="item.title" class="teacher-classes-reminder-item">
-                <span class="teacher-classes-reminder-icon" :class="`is-${item.tone}`"
-                  ><IconGlyph :name="item.icon" :size="20"
-                /></span>
-                <div class="teacher-classes-reminder-copy">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.copy }}</span>
-                </div>
-                <span class="teacher-classes-reminder-tag" :class="`is-${item.tone}`">{{ item.badge }}</span>
-              </article>
+                </li>
+              </ul>
             </div>
           </article>
         </div>
+      </section>
 
-        <div class="teacher-classes-right-column">
-          <article class="panel teacher-classes-homework-card">
-            <div class="row-between teacher-classes-section-head">
-              <div class="student-section-heading">
-                <strong>{{ t('teacherClasses.learningFollowups') }}</strong>
+      <section class="teacher-classes-grid">
+        <article class="panel teacher-classes-card" aria-labelledby="teacher-classes-library-title">
+          <div class="card-header">
+            <h2 id="teacher-classes-library-title" class="card-title">{{ t('teacherClasses.library') }}</h2>
+            <button class="btn btn-link" type="button" @click="openContent">{{ t('teacherClasses.viewAll') }}</button>
+          </div>
+
+          <ul v-if="recordingCards.length" class="list-divided teacher-classes-list">
+            <li v-for="item in recordingCards" :key="item.id" class="teacher-classes-row">
+              <span class="teacher-class-tile" :class="`is-${item.art}`" aria-hidden="true">
+                <IconGlyph name="play" :size="20" />
+              </span>
+              <div class="teacher-classes-row-copy">
+                <strong :id="`teacher-recording-${item.id}`">{{ item.title }}</strong>
+                <span class="type-caption">{{ item.meta }}</span>
               </div>
-              <button class="student-link-button" type="button" @click="openContent">
-                {{ t('teacherClasses.openContent') }}
+              <div class="teacher-classes-row-side">
+                <span class="tag">{{ item.lengthLabel }}</span>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  type="button"
+                  :aria-describedby="`teacher-recording-${item.id}`"
+                  @click="openContent"
+                >
+                  {{ t('teacherClasses.open') }}
+                </button>
+              </div>
+            </li>
+          </ul>
+          <StatePanel
+            v-else
+            compact
+            icon="play"
+            :title="t('teacherClasses.noRecordingsTitle')"
+            :message="t('teacherClasses.noRecordingsHint')"
+          >
+            <template #actions>
+              <button class="btn btn-secondary btn-sm" type="button" @click="openContent">
+                {{ t('teacherClasses.browseRecordings') }}
               </button>
-            </div>
+            </template>
+          </StatePanel>
+        </article>
 
-            <div class="teacher-classes-homework-list">
-              <article v-for="item in assignmentCards" :key="item.title" class="teacher-classes-homework-item">
-                <span class="teacher-classes-homework-icon" :class="`is-${item.tone}`"
-                  ><IconGlyph :name="item.icon" :size="20"
-                /></span>
-                <div class="teacher-classes-homework-copy">
-                  <div class="row u-wrap">
-                    <strong>{{ item.title }}</strong>
-                    <span class="teacher-classes-chip">{{ item.classCode }}</span>
-                    <span class="teacher-classes-deadline">{{ item.deadline }}</span>
-                  </div>
-                  <span>{{ item.progressLabel }}</span>
-                  <div class="teacher-classes-homework-progress">
-                    <span :style="{ width: `${item.progress}%` }" />
-                  </div>
+        <article class="panel teacher-classes-card" aria-labelledby="teacher-classes-followups-title">
+          <div class="card-header">
+            <h2 id="teacher-classes-followups-title" class="card-title">{{ t('teacherClasses.followups') }}</h2>
+            <button class="btn btn-link" type="button" @click="openStudents">
+              {{ t('teacherClasses.openStudents') }}
+            </button>
+          </div>
+
+          <ul class="list-divided teacher-classes-list">
+            <li v-for="item in reminderCards" :key="item.title" class="teacher-classes-row is-top">
+              <span class="teacher-class-tile" :class="`is-${item.tone}`" aria-hidden="true">
+                <IconGlyph :name="item.icon" :size="20" />
+              </span>
+              <div class="teacher-classes-row-copy">
+                <strong>{{ item.title }}</strong>
+                <span class="type-caption">{{ item.copy }}</span>
+              </div>
+              <StatusPill :label="item.badge" :tone="item.pillTone" />
+            </li>
+          </ul>
+        </article>
+
+        <article class="panel teacher-classes-card" aria-labelledby="teacher-classes-learning-title">
+          <div class="card-header">
+            <h2 id="teacher-classes-learning-title" class="card-title">
+              {{ t('teacherClasses.learningFollowups') }}
+            </h2>
+            <button class="btn btn-link" type="button" @click="openContent">
+              {{ t('teacherClasses.openContent') }}
+            </button>
+          </div>
+
+          <ul class="list-divided teacher-classes-list">
+            <li v-for="item in assignmentCards" :key="item.title" class="teacher-classes-row is-top">
+              <span class="teacher-class-tile" :class="`is-${item.tone}`" aria-hidden="true">
+                <IconGlyph :name="item.icon" :size="20" />
+              </span>
+              <div class="teacher-classes-row-copy">
+                <strong>{{ item.title }}</strong>
+                <div class="teacher-classes-tags">
+                  <span class="chip">{{ item.classCode }}</span>
+                  <span class="tag">{{ item.deadline }}</span>
                 </div>
-                <strong class="teacher-classes-homework-percent">{{ item.progress }}%</strong>
-              </article>
-            </div>
-          </article>
-
-          <article class="panel teacher-classes-actions-card">
-            <div class="teacher-classes-actions-head">
-              <div class="student-section-heading">
-                <strong>{{ t('teacherClasses.quickActions') }}</strong>
+                <span class="type-caption">{{ item.progressLabel }}</span>
+                <ProgressBar class="is-sm" :progress="item.progress" :label="item.title" />
               </div>
-            </div>
+              <strong class="teacher-classes-percent">{{ item.progress }}%</strong>
+            </li>
+          </ul>
+        </article>
 
-            <div class="teacher-classes-actions-grid">
-              <button
-                v-for="item in quickActions"
-                :key="item.title"
-                class="teacher-classes-action-button"
-                type="button"
-                @click="item.action"
-              >
-                <span class="teacher-classes-action-icon" :class="`is-${item.tone}`"
-                  ><IconGlyph :name="item.icon" :size="20"
-                /></span>
-                <span>{{ item.title }}</span>
-              </button>
-            </div>
-          </article>
-        </div>
+        <article class="panel teacher-classes-card" aria-labelledby="teacher-classes-quick-title">
+          <h2 id="teacher-classes-quick-title" class="card-title">{{ t('teacherClasses.quickActions') }}</h2>
+          <div class="teacher-classes-quick-grid">
+            <button
+              v-for="item in quickActions"
+              :key="item.title"
+              class="btn btn-secondary teacher-classes-quick"
+              type="button"
+              @click="item.action"
+            >
+              <span class="teacher-class-tile" :class="`is-${item.tone}`" aria-hidden="true">
+                <IconGlyph :name="item.icon" :size="20" />
+              </span>
+              <span>{{ item.title }}</span>
+            </button>
+          </div>
+        </article>
       </section>
     </ResourceSection>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -470,11 +559,15 @@ import { teacherApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import ProgressBar from '@/components/common/ProgressBar.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import TeacherApprovalLockPanel from '@/components/teacher/TeacherApprovalLockPanel.vue'
 import { appEnv } from '@/config/env'
 import { useResource } from '@/composables/useResource'
+import { useStatusLabels } from '@/composables/useStatusLabels'
 import { useTeacherAccess } from '@/composables/useTeacherAccess'
 import type { TeacherLiveClassPayload } from '@/api/services'
 import {
@@ -491,33 +584,39 @@ import { useAuthStore } from '@/stores/auth'
 import type { CoursePackageResponse, LessonResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, getDisplayLocale, nonNegativeInteger, ratioPercent } from '@/utils/format'
+import { effectiveLiveClassStatus } from '@/utils/liveClassActions'
 import { openSafeHttpUrl } from '@/utils/url'
 
 type MeetingPlatformValue = TeacherLiveClassPayload['meetingPlatform']
+const MEETING_PLATFORMS: readonly MeetingPlatformValue[] = ['ZOOM', 'GOOGLE_MEET', 'MICROSOFT_TEAMS', 'OTHER']
+/** Malaysia time zone for new live classes (A5 #14). */
+const DEFAULT_TIME_ZONE = 'Asia/Kuala_Lumpur'
 
 const router = useRouter()
 const { t, locale } = useI18n({
   messages: {
     en: { teacherClasses: teacherClassesMessages.en },
     ms: { teacherClasses: teacherClassesMessages.ms },
-    zh: { teacherClasses: teacherClassesMessages.zh },
+    'zh-CN': { teacherClasses: teacherClassesMessages['zh-CN'] },
   },
 })
 const auth = useAuthStore()
-const { teacherApprovalLocked, teacherApprovalMessage } = useTeacherAccess()
+const { statusLabel } = useStatusLabels()
+const { teacherApprovalLocked, teacherApprovalMessage, guardTeacherRequest } = useTeacherAccess()
 const previewFallbackEnabled = computed(() => appEnv.useDemoData && auth.isPreviewSession)
 
+// D13: live classes, lessons and packages are approved-teacher endpoints; a 403 switches the page to the locked state.
 const liveClassesResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.liveClasses()),
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.liveClasses())),
   teacherLiveClasses,
 )
 const analyticsResource = useResource(() => teacherApi.analytics(), teacherAnalytics)
 const lessonsResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.lessons()),
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.lessons())),
   teacherLessons,
 )
 const packagesResource = useResource(
-  () => (teacherApprovalLocked.value ? Promise.resolve([]) : teacherApi.packages()),
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.packages())),
   teacherCoursePackages,
 )
 const selectedClassId = ref<number | null>(null)
@@ -595,17 +694,17 @@ const pageLoading = computed(
     recordedResource.loading.value ||
     progressResource.loading.value,
 )
+// While locked, errors of the approved-teacher endpoints are replaced by the verification message.
 const pageError = computed(
   () =>
-    liveClassesResource.error.value ||
+    (teacherApprovalLocked.value
+      ? null
+      : liveClassesResource.error.value || lessonsResource.error.value || packagesResource.error.value) ||
     analyticsResource.error.value ||
-    lessonsResource.error.value ||
-    packagesResource.error.value ||
     enrolmentsResource.error.value ||
     recordedResource.error.value ||
     progressResource.error.value,
 )
-const noticeError = computed(() => actionError.value || pageError.value)
 const usingFallback = computed(
   () =>
     liveClassesResource.usingFallback.value ||
@@ -646,7 +745,7 @@ const classesNoticeDetail = computed(() => {
     return teacherApprovalMessage.value
   }
 
-  if (noticeError.value) {
+  if (actionError.value) {
     return selectedClassId.value ? t('teacherClasses.retryContext') : t('teacherClasses.reopenClass')
   }
 
@@ -664,11 +763,15 @@ const classesNoticeDetail = computed(() => {
 })
 
 const showComposer = ref(false)
+/** Cancelling a live class is a two-step action: the first click asks for confirmation inside the composer. */
+const confirmingCancel = ref(false)
 const submittingCreate = ref(false)
 const submittingUpdate = ref(false)
 const submittingCancel = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
+let enrolmentsRequest = 0
+let recordingsRequest = 0
 
 const classForm = reactive<TeacherLiveClassPayload>({
   title: '',
@@ -677,7 +780,7 @@ const classForm = reactive<TeacherLiveClassPayload>({
   packageId: 0,
   startTime: '',
   endTime: '',
-  timeZone: 'Asia/Singapore',
+  timeZone: DEFAULT_TIME_ZONE,
   meetingLink: '',
   meetingPlatform: 'ZOOM',
   status: 'SCHEDULED',
@@ -693,7 +796,7 @@ const currentDateLabel = computed(() =>
   }).format(new Date()),
 )
 
-const primaryClass = computed(
+const focusClass = computed(
   () => liveClasses.value[0] ?? (liveClassesResource.usingFallback.value ? teacherLiveClasses[0] : null),
 )
 const selectedLiveClass = computed(() => liveClasses.value.find((item) => item.id === selectedClassId.value) ?? null)
@@ -719,14 +822,14 @@ const liveClassCards = computed(() =>
         start,
       ),
       dayLabel: formatClassDate(start),
-      classCode: formatStatus(item.liveClassStatus),
+      classCode: liveClassStatusLabel(effectiveLiveClassStatus(item)),
+      statusTone: liveClassStatusTone(effectiveLiveClassStatus(item)),
       platform: platformLabel,
       platformMeta,
       meetingLink: item.meetingLink,
+      selected: selectedClassId.value === item.id,
       editLabel: selectedClassId.value === item.id ? t('teacherClasses.editing') : t('teacherClasses.editClass'),
-      platformTone: platformToneFor(platform),
       art: rotatingClassArt(index),
-      tone: liveClassTone(index),
     }
   }),
 )
@@ -784,7 +887,7 @@ const attendanceLegend = computed(() => {
 })
 
 const reminderCards = computed(() => {
-  const activeClass = selectedLiveClass.value ?? primaryClass.value
+  const activeClass = selectedLiveClass.value ?? focusClass.value
 
   return [
     {
@@ -794,9 +897,12 @@ const reminderCards = computed(() => {
       copy: activeClass
         ? `${activeClass.title} - ${formatDate(activeClass.startTime)}`
         : t('teacherClasses.classDetailsPending'),
-      badge: activeClass?.liveClassStatus ? formatStatus(activeClass.liveClassStatus) : t('teacherClasses.noClass'),
+      badge: activeClass?.liveClassStatus
+        ? liveClassStatusLabel(effectiveLiveClassStatus(activeClass))
+        : t('teacherClasses.noClass'),
       icon: 'status',
       tone: 'green',
+      pillTone: 'success' as const,
     },
     {
       title: pendingCheckInCount.value > 0 ? t('teacherClasses.pendingFollowup') : t('teacherClasses.rosterClear'),
@@ -804,6 +910,7 @@ const reminderCards = computed(() => {
       badge: t('teacherClasses.rosterCount', { count: enrolments.value.length }),
       icon: 'alert',
       tone: pendingCheckInTone.value,
+      pillTone: pendingCheckInCount.value > 0 ? ('warning' as const) : ('success' as const),
     },
   ]
 })
@@ -820,7 +927,7 @@ const assignmentCards = computed(() => {
     {
       title: selectedLiveClass.value?.lesson?.lessonTitle || t('teacherClasses.linkedRecordings'),
       classCode: selectedLiveClass.value
-        ? formatStatus(selectedLiveClass.value.liveClassStatus)
+        ? liveClassStatusLabel(effectiveLiveClassStatus(selectedLiveClass.value))
         : t('teacherClasses.recordings'),
       deadline: t('teacherClasses.recordingCount', { count: recordedVideos.value.length }),
       progressLabel: t('teacherClasses.completedViews', { count: completedVideoViews }),
@@ -878,16 +985,6 @@ const quickActions = computed(() => [
   },
 ])
 
-function platformToneFor(platform: MeetingPlatformValue): string {
-  return platform === 'GOOGLE_MEET' ? 'green' : 'blue'
-}
-
-function liveClassTone(index: number): string {
-  if (index === 0) return 'purple'
-  if (index === 1) return 'orange'
-  return 'blue'
-}
-
 function rotatingClassArt(index: number): string {
   return ['purple', 'orange', 'festival'][index % 3]
 }
@@ -928,21 +1025,43 @@ function formatClassDate(date: Date): string {
   }).format(date)
 }
 
-function formatStatus(status: string): string {
-  const keys: Record<string, string> = {
-    SCHEDULED: 'statusScheduled',
-    IN_PROGRESS: 'statusInProgress',
-    COMPLETED: 'statusCompleted',
-    CANCELLED: 'statusCancelled',
-    ENROLLED: 'statusEnrolled',
-    ATTENDED: 'statusAttended',
+// W4: every enum shown to teachers goes through the shared status labels (never raw ENROLLED / ZOOM values).
+function liveClassStatusLabel(status: string | null | undefined): string {
+  const normalized = (status ?? '').trim().toUpperCase()
+  const value = normalized === 'IN_PROGRESS' || normalized === 'LIVE' ? 'ONGOING' : normalized
+  return statusLabel('liveClass', value)
+}
+
+function liveClassStatusTone(status: string | null | undefined): 'info' | 'success' | 'neutral' | 'danger' {
+  switch ((status ?? '').trim().toUpperCase()) {
+    case 'ONGOING':
+    case 'IN_PROGRESS':
+    case 'LIVE':
+      return 'success'
+    case 'COMPLETED':
+      return 'neutral'
+    case 'CANCELLED':
+      return 'danger'
+    default:
+      return 'info'
   }
-  const key = keys[status.toUpperCase()]
-  if (key) return t(`teacherClasses.${key}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
+}
+
+function enrolmentStatusLabel(status: string | null | undefined): string {
+  return statusLabel('enrolment', (status ?? '').trim().toUpperCase())
+}
+
+function enrolmentTone(status: string | null | undefined): 'success' | 'warning' | 'danger' | 'info' {
+  switch ((status ?? '').trim().toUpperCase()) {
+    case 'ATTENDED':
+      return 'success'
+    case 'MISSED':
+      return 'warning'
+    case 'CANCELLED':
+      return 'danger'
+    default:
+      return 'info'
+  }
 }
 
 function normalizeMeetingPlatform(value: string | null | undefined): MeetingPlatformValue {
@@ -960,7 +1079,7 @@ function normalizeMeetingPlatform(value: string | null | undefined): MeetingPlat
 }
 
 function formatMeetingPlatform(value: string | null | undefined): string {
-  return formatStatus(normalizeMeetingPlatform(value))
+  return statusLabel('platform', normalizeMeetingPlatform(value))
 }
 
 function applyClassToForm(item: (typeof liveClasses.value)[number]): void {
@@ -971,7 +1090,7 @@ function applyClassToForm(item: (typeof liveClasses.value)[number]): void {
   selectedLessonId.value = item.lesson?.lessonId ?? null
   classForm.startTime = toInputDateTime(item.startTime)
   classForm.endTime = toInputDateTime(item.endTime)
-  classForm.timeZone = item.timeZone || 'Asia/Singapore'
+  classForm.timeZone = item.timeZone || DEFAULT_TIME_ZONE
   classForm.meetingLink = item.meetingLink ?? ''
   classForm.meetingPlatform = normalizeMeetingPlatform(item.meetingPlatform)
   classForm.status = item.liveClassStatus || 'SCHEDULED'
@@ -983,29 +1102,42 @@ function resetComposer(): void {
   tomorrow.setDate(tomorrow.getDate() + 1)
   tomorrow.setHours(17, 0, 0, 0)
   const end = new Date(tomorrow.getTime() + 45 * 60_000)
+  // Read the selected class before clearing the selection (selectedLiveClass becomes null afterwards).
+  const previousClass = selectedLiveClass.value
+  confirmingCancel.value = false
 
   selectedClassId.value = null
   classForm.title = ''
   classForm.description = ''
-  classForm.lessonId = selectedLiveClass.value?.lesson?.lessonId ?? primaryClass.value?.lesson?.lessonId ?? 0
-  classForm.packageId =
-    selectedLiveClass.value?.coursePackage?.packageId ?? primaryClass.value?.coursePackage?.packageId ?? 0
+  classForm.lessonId = previousClass?.lesson?.lessonId ?? focusClass.value?.lesson?.lessonId ?? 0
+  classForm.packageId = previousClass?.coursePackage?.packageId ?? focusClass.value?.coursePackage?.packageId ?? 0
   selectedLessonId.value = classForm.lessonId || null
   classForm.startTime = toInputDateTime(tomorrow.toISOString())
   classForm.endTime = toInputDateTime(end.toISOString())
-  classForm.timeZone = 'Asia/Singapore'
+  classForm.timeZone = DEFAULT_TIME_ZONE
   classForm.meetingLink = ''
   classForm.meetingPlatform = 'ZOOM'
   classForm.status = 'SCHEDULED'
   classForm.maxParticipants = 20
 }
 
+/** Brings the composer into view once it renders (it sits below the class list). */
+async function revealComposer(): Promise<void> {
+  await nextTick()
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  document
+    .getElementById('teacher-classes-composer')
+    ?.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+}
+
 function openComposer(): void {
   showComposer.value = true
+  void revealComposer()
 }
 
 function toggleComposer(): void {
   showComposer.value = !showComposer.value
+  if (showComposer.value) void revealComposer()
 }
 
 function createNewClass(): void {
@@ -1028,12 +1160,14 @@ function openStudents(): void {
 async function selectClass(classId: number): Promise<void> {
   actionError.value = null
   actionSuccess.value = null
+  confirmingCancel.value = false
   selectedClassId.value = classId
   const item = liveClasses.value.find((entry) => entry.id === classId)
   if (item) {
     selectedLessonId.value = item.lesson?.lessonId ?? null
     applyClassToForm(item)
     showComposer.value = true
+    void revealComposer()
   }
   await loadDependentResources(classId, item?.lesson?.lessonId ?? null)
 }
@@ -1098,6 +1232,7 @@ async function cancelSelectedClass(): Promise<void> {
   if (classesReadOnly.value) {
     actionSuccess.value = null
     actionError.value = t('teacherClasses.previewCancel')
+    confirmingCancel.value = false
     return
   }
 
@@ -1113,6 +1248,7 @@ async function cancelSelectedClass(): Promise<void> {
     actionError.value = resolveApiError(reason, t('teacherClasses.cancelError'))
   } finally {
     submittingCancel.value = false
+    confirmingCancel.value = false
   }
 }
 
@@ -1128,16 +1264,22 @@ async function loadEnrolments(classId: number, announceSuccess = true): Promise<
     return
   }
 
+  // Only the roster of the most recently requested class may land (clicks and watchers can overlap).
+  const request = ++enrolmentsRequest
   try {
-    enrolmentsResource.data.value = await teacherApi.enrolments(classId)
+    const items = await teacherApi.enrolments(classId)
+    if (request !== enrolmentsRequest) return
+    enrolmentsResource.data.value = items
     if (announceSuccess) actionSuccess.value = t('teacherClasses.rosterLoaded')
   } catch (reason) {
+    if (request !== enrolmentsRequest) return
     actionSuccess.value = null
     actionError.value = resolveApiError(reason, t('teacherClasses.rosterError'))
   }
 }
 
 async function loadRecordedResources(lessonId: number | null): Promise<void> {
+  const request = ++recordingsRequest
   if (!lessonId) {
     recordedResource.data.value = recordedResource.usingFallback.value ? teacherRecordedVideos : []
     progressResource.data.value = progressResource.usingFallback.value ? teacherVideoProgress : []
@@ -1155,15 +1297,17 @@ async function loadRecordedResources(lessonId: number | null): Promise<void> {
   }
 
   try {
-    recordedResource.data.value = await teacherApi.recordedVideos(lessonId)
+    const videos = await teacherApi.recordedVideos(lessonId)
+    if (request === recordingsRequest) recordedResource.data.value = videos
   } catch (reason) {
-    actionError.value = resolveApiError(reason, t('teacherClasses.recordingsError'))
+    if (request === recordingsRequest) actionError.value = resolveApiError(reason, t('teacherClasses.recordingsError'))
   }
 
   try {
-    progressResource.data.value = await teacherApi.lessonVideoProgress(lessonId)
+    const progressRows = await teacherApi.lessonVideoProgress(lessonId)
+    if (request === recordingsRequest) progressResource.data.value = progressRows
   } catch (reason) {
-    actionError.value = resolveApiError(reason, t('teacherClasses.progressError'))
+    if (request === recordingsRequest) actionError.value = resolveApiError(reason, t('teacherClasses.progressError'))
   }
 }
 
@@ -1241,704 +1385,465 @@ watch(
 </script>
 
 <style scoped>
-.teacher-classes-page {
-  position: relative;
-  padding-bottom: 6px;
+/* Shared pieces --------------------------------------------------------- */
+.teacher-class-tile {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
 }
 
-.teacher-classes-page :deep(.page-header) {
+.teacher-class-tile.is-orange {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.teacher-class-tile.is-green {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.teacher-class-tile.is-blue,
+.teacher-class-tile.is-festival {
+  background: var(--color-info-soft);
+  color: var(--color-info-text);
+}
+
+.teacher-classes-card {
+  display: grid;
+  align-content: start;
+  gap: var(--section-gap);
+  min-width: 0;
+}
+
+.teacher-classes-card-heading {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+/* Upcoming live classes ------------------------------------------------- */
+.teacher-classes-upcoming {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.teacher-classes-date {
+  gap: var(--space-1-5);
+}
+
+.teacher-live-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-live-item {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  gap: var(--space-4) var(--space-5);
   align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
-.teacher-classes-page :deep(.page-header-actions) {
-  align-items: stretch;
+.teacher-live-item.is-selected {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
 }
 
-.teacher-sample-link,
-.teacher-guide-button,
-.teacher-outline-button {
-  border: 1px solid rgba(223, 227, 243, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: var(--text);
-  border-radius: 16px;
-  padding: 12px 18px;
-  font-weight: 700;
+.teacher-live-when {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
 }
 
-.teacher-sample-link {
-  color: var(--primary);
-  box-shadow: 0 12px 24px rgba(118, 104, 204, 0.1);
+.teacher-live-day {
+  color: var(--text-brand);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
 }
 
-.teacher-classes-upcoming,
-.teacher-classes-library-card,
-.teacher-classes-attendance-card,
-.teacher-classes-reminders-card,
-.teacher-classes-homework-card,
-.teacher-classes-actions-card,
-.teacher-classes-editor-card,
-.teacher-classes-roster-card {
-  border-radius: 28px;
+.teacher-live-time {
+  color: var(--color-primary-600);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
 }
 
-.teacher-classes-section-head {
-  margin-bottom: 16px;
+.teacher-live-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
-.teacher-classes-header-actions {
+.teacher-live-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-live-title-row {
+  display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.teacher-classes-head-link {
-  padding-inline: 4px;
+.teacher-live-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
 }
 
-.teacher-classes-date-pill {
+.teacher-live-topic {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.teacher-live-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.teacher-live-meta li {
   display: inline-flex;
   align-items: center;
-  padding: 11px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(228, 232, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #37445f;
-  font-weight: 700;
+  gap: var(--space-1-5);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.teacher-classes-live-list {
-  display: grid;
-  gap: 12px;
-}
-
-.teacher-classes-live-item {
-  display: grid;
-  grid-template-columns: 118px minmax(0, 1.2fr) minmax(180px, 0.72fr) auto;
-  gap: 18px;
-  align-items: center;
-  padding: 16px 18px;
-  border-radius: 22px;
-  border: 1px solid rgba(236, 239, 247, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
-}
-
-.teacher-classes-live-item.is-purple {
-  box-shadow:
-    inset 0 0 0 1px rgba(134, 104, 255, 0.1),
-    0 10px 20px rgba(124, 102, 222, 0.05);
-}
-
-.teacher-classes-live-time {
-  display: grid;
-  gap: 6px;
-  align-content: center;
-}
-
-.teacher-classes-live-time small {
-  color: var(--primary);
-  font-weight: 700;
-}
-
-.teacher-classes-live-time strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: clamp(1.7rem, 1.9vw, 2.15rem);
-  color: #6950ff;
-  line-height: 1;
-}
-
-.teacher-classes-live-media {
-  display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-}
-
-.teacher-classes-live-thumb,
-.teacher-classes-library-thumb {
-  min-height: 60px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  color: white;
-  font-weight: 800;
-  text-transform: lowercase;
-  letter-spacing: 0.02em;
-  overflow: hidden;
-}
-
-.teacher-classes-live-thumb.is-purple,
-.teacher-classes-library-thumb.is-purple {
-  background: linear-gradient(135deg, #c4b3ff, #8f6dff 52%, #ffd25a);
-}
-
-.teacher-classes-live-thumb.is-orange,
-.teacher-classes-library-thumb.is-orange {
-  background: linear-gradient(135deg, #ffd786, #ff9b6b 48%, #8b6cff);
-}
-
-.teacher-classes-live-thumb.is-festival,
-.teacher-classes-library-thumb.is-festival {
-  background: linear-gradient(135deg, #ffae4d, #ff6e57 44%, #7d55ff);
-}
-
-.teacher-classes-live-copy,
-.teacher-classes-library-copy,
-.teacher-classes-reminder-copy,
-.teacher-classes-homework-copy,
-.teacher-classes-roster-copy {
-  display: grid;
-  gap: 5px;
-}
-
-.teacher-classes-live-copy strong,
-.teacher-classes-library-copy strong,
-.teacher-classes-roster-copy strong {
-  font-size: 1.04rem;
-}
-
-.teacher-classes-live-copy span,
-.teacher-classes-library-copy span,
-.teacher-classes-roster-copy span,
-.teacher-classes-live-platform span,
-.teacher-classes-reminder-copy span,
-.teacher-classes-homework-copy span {
-  color: #606d8a;
-}
-
-.teacher-classes-live-copy small,
-.teacher-classes-roster-copy small {
-  color: #7a86a2;
-}
-
-.teacher-classes-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(131, 101, 255, 0.12);
-  color: var(--primary);
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.teacher-classes-live-platform {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-}
-
-.teacher-classes-platform-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: white;
-  font-weight: 800;
-}
-
-.teacher-classes-platform-icon.is-blue {
-  background: linear-gradient(180deg, #4da0ff, #2a82f4);
-}
-
-.teacher-classes-platform-icon.is-green {
-  background: linear-gradient(180deg, #7ac65b, #2ea34a);
-}
-
-.teacher-classes-live-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.teacher-classes-live-actions-main {
+.teacher-live-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.teacher-classes-live-more {
-  min-width: 72px;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 14px;
-  background: rgba(126, 96, 255, 0.08);
-  color: #7f6dff;
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.teacher-classes-support-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 16px;
-  padding: 14px 18px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(243, 239, 255, 0.98), rgba(255, 249, 238, 0.98));
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.teacher-classes-support-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+/* Composer, roster and attendance ------------------------------------- */
+.teacher-classes-detail {
   display: grid;
-  place-items: center;
-  border: 1px solid rgba(131, 101, 255, 0.22);
-  font-size: 0.82rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
+  align-items: start;
 }
 
-.teacher-classes-support-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  color: #6a58c9;
+.teacher-classes-detail.is-composing {
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
 }
 
-.teacher-guide-button {
-  color: var(--primary);
-  background: rgba(255, 255, 255, 0.98);
-  padding: 10px 16px;
+.teacher-classes-detail-side {
+  display: contents;
 }
 
-.teacher-classes-composer-grid {
+.teacher-classes-detail.is-composing .teacher-classes-detail-side {
   display: grid;
-  grid-template-columns: minmax(0, 1.14fr) 372px;
-  gap: 18px;
+  gap: var(--grid-gap);
+  align-content: start;
+}
+
+.teacher-classes-composer {
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+  display: grid;
+  gap: var(--section-gap);
+  min-width: 0;
 }
 
 .teacher-classes-form {
   display: grid;
-  gap: 14px;
+  gap: var(--space-5);
 }
 
-.teacher-classes-form-footer {
+.teacher-classes-textarea {
+  min-height: 96px;
+}
+
+.teacher-classes-form-error {
+  margin: 0;
+}
+
+.teacher-classes-confirm {
   display: grid;
-  gap: 12px;
-  margin-top: 6px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-danger-soft);
 }
 
-.teacher-classes-form-note {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255, 248, 225, 0.98), rgba(255, 255, 255, 0.98));
-  color: #695a2d;
-  line-height: 1.5;
+.teacher-classes-confirm-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-danger-text);
+  font-weight: var(--font-weight-semibold);
 }
 
-.teacher-classes-roster-count {
-  color: var(--primary);
-  font-weight: 700;
+.teacher-classes-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
-.teacher-classes-roster-list {
-  display: grid;
-  gap: 12px;
+.teacher-roster-list,
+.teacher-classes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.teacher-classes-roster-item {
+.teacher-roster-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(235, 239, 246, 0.96);
-}
-
-.teacher-classes-roster-item:last-child {
-  border-bottom: 0;
-}
-
-.teacher-classes-empty {
-  padding: 18px 0 4px;
-  color: var(--text-soft);
-  line-height: 1.55;
-}
-
-.teacher-classes-dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(280px, 0.92fr) minmax(320px, 1.02fr);
-  gap: 18px;
-}
-
-.teacher-classes-center-column,
-.teacher-classes-right-column {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-}
-
-.teacher-classes-library-list,
-.teacher-classes-reminder-list,
-.teacher-classes-homework-list {
-  display: grid;
-  gap: 12px;
-}
-
-.teacher-classes-library-item,
-.teacher-classes-reminder-item,
-.teacher-classes-homework-item {
-  display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
 }
 
-.teacher-classes-library-item {
-  grid-template-columns: 72px minmax(0, 1fr) auto;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.teacher-classes-library-item:last-child {
-  border-bottom: 0;
-}
-
-.teacher-classes-library-side {
+.teacher-roster-copy,
+.teacher-classes-row-copy {
   display: grid;
-  justify-items: end;
-  gap: 8px;
-  color: #5f6b85;
-  font-size: 0.88rem;
+  gap: var(--space-0-5);
+  min-width: 0;
 }
 
-.teacher-play-button {
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(223, 227, 243, 0.96);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.98);
-  color: var(--primary);
-  font-size: 0.8rem;
-  font-weight: 700;
+.teacher-roster-copy strong,
+.teacher-classes-row-copy strong {
+  overflow-wrap: anywhere;
 }
 
-.teacher-footer-cta {
-  margin-top: 12px;
-  width: 100%;
-  min-height: 44px;
-  border: 0;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(245, 240, 255, 0.98), rgba(255, 248, 241, 0.98));
-  color: var(--primary);
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-.teacher-classes-title-with-note {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.teacher-classes-head-note {
-  color: #8a95ae;
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.teacher-classes-attendance-wrap {
+.teacher-classes-attendance {
   display: grid;
-  grid-template-columns: 182px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-6);
   align-items: center;
 }
 
 .teacher-classes-attendance-ring {
-  width: 148px;
-  height: 148px;
-  border-radius: 50%;
+  --attendance: v-bind(attendanceRate);
   display: grid;
   place-items: center;
-  margin: 0 auto;
+  width: 136px;
+  height: 136px;
+  border-radius: var(--radius-round);
   background:
-    radial-gradient(circle closest-side, white 66%, transparent 67% 100%),
-    conic-gradient(#66c64a 0 calc(var(--attendance) * 1%), rgba(228, 232, 243, 0.92) 0);
+    radial-gradient(circle closest-side, var(--surface-card) 78%, transparent 79% 100%),
+    conic-gradient(var(--color-success) calc(var(--attendance) * 1%), var(--color-ink-100) 0);
 }
 
 .teacher-classes-attendance-inner {
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: var(--space-0-5);
   text-align: center;
-}
-
-.teacher-classes-attendance-inner small,
-.teacher-classes-attendance-inner span {
-  color: var(--text-soft);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .teacher-classes-attendance-inner strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.4rem;
-  line-height: 1;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
 }
 
 .teacher-classes-attendance-legend {
   display: grid;
-  gap: 14px;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .teacher-classes-attendance-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: var(--space-2-5);
   align-items: center;
-  color: #56627d;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.teacher-classes-attendance-row strong {
+  color: var(--text-primary);
 }
 
 .teacher-classes-attendance-dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
-}
-
-.teacher-classes-attendance-dot.is-green {
-  background: #6acb4c;
+  border-radius: var(--radius-round);
+  background: var(--color-success);
 }
 
 .teacher-classes-attendance-dot.is-yellow {
-  background: #ffb92f;
+  background: var(--color-warning);
 }
 
 .teacher-classes-attendance-dot.is-red {
-  background: #ff6969;
+  background: var(--color-danger);
 }
 
-.teacher-classes-reminder-item {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.teacher-classes-reminder-item:last-child {
-  border-bottom: 0;
-}
-
-.teacher-classes-reminder-icon,
-.teacher-classes-homework-icon,
-.teacher-classes-action-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-}
-
-.teacher-classes-reminder-icon.is-green,
-.teacher-classes-homework-icon.is-green,
-.teacher-classes-action-icon.is-green {
-  background: rgba(99, 197, 95, 0.12);
-  color: #4ca648;
-}
-
-.teacher-classes-reminder-icon.is-orange,
-.teacher-classes-homework-icon.is-orange,
-.teacher-classes-action-icon.is-orange {
-  background: rgba(255, 184, 79, 0.14);
-  color: #e3911c;
-}
-
-.teacher-classes-reminder-icon.is-purple,
-.teacher-classes-homework-icon.is-purple,
-.teacher-classes-action-icon.is-purple {
-  background: rgba(131, 101, 255, 0.12);
-  color: var(--primary);
-}
-
-.teacher-classes-action-icon.is-blue {
-  background: rgba(62, 148, 255, 0.12);
-  color: #2f86f6;
-}
-
-.teacher-classes-reminder-tag,
-.teacher-classes-deadline {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.teacher-classes-reminder-tag.is-green {
-  background: rgba(112, 211, 106, 0.12);
-  color: #4ca648;
-}
-
-.teacher-classes-reminder-tag.is-orange,
-.teacher-classes-deadline {
-  background: rgba(255, 183, 75, 0.15);
-  color: #d88b1e;
-}
-
-.teacher-classes-homework-item {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.teacher-classes-homework-item:last-child {
-  border-bottom: 0;
-}
-
-.teacher-classes-homework-progress {
-  position: relative;
-  height: 8px;
-  margin-top: 8px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(223, 227, 241, 0.82);
-}
-
-.teacher-classes-homework-progress span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #7c58ff, #9f82ff);
-}
-
-.teacher-classes-homework-percent {
-  color: #616d89;
-  font-size: 0.94rem;
-}
-
-.teacher-classes-actions-grid {
+/* Library, follow-ups and quick actions -------------------------------- */
+.teacher-classes-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--grid-gap);
+  align-items: start;
 }
 
-.teacher-classes-action-button {
-  min-height: 84px;
-  border-radius: 20px;
-  border: 1px solid rgba(230, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
+.teacher-classes-row {
   display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 10px;
-  color: var(--text);
-  font-weight: 700;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.teacher-classes-row.is-top {
+  align-items: start;
+}
+
+.teacher-classes-row-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.teacher-classes-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+  margin: var(--space-1) 0;
+}
+
+.teacher-classes-row-copy .progress-bar {
+  margin-top: var(--space-1-5);
+}
+
+.teacher-classes-percent {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.teacher-classes-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.teacher-classes-quick.btn {
+  flex-direction: column;
+  height: auto;
+  min-height: 96px;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  white-space: normal;
   text-align: center;
 }
 
-.teacher-classes-editor-card :deep(.textarea) {
-  min-height: 112px;
-}
-
-.teacher-classes-attendance-card {
-  --attendance: v-bind(attendanceRate);
-}
-
-@media (max-width: 1460px) {
-  .teacher-classes-live-item {
-    grid-template-columns: minmax(96px, 120px) minmax(0, 1fr);
+@media (max-width: 1200px) {
+  .teacher-live-item {
+    grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
   }
 
-  .teacher-classes-live-platform,
-  .teacher-classes-live-actions {
+  .teacher-live-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .teacher-classes-detail.is-composing {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-classes-detail.is-composing .teacher-classes-detail-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .teacher-classes-detail,
+  .teacher-classes-detail.is-composing .teacher-classes-detail-side,
+  .teacher-classes-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-live-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .teacher-live-when {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+
+  .teacher-live-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-column: auto;
+  }
+
+  .teacher-live-actions > .btn:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .teacher-classes-attendance {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .teacher-classes-attendance-legend {
+    width: 100%;
+  }
+
+  .teacher-roster-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .teacher-roster-item > .status-pill {
     grid-column: 2;
   }
 
-  .teacher-classes-dashboard-grid {
-    grid-template-columns: 1fr 1fr;
+  .teacher-classes-row,
+  .teacher-classes-row.is-top {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .teacher-classes-library-card {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 1180px) {
-  .teacher-classes-composer-grid,
-  .teacher-classes-dashboard-grid,
-  .teacher-classes-attendance-wrap {
-    grid-template-columns: 1fr;
-  }
-
-  .teacher-classes-support-strip {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .teacher-classes-live-item {
-    grid-template-columns: minmax(90px, 110px) minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .teacher-classes-live-platform,
-  .teacher-classes-live-actions {
-    grid-column: 1 / -1;
-  }
-
-  .teacher-classes-live-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .teacher-classes-live-actions-main {
+  .teacher-classes-row-side,
+  .teacher-classes-percent,
+  .teacher-classes-row > .status-pill {
+    grid-column: 2;
     justify-content: flex-start;
-  }
-}
-
-@media (max-width: 760px) {
-  .teacher-classes-live-item,
-  .teacher-classes-live-media,
-  .teacher-classes-library-item,
-  .teacher-classes-homework-item,
-  .teacher-classes-roster-item {
-    grid-template-columns: 1fr;
-  }
-
-  .teacher-classes-live-actions-main,
-  .teacher-classes-header-actions {
-    justify-content: flex-start;
-  }
-
-  .teacher-classes-actions-grid,
-  .form-grid.two {
-    grid-template-columns: 1fr;
-  }
-
-  .teacher-classes-upcoming,
-  .teacher-classes-library-card,
-  .teacher-classes-attendance-card,
-  .teacher-classes-reminders-card,
-  .teacher-classes-homework-card,
-  .teacher-classes-actions-card,
-  .teacher-classes-editor-card,
-  .teacher-classes-roster-card {
-    border-radius: 22px;
-  }
-
-  .teacher-classes-live-item {
-    padding: 14px;
-  }
-
-  .teacher-classes-date-pill {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .teacher-classes-support-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .teacher-classes-live-more,
-  .teacher-classes-live-actions-main > button {
-    width: 100%;
   }
 }
 </style>

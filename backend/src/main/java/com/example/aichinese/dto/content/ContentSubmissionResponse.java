@@ -1,11 +1,9 @@
 package com.example.aichinese.dto.content;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.ManagedContentType;
@@ -19,8 +17,6 @@ import com.example.aichinese.entity.enums.ManagedContentType;
         "level",
         "category",
         "learningType",
-        "accessType",
-        "price",
         "contentStatus",
         "rejectionReason",
         "createdAt",
@@ -35,8 +31,6 @@ public record ContentSubmissionResponse(
         LearningLevelResponse level,
         LearningCategoryResponse category,
         LearningType learningType,
-        AccessType accessType,
-        BigDecimal price,
         ContentStatus contentStatus,
         String rejectionReason,
         LocalDateTime createdAt,
@@ -46,7 +40,6 @@ public record ContentSubmissionResponse(
         Objects.requireNonNull(contentType, "contentType must not be null");
         Objects.requireNonNull(id, "id must not be null");
         Objects.requireNonNull(title, "title must not be null");
-        Objects.requireNonNull(accessType, "accessType must not be null");
         Objects.requireNonNull(contentStatus, "contentStatus must not be null");
         Objects.requireNonNull(createdAt, "createdAt must not be null");
         Objects.requireNonNull(updatedAt, "updatedAt must not be null");

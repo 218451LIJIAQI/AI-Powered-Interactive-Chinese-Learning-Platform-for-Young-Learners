@@ -1,59 +1,64 @@
 <template>
   <div class="public-page public-landing-page">
-    <section class="public-hero-card">
-      <div class="public-hero-skyline public-hero-skyline--left" />
-      <div class="public-hero-skyline public-hero-skyline--right" />
-      <div class="public-hero-bamboo public-hero-bamboo--left" />
-      <div class="public-hero-bamboo public-hero-bamboo--right" />
-      <div class="public-hero-cloud public-hero-cloud--1" />
-      <div class="public-hero-cloud public-hero-cloud--2" />
-      <div class="public-hero-cloud public-hero-cloud--3" />
+    <section class="public-hero-card" aria-labelledby="landing-hero-title">
+      <div class="public-hero-decor" aria-hidden="true">
+        <span class="public-hero-bamboo public-hero-bamboo--left" />
+        <span class="public-hero-bamboo public-hero-bamboo--right" />
+        <span class="public-hero-cloud public-hero-cloud--1" />
+        <span class="public-hero-cloud public-hero-cloud--2" />
+        <span class="public-hero-cloud public-hero-cloud--3" />
+      </div>
 
       <div class="public-hero-grid">
         <div class="public-hero-copy">
-          <div class="public-hero-chip">
-            <span>{{ t('landing.youngLearners') }}</span>
+          <p class="public-hero-chip">
+            <span class="public-hero-chip-label">{{ t('landing.audienceChip') }}</span>
             <span>{{ t('landing.ageLine') }}</span>
-          </div>
+          </p>
 
-          <h1>
-            {{ t('landing.heroPrefixOne') }} <span class="accent-purple">{{ t('landing.heroEmphasisOne') }}</span
+          <h1 id="landing-hero-title" class="public-hero-title">
+            {{ t('landing.heroPrefixOne') }} <span class="public-hero-emphasis">{{ t('landing.heroEmphasisOne') }}</span
             >{{ t('landing.heroSuffixOne') }}<br />
-            {{ t('landing.heroPrefixTwo') }} <span class="accent-orange">{{ t('landing.heroEmphasisTwo') }}</span
+            {{ t('landing.heroPrefixTwo') }}
+            <span class="public-hero-emphasis public-hero-emphasis--warm">{{ t('landing.heroEmphasisTwo') }}</span
             >{{ t('landing.heroSuffixTwo') }}
           </h1>
 
-          <p>{{ t('landing.heroDescription') }}</p>
+          <p class="public-hero-lead">{{ t('landing.heroDescription') }}</p>
 
           <div class="public-hero-actions">
-            <button class="btn btn-primary public-hero-button" type="button" @click="openCatalog">
-              <span>{{ t('landing.exploreCourses') }}</span>
+            <button class="btn btn-accent btn-lg" type="button" @click="openAuth">
+              {{ t('landing.startLearning') }}
+              <IconGlyph name="chevronRight" :size="18" />
             </button>
-            <button class="btn btn-accent public-hero-button public-hero-button--gold" type="button" @click="openAuth">
-              <span>{{ t('landing.startLearning') }}</span>
+            <button class="btn btn-secondary btn-lg" type="button" @click="openCatalog">
+              {{ t('landing.exploreCourses') }}
             </button>
           </div>
 
-          <div class="public-hero-checks">
-            <span>{{ t('landing.ages') }}</span>
-            <span>{{ t('landing.beginnerFriendly') }}</span>
-            <span>{{ t('landing.confidence') }}</span>
-          </div>
-
-          <div class="public-hero-proof">
-            <article v-for="item in heroProof" :key="item.label">
-              <strong>{{ item.value }}</strong>
-              <span>{{ item.label }}</span>
-            </article>
-          </div>
+          <ul class="public-hero-checks">
+            <li v-for="check in heroChecks" :key="check">
+              <IconGlyph name="status" :size="16" />
+              <span>{{ check }}</span>
+            </li>
+          </ul>
         </div>
 
         <div class="public-hero-visual">
-          <div class="public-hero-speech">
-            <span>Ni hao!</span>
-            <small>{{ t('landing.hello') }}</small>
+          <div class="public-hero-stage" aria-hidden="true">
+            <div class="public-hero-speech">
+              <span>Ni hao!</span>
+              <small>{{ t('landing.hello') }}</small>
+            </div>
+            <PandaIllustration class="public-hero-panda" :size="228" outfit="#6d47ff" accent="#f6c44f" />
           </div>
-          <PandaIllustration class="public-hero-panda" :size="228" outfit="#6d47ff" accent="#f6c44f" />
+
+          <ul class="public-hero-proof">
+            <li v-for="item in heroProof" :key="item.label">
+              <strong>{{ item.value }}</strong>
+              <span>{{ item.label }}</span>
+            </li>
+          </ul>
         </div>
       </div>
     </section>
@@ -69,62 +74,85 @@
       />
     </section>
 
-    <section id="how-it-works" class="public-journey-strip" :aria-label="t('landing.howItWorks')">
-      <article v-for="step in familyJourney" :key="step.title" class="public-journey-card">
-        <span class="public-journey-step">{{ step.step }}</span>
-        <strong>{{ step.title }}</strong>
-        <p>{{ step.copy }}</p>
-      </article>
+    <section id="how-it-works" class="public-journey" aria-labelledby="landing-journey-title">
+      <h2 id="landing-journey-title" class="section-title">{{ t('landing.howItWorks') }}</h2>
+      <ol class="public-journey-strip">
+        <li v-for="step in learnerJourney" :key="step.title" class="public-journey-card">
+          <span class="public-journey-step" aria-hidden="true">{{ step.step }}</span>
+          <div class="public-journey-copy">
+            <h3>{{ step.title }}</h3>
+            <p>{{ step.copy }}</p>
+          </div>
+        </li>
+      </ol>
     </section>
 
     <section class="public-home-content">
       <div class="public-home-main">
         <DataNotice
           :using-fallback="featuredCoursesResource.usingFallback.value"
-          :error="featuredCoursesResource.error.value"
           :fallback-title="t('landing.previewTitle')"
           :fallback-message="t('landing.previewMessage')"
-          :error-title="t('landing.unavailableTitle')"
         />
 
-        <section class="panel public-home-panel">
-          <div class="public-section-head">
-            <h2>{{ t('landing.featuredCourses') }}</h2>
-            <button class="public-link-button" type="button" @click="openCatalog">{{ t('landing.viewAll') }}</button>
+        <section class="panel public-home-panel" aria-labelledby="landing-featured-title">
+          <div class="section-header">
+            <h2 id="landing-featured-title" class="section-title">{{ t('landing.featuredCourses') }}</h2>
+            <button class="btn btn-link" type="button" @click="openCatalog">
+              {{ t('landing.viewAll') }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </button>
           </div>
 
-          <div v-if="featuredCourses.length" class="public-featured-grid">
-            <article v-for="(course, index) in featuredCourses" :key="course.id" class="public-featured-card">
+          <StatePanel
+            v-if="featuredCoursesResource.loading.value"
+            tone="loading"
+            icon="progress"
+            :title="t('landing.loadingCourses')"
+            :message="t('landing.loadingCoursesHint')"
+            compact
+          />
+          <StatePanel
+            v-else-if="featuredCoursesResource.error.value && !featuredCourses.length"
+            tone="error"
+            icon="alert"
+            :title="t('landing.unavailableTitle')"
+            :message="featuredCoursesResource.error.value"
+            compact
+          >
+            <template #actions>
+              <button class="btn btn-primary" type="button" @click="featuredCoursesResource.reload">
+                {{ t('landing.retry') }}
+              </button>
+            </template>
+          </StatePanel>
+          <ul v-else-if="featuredCourses.length" class="public-featured-grid">
+            <li v-for="(course, index) in featuredCourses" :key="course.id" class="public-featured-card">
               <button
                 class="public-featured-card-button"
                 type="button"
                 :aria-label="t('landing.openCourse', { title: course.title })"
                 @click="viewCourse(course.id)"
               >
-                <div class="public-featured-thumb">
-                  <CourseSceneThumb :size="158" :variant="featuredThumb(index)" />
-                  <span class="public-featured-level">{{ course.level.name }}</span>
-                </div>
-
-                <div class="public-featured-copy">
-                  <h3>{{ course.title }}</h3>
-                  <p>{{ featuredCopy(course) }}</p>
-                </div>
-
-                <div class="public-featured-meta">
+                <span class="public-featured-thumb" aria-hidden="true">
+                  <CourseSceneThumb :size="132" :variant="featuredThumb(index)" />
+                </span>
+                <span class="public-featured-copy">
+                  <span class="chip">{{ course.level.name }}</span>
+                  <strong class="public-featured-title">{{ course.title }}</strong>
+                  <span class="public-featured-description">{{ featuredCopy(course) }}</span>
+                </span>
+                <span class="public-featured-meta">
                   <span>{{ course.category.name }}</span>
                   <span>{{ course.teacher.displayName }}</span>
-                </div>
+                </span>
               </button>
-            </article>
-          </div>
-          <div v-else class="public-featured-empty">{{ t('landing.noCourses') }}</div>
-
-          <div class="public-carousel-dots">
-            <span class="is-active" />
-            <span />
-            <span />
-          </div>
+            </li>
+          </ul>
+          <p v-else class="public-featured-empty">
+            <IconGlyph name="courses" :size="20" />
+            <span>{{ t('landing.noCourses') }}</span>
+          </p>
         </section>
       </div>
 
@@ -153,73 +181,74 @@
       </aside>
     </section>
 
-    <section id="safety" class="public-safety-banner">
-      <div class="public-safety-icon">
-        <IconGlyph name="shield" :size="32" />
-      </div>
+    <section id="safety" class="public-safety-banner" aria-labelledby="landing-safety-title">
+      <span class="public-safety-icon" aria-hidden="true"><IconGlyph name="shield" :size="28" /></span>
       <div class="public-safety-copy">
-        <strong>{{ t('landing.safetyBannerTitle') }}</strong>
+        <h2 id="landing-safety-title">{{ t('landing.safetyBannerTitle') }}</h2>
         <p>{{ t('landing.safetyBannerCopy') }}</p>
       </div>
-      <div class="public-safety-scene">
-        <div class="public-safety-hill" />
-        <div class="public-safety-pagoda" />
+      <div class="public-safety-scene" aria-hidden="true">
+        <span class="public-safety-hill" />
+        <span class="public-safety-pagoda" />
       </div>
     </section>
 
-    <section id="support" class="panel public-support-panel">
-      <div class="public-section-head">
-        <div>
-          <span class="legal-eyebrow">{{ t('landing.support') }}</span>
-          <h2>{{ t('landing.supportTitle') }}</h2>
+    <section id="support" class="panel public-support-panel" aria-labelledby="landing-support-title">
+      <div class="section-header">
+        <div class="public-support-heading">
+          <span class="page-eyebrow">{{ t('landing.support') }}</span>
+          <h2 id="landing-support-title" class="section-title">{{ t('landing.supportTitle') }}</h2>
         </div>
         <button class="btn btn-primary" type="button" @click="openSupportSignIn">
           {{ t('landing.signInSupport') }}
         </button>
       </div>
-      <div class="public-support-grid">
-        <article v-for="item in supportOptions" :key="item.title" class="public-support-card">
-          <strong>{{ item.title }}</strong>
+      <ul class="public-support-grid">
+        <li v-for="item in supportOptions" :key="item.title" class="public-support-card">
+          <h3>{{ item.title }}</h3>
           <p>{{ item.copy }}</p>
-        </article>
-      </div>
+        </li>
+      </ul>
     </section>
 
     <footer id="about" class="public-footer">
-      <div class="public-footer-brand">
-        <AppBrand />
-        <div class="public-footer-fish"><IconGlyph name="language" :size="20" /></div>
+      <div class="public-footer-top">
+        <div class="public-footer-brand">
+          <AppBrand />
+          <strong class="public-footer-official-title" data-testid="official-title">{{
+            t('landing.officialTitle')
+          }}</strong>
+          <p class="public-footer-about">{{ t('landing.aboutCopy') }}</p>
+        </div>
+
+        <div class="public-footer-links">
+          <nav class="public-footer-column" :aria-label="t('landing.explore')">
+            <h2>{{ t('landing.explore') }}</h2>
+            <a href="/courses" @click.prevent="openCatalog">{{ t('landing.courses') }}</a>
+            <a href="#how-it-works">{{ t('landing.howItWorksLink') }}</a>
+          </nav>
+          <nav class="public-footer-column" :aria-label="t('landing.company')">
+            <h2>{{ t('landing.company') }}</h2>
+            <a href="#about">{{ t('landing.aboutUs') }}</a>
+            <a href="#support">{{ t('landing.contactUs') }}</a>
+          </nav>
+          <nav class="public-footer-column" :aria-label="t('landing.safety')">
+            <h2>{{ t('landing.safety') }}</h2>
+            <a href="/responsible-ai" @click.prevent="openResponsibleAi">{{ t('landing.responsibleAi') }}</a>
+            <a href="/privacy" @click.prevent="openPrivacy">{{ t('landing.privacy') }}</a>
+            <a href="/terms" @click.prevent="openTerms">{{ t('landing.terms') }}</a>
+          </nav>
+          <nav class="public-footer-column" :aria-label="t('landing.support')">
+            <h2>{{ t('landing.support') }}</h2>
+            <a href="#support">{{ t('landing.helpCenter') }}</a>
+            <a href="#support">{{ t('landing.contactSupport') }}</a>
+          </nav>
+        </div>
       </div>
 
-      <div class="public-footer-links">
-        <div class="public-footer-column">
-          <strong>{{ t('landing.explore') }}</strong>
-          <a href="/courses" @click.prevent="openCatalog">{{ t('landing.courses') }}</a>
-          <a href="#how-it-works">{{ t('landing.howItWorksLink') }}</a>
-        </div>
-        <div class="public-footer-column">
-          <strong>{{ t('landing.company') }}</strong>
-          <a href="#about">{{ t('landing.aboutUs') }}</a>
-          <a href="#support">{{ t('landing.contactUs') }}</a>
-        </div>
-        <div class="public-footer-column">
-          <strong>{{ t('landing.safety') }}</strong>
-          <a href="#safety">{{ t('landing.childSafety') }}</a>
-          <a href="/privacy" @click.prevent="openPrivacy">{{ t('landing.privacy') }}</a>
-          <a href="/terms" @click.prevent="openTerms">{{ t('landing.terms') }}</a>
-        </div>
-        <div class="public-footer-column">
-          <strong>{{ t('landing.support') }}</strong>
-          <a href="#support">{{ t('landing.helpCenter') }}</a>
-          <a href="#support">{{ t('landing.contactSupport') }}</a>
-        </div>
-      </div>
-
-      <div class="public-footer-meta">
-        <div class="public-footer-copy">
-          <span>&copy; {{ copyrightYear }} MandarinSpark. {{ t('landing.rights') }}</span>
-          <span>{{ t('landing.madeForLearners') }}</span>
-        </div>
+      <div class="public-footer-bottom">
+        <span>&copy; {{ copyrightYear }} MandarinSpark. {{ t('landing.rights') }}</span>
+        <span>{{ t('landing.madeForLearners') }}</span>
       </div>
     </footer>
   </div>
@@ -235,6 +264,7 @@ import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
 import PublicFeatureCard from '@/components/public/PublicFeatureCard.vue'
 import PublicInfoBanner from '@/components/public/PublicInfoBanner.vue'
@@ -244,7 +274,7 @@ import { landingMessages } from '@/plugins/landingMessages'
 import '@/styles/landing.css'
 import type { PublicCourseSummary } from '@/types/api'
 
-type CourseSceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
+type CourseSceneVariant = 'panda' | 'people' | 'pagoda' | 'travel' | 'general'
 type FeatureTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink' | 'purple'
 
 const router = useRouter()
@@ -252,7 +282,7 @@ const { t } = useI18n({
   messages: {
     en: { landing: landingMessages.en },
     ms: { landing: landingMessages.ms },
-    zh: { landing: landingMessages.zh },
+    'zh-CN': { landing: landingMessages['zh-CN'] },
   },
 })
 const copyrightYear = new Date().getFullYear()
@@ -316,13 +346,15 @@ const featureStrip = computed(
     ] satisfies Array<{ icon: string; title: string; description: string; tone: FeatureTone }>,
 )
 
+const heroChecks = computed(() => [t('landing.ageRange'), t('landing.beginnerFriendly'), t('landing.confidence')])
+
 const heroProof = computed(() => [
   { value: t('landing.proofPathValue'), label: t('landing.proofPathLabel') },
   { value: t('landing.proofAiValue'), label: t('landing.proofAiLabel') },
   { value: t('landing.proofRewardsValue'), label: t('landing.proofRewardsLabel') },
 ])
 
-const familyJourney = computed(() => [
+const learnerJourney = computed(() => [
   {
     step: '1',
     title: t('landing.journeyExploreTitle'),
@@ -342,8 +374,8 @@ const familyJourney = computed(() => [
 
 const supportOptions = computed(() => [
   {
-    title: t('landing.supportFamiliesTitle'),
-    copy: t('landing.supportFamiliesCopy'),
+    title: t('landing.supportStudentsTitle'),
+    copy: t('landing.supportStudentsCopy'),
   },
   {
     title: t('landing.supportTeachersTitle'),
@@ -359,7 +391,7 @@ function viewCourse(id: string): void {
   void router.push(`/courses/${id}`)
 }
 
-const featuredThumbs = ['panda', 'family', 'pagoda'] as const
+const featuredThumbs = ['panda', 'people', 'pagoda'] as const
 
 function featuredThumb(index: number): CourseSceneVariant {
   return featuredThumbs[index % featuredThumbs.length]
@@ -389,6 +421,10 @@ function openSupportSignIn(): void {
 
 function openPrivacy(): void {
   void router.push('/privacy')
+}
+
+function openResponsibleAi(): void {
+  void router.push('/responsible-ai')
 }
 
 function openTerms(): void {

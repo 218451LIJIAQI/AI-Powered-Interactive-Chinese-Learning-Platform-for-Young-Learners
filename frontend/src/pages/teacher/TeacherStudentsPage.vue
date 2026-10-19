@@ -6,283 +6,403 @@
       icon="students"
     />
 
-    <DataNotice :using-fallback="usingFallback" :error="noticeError" :success="actionSuccess" />
+    <DataNotice :using-fallback="usingFallback" :error="actionError" :success="actionSuccess" />
 
-    <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="teacher-students-stats">
+    <TeacherApprovalLockPanel
+      v-if="teacherApprovalLocked"
+      :title="teacherApprovalTitle"
+      :message="teacherApprovalMessage"
+    />
+
+    <ResourceSection v-else :loading="pageLoading" :error="pageError" @retry="reloadAll">
+      <section class="teacher-students-kpis">
         <article
           v-for="item in summaryCards"
           :key="item.label"
-          class="teacher-students-stat-card"
+          class="panel teacher-students-kpi"
           :class="`is-${item.tone}`"
         >
-          <span class="teacher-students-stat-icon"><IconGlyph :name="item.icon" :size="22" /></span>
-          <div class="teacher-students-stat-copy">
-            <small>{{ item.label }}</small>
-            <strong>{{ item.value }}</strong>
-            <span>{{ item.caption }}</span>
+          <span class="teacher-students-kpi-icon" aria-hidden="true"><IconGlyph :name="item.icon" :size="22" /></span>
+          <div class="teacher-students-kpi-copy">
+            <p class="teacher-students-kpi-label">{{ item.label }}</p>
+            <p class="teacher-students-kpi-value">{{ item.value }}</p>
+            <p class="teacher-students-kpi-caption">{{ item.caption }}</p>
+            <button class="btn btn-link teacher-students-kpi-action" type="button" @click="item.action">
+              {{ item.actionLabel }}
+            </button>
           </div>
-          <button class="student-link-button" type="button" @click="item.action">{{ item.actionLabel }}</button>
         </article>
       </section>
 
       <section class="teacher-students-workbench">
-        <article class="panel teacher-students-directory-card">
-          <div class="teacher-students-directory-head">
-            <div class="student-section-heading">
-              <strong>{{ t('teacherStudents.allStudents', { count: filteredStudents.length }) }}</strong>
+        <aside class="panel teacher-students-directory" :aria-label="t('teacherStudents.searchAria')">
+          <p class="card-title">{{ t('teacherStudents.allStudents', { count: filteredStudents.length }) }}</p>
+
+          <div class="teacher-students-tools">
+            <div class="input-with-icon">
+              <IconGlyph class="input-icon" name="search" :size="16" aria-hidden="true" />
+              <label class="sr-only" for="teacher-students-search">{{ t('teacherStudents.searchAria') }}</label>
+              <input
+                id="teacher-students-search"
+                v-model="searchTerm"
+                class="input"
+                type="search"
+                :placeholder="t('teacherStudents.searchPlaceholder')"
+              />
             </div>
-            <div class="teacher-students-directory-tools">
-              <label class="teacher-students-search">
-                <IconGlyph name="search" :size="16" />
-                <input
-                  v-model="searchTerm"
-                  class="teacher-students-search-input"
-                  :aria-label="t('teacherStudents.searchAria')"
-                  :placeholder="t('teacherStudents.searchPlaceholder')"
-                />
-              </label>
-              <button class="teacher-outline-button teacher-students-filter-button" type="button" @click="cycleSort">
-                {{ t('teacherStudents.sort', { mode: sortModeLabel }) }}
+            <div class="segmented teacher-students-sort" role="group" :aria-label="t('teacherStudents.sortBy')">
+              <button
+                class="segmented-option"
+                type="button"
+                :aria-pressed="sortMode === 'progress'"
+                @click="setSort('progress')"
+              >
+                {{ t('teacherStudents.sortProgress') }}
+              </button>
+              <button
+                class="segmented-option"
+                type="button"
+                :aria-pressed="sortMode === 'name'"
+                @click="setSort('name')"
+              >
+                {{ t('teacherStudents.sortName') }}
               </button>
             </div>
           </div>
 
-          <div v-if="filteredStudents.length" class="teacher-students-directory-list">
-            <button
-              v-for="student in filteredStudents"
-              :key="student.studentId"
-              type="button"
-              class="teacher-students-directory-item"
-              :class="{ 'is-active': selectedStudent?.studentId === student.studentId }"
-              @click="selectStudent(student.studentId)"
-            >
-              <PortraitAvatar :size="52" rounded="soft" :kind="student.avatarKind" />
-              <div class="teacher-students-directory-copy">
-                <div class="row-between u-align-start">
-                  <div class="stack u-gap-4 u-min-w-0">
-                    <strong>{{ student.displayName }}</strong>
-                    <span>{{ student.levelLabel }}</span>
-                  </div>
-                  <strong class="teacher-students-directory-progress" :class="`is-${riskTone(student.atRisk)}`">
-                    {{ student.progressPercent }}%
-                  </strong>
-                </div>
-                <div class="row-between">
-                  <small>{{ riskStatusLabel(student.atRisk) }}</small>
-                  <span class="teacher-students-directory-more">{{ student.quizAverageLabel }}</span>
-                </div>
-              </div>
-            </button>
-          </div>
+          <ul v-if="filteredStudents.length" class="teacher-students-roster">
+            <li v-for="student in filteredStudents" :key="student.studentId">
+              <button
+                type="button"
+                class="teacher-student-row"
+                :class="{ 'is-active': selectedStudent?.studentId === student.studentId }"
+                :aria-pressed="selectedStudent?.studentId === student.studentId"
+                @click="selectStudent(student.studentId)"
+              >
+                <PortraitAvatar :size="44" rounded="soft" :name="student.displayName" aria-hidden="true" />
+                <span class="teacher-student-row-copy">
+                  <strong>{{ student.displayName }}</strong>
+                  <span class="type-caption">{{ student.levelLabel }}</span>
+                  <StatusPill
+                    v-if="student.needsSupport"
+                    :label="t('teacherStudents.needsSupportBadge')"
+                    tone="warning"
+                    icon="alert"
+                    data-testid="needs-support-indicator"
+                  />
+                  <StatusPill v-else :label="t('teacherStudents.onTrack')" tone="success" />
+                </span>
+                <span class="teacher-student-row-figures">
+                  <strong :class="`is-${riskTone(student.needsSupport)}`">{{ student.progressPercent }}%</strong>
+                  <span class="type-caption">{{ student.quizAverageLabel }}</span>
+                </span>
+              </button>
+            </li>
+          </ul>
 
           <StatePanel
             v-else
-            icon="students"
+            compact
+            icon="search"
             :title="t('teacherStudents.noStudents')"
             :message="t('teacherStudents.noStudentsHint')"
-          />
-        </article>
+          >
+            <template v-if="searchTerm" #actions>
+              <button class="btn btn-secondary btn-sm" type="button" @click="searchTerm = ''">
+                {{ t('teacherStudents.clearSearch') }}
+              </button>
+            </template>
+          </StatePanel>
+        </aside>
 
-        <div class="teacher-students-main-column">
-          <article class="panel teacher-students-profile-card">
+        <div class="teacher-students-detail">
+          <article id="teacher-students-detail" class="panel teacher-students-profile">
             <template v-if="selectedStudent">
               <div class="teacher-students-profile-head">
-                <div class="teacher-students-profile-meta">
-                  <PortraitAvatar :size="74" rounded="soft" :kind="selectedStudent.avatarKind" />
-                  <div class="stack u-gap-4">
-                    <div class="row u-wrap">
-                      <strong>{{ selectedStudent.displayName }}</strong>
-                      <span class="teacher-students-star">{{ selectedStudentBadgeLabel }}</span>
+                <div class="teacher-students-profile-identity">
+                  <PortraitAvatar :size="64" rounded="soft" :name="selectedStudent.displayName" aria-hidden="true" />
+                  <div class="teacher-students-profile-copy">
+                    <div class="teacher-students-profile-name-row">
+                      <h2 class="teacher-students-profile-name">{{ selectedStudent.displayName }}</h2>
+                      <StatusPill
+                        :label="selectedStudentBadgeLabel"
+                        :tone="selectedStudent.needsSupport ? 'warning' : 'success'"
+                        :icon="selectedStudent.needsSupport ? 'alert' : 'status'"
+                      />
                     </div>
-                    <span>{{ selectedStudent.levelLabel }}</span>
-                    <small>{{ selectedJoinedLabel }}</small>
+                    <span class="teacher-students-muted">{{ selectedStudent.levelLabel }}</span>
+                    <span class="type-caption">{{ selectedJoinedLabel }}</span>
                   </div>
                 </div>
 
-                <div class="teacher-students-profile-progress">
+                <p class="teacher-students-profile-progress">
                   <strong>{{ selectedStudent.progressPercent }}%</strong>
                   <span>{{ t('teacherStudents.courseProgress') }}</span>
-                </div>
+                </p>
               </div>
 
-              <div class="teacher-students-contact-grid">
-                <article>
-                  <small>{{ t('teacherStudents.email') }}</small>
-                  <strong>{{ selectedStudentEmailLabel }}</strong>
-                </article>
-                <article>
-                  <small>{{ t('teacherStudents.quizAverage') }}</small>
-                  <strong>{{ selectedStudent.quizAverageLabel }}</strong>
-                </article>
-                <article>
-                  <small>{{ t('teacherStudents.latestActivity') }}</small>
-                  <strong>{{ selectedLatestActivityLabel }}</strong>
-                </article>
-                <article>
-                  <small>{{ t('teacherStudents.latestFeedback') }}</small>
-                  <strong>{{ selectedLatestFeedbackLabel }}</strong>
-                </article>
-              </div>
+              <dl class="teacher-students-facts">
+                <div>
+                  <dt>{{ t('teacherStudents.masteredLessons') }}</dt>
+                  <dd>{{ selectedMasteredLabel }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('teacherStudents.quizAverage') }}</dt>
+                  <dd>{{ selectedStudent.quizAverageLabel }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('teacherStudents.latestActivity') }}</dt>
+                  <dd>{{ selectedLatestActivityLabel }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('teacherStudents.latestFeedback') }}</dt>
+                  <dd>{{ selectedLatestFeedbackLabel }}</dd>
+                </div>
+              </dl>
             </template>
 
             <StatePanel
               v-else
+              compact
               icon="students"
               :title="t('teacherStudents.noStudentsAvailable')"
               :message="t('teacherStudents.noStudentsAvailableHint')"
             />
           </article>
 
-          <div v-if="selectedStudent" class="teacher-students-overview-grid">
-            <article class="panel teacher-students-progress-card">
-              <div class="teacher-students-card-head">
-                <strong>{{ t('teacherStudents.learningSummary') }}</strong>
-              </div>
+          <div v-if="selectedStudent" class="teacher-students-grid">
+            <article class="panel teacher-students-card" aria-labelledby="teacher-students-summary-title">
+              <h2 id="teacher-students-summary-title" class="card-title">{{ t('teacherStudents.learningSummary') }}</h2>
 
-              <div class="teacher-students-progress-summary">
-                <article class="teacher-students-mini-stat">
-                  <small>{{ t('teacherStudents.progress') }}</small>
-                  <strong>{{ selectedStudent.progressPercent }}%</strong>
-                  <span>{{ t('teacherStudents.linkedLessons') }}</span>
-                </article>
-                <article class="teacher-students-mini-stat">
-                  <small>{{ t('teacherStudents.quizAverage') }}</small>
-                  <strong>{{ selectedStudent.quizAverageLabel }}</strong>
-                  <span>{{ t('teacherStudents.submittedAttempts') }}</span>
-                </article>
-                <article class="teacher-students-mini-stat">
-                  <small>{{ t('teacherStudents.riskStatus') }}</small>
-                  <strong>{{ selectedRiskStatusLabel }}</strong>
-                  <span>{{ selectedRiskSummary }}</span>
-                </article>
-              </div>
+              <dl class="teacher-students-mini-stats">
+                <div class="teacher-students-mini-stat">
+                  <dt>{{ t('teacherStudents.progress') }}</dt>
+                  <dd>
+                    <strong>{{ selectedStudent.progressPercent }}%</strong>
+                    <span>{{ t('teacherStudents.linkedLessons') }}</span>
+                  </dd>
+                </div>
+                <div class="teacher-students-mini-stat">
+                  <dt>{{ t('teacherStudents.quizAverage') }}</dt>
+                  <dd>
+                    <strong>{{ selectedStudent.quizAverageLabel }}</strong>
+                    <span>{{ t('teacherStudents.submittedAttempts') }}</span>
+                  </dd>
+                </div>
+                <div
+                  class="teacher-students-mini-stat is-wide"
+                  :class="{ 'is-warning': selectedStudent.needsSupport }"
+                  data-testid="student-support-status"
+                >
+                  <dt>{{ t('teacherStudents.riskStatus') }}</dt>
+                  <dd>
+                    <strong class="teacher-students-support-value">{{ selectedRiskStatusLabel }}</strong>
+                    <span v-if="!selectedSupportReasons.length">{{ t('teacherStudents.noRisk') }}</span>
+                    <ul
+                      v-else
+                      class="teacher-students-reason-list"
+                      :aria-label="t('teacherStudents.supportReasonsTitle')"
+                    >
+                      <li v-for="reason in selectedSupportReasons" :key="reason">
+                        {{ statusLabel('supportReason', reason) }}
+                      </li>
+                    </ul>
+                  </dd>
+                </div>
+              </dl>
+              <p class="teacher-students-note">{{ t('teacherStudents.supportRuleNote') }}</p>
             </article>
 
-            <article class="panel teacher-students-weak-card">
-              <div class="teacher-students-card-head">
-                <strong>{{ t('teacherStudents.weakAreas') }}</strong>
+            <article
+              class="panel teacher-students-card"
+              data-testid="student-lesson-mastery"
+              aria-labelledby="teacher-students-mastery-title"
+            >
+              <div class="teacher-students-card-heading">
+                <h2 id="teacher-students-mastery-title" class="card-title">{{ t('teacherStudents.lessonMastery') }}</h2>
+                <p class="teacher-students-note">{{ t('teacherStudents.lessonMasteryHint') }}</p>
               </div>
 
-              <div v-if="selectedWeakAreaRows.length" class="teacher-students-weak-list">
-                <article v-for="item in selectedWeakAreaRows" :key="item.label" class="teacher-students-weak-row">
-                  <div class="row-between">
-                    <strong>{{ item.label }}</strong>
-                    <span>{{ item.detail }}</span>
+              <ul v-if="selectedMasteryRows.length" class="list-divided teacher-students-plain-list">
+                <li
+                  v-for="row in selectedMasteryRows"
+                  :key="row.lessonId"
+                  class="teacher-students-mastery-row"
+                  data-testid="student-lesson-mastery-row"
+                >
+                  <div class="teacher-students-mastery-head">
+                    <strong>{{ row.lessonTitle }}</strong>
+                    <MasteryChip :mastery="row.mastery" />
                   </div>
-                </article>
-              </div>
-              <p v-else class="teacher-students-empty-copy">{{ t('teacherStudents.noWeakAreas') }}</p>
-
-              <button class="teacher-footer-link" type="button" @click="openFeedback">
-                <span>{{ t('teacherStudents.openFeedback') }}</span>
-                <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
-              </button>
+                  <ProgressBar class="is-sm" :progress="row.completionPercent" :label="row.lessonTitle" />
+                  <div class="teacher-students-mastery-meta">
+                    <span>{{
+                      t('teacherStudents.lessonCompletion', { percent: formatPercent(row.completionPercent) })
+                    }}</span>
+                    <span>{{
+                      row.bestQuizPercentage == null
+                        ? t('teacherStudents.noBestQuiz')
+                        : t('teacherStudents.bestQuiz', { percent: formatPercent(row.bestQuizPercentage) })
+                    }}</span>
+                  </div>
+                </li>
+              </ul>
+              <p v-else class="teacher-students-empty">{{ t('teacherStudents.noLessonMastery') }}</p>
             </article>
 
-            <article class="panel teacher-students-insights-card">
-              <div class="teacher-students-card-head">
-                <strong>{{ t('teacherStudents.insights') }}</strong>
+            <article class="panel teacher-students-card" aria-labelledby="teacher-students-weak-title">
+              <div class="teacher-students-card-heading">
+                <h2 id="teacher-students-weak-title" class="card-title">{{ t('teacherStudents.weakAreas') }}</h2>
+                <p class="teacher-students-note">{{ t('teacherStudents.weakAreasHint') }}</p>
               </div>
 
-              <div class="teacher-students-insight-list">
-                <article v-for="item in selectedInsights" :key="item.message" class="teacher-students-insight-item">
-                  <span class="teacher-students-insight-icon" :class="`is-${item.tone}`"
-                    ><IconGlyph :name="item.icon" :size="18"
-                  /></span>
-                  <span>{{ item.message }}</span>
-                </article>
+              <ul v-if="selectedWeakAreas.length" class="teacher-students-weak-list">
+                <li v-for="lesson in selectedWeakAreas" :key="lesson" class="teacher-students-weak-item">
+                  <IconGlyph name="alert" :size="16" aria-hidden="true" />
+                  <span>{{ lesson }}</span>
+                </li>
+              </ul>
+              <p v-else class="teacher-students-empty">{{ t('teacherStudents.noWeakAreas') }}</p>
+
+              <div class="card-footer teacher-students-card-footer">
+                <button class="btn btn-secondary btn-sm" type="button" @click="openFeedback">
+                  {{ t('teacherStudents.openFeedback') }}
+                  <IconGlyph name="chevronRight" :size="16" aria-hidden="true" />
+                </button>
               </div>
+            </article>
+
+            <article class="panel teacher-students-card" aria-labelledby="teacher-students-insights-title">
+              <h2 id="teacher-students-insights-title" class="card-title">{{ t('teacherStudents.insights') }}</h2>
+
+              <ul class="teacher-students-plain-list teacher-students-insights">
+                <li v-for="item in selectedInsights" :key="item.message" class="teacher-students-insight">
+                  <span class="teacher-student-tile" :class="`is-${item.tone}`" aria-hidden="true">
+                    <IconGlyph :name="item.icon" :size="18" />
+                  </span>
+                  <span>{{ item.message }}</span>
+                </li>
+              </ul>
+            </article>
+
+            <article class="panel teacher-students-card" aria-labelledby="teacher-students-feedback-title">
+              <div class="card-header">
+                <h2 id="teacher-students-feedback-title" class="card-title">
+                  {{ t('teacherStudents.recentFeedback') }}
+                </h2>
+                <button class="btn btn-link" type="button" @click="openFeedback">
+                  {{ t('teacherStudents.viewAll') }}
+                </button>
+              </div>
+
+              <ul v-if="selectedFeedbackCards.length" class="list-divided teacher-students-plain-list">
+                <li v-for="item in selectedFeedbackCards" :key="item.id" class="teacher-students-feedback">
+                  <span class="teacher-student-tile" :class="`is-${item.tone}`" aria-hidden="true">
+                    <IconGlyph :name="item.icon" :size="18" />
+                  </span>
+                  <div class="teacher-students-feedback-copy">
+                    <div class="teacher-students-feedback-head">
+                      <strong>{{ item.title }}</strong>
+                      <span class="type-caption">{{ item.time }}</span>
+                    </div>
+                    <p>{{ item.message }}</p>
+                  </div>
+                </li>
+              </ul>
+              <p v-else class="teacher-students-empty">{{ t('teacherStudents.noFeedback') }}</p>
+            </article>
+
+            <article
+              class="panel teacher-students-card teacher-students-followup"
+              aria-labelledby="teacher-students-followup-title"
+            >
+              <div class="teacher-students-card-heading">
+                <h2 id="teacher-students-followup-title" class="card-title">
+                  {{ t('teacherStudents.draftGuidance') }}
+                </h2>
+                <p class="teacher-students-note">{{ t('teacherStudents.draftHint') }}</p>
+              </div>
+
+              <form class="teacher-students-followup-form" @submit.prevent="submitFollowUpFeedback">
+                <div class="form-grid two">
+                  <div class="field">
+                    <label class="field-label" for="teacher-followup-tone">{{ t('teacherStudents.tone') }}</label>
+                    <select
+                      id="teacher-followup-tone"
+                      v-model="followUpTone"
+                      class="select"
+                      :disabled="followUpDisabled"
+                    >
+                      <option value="ENCOURAGING">{{ t('teacherStudents.encouraging') }}</option>
+                      <option value="SPECIFIC">{{ t('teacherStudents.specific') }}</option>
+                      <option value="CORRECTIVE">{{ t('teacherStudents.corrective') }}</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label class="field-label" for="teacher-followup-focus">{{ t('teacherStudents.focus') }}</label>
+                    <select
+                      id="teacher-followup-focus"
+                      v-model="followUpFocus"
+                      class="select"
+                      :disabled="followUpDisabled"
+                    >
+                      <option value="WEAK_AREAS">{{ t('teacherStudents.weakAreasOption') }}</option>
+                      <option value="QUIZ_ACCURACY">{{ t('teacherStudents.quizAccuracy') }}</option>
+                      <option value="CONSISTENCY">{{ t('teacherStudents.consistency') }}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="teacher-followup-message">
+                    {{ t('teacherStudents.feedbackAria') }}<span class="required-mark" aria-hidden="true">*</span>
+                  </label>
+                  <p class="teacher-students-greeting">
+                    {{ t('teacherStudents.greeting', { name: selectedStudentFirstName }) }}
+                  </p>
+                  <textarea
+                    id="teacher-followup-message"
+                    v-model="followUpMessage"
+                    class="textarea teacher-students-followup-textarea"
+                    required
+                    :maxlength="PRACTICE_FEEDBACK_MAX_LENGTH"
+                    :aria-invalid="Boolean(followUpMessageError) || undefined"
+                    :aria-describedby="followUpDescribedBy"
+                    :disabled="followUpDisabled"
+                  />
+                  <div class="teacher-students-field-foot">
+                    <p id="teacher-followup-hint" class="field-hint">{{ t('teacherStudents.draftKeptHint') }}</p>
+                    <span class="field-hint teacher-students-counter">
+                      {{ followUpMessage.length }} / {{ PRACTICE_FEEDBACK_MAX_LENGTH }}
+                    </span>
+                  </div>
+                  <p v-if="followUpMessageError" id="teacher-followup-error" class="field-error" role="alert">
+                    {{ followUpMessageError }}
+                  </p>
+                </div>
+
+                <p class="teacher-students-ready">
+                  <IconGlyph name="status" :size="16" aria-hidden="true" />
+                  {{ t('teacherStudents.readyAs', { type: followUpFeedbackTypeLabel }) }}
+                </p>
+
+                <div class="form-actions">
+                  <button class="btn btn-ghost" type="button" :disabled="followUpDisabled" @click="resetFollowUpDraft">
+                    <IconGlyph name="retry" :size="16" aria-hidden="true" />
+                    {{ t('teacherStudents.resetDraft') }}
+                  </button>
+                  <button
+                    class="btn btn-primary"
+                    type="submit"
+                    :aria-busy="submittingFollowUp"
+                    :disabled="feedbackReadOnly || submittingFollowUp || !selectedStudent"
+                  >
+                    {{ sendFeedbackLabel }}
+                  </button>
+                </div>
+              </form>
             </article>
           </div>
-        </div>
-
-        <div class="teacher-students-side-column">
-          <article class="panel teacher-students-feedback-card">
-            <div class="row-between teacher-students-card-head">
-              <strong>{{ t('teacherStudents.recentFeedback') }}</strong>
-              <button class="student-link-button" type="button" @click="openFeedback">
-                {{ t('teacherStudents.viewAll') }}
-              </button>
-            </div>
-
-            <div v-if="selectedFeedbackCards.length" class="teacher-students-feedback-list">
-              <article v-for="item in selectedFeedbackCards" :key="item.id" class="teacher-students-feedback-item">
-                <span class="teacher-students-feedback-icon" :class="`is-${item.tone}`"
-                  ><IconGlyph :name="item.icon" :size="18"
-                /></span>
-                <div class="teacher-students-feedback-copy">
-                  <div class="row-between u-align-start">
-                    <strong>{{ item.title }}</strong>
-                    <small>{{ item.time }}</small>
-                  </div>
-                  <p>{{ item.message }}</p>
-                </div>
-              </article>
-            </div>
-            <p v-else class="teacher-students-empty-copy">{{ t('teacherStudents.noFeedback') }}</p>
-          </article>
-
-          <article class="panel teacher-students-followup-card">
-            <div class="teacher-students-card-head">
-              <div class="row-between teacher-students-followup-headline">
-                <strong>{{ t('teacherStudents.draftGuidance') }}</strong>
-                <span class="teacher-students-followup-info"><IconGlyph name="help" :size="14" /></span>
-              </div>
-              <p>{{ t('teacherStudents.draftHint') }}</p>
-            </div>
-
-            <form class="teacher-students-followup-box" @submit.prevent="submitFollowUpFeedback">
-              <strong>{{ t('teacherStudents.greeting', { name: selectedStudentFirstName }) }}</strong>
-              <textarea
-                v-model="followUpMessage"
-                class="textarea teacher-students-followup-textarea"
-                :aria-label="t('teacherStudents.feedbackAria')"
-                :disabled="followUpDisabled"
-              />
-              <span class="teacher-students-followup-sign">{{
-                t('teacherStudents.readyAs', { type: followUpFeedbackTypeLabel })
-              }}</span>
-            </form>
-
-            <div class="teacher-students-followup-fields">
-              <div class="field">
-                <label for="teacher-followup-tone">{{ t('teacherStudents.tone') }}</label>
-                <select id="teacher-followup-tone" v-model="followUpTone" class="select" :disabled="followUpDisabled">
-                  <option value="ENCOURAGING">{{ t('teacherStudents.encouraging') }}</option>
-                  <option value="SPECIFIC">{{ t('teacherStudents.specific') }}</option>
-                  <option value="CORRECTIVE">{{ t('teacherStudents.corrective') }}</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="teacher-followup-focus">{{ t('teacherStudents.focus') }}</label>
-                <select id="teacher-followup-focus" v-model="followUpFocus" class="select" :disabled="followUpDisabled">
-                  <option value="WEAK_AREAS">{{ t('teacherStudents.weakAreasOption') }}</option>
-                  <option value="QUIZ_ACCURACY">{{ t('teacherStudents.quizAccuracy') }}</option>
-                  <option value="CONSISTENCY">{{ t('teacherStudents.consistency') }}</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="teacher-students-followup-actions">
-              <button
-                class="teacher-outline-button"
-                type="button"
-                :disabled="followUpDisabled"
-                @click="resetFollowUpDraft"
-              >
-                {{ t('teacherStudents.resetDraft') }}
-              </button>
-              <button
-                class="btn btn-primary"
-                type="button"
-                :disabled="feedbackReadOnly || submittingFollowUp || !selectedStudent"
-                @click="submitFollowUpFeedback"
-              >
-                {{ sendFeedbackLabel }}
-              </button>
-            </div>
-          </article>
         </div>
       </section>
     </ResourceSection>
@@ -290,66 +410,107 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { teacherApi } from '@/api/services'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import MasteryChip from '@/components/common/MasteryChip.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import TeacherApprovalLockPanel from '@/components/teacher/TeacherApprovalLockPanel.vue'
 import { useResource } from '@/composables/useResource'
+import { useStatusLabels } from '@/composables/useStatusLabels'
+import { useTeacherAccess } from '@/composables/useTeacherAccess'
 import { teacherFeedback, teacherStudentSummaries } from '@/demo/data'
 import { teacherStudentsMessages } from '@/plugins/teacherStudentsMessages'
-import type { TeacherFeedbackResponse, TeacherStudentSummaryResponse } from '@/types/api'
+import type { StudentSupportReason, TeacherFeedbackResponse, TeacherStudentSummaryResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { clampPercent, formatDate, formatDateTime, formatPercent } from '@/utils/format'
-import { formatTeacherFeedbackType } from '@/utils/teacherFeedback'
+import {
+  PRACTICE_FEEDBACK_MAX_LENGTH,
+  PRACTICE_FEEDBACK_MIN_LENGTH,
+  validatePracticeFeedbackMessage,
+} from '@/utils/teacherPracticeReview'
+import {
+  buildFollowUpSuggestion,
+  followUpFeedbackType,
+  lessonMasteryRows,
+  masteryCounts,
+  shouldApplySuggestion,
+  studentNeedsSupport,
+  studentSupportReasons,
+  weakAreaLessons,
+  type FollowUpFocus,
+  type FollowUpTone,
+  type LessonMasteryRow,
+} from '@/utils/teacherRoster'
 
 const router = useRouter()
 const { t } = useI18n({
   messages: {
     en: { teacherStudents: teacherStudentsMessages.en },
     ms: { teacherStudents: teacherStudentsMessages.ms },
-    zh: { teacherStudents: teacherStudentsMessages.zh },
+    'zh-CN': { teacherStudents: teacherStudentsMessages['zh-CN'] },
   },
 })
+const { statusLabel } = useStatusLabels()
 
 type SortMode = 'progress' | 'name'
-type StudentAvatarKind = 'student' | 'male' | 'female' | 'hijab'
 type StudentRecord = TeacherStudentSummaryResponse & {
-  avatarKind: StudentAvatarKind
   displayName: string
   levelLabel: string
   quizAverageLabel: string
+  supportReasonList: StudentSupportReason[]
+  masteryRows: LessonMasteryRow[]
+  weakLessons: string[]
 }
 
-const studentsResource = useResource(() => teacherApi.students(), teacherStudentSummaries)
-const feedbackResource = useResource(() => teacherApi.feedbackList(), teacherFeedback)
+// D13: the roster and feedback history are approved-teacher features; a 403 also switches to the locked state.
+const { teacherApprovalLocked, teacherApprovalTitle, teacherApprovalMessage, guardTeacherRequest } = useTeacherAccess()
+const studentsResource = useResource(
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.students())),
+  teacherStudentSummaries,
+)
+const feedbackResource = useResource(
+  () => (teacherApprovalLocked.value ? Promise.resolve([]) : guardTeacherRequest(() => teacherApi.feedbackList())),
+  teacherFeedback,
+)
 
 const searchTerm = ref('')
 const sortMode = ref<SortMode>('progress')
 const selectedStudentId = ref<number | null>(null)
-const followUpTone = ref('ENCOURAGING')
-const followUpFocus = ref('WEAK_AREAS')
+const followUpTone = ref<FollowUpTone>('ENCOURAGING')
+const followUpFocus = ref<FollowUpFocus>('WEAK_AREAS')
 const followUpMessage = ref('')
+/** The last suggestion written into the textarea; typed text that differs from it is never overwritten (A5 #11). */
+const lastSuggestion = ref<string | null>(null)
 const submittingFollowUp = ref(false)
 const actionError = ref<string | null>(null)
 const actionSuccess = ref<string | null>(null)
+/** Message validation problems are also shown under the textarea (the page notice can be far away). */
+const followUpMessageError = ref<string | null>(null)
 
 const students = computed<StudentRecord[]>(() =>
   (studentsResource.data.value ?? []).map((item) => ({
     ...item,
-    avatarKind: 'student',
     displayName: item.displayName?.trim() || item.fullName,
     levelLabel: item.currentLevel?.trim() || t('teacherStudents.levelNotSet'),
     progressPercent: clampPercent(item.progressPercent),
     quizAveragePercent: item.quizAveragePercent == null ? null : clampPercent(item.quizAveragePercent),
     quizAverageLabel:
       item.quizAveragePercent == null ? t('teacherStudents.noQuizData') : formatPercent(item.quizAveragePercent),
+    // "Needs support" comes only from the server's needsSupport / supportReasons, never from received feedback.
+    needsSupport: studentNeedsSupport(item),
+    supportReasonList: studentSupportReasons(item),
+    masteryRows: lessonMasteryRows(item.lessonMastery),
+    weakLessons: weakAreaLessons(item.weakAreas),
   })),
 )
 
@@ -358,11 +519,15 @@ const feedback = computed<TeacherFeedbackResponse[]>(
 )
 
 const pageLoading = computed(() => studentsResource.loading.value || feedbackResource.loading.value)
-const pageError = computed(() => studentsResource.error.value || feedbackResource.error.value)
-const noticeError = computed(() => actionError.value || pageError.value)
+const pageError = computed(() =>
+  teacherApprovalLocked.value ? null : studentsResource.error.value || feedbackResource.error.value,
+)
 const usingFallback = computed(() => studentsResource.usingFallback.value || feedbackResource.usingFallback.value)
-const feedbackReadOnly = computed(() => usingFallback.value)
+const feedbackReadOnly = computed(() => usingFallback.value || teacherApprovalLocked.value)
 const followUpDisabled = computed(() => feedbackReadOnly.value || submittingFollowUp.value || !selectedStudent.value)
+const followUpDescribedBy = computed(() =>
+  followUpMessageError.value ? 'teacher-followup-error teacher-followup-hint' : 'teacher-followup-hint',
+)
 const sendFeedbackLabel = computed(() =>
   submittingFollowUp.value ? t('teacherStudents.sending') : t('teacherStudents.sendNow'),
 )
@@ -373,9 +538,9 @@ const filteredStudents = computed(() => {
     if (!keyword) return true
     return (
       item.displayName.toLowerCase().includes(keyword) ||
-      (item.email ?? '').toLowerCase().includes(keyword) ||
       item.levelLabel.toLowerCase().includes(keyword) ||
-      item.weakAreas.some((entry) => entry.toLowerCase().includes(keyword))
+      item.weakLessons.some((entry) => entry.toLowerCase().includes(keyword)) ||
+      item.masteryRows.some((row) => row.lessonTitle.toLowerCase().includes(keyword))
     )
   })
 
@@ -400,7 +565,7 @@ const selectedStudent = computed(
 )
 
 const summaryCards = computed(() => {
-  const atRiskCount = students.value.filter((item) => item.atRisk).length
+  const supportCount = students.value.filter((item) => item.needsSupport).length
   const quizStudents = students.value.filter((item) => item.quizAveragePercent != null)
   const averageProgress = students.value.length
     ? clampPercent(students.value.reduce((sum, item) => sum + item.progressPercent, 0) / students.value.length)
@@ -430,16 +595,16 @@ const summaryCards = computed(() => {
     },
     {
       label: t('teacherStudents.atRisk'),
-      value: String(atRiskCount),
+      value: String(supportCount),
       caption: t('teacherStudents.atRiskHint'),
       icon: 'alert',
       tone: 'orange',
       actionLabel: t('teacherStudents.filterAtRisk'),
-      action: selectFirstAtRiskStudent,
+      action: selectFirstSupportStudent,
     },
     {
       label: t('teacherStudents.quizAverage'),
-      value: students.value.some((item) => item.quizAveragePercent != null) ? `${averageQuiz}%` : '--',
+      value: quizStudents.length ? `${averageQuiz}%` : '--',
       caption: t('teacherStudents.submittedAttempts'),
       icon: 'quiz',
       tone: 'green',
@@ -448,6 +613,13 @@ const summaryCards = computed(() => {
     },
   ]
 })
+
+const FEEDBACK_CARD_STYLES = [
+  { icon: 'file', tone: 'green' },
+  { icon: 'status', tone: 'orange' },
+  { icon: 'help', tone: 'purple' },
+  { icon: 'history', tone: 'blue' },
+] as const
 
 const selectedFeedbackCards = computed(() =>
   feedback.value
@@ -462,17 +634,18 @@ const selectedFeedbackCards = computed(() =>
           : feedbackTypeLabel(item.feedbackType),
       message: item.message,
       time: formatDateTime(item.createdAt),
-      icon: ['file', 'status', 'help', 'history'][index % 4],
-      tone: (['green', 'orange', 'purple', 'blue'] as const)[index % 4],
+      // Decorative icon only; it carries no priority meaning.
+      ...FEEDBACK_CARD_STYLES[index % FEEDBACK_CARD_STYLES.length],
     })),
 )
 
-const selectedWeakAreaRows = computed(() => {
-  const weakAreas = selectedStudent.value?.weakAreas ?? []
-  return weakAreas.slice(0, 4).map((label, index) => ({
-    label,
-    detail: index === 0 ? t('teacherStudents.primaryFocus') : t('teacherStudents.recordedFocus'),
-  }))
+const selectedSupportReasons = computed(() => selectedStudent.value?.supportReasonList ?? [])
+const selectedMasteryRows = computed(() => selectedStudent.value?.masteryRows ?? [])
+const selectedWeakAreas = computed(() => selectedStudent.value?.weakLessons ?? [])
+const selectedMasteredLabel = computed(() => {
+  const rows = selectedMasteryRows.value
+  if (!rows.length) return '--'
+  return t('teacherStudents.masteredLessonsValue', { mastered: masteryCounts(rows).MASTERED, total: rows.length })
 })
 
 const selectedInsights = computed(() => {
@@ -481,25 +654,29 @@ const selectedInsights = computed(() => {
   }
 
   const learner = selectedStudentFirstName.value
-  const weakArea = selectedStudent.value.weakAreas[0]
+  const weakArea = selectedWeakAreas.value[0]
   const quizAverage =
     selectedStudent.value.quizAveragePercent == null
       ? t('teacherStudents.noQuizAverage')
       : t('teacherStudents.quizAverageValue', { average: formatPercent(selectedStudent.value.quizAveragePercent) })
+  const reasons = selectedSupportReasons.value.map((reason) => statusLabel('supportReason', reason)).join(', ')
 
   return [
     {
-      icon: selectedStudent.value.atRisk ? 'alert' : 'status',
-      tone: selectedStudent.value.atRisk ? 'orange' : 'green',
-      message: selectedStudent.value.atRisk
-        ? t('teacherStudents.riskInsight', { name: learner })
+      icon: selectedStudent.value.needsSupport ? 'alert' : 'status',
+      tone: selectedStudent.value.needsSupport ? 'orange' : 'green',
+      message: selectedStudent.value.needsSupport
+        ? t('teacherStudents.riskInsight', {
+            name: learner,
+            reasons: reasons || t('teacherStudents.needsSupportBadge'),
+          })
         : t('teacherStudents.onTrackInsight', { name: learner }),
     },
     {
       icon: weakArea ? 'help' : 'status',
       tone: weakArea ? 'blue' : 'green',
       message: weakArea
-        ? t('teacherStudents.visibleWeakArea', { area: weakArea.toLowerCase() })
+        ? t('teacherStudents.visibleWeakArea', { area: weakArea })
         : t('teacherStudents.noWeakAreasInsight'),
     },
     {
@@ -520,6 +697,7 @@ const selectedLatestActivityLabel = computed(() =>
     ? formatDateTime(selectedStudent.value.latestActivityAt)
     : t('teacherStudents.noActivity'),
 )
+// Informational only: the latest feedback never affects the support signal.
 const selectedLatestFeedbackLabel = computed(() => {
   if (!selectedStudent.value?.latestFeedbackType) {
     return t('teacherStudents.noFeedbackRecorded')
@@ -532,21 +710,14 @@ const selectedLatestFeedbackLabel = computed(() => {
       })
     : normalized
 })
-const selectedRiskSummary = computed(() =>
-  selectedStudent.value?.atRisk ? t('teacherStudents.needsFollowup') : t('teacherStudents.noRisk'),
-)
 const selectedRiskStatusLabel = computed(() =>
-  selectedStudent.value?.atRisk ? t('teacherStudents.atRisk') : t('teacherStudents.stable'),
+  selectedStudent.value?.needsSupport ? t('teacherStudents.atRisk') : t('teacherStudents.stable'),
 )
 const selectedStudentBadgeLabel = computed(() =>
-  selectedStudent.value?.atRisk ? t('teacherStudents.alert') : t('teacherStudents.active'),
+  selectedStudent.value?.needsSupport ? t('teacherStudents.alert') : t('teacherStudents.active'),
 )
-const selectedStudentEmailLabel = computed(() => selectedStudent.value?.email || '--')
 const selectedStudentFirstName = computed(
   () => selectedStudent.value?.displayName.split(' ')[0] ?? t('teacherStudents.student'),
-)
-const sortModeLabel = computed(() =>
-  sortMode.value === 'progress' ? t('teacherStudents.sortProgress') : t('teacherStudents.sortName'),
 )
 
 const manualFollowupDraft = computed(() => {
@@ -554,38 +725,22 @@ const manualFollowupDraft = computed(() => {
     return t('teacherStudents.openLearnerDraft')
   }
 
-  const learner = selectedStudentFirstName.value
-  const weakFocus = selectedStudent.value.weakAreas[0]
-  const quizLabel =
-    selectedStudent.value.quizAveragePercent == null
-      ? t('teacherStudents.recentActivities')
-      : t('teacherStudents.quizAveragePossessive', {
-          average: formatPercent(selectedStudent.value.quizAveragePercent),
-        })
-  const toneLead =
-    followUpTone.value === 'CORRECTIVE'
-      ? t('teacherStudents.toneCorrective')
-      : followUpTone.value === 'SPECIFIC'
-        ? t('teacherStudents.toneSpecific')
-        : t('teacherStudents.toneEncouraging')
-  const focusText =
-    followUpFocus.value === 'QUIZ_ACCURACY'
-      ? quizLabel
-      : followUpFocus.value === 'CONSISTENCY'
-        ? t('teacherStudents.consistentPractice')
-        : weakFocus
-          ? weakFocus.toLowerCase()
-          : t('teacherStudents.nextLessonTarget')
-
-  return t('teacherStudents.draftMessage', { lead: toneLead, focus: focusText, name: learner })
+  return buildFollowUpSuggestion(
+    {
+      name: selectedStudentFirstName.value,
+      tone: followUpTone.value,
+      focus: followUpFocus.value,
+      weakLesson: selectedWeakAreas.value[0] ?? null,
+      quizAverageLabel:
+        selectedStudent.value.quizAveragePercent == null
+          ? null
+          : formatPercent(selectedStudent.value.quizAveragePercent),
+    },
+    (key, params) => t(`teacherStudents.${key}`, params ?? {}),
+  )
 })
-const followUpFeedbackType = computed(() => {
-  if (followUpTone.value === 'CORRECTIVE') return 'CORRECTIVE'
-  if (followUpFocus.value === 'QUIZ_ACCURACY') return 'QUIZ'
-  if (followUpFocus.value === 'WEAK_AREAS') return 'WEAK_AREA'
-  return 'GENERAL'
-})
-const followUpFeedbackTypeLabel = computed(() => feedbackTypeLabel(followUpFeedbackType.value))
+const followUpType = computed(() => followUpFeedbackType(followUpTone.value, followUpFocus.value))
+const followUpFeedbackTypeLabel = computed(() => feedbackTypeLabel(followUpType.value))
 
 watch(
   filteredStudents,
@@ -597,24 +752,44 @@ watch(
   { immediate: true, deep: true },
 )
 
+// A5 #11: refresh the suggestion when tone / focus / learner change, but only while the teacher has not typed
+// their own text (empty textarea, or it still equals the previous suggestion).
 watch(
-  [selectedStudent, manualFollowupDraft],
-  () => {
-    followUpMessage.value = manualFollowupDraft.value
+  manualFollowupDraft,
+  (suggestion) => {
+    if (shouldApplySuggestion(followUpMessage.value, lastSuggestion.value)) {
+      followUpMessage.value = suggestion
+    }
+    lastSuggestion.value = suggestion
   },
   { immediate: true },
 )
 
+function applySuggestion(): void {
+  followUpMessage.value = manualFollowupDraft.value
+  lastSuggestion.value = manualFollowupDraft.value
+}
+
 function selectStudent(studentId: number): void {
   selectedStudentId.value = studentId
+  // In the one-column layout the learner detail sits below the roster, so bring it into view.
+  if (window.matchMedia?.('(max-width: 1200px)').matches) void revealSelectedStudent()
+}
+
+async function revealSelectedStudent(): Promise<void> {
+  await nextTick()
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  document
+    .getElementById('teacher-students-detail')
+    ?.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
 }
 
 function selectFirstFilteredStudent(): void {
   selectedStudentId.value = filteredStudents.value[0]?.studentId ?? null
 }
 
-function selectFirstAtRiskStudent(): void {
-  const target = filteredStudents.value.find((item) => item.atRisk)
+function selectFirstSupportStudent(): void {
+  const target = filteredStudents.value.find((item) => item.needsSupport)
   if (target) selectedStudentId.value = target.studentId
 }
 
@@ -622,34 +797,20 @@ function openFeedback(): void {
   void router.push('/teacher/feedback')
 }
 
-function riskTone(atRisk: boolean): string {
-  return atRisk ? 'risk' : 'good'
-}
-
-function riskStatusLabel(atRisk: boolean): string {
-  return atRisk ? t('teacherStudents.needsAttention') : t('teacherStudents.onTrack')
+function riskTone(needsSupport: boolean): string {
+  return needsSupport ? 'risk' : 'good'
 }
 
 function feedbackTypeLabel(type: string | null | undefined): string {
-  const keys: Record<string, string> = {
-    GENERAL: 'feedbackGeneral',
-    QUIZ: 'feedbackQuiz',
-    LESSON: 'feedbackLesson',
-    ENCOURAGING: 'feedbackEncouraging',
-    CORRECTIVE: 'feedbackCorrective',
-    PROGRESS: 'feedbackProgress',
-    WEAK_AREA: 'feedbackWeakArea',
-  }
-  const key = type ? keys[type.toUpperCase()] : 'feedbackGeneral'
-  return key ? t(`teacherStudents.${key}`) : formatTeacherFeedbackType(type)
+  return statusLabel('feedbackType', type?.trim() ? type.trim().toUpperCase() : 'GENERAL')
 }
 
-function cycleSort(): void {
-  sortMode.value = sortMode.value === 'progress' ? 'name' : 'progress'
+function setSort(mode: SortMode): void {
+  sortMode.value = mode
 }
 
 function resetFollowUpDraft(): void {
-  followUpMessage.value = manualFollowupDraft.value
+  applySuggestion()
   actionError.value = null
   actionSuccess.value = t('teacherStudents.draftReset')
 }
@@ -658,6 +819,7 @@ async function submitFollowUpFeedback(): Promise<void> {
   if (submittingFollowUp.value) return
   actionError.value = null
   actionSuccess.value = null
+  followUpMessageError.value = null
 
   if (feedbackReadOnly.value) {
     actionError.value = t('teacherStudents.previewFeedback')
@@ -669,20 +831,30 @@ async function submitFollowUpFeedback(): Promise<void> {
     return
   }
 
-  if (!followUpMessage.value.trim()) {
+  // Same 5..2000 character rule as the backend feedback request (the textarea already caps the maximum).
+  const messageProblem = validatePracticeFeedbackMessage(followUpMessage.value)
+  if (messageProblem === 'required') {
     actionError.value = t('teacherStudents.messageRequired')
+    followUpMessageError.value = actionError.value
+    return
+  }
+  if (messageProblem === 'tooShort') {
+    actionError.value = t('teacherStudents.messageTooShort', { min: PRACTICE_FEEDBACK_MIN_LENGTH })
+    followUpMessageError.value = actionError.value
     return
   }
 
   submittingFollowUp.value = true
   try {
-    await teacherApi.createFeedback({
+    const payload = {
       studentId: selectedStudent.value.studentId,
-      feedbackType: followUpFeedbackType.value,
+      feedbackType: followUpType.value,
       message: followUpMessage.value.trim(),
-    })
+    }
+    await guardTeacherRequest(() => teacherApi.createFeedback(payload))
     await feedbackResource.reload()
     await studentsResource.reload()
+    applySuggestion()
     actionSuccess.value = t('teacherStudents.feedbackSent')
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('teacherStudents.feedbackError'))
@@ -698,465 +870,539 @@ function reloadAll(): void {
 </script>
 
 <style scoped>
-.teacher-students-page {
-  position: relative;
-}
-
-.teacher-students-stats {
+/* KPI row ---------------------------------------------------------------- */
+.teacher-students-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--grid-gap);
 }
 
-.teacher-students-stat-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  padding: 16px 18px;
-  border-radius: 24px;
-  border: 1px solid rgba(232, 236, 247, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 22px rgba(145, 154, 201, 0.06);
+.teacher-students-kpi {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
 }
 
-.teacher-students-stat-card.is-purple {
-  background: linear-gradient(135deg, rgba(246, 241, 255, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.teacher-students-stat-card.is-purple-soft {
-  background: linear-gradient(135deg, rgba(250, 247, 255, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.teacher-students-stat-card.is-orange {
-  background: linear-gradient(135deg, rgba(255, 245, 234, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.teacher-students-stat-card.is-green {
-  background: linear-gradient(135deg, rgba(244, 255, 244, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.teacher-students-stat-icon {
-  width: 62px;
-  height: 62px;
-  border-radius: 50%;
+.teacher-students-kpi-icon {
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
-  font-size: 0.9rem;
-  font-weight: 800;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: inset 0 0 0 1px rgba(232, 236, 247, 0.96);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
 }
 
-.teacher-students-stat-copy {
+.teacher-students-kpi.is-orange .teacher-students-kpi-icon {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.teacher-students-kpi.is-green .teacher-students-kpi-icon {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.teacher-students-kpi-copy {
   display: grid;
-  gap: 4px;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.teacher-students-stat-copy small,
-.teacher-students-stat-copy span {
-  color: #66738e;
+.teacher-students-kpi-copy p {
+  margin: 0;
 }
 
-.teacher-students-stat-copy strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2rem;
-  line-height: 1;
+.teacher-students-kpi-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
 }
 
+.teacher-students-kpi-value {
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.teacher-students-kpi-caption {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.teacher-students-kpi-action {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-sm);
+  text-align: left;
+}
+
+/* Workbench: roster list + learner detail ------------------------------ */
 .teacher-students-workbench {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1.12fr) 372px;
-  gap: 18px;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--grid-gap);
   align-items: start;
 }
 
-.teacher-students-main-column,
-.teacher-students-side-column {
+.teacher-students-directory {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
   display: grid;
-  gap: 18px;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
-.teacher-students-directory-card,
-.teacher-students-profile-card,
-.teacher-students-progress-card,
-.teacher-students-weak-card,
-.teacher-students-insights-card,
-.teacher-students-feedback-card,
-.teacher-students-followup-card {
-  border-radius: 28px;
-}
-
-.teacher-students-directory-head,
-.teacher-students-card-head {
+.teacher-students-tools {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
-.teacher-students-directory-tools {
+.teacher-students-sort {
+  justify-self: start;
+}
+
+.teacher-students-roster,
+.teacher-students-plain-list,
+.teacher-students-weak-list,
+.teacher-students-reason-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-students-roster {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
+  gap: var(--space-2);
 }
 
-.teacher-students-search {
+.teacher-student-row {
   display: grid;
-  gap: 6px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(230, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #8b94ad;
-}
-
-.teacher-students-filter-button {
-  min-height: 44px;
-  padding-inline: 18px;
-}
-
-.teacher-students-search-input {
-  min-height: 36px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-}
-
-.teacher-students-directory-list,
-.teacher-students-feedback-list,
-.teacher-students-insight-list {
-  display: grid;
-  gap: 10px;
-}
-
-.teacher-students-directory-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
   width: 100%;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 18px;
-  border: 1px solid rgba(235, 239, 247, 0.96);
-  background: rgba(255, 255, 255, 0.98);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  color: var(--text-primary);
   text-align: left;
-  color: var(--text);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
 }
 
-.teacher-students-directory-item.is-active {
-  border-color: rgba(128, 96, 255, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(128, 96, 255, 0.14);
-  background: linear-gradient(135deg, rgba(248, 245, 255, 0.98), rgba(255, 255, 255, 0.98));
+.teacher-student-row:hover {
+  border-color: var(--border-interactive);
 }
 
-.teacher-students-directory-copy {
+.teacher-student-row.is-active {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
+  box-shadow: inset 3px 0 0 var(--color-primary-500);
+}
+
+.teacher-student-row-copy {
   display: grid;
-  gap: 6px;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.teacher-students-directory-copy span,
-.teacher-students-directory-copy small {
-  color: #717d98;
+.teacher-student-row-copy strong {
+  overflow-wrap: anywhere;
 }
 
-.teacher-students-directory-progress {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.52rem;
-  line-height: 1;
+.teacher-student-row-figures {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+  text-align: right;
 }
 
-.teacher-students-directory-progress.is-good {
-  color: #49b549;
+.teacher-student-row-figures strong {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  color: var(--color-success-text);
 }
 
-.teacher-students-directory-progress.is-risk {
-  color: #ff6a5b;
+.teacher-student-row-figures strong.is-risk {
+  color: var(--color-danger-text);
 }
 
-.teacher-students-directory-more {
-  color: #919bb6;
-  font-size: 0.8rem;
-  line-height: 1;
+.teacher-students-detail {
+  display: grid;
+  gap: var(--grid-gap);
+  min-width: 0;
+}
+
+/* Selected learner ---------------------------------------------------- */
+.teacher-students-profile {
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+  display: grid;
+  gap: var(--section-gap);
 }
 
 .teacher-students-profile-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
-.teacher-students-profile-meta {
+.teacher-students-profile-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.teacher-students-profile-copy {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.teacher-students-profile-meta span,
-.teacher-students-profile-meta small {
-  color: #68748f;
+.teacher-students-profile-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.teacher-students-star {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 56px;
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 184, 62, 0.18);
-  color: #f0a81b;
-  font-size: 0.76rem;
-  font-weight: 800;
+.teacher-students-profile-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.teacher-students-muted,
+.teacher-students-note,
+.teacher-students-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.teacher-students-note {
+  font-size: var(--font-size-sm);
 }
 
 .teacher-students-profile-progress {
   display: grid;
   justify-items: end;
-  gap: 6px;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .teacher-students-profile-progress strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.85rem;
-  color: #7253ff;
-  line-height: 1;
+  color: var(--color-primary-600);
+  font-family: var(--font-display);
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
 }
 
-.teacher-students-profile-progress span {
-  color: #6c7893;
-}
-
-.teacher-students-contact-grid,
-.teacher-students-progress-summary {
+.teacher-students-facts,
+.teacher-students-mini-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
 }
 
-.teacher-students-contact-grid article,
+.teacher-students-mini-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.teacher-students-facts > div,
 .teacher-students-mini-stat {
   display: grid;
-  gap: 6px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(247, 249, 253, 0.96);
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
 }
 
-.teacher-students-contact-grid small,
-.teacher-students-mini-stat small,
-.teacher-students-mini-stat span {
-  color: #6d7893;
+.teacher-students-facts dt,
+.teacher-students-mini-stat dt {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
 }
 
-.teacher-students-mini-stat strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.8rem;
-  line-height: 1;
+.teacher-students-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
 }
 
-.teacher-students-overview-grid {
+.teacher-students-mini-stat dd {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.teacher-students-mini-stat dd strong {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.teacher-students-mini-stat.is-wide {
+  grid-column: 1 / -1;
+}
+
+.teacher-students-mini-stat.is-warning {
+  background: var(--color-warning-soft);
+}
+
+.teacher-students-mini-stat dd .teacher-students-support-value {
+  font-size: var(--font-size-lg);
+}
+
+.teacher-students-reason-list {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.teacher-students-reason-list li::before {
+  content: '• ';
+}
+
+/* Cards --------------------------------------------------------------- */
+.teacher-students-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
+  align-items: start;
+}
+
+.teacher-students-card {
+  display: grid;
+  align-content: start;
+  gap: var(--section-gap);
+  min-width: 0;
+}
+
+.teacher-students-card-heading {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.teacher-students-card-footer {
+  justify-content: flex-start;
+}
+
+.teacher-student-tile {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+}
+
+.teacher-student-tile.is-green {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.teacher-student-tile.is-orange {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.teacher-student-tile.is-blue {
+  background: var(--color-info-soft);
+  color: var(--color-info-text);
+}
+
+.teacher-students-mastery-row {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.teacher-students-mastery-head,
+.teacher-students-mastery-meta,
+.teacher-students-feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.teacher-students-mastery-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .teacher-students-weak-list {
-  display: grid;
-  gap: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.teacher-students-weak-row {
-  display: grid;
-  gap: 8px;
-}
-
-.teacher-students-weak-row span {
-  color: #7d88a3;
-}
-
-.teacher-footer-link {
-  width: fit-content;
-  min-height: 38px;
-  margin-top: 10px;
-  border: 0;
-  padding: 6px 0;
-  background: transparent;
-  color: var(--primary);
-  font-weight: 700;
+.teacher-students-weak-item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-3);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
 }
 
-.teacher-students-insight-item {
+.teacher-students-insights {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.teacher-students-insight,
+.teacher-students-feedback {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
   align-items: start;
-  padding: 8px 0;
-  color: #596681;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
 }
 
-.teacher-students-insight-icon,
-.teacher-students-feedback-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-}
-
-.teacher-students-insight-icon.is-green,
-.teacher-students-feedback-icon.is-green {
-  background: rgba(100, 203, 86, 0.12);
-  color: #45aa43;
-}
-
-.teacher-students-insight-icon.is-orange,
-.teacher-students-feedback-icon.is-orange {
-  background: rgba(255, 183, 75, 0.14);
-  color: #de8d1f;
-}
-
-.teacher-students-insight-icon.is-blue {
-  background: rgba(63, 144, 255, 0.12);
-  color: #2f86f6;
-}
-
-.teacher-students-insight-icon.is-purple,
-.teacher-students-feedback-icon.is-purple {
-  background: rgba(131, 101, 255, 0.12);
-  color: var(--primary);
-}
-
-.teacher-students-feedback-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.teacher-students-feedback-item:last-child {
-  border-bottom: 0;
+.teacher-students-insight > span:last-child {
+  padding-top: var(--space-1-5);
 }
 
 .teacher-students-feedback-copy {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.teacher-students-feedback-copy small,
-.teacher-students-followup-card p,
-.teacher-students-followup-box p {
-  color: #5f6c87;
+.teacher-students-feedback-copy strong {
+  color: var(--text-primary);
 }
 
-.teacher-students-followup-card {
-  display: grid;
-  gap: 14px;
-  background: linear-gradient(135deg, rgba(247, 243, 255, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.teacher-students-followup-headline {
-  align-items: center;
-}
-
-.teacher-students-followup-info {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(131, 101, 255, 0.1);
-  color: var(--primary);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.teacher-students-followup-box {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(230, 233, 245, 0.96);
-}
-
-.teacher-students-followup-textarea {
-  min-height: 132px;
-}
-
-.teacher-students-followup-sign {
-  color: #6e63ca;
-  font-weight: 700;
-}
-
-.teacher-students-followup-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.teacher-students-followup-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr);
-  gap: 12px;
-}
-
-.teacher-students-empty-copy {
-  color: #838eaa;
-  line-height: 1.5;
+.teacher-students-feedback-copy p {
   margin: 0;
 }
 
-@media (max-width: 1480px) {
-  .teacher-students-stats {
+/* Follow-up composer --------------------------------------------------- */
+.teacher-students-followup {
+  border-color: var(--color-primary-100);
+  background: linear-gradient(180deg, var(--color-primary-50), var(--surface-card) 160px);
+}
+
+.teacher-students-followup-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.teacher-students-followup-form .field {
+  align-content: start;
+}
+
+.teacher-students-greeting {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-students-followup-textarea {
+  min-height: 140px;
+}
+
+.teacher-students-field-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.teacher-students-counter {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-students-ready {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-brand);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+@media (max-width: 1200px) {
+  .teacher-students-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .teacher-students-workbench {
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .teacher-students-side-column {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .teacher-students-directory {
+    position: static;
+  }
+
+  .teacher-students-roster {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+
+  .teacher-students-tools {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 }
 
-@media (max-width: 1180px) {
-  .teacher-students-workbench,
-  .teacher-students-side-column,
-  .teacher-students-contact-grid,
-  .teacher-students-progress-summary {
-    grid-template-columns: 1fr;
+@media (max-width: 900px) {
+  .teacher-students-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 760px) {
-  .teacher-students-stats,
-  .teacher-students-directory-tools,
-  .teacher-students-followup-fields,
-  .teacher-students-followup-actions {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .teacher-students-tools,
+  .teacher-students-kpis {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .teacher-students-stat-card,
-  .teacher-students-profile-head {
-    grid-template-columns: 1fr;
+  .teacher-students-profile-progress {
     justify-items: start;
   }
 
-  .teacher-students-profile-head {
-    display: grid;
+  .teacher-students-profile-progress strong {
+    font-size: var(--font-size-4xl);
   }
 }
 </style>

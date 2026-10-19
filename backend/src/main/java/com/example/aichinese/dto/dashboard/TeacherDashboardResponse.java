@@ -14,7 +14,6 @@ import com.example.aichinese.entity.enums.TeacherStatus;
         "totalLessons",
         "totalStudents",
         "averageQuizScore",
-        "earningsSummary",
         "recentQuizResults",
         "recentNotifications"
 })
@@ -24,13 +23,11 @@ public record TeacherDashboardResponse(
         long totalLessons,
         long totalStudents,
         BigDecimal averageQuizScore,
-        EarningsSummary earningsSummary,
         List<RecentQuizResult> recentQuizResults,
         List<NotificationSummary> recentNotifications) {
 
     public TeacherDashboardResponse {
         Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
-        Objects.requireNonNull(earningsSummary, "earningsSummary must not be null");
         if (averageQuizScore == null) {
             averageQuizScore = BigDecimal.ZERO;
         }
@@ -40,36 +37,6 @@ public record TeacherDashboardResponse(
 
     private static <T> List<T> copyRequired(List<T> values, String fieldName) {
         return List.copyOf(Objects.requireNonNull(values, fieldName + " must not be null"));
-    }
-
-    @JsonPropertyOrder({
-            "grossAmount",
-            "netAmount",
-            "availableBalance",
-            "pendingBalance",
-            "currencyCode"
-    })
-    public record EarningsSummary(
-            BigDecimal grossAmount,
-            BigDecimal netAmount,
-            BigDecimal availableBalance,
-            BigDecimal pendingBalance,
-            String currencyCode) {
-
-        public EarningsSummary {
-            if (grossAmount == null) {
-                grossAmount = BigDecimal.ZERO;
-            }
-            if (netAmount == null) {
-                netAmount = BigDecimal.ZERO;
-            }
-            if (availableBalance == null) {
-                availableBalance = BigDecimal.ZERO;
-            }
-            if (pendingBalance == null) {
-                pendingBalance = BigDecimal.ZERO;
-            }
-        }
     }
 
     @JsonPropertyOrder({

@@ -15,10 +15,13 @@ public class AiAvailabilityService {
             "AI tutor is currently unavailable. Please try again later.";
 
     public static final String PRONUNCIATION_UNAVAILABLE_MESSAGE =
-            "Pronunciation feedback is currently unavailable because the selected AI provider does not support audio analysis yet.";
+            "AI audio feedback is not supported by the configured model; your recording is saved for teacher review.";
 
     public static final String WRITING_UNAVAILABLE_MESSAGE =
-            "Writing feedback is currently unavailable because the selected AI provider does not support image analysis yet.";
+            "AI handwriting feedback is not available right now; your image is saved for teacher review.";
+
+    public static final String MEDIA_FEEDBACK_NOTICE =
+            "Limited AI-assisted feedback for practice only. It is not a score or an official assessment.";
 
     static final String AVAILABLE_MESSAGE = "AI provider is configured.";
 
@@ -63,7 +66,10 @@ public class AiAvailabilityService {
             return AiAvailabilityResponse.unavailable(provider, model, INVALID_BASE_URL_MESSAGE);
         }
 
-        return AiAvailabilityResponse.textGenerationAvailable(provider, model, AVAILABLE_MESSAGE);
+        // Only the OpenAI Responses client sends image input (GPT-5.6 Luna accepts images);
+        // the Chat Completions-compatible alternatives are text only.
+        boolean imageAnalysisAvailable = AiProviderSupport.OPENAI.equals(provider);
+        return AiAvailabilityResponse.available(provider, model, AVAILABLE_MESSAGE, imageAnalysisAvailable);
     }
 
     public String normalizedProvider() {

@@ -4,12 +4,15 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,13 +45,14 @@ import com.example.aichinese.entity.Flashcard;
 import com.example.aichinese.entity.ListeningExercise;
 import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.MatchingGameItem;
+import com.example.aichinese.entity.base.PracticeActivityContent;
 import com.example.aichinese.entity.StoryActivity;
 import com.example.aichinese.entity.StoryQuestion;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.ReviewContentType;
 import com.example.aichinese.mapper.AdminActivityMapper;
 import com.example.aichinese.repository.DragDropActivityRepository;
 import com.example.aichinese.repository.DragDropItemRepository;
@@ -86,6 +90,8 @@ public class AdminActivityService {
     private final UserRepository userRepository;
     private final AdminActivityMapper mapper;
     private final AuditLogService auditLogService;
+    private final ContentReviewService contentReviewService;
+    private final ContentSafetyService contentSafetyService;
 
     public AdminActivityService(
             FlashcardRepository flashcardRepository,
@@ -99,7 +105,9 @@ public class AdminActivityService {
             StoryQuestionRepository storyQuestionRepository,
             UserRepository userRepository,
             AdminActivityMapper mapper,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ContentReviewService contentReviewService,
+            ContentSafetyService contentSafetyService) {
         this.flashcardRepository = Objects.requireNonNull(flashcardRepository, "flashcardRepository");
         this.matchingGameRepository = Objects.requireNonNull(matchingGameRepository, "matchingGameRepository");
         this.matchingGameItemRepository = Objects.requireNonNull(matchingGameItemRepository, "matchingGameItemRepository");
@@ -112,7 +120,43 @@ public class AdminActivityService {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
+        this.contentSafetyService = Objects.requireNonNull(contentSafetyService, "contentSafetyService");
     }
+
+    /**
+     * Who performs an activity operation. Admins manage the whole library; teachers (D5) only
+     * their own items ({@code created_by_user_id}), which follow the review workflow.
+     */
+    public record Actor(User user, boolean teacher) {
+
+        public Actor {
+            Objects.requireNonNull(user, "user must not be null");
+        }
+
+        /** Owner restriction for look-ups: the teacher's own user id, or {@code null} for admins. */
+        Long ownerUserId() {
+            return teacher ? user.getId() : null;
+        }
+
+        String auditPrefix() {
+            return teacher ? "TEACHER_ACTIVITY_" : "ADMIN_ACTIVITY_";
+        }
+
+        String auditActor() {
+            return teacher ? "Teacher" : "Admin";
+        }
+    }
+
+    public Actor adminActor(SecurityUserDetails currentUser) {
+        return new Actor(findActor(currentUser), false);
+    }
+
+    public Actor teacherActor(SecurityUserDetails currentUser) {
+        return new Actor(findActor(currentUser), true);
+    }
+
+    // ===== Flashcards =====
 
     @Transactional(readOnly = true)
     public PageResponse<AdminFlashcardResponse> listFlashcards(ActivityFilter filter, int page, int size, String sort) {
@@ -126,27 +170,41 @@ public class AdminActivityService {
 
     @Transactional(readOnly = true)
     public AdminFlashcardResponse getFlashcard(Long id) {
-        return mapper.toResponse(findFlashcard(id));
+        return getFlashcard(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminFlashcardResponse getFlashcard(Long id, Long ownerUserId) {
+        return mapper.toResponse(findFlashcard(id, ownerUserId));
     }
 
     @Transactional
     public AdminFlashcardResponse createFlashcard(SecurityUserDetails currentUser, AdminFlashcardRequest request) {
-        User admin = findActor(currentUser);
-        Flashcard entity = mapper.toEntity(request, admin);
-        Flashcard saved = flashcardRepository.save(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_CREATE", "Flashcard", saved.getId(),
-                "Admin created a flashcard in the platform library.");
+        return createFlashcard(adminActor(currentUser), request);
+    }
+
+    @Transactional
+    public AdminFlashcardResponse createFlashcard(Actor actor, AdminFlashcardRequest request) {
+        screen(request);
+        Flashcard saved = flashcardRepository.save(mapper.toEntity(request, actor.user()));
+        auditCreate(actor, "Flashcard", saved.getId(), "a flashcard");
         return mapper.toResponse(saved);
     }
 
     @Transactional
     public AdminFlashcardResponse updateFlashcard(SecurityUserDetails currentUser, Long id, AdminFlashcardRequest request) {
-        User admin = findActor(currentUser);
-        Flashcard entity = findFlashcard(id);
+        return updateFlashcard(adminActor(currentUser), id, request);
+    }
+
+    @Transactional
+    public AdminFlashcardResponse updateFlashcard(Actor actor, Long id, AdminFlashcardRequest request) {
+        screen(request);
+        Flashcard entity = findFlashcard(id, actor.ownerUserId());
+        beforeEdit(actor, ReviewContentType.FLASHCARD, entity);
         mapper.applyTo(request, entity);
+        afterEdit(actor, ReviewContentType.FLASHCARD, entity);
         Flashcard saved = flashcardRepository.save(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_UPDATE", "Flashcard", saved.getId(),
-                "Admin updated a flashcard.");
+        auditUpdate(actor, "Flashcard", saved.getId(), "a flashcard");
         return mapper.toResponse(saved);
     }
 
@@ -155,8 +213,8 @@ public class AdminActivityService {
             AdminActivityStatusUpdateRequest request) {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
-        Flashcard entity = findFlashcard(id);
-        entity.setContentStatus(target);
+        Flashcard entity = findFlashcard(id, null);
+        applyAdminStatus(ReviewContentType.FLASHCARD, entity, target);
         Flashcard saved = flashcardRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "Flashcard", saved.getId(),
                 "Admin set flashcard status to " + target + ".");
@@ -165,55 +223,87 @@ public class AdminActivityService {
 
     @Transactional
     public void deleteFlashcard(SecurityUserDetails currentUser, Long id) {
-        User admin = findActor(currentUser);
-        Flashcard entity = findFlashcard(id);
-        flashcardRepository.delete(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_DELETE", "Flashcard", id,
-                "Admin deleted a flashcard.");
+        deleteFlashcard(adminActor(currentUser), id);
     }
 
-    private Flashcard findFlashcard(Long id) {
+    @Transactional
+    public void deleteFlashcard(Actor actor, Long id) {
+        Flashcard entity = findFlashcard(id, actor.ownerUserId());
+        beforeDelete(actor, entity);
+        flashcardRepository.delete(entity);
+        auditDelete(actor, "Flashcard", id, "a flashcard");
+    }
+
+    @Transactional
+    public AdminFlashcardResponse submitFlashcard(Actor actor, Long id) {
+        Flashcard entity = findFlashcard(id, actor.ownerUserId());
+        contentReviewService.submitForReview(actor.user(), ReviewContentType.FLASHCARD, entity);
+        return mapper.toResponse(flashcardRepository.save(entity));
+    }
+
+    private Flashcard findFlashcard(Long id, Long ownerUserId) {
         return flashcardRepository.findById(id)
+                .filter(entity -> isOwnedBy(entity, ownerUserId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Flashcard not found."));
     }
+
+    // ===== Matching games =====
 
     @Transactional(readOnly = true)
     public PageResponse<AdminMatchingGameResponse> listMatchingGames(ActivityFilter filter, int page, int size, String sort) {
         Pageable pageable = buildPageable(page, size, sort);
         Page<MatchingGame> result = matchingGameRepository.findAll(filterSpec(filter), pageable);
+        Map<Long, List<MatchingGameItem>> itemsByGameId = childrenByParentId(
+                result.getContent(),
+                matchingGameItemRepository::findByMatchingGameIdInOrderBySortOrderAscCreatedAtAsc,
+                item -> item.getMatchingGame().getId());
         List<AdminMatchingGameResponse> items = result.getContent().stream()
-                .map(game -> mapper.toResponse(game, loadMatchingGameItems(game.getId())))
+                .map(game -> mapper.toResponse(game, itemsByGameId.getOrDefault(game.getId(), List.of())))
                 .toList();
         return toPageResponse(items, result);
     }
 
     @Transactional(readOnly = true)
     public AdminMatchingGameResponse getMatchingGame(Long id) {
-        MatchingGame entity = findMatchingGame(id);
+        return getMatchingGame(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminMatchingGameResponse getMatchingGame(Long id, Long ownerUserId) {
+        MatchingGame entity = findMatchingGame(id, ownerUserId);
         return mapper.toResponse(entity, loadMatchingGameItems(id));
     }
 
     @Transactional
     public AdminMatchingGameResponse createMatchingGame(SecurityUserDetails currentUser, AdminMatchingGameRequest request) {
-        User admin = findActor(currentUser);
-        MatchingGame entity = mapper.toEntity(request, admin);
-        MatchingGame saved = matchingGameRepository.save(entity);
+        return createMatchingGame(adminActor(currentUser), request);
+    }
+
+    @Transactional
+    public AdminMatchingGameResponse createMatchingGame(Actor actor, AdminMatchingGameRequest request) {
+        screen(request);
+        MatchingGame saved = matchingGameRepository.save(mapper.toEntity(request, actor.user()));
         List<MatchingGameItem> items = saveMatchingGameItems(saved, request);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_CREATE", "MatchingGame", saved.getId(),
-                "Admin created a matching game in the platform library.");
+        auditCreate(actor, "MatchingGame", saved.getId(), "a matching game");
         return mapper.toResponse(saved, items);
     }
 
     @Transactional
     public AdminMatchingGameResponse updateMatchingGame(SecurityUserDetails currentUser, Long id, AdminMatchingGameRequest request) {
-        User admin = findActor(currentUser);
-        MatchingGame entity = findMatchingGame(id);
+        return updateMatchingGame(adminActor(currentUser), id, request);
+    }
+
+    @Transactional
+    public AdminMatchingGameResponse updateMatchingGame(Actor actor, Long id, AdminMatchingGameRequest request) {
+        screen(request);
+        MatchingGame entity = findMatchingGame(id, actor.ownerUserId());
+        beforeEdit(actor, ReviewContentType.MATCHING_GAME, entity);
         mapper.applyTo(request, entity);
+        afterEdit(actor, ReviewContentType.MATCHING_GAME, entity);
         MatchingGame saved = matchingGameRepository.save(entity);
         matchingGameItemRepository.deleteByMatchingGameId(saved.getId());
         List<MatchingGameItem> items = saveMatchingGameItems(saved, request);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_UPDATE", "MatchingGame", saved.getId(),
-                "Admin updated a matching game.");
+        auditUpdate(actor, "MatchingGame", saved.getId(), "a matching game");
         return mapper.toResponse(saved, items);
     }
 
@@ -222,8 +312,8 @@ public class AdminActivityService {
             AdminActivityStatusUpdateRequest request) {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
-        MatchingGame entity = findMatchingGame(id);
-        entity.setContentStatus(target);
+        MatchingGame entity = findMatchingGame(id, null);
+        applyAdminStatus(ReviewContentType.MATCHING_GAME, entity, target);
         MatchingGame saved = matchingGameRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "MatchingGame", saved.getId(),
                 "Admin set matching game status to " + target + ".");
@@ -232,16 +322,29 @@ public class AdminActivityService {
 
     @Transactional
     public void deleteMatchingGame(SecurityUserDetails currentUser, Long id) {
-        User admin = findActor(currentUser);
-        MatchingGame entity = findMatchingGame(id);
-        matchingGameItemRepository.deleteByMatchingGameId(entity.getId());
-        matchingGameRepository.delete(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_DELETE", "MatchingGame", id,
-                "Admin deleted a matching game.");
+        deleteMatchingGame(adminActor(currentUser), id);
     }
 
-    private MatchingGame findMatchingGame(Long id) {
+    @Transactional
+    public void deleteMatchingGame(Actor actor, Long id) {
+        MatchingGame entity = findMatchingGame(id, actor.ownerUserId());
+        beforeDelete(actor, entity);
+        matchingGameItemRepository.deleteByMatchingGameId(entity.getId());
+        matchingGameRepository.delete(entity);
+        auditDelete(actor, "MatchingGame", id, "a matching game");
+    }
+
+    @Transactional
+    public AdminMatchingGameResponse submitMatchingGame(Actor actor, Long id) {
+        MatchingGame entity = findMatchingGame(id, actor.ownerUserId());
+        contentReviewService.submitForReview(actor.user(), ReviewContentType.MATCHING_GAME, entity);
+        MatchingGame saved = matchingGameRepository.save(entity);
+        return mapper.toResponse(saved, loadMatchingGameItems(saved.getId()));
+    }
+
+    private MatchingGame findMatchingGame(Long id, Long ownerUserId) {
         return matchingGameRepository.findById(id)
+                .filter(entity -> isOwnedBy(entity, ownerUserId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Matching game not found."));
     }
 
@@ -249,15 +352,17 @@ public class AdminActivityService {
         return matchingGameItemRepository.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(gameId);
     }
 
-    private List<MatchingGameItem> saveMatchingGameItems(MatchingGame parent, AdminMatchingGameRequest request) {
+    private List<MatchingGameItem> saveMatchingGameItems(MatchingGame owner, AdminMatchingGameRequest request) {
         if (request.items().isEmpty()) {
             return List.of();
         }
         List<MatchingGameItem> entities = request.items().stream()
-                .map(item -> mapper.toEntity(item, parent))
+                .map(item -> mapper.toEntity(item, owner))
                 .toList();
         return matchingGameItemRepository.saveAll(entities);
     }
+
+    // ===== Listening exercises =====
 
     @Transactional(readOnly = true)
     public PageResponse<AdminListeningExerciseResponse> listListeningExercises(ActivityFilter filter, int page, int size, String sort) {
@@ -271,27 +376,41 @@ public class AdminActivityService {
 
     @Transactional(readOnly = true)
     public AdminListeningExerciseResponse getListeningExercise(Long id) {
-        return mapper.toResponse(findListeningExercise(id));
+        return getListeningExercise(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminListeningExerciseResponse getListeningExercise(Long id, Long ownerUserId) {
+        return mapper.toResponse(findListeningExercise(id, ownerUserId));
     }
 
     @Transactional
     public AdminListeningExerciseResponse createListeningExercise(SecurityUserDetails currentUser, AdminListeningExerciseRequest request) {
-        User admin = findActor(currentUser);
-        ListeningExercise entity = mapper.toEntity(request, admin);
-        ListeningExercise saved = listeningExerciseRepository.save(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_CREATE", "ListeningExercise", saved.getId(),
-                "Admin created a listening exercise.");
+        return createListeningExercise(adminActor(currentUser), request);
+    }
+
+    @Transactional
+    public AdminListeningExerciseResponse createListeningExercise(Actor actor, AdminListeningExerciseRequest request) {
+        screen(request);
+        ListeningExercise saved = listeningExerciseRepository.save(mapper.toEntity(request, actor.user()));
+        auditCreate(actor, "ListeningExercise", saved.getId(), "a listening exercise");
         return mapper.toResponse(saved);
     }
 
     @Transactional
     public AdminListeningExerciseResponse updateListeningExercise(SecurityUserDetails currentUser, Long id, AdminListeningExerciseRequest request) {
-        User admin = findActor(currentUser);
-        ListeningExercise entity = findListeningExercise(id);
+        return updateListeningExercise(adminActor(currentUser), id, request);
+    }
+
+    @Transactional
+    public AdminListeningExerciseResponse updateListeningExercise(Actor actor, Long id, AdminListeningExerciseRequest request) {
+        screen(request);
+        ListeningExercise entity = findListeningExercise(id, actor.ownerUserId());
+        beforeEdit(actor, ReviewContentType.LISTENING_EXERCISE, entity);
         mapper.applyTo(request, entity);
+        afterEdit(actor, ReviewContentType.LISTENING_EXERCISE, entity);
         ListeningExercise saved = listeningExerciseRepository.save(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_UPDATE", "ListeningExercise", saved.getId(),
-                "Admin updated a listening exercise.");
+        auditUpdate(actor, "ListeningExercise", saved.getId(), "a listening exercise");
         return mapper.toResponse(saved);
     }
 
@@ -300,8 +419,8 @@ public class AdminActivityService {
             AdminActivityStatusUpdateRequest request) {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
-        ListeningExercise entity = findListeningExercise(id);
-        entity.setContentStatus(target);
+        ListeningExercise entity = findListeningExercise(id, null);
+        applyAdminStatus(ReviewContentType.LISTENING_EXERCISE, entity, target);
         ListeningExercise saved = listeningExerciseRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "ListeningExercise", saved.getId(),
                 "Admin set listening exercise status to " + target + ".");
@@ -310,17 +429,31 @@ public class AdminActivityService {
 
     @Transactional
     public void deleteListeningExercise(SecurityUserDetails currentUser, Long id) {
-        User admin = findActor(currentUser);
-        ListeningExercise entity = findListeningExercise(id);
-        listeningExerciseRepository.delete(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_DELETE", "ListeningExercise", id,
-                "Admin deleted a listening exercise.");
+        deleteListeningExercise(adminActor(currentUser), id);
     }
 
-    private ListeningExercise findListeningExercise(Long id) {
+    @Transactional
+    public void deleteListeningExercise(Actor actor, Long id) {
+        ListeningExercise entity = findListeningExercise(id, actor.ownerUserId());
+        beforeDelete(actor, entity);
+        listeningExerciseRepository.delete(entity);
+        auditDelete(actor, "ListeningExercise", id, "a listening exercise");
+    }
+
+    @Transactional
+    public AdminListeningExerciseResponse submitListeningExercise(Actor actor, Long id) {
+        ListeningExercise entity = findListeningExercise(id, actor.ownerUserId());
+        contentReviewService.submitForReview(actor.user(), ReviewContentType.LISTENING_EXERCISE, entity);
+        return mapper.toResponse(listeningExerciseRepository.save(entity));
+    }
+
+    private ListeningExercise findListeningExercise(Long id, Long ownerUserId) {
         return listeningExerciseRepository.findById(id)
+                .filter(entity -> isOwnedBy(entity, ownerUserId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Listening exercise not found."));
     }
+
+    // ===== Tracing exercises =====
 
     @Transactional(readOnly = true)
     public PageResponse<AdminTracingExerciseResponse> listTracingExercises(ActivityFilter filter, int page, int size, String sort) {
@@ -334,27 +467,41 @@ public class AdminActivityService {
 
     @Transactional(readOnly = true)
     public AdminTracingExerciseResponse getTracingExercise(Long id) {
-        return mapper.toResponse(findTracingExercise(id));
+        return getTracingExercise(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminTracingExerciseResponse getTracingExercise(Long id, Long ownerUserId) {
+        return mapper.toResponse(findTracingExercise(id, ownerUserId));
     }
 
     @Transactional
     public AdminTracingExerciseResponse createTracingExercise(SecurityUserDetails currentUser, AdminTracingExerciseRequest request) {
-        User admin = findActor(currentUser);
-        TracingExercise entity = mapper.toEntity(request, admin);
-        TracingExercise saved = tracingExerciseRepository.save(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_CREATE", "TracingExercise", saved.getId(),
-                "Admin created a tracing exercise.");
+        return createTracingExercise(adminActor(currentUser), request);
+    }
+
+    @Transactional
+    public AdminTracingExerciseResponse createTracingExercise(Actor actor, AdminTracingExerciseRequest request) {
+        screen(request);
+        TracingExercise saved = tracingExerciseRepository.save(mapper.toEntity(request, actor.user()));
+        auditCreate(actor, "TracingExercise", saved.getId(), "a tracing exercise");
         return mapper.toResponse(saved);
     }
 
     @Transactional
     public AdminTracingExerciseResponse updateTracingExercise(SecurityUserDetails currentUser, Long id, AdminTracingExerciseRequest request) {
-        User admin = findActor(currentUser);
-        TracingExercise entity = findTracingExercise(id);
+        return updateTracingExercise(adminActor(currentUser), id, request);
+    }
+
+    @Transactional
+    public AdminTracingExerciseResponse updateTracingExercise(Actor actor, Long id, AdminTracingExerciseRequest request) {
+        screen(request);
+        TracingExercise entity = findTracingExercise(id, actor.ownerUserId());
+        beforeEdit(actor, ReviewContentType.TRACING_EXERCISE, entity);
         mapper.applyTo(request, entity);
+        afterEdit(actor, ReviewContentType.TRACING_EXERCISE, entity);
         TracingExercise saved = tracingExerciseRepository.save(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_UPDATE", "TracingExercise", saved.getId(),
-                "Admin updated a tracing exercise.");
+        auditUpdate(actor, "TracingExercise", saved.getId(), "a tracing exercise");
         return mapper.toResponse(saved);
     }
 
@@ -363,8 +510,8 @@ public class AdminActivityService {
             AdminActivityStatusUpdateRequest request) {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
-        TracingExercise entity = findTracingExercise(id);
-        entity.setContentStatus(target);
+        TracingExercise entity = findTracingExercise(id, null);
+        applyAdminStatus(ReviewContentType.TRACING_EXERCISE, entity, target);
         TracingExercise saved = tracingExerciseRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "TracingExercise", saved.getId(),
                 "Admin set tracing exercise status to " + target + ".");
@@ -373,55 +520,87 @@ public class AdminActivityService {
 
     @Transactional
     public void deleteTracingExercise(SecurityUserDetails currentUser, Long id) {
-        User admin = findActor(currentUser);
-        TracingExercise entity = findTracingExercise(id);
-        tracingExerciseRepository.delete(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_DELETE", "TracingExercise", id,
-                "Admin deleted a tracing exercise.");
+        deleteTracingExercise(adminActor(currentUser), id);
     }
 
-    private TracingExercise findTracingExercise(Long id) {
+    @Transactional
+    public void deleteTracingExercise(Actor actor, Long id) {
+        TracingExercise entity = findTracingExercise(id, actor.ownerUserId());
+        beforeDelete(actor, entity);
+        tracingExerciseRepository.delete(entity);
+        auditDelete(actor, "TracingExercise", id, "a tracing exercise");
+    }
+
+    @Transactional
+    public AdminTracingExerciseResponse submitTracingExercise(Actor actor, Long id) {
+        TracingExercise entity = findTracingExercise(id, actor.ownerUserId());
+        contentReviewService.submitForReview(actor.user(), ReviewContentType.TRACING_EXERCISE, entity);
+        return mapper.toResponse(tracingExerciseRepository.save(entity));
+    }
+
+    private TracingExercise findTracingExercise(Long id, Long ownerUserId) {
         return tracingExerciseRepository.findById(id)
+                .filter(entity -> isOwnedBy(entity, ownerUserId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Tracing exercise not found."));
     }
+
+    // ===== Drag-and-drop activities =====
 
     @Transactional(readOnly = true)
     public PageResponse<AdminDragDropActivityResponse> listDragDropActivities(ActivityFilter filter, int page, int size, String sort) {
         Pageable pageable = buildPageable(page, size, sort);
         Page<DragDropActivity> result = dragDropActivityRepository.findAll(filterSpec(filter), pageable);
+        Map<Long, List<DragDropItem>> itemsByActivityId = childrenByParentId(
+                result.getContent(),
+                dragDropItemRepository::findByDragDropActivityIdInOrderBySortOrderAscCreatedAtAsc,
+                item -> item.getDragDropActivity().getId());
         List<AdminDragDropActivityResponse> items = result.getContent().stream()
-                .map(activity -> mapper.toResponse(activity, loadDragDropItems(activity.getId())))
+                .map(activity -> mapper.toResponse(activity, itemsByActivityId.getOrDefault(activity.getId(), List.of())))
                 .toList();
         return toPageResponse(items, result);
     }
 
     @Transactional(readOnly = true)
     public AdminDragDropActivityResponse getDragDropActivity(Long id) {
-        DragDropActivity entity = findDragDropActivity(id);
+        return getDragDropActivity(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminDragDropActivityResponse getDragDropActivity(Long id, Long ownerUserId) {
+        DragDropActivity entity = findDragDropActivity(id, ownerUserId);
         return mapper.toResponse(entity, loadDragDropItems(id));
     }
 
     @Transactional
     public AdminDragDropActivityResponse createDragDropActivity(SecurityUserDetails currentUser, AdminDragDropActivityRequest request) {
-        User admin = findActor(currentUser);
-        DragDropActivity entity = mapper.toEntity(request, admin);
-        DragDropActivity saved = dragDropActivityRepository.save(entity);
+        return createDragDropActivity(adminActor(currentUser), request);
+    }
+
+    @Transactional
+    public AdminDragDropActivityResponse createDragDropActivity(Actor actor, AdminDragDropActivityRequest request) {
+        screen(request);
+        DragDropActivity saved = dragDropActivityRepository.save(mapper.toEntity(request, actor.user()));
         List<DragDropItem> items = saveDragDropItems(saved, request);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_CREATE", "DragDropActivity", saved.getId(),
-                "Admin created a drag-drop activity.");
+        auditCreate(actor, "DragDropActivity", saved.getId(), "a drag-drop activity");
         return mapper.toResponse(saved, items);
     }
 
     @Transactional
     public AdminDragDropActivityResponse updateDragDropActivity(SecurityUserDetails currentUser, Long id, AdminDragDropActivityRequest request) {
-        User admin = findActor(currentUser);
-        DragDropActivity entity = findDragDropActivity(id);
+        return updateDragDropActivity(adminActor(currentUser), id, request);
+    }
+
+    @Transactional
+    public AdminDragDropActivityResponse updateDragDropActivity(Actor actor, Long id, AdminDragDropActivityRequest request) {
+        screen(request);
+        DragDropActivity entity = findDragDropActivity(id, actor.ownerUserId());
+        beforeEdit(actor, ReviewContentType.DRAG_DROP_ACTIVITY, entity);
         mapper.applyTo(request, entity);
+        afterEdit(actor, ReviewContentType.DRAG_DROP_ACTIVITY, entity);
         DragDropActivity saved = dragDropActivityRepository.save(entity);
         dragDropItemRepository.deleteByDragDropActivityId(saved.getId());
         List<DragDropItem> items = saveDragDropItems(saved, request);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_UPDATE", "DragDropActivity", saved.getId(),
-                "Admin updated a drag-drop activity.");
+        auditUpdate(actor, "DragDropActivity", saved.getId(), "a drag-drop activity");
         return mapper.toResponse(saved, items);
     }
 
@@ -430,8 +609,8 @@ public class AdminActivityService {
             AdminActivityStatusUpdateRequest request) {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
-        DragDropActivity entity = findDragDropActivity(id);
-        entity.setContentStatus(target);
+        DragDropActivity entity = findDragDropActivity(id, null);
+        applyAdminStatus(ReviewContentType.DRAG_DROP_ACTIVITY, entity, target);
         DragDropActivity saved = dragDropActivityRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "DragDropActivity", saved.getId(),
                 "Admin set drag-drop activity status to " + target + ".");
@@ -440,16 +619,29 @@ public class AdminActivityService {
 
     @Transactional
     public void deleteDragDropActivity(SecurityUserDetails currentUser, Long id) {
-        User admin = findActor(currentUser);
-        DragDropActivity entity = findDragDropActivity(id);
-        dragDropItemRepository.deleteByDragDropActivityId(entity.getId());
-        dragDropActivityRepository.delete(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_DELETE", "DragDropActivity", id,
-                "Admin deleted a drag-drop activity.");
+        deleteDragDropActivity(adminActor(currentUser), id);
     }
 
-    private DragDropActivity findDragDropActivity(Long id) {
+    @Transactional
+    public void deleteDragDropActivity(Actor actor, Long id) {
+        DragDropActivity entity = findDragDropActivity(id, actor.ownerUserId());
+        beforeDelete(actor, entity);
+        dragDropItemRepository.deleteByDragDropActivityId(entity.getId());
+        dragDropActivityRepository.delete(entity);
+        auditDelete(actor, "DragDropActivity", id, "a drag-drop activity");
+    }
+
+    @Transactional
+    public AdminDragDropActivityResponse submitDragDropActivity(Actor actor, Long id) {
+        DragDropActivity entity = findDragDropActivity(id, actor.ownerUserId());
+        contentReviewService.submitForReview(actor.user(), ReviewContentType.DRAG_DROP_ACTIVITY, entity);
+        DragDropActivity saved = dragDropActivityRepository.save(entity);
+        return mapper.toResponse(saved, loadDragDropItems(saved.getId()));
+    }
+
+    private DragDropActivity findDragDropActivity(Long id, Long ownerUserId) {
         return dragDropActivityRepository.findById(id)
+                .filter(entity -> isOwnedBy(entity, ownerUserId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Drag-drop activity not found."));
     }
 
@@ -457,53 +649,73 @@ public class AdminActivityService {
         return dragDropItemRepository.findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(activityId);
     }
 
-    private List<DragDropItem> saveDragDropItems(DragDropActivity parent, AdminDragDropActivityRequest request) {
+    private List<DragDropItem> saveDragDropItems(DragDropActivity owner, AdminDragDropActivityRequest request) {
         if (request.items().isEmpty()) {
             return List.of();
         }
         List<DragDropItem> entities = request.items().stream()
-                .map(item -> mapper.toEntity(item, parent))
+                .map(item -> mapper.toEntity(item, owner))
                 .toList();
         return dragDropItemRepository.saveAll(entities);
     }
+
+    // ===== Story activities =====
 
     @Transactional(readOnly = true)
     public PageResponse<AdminStoryActivityResponse> listStoryActivities(ActivityFilter filter, int page, int size, String sort) {
         Pageable pageable = buildPageable(page, size, sort);
         Page<StoryActivity> result = storyActivityRepository.findAll(filterSpec(filter), pageable);
+        Map<Long, List<StoryQuestion>> questionsByStoryId = childrenByParentId(
+                result.getContent(),
+                storyQuestionRepository::findByStoryActivityIdInOrderBySortOrderAscCreatedAtAsc,
+                question -> question.getStoryActivity().getId());
         List<AdminStoryActivityResponse> items = result.getContent().stream()
-                .map(story -> mapper.toResponse(story, loadStoryQuestions(story.getId())))
+                .map(story -> mapper.toResponse(story, questionsByStoryId.getOrDefault(story.getId(), List.of())))
                 .toList();
         return toPageResponse(items, result);
     }
 
     @Transactional(readOnly = true)
     public AdminStoryActivityResponse getStoryActivity(Long id) {
-        StoryActivity entity = findStoryActivity(id);
+        return getStoryActivity(id, null);
+    }
+
+    @Transactional(readOnly = true)
+    public AdminStoryActivityResponse getStoryActivity(Long id, Long ownerUserId) {
+        StoryActivity entity = findStoryActivity(id, ownerUserId);
         return mapper.toResponse(entity, loadStoryQuestions(id));
     }
 
     @Transactional
     public AdminStoryActivityResponse createStoryActivity(SecurityUserDetails currentUser, AdminStoryActivityRequest request) {
-        User admin = findActor(currentUser);
-        StoryActivity entity = mapper.toEntity(request, admin);
-        StoryActivity saved = storyActivityRepository.save(entity);
+        return createStoryActivity(adminActor(currentUser), request);
+    }
+
+    @Transactional
+    public AdminStoryActivityResponse createStoryActivity(Actor actor, AdminStoryActivityRequest request) {
+        screen(request);
+        StoryActivity saved = storyActivityRepository.save(mapper.toEntity(request, actor.user()));
         List<StoryQuestion> questions = saveStoryQuestions(saved, request);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_CREATE", "StoryActivity", saved.getId(),
-                "Admin created a story activity.");
+        auditCreate(actor, "StoryActivity", saved.getId(), "a story activity");
         return mapper.toResponse(saved, questions);
     }
 
     @Transactional
     public AdminStoryActivityResponse updateStoryActivity(SecurityUserDetails currentUser, Long id, AdminStoryActivityRequest request) {
-        User admin = findActor(currentUser);
-        StoryActivity entity = findStoryActivity(id);
+        return updateStoryActivity(adminActor(currentUser), id, request);
+    }
+
+    @Transactional
+    public AdminStoryActivityResponse updateStoryActivity(Actor actor, Long id, AdminStoryActivityRequest request) {
+        screen(request);
+        StoryActivity entity = findStoryActivity(id, actor.ownerUserId());
+        beforeEdit(actor, ReviewContentType.STORY_ACTIVITY, entity);
         mapper.applyTo(request, entity);
+        afterEdit(actor, ReviewContentType.STORY_ACTIVITY, entity);
         StoryActivity saved = storyActivityRepository.save(entity);
         storyQuestionRepository.deleteByStoryActivityId(saved.getId());
         List<StoryQuestion> questions = saveStoryQuestions(saved, request);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_UPDATE", "StoryActivity", saved.getId(),
-                "Admin updated a story activity.");
+        auditUpdate(actor, "StoryActivity", saved.getId(), "a story activity");
         return mapper.toResponse(saved, questions);
     }
 
@@ -512,8 +724,8 @@ public class AdminActivityService {
             AdminActivityStatusUpdateRequest request) {
         ContentStatus target = validateTargetStatus(request);
         User admin = findActor(currentUser);
-        StoryActivity entity = findStoryActivity(id);
-        entity.setContentStatus(target);
+        StoryActivity entity = findStoryActivity(id, null);
+        applyAdminStatus(ReviewContentType.STORY_ACTIVITY, entity, target);
         StoryActivity saved = storyActivityRepository.save(entity);
         auditLogService.record(admin, "ADMIN_ACTIVITY_STATUS", "StoryActivity", saved.getId(),
                 "Admin set story activity status to " + target + ".");
@@ -522,16 +734,29 @@ public class AdminActivityService {
 
     @Transactional
     public void deleteStoryActivity(SecurityUserDetails currentUser, Long id) {
-        User admin = findActor(currentUser);
-        StoryActivity entity = findStoryActivity(id);
-        storyQuestionRepository.deleteByStoryActivityId(entity.getId());
-        storyActivityRepository.delete(entity);
-        auditLogService.record(admin, "ADMIN_ACTIVITY_DELETE", "StoryActivity", id,
-                "Admin deleted a story activity.");
+        deleteStoryActivity(adminActor(currentUser), id);
     }
 
-    private StoryActivity findStoryActivity(Long id) {
+    @Transactional
+    public void deleteStoryActivity(Actor actor, Long id) {
+        StoryActivity entity = findStoryActivity(id, actor.ownerUserId());
+        beforeDelete(actor, entity);
+        storyQuestionRepository.deleteByStoryActivityId(entity.getId());
+        storyActivityRepository.delete(entity);
+        auditDelete(actor, "StoryActivity", id, "a story activity");
+    }
+
+    @Transactional
+    public AdminStoryActivityResponse submitStoryActivity(Actor actor, Long id) {
+        StoryActivity entity = findStoryActivity(id, actor.ownerUserId());
+        contentReviewService.submitForReview(actor.user(), ReviewContentType.STORY_ACTIVITY, entity);
+        StoryActivity saved = storyActivityRepository.save(entity);
+        return mapper.toResponse(saved, loadStoryQuestions(saved.getId()));
+    }
+
+    private StoryActivity findStoryActivity(Long id, Long ownerUserId) {
         return storyActivityRepository.findById(id)
+                .filter(entity -> isOwnedBy(entity, ownerUserId))
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Story activity not found."));
     }
 
@@ -539,14 +764,129 @@ public class AdminActivityService {
         return storyQuestionRepository.findByStoryActivityIdOrderBySortOrderAscCreatedAtAsc(storyId);
     }
 
-    private List<StoryQuestion> saveStoryQuestions(StoryActivity parent, AdminStoryActivityRequest request) {
+    private List<StoryQuestion> saveStoryQuestions(StoryActivity owner, AdminStoryActivityRequest request) {
         if (request.questions().isEmpty()) {
             return List.of();
         }
         List<StoryQuestion> entities = request.questions().stream()
-                .map(question -> mapper.toEntity(question, parent))
+                .map(question -> mapper.toEntity(question, owner))
                 .toList();
         return storyQuestionRepository.saveAll(entities);
+    }
+
+    // ===== Shared workflow helpers =====
+
+    /**
+     * Loads the children of one page of parents with a single query and groups them by parent id.
+     * Each group keeps the finder's order (sort order, then creation time).
+     */
+    private static <C> Map<Long, List<C>> childrenByParentId(
+            List<? extends PracticeActivityContent> parents,
+            Function<Collection<Long>, List<C>> batchFinder,
+            Function<C, Long> parentIdOf) {
+        if (parents.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> parentIds = parents.stream().map(PracticeActivityContent::getId).toList();
+        return batchFinder.apply(parentIds).stream().collect(Collectors.groupingBy(parentIdOf));
+    }
+
+    private static boolean isOwnedBy(PracticeActivityContent entity, Long ownerUserId) {
+        if (ownerUserId == null) {
+            return true;
+        }
+        User author = entity.getCreatedByUser();
+        return author != null && ownerUserId.equals(author.getId());
+    }
+
+    // ===== Content safety (same sensitive-word rule as lessons and quizzes) =====
+
+    private void screen(AdminFlashcardRequest request) {
+        contentSafetyService.screenText(request.title(), request.frontText(), request.backText(), request.pinyin(),
+                request.englishMeaning(), request.malayMeaning(), request.extraPayload(), request.topic(), tags(request.tags()));
+    }
+
+    private void screen(AdminMatchingGameRequest request) {
+        contentSafetyService.screenText(request.title(), request.topic(), tags(request.tags()));
+        if (request.items() != null) {
+            request.items().stream().filter(Objects::nonNull).forEach(item ->
+                    contentSafetyService.screenText(item.leftText(), item.rightText(), item.pinyin()));
+        }
+    }
+
+    private void screen(AdminListeningExerciseRequest request) {
+        contentSafetyService.screenText(request.title(), request.questionPayload(), request.topic(), tags(request.tags()));
+    }
+
+    private void screen(AdminTracingExerciseRequest request) {
+        contentSafetyService.screenText(request.title(), request.targetCharacter(), request.pinyin(), request.meaning(),
+                request.instructions(), request.topic(), tags(request.tags()));
+    }
+
+    private void screen(AdminDragDropActivityRequest request) {
+        contentSafetyService.screenText(request.title(), request.instructions(), request.topic(), tags(request.tags()));
+        if (request.items() != null) {
+            request.items().stream().filter(Objects::nonNull).forEach(item ->
+                    contentSafetyService.screenText(item.dragText(), item.targetZone(), item.pinyin()));
+        }
+    }
+
+    private void screen(AdminStoryActivityRequest request) {
+        contentSafetyService.screenText(request.title(), request.instructions(), request.storyText(), request.pinyin(),
+                request.translation(), request.topic(), tags(request.tags()));
+        if (request.questions() != null) {
+            request.questions().stream().filter(Objects::nonNull).forEach(question ->
+                    contentSafetyService.screenText(question.questionText(), question.optionsPayload(), question.explanation()));
+        }
+    }
+
+    private static String tags(List<String> tags) {
+        return tags == null ? null : String.join(" ", tags.stream().filter(Objects::nonNull).toList());
+    }
+
+    /** Teachers may edit DRAFT, REJECTED and PUBLISHED items only (D24); admins edit any item. */
+    private void beforeEdit(Actor actor, ReviewContentType type, PracticeActivityContent entity) {
+        if (actor.teacher()) {
+            contentReviewService.requireTeacherEditable(entity, type);
+        }
+    }
+
+    /** A teacher's edit of a PUBLISHED item sends it back to SUBMITTED for re-review. */
+    private void afterEdit(Actor actor, ReviewContentType type, PracticeActivityContent entity) {
+        if (actor.teacher()) {
+            contentReviewService.recordTeacherEdit(actor.user(), type, entity);
+        }
+    }
+
+    /** Teachers can delete only drafts; published history is archived by an admin instead. */
+    private static void beforeDelete(Actor actor, PracticeActivityContent entity) {
+        if (actor.teacher() && entity.getContentStatus() != ContentStatus.DRAFT) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only draft activities can be deleted.");
+        }
+    }
+
+    /** Admin library status change; publishing requires a complete activity. */
+    private void applyAdminStatus(ReviewContentType type, PracticeActivityContent entity, ContentStatus target) {
+        if (target == ContentStatus.PUBLISHED) {
+            contentReviewService.requireComplete(type, entity);
+            entity.setRejectionReason(null);
+        }
+        entity.setContentStatus(target);
+    }
+
+    private void auditCreate(Actor actor, String targetType, Long id, String label) {
+        auditLogService.record(actor.user(), actor.auditPrefix() + "CREATE", targetType, id,
+                actor.auditActor() + " created " + label + (actor.teacher() ? " draft." : " in the platform library."));
+    }
+
+    private void auditUpdate(Actor actor, String targetType, Long id, String label) {
+        auditLogService.record(actor.user(), actor.auditPrefix() + "UPDATE", targetType, id,
+                actor.auditActor() + " updated " + label + ".");
+    }
+
+    private void auditDelete(Actor actor, String targetType, Long id, String label) {
+        auditLogService.record(actor.user(), actor.auditPrefix() + "DELETE", targetType, id,
+                actor.auditActor() + " deleted " + label + ".");
     }
 
     @Transactional(readOnly = true)
@@ -707,7 +1047,7 @@ public class AdminActivityService {
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;
         String safeField = switch (field) {
-            case "title", "createdAt", "updatedAt", "hskLevel", "ageBand",
+            case "title", "createdAt", "updatedAt", "hskLevel",
                     "difficulty", "contentStatus", "xpReward" -> field;
             default -> "updatedAt";
         };
@@ -734,9 +1074,6 @@ public class AdminActivityService {
             if (filter.hskLevel() != null) {
                 predicates.add(cb.equal(root.get("hskLevel"), filter.hskLevel()));
             }
-            if (filter.ageBand() != null) {
-                predicates.add(cb.equal(root.get("ageBand"), filter.ageBand()));
-            }
             if (filter.difficulty() != null) {
                 predicates.add(cb.equal(root.get("difficulty"), filter.difficulty()));
             }
@@ -762,7 +1099,6 @@ public class AdminActivityService {
     public record ActivityFilter(
             ContentStatus status,
             Integer hskLevel,
-            AgeBand ageBand,
             ActivityDifficulty difficulty,
             String topic,
             String tag,
@@ -773,7 +1109,6 @@ public class AdminActivityService {
         public static ActivityFilter of(
                 Optional<String> status,
                 Optional<Integer> hskLevel,
-                Optional<String> ageBand,
                 Optional<String> difficulty,
                 Optional<String> topic,
                 Optional<String> tag,
@@ -783,7 +1118,6 @@ public class AdminActivityService {
             return new ActivityFilter(
                     status.map(value -> requireMaxLength(value, 40, "status")).map(ActivityFilter::parseStatus).orElse(null),
                     hskLevel.orElse(null),
-                    ageBand.map(value -> requireMaxLength(value, 40, "ageBand")).map(ActivityFilter::parseAgeBand).orElse(null),
                     difficulty.map(value -> requireMaxLength(value, 40, "difficulty")).map(ActivityFilter::parseDifficulty).orElse(null),
                     topic.map(value -> requireMaxLength(value, 200, "topic")).orElse(null),
                     tag.map(value -> requireMaxLength(value, 100, "tag")).orElse(null),
@@ -805,14 +1139,6 @@ public class AdminActivityService {
                 return ContentStatus.fromValue(raw);
             } catch (IllegalArgumentException ex) {
                 throw new ResponseStatusException(BAD_REQUEST, "Unknown status: " + raw);
-            }
-        }
-
-        private static AgeBand parseAgeBand(String raw) {
-            try {
-                return AgeBand.fromValue(raw);
-            } catch (IllegalArgumentException ex) {
-                throw new ResponseStatusException(BAD_REQUEST, "Unknown ageBand: " + raw);
             }
         }
 

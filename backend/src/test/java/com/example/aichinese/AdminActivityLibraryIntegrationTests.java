@@ -40,18 +40,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * The platform owns the curated library of Flashcards, MatchingGames,
  * ListeningExercises, TracingExercises, DragDropActivities and
- * StoryActivities. Teachers no longer author these — only admins do, via
- * {@code /api/v1/admin/activities/**}.
+ * StoryActivities through {@code /api/v1/admin/activities/**}. Approved
+ * teachers author their own items through {@code /api/v1/teachers/activities/**}
+ * (D5, see ContentReviewWorkflowIntegrationTests); they never reach the admin API.
  *
  * These tests exercise the full CRUD round-trip on representative types
  * (flashcard for the simple single-row case, matching-game for the
- * composite parent+children case) plus the status lifecycle and the
+ * composite game+items case) plus the status lifecycle and the
  * role-based access guards.
  *
- * <p>Also pins the per-type validation invariants (matching games need
- * pairs, drag-drop needs targets, stories need comprehension
- * questions) so a future refactor of {@code AdminActivityService}
- * cannot quietly weaken them.</p>
+ * <p>Also pins the publish-time completeness guard (a matching game
+ * without pairs cannot be published) so a future refactor of
+ * {@code AdminActivityService} cannot quietly weaken it.</p>
  */
 @SpringBootTest(properties = {
         "DEFAULT_ADMIN_EMAIL=admin@example.com",
@@ -102,7 +102,6 @@ class AdminActivityLibraryIntegrationTests {
                 Map.entry("englishMeaning", "Hello"),
                 Map.entry("sortOrder", 0),
                 Map.entry("hskLevel", 1),
-                Map.entry("ageBand", "LOWER_PRIMARY"),
                 Map.entry("difficulty", "EASY"),
                 Map.entry("topic", "greetings"),
                 Map.entry("tags", List.of("basic", "polite")),
@@ -147,7 +146,6 @@ class AdminActivityLibraryIntegrationTests {
                 Map.entry("englishMeaning", "Hello (greeting)"),
                 Map.entry("sortOrder", 1),
                 Map.entry("hskLevel", 1),
-                Map.entry("ageBand", "LOWER_PRIMARY"),
                 Map.entry("difficulty", "EASY"),
                 Map.entry("topic", "greetings"),
                 Map.entry("tags", List.of("basic")));
@@ -194,11 +192,10 @@ class AdminActivityLibraryIntegrationTests {
         String token = adminToken();
 
         Map<String, Object> body = Map.of(
-                "title", "Animal matching",
+                "title", "Campus food matching",
                 "hskLevel", 1,
-                "ageBand", "LOWER_PRIMARY",
                 "difficulty", "EASY",
-                "topic", "animals",
+                "topic", "food",
                 "tags", List.of("animal"),
                 "items", List.of(
                         Map.of("leftText", "猫", "rightText", "cat", "pinyin", "māo", "sortOrder", 0),
@@ -216,11 +213,11 @@ class AdminActivityLibraryIntegrationTests {
 
         long gameId = responseDataId(result);
 
-        // Re-saving the game with one fewer item must wipe the old children
+        // Re-saving the game with one fewer item must wipe the old items
         // and persist only the new payload (full replacement semantics).
         Map<String, Object> updateBody = Map.of(
                 "title", "Animal matching (trimmed)",
-                "topic", "animals",
+                "topic", "food",
                 "items", List.of(
                         Map.of("leftText", "鸟", "rightText", "bird", "pinyin", "niǎo", "sortOrder", 0)));
 
@@ -237,7 +234,7 @@ class AdminActivityLibraryIntegrationTests {
                 .findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(gameId))
                 .hasSize(1);
 
-        // Deleting the parent must also remove the children — otherwise the
+        // Deleting the game must also remove its items — otherwise the
         // matching_game_items table would slowly accumulate orphans.
         mockMvc.perform(delete("/api/v1/admin/activities/matching-games/" + gameId)
                 .with(csrf())
@@ -327,9 +324,19 @@ class AdminActivityLibraryIntegrationTests {
                 .andReturn();
         long flashcardId = responseDataId(result);
 
-        // PENDING_REVIEW is a legitimate enum value but should NOT be settable
+        // SUBMITTED is a legitimate ContentStatus value but must NOT be settable
         // through the admin endpoint — admins can only move between DRAFT,
-        // PUBLISHED and ARCHIVED.
+        // PUBLISHED and ARCHIVED (review states go through the review queue).
+        mockMvc.perform(patch("/api/v1/admin/activities/flashcards/" + flashcardId + "/status")
+                .with(csrf())
+                .header(AUTHORIZATION, bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("status", "SUBMITTED"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Status must be one of DRAFT, PUBLISHED, ARCHIVED."));
+
+        // An unknown status value is rejected while the request body is read.
         mockMvc.perform(patch("/api/v1/admin/activities/flashcards/" + flashcardId + "/status")
                 .with(csrf())
                 .header(AUTHORIZATION, bearer(token))
@@ -383,11 +390,35 @@ class AdminActivityLibraryIntegrationTests {
         registerTeacher(teacherEmail);
         String teacherToken = loginAndExtractToken(teacherEmail, DEFAULT_PASSWORD);
 
-        // Activity authoring is now an admin-only capability; teachers must
-        // be rejected with 403 to prevent accidental privilege escalation.
+        // The admin library API stays admin-only; teachers manage only their own
+        // activities via /api/v1/teachers/activities, and only once approved.
         mockMvc.perform(get("/api/v1/admin/activities/flashcards")
                 .header(AUTHORIZATION, bearer(teacherToken)))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/teachers/activities")
+                .header(AUTHORIZATION, bearer(teacherToken)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCannotPublishAnIncompleteMatchingGame() throws Exception {
+        String adminToken = loginAndExtractToken(ADMIN_EMAIL, ADMIN_PASSWORD);
+        MvcResult created = mockMvc.perform(post("/api/v1/admin/activities/matching-games")
+                .with(csrf())
+                .header(AUTHORIZATION, bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("title", "Empty pairs", "learningStage", "SCAFFOLDED"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.learningStage").value("SCAFFOLDED"))
+                .andReturn();
+        long gameId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asLong();
+
+        mockMvc.perform(patch("/api/v1/admin/activities/matching-games/" + gameId + "/status")
+                .with(csrf())
+                .header(AUTHORIZATION, bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("status", "PUBLISHED"))))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

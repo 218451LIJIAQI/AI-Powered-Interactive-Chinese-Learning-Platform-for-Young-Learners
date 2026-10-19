@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { openSafeHttpUrl, safeHttpUrl } from './url'
 
 describe('safeHttpUrl', () => {
-  it.each(['https://example.com/checkout?session=123', 'http://localhost:8080/files/video.mp4'])(
+  it.each(['https://example.com/live-class?session=123', 'http://localhost:8080/files/video.mp4'])(
     'accepts %s',
     (url) => {
       expect(safeHttpUrl(url)).toBe(url)
@@ -20,9 +20,9 @@ describe('safeHttpUrl', () => {
   })
 
   it.each([
-    'https://trusted.example@evil.example/checkout',
-    'https://example.com/\u202echeckout',
-    'https://example.com/\u0000checkout',
+    'https://trusted.example@evil.example/live-class',
+    'https://example.com/\u202elive-class',
+    'https://example.com/\u0000live-class',
   ])('rejects credentialed or visually ambiguous URL %s', (url) => {
     expect(safeHttpUrl(url)).toBeNull()
   })

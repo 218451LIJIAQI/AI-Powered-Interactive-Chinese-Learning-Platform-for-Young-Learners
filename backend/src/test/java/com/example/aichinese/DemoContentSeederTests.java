@@ -39,7 +39,7 @@ class DemoContentSeederTests {
         assertTrue(userRepository.existsByEmailIgnoreCase("student@fyp.local"));
         assertEquals(3, lessonRepository.count());
         assertEquals(1, coursePackageRepository.count());
-        assertEquals(4, publicContentService.discoverCourses(null, null, null, null, null, null, 0, 10).totalItems());
+        assertEquals(4, publicContentService.discoverCourses(null, null, null, null, null, 0, 10).totalItems());
 
         demoContentSeeder.run();
 

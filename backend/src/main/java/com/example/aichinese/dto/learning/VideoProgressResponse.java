@@ -28,8 +28,6 @@ public record VideoProgressResponse(
         LocalDateTime updatedAt) {
 
     public VideoProgressResponse {
-        Objects.requireNonNull(id, "id must not be null");
         Objects.requireNonNull(lessonId, "lessonId must not be null");
-        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
     }
 }

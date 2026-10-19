@@ -7,7 +7,7 @@ describe('account recovery translations', () => {
     for (const section of ['forgot', 'reset'] as const) {
       const englishKeys = Object.keys(recoveryMessages.en[section]).sort()
 
-      for (const locale of ['ms', 'zh'] as const) {
+      for (const locale of ['ms', 'zh-CN'] as const) {
         expect(Object.keys(recoveryMessages[locale][section]).sort()).toEqual(englishKeys)
         for (const key of englishKeys) {
           expect(

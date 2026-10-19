@@ -1,5 +1,5 @@
 <template>
-  <div class="row">
+  <div class="row progress-ring" :class="{ 'is-sm': size === 'sm' }">
     <div
       class="ring"
       :class="toneClass"
@@ -12,7 +12,7 @@
     >
       <span aria-hidden="true">{{ label }}</span>
     </div>
-    <div class="stack">
+    <div class="stack progress-ring-copy">
       <strong>{{ title }}</strong>
       <span v-if="subtitle" class="muted">{{ subtitle }}</span>
     </div>
@@ -22,18 +22,21 @@
 <script setup lang="ts">
 import { computed, type StyleValue } from 'vue'
 
-type RingTone = 'primary' | 'success'
+type RingTone = 'primary' | 'success' | 'warning'
 
 interface Props {
   progress: number
   title: string
   subtitle?: string
   tone?: RingTone
+  /** `sm` is a 56px dial for dense side panels; `md` (default) is 88px. */
+  size?: 'sm' | 'md'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   subtitle: '',
   tone: 'primary',
+  size: 'md',
 })
 
 function clampProgress(value: number): number {
@@ -44,5 +47,5 @@ const progressValue = computed<number>(() => clampProgress(props.progress))
 const label = computed<string>(() => `${progressValue.value}%`)
 const ariaLabel = computed<string>(() => `${props.title}: ${label.value}`)
 const ringStyle = computed<StyleValue>(() => ({ '--progress': progressValue.value }))
-const toneClass = computed<string>(() => (props.tone === 'success' ? 'success' : ''))
+const toneClass = computed<string>(() => (props.tone === 'primary' ? '' : props.tone))
 </script>

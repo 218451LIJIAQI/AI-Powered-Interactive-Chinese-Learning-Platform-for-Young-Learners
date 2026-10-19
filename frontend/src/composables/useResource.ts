@@ -22,6 +22,34 @@ interface ResourceState<T> {
   readonly reload: () => Promise<void>
 }
 
+/**
+ * How a resource may use its demo fixture:
+ * - `none`: always live data (no fixture, or the build is not a preview build);
+ * - `immediate`: preview build with no real session (anonymous visitor or preview role) -> fixture, no request;
+ * - `onUnreachable`: preview build with a real signed-in session -> live data; the fixture is used only when the
+ *   API cannot be reached at all (network failure, no HTTP response). HTTP errors (4xx/5xx) are shown as errors.
+ * Outside preview builds (VITE_USE_DEMO_DATA and VITE_ENABLE_PREVIEW_MODE both true) a real user never sees fixtures.
+ */
+export type FallbackMode = 'none' | 'immediate' | 'onUnreachable'
+
+export interface FallbackRuleInput {
+  hasFallback: boolean
+  useDemoData: boolean
+  enablePreviewMode: boolean
+  hasRealSession: boolean
+}
+
+export function resolveFallbackMode(input: FallbackRuleInput): FallbackMode {
+  if (!input.hasFallback || !input.useDemoData || !input.enablePreviewMode) return 'none'
+  return input.hasRealSession ? 'onUnreachable' : 'immediate'
+}
+
+/** True when the request never reached the API (no HTTP response), e.g. the backend is down. */
+export function isUnreachableFailure(reason: unknown): boolean {
+  const failure = reason as ApiFailure | null
+  return failure?.response?.status == null && Boolean(failure?.request)
+}
+
 export function useResource<T>(
   loader: () => Promise<T>,
   fallback?: FallbackFactory<T>,
@@ -41,10 +69,15 @@ export function useResource<T>(
     return fallback as T
   }
 
-  const hasFallback = computed(() => fallback !== undefined)
-  const canUseFallback = computed(
-    () => hasFallback.value && appEnv.useDemoData && (appEnv.enablePreviewMode || auth.isPreviewSession),
+  const fallbackMode = computed(() =>
+    resolveFallbackMode({
+      hasFallback: fallback !== undefined,
+      useDemoData: appEnv.useDemoData,
+      enablePreviewMode: appEnv.enablePreviewMode,
+      hasRealSession: Boolean(auth.isAuthenticated),
+    }),
   )
+  const canUseFallback = computed(() => fallbackMode.value === 'immediate')
   const data = shallowRef<T | null>(canUseFallback.value ? readFallback() : null)
   const error = ref<string | null>(null)
   const loading = ref(immediate && !canUseFallback.value)
@@ -52,11 +85,7 @@ export function useResource<T>(
   let executionSequence = 0
 
   function shouldUseFailureFallback(reason: unknown): boolean {
-    if (!canUseFallback.value) return false
-
-    const failure = reason as ApiFailure | null
-    const status = failure?.response?.status
-    return status === 404 || (status == null && Boolean(failure?.request))
+    return fallbackMode.value === 'onUnreachable' && isUnreachableFailure(reason)
   }
 
   async function execute(): Promise<void> {

@@ -5,6 +5,7 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
@@ -25,7 +26,8 @@ import lombok.Setter;
         @Index(name = "idx_teacher_feedback_teacher_id", columnList = "teacher_id"),
         @Index(name = "idx_teacher_feedback_student_id", columnList = "student_id"),
         @Index(name = "idx_teacher_feedback_lesson_id", columnList = "lesson_id"),
-        @Index(name = "idx_teacher_feedback_quiz_attempt_id", columnList = "quiz_attempt_id")
+        @Index(name = "idx_teacher_feedback_quiz_attempt_id", columnList = "quiz_attempt_id"),
+        @Index(name = "idx_teacher_feedback_practice_submission_id", columnList = "practice_submission_id")
 })
 @NamedEntityGraph(
         name = TeacherFeedback.GRAPH_DETAIL,
@@ -71,6 +73,12 @@ public class TeacherFeedback extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lesson_id", updatable = false)
     private Lesson lesson;
+
+    /** Optional link to the reviewed pronunciation/handwriting practice submission (D7a). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "practice_submission_id", updatable = false,
+            foreignKey = @ForeignKey(name = "fk_teacher_feedback_practice_submission"))
+    private PracticeSubmission practiceSubmission;
 
     @Column(name = "feedback_type", length = 50)
     private String feedbackType;

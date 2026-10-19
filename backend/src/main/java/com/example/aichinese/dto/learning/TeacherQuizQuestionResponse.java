@@ -13,6 +13,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
         "points",
         "displayOrder",
         "explanation",
+        "hint",
         "options"
 })
 public record TeacherQuizQuestionResponse(
@@ -23,6 +24,7 @@ public record TeacherQuizQuestionResponse(
         Integer points,
         Integer displayOrder,
         String explanation,
+        String hint,
         List<TeacherQuizOptionResponse> options) {
 
     public TeacherQuizQuestionResponse {

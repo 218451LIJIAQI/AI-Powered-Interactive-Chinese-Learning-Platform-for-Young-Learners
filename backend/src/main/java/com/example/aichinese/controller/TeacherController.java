@@ -173,7 +173,7 @@ public class TeacherController {
             @RequestParam("file") MultipartFile file,
             @Size(max = 40, message = "Document type must not exceed 40 characters.")
             @RequestParam(value = "documentType", required = false) String documentType,
-            @Size(max = 1000, message = "Description must not exceed 1000 characters.")
+            @Size(max = 500, message = "Description must not exceed 500 characters.")
             @RequestParam(value = "description", required = false) String description) {
         return ApiResponse.success(
                 "Verification document uploaded successfully.",

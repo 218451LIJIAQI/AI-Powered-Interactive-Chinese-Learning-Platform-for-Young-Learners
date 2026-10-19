@@ -24,12 +24,4 @@ public enum LearningType {
                 "Learning type is required.",
                 () -> "Invalid learning type. Allowed values are LIVE, RECORDED, or HYBRID.");
     }
-
-    public boolean hasLiveComponent() {
-        return this == LIVE || this == HYBRID;
-    }
-
-    public boolean hasRecordedComponent() {
-        return this == RECORDED || this == HYBRID;
-    }
 }

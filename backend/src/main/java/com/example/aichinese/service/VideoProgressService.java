@@ -29,11 +29,12 @@ import com.example.aichinese.util.PaginationUtils;
  * progress UI.
  *
  * <p>Progress is upserted on every heartbeat — students with multiple
- * tabs / devices will overwrite each other rather than diverge, which
- * matches the platform's "resume from last-known position" UX.
- * Access is re-checked on every read and write via
- * {@link LiveLearningAccessService} so a student who lost access (e.g.
- * subscription lapse) cannot keep updating their progress.</p>
+ * tabs / devices will overwrite each other's playback position rather than
+ * diverge, which matches the platform's "resume from last-known position" UX.
+ * The progress percentage never decreases and completion is sticky.
+ * The video (and its lesson/course) is re-checked on every read and write via
+ * {@link LiveLearningAccessService} so progress cannot be recorded against
+ * content that is no longer published.</p>
  *
  * <p>A {@code COMPLETED} notification is dispatched the first time the
  * student crosses the completion threshold, ensuring teachers see
@@ -55,27 +56,41 @@ public class VideoProgressService {
     private final LiveLearningMapper liveLearningMapper;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final StudentLearningProgressService studentLearningProgressService;
 
     public VideoProgressService(
             VideoProgressRepository videoProgressRepository,
             LiveLearningAccessService liveLearningAccessService,
             LiveLearningMapper liveLearningMapper,
             NotificationService notificationService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            StudentLearningProgressService studentLearningProgressService) {
         this.videoProgressRepository = Objects.requireNonNull(videoProgressRepository, "videoProgressRepository");
         this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
         this.liveLearningMapper = Objects.requireNonNull(liveLearningMapper, "liveLearningMapper");
         this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.studentLearningProgressService = Objects.requireNonNull(
+                studentLearningProgressService, "studentLearningProgressService");
     }
 
     @Transactional(readOnly = true)
     public VideoProgressResponse getProgress(SecurityUserDetails currentUser, Long videoId) {
         StudentProfile student = liveLearningAccessService.requireStudent(currentUser);
         RecordedLessonVideo video = requireAccessibleVideo(currentUser, videoId);
-        VideoProgress progress = videoProgressRepository.findByStudentIdAndRecordedVideoId(student.getId(), video.getId())
-                .orElseGet(() -> createDefaultProgress(student, video));
-        return liveLearningMapper.toVideoProgressResponse(progress);
+        // Before the first save there is no row yet: return a zero record instead of mapping an unsaved entity.
+        return videoProgressRepository.findByStudentIdAndRecordedVideoId(student.getId(), video.getId())
+                .map(liveLearningMapper::toVideoProgressResponse)
+                .orElseGet(() -> new VideoProgressResponse(
+                        null,
+                        video.getLesson().getId(),
+                        video.getId(),
+                        ZERO_PROGRESS,
+                        video.getDurationSeconds(),
+                        ZERO_PROGRESS,
+                        false,
+                        null,
+                        null));
     }
 
     @Transactional
@@ -116,6 +131,8 @@ public class VideoProgressService {
                     TARGET_RECORDED_VIDEO,
                     video.getId(),
                     "Student completed a recorded video.");
+            // Lessons without quizzes complete from content + recorded videos (D25).
+            studentLearningProgressService.recordLessonVideoCompleted(student, video.getLesson());
         }
 
         return liveLearningMapper.toVideoProgressResponse(saved);
@@ -140,7 +157,7 @@ public class VideoProgressService {
         List<VideoProgress> accessibleProgress = videoProgressRepository.findByLessonTeacherUserIdAndLessonIdOrderByLastWatchedAtDesc(
                 currentUser.getUserId(),
                 lessonId).stream()
-                .filter(this::hasCurrentProgressAccess)
+                .filter(VideoProgressService::hasCurrentProgressAccess)
                 .toList();
         int startIndex = PaginationUtils.startIndex(safePage, safeSize, accessibleProgress.size());
         int endIndex = PaginationUtils.endIndex(startIndex, safeSize, accessibleProgress.size());
@@ -154,16 +171,8 @@ public class VideoProgressService {
                 PaginationUtils.totalPages(accessibleProgress.size(), safeSize));
     }
 
-    private boolean hasCurrentProgressAccess(VideoProgress progress) {
-        if (progress.getStudent() == null) {
-            return false;
-        }
-        boolean lessonAccess = progress.getLesson() == null
-                || liveLearningAccessService.hasStudentLessonAccess(progress.getStudent(), progress.getLesson());
-        boolean packageAccess = progress.getRecordedVideo() == null
-                || progress.getRecordedVideo().getCoursePackage() == null
-                || liveLearningAccessService.hasStudentPackageAccess(progress.getStudent(), progress.getRecordedVideo().getCoursePackage());
-        return lessonAccess && packageAccess;
+    private static boolean hasCurrentProgressAccess(VideoProgress progress) {
+        return progress.getStudent() != null;
     }
 
     private RecordedLessonVideo requireAccessibleVideo(SecurityUserDetails currentUser, Long videoId) {
@@ -199,7 +208,6 @@ public class VideoProgressService {
                 user == null
                         ? student.getDisplayName()
                         : user.getDisplayName(),
-                user == null ? null : user.getEmail(),
                 video == null ? null : video.getId(),
                 video == null ? null : video.getTitle(),
                 progress.getProgressPercentage(),
@@ -241,7 +249,15 @@ public class VideoProgressService {
             }
         }
 
-        boolean completed = Boolean.TRUE.equals(request.completed()) || progressPercentage >= COMPLETE_PROGRESS;
+        // watchedSeconds is the resume position and may move back on a rewatch, but the reported
+        // progress never drops and a completed video stays completed (re-opening it must not undo
+        // the completion or fire the completion notification again).
+        progressPercentage = Math.max(
+                progressPercentage,
+                Objects.requireNonNullElse(progress.getProgressPercentage(), ZERO_PROGRESS));
+        boolean completed = progress.isCompleted()
+                || Boolean.TRUE.equals(request.completed())
+                || progressPercentage >= COMPLETE_PROGRESS;
         if (completed) {
             progressPercentage = COMPLETE_PROGRESS;
         }

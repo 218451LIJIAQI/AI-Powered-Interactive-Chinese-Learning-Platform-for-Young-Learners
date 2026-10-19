@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 @JsonPropertyOrder({
         "studentId",
         "studentName",
-        "studentEmail",
         "recordedVideoId",
         "recordedVideoTitle",
         "progressPercentage",
@@ -19,7 +18,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 public record LessonVideoProgressSummaryResponse(
         Long studentId,
         String studentName,
-        String studentEmail,
         Long recordedVideoId,
         String recordedVideoTitle,
         Integer progressPercentage,

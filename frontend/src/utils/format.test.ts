@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   clampNumber,
   clampPercent,
-  formatCurrency,
   formatDate,
   formatDateTime,
   formatNumber,
@@ -19,14 +18,7 @@ describe('format numeric helpers', () => {
   it('formats non-finite numbers with stable fallbacks', () => {
     expect(formatNumber(Number.NaN)).toBe('0')
     expect(formatNumber(Number.POSITIVE_INFINITY)).toBe('0')
-    expect(formatCurrency(Number.NEGATIVE_INFINITY)).toBe('$0.00')
-  })
-
-  it('formats currency defensively when backend currency codes are malformed', () => {
-    expect(formatCurrency(12.5, 'myr')).toContain('MYR')
-    expect(formatCurrency(12.5, ' myr ')).toContain('12.50')
-    expect(formatCurrency(12.5, 'US')).toBe('$12.50')
-    expect(formatCurrency(12.5, 'ZZZ')).toBe('$12.50')
+    expect(formatNumber(Number.NEGATIVE_INFINITY)).toBe('0')
   })
 
   it('clamps percentages before display or progress-bar usage', () => {
@@ -66,8 +58,13 @@ describe('format date helpers', () => {
     expect(formatDateTime('2026-05-20T12:00:00.000Z')).toMatch(/^May 20, \d{1,2}:00 (AM|PM)$/)
   })
 
+  it('formats a calendar date (yyyy-MM-dd) as that day in every time zone and rejects impossible dates', () => {
+    expect(formatDate('2026-05-18')).toBe('May 18, 2026')
+    expect(formatDate('2026-02-30')).toBe('--')
+  })
+
   it('uses the active interface locale for dates and numbers', () => {
-    document.documentElement.lang = 'zh'
+    document.documentElement.lang = 'zh-CN'
     expect(formatNumber(1234)).toBe('1,234')
     expect(formatDate('2026-05-20T12:00:00.000Z')).toBe('2026年5月20日')
 

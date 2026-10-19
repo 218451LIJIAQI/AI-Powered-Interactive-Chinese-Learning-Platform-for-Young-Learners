@@ -55,8 +55,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -70,7 +68,7 @@ public class AdminActivityController {
             @RequestParam(value = "type", required = false) String type,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, type);
         return ApiResponse.success(
                 "Activities retrieved successfully.",
@@ -82,8 +80,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -97,7 +93,7 @@ public class AdminActivityController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
             @RequestParam(value = "sort", required = false) String sort) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, null);
         return ApiResponse.success(
                 "Flashcards retrieved successfully.",
@@ -153,8 +149,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -168,7 +162,7 @@ public class AdminActivityController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
             @RequestParam(value = "sort", required = false) String sort) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, null);
         return ApiResponse.success(
                 "Matching games retrieved successfully.",
@@ -224,8 +218,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -239,7 +231,7 @@ public class AdminActivityController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
             @RequestParam(value = "sort", required = false) String sort) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, null);
         return ApiResponse.success(
                 "Listening exercises retrieved successfully.",
@@ -295,8 +287,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -310,7 +300,7 @@ public class AdminActivityController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
             @RequestParam(value = "sort", required = false) String sort) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, null);
         return ApiResponse.success(
                 "Tracing exercises retrieved successfully.",
@@ -366,8 +356,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -381,7 +369,7 @@ public class AdminActivityController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
             @RequestParam(value = "sort", required = false) String sort) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, null);
         return ApiResponse.success(
                 "Drag-drop activities retrieved successfully.",
@@ -437,8 +425,6 @@ public class AdminActivityController {
             @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "hskLevel", required = false) Integer hskLevel,
-            @Size(max = 40, message = "Age band must not exceed 40 characters.")
-            @RequestParam(value = "ageBand", required = false) String ageBand,
             @Size(max = 40, message = "Difficulty must not exceed 40 characters.")
             @RequestParam(value = "difficulty", required = false) String difficulty,
             @Size(max = 200, message = "Topic must not exceed 200 characters.")
@@ -452,7 +438,7 @@ public class AdminActivityController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @Size(max = 40, message = "Sort must not exceed 40 characters.")
             @RequestParam(value = "sort", required = false) String sort) {
-        ActivityFilter filter = buildFilter(status, hskLevel, ageBand, difficulty,
+        ActivityFilter filter = buildFilter(status, hskLevel, difficulty,
                 topic, tag, createdByUserId, keyword, null);
         return ApiResponse.success(
                 "Story activities retrieved successfully.",
@@ -506,7 +492,6 @@ public class AdminActivityController {
     private static ActivityFilter buildFilter(
             String status,
             Integer hskLevel,
-            String ageBand,
             String difficulty,
             String topic,
             String tag,
@@ -516,7 +501,6 @@ public class AdminActivityController {
         return ActivityFilter.of(
                 Optional.ofNullable(status),
                 Optional.ofNullable(hskLevel),
-                Optional.ofNullable(ageBand),
                 Optional.ofNullable(difficulty),
                 Optional.ofNullable(topic),
                 Optional.ofNullable(tag),

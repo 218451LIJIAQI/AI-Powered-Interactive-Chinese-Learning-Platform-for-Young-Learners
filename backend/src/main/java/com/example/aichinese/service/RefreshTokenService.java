@@ -176,20 +176,7 @@ public class RefreshTokenService {
     }
 
     private static String truncate(String value, int maxLength) {
-        String stripped = TextUtils.trimToNull(value);
-        if (stripped == null) {
-            return null;
-        }
-        if (stripped.length() <= maxLength) {
-            return stripped;
-        }
-        int endIndex = maxLength;
-        if (Character.isHighSurrogate(stripped.charAt(endIndex - 1))
-                && endIndex < stripped.length()
-                && Character.isLowSurrogate(stripped.charAt(endIndex))) {
-            endIndex--;
-        }
-        return stripped.substring(0, endIndex);
+        return TextUtils.safeTruncate(TextUtils.trimToNull(value), maxLength);
     }
 
     public record RefreshSession(User user, RefreshTokenIssue refreshToken) {

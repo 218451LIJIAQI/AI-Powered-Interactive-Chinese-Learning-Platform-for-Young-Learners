@@ -1,285 +1,254 @@
 <template>
   <div class="page-stack student-rewards-page">
-    <section class="student-simple-header">
-      <h1>
-        {{ t('studentRewards.title') }} <span><IconGlyph name="rewards" :size="28" /></span>
-      </h1>
-      <p>{{ t('studentRewards.intro') }}</p>
-    </section>
+    <PageHeaderBlock :title="t('studentRewards.title')" :description="t('studentRewards.intro')" icon="rewards">
+      <template #actions>
+        <button type="button" class="btn btn-secondary" @click="openAchievements">
+          <IconGlyph name="trophy" :size="18" />
+          {{ t('studentRewards.openAchievements') }}
+        </button>
+        <button type="button" class="btn btn-primary" @click="openRewardPractice">
+          <IconGlyph name="practice" :size="18" />
+          {{ t('studentRewards.continuePractice') }}
+        </button>
+      </template>
+    </PageHeaderBlock>
 
-    <DataNotice :using-fallback="usingFallback" :error="pageError" />
+    <DataNotice :using-fallback="usingFallback" />
 
     <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="student-rewards-layout">
+      <div class="student-rewards-layout">
         <div class="student-rewards-main">
-          <article class="student-rewards-hero">
-            <span class="student-rewards-confetti is-1" />
-            <span class="student-rewards-confetti is-2" />
-            <span class="student-rewards-confetti is-3" />
-            <span class="student-rewards-hero-pagoda" />
-
-            <div class="student-rewards-level">
-              <span class="student-rewards-level-badge"><IconGlyph name="trophy" :size="44" /></span>
-              <div class="student-rewards-level-copy">
-                <small>{{ t('studentRewards.yourLevel') }}</small>
-                <strong>{{ t('studentRewards.level', { level: currentLevelNumber }) }}</strong>
-                <span>{{ currentLevelTitle }}</span>
+          <article class="hero-card student-rewards-hero">
+            <div class="student-rewards-hero-body">
+              <div class="student-rewards-level">
+                <span class="student-rewards-level-badge" aria-hidden="true">
+                  <IconGlyph name="trophy" :size="32" />
+                </span>
+                <div class="student-rewards-level-copy">
+                  <span>{{ t('studentRewards.yourLevel') }}</span>
+                  <strong>{{ t('studentRewards.level', { level: currentLevelNumber }) }}</strong>
+                  <span>{{ currentLevelTitle }}</span>
+                </div>
               </div>
+
               <div class="student-rewards-level-progress">
-                <ProgressBar :progress="levelProgressPercent" />
-                <strong>{{ t('studentRewards.nextLevelProgress', { progress: levelProgressPercent }) }}</strong>
-              </div>
-            </div>
-
-            <div class="student-rewards-hero-center">
-              <div class="student-rewards-top-stats">
-                <div v-for="stat in heroStats" :key="stat.label" class="student-rewards-top-stat">
-                  <span class="student-rewards-top-icon"><IconGlyph :name="stat.icon" :size="20" /></span>
-                  <div>
-                    <small>{{ stat.label }}</small>
-                    <strong>{{ stat.value }}</strong>
-                  </div>
+                <div class="student-rewards-level-progress-row">
+                  <strong>{{ t('studentRewards.nextLevelProgress', { progress: levelProgressPercent }) }}</strong>
+                  <span>{{ t('studentRewards.levelTarget', { level: nextLevelNumber }) }}</span>
                 </div>
-              </div>
-
-              <div class="student-rewards-next-card">
-                <span class="student-rewards-next-icon"><IconGlyph name="rewards" :size="26" /></span>
-                <div class="student-rewards-next-copy">
+                <ProgressBar
+                  class="is-lg"
+                  :progress="levelProgressPercent"
+                  :label="t('studentRewards.levelTarget', { level: nextLevelNumber })"
+                />
+                <p>
                   <strong>{{ t('studentRewards.nextMilestone') }}</strong>
-                  <p>
-                    {{
-                      t('studentRewards.milestoneProgress', { progress: levelProgressPercent, level: nextLevelNumber })
-                    }}
-                  </p>
-                  <div class="student-rewards-next-progress">
-                    <ProgressBar :progress="levelProgressPercent" />
-                    <span>{{ t('studentRewards.levelTarget', { level: nextLevelNumber }) }}</span>
-                  </div>
-                </div>
+                  {{
+                    t('studentRewards.milestoneProgress', { progress: levelProgressPercent, level: nextLevelNumber })
+                  }}
+                </p>
               </div>
+
+              <ul class="student-rewards-stats">
+                <li v-for="stat in heroStats" :key="stat.label" class="student-rewards-stat">
+                  <span class="student-rewards-stat-icon" aria-hidden="true">
+                    <IconGlyph :name="stat.icon" :size="20" />
+                  </span>
+                  <strong>{{ stat.value }}</strong>
+                  <span>{{ stat.label }}</span>
+                </li>
+              </ul>
             </div>
 
-            <div class="student-rewards-hero-mascot">
-              <PandaIllustration :size="188" outfit="#7c58ff" accent="#f6d056" pose="wave" />
-            </div>
+            <span class="student-rewards-hero-mascot" aria-hidden="true">
+              <PandaIllustration :size="168" outfit="#5a35ec" accent="#ffcc2f" pose="wave" />
+            </span>
           </article>
 
-          <article class="panel student-rewards-badges-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <span><IconGlyph name="trophy" :size="20" /></span>
-                <strong>{{ t('studentRewards.earnedBadges') }}</strong>
-              </div>
-              <button type="button" class="student-link-button" @click="openAchievements">
+          <section class="panel student-rewards-card" :aria-labelledby="`${baseId}-badges`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-badges`" class="card-title student-rewards-card-title">
+                <span class="student-rewards-title-icon" aria-hidden="true"
+                  ><IconGlyph name="trophy" :size="18"
+                /></span>
+                {{ t('studentRewards.earnedBadges') }}
+              </h2>
+              <button type="button" class="btn btn-link" @click="openAchievements">
                 {{ t('studentRewards.openAchievements') }}
               </button>
             </div>
 
-            <div v-if="earnedBadgeCards.length" class="student-badge-grid">
-              <article
-                v-for="badge in earnedBadgeCards"
-                :key="badge.id"
-                class="student-badge-card"
-                :class="{ 'is-locked': badge.locked }"
-              >
-                <div class="student-badge-emblem" :class="`is-${badge.tone}`">
-                  <span><IconGlyph :name="badge.icon" :size="26" /></span>
-                  <small v-if="badge.locked"><IconGlyph name="safe" :size="14" /></small>
-                </div>
+            <ul v-if="earnedBadgeCards.length" class="student-badge-grid">
+              <li v-for="badge in earnedBadgeCards" :key="badge.id" class="student-badge-card">
+                <span class="student-badge-emblem" :class="`is-${badge.tone}`" aria-hidden="true">
+                  <IconGlyph :name="badge.icon" :size="26" />
+                </span>
                 <strong>{{ badge.title }}</strong>
                 <span>{{ badge.subtitle }}</span>
-                <div class="student-badge-status is-earned">
-                  <IconGlyph name="status" :size="12" /> {{ badge.statusLabel }}
-                </div>
-              </article>
-            </div>
-            <div v-else class="student-badges-empty">
-              <div class="student-badges-empty-head">
-                <span><IconGlyph name="trophy" :size="22" /></span>
-                <div>
-                  <strong>{{ t('studentRewards.noBadges') }}</strong>
-                  <small>{{ t('studentRewards.noBadgesHint') }}</small>
-                </div>
-              </div>
-              <ul class="student-badges-empty-list">
-                <li><IconGlyph name="learn" :size="14" /> {{ t('studentRewards.unlockPinyin') }}</li>
-                <li><IconGlyph name="quiz" :size="14" /> {{ t('studentRewards.unlockQuiz') }}</li>
-                <li><IconGlyph name="streak" :size="14" /> {{ t('studentRewards.unlockStreak') }}</li>
-              </ul>
-              <button type="button" class="student-badges-empty-cta" @click="openRewardPractice">
-                <IconGlyph name="practice" :size="16" />
-                {{ t('studentRewards.startPractice') }}
-                <IconGlyph name="chevronRight" :size="14" />
-              </button>
-            </div>
+                <span class="student-badge-status">
+                  <IconGlyph name="status" :size="14" />
+                  {{ badge.statusLabel }}
+                </span>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              tone="empty"
+              icon="trophy"
+              :title="t('studentRewards.noBadges')"
+              :message="t('studentRewards.noBadgesHint')"
+              compact
+            >
+              <template #actions>
+                <button type="button" class="btn btn-secondary btn-sm" @click="openRewardPractice">
+                  <IconGlyph name="practice" :size="16" />
+                  {{ t('studentRewards.startPractice') }}
+                </button>
+              </template>
+            </StatePanel>
+          </section>
 
-            <div class="student-badges-divider" />
-
-            <div class="row-between">
-              <div class="student-section-heading">
-                <span><IconGlyph name="safe" :size="20" /></span>
-                <strong>{{ t('studentRewards.lockedBadges') }}</strong>
-              </div>
-              <span class="student-badges-meta">{{
-                t('studentRewards.toUnlock', { count: lockedBadgeCards.length })
-              }}</span>
-            </div>
-
-            <div class="student-badge-grid student-badge-grid--locked">
-              <article v-for="badge in lockedBadgeCards" :key="badge.id" class="student-badge-card is-locked">
-                <div class="student-badge-emblem is-gray">
-                  <span><IconGlyph :name="badge.icon" :size="26" /></span>
-                  <small><IconGlyph name="safe" :size="14" /></small>
-                </div>
-                <strong>{{ badge.title }}</strong>
-                <span>{{ badge.subtitle }}</span>
-                <div class="student-badge-status is-locked">
-                  <IconGlyph name="safe" :size="12" /> {{ badge.statusLabel }}
-                </div>
-              </article>
-            </div>
-
-            <p class="student-badges-note">
-              {{ t('studentRewards.keepGoing') }}
-            </p>
-          </article>
-
-          <article class="panel student-rewards-journey-card">
-            <div class="student-section-heading">
-              <span><IconGlyph name="progress" :size="20" /></span>
+          <section class="panel student-rewards-card" :aria-labelledby="`${baseId}-journey`">
+            <div class="card-header">
               <div>
-                <strong>{{ t('studentRewards.journey') }}</strong>
-                <p>{{ t('studentRewards.journeyHint') }}</p>
+                <h2 :id="`${baseId}-journey`" class="card-title student-rewards-card-title">
+                  <span class="student-rewards-title-icon" aria-hidden="true">
+                    <IconGlyph name="progress" :size="18" />
+                  </span>
+                  {{ t('studentRewards.journey') }}
+                </h2>
+                <p class="card-subtitle">{{ t('studentRewards.journeyHint') }}</p>
               </div>
             </div>
 
-            <div class="student-journey-track">
-              <span class="student-journey-line" />
-              <article
+            <ol class="student-rewards-journey">
+              <li
                 v-for="step in journeySteps"
                 :key="step.level"
-                class="student-journey-step"
-                :class="{
-                  'is-complete': step.status === 'complete',
-                  'is-current': step.status === 'current',
-                  'is-future': step.status === 'future',
-                }"
+                class="student-rewards-journey-step"
+                :class="`is-${step.status}`"
+                :aria-current="step.status === 'current' ? 'step' : undefined"
               >
-                <span class="student-journey-node"><IconGlyph :name="step.icon" :size="24" /></span>
-                <strong>{{ t('studentRewards.level', { level: step.level }) }}</strong>
-                <span>{{ step.title }}</span>
-                <small>{{ step.caption }}</small>
-              </article>
-            </div>
-          </article>
+                <span class="student-rewards-journey-node" aria-hidden="true">
+                  <IconGlyph :name="step.icon" :size="20" />
+                </span>
+                <div class="student-rewards-journey-copy">
+                  <strong>{{ t('studentRewards.level', { level: step.level }) }}</strong>
+                  <span>{{ step.title }}</span>
+                  <small>{{ step.caption }}</small>
+                </div>
+              </li>
+            </ol>
+          </section>
         </div>
 
         <aside class="student-rewards-side">
-          <article class="panel student-weekly-goals-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <span><IconGlyph name="trophy" :size="20" /></span>
-                <strong>{{ t('studentRewards.progressGoals') }}</strong>
-              </div>
-              <span class="student-weekly-reset">{{ t('studentRewards.liveProgress') }}</span>
+          <section class="panel student-rewards-card" :aria-labelledby="`${baseId}-summary`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-summary`" class="card-title">{{ t('studentRewards.progressSummary') }}</h2>
+              <StatusPill :label="t('studentRewards.liveProgress')" tone="success" />
             </div>
 
-            <div class="student-weekly-goal-list">
-              <article v-for="goal in weeklyGoals" :key="goal.title" class="student-weekly-goal-item">
-                <span class="student-weekly-goal-icon" :class="`is-${goal.tone}`"
-                  ><IconGlyph :name="goal.icon" :size="18"
-                /></span>
-                <div class="student-weekly-goal-copy">
-                  <strong>{{ goal.title }}</strong>
-                  <ProgressBar :progress="goal.progress" />
+            <ul class="student-rewards-list">
+              <li v-for="goal in progressSummary" :key="goal.title" class="student-rewards-goal">
+                <span class="student-rewards-row-icon" :class="`is-${goal.tone}`" aria-hidden="true">
+                  <IconGlyph :name="goal.icon" :size="18" />
+                </span>
+                <div class="student-rewards-goal-copy">
+                  <div class="student-rewards-goal-head">
+                    <strong>{{ goal.title }}</strong>
+                    <span>{{ goal.count }}</span>
+                  </div>
+                  <ProgressBar class="is-sm" :progress="goal.progress" :label="goal.title" />
+                  <small>{{ goal.statusLabel }}</small>
                 </div>
-                <div class="student-weekly-goal-side">
-                  <span>{{ goal.count }}</span>
-                  <strong>{{ goal.statusLabel }}</strong>
-                </div>
-              </article>
-            </div>
+              </li>
+            </ul>
 
-            <button type="button" class="student-weekly-bonus" @click="openRewardPractice">
-              <span><IconGlyph name="rewards" :size="18" /></span>
-              {{ t('studentRewards.practiceXp') }}
-            </button>
-          </article>
-
-          <article class="student-rewards-promo-card">
-            <div class="student-rewards-promo-copy">
-              <strong>{{ t('studentRewards.keepEarning') }}</strong>
-              <p>{{ t('studentRewards.earningHint') }}</p>
-              <button type="button" class="btn btn-primary" @click="openRewardPractice">
-                {{ t('studentRewards.continuePractice') }}
+            <div class="card-footer">
+              <button type="button" class="btn btn-ghost btn-sm" @click="openRewardPractice">
+                <IconGlyph name="rewards" :size="16" />
+                {{ t('studentRewards.practiceXp') }}
               </button>
             </div>
-            <div class="student-rewards-promo-chest"><IconGlyph name="rewards" :size="58" /></div>
+          </section>
+
+          <article class="student-rewards-tip">
+            <span class="student-rewards-tip-icon" aria-hidden="true"><IconGlyph name="rewards" :size="22" /></span>
+            <div>
+              <strong>{{ t('studentRewards.keepEarning') }}</strong>
+              <p>{{ t('studentRewards.earningHint') }}</p>
+            </div>
           </article>
 
-          <article class="panel student-reward-history-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <span><IconGlyph name="file" :size="20" /></span>
-                <strong>{{ t('studentRewards.history') }}</strong>
-              </div>
-              <button type="button" class="student-link-button" @click="openProfile">
+          <section class="panel student-rewards-card" :aria-labelledby="`${baseId}-history`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-history`" class="card-title">{{ t('studentRewards.history') }}</h2>
+              <button type="button" class="btn btn-link" @click="openProfile">
                 {{ t('studentRewards.pointsActivity') }}
               </button>
             </div>
 
-            <div v-if="rewardHistoryCards.length" class="student-reward-history-list">
-              <article v-for="item in rewardHistoryCards" :key="item.id" class="student-reward-history-item">
-                <span class="student-reward-history-icon"><IconGlyph :name="item.icon" :size="18" /></span>
-                <div class="student-reward-history-copy">
+            <ul v-if="rewardHistoryCards.length" class="student-rewards-list">
+              <li v-for="item in rewardHistoryCards" :key="item.id" class="student-rewards-row">
+                <span class="student-rewards-row-icon is-purple" aria-hidden="true">
+                  <IconGlyph :name="item.icon" :size="18" />
+                </span>
+                <div class="student-rewards-row-copy">
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.date }}</span>
                 </div>
-                <strong class="student-reward-history-points">{{ item.pointsLabel }} XP</strong>
-              </article>
-            </div>
-            <div v-else class="student-reward-history-empty">
-              <span><IconGlyph name="streak" :size="18" /></span>
-              <div>
-                <strong>{{ t('studentRewards.noHistory') }}</strong>
-                <small>{{ t('studentRewards.noHistoryHint') }}</small>
-              </div>
-            </div>
-          </article>
+                <strong class="student-rewards-points">{{ item.pointsLabel }} XP</strong>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              tone="empty"
+              icon="streak"
+              :title="t('studentRewards.noHistory')"
+              :message="t('studentRewards.noHistoryHint')"
+              compact
+            />
+          </section>
 
-          <article class="panel student-rewards-achievements-card">
-            <div class="row-between">
-              <div class="student-section-heading">
-                <span><IconGlyph name="star" :size="20" /></span>
-                <strong>{{ t('studentRewards.achievements') }}</strong>
-              </div>
-              <button type="button" class="student-link-button" @click="openAchievements">
+          <section class="panel student-rewards-card" :aria-labelledby="`${baseId}-achievements`">
+            <div class="card-header">
+              <h2 :id="`${baseId}-achievements`" class="card-title">{{ t('studentRewards.achievements') }}</h2>
+              <button type="button" class="btn btn-link" @click="openAchievements">
                 {{ t('studentRewards.open') }}
               </button>
             </div>
 
-            <div class="student-achievement-list">
-              <article v-for="item in achievementFeed" :key="item.id" class="student-achievement-item">
-                <span class="student-achievement-icon" :class="`is-${item.tone}`"
-                  ><IconGlyph :name="item.icon" :size="18"
-                /></span>
-                <div class="student-achievement-copy">
+            <ul v-if="achievementFeed.length" class="student-rewards-list">
+              <li v-for="item in achievementFeed" :key="item.id" class="student-rewards-row">
+                <span class="student-rewards-row-icon" :class="`is-${item.tone}`" aria-hidden="true">
+                  <IconGlyph :name="item.icon" :size="18" />
+                </span>
+                <div class="student-rewards-row-copy">
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.subtitle }}</span>
-                  <small>{{ item.date }}</small>
+                  <small v-if="item.date">{{ item.date }}</small>
                 </div>
-                <strong class="student-achievement-reward">{{ item.reward }}</strong>
-              </article>
-            </div>
-          </article>
+                <span class="chip">{{ item.reward }}</span>
+              </li>
+            </ul>
+            <StatePanel
+              v-else
+              tone="empty"
+              icon="star"
+              :title="t('studentRewards.noAchievements')"
+              :message="t('studentRewards.noAchievementsHint')"
+              compact
+            />
+          </section>
         </aside>
-      </section>
+      </div>
     </ResourceSection>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -288,7 +257,10 @@ import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useResource } from '@/composables/useResource'
 import {
   activityLibrary,
@@ -312,7 +284,7 @@ const { t } = useI18n({
   messages: {
     en: { studentRewards: studentRewardsMessages.en },
     ms: { studentRewards: studentRewardsMessages.ms },
-    zh: { studentRewards: studentRewardsMessages.zh },
+    'zh-CN': { studentRewards: studentRewardsMessages['zh-CN'] },
   },
 })
 
@@ -320,7 +292,7 @@ type BadgeIcon = 'star' | 'learn' | 'live' | 'trophy'
 type JourneyStatus = 'complete' | 'current' | 'future'
 
 const router = useRouter()
-const fallbackAchievementDateIso = new Date().toISOString()
+const baseId = useId()
 
 const resource = useResource(() => studentApi.rewards(), studentRewards)
 const historyResource = useResource(() => studentApi.pointsHistory(), studentPointsHistory)
@@ -420,7 +392,7 @@ function levelTitleFor(levelNumber: number): string {
   const keys: Record<number, string> = {
     1: 'starter',
     2: 'pinyinExplorer',
-    3: 'littleLearner',
+    3: 'developingLearner',
     4: 'wordBuilder',
     5: 'sentenceMaker',
   }
@@ -434,13 +406,15 @@ const levelProgressPercent = computed(() => clampPercent(rewards.value.progressT
 const currentStreakCount = computed(() => nonNegativeInteger(rewards.value.streak.currentStreak))
 const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
 const currentLevelTitle = computed(() => levelTitleFor(currentLevelNumber.value))
+const recentQuizCount = computed(() => dashboard.value.recentQuizResults.length)
 const quizzesAbove80 = computed(
   () => dashboard.value.recentQuizResults.filter((item) => ratioPercent(item.score, item.maxScore) >= 80).length,
 )
-const completedLessonsForGoal = computed(() => Math.min(8, nonNegativeInteger(progress.value.completedLessons)))
+const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
+const startedLessonCount = computed(() =>
+  Math.max(completedLessonCount.value, nonNegativeInteger(progress.value.totalLessonsStarted)),
+)
 const completedActivityCount = computed(() => activities.value.items.filter((item) => item.completed).length)
-const completedActivitiesForGoal = computed(() => Math.min(5, completedActivityCount.value))
-const quizGoalCount = computed(() => Math.min(3, quizzesAbove80.value))
 
 const heroStats = computed(() => [
   { label: t('studentRewards.totalPoints'), value: formatNumber(rewards.value.totalPoints), icon: 'star' },
@@ -450,143 +424,102 @@ const heroStats = computed(() => [
     icon: 'streak',
   },
   {
-    label: t('studentRewards.achievements'),
+    label: t('studentRewards.badgeCount'),
     value: String(nonNegativeInteger(dashboard.value.badgeCount)),
     icon: 'rewards',
   },
 ])
 
-const earnedBadgeCards = computed(() => {
-  const base = rewards.value.badges.map((badge, index) => ({
+// Only badges actually returned by the rewards API are shown (D21: no invented or derived badges).
+const earnedBadgeCards = computed(() =>
+  rewards.value.badges.slice(0, 10).map((badge, index) => ({
     id: `earned-${badge.badgeId}`,
     title: badge.name,
     subtitle: badge.description,
-    statusLabel: earnedBadgeStatusLabel(index),
+    statusLabel: badge.awardedAt
+      ? t('studentRewards.earnedOn', { date: formatDate(badge.awardedAt) })
+      : t('studentRewards.earned'),
     icon: badgeIconFor(badge.iconKey),
     tone: earnedBadgeTone(index),
-    locked: false,
-  }))
+  })),
+)
 
-  const derived = [
-    {
-      id: 'earned-streak',
-      title: t('studentRewards.sevenDayStreak'),
-      subtitle: t('studentRewards.streakHint'),
-      statusLabel: t('studentRewards.mastered'),
-      icon: 'streak',
+// Recent achievements are built only from real learner data, dated only with real timestamps (D21).
+const achievementFeed = computed(() => {
+  const items: Array<{
+    id: string
+    icon: string
+    title: string
+    subtitle: string
+    reward: string
+    date: string
+    tone: string
+  }> = []
+
+  if (currentStreakCount.value > 0) {
+    const lastLearningDate = rewards.value.streak.lastLearningDate
+    items.push({
+      id: 'streak',
+      icon: 'star',
+      title: t('studentRewards.streakAchievement'),
+      subtitle: t('studentRewards.streakAchievementHint', { count: currentStreakCount.value }),
+      reward: t('studentRewards.dayStreak', { count: currentStreakCount.value }),
+      date: lastLearningDate ? formatDate(lastLearningDate) : '',
       tone: 'purple',
-      locked: false,
-    },
-    {
-      id: 'earned-quiz',
-      title: t('studentRewards.quizStarter'),
-      subtitle: t('studentRewards.quizStarterHint'),
-      statusLabel: t('studentRewards.inProgress'),
+    })
+  }
+
+  const latestQuiz = dashboard.value.recentQuizResults[0]
+  if (latestQuiz) {
+    items.push({
+      id: 'quiz',
       icon: 'quiz',
+      title: t('studentRewards.quizProgress'),
+      subtitle: t('studentRewards.quizProgressHint', { score: quizAveragePercent.value }),
+      reward: t('studentRewards.average', { score: quizAveragePercent.value }),
+      date: latestQuiz.completedAt ? formatDate(latestQuiz.completedAt) : '',
+      tone: 'green',
+    })
+  }
+
+  if (completedActivityCount.value > 0) {
+    items.push({
+      id: 'practice',
+      icon: 'live',
+      title: t('studentRewards.practiceExplorer'),
+      subtitle: t('studentRewards.practiceExplorerHint', { count: completedActivityCount.value }),
+      reward: t('studentRewards.activities', { count: completedActivityCount.value }),
+      date: '',
       tone: 'orange',
-      locked: false,
-    },
-  ]
+    })
+  }
 
-  const filteredDerived = derived.filter((item) => {
-    if (item.id === 'earned-streak') return currentStreakCount.value >= 7
-    if (item.id === 'earned-quiz') return quizzesAbove80.value > 0
-    return true
-  })
-
-  return [...base, ...filteredDerived].slice(0, 5)
+  return items
 })
 
-const lockedBadgeCards = computed(() => [
+// Progress summary uses the learner's real counts only; no invented weekly targets (D21).
+const progressSummary = computed(() => [
   {
-    id: 'lock-1',
-    title: t('studentRewards.sentenceBuilder'),
-    subtitle: t('studentRewards.sentenceBuilderHint'),
-    statusLabel: t('studentRewards.locked'),
-    icon: 'clip',
-  },
-  {
-    id: 'lock-2',
-    title: t('studentRewards.storyStarter'),
-    subtitle: t('studentRewards.storyStarterHint'),
-    statusLabel: t('studentRewards.locked'),
-    icon: 'learn',
-  },
-  {
-    id: 'lock-3',
-    title: t('studentRewards.characterMaster'),
-    subtitle: t('studentRewards.characterMasterHint'),
-    statusLabel: t('studentRewards.locked'),
-    icon: 'language',
-  },
-  {
-    id: 'lock-4',
-    title: t('studentRewards.quizWhiz'),
-    subtitle: t('studentRewards.quizWhizHint'),
-    statusLabel: t('studentRewards.locked'),
-    icon: 'quiz',
-  },
-  {
-    id: 'lock-5',
-    title: t('studentRewards.cultureExplorer'),
-    subtitle: t('studentRewards.cultureExplorerHint'),
-    statusLabel: t('studentRewards.locked'),
-    icon: 'globe',
-  },
-])
-
-const achievementFeed = computed(() => [
-  {
-    id: 'a-1',
-    icon: 'star',
-    title: t('studentRewards.streakAchievement'),
-    subtitle: t('studentRewards.streakAchievementHint', { count: currentStreakCount.value }),
-    reward: t('studentRewards.dayStreak', { count: currentStreakCount.value }),
-    date: formatDate(pointsHistory.value[0]?.createdAt ?? fallbackAchievementDateIso),
-    tone: 'purple',
-  },
-  {
-    id: 'a-2',
-    icon: 'quiz',
-    title: t('studentRewards.quizProgress'),
-    subtitle: t('studentRewards.quizProgressHint', { score: quizAveragePercent.value }),
-    reward: t('studentRewards.average', { score: quizAveragePercent.value }),
-    date: formatDate(dashboard.value.recentQuizResults[0]?.completedAt ?? fallbackAchievementDateIso),
-    tone: 'green',
-  },
-  {
-    id: 'a-3',
-    icon: 'live',
-    title: t('studentRewards.practiceExplorer'),
-    subtitle: t('studentRewards.practiceExplorerHint', { count: activities.value.items.length }),
-    reward: t('studentRewards.activities', { count: activities.value.items.length }),
-    date: formatDate(pointsHistory.value[1]?.createdAt ?? fallbackAchievementDateIso),
-    tone: 'orange',
-  },
-])
-
-const weeklyGoals = computed(() => [
-  {
-    title: t('studentRewards.finishLessons'),
-    count: `${completedLessonsForGoal.value} / 8`,
-    progress: ratioPercent(completedLessonsForGoal.value, 8),
-    statusLabel: t('studentRewards.trackingLessons'),
+    title: t('studentRewards.lessonsCompleted'),
+    count: `${completedLessonCount.value} / ${startedLessonCount.value}`,
+    progress: ratioPercent(completedLessonCount.value, startedLessonCount.value),
+    statusLabel: t('studentRewards.ofStartedLessons'),
     icon: 'learn',
     tone: 'green',
   },
   {
-    title: t('studentRewards.finishActivities'),
-    count: `${completedActivitiesForGoal.value} / 5`,
-    progress: ratioPercent(completedActivitiesForGoal.value, 5),
-    statusLabel: t('studentRewards.trackingPractice'),
+    title: t('studentRewards.activitiesCompleted'),
+    count: `${completedActivityCount.value} / ${activities.value.items.length}`,
+    progress: ratioPercent(completedActivityCount.value, activities.value.items.length),
+    statusLabel: t('studentRewards.ofAvailableActivities'),
     icon: 'live',
     tone: 'purple',
   },
   {
-    title: t('studentRewards.scoreQuizzes'),
-    count: `${quizGoalCount.value} / 3`,
-    progress: ratioPercent(quizGoalCount.value, 3),
-    statusLabel: t('studentRewards.trackingQuizzes'),
+    title: t('studentRewards.quizzesAbove80'),
+    count: `${quizzesAbove80.value} / ${recentQuizCount.value}`,
+    progress: ratioPercent(quizzesAbove80.value, recentQuizCount.value),
+    statusLabel: t('studentRewards.ofRecentQuizzes'),
     icon: 'clip',
     tone: 'orange',
   },
@@ -623,10 +556,6 @@ function badgeIconFor(iconKey: string | null | undefined): BadgeIcon {
   return 'trophy'
 }
 
-function earnedBadgeStatusLabel(index: number): string {
-  return index < 2 ? t('studentRewards.mastered') : t('studentRewards.inProgress')
-}
-
 function earnedBadgeTone(index: number): string {
   if (index === 0) return 'gold'
   if (index === 1) return 'green'
@@ -647,13 +576,13 @@ function journeyStatusFor(level: number): JourneyStatus {
 function journeyCaptionFor(level: number, status: JourneyStatus): string {
   if (status === 'complete') return t('studentRewards.completed')
   if (status === 'current') return t('studentRewards.nextLevelProgress', { progress: levelProgressPercent.value })
-  return level === nextLevelNumber.value ? t('studentRewards.nextUp') : t('studentRewards.lockedProgress')
+  return level === nextLevelNumber.value ? t('studentRewards.nextUp') : t('studentRewards.futureLevel')
 }
 
 function journeyIconFor(status: JourneyStatus): string {
   if (status === 'complete') return 'star'
   if (status === 'current') return 'trophy'
-  return 'safe'
+  return 'progress'
 }
 
 function openAchievements(): void {
@@ -683,1281 +612,555 @@ function reloadAll(): void {
 </script>
 
 <style scoped>
+.student-rewards-page {
+  display: grid;
+  gap: var(--page-gap);
+}
+
 .student-rewards-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.46fr) 378px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: var(--page-gap);
+  align-items: start;
 }
 
 .student-rewards-main,
 .student-rewards-side {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  display: grid;
+  gap: var(--page-gap);
+  align-content: start;
+  align-items: start;
+  min-width: 0;
 }
 
+/* Level hero --------------------------------------------------------------- */
 .student-rewards-hero {
   position: relative;
-  overflow: hidden;
   display: grid;
-  grid-template-columns: 0.86fr 1.18fr 0.66fr;
-  gap: 18px;
-  padding: 22px;
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.18), transparent 18%),
-    linear-gradient(135deg, #9f7cff 0%, #8b69ff 42%, #caa9ff 100%);
-  box-shadow: 0 26px 54px rgba(135, 108, 255, 0.16);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-4);
 }
 
-.student-rewards-confetti {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 4px;
-  background: rgba(255, 210, 84, 0.88);
-}
-
-.student-rewards-confetti.is-1 {
-  top: 22px;
-  right: 248px;
-}
-
-.student-rewards-confetti.is-2 {
-  top: 48px;
-  right: 170px;
-  background: rgba(255, 120, 138, 0.82);
-}
-
-.student-rewards-confetti.is-3 {
-  top: 82px;
-  right: 206px;
-  background: rgba(255, 173, 63, 0.82);
-}
-
-.student-rewards-hero-pagoda {
-  position: absolute;
-  right: 34px;
-  bottom: 18px;
-  width: 116px;
-  height: 98px;
-  opacity: 0.22;
-  background: linear-gradient(
-    180deg,
-    #ffffff 0 12%,
-    transparent 12% 18%,
-    #fff1cf 18% 30%,
-    transparent 30% 36%,
-    #ffe6b0 36% 48%,
-    transparent 48% 56%,
-    #ffd799 56% 100%
-  );
-  clip-path: polygon(
-    50% 0,
-    76% 14%,
-    100% 34%,
-    80% 36%,
-    80% 44%,
-    100% 52%,
-    78% 54%,
-    78% 62%,
-    96% 70%,
-    74% 72%,
-    74% 100%,
-    26% 100%,
-    26% 72%,
-    4% 70%,
-    22% 62%,
-    22% 54%,
-    0 52%,
-    20% 44%,
-    20% 36%,
-    0 34%,
-    24% 14%
-  );
-}
-
-.student-rewards-level,
-.student-rewards-next-card {
-  position: relative;
-  z-index: 1;
+.student-rewards-hero-body {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
 }
 
 .student-rewards-level {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  color: white;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .student-rewards-level-badge {
-  width: 98px;
-  height: 98px;
-  border-radius: 28px;
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
-  font-size: 3rem;
-  background: linear-gradient(180deg, rgba(255, 218, 84, 0.96), rgba(245, 161, 28, 0.96));
-  box-shadow: 0 18px 28px rgba(100, 65, 180, 0.22);
+  width: var(--space-16);
+  height: var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-500);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-accent);
 }
 
-.student-rewards-level-copy small,
-.student-rewards-top-stat small {
-  display: block;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 0.82rem;
-}
-
-.student-rewards-level-copy strong {
-  display: block;
-  margin-top: 10px;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.2rem;
+.student-rewards-level-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
 }
 
 .student-rewards-level-copy span {
-  display: block;
-  margin-top: 4px;
-  font-size: 1.2rem;
-  font-weight: 600;
+  color: var(--text-on-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.student-rewards-level-copy strong {
+  color: var(--text-on-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
 }
 
 .student-rewards-level-progress {
   display: grid;
-  gap: 10px;
-  margin-top: 8px;
+  gap: var(--space-2);
+  max-width: var(--reading-max);
 }
 
-.student-rewards-level-progress strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.4rem;
-}
-
-.student-rewards-hero-center {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 16px;
-  align-content: start;
-}
-
-.student-rewards-top-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 28px rgba(87, 66, 189, 0.14);
-}
-
-.student-rewards-top-stat {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  padding: 8px 12px;
-  color: var(--text);
-}
-
-.student-rewards-top-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 1.35rem;
-  background: linear-gradient(135deg, rgba(255, 230, 141, 0.86), rgba(255, 255, 255, 0.98));
-}
-
-.student-rewards-top-stat strong {
-  display: block;
-  margin-top: 4px;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.7rem;
-}
-
-.student-rewards-top-stat small {
-  color: var(--text-soft);
-}
-
-.student-rewards-next-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 16px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 28px rgba(87, 66, 189, 0.14);
-}
-
-.student-rewards-next-icon {
-  width: 68px;
-  height: 68px;
-  border-radius: 24px;
-  display: grid;
-  place-items: center;
-  font-size: 2rem;
-  background: linear-gradient(135deg, rgba(255, 216, 118, 0.92), rgba(245, 161, 28, 0.92));
-}
-
-.student-rewards-next-copy p {
-  margin: 4px 0 0;
-  color: var(--text-soft);
-  line-height: 1.5;
-}
-
-.student-rewards-next-progress {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.student-rewards-next-progress span {
-  color: var(--primary);
-  font-weight: 700;
-}
-
-.student-rewards-hero-mascot {
-  position: relative;
-  z-index: 1;
-  align-self: end;
-  justify-self: center;
-}
-
-.student-badge-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 14px;
-}
-
-.student-badge-grid--locked {
-  margin-top: 10px;
-}
-
-.student-badge-card {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  text-align: center;
-}
-
-.student-badge-card strong {
-  font-size: 0.95rem;
-  line-height: 1.3;
-}
-
-.student-badge-card span {
-  color: var(--text-soft);
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
-.student-badge-emblem {
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  position: relative;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 2.4rem;
-  color: white;
-}
-
-.student-badge-emblem small {
-  position: absolute;
-  right: 4px;
-  top: 2px;
-  font-size: 1rem;
-}
-
-.student-badge-emblem.is-gold {
-  background: linear-gradient(180deg, #93d34b, #54b438);
-}
-
-.student-badge-emblem.is-green {
-  background: linear-gradient(180deg, #80cf49, #53af38);
-}
-
-.student-badge-emblem.is-blue {
-  background: linear-gradient(180deg, #73b4ff, #2e88f5);
-}
-
-.student-badge-emblem.is-purple {
-  background: linear-gradient(180deg, #8f69ff, #6946e8);
-}
-
-.student-badge-emblem.is-orange {
-  background: linear-gradient(180deg, #ffbe57, #ff8f2f);
-}
-
-.student-badge-emblem.is-gray {
-  color: #9aa4be;
-  background: linear-gradient(180deg, #efeff2, #d8d9df);
-}
-
-.student-badge-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 2px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.student-badge-status.is-earned {
-  color: #2f9f45;
-  background: rgba(95, 202, 108, 0.16);
-}
-
-.student-badge-status.is-locked {
-  color: #7a849e;
-  background: rgba(204, 210, 226, 0.32);
-}
-
-.student-badges-divider {
-  height: 1px;
-  margin: 16px 0 10px;
-  background: rgba(232, 236, 247, 0.96);
-}
-
-.student-badges-note {
-  margin: 14px 0 0;
-  color: var(--text-soft);
-  text-align: center;
-  font-size: 0.92rem;
-}
-
-.student-achievement-list,
-.student-reward-history-list {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.student-achievement-item,
-.student-reward-history-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.student-achievement-icon,
-.student-reward-history-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-size: 1.2rem;
-}
-
-.student-achievement-icon.is-purple {
-  background: rgba(133, 97, 255, 0.12);
-}
-
-.student-achievement-icon.is-green {
-  background: rgba(97, 201, 103, 0.12);
-}
-
-.student-achievement-icon.is-orange {
-  background: rgba(255, 177, 55, 0.14);
-}
-
-.student-achievement-copy,
-.student-reward-history-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.student-achievement-copy span,
-.student-reward-history-copy span {
-  color: var(--text-soft);
-  font-size: 0.84rem;
-  line-height: 1.4;
-}
-
-.student-rewards-journey-card p {
-  margin: 4px 0 0;
-  color: var(--text-soft);
-}
-
-.student-journey-track {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 20px;
-}
-
-.student-journey-line {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 36px;
-  height: 4px;
-  border-top: 3px dashed rgba(205, 210, 230, 0.96);
-}
-
-.student-journey-step {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  text-align: center;
-}
-
-.student-journey-node {
-  width: 66px;
-  height: 66px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 1.8rem;
-  background: #eff0f5;
-  box-shadow: inset 0 0 0 1px rgba(225, 229, 241, 0.96);
-}
-
-.student-journey-step.is-complete .student-journey-node {
-  background: linear-gradient(180deg, #8fd94a, #55b73c);
-  color: white;
-}
-
-.student-journey-step.is-current .student-journey-node {
-  background: linear-gradient(180deg, #ffd455, #f5a523);
-  color: white;
-}
-
-.student-journey-step.is-future .student-journey-node {
-  color: #9aa4be;
-}
-
-.student-journey-step span,
-.student-journey-step small {
-  color: var(--text-soft);
-}
-
-.student-journey-step.is-complete small {
-  color: #4eaf41;
-  font-weight: 700;
-}
-
-.student-journey-step.is-current small {
-  color: var(--primary);
-  font-weight: 700;
-}
-
-.student-weekly-reset {
-  color: var(--text-soft);
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.student-weekly-goal-list {
-  display: grid;
-  gap: 14px;
-  margin-top: 14px;
-}
-
-.student-weekly-goal-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.student-weekly-goal-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-size: 1.2rem;
-}
-
-.student-weekly-goal-icon.is-green {
-  background: rgba(89, 190, 78, 0.12);
-}
-
-.student-weekly-goal-icon.is-purple {
-  background: rgba(133, 97, 255, 0.12);
-}
-
-.student-weekly-goal-icon.is-orange {
-  background: rgba(255, 177, 55, 0.14);
-}
-
-.student-weekly-goal-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.student-weekly-goal-side {
-  display: grid;
-  justify-items: end;
-  gap: 4px;
-}
-
-.student-weekly-goal-side span {
-  color: var(--text-soft);
-  font-size: 0.86rem;
-}
-
-.student-weekly-goal-side strong {
-  color: #f0a81b;
-}
-
-.student-weekly-bonus {
-  margin-top: 16px;
-  width: 100%;
-  min-height: 54px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 214, 104, 0.96);
-  background: linear-gradient(180deg, rgba(255, 247, 206, 0.96), rgba(255, 242, 183, 0.96));
-  color: #7a5700;
-  font-weight: 700;
+.student-rewards-level-progress-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
 }
 
-.student-rewards-promo-card {
-  position: relative;
-  overflow: hidden;
-  padding: 20px;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 84% 20%, rgba(255, 220, 137, 0.36), transparent 20%),
-    linear-gradient(135deg, rgba(255, 245, 224, 0.98), rgba(255, 251, 241, 0.98));
-  border: 1px solid rgba(255, 234, 176, 0.92);
-  box-shadow: 0 18px 36px rgba(166, 152, 115, 0.12);
+.student-rewards-level-progress-row span,
+.student-rewards-level-progress p {
+  color: var(--text-on-primary);
 }
 
-.student-rewards-promo-copy {
+.student-rewards-level-progress p {
   display: grid;
-  gap: 10px;
-  max-width: 62%;
-}
-
-.student-rewards-promo-copy p {
+  gap: var(--space-0-5);
   margin: 0;
-  color: #6a6879;
-  line-height: 1.55;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
-.student-rewards-promo-chest {
-  position: absolute;
-  right: 18px;
-  bottom: 10px;
-  font-size: 4.8rem;
+.student-rewards-level-progress p strong {
+  color: var(--text-on-primary);
 }
 
-.student-reward-history-points {
-  color: #52b748;
+.student-rewards-level-progress :deep(.progress-bar) {
+  background: var(--color-white-a24);
 }
 
-@media (max-width: 1420px) {
-  .student-rewards-layout {
-    grid-template-columns: 1fr;
-  }
+.student-rewards-level-progress :deep(.progress-bar > span) {
+  background: var(--color-accent-500);
 }
 
-@media (max-width: 1180px) {
-  .student-rewards-hero {
-    grid-template-columns: 1fr;
-  }
-
-  .student-badge-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .student-journey-track {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .student-journey-line {
-    display: none;
-  }
-
-  .student-rewards-promo-copy {
-    max-width: 100%;
-    padding-right: 100px;
-  }
-}
-
-@media (max-width: 760px) {
-  .student-badge-grid,
-  .student-rewards-top-stats {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .student-weekly-goal-item,
-  .student-achievement-item,
-  .student-reward-history-item {
-    grid-template-columns: 1fr;
-    justify-items: start;
-  }
-
-  .student-weekly-goal-side {
-    justify-items: start;
-  }
-}
-
-@media (min-width: 900px) {
-  .student-rewards-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
-    gap: 18px;
-  }
-
-  .student-rewards-main,
-  .student-rewards-side {
-    gap: 18px;
-  }
-
-  .student-rewards-hero {
-    grid-template-columns: 0.74fr minmax(0, 1fr) 156px;
-    gap: 16px;
-    min-height: 210px;
-    padding: 22px;
-    border-radius: 26px;
-  }
-
-  .student-rewards-level-badge {
-    width: 84px;
-    height: 84px;
-    border-radius: 24px;
-    font-size: 2.5rem;
-  }
-
-  .student-rewards-level-copy strong {
-    margin-top: 8px;
-    font-size: 1.9rem;
-  }
-
-  .student-rewards-level-copy span,
-  .student-rewards-level-progress strong {
-    font-size: 1rem;
-  }
-
-  .student-rewards-level-progress {
-    gap: 8px;
-    margin-top: 6px;
-  }
-
-  .student-rewards-top-stats {
-    gap: 10px;
-  }
-
-  .student-rewards-top-stat {
-    gap: 10px;
-    padding: 10px 12px;
-  }
-
-  .student-rewards-top-icon {
-    width: 40px;
-    height: 40px;
-    font-size: 1.2rem;
-  }
-
-  .student-rewards-top-stat strong {
-    font-size: 1.34rem;
-  }
-
-  .student-rewards-top-stat small {
-    font-size: 0.8rem;
-  }
-
-  .student-rewards-next-card {
-    grid-template-columns: 58px minmax(0, 1fr);
-    gap: 12px;
-    padding: 14px;
-    border-radius: 18px;
-  }
-
-  .student-rewards-next-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 18px;
-    font-size: 1.6rem;
-  }
-
-  .student-rewards-next-copy p,
-  .student-rewards-next-progress span {
-    font-size: 0.86rem;
-  }
-
-  .student-rewards-hero-mascot {
-    transform: scale(0.9);
-    transform-origin: bottom center;
-  }
-
-  .student-rewards-badges-card,
-  .student-rewards-achievements-card,
-  .student-rewards-journey-card,
-  .student-weekly-goals-card,
-  .student-reward-history-card {
-    padding: 18px;
-    border-radius: 24px;
-  }
-
-  .student-badge-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
-    margin-top: 12px;
-  }
-
-  .student-badge-emblem {
-    width: 76px;
-    height: 76px;
-    font-size: 2rem;
-  }
-
-  .student-badge-card {
-    gap: 8px;
-  }
-
-  .student-badge-card strong {
-    font-size: 0.88rem;
-  }
-
-  .student-badge-card span {
-    font-size: 0.76rem;
-    line-height: 1.3;
-  }
-
-  .student-achievement-item,
-  .student-reward-history-item,
-  .student-weekly-goal-item {
-    gap: 10px;
-    font-size: 0.86rem;
-  }
-
-  .student-achievement-icon,
-  .student-reward-history-icon,
-  .student-weekly-goal-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 13px;
-    font-size: 1.08rem;
-  }
-
-  .student-achievement-copy span,
-  .student-reward-history-copy span,
-  .student-weekly-reset,
-  .student-weekly-goal-side span {
-    font-size: 0.8rem;
-  }
-
-  .student-journey-track {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .student-journey-line {
-    display: block;
-    top: 30px;
-  }
-
-  .student-journey-node {
-    width: 58px;
-    height: 58px;
-    font-size: 1.55rem;
-  }
-
-  .student-journey-step strong,
-  .student-journey-step span,
-  .student-journey-step small {
-    font-size: 0.8rem;
-  }
-
-  .student-weekly-goal-list,
-  .student-achievement-list,
-  .student-reward-history-list {
-    gap: 12px;
-    margin-top: 12px;
-  }
-
-  .student-weekly-bonus {
-    min-height: 48px;
-    border-radius: 16px;
-    font-size: 0.86rem;
-  }
-
-  .student-rewards-promo-card {
-    padding: 18px;
-    border-radius: 22px;
-  }
-
-  .student-rewards-promo-copy {
-    max-width: 72%;
-    gap: 8px;
-  }
-
-  .student-rewards-promo-copy p {
-    font-size: 0.86rem;
-    line-height: 1.45;
-  }
-
-  .student-rewards-promo-chest {
-    font-size: 4rem;
-  }
-}
-
-.student-rewards-page .student-simple-header {
+.student-rewards-stats {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 16px;
-  padding: 4px 4px 0;
-}
-
-.student-rewards-page .student-simple-header h1 {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: var(--space-3);
   margin: 0;
-  color: #1f2647;
-  font-family: 'Fredoka', sans-serif;
-  font-size: clamp(2rem, 3.4vw, 2.85rem);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
-}
-
-.student-rewards-page .student-simple-header h1 > span {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
-  color: #cf7c0e;
-  background: linear-gradient(135deg, rgba(255, 226, 145, 0.92), rgba(255, 197, 96, 0.92));
-  box-shadow:
-    0 12px 22px rgba(255, 175, 71, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.student-rewards-page .student-simple-header p {
-  grid-column: 1 / -1;
-  max-width: 720px;
-  margin: 8px 0 0;
-  color: #5a6485;
-  font-size: 0.96rem;
-  line-height: 1.5;
-}
-
-.student-rewards-top-stat {
-  min-width: 0;
-}
-
-.student-rewards-top-stat > div {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.student-rewards-top-stat small {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.74rem;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-
-.student-rewards-top-stat strong {
-  margin-top: 0;
-  font-size: 1.55rem;
-  line-height: 1.04;
-  letter-spacing: -0.01em;
-}
-
-.student-rewards-level-copy {
-  min-width: 0;
-}
-
-.student-rewards-level-copy span {
-  display: block;
-  min-width: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.student-rewards-badges-card {
-  padding: 20px;
-  border-radius: 26px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(255, 219, 137, 0.18), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96));
-  box-shadow:
-    0 18px 38px rgba(112, 121, 176, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-}
-
-.student-badges-meta {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(204, 210, 226, 0.32);
-  color: #7a849e;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.student-badge-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 14px;
-}
-
-.student-badge-card {
-  position: relative;
-  padding: 14px 10px 12px;
-  border: 1px solid rgba(231, 235, 248, 0.92);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10px 22px rgba(124, 132, 184, 0.06);
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.student-badge-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(126, 96, 255, 0.28);
-  box-shadow: 0 18px 32px rgba(124, 132, 184, 0.14);
-}
-
-.student-badge-card.is-locked {
-  background: rgba(248, 249, 252, 0.96);
-  box-shadow: 0 6px 14px rgba(124, 132, 184, 0.05);
-}
-
-.student-badge-card.is-locked:hover {
-  transform: none;
-  border-color: rgba(231, 235, 248, 0.92);
-  box-shadow: 0 10px 20px rgba(124, 132, 184, 0.08);
-}
-
-.student-badge-card strong {
-  margin-top: 2px;
-  color: #232b4a;
-  font-size: 0.92rem;
-  line-height: 1.18;
-}
-
-.student-badge-card span {
-  flex: 1 1 auto;
-  min-height: 32px;
-  color: #66718d;
-  font-size: 0.74rem;
-  line-height: 1.3;
-}
-
-.student-badge-card.is-locked strong {
-  color: #4f5a7a;
-}
-
-.student-badge-emblem {
-  width: 72px;
-  height: 72px;
-  border-radius: 22px;
-  box-shadow:
-    inset 0 -3px 0 rgba(0, 0, 0, 0.08),
-    0 14px 22px rgba(120, 96, 220, 0.16);
-}
-
-.student-badge-emblem.is-gold {
-  background: linear-gradient(180deg, #ffd75a, #f3a020);
-  color: white;
-}
-
-.student-badge-emblem.is-green {
-  background: linear-gradient(180deg, #8ad55a, #4ea93d);
-}
-
-.student-badge-emblem.is-gray {
-  background: linear-gradient(180deg, #f3f4f8, #dee0ea);
-  color: #8a93ad;
-  box-shadow:
-    inset 0 -2px 0 rgba(0, 0, 0, 0.04),
-    0 8px 14px rgba(150, 156, 180, 0.12);
-}
-
-.student-badge-emblem small {
-  right: -4px;
-  top: -4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: white;
-  color: #7a849e;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 4px 10px rgba(120, 130, 160, 0.18);
-}
-
-.student-badge-status {
-  margin-top: 4px;
-}
-
-.student-badges-empty {
-  margin-top: 14px;
-  padding: 16px;
-  border: 1px dashed rgba(126, 96, 255, 0.28);
-  border-radius: 22px;
-  background: radial-gradient(circle at 96% 4%, rgba(255, 226, 144, 0.18), transparent 32%), rgba(247, 245, 255, 0.7);
-}
-
-.student-badges-empty-head {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-}
-
-.student-badges-empty-head > span {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
-  color: #d9881a;
-  background: linear-gradient(135deg, rgba(255, 224, 141, 0.96), rgba(255, 196, 105, 0.96));
-  box-shadow: 0 10px 20px rgba(245, 175, 71, 0.18);
-}
-
-.student-badges-empty-head strong {
-  display: block;
-  color: #232b4a;
-  font-size: 1rem;
-  line-height: 1.2;
-}
-
-.student-badges-empty-head small {
-  display: block;
-  margin-top: 4px;
-  color: #66718d;
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
-.student-badges-empty-list {
-  display: grid;
-  gap: 8px;
-  margin: 14px 0 12px;
   padding: 0;
   list-style: none;
 }
 
-.student-badges-empty-list li {
+.student-rewards-stat {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(231, 235, 248, 0.96);
-  color: #2f3a5c;
-  font-size: 0.84rem;
-  line-height: 1.35;
+  padding: var(--space-3);
+  border: 1px solid var(--color-white-a24);
+  border-radius: var(--radius-lg);
+  background: var(--surface-on-brand);
 }
 
-.student-badges-empty-list li > :first-child {
-  color: #6d4cff;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  background: rgba(111, 76, 255, 0.1);
+.student-rewards-stat-icon {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  color: var(--color-primary-600);
+}
+
+.student-rewards-stat strong {
+  color: var(--text-on-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.student-rewards-stat span:last-child {
+  color: var(--text-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.student-rewards-hero-mascot {
+  display: block;
+  margin-bottom: calc(-1 * var(--card-padding));
+}
+
+/* Cards -------------------------------------------------------------------- */
+.student-rewards-card {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.student-rewards-card .card-header {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.student-rewards-card .card-header > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.student-rewards-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+}
+
+.student-rewards-title-icon {
   display: grid;
   place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
 }
 
-.student-badges-empty-cta {
+/* Badges ------------------------------------------------------------------- */
+.student-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 148px), 1fr));
+  gap: var(--grid-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.student-badge-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  justify-items: center;
+  gap: var(--space-1-5);
+  min-width: 0;
+  padding: var(--space-4) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+  text-align: center;
+}
+
+.student-badge-card > strong {
+  margin-top: var(--space-1-5);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.student-badge-card > span:not([class]) {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.student-badge-emblem {
+  display: grid;
+  place-items: center;
+  width: var(--space-16);
+  height: var(--space-16);
+  border-radius: var(--radius-round);
+  box-shadow: var(--shadow-sm);
+}
+
+.student-badge-emblem.is-gold {
+  background: var(--color-accent-500);
+  color: var(--text-on-accent);
+}
+
+.student-badge-emblem.is-green {
+  background: var(--color-success-strong);
+  color: var(--color-white);
+}
+
+.student-badge-emblem.is-blue {
+  background: var(--color-info-strong);
+  color: var(--color-white);
+}
+
+.student-badge-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #7657ff, #9d7bff);
-  color: white;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 12px 22px rgba(122, 96, 230, 0.28);
+  justify-content: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  margin-top: var(--space-1);
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
 }
 
-.student-badges-empty-cta:hover {
-  filter: brightness(1.05);
+.student-badge-status .icon-glyph {
+  flex: 0 0 auto;
 }
 
-.student-journey-step strong {
-  color: #232b4a;
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.95rem;
-  letter-spacing: -0.01em;
-}
-
-.student-journey-step span {
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.student-journey-step small {
-  font-size: 0.72rem;
-  line-height: 1.3;
-}
-
-.student-reward-history-empty {
+/* Journey ------------------------------------------------------------------ */
+.student-rewards-journey {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  margin-top: 12px;
-  padding: 14px;
-  border: 1px dashed rgba(228, 232, 244, 0.96);
-  border-radius: 16px;
-  background: rgba(250, 251, 255, 0.92);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.student-reward-history-empty > span {
+.student-rewards-journey-step {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 var(--space-1);
+  text-align: center;
+}
+
+/* Connector between nodes. */
+.student-rewards-journey-step + .student-rewards-journey-step::before {
+  position: absolute;
+  top: calc(var(--space-12) / 2);
+  right: calc(50% + var(--space-6));
+  left: calc(-50% + var(--space-6));
+  height: var(--border-width-thick);
+  border-radius: var(--radius-pill);
+  background: var(--border-default);
+  content: '';
+}
+
+.student-rewards-journey-step.is-complete + .student-rewards-journey-step::before {
+  background: var(--color-success);
+}
+
+.student-rewards-journey-node {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  color: #d9881a;
-  background: rgba(255, 196, 105, 0.22);
+  width: var(--space-12);
+  height: var(--space-12);
+  border: var(--border-width-thick) solid var(--border-default);
+  border-radius: var(--radius-round);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
 }
 
-.student-reward-history-empty strong {
-  display: block;
-  color: #232b4a;
-  font-size: 0.92rem;
-  line-height: 1.2;
+.is-complete .student-rewards-journey-node {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
 }
 
-.student-reward-history-empty small {
-  display: block;
-  margin-top: 4px;
-  color: #66718d;
-  font-size: 0.78rem;
-  line-height: 1.4;
+.is-current .student-rewards-journey-node {
+  border-color: var(--color-accent-600);
+  background: var(--color-accent-500);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-accent);
 }
 
-.student-rewards-achievements-card {
-  padding: 18px;
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(255, 197, 122, 0.18), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 252, 255, 0.96));
-  box-shadow:
-    0 18px 32px rgba(120, 130, 180, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+.student-rewards-journey-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
 }
 
-.student-rewards-achievements-card .student-achievement-list {
-  gap: 10px;
-  margin-top: 12px;
+.student-rewards-journey-copy strong {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
 }
 
-.student-rewards-achievements-card .student-achievement-item {
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid rgba(231, 235, 248, 0.94);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.92);
+.student-rewards-journey-copy span {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
 }
 
-.student-rewards-achievements-card .student-achievement-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 13px;
-  font-size: 1rem;
+.student-rewards-journey-copy small {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
 }
 
-.student-rewards-achievements-card .student-achievement-copy strong {
-  color: #232b4a;
-  font-size: 0.86rem;
-  line-height: 1.18;
+.is-complete .student-rewards-journey-copy small {
+  color: var(--color-success-text);
 }
 
-.student-rewards-achievements-card .student-achievement-copy span {
-  display: block;
-  color: #66718d;
-  font-size: 0.74rem;
-  line-height: 1.35;
+.is-current .student-rewards-journey-copy small {
+  color: var(--text-brand);
 }
 
-.student-rewards-achievements-card .student-achievement-copy small {
-  display: block;
-  margin-top: 2px;
-  color: #94a0b9;
-  font-size: 0.68rem;
-  letter-spacing: 0.01em;
+/* Side lists --------------------------------------------------------------- */
+.student-rewards-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.student-achievement-reward {
-  padding: 5px 10px;
-  border-radius: 999px;
-  color: #6d4cff;
-  background: rgba(111, 76, 255, 0.1);
-  font-family: 'Fredoka', sans-serif;
-  font-size: 0.76rem;
+.student-rewards-list > li {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.student-rewards-list > li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.student-rewards-list > li:last-child {
+  padding-bottom: 0;
+}
+
+.student-rewards-goal,
+.student-rewards-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-rewards-goal {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.student-rewards-row-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+}
+
+.student-rewards-row-icon.is-green {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.student-rewards-row-icon.is-orange {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.student-rewards-goal-copy,
+.student-rewards-row-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.student-rewards-goal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.student-rewards-goal-head strong,
+.student-rewards-row-copy strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.student-rewards-goal-head span {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.student-rewards-goal-copy small,
+.student-rewards-row-copy span,
+.student-rewards-row-copy small {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.student-rewards-points {
+  color: var(--color-success-text);
+  font-size: var(--font-size-md);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  align-self: start;
 }
 
-.student-badge-grid--locked .student-badge-card {
-  background: rgba(248, 249, 252, 0.7);
+.student-rewards-card .card-footer {
+  justify-content: flex-start;
 }
 
-@media (max-width: 1280px) {
-  .student-badge-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+.student-rewards-tip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-accent-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-50);
+}
+
+.student-rewards-tip-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.student-rewards-tip strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.student-rewards-tip p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+@media (max-width: 1200px) {
+  .student-rewards-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-rewards-side {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   }
 }
 
-@media (max-width: 1180px) {
-  .student-rewards-page .student-simple-header {
-    grid-template-columns: 1fr;
-    align-items: start;
+@media (max-width: 900px) {
+  .student-rewards-hero-mascot {
+    display: none;
   }
 
-  .student-badge-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .student-rewards-hero {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 760px) {
-  .student-badge-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 640px) {
+  .student-rewards-journey {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
   }
 
-  .student-rewards-achievements-card .student-achievement-item {
-    grid-template-columns: 36px minmax(0, 1fr);
+  .student-rewards-journey-step {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0;
+    text-align: left;
   }
 
-  .student-achievement-reward {
-    grid-column: 1 / -1;
-    justify-self: start;
+  .student-rewards-journey-step + .student-rewards-journey-step::before {
+    display: none;
+  }
+
+  .student-rewards-level-copy strong {
+    font-size: var(--font-size-3xl);
   }
 }
 </style>

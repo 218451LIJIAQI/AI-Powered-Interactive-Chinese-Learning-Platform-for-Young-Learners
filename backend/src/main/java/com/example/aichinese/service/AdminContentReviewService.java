@@ -33,6 +33,7 @@ import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.ManagedContentType;
+import com.example.aichinese.entity.enums.ReviewContentType;
 import com.example.aichinese.mapper.ContentManagementMapper;
 import com.example.aichinese.repository.ContentModerationRecordRepository;
 import com.example.aichinese.repository.CoursePackageRepository;
@@ -53,6 +54,9 @@ public class AdminContentReviewService {
     private static final int ADMIN_PACKAGE_ITEM_LIMIT = 100;
     private static final int MERGE_BATCH_SIZE = 100;
     private static final int MAX_MODERATION_NOTE_LENGTH = 1000;
+    /** Length of {@code content_moderation_records.target_title_snapshot}. */
+    private static final int MAX_TARGET_TITLE_LENGTH = 255;
+    private static final String ACTION_ARCHIVE = "ADMIN_CONTENT_ARCHIVE";
 
     private final LearningModuleRepository learningModuleRepository;
     private final LessonRepository lessonRepository;
@@ -62,6 +66,7 @@ public class AdminContentReviewService {
     private final ContentManagementMapper contentManagementMapper;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
+    private final ContentReviewService contentReviewService;
 
     public AdminContentReviewService(
             LearningModuleRepository learningModuleRepository,
@@ -71,7 +76,8 @@ public class AdminContentReviewService {
             ContentModerationRecordRepository contentModerationRecordRepository,
             ContentManagementMapper contentManagementMapper,
             AuditLogService auditLogService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ContentReviewService contentReviewService) {
         this.learningModuleRepository = Objects.requireNonNull(learningModuleRepository, "learningModuleRepository");
         this.lessonRepository = Objects.requireNonNull(lessonRepository, "lessonRepository");
         this.coursePackageRepository = Objects.requireNonNull(coursePackageRepository, "coursePackageRepository");
@@ -80,6 +86,7 @@ public class AdminContentReviewService {
         this.contentManagementMapper = Objects.requireNonNull(contentManagementMapper, "contentManagementMapper");
         this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.contentReviewService = Objects.requireNonNull(contentReviewService, "contentReviewService");
     }
 
     @Transactional(readOnly = true)
@@ -288,21 +295,21 @@ public class AdminContentReviewService {
             case MODULE -> {
                 LearningModule module = findModule(id);
                 requireNotAlreadyArchived(module.getContentStatus(), "module");
-                module.setContentStatus(ContentStatus.ARCHIVED);
+                contentReviewService.applyArchive(adminUser, ReviewContentType.MODULE, module, cleanNote(note), ACTION_ARCHIVE);
                 learningModuleRepository.save(module);
                 yield contentManagementMapper.toSubmissionDetailResponse(module, List.of());
             }
             case LESSON -> {
                 Lesson lesson = findLesson(id);
                 requireNotAlreadyArchived(lesson.getContentStatus(), "lesson");
-                lesson.setContentStatus(ContentStatus.ARCHIVED);
+                contentReviewService.applyArchive(adminUser, ReviewContentType.LESSON, lesson, cleanNote(note), ACTION_ARCHIVE);
                 lessonRepository.save(lesson);
                 yield contentManagementMapper.toSubmissionDetailResponse(lesson);
             }
             case PACKAGE -> {
                 CoursePackage coursePackage = findPackage(id);
                 requireNotAlreadyArchived(coursePackage.getContentStatus(), "package");
-                coursePackage.setContentStatus(ContentStatus.ARCHIVED);
+                contentReviewService.applyArchive(adminUser, ReviewContentType.PACKAGE, coursePackage, cleanNote(note), ACTION_ARCHIVE);
                 coursePackageRepository.save(coursePackage);
                 yield contentManagementMapper.toSubmissionDetailResponse(
                         coursePackage,
@@ -312,11 +319,14 @@ public class AdminContentReviewService {
             }
         };
 
-        recordModeration(adminUser, contentType, id, note);
+        recordModeration(adminUser, contentType, id, response.title(), note);
         log.info("Content archived: type={}, id={}, adminUserId={}", contentType, id, adminUser.getId());
-        auditLogService.record(adminUser, "ADMIN_CONTENT_ARCHIVE", contentType.name(), id,
-                "Admin archived content.");
         return response;
+    }
+
+    private static String cleanNote(String note) {
+        String sanitized = AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH);
+        return sanitized == null || sanitized.isBlank() ? null : sanitized;
     }
 
     private static void requireNotAlreadyArchived(ContentStatus currentStatus, String entityName) {
@@ -359,11 +369,13 @@ public class AdminContentReviewService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Admin user could not be found."));
     }
 
-    private void recordModeration(User adminUser, ManagedContentType contentType, Long id, String note) {
+    /** Keeps a title snapshot, as ContentModerationService does, so the moderation history stays readable. */
+    private void recordModeration(User adminUser, ManagedContentType contentType, Long id, String title, String note) {
         ContentModerationRecord record = new ContentModerationRecord();
         record.setAdminUser(adminUser);
         record.setTargetType(contentType.name());
         record.setTargetId(id);
+        record.setTargetTitleSnapshot(title == null ? null : TextUtils.safeTruncate(title, MAX_TARGET_TITLE_LENGTH));
         record.setActionTaken("ARCHIVE");
         record.setNote(AiInputSanitizer.sanitize(note, MAX_MODERATION_NOTE_LENGTH));
         contentModerationRecordRepository.save(record);

@@ -1,6 +1,7 @@
 package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.dto.auth.AuthResponse;
 import com.example.aichinese.dto.auth.AuthSessionResponse;
+import com.example.aichinese.dto.auth.ChangePasswordRequest;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
 import com.example.aichinese.dto.auth.ForgotPasswordRequest;
 import com.example.aichinese.dto.auth.LoginRequest;
@@ -37,6 +40,7 @@ import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
 import com.example.aichinese.dto.auth.ResetPasswordRequest;
+import com.example.aichinese.dto.auth.UpdateProfileRequest;
 import com.example.aichinese.entity.PasswordResetToken;
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
@@ -52,6 +56,7 @@ import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.JwtService;
 import com.example.aichinese.security.LoginAttemptLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.LanguageCodes;
 import com.example.aichinese.util.TextUtils;
 
 @Service
@@ -59,6 +64,10 @@ public class AuthService {
 
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(60);
     private static final int RESET_TOKEN_GENERATION_ATTEMPTS = 3;
+    private static final String ACCOUNT_UNAVAILABLE_MESSAGE =
+            "This account is currently unavailable. Please contact the platform administrator.";
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_PASSWORD_LENGTH = 72;
     private static final String GENERIC_RESET_TOKEN_INVALID_MESSAGE =
             "Reset token is invalid or has already been used.";
 
@@ -174,6 +183,14 @@ public class AuthService {
         } catch (BadCredentialsException exception) {
             recordLoginFailure(email, clientIp);
             throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.");
+        } catch (DisabledException exception) {
+            // FR-AUTH-14: reveal "unavailable" only after the password was verified, so a wrong password
+            // never discloses the account state; a correct one is not counted as a failed attempt.
+            if (passwordMatchesStoredHash(email, request.password())) {
+                throw new ResponseStatusException(FORBIDDEN, ACCOUNT_UNAVAILABLE_MESSAGE);
+            }
+            recordLoginFailure(email, clientIp);
+            throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.");
         } catch (AuthenticationException exception) {
             recordLoginFailure(email, clientIp);
             throw new ResponseStatusException(UNAUTHORIZED, "Invalid email or password.", exception);
@@ -225,7 +242,8 @@ public class AuthService {
                         profile.getId(),
                         profile.getDisplayName(),
                         profile.getCurrentLevel() != null ? profile.getCurrentLevel().getName() : null,
-                        profile.getTotalPoints()))
+                        profile.getTotalPoints(),
+                        profile.getInstitution()))
                 .orElse(null);
 
         CurrentUserResponse.TeacherProfileSummary teacherSummary = teacherProfileRepository.findByUserId(user.getId())
@@ -337,6 +355,102 @@ public class AuthService {
                 null);
     }
 
+    /**
+     * D12 / FR-AUTH-12: display name and preferred interface language for every role. A student's
+     * profile display name follows the account display name.
+     */
+    @Transactional
+    public CurrentUserResponse updateProfile(SecurityUserDetails currentUser, UpdateProfileRequest request) {
+        User user = requireCurrentUser(currentUser);
+        String displayName = TextUtils.trimToOptional(request.displayName())
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Display name is required."));
+        String language = LanguageCodes.normalize(request.preferredLanguage());
+        if (language == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Preferred language must be en, ms or zh-CN.");
+        }
+        user.setDisplayName(displayName);
+        user.setPreferredLanguage(language);
+        userRepository.save(user);
+        studentProfileRepository.findByUserId(user.getId()).ifPresent(profile -> {
+            profile.setDisplayName(displayName);
+            studentProfileRepository.save(profile);
+        });
+        auditLogService.safeRecord(
+                user,
+                "PROFILE_UPDATED",
+                "USER",
+                user.getId(),
+                "User updated their display name or preferred language.",
+                null);
+        return getCurrentUser(currentUser);
+    }
+
+    /**
+     * D12 / FR-AUTH-13: verifies the current password, stores the new BCrypt hash, bumps the session
+     * version and revokes every refresh token (other sessions stop working) and returns a fresh
+     * session for the caller. Repeated wrong current passwords are rate-limited like sign-in.
+     */
+    @Transactional
+    public AuthSessionResponse changePassword(
+            SecurityUserDetails currentUser,
+            ChangePasswordRequest request,
+            String clientIp,
+            String userAgent) {
+        User user = requireCurrentUser(currentUser);
+        String limiterKey = normalizeEmail(user.getEmail());
+        if (!loginAttemptLimiter.isAllowed(limiterKey, clientIp)) {
+            long retrySeconds = Math.max(1L, loginAttemptLimiter.retryAfter(limiterKey, clientIp).toSeconds());
+            throw new ResponseStatusException(
+                    TOO_MANY_REQUESTS,
+                    "Too many failed attempts. Please try again in " + retrySeconds + " seconds.");
+        }
+        if (request.currentPassword() == null || !passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            recordLoginFailure(limiterKey, clientIp);
+            throw new ResponseStatusException(BAD_REQUEST, "Current password is incorrect.");
+        }
+        loginAttemptLimiter.recordSuccess(limiterKey, clientIp);
+        if (request.newPassword() == null || request.newPassword().length() < MIN_PASSWORD_LENGTH
+                || request.newPassword().length() > MAX_PASSWORD_LENGTH) {
+            throw new ResponseStatusException(BAD_REQUEST, "Password must be between 8 and 72 characters.");
+        }
+        validatePasswords(request.newPassword(), request.confirmPassword());
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(BAD_REQUEST, "New password must be different from the current password.");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        rotateSessionVersion(user);
+        User saved = userRepository.save(user);
+        refreshTokenService.revokeActiveTokensForUser(saved.getId());
+
+        auditLogService.safeRecord(
+                saved,
+                "PASSWORD_CHANGED",
+                "USER",
+                saved.getId(),
+                "User changed their password; other sessions were signed out.",
+                null);
+
+        User withRoles = userRepository.findByEmailWithRoles(saved.getEmail()).orElse(saved);
+        TeacherStatus teacherStatus = teacherProfileRepository.findByUserId(saved.getId())
+                .map(TeacherProfile::getTeacherStatus)
+                .orElse(null);
+        return new AuthSessionResponse(
+                toAuthResponse(withRoles, teacherStatus),
+                refreshTokenService.issue(withRoles, clientIp, userAgent));
+    }
+
+    private boolean passwordMatchesStoredHash(String email, String rawPassword) {
+        if (rawPassword == null) {
+            return false;
+        }
+        return userRepository.findByEmailWithRoles(email)
+                .map(User::getPasswordHash)
+                .filter(hash -> hash != null && !hash.isBlank())
+                .map(hash -> passwordEncoder.matches(rawPassword, hash))
+                .orElse(false);
+    }
+
     private String generateUniqueToken() {
         for (int attempt = 0; attempt < RESET_TOKEN_GENERATION_ATTEMPTS; attempt++) {
             String candidate = (UUID.randomUUID().toString() + UUID.randomUUID().toString()).replace("-", "");
@@ -426,8 +540,6 @@ public class AuthService {
     }
 
     private String normalizePreferredLanguage(String preferredLanguage) {
-        return TextUtils.trimToOptional(preferredLanguage)
-                .map(value -> value.toLowerCase(Locale.ROOT))
-                .orElse("en");
+        return LanguageCodes.normalizeOrDefault(preferredLanguage);
     }
 }

@@ -31,10 +31,22 @@ describe('safe storage helpers', () => {
     window.localStorage.clear()
     expect(readPersistedLocale()).toBe('en')
 
-    window.localStorage.setItem(storageKeys.language, 'zh')
-    expect(readPersistedLocale()).toBe('zh')
+    window.localStorage.setItem(storageKeys.language, 'zh-CN')
+    expect(readPersistedLocale()).toBe('zh-CN')
+
+    window.localStorage.setItem(storageKeys.language, 'ms')
+    expect(readPersistedLocale()).toBe('ms')
 
     window.localStorage.setItem(storageKeys.language, 'fr')
     expect(readPersistedLocale()).toBe('en')
+  })
+
+  it('maps the legacy Chinese locale code from earlier builds to zh-CN and rewrites it', () => {
+    window.localStorage.clear()
+    // Legacy value written by builds before D18 (BCP-47 zh-CN).
+    window.localStorage.setItem(storageKeys.language, 'zh')
+
+    expect(readPersistedLocale()).toBe('zh-CN')
+    expect(window.localStorage.getItem(storageKeys.language)).toBe('zh-CN')
   })
 })

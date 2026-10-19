@@ -3,7 +3,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useResource } from './useResource'
+import { isUnreachableFailure, resolveFallbackMode, useResource } from './useResource'
 
 const mocks = vi.hoisted(() => ({
   appEnv: {
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   },
   auth: {
     isPreviewSession: false,
+    isAuthenticated: false,
   },
 }))
 
@@ -55,6 +56,7 @@ describe('useResource guarded fallback behavior', () => {
     mocks.appEnv.useDemoData = false
     mocks.appEnv.enablePreviewMode = false
     mocks.auth.isPreviewSession = false
+    mocks.auth.isAuthenticated = false
   })
 
   afterEach(() => {
@@ -124,5 +126,67 @@ describe('useResource guarded fallback behavior', () => {
     expect(resource.error.value).toBeNull()
     expect(resource.data.value).toEqual({ count: 2 })
     expect(resource.usingFallback.value).toBe(false)
+  })
+
+  it('never serves fixtures to a real signed-in user while the API answers, even in a preview build', async () => {
+    enablePreviewFallbacks(false)
+    mocks.auth.isAuthenticated = true
+    const loader = vi.fn().mockResolvedValue({ message: 'live data' })
+    const resource = mountResource(loader, { message: 'demo fixture' })
+
+    await flushPromises()
+
+    expect(loader).toHaveBeenCalledOnce()
+    expect(resource.data.value).toEqual({ message: 'live data' })
+    expect(resource.usingFallback.value).toBe(false)
+  })
+
+  it('shows HTTP errors (e.g. 404) to a real signed-in user instead of demo data', async () => {
+    enablePreviewFallbacks(false)
+    mocks.auth.isAuthenticated = true
+    const loader = vi.fn().mockRejectedValue({ response: { status: 404, data: { message: 'Lesson was not found.' } } })
+    const resource = mountResource(loader, { message: 'demo fixture' })
+
+    await flushPromises()
+
+    expect(resource.data.value).toBeNull()
+    expect(resource.usingFallback.value).toBe(false)
+    expect(resource.error.value).toBe('Lesson was not found.')
+  })
+
+  it('falls back to the preview fixture for a signed-in user only when the API is unreachable', async () => {
+    enablePreviewFallbacks(false)
+    mocks.auth.isAuthenticated = true
+    const loader = vi.fn().mockRejectedValue({ request: {} })
+    const resource = mountResource(loader, { message: 'demo fixture' })
+
+    await flushPromises()
+
+    expect(loader).toHaveBeenCalledOnce()
+    expect(resource.data.value).toEqual({ message: 'demo fixture' })
+    expect(resource.usingFallback.value).toBe(true)
+  })
+})
+
+describe('resolveFallbackMode rule', () => {
+  const base = { hasFallback: true, useDemoData: true, enablePreviewMode: true, hasRealSession: false }
+
+  it('uses fixtures immediately only in a preview build without a real session', () => {
+    expect(resolveFallbackMode(base)).toBe('immediate')
+    expect(resolveFallbackMode({ ...base, hasRealSession: true })).toBe('onUnreachable')
+  })
+
+  it('never uses fixtures outside a full preview build or without a fixture', () => {
+    expect(resolveFallbackMode({ ...base, useDemoData: false })).toBe('none')
+    expect(resolveFallbackMode({ ...base, enablePreviewMode: false })).toBe('none')
+    expect(resolveFallbackMode({ ...base, hasFallback: false })).toBe('none')
+    expect(resolveFallbackMode({ ...base, enablePreviewMode: false, hasRealSession: true })).toBe('none')
+  })
+
+  it('treats only failures without an HTTP response as unreachable', () => {
+    expect(isUnreachableFailure({ request: {} })).toBe(true)
+    expect(isUnreachableFailure({ request: {}, response: { status: 404 } })).toBe(false)
+    expect(isUnreachableFailure({ response: { status: 500 } })).toBe(false)
+    expect(isUnreachableFailure(null)).toBe(false)
   })
 })

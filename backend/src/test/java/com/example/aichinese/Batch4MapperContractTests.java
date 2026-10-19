@@ -28,9 +28,7 @@ import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.VideoProgress;
-import com.example.aichinese.entity.enums.AccessType;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
-import com.example.aichinese.entity.enums.AgeBand;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearningType;
 import com.example.aichinese.entity.enums.PackageItemType;
@@ -52,7 +50,7 @@ class Batch4MapperContractTests {
     private final LiveLearningMapper liveLearningMapper = new LiveLearningMapper();
 
     @Test
-    void adminActivityMapperNormalizesCsvTagsAndNullChildLists() {
+    void adminActivityMapperNormalizesCsvTagsAndNullItemLists() {
         AdminFlashcardRequest request = new AdminFlashcardRequest(
                 "Card",
                 "\u4F60",
@@ -65,12 +63,12 @@ class Batch4MapperContractTests {
                 0,
                 null,
                 1,
-                AgeBand.LOWER_PRIMARY,
                 ActivityDifficulty.EASY,
                 "greetings",
                 List.of("\u3000tone,\n practice\u3000", "tone practice", "pinyin"),
                 10,
-                30);
+                30,
+                null);
 
         Flashcard entity = adminActivityMapper.toEntity(request, null);
 
@@ -223,7 +221,6 @@ class Batch4MapperContractTests {
         coursePackage.setId(9L);
         coursePackage.setTitle("Package");
         coursePackage.setLearningType(LearningType.HYBRID);
-        coursePackage.setAccessType(AccessType.FREE);
         coursePackage.setContentStatus(ContentStatus.PUBLISHED);
         coursePackage.setCreatedAt(NOW);
         coursePackage.setUpdatedAt(NOW);
@@ -231,12 +228,12 @@ class Batch4MapperContractTests {
     }
 
     private static PackageItem packageItem() {
-        CoursePackage parent = new CoursePackage();
-        parent.setId(9L);
+        CoursePackage ownerPackage = new CoursePackage();
+        ownerPackage.setId(9L);
 
         PackageItem item = new PackageItem();
         item.setId(10L);
-        item.setCoursePackage(parent);
+        item.setCoursePackage(ownerPackage);
         item.setItemType(PackageItemType.LESSON);
         item.setItemId(55L);
         item.setSortOrder(1);

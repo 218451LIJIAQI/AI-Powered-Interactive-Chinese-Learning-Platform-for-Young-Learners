@@ -273,15 +273,56 @@ class StudentActivityLibraryIntegrationTests {
 
         String studentToken = registerStudentAndLogin(uniqueEmail("matching-student"));
 
-        mockMvc.perform(authenticatedGet(studentMatchingGamePath(matchingGameId), studentToken))
+        MvcResult loaded = mockMvc.perform(authenticatedGet(studentMatchingGamePath(matchingGameId), studentToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items.length()").value(2))
-                .andExpect(jsonPath("$.data.items[0].leftText").value("猫"));
+                .andExpect(jsonPath("$.data.leftItems.length()").value(2))
+                .andExpect(jsonPath("$.data.leftItems[0].text").value("猫"))
+                .andExpect(jsonPath("$.data.rightOptions.length()").value(2))
+                // No answer key before an attempt: items carry no partner, options carry no item link.
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.leftItems[0].rightText").doesNotExist())
+                .andExpect(jsonPath("$.data.rightOptions[0].id").doesNotExist())
+                .andReturn();
+        JsonNode leftItems = objectMapper.readTree(loaded.getResponse().getContentAsString()).path("data").path("leftItems");
+        long catId = leftItems.get(0).path("id").asLong();
+        long dogId = leftItems.get(1).path("id").asLong();
 
         mockMvc.perform(authenticatedPost(studentMatchingGameCompletionPath(matchingGameId), studentToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Submit your answers to complete this activity."));
+
+        mockMvc.perform(authenticatedJsonPost(studentMatchingGameCompletionPath(matchingGameId), studentToken, Map.of(
+                        "matches", List.of(
+                                Map.of("leftItemId", catId, "rightText", "dog"),
+                                Map.of("leftItemId", dogId, "rightText", "cat")))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.passed").value(false))
+                .andExpect(jsonPath("$.data.correctCount").value(0))
+                .andExpect(jsonPath("$.data.earnedPoints").value(0))
+                .andExpect(jsonPath("$.data.firstCompletion").value(false));
+
+        mockMvc.perform(authenticatedGet(studentMatchingGamePath(matchingGameId), studentToken))
+                .andExpect(jsonPath("$.data.completed").value(false));
+
+        mockMvc.perform(authenticatedJsonPost(studentMatchingGameCompletionPath(matchingGameId), studentToken, Map.of(
+                        "matches", List.of(
+                                Map.of("leftItemId", catId, "rightText", "cat"),
+                                Map.of("leftItemId", dogId, "rightText", " DOG ")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.passed").value(true))
+                .andExpect(jsonPath("$.data.correctCount").value(2))
+                .andExpect(jsonPath("$.data.earnedPoints").value(DEFAULT_MATCHING_XP))
                 .andExpect(jsonPath("$.data.firstCompletion").value(true))
                 .andExpect(jsonPath("$.data.type").value(MATCHING_GAME));
+
+        mockMvc.perform(authenticatedJsonPost(studentMatchingGameCompletionPath(matchingGameId), studentToken, Map.of(
+                        "matches", List.of(
+                                Map.of("leftItemId", catId, "rightText", "cat"),
+                                Map.of("leftItemId", dogId, "rightText", "dog")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.passed").value(true))
+                .andExpect(jsonPath("$.data.earnedPoints").value(0))
+                .andExpect(jsonPath("$.data.firstCompletion").value(false));
     }
 
     @Test
